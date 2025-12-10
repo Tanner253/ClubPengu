@@ -1,0 +1,147 @@
+@import "tailwindcss";
+
+@theme {
+  --font-geist-sans: "Geist", system-ui, sans-serif;
+  --font-geist-mono: "Geist Mono", monospace;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: 8 12 21;
+    --foreground: 255 255 255;
+    --primary: 0 212 255;
+    --primary-dark: 0 150 199;
+    --accent: 255 107 107;
+    --accent-gold: 255 215 0;
+    --card: 15 23 42;
+    --card-border: 30 41 59;
+    --muted: 148 163 184;
+  }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-family: var(--font-geist-sans);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgb(var(--card));
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--primary));
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--primary-dark));
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, rgb(var(--primary)) 0%, rgb(var(--accent)) 50%, rgb(var(--accent-gold)) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.gradient-text-blue {
+  background: linear-gradient(135deg, #00d4ff 0%, #0099ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Glow effects */
+.glow {
+  box-shadow: 0 0 40px rgba(0, 212, 255, 0.3);
+}
+
+.glow-gold {
+  box-shadow: 0 0 40px rgba(255, 215, 0, 0.3);
+}
+
+/* Glass card */
+.glass-card {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Animated background */
+.animated-bg {
+  background: 
+    radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(255, 107, 107, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+}
+
+/* Snow effect */
+@keyframes snowfall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(360deg);
+    opacity: 0.3;
+  }
+}
+
+.snowflake {
+  position: fixed;
+  color: white;
+  font-size: 1rem;
+  user-select: none;
+  pointer-events: none;
+  z-index: 1;
+  animation: snowfall linear infinite;
+  opacity: 0.6;
+}
+
+/* Section divider */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.5), transparent);
+}
+
+/* Pulse animation for CTA */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 40px rgba(0, 212, 255, 0.8);
+  }
+}
+
+.pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Feature card hover */
+.feature-card {
+  transition: all 0.3s ease;
+}
+
+.feature-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(0, 212, 255, 0.5);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+}
+
+/* Roadmap line */
+.roadmap-line {
+  background: linear-gradient(180deg, rgb(var(--primary)), rgb(var(--accent)), rgb(var(--accent-gold)));
+}
