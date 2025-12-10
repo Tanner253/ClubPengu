@@ -311,15 +311,13 @@ function HeroSection() {
             Explore Whitepaper
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </a>
-          <a
-            href="https://club-pengu-client.vercel.app/"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white/5 border border-white/10 text-white font-semibold flex items-center gap-2 hover:bg-white/10 hover:border-white/20 transition-all text-sm sm:text-base"
+          <button
+            disabled
+            className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white/5 border border-white/10 text-slate-500 font-semibold flex items-center gap-2 cursor-not-allowed opacity-50 text-sm sm:text-base"
           >
             Play Demo
-            <ExternalLink className="w-4 h-4" />
-          </a>
+            <span className="text-xs bg-white/10 px-2 py-0.5 rounded-full">Soon</span>
+          </button>
         </motion.div>
 
         {/* Token badge */}

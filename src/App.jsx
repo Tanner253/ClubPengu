@@ -24,6 +24,9 @@ const App = () => {
     // Minigame state (separate from room system)
     const [activeMinigame, setActiveMinigame] = useState(null);
     
+    // Custom spawn position (when exiting dojo/igloo to town)
+    const [spawnPosition, setSpawnPosition] = useState(null);
+    
     // Initialize GameManager on mount
     useEffect(() => {
         const gm = GameManager.getInstance();
@@ -50,8 +53,9 @@ const App = () => {
     };
     
     // Change room/layer (town -> dojo, dojo -> town, etc.)
-    const handleChangeRoom = (newRoom) => {
+    const handleChangeRoom = (newRoom, exitSpawnPos = null) => {
         GameManager.getInstance().setRoom(newRoom);
+        setSpawnPosition(exitSpawnPos); // Will be used by VoxelWorld for spawn location
         setCurrentRoom(newRoom);
     };
     
@@ -96,6 +100,7 @@ const App = () => {
                 onStartMinigame={handleStartMinigame}
                 playerPuffle={playerPuffle}
                 onPuffleChange={setPlayerPuffle}
+                customSpawnPos={spawnPosition}
             />
         );
     }

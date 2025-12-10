@@ -4,17 +4,65 @@
  */
 
 import { WebSocketServer } from 'ws';
+import http from 'http';
 
 const PORT = process.env.PORT || 3001;
+const MAX_CONNECTIONS_PER_IP = 2; // Maximum allowed connections per IP address
 
 // Game state
-const players = new Map(); // odisconnectedplayerId -> { id, name, room, position, rotation, appearance, puffle }
+const players = new Map(); // playerId -> { id, name, room, position, rotation, appearance, puffle, ip }
 const rooms = new Map(); // roomId -> Set of playerIds
+const ipConnections = new Map(); // ip -> Set of playerIds (for tracking connections per IP)
 
-// Create WebSocket server
-const wss = new WebSocketServer({ port: PORT });
+// Create HTTP server to access request headers for IP
+const server = http.createServer();
+
+// Create WebSocket server attached to HTTP server
+const wss = new WebSocketServer({ server });
 
 console.log(`🐧 Club Penguin Server running on port ${PORT}`);
+
+// Helper to get client IP from request
+function getClientIP(req) {
+    // Check for forwarded IP (behind proxy/load balancer)
+    const forwarded = req.headers['x-forwarded-for'];
+    if (forwarded) {
+        return forwarded.split(',')[0].trim();
+    }
+    // Check for real IP header
+    const realIP = req.headers['x-real-ip'];
+    if (realIP) {
+        return realIP;
+    }
+    // Fall back to socket remote address
+    return req.socket?.remoteAddress || 'unknown';
+}
+
+// Check if IP can connect (returns true if allowed)
+function canIPConnect(ip) {
+    const connections = ipConnections.get(ip);
+    if (!connections) return true;
+    return connections.size < MAX_CONNECTIONS_PER_IP;
+}
+
+// Track IP connection
+function trackIPConnection(ip, playerId) {
+    if (!ipConnections.has(ip)) {
+        ipConnections.set(ip, new Set());
+    }
+    ipConnections.get(ip).add(playerId);
+}
+
+// Remove IP connection tracking
+function removeIPConnection(ip, playerId) {
+    const connections = ipConnections.get(ip);
+    if (connections) {
+        connections.delete(playerId);
+        if (connections.size === 0) {
+            ipConnections.delete(ip);
+        }
+    }
+}
 
 // Generate unique player ID
 function generateId() {
@@ -115,14 +163,32 @@ function getPlayersInRoom(roomId, excludeId = null) {
 }
 
 // Handle new connection
-wss.on('connection', (ws) => {
+wss.on('connection', (ws, req) => {
+    const clientIP = getClientIP(req);
+    
+    // Check if IP has too many connections
+    if (!canIPConnect(clientIP)) {
+        console.log(`⚠️ Rejected connection from ${clientIP} - too many connections`);
+        ws.send(JSON.stringify({
+            type: 'error',
+            code: 'TOO_MANY_CONNECTIONS',
+            message: 'Too many connections from your IP address. Please close other tabs.'
+        }));
+        ws.close(1008, 'Too many connections from this IP');
+        return;
+    }
+    
     const playerId = generateId();
-    console.log(`Player connected: ${playerId}`);
+    console.log(`Player connected: ${playerId} from ${clientIP}`);
+    
+    // Track this IP connection
+    trackIPConnection(clientIP, playerId);
     
     // Initialize player data
     players.set(playerId, {
         id: playerId,
         ws: ws,
+        ip: clientIP,
         name: `Penguin${Math.floor(Math.random() * 1000)}`,
         room: null,
         position: { x: 0, y: 0, z: 0 },
@@ -153,17 +219,24 @@ wss.on('connection', (ws) => {
         console.log(`Player disconnected: ${playerId}`);
         
         const player = players.get(playerId);
-        if (player && player.room) {
-            // Notify room
-            broadcastToRoom(player.room, {
-                type: 'player_left',
-                playerId: playerId
-            });
+        if (player) {
+            // Remove IP connection tracking
+            if (player.ip) {
+                removeIPConnection(player.ip, playerId);
+            }
             
-            // Remove from room
-            const room = rooms.get(player.room);
-            if (room) {
-                room.delete(playerId);
+            if (player.room) {
+                // Notify room
+                broadcastToRoom(player.room, {
+                    type: 'player_left',
+                    playerId: playerId
+                });
+                
+                // Remove from room
+                const room = rooms.get(player.room);
+                if (room) {
+                    room.delete(playerId);
+                }
             }
         }
         
@@ -407,6 +480,11 @@ setInterval(() => {
         if (player.ws.readyState !== 1) {
             console.log(`Cleaning up stale player: ${playerId}`);
             
+            // Remove IP tracking
+            if (player.ip) {
+                removeIPConnection(player.ip, playerId);
+            }
+            
             if (player.room) {
                 broadcastToRoom(player.room, {
                     type: 'player_left',
@@ -424,6 +502,12 @@ setInterval(() => {
 
 // Log server stats periodically
 setInterval(() => {
-    console.log(`📊 Players: ${players.size} | Rooms: ${Array.from(rooms.entries()).map(([id, set]) => `${id}:${set.size}`).join(', ') || 'none'}`);
+    const uniqueIPs = ipConnections.size;
+    console.log(`📊 Players: ${players.size} | Unique IPs: ${uniqueIPs} | Rooms: ${Array.from(rooms.entries()).map(([id, set]) => `${id}:${set.size}`).join(', ') || 'none'}`);
 }, 60000);
+
+// Start the HTTP server
+server.listen(PORT, () => {
+    console.log(`🌐 HTTP server listening on port ${PORT}`);
+});
 

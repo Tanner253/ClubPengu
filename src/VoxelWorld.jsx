@@ -18,7 +18,8 @@ const VoxelWorld = ({
     onChangeRoom,
     onStartMinigame,
     playerPuffle, 
-    onPuffleChange 
+    onPuffleChange,
+    customSpawnPos  // Custom spawn position (when returning from dojo/igloo)
 }) => {
     const mountRef = useRef(null);
     const sceneRef = useRef(null);
@@ -40,6 +41,7 @@ const VoxelWorld = ({
         playerCount,
         playerList,           // Triggers mesh creation/removal
         playersDataRef,       // Real-time position data (no re-renders)
+        connectionError,      // Error if connection rejected
         joinRoom: mpJoinRoom,
         sendPosition,
         sendChat: mpSendChat,
@@ -106,6 +108,30 @@ const VoxelWorld = ({
         localStorage.setItem('owned_puffles', JSON.stringify(ownedPuffles.map(p => p.toJSON())));
     }, [ownedPuffles]);
     
+    // Mobile detection and orientation handling
+    useEffect(() => {
+        const checkMobile = () => {
+            const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
+                || ('ontouchstart' in window && window.innerWidth < 1024);
+            setIsMobile(mobile);
+        };
+        
+        const checkOrientation = () => {
+            setIsLandscape(window.innerWidth > window.innerHeight);
+        };
+        
+        checkMobile();
+        checkOrientation();
+        
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', checkOrientation);
+        
+        return () => {
+            window.removeEventListener('resize', checkOrientation);
+            window.removeEventListener('orientationchange', checkOrientation);
+        };
+    }, []);
+    
     // Use prop for equipped puffle, with local ref for 3D tracking
     const puffle = playerPuffle;
     
@@ -115,6 +141,17 @@ const VoxelWorld = ({
     
     // Town Interaction State
     const [nearbyInteraction, setNearbyInteraction] = useState(null);
+    
+    // Bench Sitting State
+    const [seatedOnBench, setSeatedOnBench] = useState(null); // { benchId, snapPoint, worldPos }
+    const seatedRef = useRef(null); // For game loop access
+    
+    // Mobile State
+    const [isMobile, setIsMobile] = useState(false);
+    const [isLandscape, setIsLandscape] = useState(true);
+    const [showMobileChat, setShowMobileChat] = useState(false);
+    const mobileControlsRef = useRef({ forward: false, back: false, left: false, right: false });
+    const pinchRef = useRef({ startDist: 0, active: false });
     
     // Room-specific portals/doors
     // Town portal positions are OFFSETS from center (centerX/Z added in checkPortals)
@@ -130,6 +167,26 @@ const VoxelWorld = ({
                 // Dojo at (0, -25), size d=14, door at front: z = -25 + 7 + 1.5 = -16.5
                 position: { x: 0, z: -16.5 },
                 doorRadius: 3.5
+            },
+            { 
+                id: 'igloo-1', 
+                name: 'IGLOO', 
+                emoji: '🏠', 
+                description: 'Enter Igloo',
+                targetRoom: 'igloo1',
+                // Igloo 1 at (-35, 20) offset, entrance tunnel extends +5.5 in Z
+                position: { x: -35, z: 25.5 },
+                doorRadius: 3
+            },
+            { 
+                id: 'igloo-2', 
+                name: 'IGLOO', 
+                emoji: '🏠', 
+                description: 'Enter Igloo',
+                targetRoom: 'igloo2',
+                // Igloo 2 at (-25, 30) offset, entrance tunnel extends +5.5 in Z
+                position: { x: -25, z: 35.5 },
+                doorRadius: 3
             },
             { 
                 id: 'market', 
@@ -152,6 +209,32 @@ const VoxelWorld = ({
                 doorRadius: 3
             }
         ],
+        igloo1: [
+            { 
+                id: 'igloo1-exit', 
+                name: 'EXIT', 
+                emoji: '🚪', 
+                description: 'Return to Town',
+                targetRoom: 'town',
+                position: { x: 0, z: 10 },
+                doorRadius: 2.5,
+                // Spawn at igloo 1 entrance in town when exiting
+                exitSpawnPos: { x: -35, z: 28 }
+            }
+        ],
+        igloo2: [
+            { 
+                id: 'igloo2-exit', 
+                name: 'EXIT', 
+                emoji: '🚪', 
+                description: 'Return to Town',
+                targetRoom: 'town',
+                position: { x: 0, z: 10 },
+                doorRadius: 2.5,
+                // Spawn at igloo 2 entrance in town when exiting
+                exitSpawnPos: { x: -25, z: 38 }
+            }
+        ],
         dojo: [
             { 
                 id: 'dojo-exit', 
@@ -160,7 +243,9 @@ const VoxelWorld = ({
                 description: 'Return to Town',
                 targetRoom: 'town',
                 position: { x: 0, z: 16 },
-                doorRadius: 3
+                doorRadius: 3,
+                // Spawn at dojo entrance in town when exiting
+                exitSpawnPos: { x: 0, z: -14 }
             },
             { 
                 id: 'sensei', 
@@ -700,6 +785,408 @@ const VoxelWorld = ({
             };
         };
         
+        // Generate Igloo interior room (cozy hangout space)
+        const generateIglooRoom = () => {
+            const IGLOO_SIZE = 20;
+            scene.background = new THREE.Color(0x1a2a3a); // Cool blue-grey
+            
+            // Simple collision map for igloo
+            const map = [];
+            for(let x = 0; x < 10; x++) {
+                map[x] = [];
+                for(let z = 0; z < 10; z++) {
+                    map[x][z] = 2; // All walkable
+                }
+            }
+            mapRef.current = map;
+            
+            // ==================== FLOOR ====================
+            // Cozy carpet in center
+            const carpetGeo = new THREE.CircleGeometry(7, 32);
+            const carpetMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 }); // Brown carpet
+            const carpet = new THREE.Mesh(carpetGeo, carpetMat);
+            carpet.rotation.x = -Math.PI / 2;
+            carpet.position.y = 0.02;
+            carpet.receiveShadow = true;
+            scene.add(carpet);
+            
+            // Carpet pattern - inner circle
+            const innerCarpet = new THREE.Mesh(
+                new THREE.CircleGeometry(5, 32),
+                new THREE.MeshStandardMaterial({ color: 0xA0522D, roughness: 0.9 })
+            );
+            innerCarpet.rotation.x = -Math.PI / 2;
+            innerCarpet.position.y = 0.03;
+            scene.add(innerCarpet);
+            
+            // Ice floor around carpet
+            const floorGeo = new THREE.CircleGeometry(IGLOO_SIZE / 2, 32);
+            const floorMat = new THREE.MeshStandardMaterial({ 
+                color: 0xE8F4F8, 
+                roughness: 0.3,
+                metalness: 0.1
+            });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.y = 0.01;
+            floor.receiveShadow = true;
+            scene.add(floor);
+            
+            // ==================== DOME WALLS ====================
+            // Ice dome interior (hemisphere from inside)
+            const domeGeo = new THREE.SphereGeometry(IGLOO_SIZE / 2, 32, 24, 0, Math.PI * 2, 0, Math.PI / 2);
+            const domeMat = new THREE.MeshStandardMaterial({ 
+                color: 0xD6EAF8,
+                roughness: 0.4,
+                side: THREE.BackSide // Render inside
+            });
+            const dome = new THREE.Mesh(domeGeo, domeMat);
+            dome.scale.y = 0.6; // Flatten dome
+            scene.add(dome);
+            
+            // Ice block lines on dome
+            for (let i = 1; i < 6; i++) {
+                const ringY = i * 1.0;
+                const ringRadius = (IGLOO_SIZE / 2) * Math.cos(Math.asin(ringY / (IGLOO_SIZE / 2 * 0.6)));
+                if (ringRadius > 1) {
+                    const ring = new THREE.Mesh(
+                        new THREE.TorusGeometry(ringRadius, 0.05, 4, 48),
+                        new THREE.MeshStandardMaterial({ color: 0xBDC3C7 })
+                    );
+                    ring.position.y = ringY;
+                    ring.rotation.x = Math.PI / 2;
+                    scene.add(ring);
+                }
+            }
+            
+            // ==================== COUCH ====================
+            const couchGroup = new THREE.Group();
+            const couchMat = new THREE.MeshStandardMaterial({ color: 0x2E4A62, roughness: 0.8 }); // Blue couch
+            const cushionMat = new THREE.MeshStandardMaterial({ color: 0x3D5A80, roughness: 0.9 });
+            
+            // Couch base
+            const baseGeo = new THREE.BoxGeometry(5, 0.8, 2);
+            const couchBase = new THREE.Mesh(baseGeo, couchMat);
+            couchBase.position.y = 0.4;
+            couchBase.castShadow = true;
+            couchGroup.add(couchBase);
+            
+            // Couch back
+            const backGeo = new THREE.BoxGeometry(5, 1.5, 0.5);
+            const couchBack = new THREE.Mesh(backGeo, couchMat);
+            couchBack.position.set(0, 1.15, -0.75);
+            couchBack.castShadow = true;
+            couchGroup.add(couchBack);
+            
+            // Couch armrests
+            const armGeo = new THREE.BoxGeometry(0.5, 1, 2);
+            [-2.5, 2.5].forEach(x => {
+                const arm = new THREE.Mesh(armGeo, couchMat);
+                arm.position.set(x, 0.7, 0);
+                arm.castShadow = true;
+                couchGroup.add(arm);
+            });
+            
+            // Cushions
+            [-1.5, 0, 1.5].forEach(x => {
+                const cushion = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.4, 0.3, 1.6),
+                    cushionMat
+                );
+                cushion.position.set(x, 0.95, 0.1);
+                couchGroup.add(cushion);
+            });
+            
+            couchGroup.position.set(0, 0, -6);
+            scene.add(couchGroup);
+            
+            // ==================== CHAIRS ====================
+            const createChair = (x, z, rotY) => {
+                const chairGroup = new THREE.Group();
+                const chairMat = new THREE.MeshStandardMaterial({ color: 0x5D4E37, roughness: 0.8 });
+                const seatMat = new THREE.MeshStandardMaterial({ color: 0xE74C3C, roughness: 0.9 }); // Red cushion
+                
+                // Seat
+                const seat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 1.5), seatMat);
+                seat.position.y = 0.8;
+                seat.castShadow = true;
+                chairGroup.add(seat);
+                
+                // Legs
+                const legGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.8, 8);
+                [[-0.5, -0.5], [-0.5, 0.5], [0.5, -0.5], [0.5, 0.5]].forEach(([lx, lz]) => {
+                    const leg = new THREE.Mesh(legGeo, chairMat);
+                    leg.position.set(lx, 0.4, lz);
+                    chairGroup.add(leg);
+                });
+                
+                // Back
+                const back = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.2, 0.15), chairMat);
+                back.position.set(0, 1.5, -0.65);
+                back.castShadow = true;
+                chairGroup.add(back);
+                
+                chairGroup.position.set(x, 0, z);
+                chairGroup.rotation.y = rotY;
+                scene.add(chairGroup);
+            };
+            
+            createChair(-5, -2, Math.PI / 4);
+            createChair(5, -2, -Math.PI / 4);
+            
+            // ==================== TV / GAME CONSOLE ====================
+            const tvGroup = new THREE.Group();
+            
+            // TV Stand
+            const standGeo = new THREE.BoxGeometry(3, 1, 1);
+            const standMat = new THREE.MeshStandardMaterial({ color: 0x2C3E50, roughness: 0.7 });
+            const stand = new THREE.Mesh(standGeo, standMat);
+            stand.position.y = 0.5;
+            stand.castShadow = true;
+            tvGroup.add(stand);
+            
+            // TV Screen
+            const screenGeo = new THREE.BoxGeometry(2.5, 1.8, 0.15);
+            const screenMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.3 });
+            const screen = new THREE.Mesh(screenGeo, screenMat);
+            screen.position.set(0, 1.9, 0);
+            screen.castShadow = true;
+            tvGroup.add(screen);
+            
+            // Screen glow (playing game)
+            const glowGeo = new THREE.PlaneGeometry(2.3, 1.6);
+            const glowMat = new THREE.MeshBasicMaterial({ 
+                color: 0x4488ff, 
+                transparent: true, 
+                opacity: 0.3 
+            });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            glow.position.set(0, 1.9, 0.08);
+            tvGroup.add(glow);
+            
+            // Game console
+            const consoleMesh = new THREE.Mesh(
+                new THREE.BoxGeometry(0.6, 0.15, 0.4),
+                new THREE.MeshStandardMaterial({ color: 0x1a1a1a })
+            );
+            consoleMesh.position.set(0, 1.1, 0.2);
+            tvGroup.add(consoleMesh);
+            
+            tvGroup.position.set(0, 0, 6);
+            tvGroup.rotation.y = Math.PI;
+            scene.add(tvGroup);
+            
+            // ==================== COFFEE TABLE ====================
+            const tableGroup = new THREE.Group();
+            const tableMat = new THREE.MeshStandardMaterial({ color: 0x5D4037, roughness: 0.7 });
+            
+            // Table top
+            const tableTop = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.15, 1.5), tableMat);
+            tableTop.position.y = 0.6;
+            tableTop.castShadow = true;
+            tableTop.receiveShadow = true;
+            tableGroup.add(tableTop);
+            
+            // Table legs
+            const tLegGeo = new THREE.BoxGeometry(0.15, 0.6, 0.15);
+            [[-1, -0.5], [-1, 0.5], [1, -0.5], [1, 0.5]].forEach(([tx, tz]) => {
+                const tLeg = new THREE.Mesh(tLegGeo, tableMat);
+                tLeg.position.set(tx, 0.3, tz);
+                tableGroup.add(tLeg);
+            });
+            
+            tableGroup.position.set(0, 0, -2);
+            scene.add(tableGroup);
+            
+            // ==================== BEACH BALL ====================
+            const ballGeo = new THREE.SphereGeometry(0.5, 16, 16);
+            const ballMat = new THREE.MeshStandardMaterial({ color: 0xFF6B6B, roughness: 0.6 });
+            const ball = new THREE.Mesh(ballGeo, ballMat);
+            ball.position.set(3, 0.5, 2);
+            ball.castShadow = true;
+            scene.add(ball);
+            
+            // Ball stripes
+            const stripeMat = new THREE.MeshStandardMaterial({ color: 0xFFE66D });
+            for (let i = 0; i < 4; i++) {
+                const stripe = new THREE.Mesh(
+                    new THREE.TorusGeometry(0.35, 0.08, 8, 16),
+                    stripeMat
+                );
+                stripe.position.set(3, 0.5, 2);
+                stripe.rotation.y = (i / 4) * Math.PI;
+                scene.add(stripe);
+            }
+            
+            // ==================== POTTED PLANT ====================
+            const plantGroup = new THREE.Group();
+            
+            // Pot
+            const potGeo = new THREE.CylinderGeometry(0.4, 0.3, 0.6, 12);
+            const potMat = new THREE.MeshStandardMaterial({ color: 0xB5651D, roughness: 0.8 });
+            const pot = new THREE.Mesh(potGeo, potMat);
+            pot.position.y = 0.3;
+            pot.castShadow = true;
+            plantGroup.add(pot);
+            
+            // Soil
+            const soil = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.35, 0.35, 0.1, 12),
+                new THREE.MeshStandardMaterial({ color: 0x3d2817 })
+            );
+            soil.position.y = 0.55;
+            plantGroup.add(soil);
+            
+            // Plant leaves
+            const leafMat = new THREE.MeshStandardMaterial({ color: 0x228B22, roughness: 0.8 });
+            for (let i = 0; i < 8; i++) {
+                const leaf = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.15, 0.8, 4),
+                    leafMat
+                );
+                const angle = (i / 8) * Math.PI * 2;
+                leaf.position.set(
+                    Math.cos(angle) * 0.2,
+                    1,
+                    Math.sin(angle) * 0.2
+                );
+                leaf.rotation.x = 0.3;
+                leaf.rotation.y = angle;
+                plantGroup.add(leaf);
+            }
+            // Center leaf
+            const centerLeaf = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.6, 4), leafMat);
+            centerLeaf.position.y = 1.1;
+            plantGroup.add(centerLeaf);
+            
+            plantGroup.position.set(-4, 0, 4);
+            scene.add(plantGroup);
+            
+            // ==================== BOOKSHELF ====================
+            const shelfGroup = new THREE.Group();
+            const shelfMat = new THREE.MeshStandardMaterial({ color: 0x654321, roughness: 0.8 });
+            
+            // Shelf frame
+            const frame = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3, 0.4), shelfMat);
+            frame.position.y = 1.5;
+            frame.castShadow = true;
+            shelfGroup.add(frame);
+            
+            // Shelves
+            [0.6, 1.5, 2.4].forEach(y => {
+                const shelf = new THREE.Mesh(
+                    new THREE.BoxGeometry(2.3, 0.08, 0.35),
+                    shelfMat
+                );
+                shelf.position.set(0, y, 0.05);
+                shelfGroup.add(shelf);
+            });
+            
+            // Books (colorful)
+            const bookColors = [0xE74C3C, 0x3498DB, 0x2ECC71, 0xF39C12, 0x9B59B6];
+            [0.8, 1.7, 2.6].forEach((y, shelfIdx) => {
+                for (let i = 0; i < 5; i++) {
+                    const book = new THREE.Mesh(
+                        new THREE.BoxGeometry(0.15, 0.4 + Math.random() * 0.2, 0.25),
+                        new THREE.MeshStandardMaterial({ color: bookColors[(i + shelfIdx) % bookColors.length] })
+                    );
+                    book.position.set(-0.8 + i * 0.35, y + 0.25, 0.05);
+                    shelfGroup.add(book);
+                }
+            });
+            
+            shelfGroup.position.set(6, 0, 0);
+            shelfGroup.rotation.y = -Math.PI / 2;
+            scene.add(shelfGroup);
+            
+            // ==================== LIGHTING ====================
+            // Warm ambient light
+            const ambientLight = new THREE.AmbientLight(0xfff5e6, 0.4);
+            scene.add(ambientLight);
+            
+            // Ceiling light (warm glow)
+            const ceilingLight = new THREE.PointLight(0xFFE4B5, 1.2, 20);
+            ceilingLight.position.set(0, 5, 0);
+            ceilingLight.castShadow = true;
+            scene.add(ceilingLight);
+            
+            // Light fixture
+            const fixtureMesh = new THREE.Mesh(
+                new THREE.SphereGeometry(0.5, 16, 16),
+                new THREE.MeshBasicMaterial({ color: 0xFFFACD })
+            );
+            fixtureMesh.position.set(0, 5.2, 0);
+            scene.add(fixtureMesh);
+            
+            // TV glow light
+            const tvLight = new THREE.PointLight(0x4488ff, 0.5, 8);
+            tvLight.position.set(0, 2, 5);
+            scene.add(tvLight);
+            
+            // ==================== EXIT GLOW ====================
+            const exitGlow = new THREE.Mesh(
+                new THREE.CircleGeometry(2, 16),
+                new THREE.MeshBasicMaterial({ color: 0x44aaff, transparent: true, opacity: 0.2 })
+            );
+            exitGlow.rotation.x = -Math.PI / 2;
+            exitGlow.position.set(0, 0.02, 9);
+            scene.add(exitGlow);
+            
+            // Exit door frame
+            const doorFrame = new THREE.Mesh(
+                new THREE.BoxGeometry(2.5, 3, 0.3),
+                new THREE.MeshStandardMaterial({ color: 0x4a3728 })
+            );
+            doorFrame.position.set(0, 1.5, IGLOO_SIZE / 2 - 0.5);
+            scene.add(doorFrame);
+            
+            // Door opening (dark)
+            const doorOpening = new THREE.Mesh(
+                new THREE.PlaneGeometry(2, 2.5),
+                new THREE.MeshBasicMaterial({ color: 0x0a1520 })
+            );
+            doorOpening.position.set(0, 1.25, IGLOO_SIZE / 2 - 0.3);
+            scene.add(doorOpening);
+            
+            // Furniture interaction data (for sitting)
+            const furniture = [
+                {
+                    type: 'couch',
+                    position: { x: 0, z: -6 },
+                    rotation: 0,
+                    seatHeight: 0.95,
+                    snapPoints: [
+                        { x: -1.5, z: 0.5 },  // Left cushion
+                        { x: 0, z: 0.5 },      // Middle cushion
+                        { x: 1.5, z: 0.5 }     // Right cushion
+                    ],
+                    interactionRadius: 2.5
+                },
+                {
+                    type: 'chair',
+                    position: { x: -5, z: -2 },
+                    rotation: Math.PI / 4,
+                    seatHeight: 0.8,
+                    snapPoints: [{ x: 0, z: 0 }],
+                    interactionRadius: 1.5
+                },
+                {
+                    type: 'chair',
+                    position: { x: 5, z: -2 },
+                    rotation: -Math.PI / 4,
+                    seatHeight: 0.8,
+                    snapPoints: [{ x: 0, z: 0 }],
+                    interactionRadius: 1.5
+                }
+            ];
+            
+            return {
+                bounds: { minX: -IGLOO_SIZE/2 + 1, maxX: IGLOO_SIZE/2 - 1, minZ: -IGLOO_SIZE/2 + 1, maxZ: IGLOO_SIZE/2 - 1 },
+                spawnPos: { x: 0, z: 7 },
+                furniture: furniture
+            };
+        };
+        
         // Generate scenery based on current room
         let roomData = null;
         let butterflyGroup = null;
@@ -713,6 +1200,8 @@ const VoxelWorld = ({
             };
         } else if (room === 'dojo') {
             roomData = generateDojoRoom();
+        } else if (room === 'igloo1' || room === 'igloo2') {
+            roomData = generateIglooRoom();
         }
         
         // Update roomRef for collision checks
@@ -1056,8 +1545,18 @@ const VoxelWorld = ({
         playerRef.current = playerWrapper;
         scene.add(playerWrapper);
         
-        // Spawn position depends on room
-        if (roomData && roomData.spawnPos) {
+        // Spawn position: use custom spawn (from portal exit) or default room spawn
+        if (customSpawnPos && room === 'town') {
+            // Exiting dojo/igloo: spawn at portal location in town
+            // customSpawnPos is an OFFSET from town center, so add center coordinates
+            const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
+            const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+            posRef.current = { 
+                x: townCenterX + customSpawnPos.x, 
+                y: 0, 
+                z: townCenterZ + customSpawnPos.z 
+            };
+        } else if (roomData && roomData.spawnPos) {
             posRef.current = { x: roomData.spawnPos.x, y: 0, z: roomData.spawnPos.z };
         } else {
             posRef.current = { x: (CITY_SIZE/2) * BUILDING_SCALE, y: 0, z: (CITY_SIZE/2) * BUILDING_SCALE + 10 };
@@ -1248,21 +1747,25 @@ const VoxelWorld = ({
             }
 
             if(e.code === 'KeyE') {
-                // Prioritize portal interaction over emotes
+                // E key is for portal interactions only
                 if (nearbyPortal && (nearbyPortal.targetRoom || nearbyPortal.minigame)) {
                     handlePortalEnter();
                     return;
                 }
+            }
+            if(e.code === 'KeyT') {
+                // T key opens emote wheel
                 setShowEmoteWheel(true);
             }
             if(e.code === 'Enter') {
                  const input = document.getElementById('chat-input-field');
-                 if(input) input.focus();
+                 // Only focus if not already focused (prevents re-focusing after sendChat blurs)
+                 if(input && document.activeElement !== input) input.focus();
             }
         };
         const handleUp = (e) => {
             keysRef.current[e.code] = false;
-            if(e.code === 'KeyE') setShowEmoteWheel(false);
+            if(e.code === 'KeyT') setShowEmoteWheel(false);
         };
         window.addEventListener('keydown', handleDown);
         window.addEventListener('keyup', handleUp);
@@ -1296,12 +1799,69 @@ const VoxelWorld = ({
             const rotSpeed = 2 * delta; 
             let moving = false;
             
-            if (!emoteRef.current.type) {
-                if (keysRef.current['KeyW'] || keysRef.current['ArrowUp']) {
+            // Check keyboard input
+            const keyForward = keysRef.current['KeyW'] || keysRef.current['ArrowUp'];
+            const keyBack = keysRef.current['KeyS'] || keysRef.current['ArrowDown'];
+            const keyLeft = keysRef.current['KeyA'] || keysRef.current['ArrowLeft'];
+            const keyRight = keysRef.current['KeyD'] || keysRef.current['ArrowRight'];
+            
+            // Check mobile button input
+            const mobile = mobileControlsRef.current;
+            const mobileForward = mobile.forward;
+            const mobileBack = mobile.back;
+            const mobileLeft = mobile.left;
+            const mobileRight = mobile.right;
+            
+            const anyMovementInput = keyForward || keyBack || keyLeft || keyRight || 
+                                      mobileForward || mobileBack || mobileLeft || mobileRight;
+            
+            // If seated on bench, check for movement to stand up
+            if (seatedRef.current) {
+                if (anyMovementInput) {
+                    // Stand up from bench - move forward to avoid collision
+                    const seatData = seatedRef.current;
+                    const benchRot = seatData.benchRotation || 0;
+                    const dismountDist = 3.0; // Distance to move forward when standing (clear of bench collision)
+                    
+                    // Calculate forward direction based on bench rotation
+                    const forwardX = Math.sin(benchRot) * dismountDist;
+                    const forwardZ = Math.cos(benchRot) * dismountDist;
+                    
+                    // Move player forward from bench
+                    posRef.current.x = seatData.worldPos.x + forwardX;
+                    posRef.current.z = seatData.worldPos.z + forwardZ;
+                    
+                    // Update mesh position
+                    if (playerRef.current) {
+                        playerRef.current.position.x = posRef.current.x;
+                        playerRef.current.position.z = posRef.current.z;
+                    }
+                    
+                    // Clear seated state
+                    seatedRef.current = null;
+                    setSeatedOnBench(null);
+                    
+                    // Clear sit emote
+                    emoteRef.current.type = null;
+                    mpSendEmote(null);
+                    
+                    // Reset penguin mesh position (inner body)
+                    if (playerRef.current && playerRef.current.children[0]) {
+                        const m = playerRef.current.children[0];
+                        m.position.y = 1;
+                        m.rotation.x = 0;
+                    }
+                }
+                // While seated, don't move
+                velRef.current.x = 0;
+                velRef.current.z = 0;
+            }
+            else if (!emoteRef.current.type) {
+                if (keyForward || mobileForward) {
                     velRef.current.z = Math.cos(rotRef.current) * speed;
                     velRef.current.x = Math.sin(rotRef.current) * speed;
                     moving = true;
-                } else if (keysRef.current['KeyS'] || keysRef.current['ArrowDown']) {
+                } else if (keyBack || mobileBack) {
                     velRef.current.z = -Math.cos(rotRef.current) * speed;
                     velRef.current.x = -Math.sin(rotRef.current) * speed;
                     moving = true;
@@ -1310,8 +1870,8 @@ const VoxelWorld = ({
                     velRef.current.z = 0;
                 }
                 
-                if (keysRef.current['KeyA'] || keysRef.current['ArrowLeft']) rotRef.current += rotSpeed;
-                if (keysRef.current['KeyD'] || keysRef.current['ArrowRight']) rotRef.current -= rotSpeed;
+                if (keyLeft || mobileLeft) rotRef.current += rotSpeed;
+                if (keyRight || mobileRight) rotRef.current -= rotSpeed;
             } else {
                 velRef.current.x = 0;
                 velRef.current.z = 0;
@@ -1325,10 +1885,14 @@ const VoxelWorld = ({
             let finalZ = nextZ;
             
             // Room-specific collision
-            if (roomRef.current === 'dojo' && roomData && roomData.bounds) {
-                // Dojo uses simple bounds collision
+            if ((roomRef.current === 'dojo' || roomRef.current === 'igloo1' || roomRef.current === 'igloo2') && roomData && roomData.bounds) {
+                // Dojo and Igloo use simple bounds collision (no furniture collision)
                 const b = roomData.bounds;
-                if (nextX < b.minX || nextX > b.maxX || nextZ < b.minZ || nextZ > b.maxZ) {
+                const playerRadius = 0.8;
+                // Clamp position to stay within bounds (prevents rotation escape)
+                finalX = Math.max(b.minX + playerRadius, Math.min(b.maxX - playerRadius, nextX));
+                finalZ = Math.max(b.minZ + playerRadius, Math.min(b.maxZ - playerRadius, nextZ));
+                if (finalX !== nextX || finalZ !== nextZ) {
                     collided = true;
                 }
             } else if (townCenterRef.current) {
@@ -1384,11 +1948,54 @@ const VoxelWorld = ({
                 }
             }
             
-            // Update position (TownCenter returns safe position, others use original logic)
-            if (townCenterRef.current && roomRef.current === 'town') {
+            // Update position (use clamped finalX/finalZ for all rooms)
+            if (roomRef.current === 'dojo' || roomRef.current === 'igloo1' || roomRef.current === 'igloo2') {
+                // Dojo/Igloo: always use clamped position
+                posRef.current.x = finalX;
+                posRef.current.z = finalZ;
+                
+                // Check igloo furniture proximity for interaction
+                if ((roomRef.current === 'igloo1' || roomRef.current === 'igloo2') && roomData && roomData.furniture) {
+                    let nearFurniture = null;
+                    for (const furn of roomData.furniture) {
+                        const dx = finalX - furn.position.x;
+                        const dz = finalZ - furn.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        if (dist < furn.interactionRadius) {
+                            nearFurniture = furn;
+                            break;
+                        }
+                    }
+                    
+                    // Dispatch interaction event (reuses existing townInteraction system)
+                    if (nearFurniture && !seatedRef.current) {
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: {
+                                action: 'sit',
+                                message: `Press E to sit on ${nearFurniture.type}`,
+                                emote: 'Sit',
+                                data: {
+                                    worldX: nearFurniture.position.x,
+                                    worldZ: nearFurniture.position.z,
+                                    worldRotation: nearFurniture.rotation,
+                                    snapPoints: nearFurniture.snapPoints,
+                                    seatHeight: nearFurniture.seatHeight
+                                }
+                            }
+                        }));
+                    } else if (!nearFurniture && !seatedRef.current) {
+                        // Exited furniture zone
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: { action: 'exit' }
+                        }));
+                    }
+                }
+            } else if (townCenterRef.current && roomRef.current === 'town') {
+                // Town: use TownCenter's safe position
                 posRef.current.x = finalX;
                 posRef.current.z = finalZ;
             } else if (!collided) {
+                // Fallback: only move if no collision
                 posRef.current.x = nextX;
                 posRef.current.z = nextZ;
             }
@@ -1432,8 +2039,8 @@ const VoxelWorld = ({
                 meshInner.rotation.z = 0;
                 meshInner.rotation.y = 0;
                 meshInner.rotation.x = 0;
-                if(footL) { footL.rotation.x = 0; }
-                if(footR) { footR.rotation.x = 0; }
+                if(footL) { footL.rotation.x = 0; footL.position.z = 0; }
+                if(footR) { footR.rotation.x = 0; footR.position.z = 0; }
                 if(head) { head.rotation.x = 0; }
                 if(hatPart) { hatPart.rotation.x = 0; }
                 if(eyesPart) { eyesPart.rotation.x = 0; }
@@ -1455,11 +2062,26 @@ const VoxelWorld = ({
                         if(flipperR) flipperR.rotation.z = -Math.sin(eTime * 10) * 1;
                     }
                     else if (emoteType === 'Sit') {
-                        meshInner.position.y = 0.6;
-                        if(footL) footL.rotation.x = -Math.PI / 2;
-                        if(footR) footR.rotation.x = -Math.PI / 2;
-                        if(flipperL) flipperL.rotation.z = 0.5;
-                        if(flipperR) flipperR.rotation.z = -0.5;
+                        // Check if seated on furniture (bench) vs ground sitting emote
+                        if (seatedRef.current) {
+                            // FURNITURE SITTING: Elevate to sit ON TOP of bench
+                            meshInner.position.y = 1.6; // Elevated to bench surface
+                        } else {
+                            // GROUND SITTING: Sit on the ground, lower position
+                            meshInner.position.y = 0.5;
+                        }
+                        // Feet extend forward when sitting - push out in front of body
+                        if(footL) {
+                            footL.rotation.x = -Math.PI / 2.5;
+                            footL.position.z = 2.5; // Push foot forward, clear of body
+                        }
+                        if(footR) {
+                            footR.rotation.x = -Math.PI / 2.5;
+                            footR.position.z = 2.5; // Push foot forward, clear of body
+                        }
+                        // Flippers rest on sides
+                        if(flipperL) flipperL.rotation.z = 0.3;
+                        if(flipperR) flipperR.rotation.z = -0.3;
                     }
                     else if (emoteType === 'Laugh') {
                           const laughRot = -0.5 + Math.sin(eTime * 20) * 0.2; 
@@ -2096,6 +2718,10 @@ const VoxelWorld = ({
         
         setChatInput("");
         
+        // Exit chat mode - blur the input so player can move again
+        const input = document.getElementById('chat-input-field');
+        if (input) input.blur();
+        
         // Earn coins for chatting
         GameManager.getInstance().incrementStat('chatsSent');
         if (Math.random() > 0.7) {
@@ -2202,7 +2828,8 @@ const VoxelWorld = ({
         
         // Room transition
         if (nearbyPortal.targetRoom && onChangeRoom) {
-            onChangeRoom(nearbyPortal.targetRoom);
+            // Pass exit spawn position if available (for returning to town)
+            onChangeRoom(nearbyPortal.targetRoom, nearbyPortal.exitSpawnPos);
             return;
         }
         
@@ -2229,19 +2856,31 @@ const VoxelWorld = ({
     // Handle town interactions (benches, snowmen, etc.)
     useEffect(() => {
         const handleTownInteraction = (e) => {
-            const { action, message, emote, data } = e.detail;
+            const { action, message, emote, data, exitedZone } = e.detail;
+            
+            // Handle exit events - clear the interaction prompt (but not if seated)
+            if (action === 'exit') {
+                if (!seatedRef.current) {
+                    setNearbyInteraction(null);
+                }
+                return;
+            }
             
             if (action === 'sit' && emote) {
-                // Auto-trigger sit emote when near bench
-                setNearbyInteraction({ action, message: 'Press E to sit', emote });
+                // Don't show prompt if already seated
+                if (seatedRef.current) return;
+                // Pass bench data including snap points and world position
+                setNearbyInteraction({ 
+                    action, 
+                    message: 'Press E to sit', 
+                    emote,
+                    benchData: data // Contains snapPoints, seatHeight, etc.
+                });
             } else if (action === 'interact_snowman') {
                 // Show snowman message
-                setNearbyInteraction({ action, message: message || '☃️ Hello friend!', emote: 'Wave' });
-            } else if (action === 'enter_igloo') {
-                setNearbyInteraction({ action, message: '🏠 Press E to enter igloo', emote: null });
-            } else {
-                setNearbyInteraction(null);
+                setNearbyInteraction({ action, message: message || '☃️ Say hi to the snowman!', emote: 'Wave' });
             }
+            // Note: enter_igloo is handled by portal system, not interaction prompts
         };
         
         window.addEventListener('townInteraction', handleTownInteraction);
@@ -2251,8 +2890,76 @@ const VoxelWorld = ({
     // Handle interaction with E key
     useEffect(() => {
         const handleInteract = (e) => {
-            if (e.code === 'KeyE' && nearbyInteraction && !showEmoteWheel && !nearbyPortal) {
-                if (nearbyInteraction.emote) {
+            if (e.code === 'KeyE' && nearbyInteraction && !nearbyPortal) {
+                // Handle bench sitting with snap points
+                if (nearbyInteraction.action === 'sit' && nearbyInteraction.benchData) {
+                    const benchData = nearbyInteraction.benchData;
+                    const snapPoints = benchData.snapPoints || [{ x: 0, z: 0, rotation: 0 }];
+                    const benchX = benchData.worldX;
+                    const benchZ = benchData.worldZ;
+                    const benchRotation = benchData.worldRotation || 0;
+                    
+                    // Find the closest available snap point
+                    const playerX = posRef.current.x;
+                    const playerZ = posRef.current.z;
+                    
+                    // Find closest snap point (transform to world space considering rotation)
+                    let closestPoint = snapPoints[0];
+                    let closestDist = Infinity;
+                    let closestWorldX = benchX;
+                    let closestWorldZ = benchZ;
+                    
+                    for (const point of snapPoints) {
+                        // Rotate snap point by bench rotation
+                        const rotatedX = point.x * Math.cos(benchRotation) - point.z * Math.sin(benchRotation);
+                        const rotatedZ = point.x * Math.sin(benchRotation) + point.z * Math.cos(benchRotation);
+                        
+                        // Transform to world space
+                        const worldX = benchX + rotatedX;
+                        const worldZ = benchZ + rotatedZ;
+                        
+                        const dist = Math.sqrt((playerX - worldX) ** 2 + (playerZ - worldZ) ** 2);
+                        if (dist < closestDist) {
+                            closestDist = dist;
+                            closestPoint = point;
+                            closestWorldX = worldX;
+                            closestWorldZ = worldZ;
+                        }
+                    }
+                    
+                    // Set seated state
+                    const seatData = {
+                        snapPoint: closestPoint,
+                        worldPos: { x: closestWorldX, z: closestWorldZ },
+                        seatHeight: benchData.seatHeight || 0.8,
+                        benchRotation: benchRotation,
+                        benchDepth: benchData.benchDepth || 0.8
+                    };
+                    setSeatedOnBench(seatData);
+                    seatedRef.current = seatData;
+                    
+                    // Move player to seat position
+                    posRef.current.x = closestWorldX;
+                    posRef.current.z = closestWorldZ;
+                    
+                    // Face forward (same direction bench faces, +Z in bench local space)
+                    rotRef.current = benchRotation;
+                    
+                    // Update player mesh position and rotation
+                    if (playerRef.current) {
+                        playerRef.current.position.x = closestWorldX;
+                        playerRef.current.position.z = closestWorldZ;
+                        playerRef.current.rotation.y = rotRef.current;
+                    }
+                    
+                    // Trigger sit emote
+                    emoteRef.current = { type: 'Sit', startTime: Date.now() };
+                    mpSendEmote('Sit');
+                    
+                    // Clear the interaction prompt
+                    setNearbyInteraction(null);
+                }
+                else if (nearbyInteraction.emote) {
                     emoteRef.current = { type: nearbyInteraction.emote, startTime: Date.now() };
                     mpSendEmote(nearbyInteraction.emote);
                 }
@@ -2263,7 +2970,7 @@ const VoxelWorld = ({
         };
         window.addEventListener('keydown', handleInteract);
         return () => window.removeEventListener('keydown', handleInteract);
-    }, [nearbyInteraction, showEmoteWheel, nearbyPortal]);
+    }, [nearbyInteraction, nearbyPortal]);
     
     // ==================== MULTIPLAYER SYNC (OPTIMIZED) ====================
     
@@ -2470,9 +3177,242 @@ const VoxelWorld = ({
         }
     }, [playerPuffle, connected, playerId]);
     
+    // Mobile directional button handlers
+    const handleMobileButtonDown = (direction) => {
+        mobileControlsRef.current[direction] = true;
+    };
+    
+    const handleMobileButtonUp = (direction) => {
+        mobileControlsRef.current[direction] = false;
+    };
+    
     return (
         <div className="relative w-full h-full bg-black">
              <div ref={mountRef} className="absolute inset-0" />
+             
+             {/* Connection Error Display */}
+             {connectionError && (
+                <div className="absolute inset-0 bg-black/90 z-50 flex flex-col items-center justify-center p-8">
+                    <div className="text-6xl mb-6">⚠️</div>
+                    <h2 className="text-red-400 text-xl retro-text text-center mb-4">Connection Error</h2>
+                    <p className="text-white text-center text-sm mb-2">{connectionError.message}</p>
+                    {connectionError.code === 'TOO_MANY_CONNECTIONS' && (
+                        <p className="text-gray-400 text-center text-xs">
+                            Please close other browser tabs running this game.
+                        </p>
+                    )}
+                    <button 
+                        className="mt-6 bg-cyan-600 hover:bg-cyan-500 text-white px-6 py-3 rounded-xl retro-text text-sm"
+                        onClick={() => window.location.reload()}
+                    >
+                        Retry Connection
+                    </button>
+                </div>
+             )}
+             
+             {/* Mobile Portrait Mode Warning */}
+             {isMobile && !isLandscape && (
+                <div className="absolute inset-0 bg-black/95 z-50 flex flex-col items-center justify-center p-8">
+                    <div className="text-6xl mb-6 animate-bounce">📱</div>
+                    <h2 className="text-white text-xl retro-text text-center mb-4">Rotate Your Device</h2>
+                    <p className="text-gray-400 text-center text-sm">
+                        Please rotate your device to landscape mode for the best experience
+                    </p>
+                    <div className="mt-8 w-20 h-12 border-2 border-white/50 rounded-lg relative animate-pulse">
+                        <div className="absolute inset-1 bg-cyan-500/30 rounded"></div>
+                    </div>
+                </div>
+             )}
+             
+             {/* Mobile Directional Buttons (Minecraft-style D-pad) */}
+             {isMobile && isLandscape && (
+                <div className="absolute bottom-6 left-6 z-30 touch-none select-none">
+                    {/* D-pad container */}
+                    <div className="relative w-36 h-36">
+                        {/* Forward Button (Top) */}
+                        <button
+                            className="absolute top-0 left-1/2 -translate-x-1/2 w-12 h-12 bg-black/60 border-2 border-white/40 rounded-lg flex items-center justify-center active:bg-white/30 active:scale-95 transition-all"
+                            onTouchStart={(e) => { e.preventDefault(); handleMobileButtonDown('forward'); }}
+                            onTouchEnd={(e) => { e.preventDefault(); handleMobileButtonUp('forward'); }}
+                            onTouchCancel={(e) => { e.preventDefault(); handleMobileButtonUp('forward'); }}
+                        >
+                            <span className="text-white text-2xl">▲</span>
+                        </button>
+                        
+                        {/* Back Button (Bottom) */}
+                        <button
+                            className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-12 bg-black/60 border-2 border-white/40 rounded-lg flex items-center justify-center active:bg-white/30 active:scale-95 transition-all"
+                            onTouchStart={(e) => { e.preventDefault(); handleMobileButtonDown('back'); }}
+                            onTouchEnd={(e) => { e.preventDefault(); handleMobileButtonUp('back'); }}
+                            onTouchCancel={(e) => { e.preventDefault(); handleMobileButtonUp('back'); }}
+                        >
+                            <span className="text-white text-2xl">▼</span>
+                        </button>
+                        
+                        {/* Left Button (Rotate Left) */}
+                        <button
+                            className="absolute left-0 top-1/2 -translate-y-1/2 w-12 h-12 bg-black/60 border-2 border-white/40 rounded-lg flex items-center justify-center active:bg-white/30 active:scale-95 transition-all"
+                            onTouchStart={(e) => { e.preventDefault(); handleMobileButtonDown('left'); }}
+                            onTouchEnd={(e) => { e.preventDefault(); handleMobileButtonUp('left'); }}
+                            onTouchCancel={(e) => { e.preventDefault(); handleMobileButtonUp('left'); }}
+                        >
+                            <span className="text-white text-2xl">◀</span>
+                        </button>
+                        
+                        {/* Right Button (Rotate Right) */}
+                        <button
+                            className="absolute right-0 top-1/2 -translate-y-1/2 w-12 h-12 bg-black/60 border-2 border-white/40 rounded-lg flex items-center justify-center active:bg-white/30 active:scale-95 transition-all"
+                            onTouchStart={(e) => { e.preventDefault(); handleMobileButtonDown('right'); }}
+                            onTouchEnd={(e) => { e.preventDefault(); handleMobileButtonUp('right'); }}
+                            onTouchCancel={(e) => { e.preventDefault(); handleMobileButtonUp('right'); }}
+                        >
+                            <span className="text-white text-2xl">▶</span>
+                        </button>
+                        
+                        {/* Center indicator */}
+                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/40 border border-white/20 flex items-center justify-center pointer-events-none">
+                            <span className="text-white/40 text-[8px] retro-text">MOVE</span>
+                        </div>
+                    </div>
+                </div>
+             )}
+             
+             {/* Mobile Action Buttons */}
+             {isMobile && isLandscape && (
+                <div className="absolute bottom-8 right-8 flex flex-col gap-3 z-30">
+                    {/* Emote Button */}
+                    <button 
+                        className="w-14 h-14 rounded-full bg-purple-600/80 border-2 border-white/40 flex items-center justify-center active:scale-95 transition-transform"
+                        onClick={() => setShowEmoteWheel(true)}
+                    >
+                        <span className="text-2xl">😄</span>
+                    </button>
+                    
+                    {/* Chat Button */}
+                    <button 
+                        className="w-14 h-14 rounded-full bg-blue-600/80 border-2 border-white/40 flex items-center justify-center active:scale-95 transition-transform"
+                        onClick={() => setShowMobileChat(true)}
+                    >
+                        <span className="text-2xl">💬</span>
+                    </button>
+                    
+                    {/* Interact Button (E key) */}
+                    {(nearbyPortal || nearbyInteraction) && (
+                        <button 
+                            className="w-14 h-14 rounded-full bg-green-600/80 border-2 border-white/40 flex items-center justify-center active:scale-95 transition-transform animate-pulse"
+                            onClick={() => {
+                                if (nearbyPortal) {
+                                    handlePortalEnter();
+                                } else if (nearbyInteraction) {
+                                    // Handle bench sitting with snap points
+                                    if (nearbyInteraction.action === 'sit' && nearbyInteraction.benchData) {
+                                        const benchData = nearbyInteraction.benchData;
+                                        const snapPoints = benchData.snapPoints || [{ x: 0, z: 0, rotation: 0 }];
+                                        const benchX = benchData.worldX;
+                                        const benchZ = benchData.worldZ;
+                                        const benchRotation = benchData.worldRotation || 0;
+                                        const playerX = posRef.current.x;
+                                        const playerZ = posRef.current.z;
+                                        
+                                        // Find closest snap point with rotation
+                                        let closestPoint = snapPoints[0];
+                                        let closestDist = Infinity;
+                                        let closestWorldX = benchX;
+                                        let closestWorldZ = benchZ;
+                                        
+                                        for (const point of snapPoints) {
+                                            const rotatedX = point.x * Math.cos(benchRotation) - point.z * Math.sin(benchRotation);
+                                            const rotatedZ = point.x * Math.sin(benchRotation) + point.z * Math.cos(benchRotation);
+                                            const worldX = benchX + rotatedX;
+                                            const worldZ = benchZ + rotatedZ;
+                                            const dist = Math.sqrt((playerX - worldX) ** 2 + (playerZ - worldZ) ** 2);
+                                            if (dist < closestDist) {
+                                                closestDist = dist;
+                                                closestPoint = point;
+                                                closestWorldX = worldX;
+                                                closestWorldZ = worldZ;
+                                            }
+                                        }
+                                        
+                                        const seatData = {
+                                            snapPoint: closestPoint,
+                                            worldPos: { x: closestWorldX, z: closestWorldZ },
+                                            seatHeight: benchData.seatHeight || 0.8,
+                                            benchRotation: benchRotation,
+                                            benchDepth: benchData.benchDepth || 0.8
+                                        };
+                                        setSeatedOnBench(seatData);
+                                        seatedRef.current = seatData;
+                                        
+                                        posRef.current.x = closestWorldX;
+                                        posRef.current.z = closestWorldZ;
+                                        rotRef.current = benchRotation; // Face forward
+                                        
+                                        if (playerRef.current) {
+                                            playerRef.current.position.x = closestWorldX;
+                                            playerRef.current.position.z = closestWorldZ;
+                                            playerRef.current.rotation.y = rotRef.current;
+                                        }
+                                        
+                                        emoteRef.current = { type: 'Sit', startTime: Date.now() };
+                                        mpSendEmote('Sit');
+                                        setNearbyInteraction(null);
+                                    }
+                                    else if (nearbyInteraction.emote) {
+                                        emoteRef.current = { type: nearbyInteraction.emote, startTime: Date.now() };
+                                        mpSendEmote(nearbyInteraction.emote);
+                                    }
+                                    if (nearbyInteraction.action === 'interact_snowman') {
+                                        setActiveBubble(nearbyInteraction.message);
+                                    }
+                                }
+                            }}
+                        >
+                            <span className="text-xl retro-text text-white">E</span>
+                        </button>
+                    )}
+                </div>
+             )}
+             
+             {/* Mobile Chat Modal */}
+             {isMobile && showMobileChat && (
+                <div className="absolute inset-0 bg-black/80 z-40 flex items-center justify-center p-4">
+                    <div className="bg-gray-900 rounded-2xl p-4 w-full max-w-md border border-white/20">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-white retro-text text-sm">Chat</h3>
+                            <button 
+                                className="text-white/60 hover:text-white p-2"
+                                onClick={() => setShowMobileChat(false)}
+                            >✕</button>
+                        </div>
+                        <input 
+                            type="text" 
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            placeholder="Type your message..."
+                            className="w-full bg-black/50 border border-white/20 rounded-xl px-4 py-3 text-white text-base"
+                            autoFocus
+                        />
+                        <div className="flex gap-2 mt-3">
+                            <button 
+                                className="flex-1 bg-gray-700 text-white py-3 rounded-xl retro-text text-xs"
+                                onClick={() => setShowMobileChat(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                className="flex-1 bg-yellow-500 text-black py-3 rounded-xl retro-text text-xs"
+                                onClick={() => {
+                                    sendChat();
+                                    setShowMobileChat(false);
+                                }}
+                            >
+                                Send
+                            </button>
+                        </div>
+                    </div>
+                </div>
+             )}
              
              {/* HUD - Top Right */}
              <GameHUD onOpenPuffles={() => setShowPufflePanel(true)} />
@@ -2490,9 +3430,9 @@ const VoxelWorld = ({
              
              {/* Town Interaction Prompt */}
              {nearbyInteraction && !nearbyPortal && (
-                <div className="absolute bottom-24 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/20 text-center animate-bounce-subtle z-20">
+                <div className={`absolute ${isMobile ? 'bottom-32 right-28' : 'bottom-24 left-1/2 -translate-x-1/2'} bg-black/70 backdrop-blur-sm px-4 py-2 rounded-xl border border-white/20 text-center animate-bounce-subtle z-20`}>
                     <p className="text-white retro-text text-sm">{nearbyInteraction.message}</p>
-                    <p className="text-yellow-400 text-xs mt-1 retro-text">Press E</p>
+                    <p className="text-yellow-400 text-xs mt-1 retro-text">{isMobile ? 'Tap E' : 'Press E'}</p>
                 </div>
              )}
 
@@ -2511,10 +3451,12 @@ const VoxelWorld = ({
              
              {/* Title & Controls - Top Left */}
              <div className="absolute top-4 left-4 retro-text text-white drop-shadow-md z-10 pointer-events-none">
-                 <h2 className={`text-xl drop-shadow-lg ${room === 'dojo' ? 'text-red-400' : 'text-yellow-400'}`}>
-                     {room === 'dojo' ? 'THE DOJO' : 'TOWN'}
+                 <h2 className={`text-xl drop-shadow-lg ${room === 'dojo' ? 'text-red-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
+                     {room === 'dojo' ? 'THE DOJO' : room === 'igloo1' ? 'IGLOO 1' : room === 'igloo2' ? 'IGLOO 2' : 'TOWN'}
                  </h2>
-                 <p className="text-[10px] opacity-70 mt-1">WASD Move • E Enter/Emotes • Mouse Orbit</p>
+                 {!isMobile && (
+                     <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>
+                 )}
                  
                  {/* Multiplayer Status */}
                  <div className="flex items-center gap-2 mt-2">
@@ -2525,32 +3467,27 @@ const VoxelWorld = ({
                  </div>
              </div>
 
-             {/* Chat Input - Bottom */}
-             <div className="absolute bottom-4 left-4 right-20 flex gap-2 pointer-events-auto z-20">
-                  <input 
-                    id="chat-input-field"
-                    type="text" 
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                        if(e.key === 'Enter') sendChat();
-                        if(e.key === 'Escape') e.target.blur();
-                    }}
-                    placeholder="Press Enter to chat..."
-                    className="flex-1 bg-black/60 border-2 border-white/20 rounded-full px-4 py-2 text-white retro-text text-xs focus:outline-none focus:border-yellow-400 backdrop-blur-sm"
-                  />
-                  <button onClick={sendChat} className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 rounded-full retro-text text-xs transition-colors">
-                      <IconSend size={16}/>
-                  </button>
-             </div>
+             {/* Chat Input - Bottom (Desktop only) */}
+             {!isMobile && (
+                <div className="absolute bottom-4 left-4 right-20 flex gap-2 pointer-events-auto z-20">
+                     <input 
+                       id="chat-input-field"
+                       type="text" 
+                       value={chatInput}
+                       onChange={(e) => setChatInput(e.target.value)}
+                       onKeyDown={(e) => {
+                           if(e.key === 'Enter') sendChat();
+                           if(e.key === 'Escape') e.target.blur();
+                       }}
+                       placeholder="Press Enter to chat..."
+                       className="flex-1 bg-black/60 border-2 border-white/20 rounded-full px-4 py-2 text-white retro-text text-xs focus:outline-none focus:border-yellow-400 backdrop-blur-sm"
+                     />
+                     <button onClick={sendChat} className="bg-yellow-500 hover:bg-yellow-400 text-black px-4 rounded-full retro-text text-xs transition-colors">
+                         <IconSend size={16}/>
+                     </button>
+                </div>
+             )}
 
-             {/* Exit Button - Bottom Right */}
-             <button 
-                className="absolute bottom-4 right-4 bg-red-600/80 hover:bg-red-500 text-white px-3 py-2 rounded-lg retro-text text-xs z-20 pointer-events-auto backdrop-blur-sm transition-colors"
-                onClick={onExitToDesigner}
-             >
-                ✕ EXIT GAME
-             </button>
              
              {showEmoteWheel && (
                  <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/50 backdrop-blur-sm animate-fade-in">

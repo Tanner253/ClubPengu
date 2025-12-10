@@ -47,6 +47,9 @@ export function MultiplayerProvider({ children }) {
     // Current room synced with server
     const [serverRoom, setServerRoom] = useState(null);
     
+    // Connection error state
+    const [connectionError, setConnectionError] = useState(null);
+    
     // Callbacks for game integration
     const callbacksRef = useRef({
         onPlayerJoined: null,
@@ -239,6 +242,14 @@ export function MultiplayerProvider({ children }) {
                 
             case 'pong':
                 break;
+                
+            case 'error':
+                console.error(`❌ Server error: ${message.code} - ${message.message}`);
+                setConnectionError({
+                    code: message.code,
+                    message: message.message
+                });
+                break;
         }
     }, []);
     
@@ -352,6 +363,7 @@ export function MultiplayerProvider({ children }) {
         playersDataRef,       // Direct ref access for game loop
         chatMessages,
         serverRoom,
+        connectionError,      // Error if connection was rejected
         
         // Actions
         setName,

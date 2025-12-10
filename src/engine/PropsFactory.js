@@ -521,13 +521,24 @@ class PropsFactory {
             size: { x: benchWidth + 0.2, y: seatHeight + 0.6, z: benchDepth + 0.3 },
         };
         
-        // Interaction zone (for sitting)
+        // Interaction zone (for sitting) with two snap points
+        // Bench faces +Z direction (back rest at -Z), so sitting players face +Z
         group.userData.interactionZone = {
             type: 'box',
-            position: { x: 0, z: benchDepth/2 + 0.5 },
-            size: { x: benchWidth, z: 1 },
+            position: { x: 0, z: benchDepth/2 + 0.8 },
+            size: { x: benchWidth + 1, z: 2 },
             action: 'sit',
-            emote: 'Sit'
+            emote: 'Sit',
+            seatHeight: seatHeight,
+            benchDepth: benchDepth,
+            // Two seat positions: left and right side of bench (centered on each half)
+            // x: ±0.6 centers player on each side of the bench
+            // z: 0 centers player on the seat planks
+            snapPoints: [
+                { x: -0.6, z: 0 },    // Left seat (centered on left half)
+                { x: 0.6, z: 0 }      // Right seat (centered on right half)
+            ],
+            maxOccupants: 2
         };
         
         return group;
@@ -797,13 +808,13 @@ class PropsFactory {
         nose.rotation.x = Math.PI / 2;
         group.add(nose);
         
-        // Smile (coal pieces)
+        // Smile (coal pieces) - curved upward for happy face :)
         for (let i = -2; i <= 2; i++) {
             const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.03, 4, 4), eyeMat);
             const angle = (i / 4) * 0.5 - 0.1;
             mouth.position.set(
                 Math.sin(angle) * 0.25,
-                2.3 - Math.abs(i) * 0.03,
+                2.22 + Math.abs(i) * 0.04,  // Inverted: edges UP = smile
                 0.35 + Math.cos(angle) * 0.05
             );
             group.add(mouth);

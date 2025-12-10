@@ -124,8 +124,9 @@ class TownCenter {
         // ==================== IGLOOS ====================
         // Residential area - southwest
         props.push(
-            { type: 'igloo', x: C - 35, z: C + 20, rotation: Math.PI * 0.25 },
-            { type: 'igloo', x: C - 25, z: C + 30, rotation: -Math.PI * 0.1 },
+            // Igloos face forward (toward +Z) so entrances align with portal detection
+            { type: 'igloo', x: C - 35, z: C + 20, rotation: 0 },
+            { type: 'igloo', x: C - 25, z: C + 30, rotation: 0 },
         );
         
         // ==================== LAMP POSTS ====================
@@ -331,6 +332,14 @@ class TownCenter {
                     const zoneX = prop.x + (zone.position?.x || 0);
                     const zoneZ = prop.z + (zone.position?.z || 0);
                     
+                    // Include the prop's world position and rotation for snap point calculations
+                    const zoneWithWorldPos = {
+                        ...zone,
+                        worldX: prop.x,
+                        worldZ: prop.z,
+                        worldRotation: prop.rotation || 0
+                    };
+                    
                     this.collisionSystem.addTrigger(
                         zoneX,
                         zoneZ,
@@ -339,8 +348,8 @@ class TownCenter {
                             radius: zone.radius || 2,
                             size: zone.size
                         },
-                        (event) => this._handleInteraction(event, zone),
-                        { action: zone.action, data: zone }
+                        (event) => this._handleInteraction(event, zoneWithWorldPos),
+                        { action: zone.action, data: zoneWithWorldPos }
                     );
                 }
             }
@@ -405,17 +414,28 @@ class TownCenter {
      * Handle interaction zone triggers
      */
     _handleInteraction(event, zone) {
-        if (event.type !== 'enter') return;
-        
-        // Dispatch custom event for UI to handle
-        window.dispatchEvent(new CustomEvent('townInteraction', {
-            detail: {
-                action: zone.action,
-                message: zone.message,
-                emote: zone.emote,
-                data: zone
-            }
-        }));
+        if (event.type === 'enter') {
+            // Dispatch enter event for UI to handle
+            window.dispatchEvent(new CustomEvent('townInteraction', {
+                detail: {
+                    action: zone.action,
+                    message: zone.message,
+                    emote: zone.emote,
+                    data: zone
+                }
+            }));
+        } else if (event.type === 'exit') {
+            // Dispatch exit event to clear UI prompt
+            window.dispatchEvent(new CustomEvent('townInteraction', {
+                detail: {
+                    action: 'exit',
+                    exitedZone: zone.action,
+                    message: null,
+                    emote: null,
+                    data: zone
+                }
+            }));
+        }
     }
 
     /**
