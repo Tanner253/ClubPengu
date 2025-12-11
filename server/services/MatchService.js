@@ -85,20 +85,27 @@ class MatchService {
     }
 
     /**
+     * Generate a single random card
+     */
+    _generateCard() {
+        const element = CARD_ELEMENTS[Math.floor(Math.random() * 3)];
+        const power = Math.floor(Math.random() * 5) + 1; // 1-5 (matches original Card Jitsu)
+        const emoji = CARD_EMOJIS[element][Math.floor(Math.random() * 5)];
+        return {
+            id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            element,
+            power,
+            emoji
+        };
+    }
+
+    /**
      * Generate a hand of 5 cards
      */
     _generateHand() {
         const hand = [];
         for (let i = 0; i < 5; i++) {
-            const element = CARD_ELEMENTS[Math.floor(Math.random() * 3)];
-            const power = Math.floor(Math.random() * 5) + 1; // 1-5 (matches original Card Jitsu)
-            const emoji = CARD_EMOJIS[element][Math.floor(Math.random() * 5)];
-            hand.push({
-                id: `card_${Date.now()}_${i}_${Math.random().toString(36).substr(2, 4)}`,
-                element,
-                power,
-                emoji
-            });
+            hand.push(this._generateCard());
         }
         return hand;
     }
@@ -270,6 +277,21 @@ class MatchService {
      * Start next round
      */
     _startNextRound(match) {
+        // Remove played cards and replace with new ones BEFORE resetting selections
+        // This must happen before we clear the selected card indices
+        if (match.state.player1SelectedCard !== null) {
+            // Remove the played card
+            match.state.player1Hand.splice(match.state.player1SelectedCard, 1);
+            // Add a new random card to the hand
+            match.state.player1Hand.push(this._generateCard());
+        }
+        if (match.state.player2SelectedCard !== null) {
+            // Remove the played card
+            match.state.player2Hand.splice(match.state.player2SelectedCard, 1);
+            // Add a new random card to the hand
+            match.state.player2Hand.push(this._generateCard());
+        }
+        
         match.state.round++;
         match.state.phase = 'select';
         match.state.player1SelectedCard = null;
@@ -277,12 +299,12 @@ class MatchService {
         match.state.turnStartedAt = Date.now();
         match.state.lastRoundResult = null;
         
-        // Replenish hands if needed
-        if (match.state.player1Hand.length < 3) {
-            match.state.player1Hand = this._generateHand();
+        // Safety: ensure hands have 5 cards (regenerate if somehow corrupted)
+        while (match.state.player1Hand.length < 5) {
+            match.state.player1Hand.push(this._generateCard());
         }
-        if (match.state.player2Hand.length < 3) {
-            match.state.player2Hand = this._generateHand();
+        while (match.state.player2Hand.length < 5) {
+            match.state.player2Hand.push(this._generateCard());
         }
         
         // Notify players
