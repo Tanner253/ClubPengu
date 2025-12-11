@@ -91,6 +91,8 @@ const VoxelWorld = ({
     const [chatInput, setChatInput] = useState("");
     const [activeBubble, setActiveBubble] = useState(null);
     const bubbleSpriteRef = useRef(null);
+    const isAfkRef = useRef(false);
+    const afkMessageRef = useRef(null);
     
     // AI State
     const aiAgentsRef = useRef([]);
@@ -1971,6 +1973,18 @@ const VoxelWorld = ({
                                       mobileForward || mobileBack || mobileLeft || mobileRight ||
                                       joystickMagnitude > 0.1;
             
+            // Clear AFK state when movement is detected
+            if (anyMovementInput && isAfkRef.current) {
+                isAfkRef.current = false;
+                afkMessageRef.current = null;
+                // Remove the AFK bubble
+                if (playerRef.current && bubbleSpriteRef.current) {
+                    playerRef.current.remove(bubbleSpriteRef.current);
+                    bubbleSpriteRef.current = null;
+                }
+                setActiveBubble(null);
+            }
+            
             // If seated on bench, check for movement to stand up
             if (seatedRef.current) {
                 if (anyMovementInput) {
@@ -3485,6 +3499,11 @@ const VoxelWorld = ({
         playerRef.current.add(sprite);
         bubbleSpriteRef.current = sprite;
         
+        // Don't auto-clear if AFK - bubble stays until movement
+        if (isAfkRef.current) {
+            return; // No timeout for AFK messages
+        }
+        
         const timeout = setTimeout(() => {
             if (playerRef.current && bubbleSpriteRef.current) {
                 playerRef.current.remove(bubbleSpriteRef.current);
@@ -3498,10 +3517,33 @@ const VoxelWorld = ({
     
     const sendChat = () => {
         if(!chatInput.trim()) return;
-        setActiveBubble(chatInput);
+        
+        const trimmedInput = chatInput.trim();
+        
+        // Check for /afk command
+        if (trimmedInput.toLowerCase().startsWith('/afk')) {
+            const afkMessage = trimmedInput.slice(4).trim() || '💤 AFK';
+            isAfkRef.current = true;
+            afkMessageRef.current = afkMessage;
+            setActiveBubble(`💤 ${afkMessage}`);
+            mpSendChat(`💤 ${afkMessage}`);
+            setChatInput("");
+            // Blur input immediately
+            const input = document.getElementById('chat-input-field');
+            if (input) input.blur();
+            return;
+        }
+        
+        // Clear AFK state if sending a regular message
+        if (isAfkRef.current) {
+            isAfkRef.current = false;
+            afkMessageRef.current = null;
+        }
+        
+        setActiveBubble(trimmedInput);
         
         // Send to other players via multiplayer
-        mpSendChat(chatInput);
+        mpSendChat(trimmedInput);
         
         setChatInput("");
         
@@ -4271,7 +4313,10 @@ const VoxelWorld = ({
                        value={chatInput}
                        onChange={(e) => setChatInput(e.target.value)}
                        onKeyDown={(e) => {
-                           if(e.key === 'Enter') sendChat();
+                           if(e.key === 'Enter') {
+                               e.stopPropagation(); // Prevent global handler from re-focusing
+                               sendChat();
+                           }
                            if(e.key === 'Escape') e.target.blur();
                        }}
                        placeholder="Press Enter to chat..."
