@@ -149,6 +149,35 @@ export const ASSETS = {
             // Red band
             for(let x=-4; x<=4; x++) for(let z=-4; z<=4; z++) if(x*x+z*z < 17 && x*x+z*z > 12) v.push({x, y:11, z, c:'#8b0000'});
             return v;
+        })(),
+        bobRossAfro: (() => {
+            // Big fluffy Bob Ross perm/afro - round and natural
+            const v = [];
+            const baseColor = '#3D2314'; // Dark brown
+            const highlightColor = '#5C3A21'; // Lighter brown for depth
+            
+            // Afro sits on head - center around y=11, radius 5
+            const centerY = 11;
+            const radius = 5;
+            
+            for(let x = -radius; x <= radius; x++) {
+                for(let y = 7; y <= 16; y++) {
+                    for(let z = -radius; z <= radius; z++) {
+                        // Perfect sphere calculation
+                        const dy = y - centerY;
+                        const dist = Math.sqrt(x*x + dy*dy + z*z);
+                        
+                        // Solid sphere with slight surface texture
+                        if(dist <= radius) {
+                            // Curly texture - alternate colors based on position
+                            const isCurl = ((x + y + z) % 2 === 0);
+                            v.push({x, y, z, c: isCurl ? highlightColor : baseColor});
+                        }
+                    }
+                }
+            }
+            
+            return v;
         })()
     },
     EYES: {
@@ -604,6 +633,67 @@ export const ASSETS = {
             // Belt
             addVoxel(7, -4, 0, leather);
             addVoxel(6, -4, 0, hiltGold);
+            
+            return Array.from(voxelMap.values());
+        })(),
+        // Paint brush and palette - Bob Ross style artist gear
+        paintBrush: (() => {
+            const voxelMap = new Map();
+            const addVoxel = (x, y, z, c) => {
+                const key = `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
+                if (!voxelMap.has(key)) {
+                    voxelMap.set(key, {x: Math.round(x), y: Math.round(y), z: Math.round(z), c});
+                }
+            };
+            
+            const woodHandle = '#8B5A2B';
+            const ferrule = '#C0C0C0';
+            const bristleBase = '#F5DEB3';
+            
+            // Paint brush held in right flipper - angled up
+            // Handle (wooden)
+            for(let i = 0; i < 8; i++) {
+                addVoxel(6, i - 2, 5, woodHandle);
+            }
+            
+            // Metal ferrule (silver band where bristles attach)
+            addVoxel(6, 6, 5, ferrule);
+            addVoxel(6, 7, 5, ferrule);
+            
+            // Bristles (with paint colors - Titanium White, Phthalo Blue, Van Dyke Brown!)
+            const paintColors = ['#FFFFFF', '#1E90FF', '#4A3728', '#228B22', '#8B0000'];
+            for(let bx = -1; bx <= 1; bx++) {
+                for(let by = 0; by < 3; by++) {
+                    const color = paintColors[(bx + by + 2) % paintColors.length];
+                    addVoxel(6 + bx, 8 + by, 5, by === 0 ? bristleBase : color);
+                }
+            }
+            // Bristle tip
+            addVoxel(6, 11, 5, '#FFFFFF'); // Titanium white on the tip
+            
+            // Paint palette held in left flipper
+            const paletteWood = '#DEB887';
+            
+            // Oval palette shape
+            for(let px = -3; px <= 1; px++) {
+                for(let pz = -2; pz <= 2; pz++) {
+                    const dist = (px * px) / 4 + (pz * pz) / 3;
+                    if(dist < 2.5) {
+                        addVoxel(-5 + px, 1, 4 + pz, paletteWood);
+                    }
+                }
+            }
+            
+            // Thumb hole
+            addVoxel(-7, 1, 4, '#1A1A1A');
+            
+            // Paint blobs on palette
+            addVoxel(-5, 1.5, 3, '#FFFFFF');    // Titanium White
+            addVoxel(-4, 1.5, 3, '#FFD700');    // Cadmium Yellow
+            addVoxel(-6, 1.5, 5, '#1E90FF');    // Phthalo Blue
+            addVoxel(-5, 1.5, 5, '#228B22');    // Sap Green
+            addVoxel(-4, 1.5, 5, '#8B0000');    // Alizarin Crimson
+            addVoxel(-6, 1.5, 3, '#4A3728');    // Van Dyke Brown
             
             return Array.from(voxelMap.values());
         })(),
