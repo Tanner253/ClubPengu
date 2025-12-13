@@ -619,13 +619,27 @@ const VoxelWorld = ({
         cameraRef.current = camera;
         camera.position.set(0, 15, -15);
         
-        const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-        // OPTIMIZED: Cap pixel ratio at 2 to prevent performance issues on high DPI screens
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        // Detect Mac for performance optimizations (Retina displays + integrated GPUs)
+        const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform) || 
+                      (navigator.userAgent.includes('Mac') && 'ontouchend' in document === false);
+        const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+        
+        // Mac-specific optimizations: disable antialias on Retina, use lower pixel ratio
+        const renderer = new THREE.WebGLRenderer({ 
+            antialias: !isMac, // Disable antialias on Mac (very expensive on Retina)
+            powerPreference: 'high-performance',
+            stencil: false, // Disable stencil buffer if not needed
+            depth: true
+        });
+        
+        // OPTIMIZED: Cap pixel ratio - more aggressive on Mac
+        // Mac Retina displays are 2x but rendering at 2x with shadows is very heavy
+        const maxPixelRatio = isMac ? 1.5 : 2;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, maxPixelRatio));
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
-        // OPTIMIZED: Use BasicShadowMap instead of PCFSoftShadowMap (faster, slightly harder edges)
-        renderer.shadowMap.type = THREE.PCFShadowMap;
+        // OPTIMIZED: Use simpler shadows on Mac/Safari
+        renderer.shadowMap.type = (isMac || isSafari) ? THREE.BasicShadowMap : THREE.PCFShadowMap;
         mountRef.current.appendChild(renderer.domElement);
         rendererRef.current = renderer;
         
