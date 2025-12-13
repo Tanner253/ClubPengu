@@ -4263,7 +4263,8 @@ const VoxelWorld = ({
                 }
                 
                 // Auto-end emotes after 3.5 seconds (client-side fallback)
-                if (meshData.currentEmote && meshData.currentEmote !== 'Sit') {
+                // Sit and Breakdance are continuous emotes - don't auto-clear
+                if (meshData.currentEmote && meshData.currentEmote !== 'Sit' && meshData.currentEmote !== 'Breakdance') {
                     const emoteAge = (Date.now() - meshData.emoteStartTime) / 1000;
                     if (emoteAge > 3.5) {
                         meshData.currentEmote = null;

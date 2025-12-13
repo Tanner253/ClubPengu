@@ -659,8 +659,8 @@ function handleMessage(playerId, message) {
                 }, playerId);
             }
             
-            // Clear emote after duration (except Sit)
-            if (message.emote !== 'Sit') {
+            // Clear emote after duration (except Sit and Breakdance which are continuous)
+            if (message.emote && message.emote !== 'Sit' && message.emote !== 'Breakdance') {
                 setTimeout(() => {
                     player.emote = null;
                     player.seatedOnFurniture = false;
