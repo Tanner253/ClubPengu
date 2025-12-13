@@ -161,9 +161,11 @@ export function ChallengeProvider({ children }) {
                     setShowInbox(false);
                     setSelectedPlayer(null);
                     
-                    // Update local coins
+                    // Update local coins and persist
                     if (message.coins !== undefined) {
-                        GameManager.getInstance().coins = message.coins;
+                        const gm = GameManager.getInstance();
+                        gm.coins = message.coins;
+                        gm.save();
                     }
                     
                     showNotification(`🎮 Match started against ${message.match.yourRole === 'player1' ? message.match.player2.name : message.match.player1.name}!`, 'success');
@@ -177,10 +179,12 @@ export function ChallengeProvider({ children }) {
                     const result = message.result;
                     setIsInMatch(false);
                     
-                    // Update local coins
+                    // Update local coins and persist
                     if (result.yourCoins !== undefined) {
-                        GameManager.getInstance().coins = result.yourCoins;
-                        GameManager.getInstance().emit('coinsChanged', { 
+                        const gm = GameManager.getInstance();
+                        gm.coins = result.yourCoins;
+                        gm.save();
+                        gm.emit('coinsChanged', { 
                             coins: result.yourCoins, 
                             delta: result.coinsWon || (result.refunded ? result.refunded : 0),
                             reason: result.reason 
@@ -253,8 +257,10 @@ export function ChallengeProvider({ children }) {
                     break;
                     
                 case 'coins_update':
-                    GameManager.getInstance().coins = message.coins;
-                    GameManager.getInstance().emit('coinsChanged', { 
+                    const gmCoins = GameManager.getInstance();
+                    gmCoins.coins = message.coins;
+                    gmCoins.save();
+                    gmCoins.emit('coinsChanged', { 
                         coins: message.coins, 
                         delta: 0,
                         reason: 'sync' 
@@ -417,6 +423,13 @@ export function ChallengeProvider({ children }) {
         });
     }, [activeMatch, send]);
     
+    // Clear match state (called when user clicks Continue after match ends)
+    const clearMatch = useCallback(() => {
+        setIsInMatch(false);
+        setActiveMatch(null);
+        setMatchState(null);
+    }, []);
+    
     // Sync coins with server
     const syncCoins = useCallback((coins) => {
         send({
@@ -464,6 +477,7 @@ export function ChallengeProvider({ children }) {
         deleteInboxMessage,
         playCard,
         forfeitMatch,
+        clearMatch,
         syncCoins,
         toggleInbox,
         setShowInbox,

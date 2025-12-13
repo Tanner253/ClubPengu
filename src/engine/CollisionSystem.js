@@ -73,10 +73,10 @@ class CollisionSystem {
     }
 
     /**
-     * Get AABB bounds for a collider
+     * Get AABB bounds for a collider (accounts for rotation)
      */
     _getColliderBounds(collider) {
-        const { x, z, shape } = collider;
+        const { x, z, shape, rotation = 0 } = collider;
         
         if (shape.type === 'cylinder' || shape.type === 'sphere') {
             const r = shape.radius;
@@ -89,6 +89,37 @@ class CollisionSystem {
         } else if (shape.type === 'box') {
             const hw = shape.size.x / 2;
             const hd = shape.size.z / 2;
+            
+            // For rotated boxes, compute AABB of all 4 corners
+            if (rotation !== 0) {
+                const cos = Math.cos(rotation);
+                const sin = Math.sin(rotation);
+                
+                // The 4 corners in local space
+                const corners = [
+                    { lx: -hw, lz: -hd },
+                    { lx:  hw, lz: -hd },
+                    { lx:  hw, lz:  hd },
+                    { lx: -hw, lz:  hd }
+                ];
+                
+                // Transform to world space and find bounds
+                let minX = Infinity, maxX = -Infinity;
+                let minZ = Infinity, maxZ = -Infinity;
+                
+                for (const c of corners) {
+                    const wx = x + c.lx * cos - c.lz * sin;
+                    const wz = z + c.lx * sin + c.lz * cos;
+                    minX = Math.min(minX, wx);
+                    maxX = Math.max(maxX, wx);
+                    minZ = Math.min(minZ, wz);
+                    maxZ = Math.max(maxZ, wz);
+                }
+                
+                return { minX, maxX, minZ, maxZ };
+            }
+            
+            // No rotation - simple AABB
             return {
                 minX: x - hw,
                 maxX: x + hw,
@@ -112,16 +143,18 @@ class CollisionSystem {
      * @param {Object} data - Optional extra data (name, mesh reference, etc.)
      * @returns {number} Collider ID for later removal
      */
-    addCollider(x, z, shape, type = CollisionSystem.TYPES.SOLID, data = {}) {
+    addCollider(x, z, shape, type = CollisionSystem.TYPES.SOLID, data = {}, rotation = 0, y = 0) {
         const id = this.nextId++;
         
         const collider = {
             id,
             x,
             z,
+            y, // Y position (base of collider)
             shape,
             type,
             data,
+            rotation, // Rotation in radians (for box colliders)
             cells: [], // Track which cells this collider is in
         };
         
@@ -150,14 +183,16 @@ class CollisionSystem {
      * @param {Object} data - Optional extra data
      * @returns {number} Trigger ID
      */
-    addTrigger(x, z, shape, callback, data = {}) {
+    addTrigger(x, z, shape, callback, data = {}, rotation = 0, y = 0) {
         const id = this.nextId++;
         
         this.triggers.set(id, {
             id,
             x,
             z,
+            y,  // Y position for elevated triggers
             shape,
+            rotation,  // Support rotation for box-shaped triggers
             callback,
             data,
             wasInside: false, // Track state for enter/exit events
@@ -260,12 +295,18 @@ class CollisionSystem {
             
             // Height-based collision check
             // Get height from either .height (cylinder) or .size.y (box)
-            const colliderHeight = collider.shape.height || collider.shape.size?.y || 100; // Default to tall if not specified
-            const colliderTop = colliderHeight;
+            const colliderThickness = collider.shape.height || collider.shape.size?.y || 100; // Default to tall if not specified
+            const colliderBase = collider.y || 0;
+            const colliderTop = colliderBase + colliderThickness;
             
             // If player Y is above the collider, skip collision (player is on top)
             if (y >= colliderTop - 0.1) {
                 continue; // Player is above this collider
+            }
+            
+            // If player Y is below the collider base, skip collision (player is under it)
+            if (y < colliderBase - 1.5) { // Player height is ~1.5
+                continue;
             }
             
             if (this._testCollision(x, z, radius, collider)) {
@@ -306,13 +347,15 @@ class CollisionSystem {
             // Check if player is within XZ bounds of this collider
             if (this._testCollision(x, z, radius, collider)) {
                 // Get height from either .height (cylinder) or .size.y (box)
-                const colliderHeight = collider.shape.height || collider.shape.size?.y || 0;
+                const colliderThickness = collider.shape.height || collider.shape.size?.y || 0;
+                const colliderBase = collider.y || 0;
+                const colliderTop = colliderBase + colliderThickness;
                 
-                // Player can land if they're above the collider top
-                if (y >= colliderHeight - 0.5 && colliderHeight > highestLanding.landingY) {
+                // Player can land if they're above the collider top (or close to it)
+                if (y >= colliderTop - 0.5 && colliderTop > highestLanding.landingY) {
                     highestLanding = {
                         canLand: true,
-                        landingY: colliderHeight,
+                        landingY: colliderTop,
                         collider: collider
                     };
                 }
@@ -395,12 +438,29 @@ class CollisionSystem {
 
     /**
      * Check triggers and fire callbacks for enter/exit events
+     * @param {number} playerY - Player Y position for height-based trigger filtering
      */
-    checkTriggers(playerX, playerZ, playerRadius = 0.5) {
+    checkTriggers(playerX, playerZ, playerRadius = 0.5, playerY = 0) {
         const triggered = [];
         
         this.triggers.forEach((trigger, id) => {
-            const isInside = this._testCollision(playerX, playerZ, playerRadius, trigger);
+            // Height check for elevated triggers
+            const triggerY = trigger.y || 0;
+            const triggerHeight = trigger.data?.seatHeight || trigger.shape?.seatHeight || 1.5;
+            
+            // For ground-level triggers (y=0), prevent triggering when ON TOP of furniture
+            // For elevated triggers (y>0), only trigger when player is at that elevation
+            let heightOk;
+            if (triggerY > 1) {
+                // Elevated trigger - player must be within range of trigger's Y level
+                heightOk = Math.abs(playerY - triggerY) < 2.5;
+            } else {
+                // Ground level trigger - player must not be standing on top
+                const maxHeight = trigger.data?.data?.seatHeight || trigger.data?.seatHeight || 2;
+                heightOk = playerY < maxHeight + 0.3;
+            }
+            
+            const isInside = heightOk && this._testCollision(playerX, playerZ, playerRadius, trigger);
             
             if (isInside && !trigger.wasInside) {
                 // Just entered
@@ -453,17 +513,28 @@ class CollisionSystem {
             return dist < (radius + shape.radius);
         } 
         else if (shape.type === 'box') {
-            // Circle vs AABB
+            // Circle vs Oriented Box (OBB)
             const halfW = shape.size.x / 2;
             const halfD = shape.size.z / 2;
+            const rotation = collider.rotation || 0;
             
-            // Find closest point on box to circle center
-            const closestX = Math.max(collider.x - halfW, Math.min(x, collider.x + halfW));
-            const closestZ = Math.max(collider.z - halfD, Math.min(z, collider.z + halfD));
+            // Transform player position into box's local space
+            const dx = x - collider.x;
+            const dz = z - collider.z;
             
-            // Check distance from closest point to circle center
+            // Rotate point by -rotation to get into box's local coordinate system
+            const cos = Math.cos(-rotation);
+            const sin = Math.sin(-rotation);
+            const localX = dx * cos - dz * sin;
+            const localZ = dx * sin + dz * cos;
+            
+            // Now do standard AABB test in local space
+            const closestX = Math.max(-halfW, Math.min(localX, halfW));
+            const closestZ = Math.max(-halfD, Math.min(localZ, halfD));
+            
+            // Check distance from closest point to circle center (in local space)
             const dist = Math.sqrt(
-                (x - closestX) ** 2 + (z - closestZ) ** 2
+                (localX - closestX) ** 2 + (localZ - closestZ) ** 2
             );
             return dist < radius;
         }
@@ -497,7 +568,8 @@ class CollisionSystem {
                 prop.z,
                 shape,
                 CollisionSystem.TYPES.SOLID,
-                { name: prop.name, propType: prop.type }
+                { name: prop.name, propType: prop.type },
+                prop.rotation || 0  // Support rotation for box colliders
             );
             ids.push(id);
         });
@@ -505,6 +577,85 @@ class CollisionSystem {
         return ids;
     }
 
+    /**
+     * Register a prop mesh - automatically extracts collision and interaction zones from userData
+     * This is the preferred way to register props - handles all transformations automatically
+     * @param {THREE.Object3D} mesh - The prop mesh (must have position and rotation set)
+     * @param {Function} interactionCallback - Optional callback for interaction zones
+     * @returns {{ colliderId: number|null, triggerId: number|null }}
+     */
+    registerProp(mesh, interactionCallback = null) {
+        const result = { colliderId: null, triggerId: null };
+        
+        const worldX = mesh.position.x;
+        const worldZ = mesh.position.z;
+        const rotation = mesh.rotation.y || 0;
+        
+        // Register collision from userData.collision
+        if (mesh.userData.collision) {
+            const col = mesh.userData.collision;
+            const colliderY = mesh.position.y || col.y || 0;  // Support elevated props
+            result.colliderId = this.addCollider(
+                worldX,
+                worldZ,
+                {
+                    type: col.type,
+                    radius: col.radius,
+                    size: col.size,
+                    height: col.height
+                },
+                CollisionSystem.TYPES.SOLID,
+                { name: mesh.name, mesh },
+                rotation,
+                colliderY  // Y position for elevated props
+            );
+        }
+        
+        // Register interaction zone from userData.interactionZone
+        if (mesh.userData.interactionZone) {
+            const zone = mesh.userData.interactionZone;
+            
+            // Calculate zone position with rotation
+            let zoneOffsetX = zone.position?.x || 0;
+            let zoneOffsetZ = zone.position?.z || 0;
+            
+            if (rotation !== 0) {
+                const cos = Math.cos(rotation);
+                const sin = Math.sin(rotation);
+                const rotatedX = zoneOffsetX * cos - zoneOffsetZ * sin;
+                const rotatedZ = zoneOffsetX * sin + zoneOffsetZ * cos;
+                zoneOffsetX = rotatedX;
+                zoneOffsetZ = rotatedZ;
+            }
+            
+            const zoneX = worldX + zoneOffsetX;
+            const zoneZ = worldZ + zoneOffsetZ;
+            
+            // Create zone data with world transform info
+            const zoneData = {
+                ...zone,
+                worldX,
+                worldZ,
+                worldRotation: rotation
+            };
+            
+            result.triggerId = this.addTrigger(
+                zoneX,
+                zoneZ,
+                {
+                    type: zone.type || 'sphere',
+                    radius: zone.radius || 2,
+                    size: zone.size
+                },
+                interactionCallback ? (event) => interactionCallback(event, zoneData) : null,
+                { action: zone.action, data: zoneData },
+                rotation
+            );
+        }
+        
+        return result;
+    }
+    
     /**
      * Clear all colliders and triggers
      */

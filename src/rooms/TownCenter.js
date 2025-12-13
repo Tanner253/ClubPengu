@@ -185,9 +185,6 @@ class TownCenter {
             // Near gift shop - scenic view of plaza
             { type: 'bench', x: C - 25, z: C - 8, rotation: Math.PI / 3 },
             
-            // Near pizza parlor - outdoor seating
-            { type: 'bench', x: C + 28, z: C + 15, rotation: -Math.PI / 2 },
-            
             // Southern scenic overlook
             { type: 'bench', x: C + 8, z: C + 32, rotation: Math.PI / 6 },
         );
@@ -197,6 +194,18 @@ class TownCenter {
         props.push(
             { type: 'snowman', x: C - 5, z: C + 18 },      // Plaza area
             { type: 'snowman', x: C + 25, z: C - 18 },     // Near pizza/dojo path
+        );
+        
+        // ==================== CHRISTMAS TREE ====================
+        // Festive Christmas tree with twinkling lights
+        props.push(
+            { type: 'christmas_tree', x: C - 10.3, z: C + 31.3 },
+        );
+        
+        // ==================== DOJO PARKOUR COURSE ====================
+        // Obstacle course behind the dojo leading to roof hangout spot
+        props.push(
+            { type: 'dojo_parkour', x: 0, z: 0 },  // Position is handled internally - don't offset
         );
         
         // ==================== SNOW PILES ====================
@@ -315,6 +324,87 @@ class TownCenter {
                         mesh.userData.particles = campfireResult.particles;
                     }
                     break;
+                case 'christmas_tree':
+                    const treeResult = this.propsFactory.createChristmasTree();
+                    mesh = treeResult.mesh;
+                    // Store update function for twinkling animation
+                    if (treeResult.update) {
+                        mesh.userData.treeUpdate = treeResult.update;
+                    }
+                    break;
+                case 'dojo_parkour':
+                    // Create parkour course with dojo dimensions
+                    const parkourResult = this.propsFactory.createDojoParkourCourse({
+                        dojoX: C,           // Dojo at center X
+                        dojoZ: C - 25,      // Dojo Z position
+                        dojoWidth: 14,
+                        dojoHeight: 8,
+                        dojoDepth: 14
+                    });
+                    mesh = parkourResult.mesh;
+                    
+                    // Register collision for each platform with proper Y position
+                    parkourResult.colliders.forEach((collider, idx) => {
+                        this.collisionSystem.addCollider(
+                            collider.x,                        // x position
+                            collider.z,                        // z position
+                            {                                  // shape
+                                type: 'box', 
+                                size: collider.size,
+                                height: collider.size.y        // Platform thickness
+                            },
+                            1,                                 // type (SOLID)
+                            { name: `parkour_plat_${idx}` },   // data
+                            collider.rotation || 0,            // rotation
+                            collider.y                         // Y position of platform base
+                        );
+                    });
+                    
+                    // Register bench interaction zones on the VIP platform (elevated)
+                    parkourResult.roofBenches.forEach((bench, idx) => {
+                        const benchZoneData = {
+                            type: 'box',
+                            position: { x: 0, z: 0.8 },
+                            size: { x: 3, z: 2 },
+                            action: 'sit',
+                            message: '🪑 Sit (Secret VIP Spot!)',
+                            emote: 'Sit',
+                            seatHeight: 0.8,
+                            benchDepth: 1,
+                            worldX: bench.x,
+                            worldZ: bench.z,
+                            worldRotation: bench.rotation || 0,
+                            snapPoints: [
+                                { x: -0.6, z: 0 },
+                                { x: 0, z: 0 },
+                                { x: 0.6, z: 0 }
+                            ],
+                            data: { seatHeight: bench.y + 0.8 }
+                        };
+                        this.collisionSystem.addTrigger(
+                            bench.x,
+                            bench.z,
+                            benchZoneData,
+                            (event) => {
+                                // Extract zone data from trigger shape and merge with event
+                                const zoneData = event.trigger?.shape || benchZoneData;
+                                this._handleInteraction(event, zoneData);
+                            },
+                            { name: `vip_bench_${idx}` },
+                            bench.rotation || 0,
+                            bench.y  // Pass the Y position for elevated trigger
+                        );
+                    });
+                    
+                    // Store parkour data for reference
+                    mesh.userData.parkourData = parkourResult;
+                    
+                    // DON'T reposition this mesh - positions are already absolute
+                    mesh.position.set(0, 0, 0);
+                    scene.add(mesh);
+                    this.propMeshes.push(mesh);
+                    mesh = null;  // Prevent double-add in the generic handler below
+                    break;
                 case 'log_seat':
                     mesh = this.propsFactory.createLogSeat(prop.rotation || 0);
                     break;
@@ -330,7 +420,7 @@ class TownCenter {
             }
             
             if (mesh) {
-                // Position the mesh
+                // Position and rotate the mesh
                 mesh.position.set(prop.x, 0, prop.z);
                 if (prop.rotation) {
                     mesh.rotation.y = prop.rotation;
@@ -340,48 +430,16 @@ class TownCenter {
                 scene.add(mesh);
                 this.propMeshes.push(mesh);
                 
-                // Register collision
-                if (mesh.userData.collision) {
-                    const col = mesh.userData.collision;
-                    this.collisionSystem.addCollider(
-                        prop.x,
-                        prop.z,
-                        col,
-                        CollisionSystem.TYPES.SOLID,
-                        { name: prop.type, mesh }
-                    );
-                }
-                
-                // Register interaction zones
-                if (mesh.userData.interactionZone) {
-                    const zone = mesh.userData.interactionZone;
-                    const zoneX = prop.x + (zone.position?.x || 0);
-                    const zoneZ = prop.z + (zone.position?.z || 0);
-                    
-                    // Include the prop's world position and rotation for snap point calculations
-                    const zoneWithWorldPos = {
-                        ...zone,
-                        worldX: prop.x,
-                        worldZ: prop.z,
-                        worldRotation: prop.rotation || 0
-                    };
-                    
-                    this.collisionSystem.addTrigger(
-                        zoneX,
-                        zoneZ,
-                        { 
-                            type: zone.type || 'sphere', 
-                            radius: zone.radius || 2,
-                            size: zone.size
-                        },
-                        (event) => this._handleInteraction(event, zoneWithWorldPos),
-                        { action: zone.action, data: zoneWithWorldPos }
-                    );
-                }
+                // Register prop with collision system - handles everything automatically
+                // The mesh already has position/rotation set, and userData contains collision/interaction data
+                this.collisionSystem.registerProp(
+                    mesh,
+                    (event, zoneData) => this._handleInteraction(event, zoneData)
+                );
             }
         });
         
-        // Add building collisions
+        // Add building collisions (walls)
         TownCenter.BUILDINGS.forEach(building => {
             const bx = C + building.position.x;
             const bz = C + building.position.z;
@@ -400,6 +458,28 @@ class TownCenter {
                 CollisionSystem.TYPES.SOLID,
                 { name: building.id, isBuilding: true }
             );
+            
+            // Add roof collision for dojo (tier 0 roof - walkable surface)
+            if (building.id === 'dojo') {
+                const roofY = building.size.h + 1.2; // First tier roof height
+                this.collisionSystem.addCollider(
+                    bx,
+                    bz,
+                    {
+                        type: 'box',
+                        size: {
+                            x: building.size.w + 4, // Roof extends beyond walls
+                            y: 0.5,                  // Roof thickness
+                            z: building.size.d + 4,
+                        },
+                        height: 0.5
+                    },
+                    CollisionSystem.TYPES.SOLID,
+                    { name: 'dojo_roof', isRoof: true },
+                    0,
+                    roofY  // Y position of roof
+                );
+            }
         });
         
         // Add water boundary collision (circular perimeter)
@@ -488,9 +568,10 @@ class TownCenter {
 
     /**
      * Check triggers at player position
+     * @param {number} playerY - Player Y for height-based filtering (e.g., don't trigger "sit" when standing ON bench)
      */
-    checkTriggers(playerX, playerZ) {
-        return this.collisionSystem.checkTriggers(playerX, playerZ);
+    checkTriggers(playerX, playerZ, playerY = 0) {
+        return this.collisionSystem.checkTriggers(playerX, playerZ, 0.5, playerY);
     }
 
     /**
@@ -546,6 +627,11 @@ class TownCenter {
                 if (light) {
                     light.intensity = 1.5 + Math.sin(time * 15) * 0.3 + Math.random() * 0.2;
                 }
+            }
+            
+            // Animate Christmas tree twinkling lights
+            if (mesh.name === 'christmas_tree' && mesh.userData.treeUpdate) {
+                mesh.userData.treeUpdate(time);
             }
         });
     }

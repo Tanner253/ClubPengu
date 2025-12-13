@@ -19,13 +19,25 @@ import Notification from './components/Notification';
 const AppContent = () => {
     // Current room/layer: 'town', 'dojo', etc.
     const [currentRoom, setCurrentRoom] = useState(null); // null = designer
-    const [penguinData, setPenguinData] = useState({
-        skin: 'blue',
-        hat: 'none',
-        eyes: 'normal',
-        mouth: 'beak',
-        bodyItem: 'none',
-        characterType: 'penguin'
+    const [penguinData, setPenguinData] = useState(() => {
+        // Load saved penguin customization from localStorage
+        try {
+            const saved = localStorage.getItem('penguin_customization');
+            if (saved) {
+                return JSON.parse(saved);
+            }
+        } catch (e) {
+            console.warn('Failed to load penguin customization:', e);
+        }
+        // Default penguin
+        return {
+            skin: 'blue',
+            hat: 'none',
+            eyes: 'normal',
+            mouth: 'beak',
+            bodyItem: 'none',
+            characterType: 'penguin'
+        };
     });
     
     // Puffle state (shared across all rooms)
@@ -52,6 +64,15 @@ const AppContent = () => {
         console.log('🐧 Club Penguin Clone Loaded!');
         console.log('💰 Coins:', gm.getCoins());
     }, []);
+    
+    // Save penguin customization whenever it changes
+    useEffect(() => {
+        try {
+            localStorage.setItem('penguin_customization', JSON.stringify(penguinData));
+        } catch (e) {
+            console.warn('Failed to save penguin customization:', e);
+        }
+    }, [penguinData]);
     
     // Enter the game world (from designer)
     const handleEnterWorld = () => {

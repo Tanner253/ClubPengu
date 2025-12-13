@@ -12,6 +12,7 @@ import TouchCameraControl from './components/TouchCameraControl';
 import SettingsMenu from './components/SettingsMenu';
 import GameManager from './engine/GameManager';
 import Puffle from './engine/Puffle';
+import PropsFactory from './engine/PropsFactory';
 import TownCenter from './rooms/TownCenter';
 import { useMultiplayer } from './multiplayer';
 import { useChallenge } from './challenge';
@@ -181,6 +182,9 @@ const VoxelWorld = ({
     const [isLandscape, setIsLandscape] = useState(true);
     const [showSettings, setShowSettings] = useState(false);
     const [showMobileChat, setShowMobileChat] = useState(false);
+    const [showDebugPosition, setShowDebugPosition] = useState(false);
+    const showDebugPositionRef = useRef(false);
+    const [debugPosition, setDebugPosition] = useState({ x: 0, y: 0, z: 0, offsetX: 0, offsetZ: 0 });
     
     // Settings (persisted to localStorage)
     const [gameSettings, setGameSettings] = useState(() => {
@@ -201,6 +205,39 @@ const VoxelWorld = ({
     useEffect(() => {
         localStorage.setItem('game_settings', JSON.stringify(gameSettings));
     }, [gameSettings]);
+    
+    // Save player position periodically and on unmount
+    useEffect(() => {
+        const savePosition = () => {
+            if (posRef.current && roomRef.current === 'town') {
+                try {
+                    const posData = {
+                        x: posRef.current.x,
+                        y: posRef.current.y,
+                        z: posRef.current.z,
+                        room: 'town',
+                        savedAt: Date.now()
+                    };
+                    localStorage.setItem('player_position', JSON.stringify(posData));
+                    console.log('💾 Saved player position:', posData);
+                } catch (e) {
+                    console.warn('Failed to save position:', e);
+                }
+            }
+        };
+        
+        // Save position every 5 seconds
+        const interval = setInterval(savePosition, 5000);
+        
+        // Save on page unload
+        window.addEventListener('beforeunload', savePosition);
+        
+        return () => {
+            clearInterval(interval);
+            window.removeEventListener('beforeunload', savePosition);
+            savePosition(); // Final save on unmount
+        };
+    }, []);
     
     // Joystick input ref (updated by VirtualJoystick component)
     const joystickInputRef = useRef({ x: 0, y: 0 });
@@ -1391,126 +1428,51 @@ const VoxelWorld = ({
             return sprite;
         };
 
-        // Build actual buildings with doors (Club Penguin/MapleStory style)
+        // Build high-quality procedural buildings using PropsFactory
+        const buildingFactory = new PropsFactory(THREE);
+        
         BUILDINGS.forEach(building => {
-            const buildingGroup = new THREE.Group();
+            let buildingGroup;
             const { w, h, d } = building.size;
             
-            // Main building structure
-            const wallGeo = new THREE.BoxGeometry(w, h, d);
-            const wallMat = new THREE.MeshStandardMaterial({ color: building.wallColor });
-            const walls = new THREE.Mesh(wallGeo, wallMat);
-            walls.position.y = h / 2;
-            walls.castShadow = true;
-            walls.receiveShadow = true;
-            buildingGroup.add(walls);
-            
-            // Roof based on type
-            if (building.roofType === 'pagoda') {
-                // Pagoda style (Dojo) - tiered roof
-                for (let tier = 0; tier < 2; tier++) {
-                    const roofW = w - tier * 3;
-                    const roofGeo = new THREE.ConeGeometry(roofW * 0.7, 3, 4);
-                    const roofMat = new THREE.MeshStandardMaterial({ color: building.color });
-                    const roof = new THREE.Mesh(roofGeo, roofMat);
-                    roof.position.y = h + 1.5 + tier * 2.5;
-                    roof.rotation.y = Math.PI / 4;
-                    roof.castShadow = true;
-                    buildingGroup.add(roof);
-                }
-                // Add decorative pillars
-                const pillarGeo = new THREE.CylinderGeometry(0.3, 0.3, h, 8);
-                const pillarMat = new THREE.MeshStandardMaterial({ color: 0x8b0000 });
-                [[-w/2 + 0.5, d/2 + 0.5], [w/2 - 0.5, d/2 + 0.5]].forEach(([px, pz]) => {
-                    const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-                    pillar.position.set(px, h/2, pz);
-                    buildingGroup.add(pillar);
-                });
-            } else if (building.roofType === 'slanted') {
-                // Slanted roof (Pizza Parlor)
-                const roofGeo = new THREE.BoxGeometry(w + 1, 0.5, d + 1);
-                const roofMat = new THREE.MeshStandardMaterial({ color: building.color });
-                const roof = new THREE.Mesh(roofGeo, roofMat);
-                roof.position.y = h + 0.25;
-                roof.rotation.z = 0.1;
-                buildingGroup.add(roof);
+            // Use factory methods for high-quality building generation
+            if (building.id === 'dojo') {
+                buildingGroup = buildingFactory.createDojo({ w, h, d });
+            } else if (building.id === 'market') {
+                buildingGroup = buildingFactory.createGiftShop({ w, h, d });
+            } else if (building.id === 'plaza') {
+                buildingGroup = buildingFactory.createPizzaParlor({ w, h, d });
             } else {
-                // Flat roof with border
-                const roofGeo = new THREE.BoxGeometry(w + 0.5, 0.5, d + 0.5);
-                const roofMat = new THREE.MeshStandardMaterial({ color: building.color });
-                const roof = new THREE.Mesh(roofGeo, roofMat);
-                roof.position.y = h + 0.25;
-                buildingGroup.add(roof);
+                // Fallback to simple building
+                buildingGroup = new THREE.Group();
+                const wallGeo = new THREE.BoxGeometry(w, h, d);
+                const wallMat = new THREE.MeshStandardMaterial({ color: building.wallColor || 0x808080 });
+                const walls = new THREE.Mesh(wallGeo, wallMat);
+                walls.position.y = h / 2;
+                walls.castShadow = true;
+                walls.receiveShadow = true;
+                buildingGroup.add(walls);
             }
             
-            // Door frame first (behind door)
-            const doorFrameGeo = new THREE.BoxGeometry(3.2, 4.8, 0.2);
-            const doorFrameMat = new THREE.MeshStandardMaterial({ 
-                color: building.gameId ? 0x8B4513 : 0x654321,
-                roughness: 0.8
-            });
-            const doorFrame = new THREE.Mesh(doorFrameGeo, doorFrameMat);
-            doorFrame.position.set(0, 2.4, d / 2 + 0.1);
-            buildingGroup.add(doorFrame);
+            // Add label sprite above building
+            const sign = createLabelSprite(building.name, building.emoji);
+            sign.position.set(0, h + 5, d / 2 + 1);
+            buildingGroup.add(sign);
             
-            // Door (front of building) - dark wood
-            const doorGeo = new THREE.BoxGeometry(2.4, 4, 0.15);
-            const doorMat = new THREE.MeshStandardMaterial({ 
-                color: 0x3d2817,
-                roughness: 0.7
-            });
-            const door = new THREE.Mesh(doorGeo, doorMat);
-            door.position.set(0, 2, d / 2 + 0.2);
-            buildingGroup.add(door);
-            
-            // Door handle
-            const handleGeo = new THREE.SphereGeometry(0.12, 8, 8);
-            const handleMat = new THREE.MeshStandardMaterial({ 
-                color: 0xFFD700,
-                metalness: 0.8,
-                roughness: 0.2
-            });
-            const handle = new THREE.Mesh(handleGeo, handleMat);
-            handle.position.set(0.8, 2, d / 2 + 0.35);
-            buildingGroup.add(handle);
-            
-            // Subtle glow mat on floor in front of door (for interactive buildings)
+            // Add interactive glow for buildings with games
             if (building.gameId) {
-                const glowGeo = new THREE.CircleGeometry(1.5, 16);
+                const glowGeo = new THREE.CircleGeometry(2, 16);
                 const glowMat = new THREE.MeshBasicMaterial({ 
                     color: 0x44ff44,
                     transparent: true,
-                    opacity: 0.3
+                    opacity: 0.4
                 });
                 const glow = new THREE.Mesh(glowGeo, glowMat);
                 glow.rotation.x = -Math.PI / 2;
-                glow.position.set(0, 0.05, d / 2 + 2);
+                glow.position.set(0, 0.05, d / 2 + 3);
                 glow.name = `door_glow_${building.id}`;
                 buildingGroup.add(glow);
             }
-            
-            // Windows
-            const windowGeo = new THREE.BoxGeometry(1.5, 1.5, 0.2);
-            const windowMat = new THREE.MeshStandardMaterial({ 
-                color: 0x87ceeb, 
-                emissive: 0xffffaa,
-                emissiveIntensity: 0.2
-            });
-            [[-w/3, h/2], [w/3, h/2]].forEach(([wx, wy]) => {
-                const win = new THREE.Mesh(windowGeo, windowMat);
-                win.position.set(wx, wy, d / 2 + 0.15);
-                buildingGroup.add(win);
-            });
-            
-            // Sign above door
-            const sign = createLabelSprite(building.name, building.emoji);
-            sign.position.set(0, h + 2, d / 2 + 1);
-            buildingGroup.add(sign);
-            
-            // Warm light near door
-            const doorLight = new THREE.PointLight(0xffaa55, 0.8, 10);
-            doorLight.position.set(0, 3, d / 2 + 2);
-            buildingGroup.add(doorLight);
             
             // Position building in world
             buildingGroup.position.set(
@@ -1521,7 +1483,7 @@ const VoxelWorld = ({
             
             scene.add(buildingGroup);
             
-            // Store building mesh for visuals
+            // Store building mesh for visuals and portal detection
             portalsRef.current.push({ 
                 ...building, 
                 mesh: buildingGroup,
@@ -1726,7 +1688,29 @@ const VoxelWorld = ({
                 y: 0, 
                 z: townCenterZ + customSpawnPos.z 
             };
+        } else if (room === 'town') {
+            // Town room: check localStorage for saved position FIRST
+            let loadedFromStorage = false;
+            try {
+                const savedPos = localStorage.getItem('player_position');
+                if (savedPos) {
+                    const parsed = JSON.parse(savedPos);
+                    if (parsed.room === 'town' && parsed.x !== undefined && parsed.z !== undefined) {
+                        posRef.current = { x: parsed.x, y: parsed.y || 0, z: parsed.z };
+                        loadedFromStorage = true;
+                        console.log('✅ Restored player position from localStorage:', parsed);
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to load saved position:', e);
+            }
+            
+            // If no saved position, use default spawn
+            if (!loadedFromStorage) {
+                posRef.current = { x: (CITY_SIZE/2) * BUILDING_SCALE, y: 0, z: (CITY_SIZE/2) * BUILDING_SCALE + 10 };
+            }
         } else if (roomData && roomData.spawnPos) {
+            // Other rooms: use room's spawn position
             posRef.current = { x: roomData.spawnPos.x, y: 0, z: roomData.spawnPos.z };
         } else {
             posRef.current = { x: (CITY_SIZE/2) * BUILDING_SCALE, y: 0, z: (CITY_SIZE/2) * BUILDING_SCALE + 10 };
@@ -1927,6 +1911,14 @@ const VoxelWorld = ({
                 // T key opens emote wheel
                 setShowEmoteWheel(true);
             }
+            if(e.code === 'F3') {
+                // F3 toggles debug position panel (like Minecraft)
+                e.preventDefault();
+                setShowDebugPosition(prev => {
+                    showDebugPositionRef.current = !prev;
+                    return !prev;
+                });
+            }
             if(e.code === 'Enter') {
                  const input = document.getElementById('chat-input-field');
                  // Only focus if not already focused (prevents re-focusing after sendChat blurs)
@@ -1959,8 +1951,10 @@ const VoxelWorld = ({
         rebuildAIMaps(); // Initial build
         
         // --- GAME LOOP ---
+        let frameCount = 0;
         const update = () => {
             reqRef.current = requestAnimationFrame(update);
+            frameCount++;
             
             const delta = clock.getDelta();
             const time = clock.getElapsedTime(); 
@@ -2367,7 +2361,8 @@ const VoxelWorld = ({
                 // Landing on objects is now handled in the unified ground collision section below
                 
                 // Also check triggers (benches, snowmen, etc.)
-                townCenterRef.current.checkTriggers(finalX, finalZ);
+                // Pass Y position so triggers can filter by height (e.g., don't show "sit" prompt when standing ON furniture)
+                townCenterRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
             } else {
                 // Fallback: Town uses tile-based collision (water at edges) + building collision
                 const gridX = Math.floor((nextX + BUILDING_SCALE/2) / BUILDING_SCALE);
@@ -2520,6 +2515,20 @@ const VoxelWorld = ({
             if (playerRef.current) {
                 playerRef.current.position.set(posRef.current.x, posRef.current.y, posRef.current.z);
                 playerRef.current.rotation.y = rotRef.current;
+            }
+            
+            // Update debug position display (throttled)
+            if (showDebugPositionRef.current && frameCount % 10 === 0) {
+                const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
+                const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+                setDebugPosition({
+                    x: posRef.current.x.toFixed(1),
+                    y: posRef.current.y.toFixed(1),
+                    z: posRef.current.z.toFixed(1),
+                    offsetX: (posRef.current.x - townCenterX).toFixed(1),
+                    offsetZ: (posRef.current.z - townCenterZ).toFixed(1),
+                    rotation: ((rotRef.current * 180 / Math.PI) % 360).toFixed(0)
+                });
             }
 
             // Player puffle follow/animate/tick - snake-tail behavior
@@ -3204,7 +3213,9 @@ const VoxelWorld = ({
             }
 
             const offset = camera.position.clone().sub(controls.target);
-            const targetPos = new THREE.Vector3(posRef.current.x, 1, posRef.current.z);
+            // Follow player's actual Y position (add slight offset for eye level)
+            const playerY = posRef.current.y + 1.2;
+            const targetPos = new THREE.Vector3(posRef.current.x, playerY, posRef.current.z);
             camera.position.copy(targetPos).add(offset);
             controls.target.copy(targetPos);
             controls.update();
@@ -4351,6 +4362,56 @@ const VoxelWorld = ({
                      </span>
                  </div>
              </div>
+             
+             {/* Debug Position Panel - Press F3 to toggle */}
+             {showDebugPosition && (
+                 <div className="absolute top-4 right-4 bg-black/80 border border-green-500/50 rounded-lg p-3 z-50 pointer-events-auto font-mono text-xs">
+                     <div className="text-green-400 font-bold mb-2 flex items-center gap-2">
+                         📍 DEBUG POSITION
+                         <span className="text-[10px] text-white/50">(F3 to hide)</span>
+                     </div>
+                     <div className="space-y-1 text-white/90">
+                         <div className="flex justify-between gap-4">
+                             <span className="text-cyan-400">World X:</span>
+                             <span>{debugPosition.x}</span>
+                         </div>
+                         <div className="flex justify-between gap-4">
+                             <span className="text-yellow-400">World Y:</span>
+                             <span>{debugPosition.y}</span>
+                         </div>
+                         <div className="flex justify-between gap-4">
+                             <span className="text-pink-400">World Z:</span>
+                             <span>{debugPosition.z}</span>
+                         </div>
+                         <div className="border-t border-white/20 my-2"></div>
+                         <div className="text-green-300 text-[10px] mb-1">Offset from Center (C):</div>
+                         <div className="flex justify-between gap-4">
+                             <span className="text-cyan-300">C + X:</span>
+                             <span className="text-green-400">{debugPosition.offsetX}</span>
+                         </div>
+                         <div className="flex justify-between gap-4">
+                             <span className="text-pink-300">C + Z:</span>
+                             <span className="text-green-400">{debugPosition.offsetZ}</span>
+                         </div>
+                         <div className="flex justify-between gap-4">
+                             <span className="text-orange-300">Rotation:</span>
+                             <span>{debugPosition.rotation}°</span>
+                         </div>
+                     </div>
+                     <button
+                         onClick={() => {
+                             const text = `x: C + ${debugPosition.offsetX}, z: C + ${debugPosition.offsetZ}`;
+                             navigator.clipboard.writeText(text);
+                         }}
+                         className="mt-3 w-full bg-green-600 hover:bg-green-500 text-white text-[10px] py-1 px-2 rounded"
+                     >
+                         📋 Copy Offset
+                     </button>
+                     <div className="mt-2 text-[9px] text-white/40 text-center">
+                         Use offsets in TownCenter.js props
+                     </div>
+                 </div>
+             )}
 
              
              {showEmoteWheel && (

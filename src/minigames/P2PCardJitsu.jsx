@@ -13,6 +13,7 @@ const P2PCardJitsu = ({ onMatchEnd }) => {
         matchState,
         playCard,
         forfeitMatch,
+        clearMatch,
     } = useChallenge();
     
     const [selectedCard, setSelectedCard] = useState(null);
@@ -357,7 +358,10 @@ const P2PCardJitsu = ({ onMatchEnd }) => {
                             </p>
                         </div>
                         <button 
-                            onClick={() => onMatchEnd && onMatchEnd()}
+                            onClick={() => {
+                                clearMatch();
+                                onMatchEnd && onMatchEnd();
+                            }}
                             className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 active:from-cyan-600 active:to-blue-600 text-white px-8 py-3 rounded-xl retro-text text-sm sm:text-base shadow-lg transition-all"
                         >
                             CONTINUE

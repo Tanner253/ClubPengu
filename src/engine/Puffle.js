@@ -176,6 +176,25 @@ class Puffle {
         const prevX = this.position.x;
         const prevZ = this.position.z;
         
+        // Get owner Y position (default to 0 for backwards compatibility)
+        const ownerY = ownerPos.y || 0;
+        
+        // Calculate Y difference - if owner is much higher/lower, teleport puffle
+        const yDiff = Math.abs(ownerY - this.position.y);
+        if (yDiff > 2) {
+            // Owner is on a different elevation - teleport puffle to owner's level
+            this.position.y = ownerY;
+            // Also teleport XZ to be close to owner
+            this.position.x = ownerPos.x - 1.5;
+            this.position.z = ownerPos.z - 1.5;
+            if (this.mesh) {
+                this.mesh.position.x = this.position.x;
+                this.mesh.position.y = ownerY + 0.5; // Puffle base height
+                this.mesh.position.z = this.position.z;
+            }
+            return;
+        }
+        
         const dx = ownerPos.x - this.position.x;
         const dz = ownerPos.z - this.position.z;
         const distance = Math.sqrt(dx * dx + dz * dz);
@@ -199,6 +218,9 @@ class Puffle {
                 this.position.z += moveZ;
             }
             
+            // Smoothly interpolate Y position to match owner
+            this.position.y += (ownerY - this.position.y) * 0.1;
+            
             // Calculate actual movement that occurred
             const actualMoveX = this.position.x - prevX;
             const actualMoveZ = this.position.z - prevZ;
@@ -213,11 +235,17 @@ class Puffle {
             // Update mesh position
             if (this.mesh) {
                 this.mesh.position.x = this.position.x;
+                this.mesh.position.y = this.position.y + 0.5; // Puffle base height offset
                 this.mesh.position.z = this.position.z;
             }
         } else {
             if (this.state === 'following') {
                 this.state = 'idle';
+            }
+            // Still update Y position when idle
+            this.position.y += (ownerY - this.position.y) * 0.1;
+            if (this.mesh) {
+                this.mesh.position.y = this.position.y + 0.5;
             }
         }
     }
@@ -237,9 +265,10 @@ class Puffle {
         const bounceSpeed = this.state === 'following' ? 4 : 1.5;
         const bounceHeight = this.state === 'following' ? 0.15 : 0.05;
         
-        // Smooth sine wave bounce
+        // Smooth sine wave bounce - add to current Y position (which includes elevation)
         const bounce = Math.abs(Math.sin(time * bounceSpeed + this.bounceOffset));
-        this.mesh.position.y = 0.35 + bounce * bounceHeight;
+        const baseY = (this.position.y || 0) + 0.35;
+        this.mesh.position.y = baseY + bounce * bounceHeight;
         
         // Subtle squash and stretch
         const squashAmount = this.state === 'following' ? 0.08 : 0.03;
@@ -258,18 +287,18 @@ class Puffle {
             this.mesh.rotation.y += diff * 0.15;
         }
         
-        // State-specific animations
+        // State-specific animations (use baseY for elevation support)
         if (this.state === 'sleeping') {
             this.mesh.rotation.z = Math.sin(time * 0.5) * 0.1;
-            this.mesh.position.y = 0.2;
+            this.mesh.position.y = baseY - 0.15;
             this.mesh.scale.set(baseScale * 1.1, baseScale * 0.7, baseScale * 1.1);
         } else if (this.state === 'playing') {
             this.mesh.rotation.y += 0.15;
-            this.mesh.position.y = 0.4 + Math.abs(Math.sin(time * 5)) * 0.3;
+            this.mesh.position.y = baseY + 0.05 + Math.abs(Math.sin(time * 5)) * 0.3;
             const playSquash = 1 + Math.sin(time * 5) * 0.1;
             this.mesh.scale.set(baseScale * playSquash, baseScale / playSquash, baseScale * playSquash);
         } else if (this.state === 'eating') {
-            this.mesh.position.y = 0.3 + Math.sin(time * 4) * 0.05;
+            this.mesh.position.y = baseY - 0.05 + Math.sin(time * 4) * 0.05;
             this.mesh.rotation.z = Math.sin(time * 6) * 0.1;
         } else {
             this.mesh.rotation.z = 0;

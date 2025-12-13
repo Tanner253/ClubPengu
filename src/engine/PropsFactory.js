@@ -1482,12 +1482,13 @@ class PropsFactory {
             height: seatHeight
         };
         
-        // Interaction zone for sitting (matches bench setup)
-        // Players approach from the front (+Z in local space after rotation)
+        // Interaction zone for sitting
+        // Zone is positioned in front of the log (+Z in local space)
+        // The log is horizontal (along X axis), players approach from +Z side
         group.userData.interactionZone = {
             type: 'box',
-            position: { x: 0, z: 0.8 },
-            size: { x: logWidth + 1, z: 2 },
+            position: { x: 0, z: logRadius + 1.2 },  // 1.2 units in front of log edge
+            size: { x: logWidth + 1.5, z: 2.5 },    // Wider and deeper zone
             action: 'sit',
             message: '🪵 Sit on log',
             emote: 'Sit',
@@ -1498,11 +1499,1521 @@ class PropsFactory {
                 { x: -0.5, z: 0 },    // Left seat
                 { x: 0.5, z: 0 }      // Right seat
             ],
-            maxOccupants: 2,
-            // Store rotation for proper facing direction when seated
-            benchRotation: rotation
+            maxOccupants: 2
         };
         
+        return group;
+    }
+
+    // ==================== PARKOUR PROPS ====================
+
+    /**
+     * Create a floating platform for parkour courses
+     * @param {Object} config - Platform configuration
+     * @returns {THREE.Group}
+     */
+    createParkourPlatform({ width = 3, depth = 3, height = 0.4, color = 0x4A90D9, glowing = false } = {}) {
+        const THREE = this.THREE;
+        const group = new THREE.Group();
+        group.name = 'parkour_platform';
+
+        // Main platform
+        const platMat = this.getMaterial(color, { 
+            roughness: 0.6,
+            metalness: glowing ? 0.3 : 0.1,
+            emissive: glowing ? color : 0x000000,
+            emissiveIntensity: glowing ? 0.2 : 0
+        });
+        const platGeo = new THREE.BoxGeometry(width, height, depth);
+        const platform = new THREE.Mesh(platGeo, platMat);
+        platform.position.y = height / 2;
+        platform.castShadow = true;
+        platform.receiveShadow = true;
+        group.add(platform);
+
+        // Edge trim
+        const trimMat = this.getMaterial(0x333333, { roughness: 0.8 });
+        const trimHeight = 0.1;
+        
+        // Front and back trim
+        [-1, 1].forEach(side => {
+            const trimGeo = new THREE.BoxGeometry(width + 0.1, trimHeight, 0.15);
+            const trim = new THREE.Mesh(trimGeo, trimMat);
+            trim.position.set(0, height + trimHeight / 2, side * (depth / 2));
+            group.add(trim);
+        });
+        
+        // Left and right trim
+        [-1, 1].forEach(side => {
+            const trimGeo = new THREE.BoxGeometry(0.15, trimHeight, depth + 0.1);
+            const trim = new THREE.Mesh(trimGeo, trimMat);
+            trim.position.set(side * (width / 2), height + trimHeight / 2, 0);
+            group.add(trim);
+        });
+
+        // Store collision data
+        group.userData.collision = {
+            type: 'box',
+            size: { x: width, y: height, z: depth },
+            height: height
+        };
+
+        return group;
+    }
+
+    /**
+     * Create a complete parkour obstacle course leading to dojo roof
+     * Course goes AROUND the side of the dojo, not through it
+     * @param {Object} config - Course configuration
+     * @returns {{ mesh: THREE.Group, platforms: Array, colliders: Array }}
+     */
+    createDojoParkourCourse({ dojoX = 0, dojoZ = -25, dojoWidth = 14, dojoHeight = 8, dojoDepth = 14 } = {}) {
+        const THREE = this.THREE;
+        const group = new THREE.Group();
+        group.name = 'dojo_parkour_course';
+
+        const platforms = [];
+        const colliders = [];
+        
+        // Roof target height
+        const roofHeight = dojoHeight + 2;
+        
+        // Dojo boundaries (to avoid clipping)
+        const dojoLeft = dojoX - dojoWidth / 2 - 2;
+        const dojoRight = dojoX + dojoWidth / 2 + 2;
+        const dojoFront = dojoZ + dojoDepth / 2 + 2;
+        const dojoBack = dojoZ - dojoDepth / 2 - 2;
+        
+        // Platform colors
+        const colors = [0x4A90D9, 0x5A9AD9, 0x3A80C9, 0x6AAAE9, 0x4A85C5];
+        
+        // Course layout - starts at ground level to the RIGHT of dojo, spirals up to first roof
+        // All positions are OUTSIDE the dojo building with generous clearance
+        // First roof (tier 0) is at h + 1.2 = ~9.2, so we target landing just above that
+        const firstRoofY = dojoHeight + 1.2;
+        
+        const courseLayout = [
+            // START: Ground level platform to the right-front of dojo
+            { x: dojoRight + 5, y: 0.3, z: dojoFront + 4, w: 4, d: 4, type: 'start' },
+            
+            // Jump 1-2: Rising along right side (OUTSIDE dojo)
+            { x: dojoRight + 6, y: 1.5, z: dojoZ - 2, w: 3, d: 3 },
+            { x: dojoRight + 5, y: 2.8, z: dojoBack + 2, w: 3, d: 3 },
+            
+            // Jump 3-4: Corner turn to behind dojo (stay far back)
+            { x: dojoRight + 2, y: 4.0, z: dojoBack - 4, w: 3, d: 3 },
+            { x: dojoX + 2, y: 5.2, z: dojoBack - 6, w: 3, d: 3 },
+            
+            // Jump 5-6: Across the back of dojo (far behind)
+            { x: dojoX - 2, y: 6.4, z: dojoBack - 5, w: 3, d: 3 },
+            { x: dojoLeft - 2, y: 7.6, z: dojoBack - 3, w: 3, d: 3 },
+            
+            // Jump 7-8: Final approach - up the left side to roof level
+            { x: dojoLeft - 4, y: 8.5, z: dojoZ, w: 3, d: 3 },
+            
+            // END: Landing pad on dojo first roof (centered, snug on tier 0)
+            { x: dojoX, y: firstRoofY + 0.5, z: dojoZ, w: 7, d: 7, type: 'end', color: 0xFFD700 },
+        ];
+
+        // Create each platform
+        courseLayout.forEach((plat, idx) => {
+            const color = plat.color || colors[idx % colors.length];
+            const isSpecial = plat.type === 'start' || plat.type === 'end';
+            const platformHeight = isSpecial ? 0.5 : 0.4;
+            
+            const platform = this.createParkourPlatform({
+                width: plat.w,
+                depth: plat.d,
+                height: platformHeight,
+                color: color,
+                glowing: isSpecial
+            });
+            
+            platform.position.set(plat.x, plat.y, plat.z);
+            group.add(platform);
+            
+            platforms.push({
+                mesh: platform,
+                x: plat.x,
+                y: plat.y,
+                z: plat.z,
+                width: plat.w,
+                depth: plat.d,
+                height: platformHeight
+            });
+            
+            // Store collider info - y is the TOP of platform where player stands
+            colliders.push({
+                x: plat.x,
+                y: plat.y,
+                z: plat.z,
+                type: 'box',
+                size: { x: plat.w, y: platformHeight, z: plat.d },
+                height: platformHeight
+            });
+
+            // Platform number painted on surface (subtle)
+            if (idx > 0 && idx < courseLayout.length - 1) {
+                const numMat = this.getMaterial(0x2A5A8A, { roughness: 0.7 });
+                const numGeo = new THREE.RingGeometry(0.15, 0.25, 16);
+                const num = new THREE.Mesh(numGeo, numMat);
+                num.rotation.x = -Math.PI / 2;
+                num.position.set(plat.x, plat.y + platformHeight + 0.01, plat.z);
+                group.add(num);
+            }
+        });
+
+        // Starting sign - "SECRET HANGOUT" with canvas text
+        const signGroup = new THREE.Group();
+        
+        // Post
+        const postMat = this.getMaterial(0x5C4033, { roughness: 0.8 });
+        const postGeo = new THREE.CylinderGeometry(0.2, 0.25, 3.5, 8);
+        const post = new THREE.Mesh(postGeo, postMat);
+        post.position.y = 1.75;
+        post.castShadow = true;
+        signGroup.add(post);
+        
+        // Sign board frame
+        const frameMat = this.getMaterial(0x654321, { roughness: 0.7 });
+        const frameGeo = new THREE.BoxGeometry(4, 1.8, 0.25);
+        const frame = new THREE.Mesh(frameGeo, frameMat);
+        frame.position.y = 3.8;
+        frame.castShadow = true;
+        signGroup.add(frame);
+        
+        // Sign face with text texture
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 200;
+        const ctx = canvas.getContext('2d');
+        
+        // Background
+        ctx.fillStyle = '#F5DEB3';
+        ctx.fillRect(0, 0, 512, 200);
+        
+        // Border
+        ctx.strokeStyle = '#8B4513';
+        ctx.lineWidth = 8;
+        ctx.strokeRect(10, 10, 492, 180);
+        
+        // Text
+        ctx.fillStyle = '#2F1810';
+        ctx.font = 'bold 42px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('🏔️ SECRET SPOT 🏔️', 256, 70);
+        
+        ctx.font = '28px Arial';
+        ctx.fillStyle = '#4A3020';
+        ctx.fillText('Parkour to the roof!', 256, 120);
+        
+        ctx.font = '24px Arial';
+        ctx.fillStyle = '#228B22';
+        ctx.fillText('⬆️ Jump your way up! ⬆️', 256, 160);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const signMat = new THREE.MeshStandardMaterial({ 
+            map: texture,
+            roughness: 0.5
+        });
+        const signGeo = new THREE.BoxGeometry(3.6, 1.4, 0.1);
+        const sign = new THREE.Mesh(signGeo, signMat);
+        sign.position.y = 3.8;
+        sign.position.z = 0.18;
+        signGroup.add(sign);
+        
+        // Arrow on top pointing up
+        const arrowMat = this.getMaterial(0x228B22, { 
+            roughness: 0.5,
+            emissive: 0x228B22,
+            emissiveIntensity: 0.2
+        });
+        const arrowGeo = new THREE.ConeGeometry(0.4, 0.8, 4);
+        const signArrow = new THREE.Mesh(arrowGeo, arrowMat);
+        signArrow.position.set(0, 4.9, 0);
+        signGroup.add(signArrow);
+        
+        const start = courseLayout[0];
+        signGroup.position.set(start.x + 4, 0, start.z);
+        group.add(signGroup);
+
+        // The END platform is at firstRoofY + 0.5, with height 0.5 (special platform)
+        // So the walking surface is at firstRoofY + 1.0
+        const firstRoofYCalc = dojoHeight + 1.2;
+        const platformSurface = firstRoofYCalc + 1.0;
+
+        // End marker - golden arch on the landing platform
+        const archMat = this.getMaterial(0xFFD700, { 
+            metalness: 0.8, 
+            roughness: 0.2,
+            emissive: 0xFFD700,
+            emissiveIntensity: 0.4
+        });
+        const archGeo = new THREE.TorusGeometry(2, 0.2, 8, 16, Math.PI);
+        const arch = new THREE.Mesh(archGeo, archMat);
+        arch.position.set(dojoX, platformSurface + 2.2, dojoZ - 2.5);
+        arch.rotation.x = 0;
+        group.add(arch);
+        
+        // Arch pillars
+        const pillarMat = this.getMaterial(0xDAA520, { metalness: 0.6, roughness: 0.3 });
+        [-2, 2].forEach(side => {
+            const pillarGeo = new THREE.CylinderGeometry(0.15, 0.18, 2.2, 8);
+            const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+            pillar.position.set(dojoX + side, platformSurface + 1.1, dojoZ - 2.5);
+            group.add(pillar);
+        });
+
+        // Create benches ON the golden landing platform
+        const roofBenches = [];
+        
+        // Two benches on the platform facing each other
+        const benchPositions = [
+            { x: dojoX - 2, z: dojoZ + 1, rotation: Math.PI / 2 },   // Left bench
+            { x: dojoX + 2, z: dojoZ + 1, rotation: -Math.PI / 2 },  // Right bench
+        ];
+        
+        benchPositions.forEach(pos => {
+            const bench = this.createBench(true);
+            bench.position.set(pos.x, platformSurface, pos.z);
+            bench.rotation.y = pos.rotation;
+            group.add(bench);
+            
+            roofBenches.push({
+                mesh: bench,
+                x: pos.x,
+                y: platformSurface,
+                z: pos.z,
+                rotation: pos.rotation
+            });
+            
+            // Bench collision for sitting
+            colliders.push({
+                x: pos.x,
+                y: platformSurface,
+                z: pos.z,
+                type: 'box',
+                size: { x: 2.5, y: 0.8, z: 1 },
+                height: 0.8,
+                rotation: pos.rotation,
+                isBench: true
+            });
+        });
+
+        // Decorative lamp posts on platform
+        const lampMat = this.getMaterial(0x333333, { roughness: 0.7 });
+        [-2.5, 2.5].forEach(side => {
+            const lampPostGeo = new THREE.CylinderGeometry(0.08, 0.1, 1.5, 6);
+            const lampPost = new THREE.Mesh(lampPostGeo, lampMat);
+            lampPost.position.set(dojoX + side, platformSurface + 0.75, dojoZ - 2);
+            group.add(lampPost);
+            
+            // Lamp light
+            const lampLight = new THREE.PointLight(0xFFAA55, 0.4, 6);
+            lampLight.position.set(dojoX + side, platformSurface + 1.6, dojoZ - 2);
+            group.add(lampLight);
+        });
+
+        // Ambient lighting on platform
+        const roofLight = new THREE.PointLight(0xFFFFDD, 0.6, 12);
+        roofLight.position.set(dojoX, platformSurface + 3, dojoZ);
+        group.add(roofLight);
+
+        return { 
+            mesh: group, 
+            platforms, 
+            colliders,
+            roofBenches,
+            roofHeight,
+            platformSurface  // The actual walking surface height
+        };
+    }
+
+    // ==================== HOLIDAY PROPS ====================
+
+    /**
+     * Create a high-quality Christmas tree with twinkling lights and presents
+     * @returns {{ mesh: THREE.Group, lights: THREE.PointLight[], update: Function }}
+     */
+    createChristmasTree() {
+        const THREE = this.THREE;
+        const group = new THREE.Group();
+        group.name = 'christmas_tree';
+
+        // Tree dimensions
+        const trunkHeight = 1.8;
+        const trunkRadius = 0.5;
+        const treeHeight = 10;
+        const tiers = 6;
+
+        // Detailed trunk with bark texture
+        const trunkMat = this.getMaterial(0x3D2817, { roughness: 0.95 });
+        const trunkGeo = new THREE.CylinderGeometry(trunkRadius * 0.8, trunkRadius * 1.3, trunkHeight, 12);
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.y = trunkHeight / 2;
+        trunk.castShadow = true;
+        group.add(trunk);
+
+        // Trunk bark rings
+        const barkMat = this.getMaterial(0x2A1A0A, { roughness: 1 });
+        for (let i = 0; i < 4; i++) {
+            const ringGeo = new THREE.TorusGeometry(trunkRadius * 1.1 - i * 0.05, 0.04, 6, 12);
+            const ring = new THREE.Mesh(ringGeo, barkMat);
+            ring.rotation.x = Math.PI / 2;
+            ring.position.y = 0.3 + i * 0.4;
+            group.add(ring);
+        }
+
+        // High-quality foliage with multiple layers per tier
+        const foliageColors = [0x0D5A1F, 0x0B4A18, 0x0A4015, 0x083812];
+        
+        let currentY = trunkHeight - 0.5;
+        const tierData = [];
+        
+        for (let i = 0; i < tiers; i++) {
+            const tierScale = 1 - (i / tiers) * 0.7;
+            const baseRadius = 3.2 * tierScale;
+            const tierHeight = (treeHeight / tiers) * 1.1;
+            
+            // Main cone layer
+            const mainMat = this.getMaterial(foliageColors[i % foliageColors.length], { roughness: 0.85 });
+            const mainGeo = new THREE.ConeGeometry(baseRadius, tierHeight, 16);
+            const mainCone = new THREE.Mesh(mainGeo, mainMat);
+            mainCone.position.y = currentY + tierHeight / 2;
+            mainCone.castShadow = true;
+            mainCone.receiveShadow = true;
+            group.add(mainCone);
+            
+            // Removed small branch tips and fringe layer for cleaner look
+            
+            tierData.push({ y: currentY + tierHeight * 0.5, radius: baseRadius });
+            currentY += tierHeight * 0.55;
+        }
+
+        // Magnificent golden star on top
+        const starY = currentY + 0.8;
+        
+        // Star core (bright golden)
+        const starCoreMat = this.getMaterial(0xFFD700, { 
+            metalness: 1.0, 
+            roughness: 0.1,
+            emissive: 0xFFD700,
+            emissiveIntensity: 1.0
+        });
+        
+        // Create 5-pointed star shape
+        const starShape = new THREE.Shape();
+        const starPoints = 5;
+        const outerRadius = 0.6;
+        const innerRadius = 0.25;
+        
+        for (let i = 0; i < starPoints * 2; i++) {
+            const radius = i % 2 === 0 ? outerRadius : innerRadius;
+            const angle = (i / (starPoints * 2)) * Math.PI * 2 - Math.PI / 2;
+            const x = Math.cos(angle) * radius;
+            const y = Math.sin(angle) * radius;
+            if (i === 0) starShape.moveTo(x, y);
+            else starShape.lineTo(x, y);
+        }
+        starShape.closePath();
+        
+        const starExtrudeSettings = { depth: 0.15, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.03 };
+        const starGeo = new THREE.ExtrudeGeometry(starShape, starExtrudeSettings);
+        const star = new THREE.Mesh(starGeo, starCoreMat);
+        star.position.y = starY;
+        // Star stands upright - no X rotation needed
+        star.position.z = -0.1;  // Center the extrusion depth
+        group.add(star);
+        
+        // Star center jewel
+        const jewelMat = this.getMaterial(0xFFFFAA, { 
+            metalness: 0.9, 
+            roughness: 0.05,
+            emissive: 0xFFFFDD,
+            emissiveIntensity: 1.5
+        });
+        const jewelGeo = new THREE.SphereGeometry(0.15, 12, 12);
+        const jewel = new THREE.Mesh(jewelGeo, jewelMat);
+        jewel.position.y = starY;
+        group.add(jewel);
+        
+        // Strong star glow light
+        const starLight = new THREE.PointLight(0xFFDD88, 2.5, 15);
+        starLight.position.y = starY;
+        group.add(starLight);
+        
+        // Secondary warm glow
+        const starGlow = new THREE.PointLight(0xFFFFAA, 1.5, 8);
+        starGlow.position.y = starY + 0.3;
+        group.add(starGlow);
+
+        // Christmas lights - many more with strong glow
+        const lightColors = [
+            0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00, 
+            0xFF00FF, 0x00FFFF, 0xFFAA00, 0xFF6600,
+            0xAAFF00, 0xFF0066
+        ];
+        const ornamentLights = [];
+        const ornamentMeshes = [];
+        
+        // Dense light placement spiraling around tree
+        const lightsPerTier = 12;
+        tierData.forEach((tier, tierIdx) => {
+            for (let i = 0; i < lightsPerTier; i++) {
+                const angle = (i / lightsPerTier) * Math.PI * 2 + tierIdx * 0.6;
+                const radiusVariance = 0.85 + Math.random() * 0.15;
+                const ox = Math.cos(angle) * tier.radius * radiusVariance;
+                const oz = Math.sin(angle) * tier.radius * radiusVariance;
+                const oy = tier.y + (Math.random() - 0.5) * 1.2;
+                
+                const color = lightColors[(tierIdx * lightsPerTier + i) % lightColors.length];
+                
+                // Glowing ornament bulb
+                const bulbMat = this.getMaterial(color, { 
+                    metalness: 0.2, 
+                    roughness: 0.3,
+                    emissive: color,
+                    emissiveIntensity: 0.8
+                });
+                const bulbGeo = new THREE.SphereGeometry(0.12, 10, 10);
+                const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+                bulb.position.set(ox, oy, oz);
+                bulb.userData.baseEmissive = 0.8;
+                bulb.userData.phaseOffset = Math.random() * Math.PI * 2;
+                bulb.userData.speed = 2 + Math.random() * 3;
+                group.add(bulb);
+                ornamentMeshes.push(bulb);
+                
+                // Bright point light for every other bulb
+                if (i % 2 === 0) {
+                    const bulbLight = new THREE.PointLight(color, 0.4, 3);
+                    bulbLight.position.set(ox, oy, oz);
+                    bulbLight.userData.baseIntensity = 0.4;
+                    bulbLight.userData.phaseOffset = bulb.userData.phaseOffset;
+                    bulbLight.userData.speed = bulb.userData.speed;
+                    group.add(bulbLight);
+                    ornamentLights.push(bulbLight);
+                }
+            }
+        });
+
+        // Gold and silver tinsel garlands
+        const tinselColors = [0xFFD700, 0xC0C0C0, 0xFFD700];
+        tinselColors.forEach((color, i) => {
+            const tinselMat = this.getMaterial(color, { metalness: 0.7, roughness: 0.3 });
+            const tinselY = trunkHeight + 1 + i * 2.5;
+            const tinselRadius = 2.5 * (1 - i * 0.12);
+            const tinselGeo = new THREE.TorusGeometry(tinselRadius, 0.06, 8, 32);
+            const tinsel = new THREE.Mesh(tinselGeo, tinselMat);
+            tinsel.rotation.x = Math.PI / 2 + (Math.random() - 0.5) * 0.1;
+            tinsel.position.y = tinselY;
+            group.add(tinsel);
+        });
+
+        // Large ornament balls (bigger decorative baubles)
+        const baubleColors = [0xFF0000, 0xFFD700, 0x0066CC, 0x00AA00, 0xCC00CC];
+        tierData.slice(0, 4).forEach((tier, tidx) => {
+            for (let i = 0; i < 3; i++) {
+                const angle = (i / 3) * Math.PI * 2 + tidx;
+                const bx = Math.cos(angle) * tier.radius * 0.7;
+                const bz = Math.sin(angle) * tier.radius * 0.7;
+                
+                const baubleMat = this.getMaterial(baubleColors[(tidx + i) % baubleColors.length], {
+                    metalness: 0.5,
+                    roughness: 0.2
+                });
+                const baubleGeo = new THREE.SphereGeometry(0.25, 12, 12);
+                const bauble = new THREE.Mesh(baubleGeo, baubleMat);
+                bauble.position.set(bx, tier.y, bz);
+                group.add(bauble);
+                
+                // Bauble cap
+                const capMat = this.getMaterial(0xC0C0C0, { metalness: 0.8, roughness: 0.2 });
+                const capGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.1, 8);
+                const cap = new THREE.Mesh(capGeo, capMat);
+                cap.position.set(bx, tier.y + 0.28, bz);
+                group.add(cap);
+            }
+        });
+
+        // MANY presents - piles and stacks around the base
+        const presentColors = [
+            { box: 0xFF0000, ribbon: 0xFFD700 },
+            { box: 0x0066FF, ribbon: 0xFFFFFF },
+            { box: 0x00AA00, ribbon: 0xFF0000 },
+            { box: 0xFFD700, ribbon: 0x8B0000 },
+            { box: 0x9900FF, ribbon: 0xFFFFFF },
+            { box: 0xFF6600, ribbon: 0x00FF00 },
+            { box: 0x00CCCC, ribbon: 0xFFD700 },
+            { box: 0xFF1493, ribbon: 0xFFFFFF },
+            { box: 0x8B4513, ribbon: 0xFFD700 },
+            { box: 0x4169E1, ribbon: 0xFF6600 },
+        ];
+
+        // Create present piles at different positions
+        const pilePositions = [
+            { x: 2.0, z: 0.8, count: 4 },
+            { x: -1.8, z: 1.2, count: 5 },
+            { x: 0.5, z: 2.0, count: 3 },
+            { x: -1.2, z: -1.5, count: 4 },
+            { x: 1.5, z: -1.2, count: 5 },
+            { x: -2.2, z: -0.3, count: 3 },
+            { x: 0.0, z: -2.0, count: 4 },
+            { x: 2.5, z: -0.5, count: 3 },
+        ];
+
+        pilePositions.forEach((pile, pileIdx) => {
+            let stackY = 0;
+            for (let i = 0; i < pile.count; i++) {
+                const colorSet = presentColors[(pileIdx * 3 + i) % presentColors.length];
+                const w = 0.4 + Math.random() * 0.5;
+                const h = 0.3 + Math.random() * 0.4;
+                const d = 0.4 + Math.random() * 0.5;
+                
+                // Offset position slightly for stacking
+                const offsetX = pile.x + (Math.random() - 0.5) * 0.3;
+                const offsetZ = pile.z + (Math.random() - 0.5) * 0.3;
+                
+                // Present box
+                const presentMat = this.getMaterial(colorSet.box, { roughness: 0.5 });
+                const presentGeo = new THREE.BoxGeometry(w, h, d);
+                const present = new THREE.Mesh(presentGeo, presentMat);
+                present.position.set(offsetX, stackY + h / 2, offsetZ);
+                present.rotation.y = Math.random() * 0.6 - 0.3;
+                present.castShadow = true;
+                group.add(present);
+
+                // Ribbon cross
+                const ribbonMat = this.getMaterial(colorSet.ribbon, { roughness: 0.35, metalness: 0.1 });
+                
+                const ribbonHGeo = new THREE.BoxGeometry(w + 0.01, 0.06, 0.1);
+                const ribbonH = new THREE.Mesh(ribbonHGeo, ribbonMat);
+                ribbonH.position.set(offsetX, stackY + h + 0.01, offsetZ);
+                ribbonH.rotation.y = present.rotation.y;
+                group.add(ribbonH);
+
+                const ribbonVGeo = new THREE.BoxGeometry(0.1, 0.06, d + 0.01);
+                const ribbonV = new THREE.Mesh(ribbonVGeo, ribbonMat);
+                ribbonV.position.set(offsetX, stackY + h + 0.01, offsetZ);
+                ribbonV.rotation.y = present.rotation.y;
+                group.add(ribbonV);
+
+                // Bow
+                const bowMat = this.getMaterial(colorSet.ribbon, { roughness: 0.3 });
+                const bowGeo = new THREE.TorusGeometry(0.08, 0.03, 6, 12);
+                const bow1 = new THREE.Mesh(bowGeo, bowMat);
+                bow1.position.set(offsetX - 0.06, stackY + h + 0.1, offsetZ);
+                bow1.rotation.x = Math.PI / 3;
+                bow1.rotation.y = present.rotation.y;
+                group.add(bow1);
+                
+                const bow2 = new THREE.Mesh(bowGeo, bowMat);
+                bow2.position.set(offsetX + 0.06, stackY + h + 0.1, offsetZ);
+                bow2.rotation.x = -Math.PI / 3;
+                bow2.rotation.y = present.rotation.y;
+                group.add(bow2);
+                
+                // Center knot
+                const knotGeo = new THREE.SphereGeometry(0.06, 6, 6);
+                const knot = new THREE.Mesh(knotGeo, bowMat);
+                knot.position.set(offsetX, stackY + h + 0.08, offsetZ);
+                group.add(knot);
+
+                // Stack some presents
+                if (i < pile.count - 1 && Math.random() > 0.4) {
+                    stackY += h * 0.9;
+                } else {
+                    stackY = 0;
+                }
+            }
+        });
+
+        // Scattered small presents
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2 + 0.3;
+            const dist = 2.8 + Math.random() * 0.8;
+            const px = Math.cos(angle) * dist;
+            const pz = Math.sin(angle) * dist;
+            
+            const colorSet = presentColors[i % presentColors.length];
+            const w = 0.35 + Math.random() * 0.25;
+            const h = 0.25 + Math.random() * 0.2;
+            const d = 0.35 + Math.random() * 0.25;
+            
+            const presentMat = this.getMaterial(colorSet.box, { roughness: 0.5 });
+            const presentGeo = new THREE.BoxGeometry(w, h, d);
+            const present = new THREE.Mesh(presentGeo, presentMat);
+            present.position.set(px, h / 2, pz);
+            present.rotation.y = Math.random() * Math.PI;
+            present.castShadow = true;
+            group.add(present);
+            
+            // Simple ribbon
+            const ribbonMat = this.getMaterial(colorSet.ribbon, { roughness: 0.35 });
+            const ribbonGeo = new THREE.BoxGeometry(w + 0.01, 0.05, 0.08);
+            const ribbon = new THREE.Mesh(ribbonGeo, ribbonMat);
+            ribbon.position.set(px, h + 0.01, pz);
+            ribbon.rotation.y = present.rotation.y;
+            group.add(ribbon);
+        }
+
+        // Snow mound at base
+        const snowMat = this.getMaterial(0xFFFFFF, { roughness: 0.95 });
+        const snowGeo = new THREE.CylinderGeometry(4, 4.5, 0.25, 24);
+        const snow = new THREE.Mesh(snowGeo, snowMat);
+        snow.position.y = 0.12;
+        snow.receiveShadow = true;
+        group.add(snow);
+        
+        // Snow bumps for natural look
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const bumpGeo = new THREE.SphereGeometry(0.3 + Math.random() * 0.2, 8, 8);
+            const bump = new THREE.Mesh(bumpGeo, snowMat);
+            bump.position.set(
+                Math.cos(angle) * (3.5 + Math.random() * 0.5),
+                0.1,
+                Math.sin(angle) * (3.5 + Math.random() * 0.5)
+            );
+            bump.scale.y = 0.4;
+            group.add(bump);
+        }
+
+        // Update function for twinkling lights
+        const update = (time) => {
+            // Twinkle lights with varied speeds and phases
+            ornamentLights.forEach((light) => {
+                const phase = light.userData.phaseOffset;
+                const speed = light.userData.speed;
+                const twinkle = Math.sin(time * speed + phase) * 0.5 + 0.5;
+                light.intensity = light.userData.baseIntensity * (0.3 + twinkle * 1.4);
+            });
+            
+            // Twinkle ornament emissive (lights flicker on and off)
+            ornamentMeshes.forEach((mesh) => {
+                const phase = mesh.userData.phaseOffset;
+                const speed = mesh.userData.speed;
+                const twinkle = Math.sin(time * speed + phase);
+                // Create on/off effect
+                const brightness = twinkle > 0 ? 1.2 : 0.3;
+                if (mesh.material.emissiveIntensity !== undefined) {
+                    mesh.material.emissiveIntensity = mesh.userData.baseEmissive * brightness;
+                }
+            });
+            
+            // Star gentle golden pulse
+            const starPulse = Math.sin(time * 1.5) * 0.2 + 0.8;
+            starLight.intensity = 2.5 * starPulse;
+            starGlow.intensity = 1.5 * (1.1 - starPulse * 0.3);
+        };
+
+        return { mesh: group, lights: ornamentLights, update };
+    }
+
+    // ==================== BUILDINGS ====================
+
+    /**
+     * Create The Dojo - Japanese pagoda style martial arts temple
+     * @param {Object} config - { w, h, d } building dimensions
+     * @returns {THREE.Group}
+     */
+    createDojo({ w = 14, h = 8, d = 14 } = {}) {
+        const THREE = this.THREE;
+        const group = new THREE.Group();
+        group.name = 'dojo_building';
+
+        // Colors
+        const wallRed = 0x8B0000;
+        const wallCream = 0xFAF0E6;
+        const roofTile = 0x2F1810;
+        const roofRed = 0xA02020;
+        const gold = 0xFFD700;
+        const woodDark = 0x3D2817;
+        const stoneGray = 0x4A4A4A;
+
+        // Stone foundation platform
+        const foundationMat = this.getMaterial(stoneGray, { roughness: 0.9 });
+        const foundationGeo = new THREE.BoxGeometry(w + 2, 1, d + 2);
+        const foundation = new THREE.Mesh(foundationGeo, foundationMat);
+        foundation.position.y = 0.5;
+        foundation.receiveShadow = true;
+        group.add(foundation);
+
+        // Steps at front - each step clearly separated
+        for (let i = 0; i < 3; i++) {
+            const stepGeo = new THREE.BoxGeometry(4 - i * 0.4, 0.28, 0.9);
+            const step = new THREE.Mesh(stepGeo, foundationMat);
+            step.position.set(0, 0.14 + i * 0.28, d / 2 + 1.5 + i * 0.95);
+            step.receiveShadow = true;
+            group.add(step);
+        }
+
+        // Main walls
+        const mainWallMat = this.getMaterial(wallRed, { roughness: 0.7 });
+        const mainWallGeo = new THREE.BoxGeometry(w, h, d);
+        const mainWall = new THREE.Mesh(mainWallGeo, mainWallMat);
+        mainWall.position.y = h / 2 + 1;
+        mainWall.castShadow = true;
+        mainWall.receiveShadow = true;
+        group.add(mainWall);
+
+        // Decorative cream panels - offset in front of wall
+        const panelMat = this.getMaterial(wallCream, { roughness: 0.6 });
+        [
+            { x: -w / 3, z: d / 2 + 0.12, rotY: 0 },
+            { x: w / 3, z: d / 2 + 0.12, rotY: 0 },
+            { x: -w / 3, z: -d / 2 - 0.12, rotY: 0 },
+            { x: w / 3, z: -d / 2 - 0.12, rotY: 0 },
+        ].forEach(pos => {
+            const panelGeo = new THREE.BoxGeometry(1.8, h - 2, 0.15);
+            const panel = new THREE.Mesh(panelGeo, panelMat);
+            panel.position.set(pos.x, h / 2 + 1, pos.z);
+            group.add(panel);
+        });
+
+        // Red columns at corners - positioned outside wall edges
+        const pillarMat = this.getMaterial(wallRed, { roughness: 0.5 });
+        const goldMat = this.getMaterial(gold, { metalness: 0.8, roughness: 0.2 });
+        
+        [
+            [-w / 2 - 0.3, d / 2 + 0.3],
+            [w / 2 + 0.3, d / 2 + 0.3],
+            [-w / 2 - 0.3, -d / 2 - 0.3],
+            [w / 2 + 0.3, -d / 2 - 0.3],
+        ].forEach(([px, pz]) => {
+            const pillarGeo = new THREE.CylinderGeometry(0.45, 0.55, h, 8);
+            const pillar = new THREE.Mesh(pillarGeo, pillarMat);
+            pillar.position.set(px, h / 2 + 1, pz);
+            pillar.castShadow = true;
+            group.add(pillar);
+
+            // Gold cap on top
+            const capGeo = new THREE.CylinderGeometry(0.55, 0.45, 0.25, 8);
+            const cap = new THREE.Mesh(capGeo, goldMat);
+            cap.position.set(px, h + 1.15, pz);
+            group.add(cap);
+
+            // Gold base
+            const baseGeo = new THREE.CylinderGeometry(0.6, 0.6, 0.3, 8);
+            const base = new THREE.Mesh(baseGeo, goldMat);
+            base.position.set(px, 1.15, pz);
+            group.add(base);
+        });
+
+        // Pagoda roof - two tiers
+        const roofMat = this.getMaterial(roofTile, { roughness: 0.8 });
+        const edgeMat = this.getMaterial(roofRed, { roughness: 0.6 });
+        
+        for (let tier = 0; tier < 2; tier++) {
+            const tierScale = 1 - tier * 0.3;
+            // Second roof (tier 1) - gap of 5 gives clearance above VIP platform (at ~10.2)
+            const tierGap = tier === 0 ? 0 : 5;  // Tier 2 at h + 6.2 = ~14.2
+            const roofY = h + 1.2 + tierGap;
+            const roofWidth = (w + 4) * tierScale;
+            const roofDepth = (d + 4) * tierScale;
+            
+            // Main roof platform
+            const platformGeo = new THREE.BoxGeometry(roofWidth, 0.4, roofDepth);
+            const platform = new THREE.Mesh(platformGeo, roofMat);
+            platform.position.y = roofY;
+            platform.castShadow = true;
+            group.add(platform);
+
+            // Curved edge trim - positioned at edges (not overlapping platform)
+            const edgeRadius = 0.35 * tierScale;
+            
+            // Front and back edges
+            [-1, 1].forEach(side => {
+                const edgeGeo = new THREE.CylinderGeometry(edgeRadius, edgeRadius * 1.4, roofWidth - 0.1, 8);
+                const edge = new THREE.Mesh(edgeGeo, edgeMat);
+                edge.rotation.z = Math.PI / 2;
+                edge.position.set(0, roofY - 0.25, side * (roofDepth / 2 + edgeRadius * 0.5));
+                group.add(edge);
+            });
+
+            // Left and right edges
+            [-1, 1].forEach(side => {
+                const edgeGeo = new THREE.CylinderGeometry(edgeRadius, edgeRadius * 1.4, roofDepth - 0.1, 8);
+                const edge = new THREE.Mesh(edgeGeo, edgeMat);
+                edge.rotation.x = Math.PI / 2;
+                edge.position.set(side * (roofWidth / 2 + edgeRadius * 0.5), roofY - 0.25, 0);
+                group.add(edge);
+            });
+
+            // Upturned corner pieces - positioned at actual corners
+            [
+                [-roofWidth / 2 - 0.3, roofDepth / 2 + 0.3],
+                [roofWidth / 2 + 0.3, roofDepth / 2 + 0.3],
+                [-roofWidth / 2 - 0.3, -roofDepth / 2 - 0.3],
+                [roofWidth / 2 + 0.3, -roofDepth / 2 - 0.3],
+            ].forEach(([cx, cz]) => {
+                const upturnGeo = new THREE.ConeGeometry(0.5 * tierScale, 1.2 * tierScale, 4);
+                const upturn = new THREE.Mesh(upturnGeo, edgeMat);
+                upturn.rotation.x = Math.PI;
+                upturn.position.set(cx, roofY + 0.4, cz);
+                group.add(upturn);
+            });
+
+            // Top tier finial
+            if (tier === 1) {
+                const ridgeGeo = new THREE.BoxGeometry(roofWidth * 0.7, 0.6, 0.25);
+                const ridge = new THREE.Mesh(ridgeGeo, edgeMat);
+                ridge.position.y = roofY + 0.5;
+                group.add(ridge);
+
+                // Gold finial
+                const finialGeo = new THREE.SphereGeometry(0.4, 12, 12);
+                const finial = new THREE.Mesh(finialGeo, goldMat);
+                finial.position.y = roofY + 1.2;
+                group.add(finial);
+
+                const spikeGeo = new THREE.ConeGeometry(0.12, 1.2, 6);
+                const spike = new THREE.Mesh(spikeGeo, goldMat);
+                spike.position.y = roofY + 2.1;
+                group.add(spike);
+            }
+        }
+
+        // Door frame - in front of wall
+        const doorFrameMat = this.getMaterial(woodDark, { roughness: 0.7 });
+        const doorFrameGeo = new THREE.BoxGeometry(3.8, 5.2, 0.25);
+        const doorFrame = new THREE.Mesh(doorFrameGeo, doorFrameMat);
+        doorFrame.position.set(0, 3.6, d / 2 + 0.13);
+        group.add(doorFrame);
+
+        // Paper screen door (shoji) - in front of frame
+        const shojiMat = this.getMaterial(0xFFFAF0, { 
+            roughness: 0.3,
+            transparent: true,
+            opacity: 0.85
+        });
+        const shojiGeo = new THREE.BoxGeometry(3.2, 4.5, 0.08);
+        const shoji = new THREE.Mesh(shojiGeo, shojiMat);
+        shoji.position.set(0, 3.25, d / 2 + 0.3);
+        group.add(shoji);
+
+        // Door grid pattern - in front of shoji
+        const gridMat = this.getMaterial(woodDark, { roughness: 0.8 });
+        for (let i = 0; i < 3; i++) {
+            const vBarGeo = new THREE.BoxGeometry(0.08, 4.5, 0.1);
+            const vBar = new THREE.Mesh(vBarGeo, gridMat);
+            vBar.position.set(-1 + i * 1, 3.25, d / 2 + 0.38);
+            group.add(vBar);
+        }
+        for (let i = 0; i < 4; i++) {
+            const hBarGeo = new THREE.BoxGeometry(3.2, 0.08, 0.1);
+            const hBar = new THREE.Mesh(hBarGeo, gridMat);
+            hBar.position.set(0, 1.5 + i * 1.15, d / 2 + 0.38);
+            group.add(hBar);
+        }
+
+        // Stone lanterns at entrance - clearly separated
+        const lanternMat = this.getMaterial(0x707070, { roughness: 0.8 });
+        [-3.2, 3.2].forEach(lx => {
+            // Lantern base
+            const baseGeo = new THREE.BoxGeometry(0.9, 0.4, 0.9);
+            const base = new THREE.Mesh(baseGeo, lanternMat);
+            base.position.set(lx, 1.2, d / 2 + 2.5);
+            group.add(base);
+
+            // Lantern pillar
+            const pillarGeo = new THREE.BoxGeometry(0.5, 1.8, 0.5);
+            const pillar = new THREE.Mesh(pillarGeo, lanternMat);
+            pillar.position.set(lx, 2.3, d / 2 + 2.5);
+            group.add(pillar);
+
+            // Lantern head
+            const headGeo = new THREE.BoxGeometry(1, 0.8, 1);
+            const head = new THREE.Mesh(headGeo, lanternMat);
+            head.position.set(lx, 3.6, d / 2 + 2.5);
+            group.add(head);
+
+            // Lantern roof cap
+            const capGeo = new THREE.ConeGeometry(0.7, 0.5, 4);
+            const cap = new THREE.Mesh(capGeo, lanternMat);
+            cap.rotation.y = Math.PI / 4;
+            cap.position.set(lx, 4.25, d / 2 + 2.5);
+            group.add(cap);
+
+            // Warm light
+            const light = new THREE.PointLight(0xFFAA55, 0.4, 6);
+            light.position.set(lx, 3.6, d / 2 + 2.5);
+            group.add(light);
+        });
+
+        // Moon windows - frame first, then glass
+        const windowMat = this.getMaterial(0xFFFAF0, {
+            emissive: 0xFFE4B5,
+            emissiveIntensity: 0.3
+        });
+        [-w / 3, w / 3].forEach(wx => {
+            // Frame ring
+            const frameGeo = new THREE.TorusGeometry(1.2, 0.12, 8, 24);
+            const frame = new THREE.Mesh(frameGeo, doorFrameMat);
+            frame.position.set(wx, h / 2 + 2, d / 2 + 0.12);
+            group.add(frame);
+
+            // Glass (slightly behind frame)
+            const windowGeo = new THREE.CircleGeometry(1.1, 16);
+            const windowMesh = new THREE.Mesh(windowGeo, windowMat);
+            windowMesh.position.set(wx, h / 2 + 2, d / 2 + 0.08);
+            group.add(windowMesh);
+        });
+
+        // Side windows
+        [-d / 3, d / 3].forEach(wz => {
+            [-1, 1].forEach(side => {
+                const windowGeo = new THREE.CircleGeometry(0.7, 12);
+                const windowMesh = new THREE.Mesh(windowGeo, windowMat);
+                windowMesh.rotation.y = side * Math.PI / 2;
+                windowMesh.position.set(side * (w / 2 + 0.08), h / 2 + 2, wz);
+                group.add(windowMesh);
+            });
+        });
+
+        // Interior glow
+        const interiorLight = new THREE.PointLight(0xFFAA55, 0.8, 12);
+        interiorLight.position.set(0, h / 2 + 1, 0);
+        group.add(interiorLight);
+
+        // Card Jitsu hexagon symbol - in front of wall
+        const symbolGeo = new THREE.CircleGeometry(1.3, 6);
+        const symbol = new THREE.Mesh(symbolGeo, goldMat);
+        symbol.position.set(0, h - 0.3, d / 2 + 0.12);
+        group.add(symbol);
+
+        return group;
+    }
+
+    /**
+     * Create Gift Shop - Colorful candy-themed store
+     * @param {Object} config - { w, h, d } building dimensions
+     * @returns {THREE.Group}
+     */
+    createGiftShop({ w = 10, h = 6, d = 10 } = {}) {
+        const THREE = this.THREE;
+        const group = new THREE.Group();
+        group.name = 'gift_shop_building';
+
+        // Colors
+        const wallPink = 0xFFB6C1;
+        const wallWhite = 0xFFFAFA;
+        const trimGold = 0xFFD700;
+        const awningRed = 0xDC143C;
+        const awningWhite = 0xFFFFFF;
+        const doorGreen = 0x228B22;
+        const windowBlue = 0x87CEEB;
+        const roofBlue = 0x4A90D9;
+
+        // Foundation
+        const foundationMat = this.getMaterial(0x8B4513, { roughness: 0.9 });
+        const foundationGeo = new THREE.BoxGeometry(w + 1, 0.5, d + 1);
+        const foundation = new THREE.Mesh(foundationGeo, foundationMat);
+        foundation.position.y = 0.25;
+        foundation.receiveShadow = true;
+        group.add(foundation);
+
+        // Main building walls
+        const wallMat = this.getMaterial(wallPink, { roughness: 0.6 });
+        const mainWallGeo = new THREE.BoxGeometry(w, h, d);
+        const mainWall = new THREE.Mesh(mainWallGeo, wallMat);
+        mainWall.position.y = h / 2 + 0.5;
+        mainWall.castShadow = true;
+        mainWall.receiveShadow = true;
+        group.add(mainWall);
+
+        // White corner trim - positioned at corners
+        const trimMat = this.getMaterial(wallWhite, { roughness: 0.5 });
+        [
+            [-w / 2 - 0.2, d / 2 + 0.2],
+            [w / 2 + 0.2, d / 2 + 0.2],
+            [-w / 2 - 0.2, -d / 2 - 0.2],
+            [w / 2 + 0.2, -d / 2 - 0.2],
+        ].forEach(([cx, cz]) => {
+            const cornerGeo = new THREE.BoxGeometry(0.4, h + 0.1, 0.4);
+            const corner = new THREE.Mesh(cornerGeo, trimMat);
+            corner.position.set(cx, h / 2 + 0.5, cz);
+            group.add(corner);
+        });
+
+        // Peaked roof using two angled box panels
+        const roofMat = this.getMaterial(roofBlue, { roughness: 0.7 });
+        const roofOverhang = 1;
+        const roofHeight = 2.5;
+        const roofSlope = Math.atan2(roofHeight, w / 2);  // Angle of roof slope
+        const roofPanelLength = Math.sqrt((w / 2 + roofOverhang) ** 2 + roofHeight ** 2);
+        
+        // Left roof panel
+        const leftRoofGeo = new THREE.BoxGeometry(roofPanelLength, 0.25, d + roofOverhang * 2);
+        const leftRoof = new THREE.Mesh(leftRoofGeo, roofMat);
+        leftRoof.rotation.z = roofSlope;
+        leftRoof.position.set(-w / 4 - 0.3, h + 0.5 + roofHeight / 2, 0);
+        leftRoof.castShadow = true;
+        group.add(leftRoof);
+        
+        // Right roof panel
+        const rightRoofGeo = new THREE.BoxGeometry(roofPanelLength, 0.25, d + roofOverhang * 2);
+        const rightRoof = new THREE.Mesh(rightRoofGeo, roofMat);
+        rightRoof.rotation.z = -roofSlope;
+        rightRoof.position.set(w / 4 + 0.3, h + 0.5 + roofHeight / 2, 0);
+        rightRoof.castShadow = true;
+        group.add(rightRoof);
+
+        // Roof ridge cap at peak
+        const ridgeGeo = new THREE.BoxGeometry(0.4, 0.3, d + roofOverhang * 2 + 0.2);
+        const ridge = new THREE.Mesh(ridgeGeo, roofMat);
+        ridge.position.set(0, h + 0.5 + roofHeight + 0.1, 0);
+        group.add(ridge);
+
+        // Snow on roof ridge
+        const snowMat = this.getMaterial(0xFFFFFF, { roughness: 0.8 });
+        const ridgeSnowGeo = new THREE.BoxGeometry(0.6, 0.2, d + roofOverhang * 2 + 0.4);
+        const ridgeSnow = new THREE.Mesh(ridgeSnowGeo, snowMat);
+        ridgeSnow.position.set(0, h + 0.5 + roofHeight + 0.3, 0);
+        group.add(ridgeSnow);
+
+        // Front gable triangle (fills the gap at front)
+        const gableMat = this.getMaterial(wallPink, { roughness: 0.6 });
+        const gableShape = new THREE.Shape();
+        gableShape.moveTo(-w / 2, 0);
+        gableShape.lineTo(0, roofHeight);
+        gableShape.lineTo(w / 2, 0);
+        gableShape.lineTo(-w / 2, 0);
+        const gableGeo = new THREE.ShapeGeometry(gableShape);
+        
+        // Front gable
+        const frontGable = new THREE.Mesh(gableGeo, gableMat);
+        frontGable.position.set(0, h + 0.5, d / 2 + 0.01);
+        group.add(frontGable);
+        
+        // Back gable
+        const backGable = new THREE.Mesh(gableGeo, gableMat);
+        backGable.rotation.y = Math.PI;
+        backGable.position.set(0, h + 0.5, -d / 2 - 0.01);
+        group.add(backGable);
+
+        // Chimney
+        const chimneyMat = this.getMaterial(0x8B4513, { roughness: 0.8 });
+        const chimneyGeo = new THREE.BoxGeometry(1.2, 2.5, 1.2);
+        const chimney = new THREE.Mesh(chimneyGeo, chimneyMat);
+        chimney.position.set(w / 4, h + roofHeight + 0.5, -d / 4);
+        chimney.castShadow = true;
+        group.add(chimney);
+
+        // Chimney snow cap
+        const chimneySnowGeo = new THREE.BoxGeometry(1.5, 0.3, 1.5);
+        const chimneySnow = new THREE.Mesh(chimneySnowGeo, snowMat);
+        chimneySnow.position.set(w / 4, h + roofHeight + 1.9, -d / 4);
+        group.add(chimneySnow);
+
+        // Striped awning
+        const awningWidth = 5;
+        const awningDepth = 2.5;
+        const awningMat = this.getMaterial(awningRed, { roughness: 0.5 });
+        const awningGeo = new THREE.BoxGeometry(awningWidth, 0.12, awningDepth);
+        const awning = new THREE.Mesh(awningGeo, awningMat);
+        
+        // White stripes on awning
+        for (let i = 0; i < 4; i++) {
+            const stripeMat = this.getMaterial(awningWhite, { roughness: 0.5 });
+            const stripeGeo = new THREE.BoxGeometry(awningWidth / 8 - 0.05, 0.02, awningDepth + 0.01);
+            const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+            stripe.position.set(-awningWidth / 2 + awningWidth / 8 + i * awningWidth / 4, 0.08, 0);
+            awning.add(stripe);
+        }
+        
+        awning.rotation.x = Math.PI / 10;
+        awning.position.set(0, h - 0.3, d / 2 + 1.8);
+        group.add(awning);
+
+        // Display window
+        const displayMat = this.getMaterial(windowBlue, {
+            transparent: true,
+            opacity: 0.7,
+            emissive: 0xFFE4B5,
+            emissiveIntensity: 0.2
+        });
+        
+        // Window frame
+        const frameMat = this.getMaterial(wallWhite, { roughness: 0.5 });
+        const frameGeo = new THREE.BoxGeometry(3.8, 2.8, 0.12);
+        const frame = new THREE.Mesh(frameGeo, frameMat);
+        frame.position.set(-w / 4, 2.5, d / 2 + 0.07);
+        group.add(frame);
+        
+        // Window glass
+        const displayGeo = new THREE.BoxGeometry(3.4, 2.4, 0.04);
+        const display = new THREE.Mesh(displayGeo, displayMat);
+        display.position.set(-w / 4, 2.5, d / 2 + 0.16);
+        group.add(display);
+
+        // Window dividers
+        const dividerMat = this.getMaterial(wallWhite, { roughness: 0.5 });
+        const vDivGeo = new THREE.BoxGeometry(0.08, 2.4, 0.05);
+        const vDiv = new THREE.Mesh(vDivGeo, dividerMat);
+        vDiv.position.set(-w / 4, 2.5, d / 2 + 0.2);
+        group.add(vDiv);
+
+        const hDivGeo = new THREE.BoxGeometry(3.4, 0.08, 0.05);
+        const hDiv = new THREE.Mesh(hDivGeo, dividerMat);
+        hDiv.position.set(-w / 4, 2.5, d / 2 + 0.2);
+        group.add(hDiv);
+
+        // Door frame
+        const doorFrameMat = this.getMaterial(0x5C4033, { roughness: 0.7 });
+        const doorFrameGeo = new THREE.BoxGeometry(2.6, 4.4, 0.1);
+        const doorFrame = new THREE.Mesh(doorFrameGeo, doorFrameMat);
+        doorFrame.position.set(w / 4, 2.7, d / 2 + 0.06);
+        group.add(doorFrame);
+
+        // Door
+        const doorMat = this.getMaterial(doorGreen, { roughness: 0.6 });
+        const doorGeo = new THREE.BoxGeometry(2.2, 4, 0.08);
+        const door = new THREE.Mesh(doorGeo, doorMat);
+        door.position.set(w / 4, 2.5, d / 2 + 0.14);
+        group.add(door);
+
+        // Door window
+        const doorWindowGeo = new THREE.BoxGeometry(1, 1.5, 0.04);
+        const doorWindow = new THREE.Mesh(doorWindowGeo, displayMat);
+        doorWindow.position.set(w / 4, 3.5, d / 2 + 0.2);
+        group.add(doorWindow);
+
+        // Door handle
+        const handleMat = this.getMaterial(trimGold, { metalness: 0.8, roughness: 0.2 });
+        const handleGeo = new THREE.SphereGeometry(0.1, 8, 8);
+        const handle = new THREE.Mesh(handleGeo, handleMat);
+        handle.position.set(w / 4 + 0.7, 2.5, d / 2 + 0.25);
+        group.add(handle);
+
+        // Sign board
+        const signBackMat = this.getMaterial(0x5C4033, { roughness: 0.7 });
+        const signBackGeo = new THREE.BoxGeometry(4.2, 1.2, 0.12);
+        const signBack = new THREE.Mesh(signBackGeo, signBackMat);
+        signBack.position.set(0, h + 0.2, d / 2 + 0.35);
+        group.add(signBack);
+
+        const signMat = this.getMaterial(trimGold, { metalness: 0.7, roughness: 0.3 });
+        const signGeo = new THREE.BoxGeometry(4, 1, 0.06);
+        const signBoard = new THREE.Mesh(signGeo, signMat);
+        signBoard.position.set(0, h + 0.2, d / 2 + 0.45);
+        group.add(signBoard);
+
+        // Side windows
+        [-d / 3, d / 3].forEach(wz => {
+            const sideFrameGeo = new THREE.BoxGeometry(0.1, 2, 1.4);
+            const sideFrame = new THREE.Mesh(sideFrameGeo, frameMat);
+            sideFrame.position.set(w / 2 + 0.06, 3, wz);
+            group.add(sideFrame);
+            
+            const sideWindowGeo = new THREE.BoxGeometry(0.04, 1.7, 1.1);
+            const sideWindow = new THREE.Mesh(sideWindowGeo, displayMat);
+            sideWindow.position.set(w / 2 + 0.12, 3, wz);
+            group.add(sideWindow);
+        });
+
+        // Gift boxes at entrance
+        const giftColors = [0xFF69B4, 0x00CED1, 0xFFD700, 0x9370DB];
+        giftColors.forEach((color, i) => {
+            const giftMat = this.getMaterial(color, { roughness: 0.5 });
+            const giftGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+            const gift = new THREE.Mesh(giftGeo, giftMat);
+            
+            const gx = -1.5 + i * 1;
+            const gz = d / 2 + 3;
+            gift.position.set(gx, 0.75, gz);
+            gift.rotation.y = i * 0.5;
+            group.add(gift);
+
+            // Ribbon cross on top
+            const ribbonMat = this.getMaterial(0xFFFFFF, { roughness: 0.4 });
+            const ribbonGeo = new THREE.BoxGeometry(0.55, 0.06, 0.06);
+            const ribbon = new THREE.Mesh(ribbonGeo, ribbonMat);
+            ribbon.position.set(gx, 1.03, gz);
+            group.add(ribbon);
+            
+            const ribbon2Geo = new THREE.BoxGeometry(0.06, 0.06, 0.55);
+            const ribbon2 = new THREE.Mesh(ribbon2Geo, ribbonMat);
+            ribbon2.position.set(gx, 1.03, gz);
+            group.add(ribbon2);
+        });
+
+        // Interior light
+        const interiorLight = new THREE.PointLight(0xFFF8DC, 0.8, 12);
+        interiorLight.position.set(0, h / 2, 0);
+        group.add(interiorLight);
+
+        return group;
+    }
+
+    /**
+     * Create Pizza Parlor - Italian restaurant style
+     * @param {Object} config - { w, h, d } building dimensions
+     * @returns {THREE.Group}
+     */
+    createPizzaParlor({ w = 12, h = 7, d = 10 } = {}) {
+        const THREE = this.THREE;
+        const group = new THREE.Group();
+        group.name = 'pizza_parlor_building';
+
+        // Colors
+        const brickRed = 0x8B4513;
+        const brickDark = 0x6B3000;
+        const awningGreen = 0x228B22;
+        const awningWhite = 0xFFFFFF;
+        const awningRed = 0xDC143C;
+        const windowWarm = 0xFFF8DC;
+        const woodBrown = 0x5C4033;
+        const creamStucco = 0xFAF0E6;
+
+        // Stone foundation
+        const foundationMat = this.getMaterial(0x696969, { roughness: 0.9 });
+        const foundationGeo = new THREE.BoxGeometry(w + 1.5, 0.5, d + 1.5);
+        const foundation = new THREE.Mesh(foundationGeo, foundationMat);
+        foundation.position.y = 0.25;
+        foundation.receiveShadow = true;
+        group.add(foundation);
+
+        // Foundation cap trim - on top of foundation (not overlapping)
+        const trimMat = this.getMaterial(0x505050, { roughness: 0.8 });
+        const trimGeo = new THREE.BoxGeometry(w + 1.6, 0.15, d + 1.6);
+        const trim = new THREE.Mesh(trimGeo, trimMat);
+        trim.position.y = 0.58;
+        group.add(trim);
+
+        // Main building walls - starts above trim
+        const wallMat = this.getMaterial(creamStucco, { roughness: 0.7 });
+        const mainWallGeo = new THREE.BoxGeometry(w, h - 1.2, d);
+        const mainWall = new THREE.Mesh(mainWallGeo, wallMat);
+        mainWall.position.y = (h - 1.2) / 2 + 1.9;
+        mainWall.castShadow = true;
+        mainWall.receiveShadow = true;
+        group.add(mainWall);
+
+        // Brick base section - separate from main wall
+        const brickMat = this.getMaterial(brickRed, { roughness: 0.9 });
+        const brickBaseGeo = new THREE.BoxGeometry(w + 0.1, 1.2, d + 0.1);
+        const brickBase = new THREE.Mesh(brickBaseGeo, brickMat);
+        brickBase.position.y = 1.25;
+        group.add(brickBase);
+
+        // Brick crown at top - above main wall
+        const brickCrownGeo = new THREE.BoxGeometry(w + 0.1, 0.6, d + 0.1);
+        const brickCrown = new THREE.Mesh(brickCrownGeo, brickMat);
+        brickCrown.position.y = h + 0.65;
+        group.add(brickCrown);
+
+        // Decorative brick columns at front corners - outside wall
+        [
+            [-w / 2 - 0.45, d / 2 + 0.45],
+            [w / 2 + 0.45, d / 2 + 0.45],
+        ].forEach(([cx, cz]) => {
+            const columnGeo = new THREE.BoxGeometry(0.7, h, 0.7);
+            const column = new THREE.Mesh(columnGeo, brickMat);
+            column.position.set(cx, h / 2 + 0.65, cz);
+            column.castShadow = true;
+            group.add(column);
+
+            // Column cap
+            const capGeo = new THREE.BoxGeometry(0.9, 0.3, 0.9);
+            const cap = new THREE.Mesh(capGeo, trimMat);
+            cap.position.set(cx, h + 1.15, cz);
+            group.add(cap);
+        });
+
+        // Italian flag awning - single solid piece with painted stripes
+        const awningWidth = w - 2;
+        const awningMat = this.getMaterial(awningWhite, { roughness: 0.5 });
+        const awningGeo = new THREE.BoxGeometry(awningWidth, 0.12, 2.5);
+        const awning = new THREE.Mesh(awningGeo, awningMat);
+        
+        // Green stripe on left
+        const greenMat = this.getMaterial(awningGreen, { roughness: 0.5 });
+        const greenGeo = new THREE.BoxGeometry(awningWidth / 3 - 0.05, 0.02, 2.5);
+        const greenStripe = new THREE.Mesh(greenGeo, greenMat);
+        greenStripe.position.set(-awningWidth / 3, 0.07, 0);
+        awning.add(greenStripe);
+        
+        // Red stripe on right
+        const redMat = this.getMaterial(awningRed, { roughness: 0.5 });
+        const redGeo = new THREE.BoxGeometry(awningWidth / 3 - 0.05, 0.02, 2.5);
+        const redStripe = new THREE.Mesh(redGeo, redMat);
+        redStripe.position.set(awningWidth / 3, 0.07, 0);
+        awning.add(redStripe);
+        
+        awning.rotation.x = Math.PI / 12;
+        awning.position.set(0, h - 0.8, d / 2 + 1.8);
+        group.add(awning);
+
+        // Slanted tile roof at back
+        const roofMat = this.getMaterial(0x704020, { roughness: 0.8 });
+        const roofGeo = new THREE.BoxGeometry(w + 1.5, 0.35, d / 2 + 1.5);
+        const roof = new THREE.Mesh(roofGeo, roofMat);
+        roof.rotation.x = -Math.PI / 10;
+        roof.position.set(0, h + 1.8, -d / 4 - 0.5);
+        roof.castShadow = true;
+        group.add(roof);
+
+        // Front parapet wall
+        const parapetGeo = new THREE.BoxGeometry(w + 0.3, 0.8, 0.35);
+        const parapet = new THREE.Mesh(parapetGeo, brickMat);
+        parapet.position.set(0, h + 1.35, d / 2 + 0.1);
+        group.add(parapet);
+
+        // Bay window - wood frame structure
+        const bayMat = this.getMaterial(woodBrown, { roughness: 0.7 });
+        const bayFrameGeo = new THREE.BoxGeometry(3.8, 2.8, 1.3);
+        const bayFrame = new THREE.Mesh(bayFrameGeo, bayMat);
+        bayFrame.position.set(-w / 4 - 0.3, 3, d / 2 + 0.8);
+        group.add(bayFrame);
+
+        // Bay window glass - front (in front of frame)
+        const glassMat = this.getMaterial(windowWarm, {
+            transparent: true,
+            opacity: 0.6,
+            emissive: 0xFFD070,
+            emissiveIntensity: 0.3
+        });
+        const frontGlassGeo = new THREE.BoxGeometry(3.4, 2.4, 0.06);
+        const frontGlass = new THREE.Mesh(frontGlassGeo, glassMat);
+        frontGlass.position.set(-w / 4 - 0.3, 3, d / 2 + 1.5);
+        group.add(frontGlass);
+
+        // Bay window sides
+        [-1, 1].forEach(side => {
+            const sideGlassGeo = new THREE.BoxGeometry(0.06, 2.4, 0.9);
+            const sideGlass = new THREE.Mesh(sideGlassGeo, glassMat);
+            sideGlass.position.set(-w / 4 - 0.3 + side * 1.9, 3, d / 2 + 1);
+            group.add(sideGlass);
+        });
+
+        // Door frame - in front of wall
+        const doorFrameMat = this.getMaterial(0x3D2817, { roughness: 0.7 });
+        const doorFrameGeo = new THREE.BoxGeometry(2.8, 4.8, 0.15);
+        const doorFrame = new THREE.Mesh(doorFrameGeo, doorFrameMat);
+        doorFrame.position.set(w / 4, 3.1, d / 2 + 0.08);
+        group.add(doorFrame);
+
+        // Door - in front of frame
+        const doorMat = this.getMaterial(woodBrown, { roughness: 0.6 });
+        const doorGeo = new THREE.BoxGeometry(2.4, 4.4, 0.1);
+        const door = new THREE.Mesh(doorGeo, doorMat);
+        door.position.set(w / 4, 3, d / 2 + 0.18);
+        group.add(door);
+
+        // Door panels - in front of door
+        const panelMat = this.getMaterial(0x2F1A0A, { roughness: 0.7 });
+        for (let row = 0; row < 2; row++) {
+            for (let col = 0; col < 2; col++) {
+                const panelGeo = new THREE.BoxGeometry(0.85, 1.4, 0.03);
+                const panel = new THREE.Mesh(panelGeo, panelMat);
+                panel.position.set(
+                    w / 4 - 0.45 + col * 0.95,
+                    1.5 + row * 2.3,
+                    d / 2 + 0.26
+                );
+                group.add(panel);
+            }
+        }
+
+        // Door window - in front of door
+        const doorWindowGeo = new THREE.BoxGeometry(1.4, 0.9, 0.05);
+        const doorWindow = new THREE.Mesh(doorWindowGeo, glassMat);
+        doorWindow.position.set(w / 4, 4.4, d / 2 + 0.26);
+        group.add(doorWindow);
+
+        // Door handle
+        const handleMat = this.getMaterial(0xFFD700, { metalness: 0.8, roughness: 0.2 });
+        const handleGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.4, 8);
+        const handle = new THREE.Mesh(handleGeo, handleMat);
+        handle.rotation.z = Math.PI / 2;
+        handle.position.set(w / 4 + 0.75, 2.8, d / 2 + 0.35);
+        group.add(handle);
+
+        // Pizza sign - mounting board first
+        const signBackMat = this.getMaterial(0x5C4033, { roughness: 0.7 });
+        const signBackGeo = new THREE.CylinderGeometry(1.6, 1.6, 0.12, 16);
+        const signBack = new THREE.Mesh(signBackGeo, signBackMat);
+        signBack.rotation.x = Math.PI / 2;
+        signBack.position.set(0, h + 2.2, d / 2 + 0.35);
+        group.add(signBack);
+
+        // Pizza sign face - gold background
+        const signMat = this.getMaterial(0xFFD700, { metalness: 0.6, roughness: 0.3 });
+        const signGeo = new THREE.CylinderGeometry(1.4, 1.4, 0.08, 16);
+        const sign = new THREE.Mesh(signGeo, signMat);
+        sign.rotation.x = Math.PI / 2;
+        sign.position.set(0, h + 2.2, d / 2 + 0.45);
+        group.add(sign);
+
+        // Pizza illustration - orange/cheese
+        const pizzaMat = this.getMaterial(0xFFA500, { roughness: 0.5 });
+        const pizzaGeo = new THREE.CylinderGeometry(1.1, 1.1, 0.04, 16);
+        const pizza = new THREE.Mesh(pizzaGeo, pizzaMat);
+        pizza.rotation.x = Math.PI / 2;
+        pizza.position.set(0, h + 2.2, d / 2 + 0.52);
+        group.add(pizza);
+
+        // Pepperoni on pizza sign - positioned in front
+        const pepMat = this.getMaterial(0x8B0000, { roughness: 0.6 });
+        [
+            [-0.4, 0.3], [0.4, 0.2], [0, -0.4], [-0.3, -0.1], [0.35, -0.25]
+        ].forEach(([px, py]) => {
+            const pepGeo = new THREE.CylinderGeometry(0.15, 0.15, 0.03, 8);
+            const pep = new THREE.Mesh(pepGeo, pepMat);
+            pep.rotation.x = Math.PI / 2;
+            pep.position.set(px, h + 2.2 + py, d / 2 + 0.56);
+            group.add(pep);
+        });
+
+        // Outdoor bistro table
+        const tableMat = this.getMaterial(0x2F4F4F, { roughness: 0.6 });
+        const tableTopGeo = new THREE.CylinderGeometry(0.7, 0.7, 0.08, 12);
+        const tableTop = new THREE.Mesh(tableTopGeo, tableMat);
+        tableTop.position.set(w / 2 + 2.5, 1.5, d / 4);
+        group.add(tableTop);
+
+        const tableLegGeo = new THREE.CylinderGeometry(0.08, 0.12, 1.4, 8);
+        const tableLeg = new THREE.Mesh(tableLegGeo, tableMat);
+        tableLeg.position.set(w / 2 + 2.5, 0.75, d / 4);
+        group.add(tableLeg);
+
+        // Flower boxes on side wall
+        const boxMat = this.getMaterial(0x704020, { roughness: 0.8 });
+        [-d / 3, d / 3].forEach(bz => {
+            const boxGeo = new THREE.BoxGeometry(0.7, 0.35, 1);
+            const box = new THREE.Mesh(boxGeo, boxMat);
+            box.position.set(-w / 2 - 0.4, 2.2, bz);
+            group.add(box);
+
+            // Flowers - spaced apart
+            const flowerColors = [0xFF69B4, 0xFFD700, 0xFF4500];
+            flowerColors.forEach((color, i) => {
+                const flowerMat = this.getMaterial(color, { roughness: 0.5 });
+                const flowerGeo = new THREE.SphereGeometry(0.12, 6, 6);
+                const flower = new THREE.Mesh(flowerGeo, flowerMat);
+                flower.position.set(-w / 2 - 0.4, 2.55, bz - 0.25 + i * 0.25);
+                group.add(flower);
+            });
+        });
+
+        // Interior warm light
+        const interiorLight = new THREE.PointLight(0xFFAA55, 0.8, 12);
+        interiorLight.position.set(0, h / 2, 0);
+        group.add(interiorLight);
+
+        // String lights - spaced apart above door
+        for (let i = 0; i < 7; i++) {
+            const bulbMat = this.getMaterial(0xFFFFAA, { 
+                emissive: 0xFFFF00,
+                emissiveIntensity: 0.4 
+            });
+            const bulbGeo = new THREE.SphereGeometry(0.1, 6, 6);
+            const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+            bulb.position.set(-3 + i, h - 0.1 + Math.sin(i * 0.8) * 0.12, d / 2 + 0.6);
+            group.add(bulb);
+        }
+
         return group;
     }
 
