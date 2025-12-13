@@ -72,7 +72,8 @@ const VoxelWorld = ({
         sendBallKick: mpSendBallKick,
         requestBallSync: mpRequestBallSync,
         registerCallbacks,
-        chatMessages
+        chatMessages,
+        worldTimeRef: serverWorldTimeRef // Server-synchronized world time
     } = useMultiplayer();
     
     // Challenge context for position updates and dance trigger
@@ -80,7 +81,7 @@ const VoxelWorld = ({
     
     // Refs for other player meshes and state
     const otherPlayerMeshesRef = useRef(new Map()); // playerId -> { mesh, bubble, puffle }
-    const lastPositionSentRef = useRef({ x: 0, z: 0, rot: 0, time: 0 });
+    const lastPositionSentRef = useRef({ x: 0, y: 0, z: 0, rot: 0, time: 0 });
     const buildPenguinMeshRef = useRef(null); // Will be set in useEffect
     
     // Player State
@@ -188,18 +189,39 @@ const VoxelWorld = ({
     
     // Settings (persisted to localStorage)
     const [gameSettings, setGameSettings] = useState(() => {
+        const defaults = {
+            leftHanded: false,
+            cameraSensitivity: 0.3,
+            soundEnabled: true,
+            showFps: false,
+            snowEnabled: true // Snowfall particles - ON by default
+        };
         try {
             const saved = localStorage.getItem('game_settings');
-            return saved ? JSON.parse(saved) : {
-                leftHanded: false,
-                cameraSensitivity: 0.3,
-                soundEnabled: true,
-                showFps: false
-            };
+            if (saved) {
+                // Merge saved settings with defaults (so new settings get their default values)
+                return { ...defaults, ...JSON.parse(saved) };
+            }
+            return defaults;
         } catch {
-            return { leftHanded: false, cameraSensitivity: 0.3, soundEnabled: true, showFps: false };
+            return defaults;
         }
     });
+    
+    // Day/night cycle state
+    const [dayTime, setDayTime] = useState(0.35); // 0-1, 0.35 = morning
+    const [daySpeed, setDaySpeed] = useState(0.01); // Speed multiplier for debug
+    const dayTimeRef = useRef(0.35);
+    const daySpeedRef = useRef(0.01);
+    
+    // Lighting refs for day/night cycle
+    const sunLightRef = useRef(null);
+    const ambientLightRef = useRef(null);
+    
+    // Snowfall refs
+    const snowParticlesRef = useRef(null);
+    const snowIntensityRef = useRef(0.5); // 0-1, current intensity
+    const snowTargetIntensityRef = useRef(0.5); // Target intensity for smooth transitions
     
     // Save settings when they change
     useEffect(() => {
@@ -302,11 +324,25 @@ const VoxelWorld = ({
                 id: 'pizza', 
                 name: 'PIZZA PARLOR', 
                 emoji: '🍕', 
-                description: 'Coming Soon',
-                targetRoom: null,
+                description: 'Enter Pizza Parlor',
+                targetRoom: 'pizza',
                 // Pizza at (25, 5), size d=10, door at front: z = 5 + 5 + 1.5 = 11.5
                 position: { x: 25, z: 11.5 },
                 doorRadius: 3
+            }
+        ],
+        pizza: [
+            { 
+                id: 'pizza-exit', 
+                name: 'EXIT', 
+                emoji: '🚪', 
+                description: 'Return to Town',
+                targetRoom: 'town',
+                position: { x: 0, z: 14 }, // Exit door inside pizza parlor
+                doorRadius: 3,
+                // Spawn at pizza entrance in town (OFFSET from center, like dojo)
+                // Pizza building at { x: 25, z: 5 }, door at z ≈ 12, spawn in front
+                exitSpawnPos: { x: 25, z: 14 }
             }
         ],
         igloo1: [
@@ -536,12 +572,10 @@ const VoxelWorld = ({
         controlsRef.current = controls;
 
         // Lighting - Arctic daylight (cool, icy blue tones)
+        // Removed hemisphere light that was causing ground glares
         const ambient = new THREE.AmbientLight(0xC0E0F0, 0.5); // Cool icy ambient
         scene.add(ambient);
-        
-        // Hemisphere light for icy outdoor lighting (sky to ice)
-        const hemiLight = new THREE.HemisphereLight(0x88B8D8, 0x6090B0, 0.4); // Icy blue gradient
-        scene.add(hemiLight);
+        ambientLightRef.current = ambient;
         
         const sunLight = new THREE.DirectionalLight(0xF8F8FF, 1.0); // Cold bright sun
         sunLight.position.set(80, 100, 60);
@@ -552,6 +586,70 @@ const VoxelWorld = ({
         sunLight.shadow.camera.top = 100;
         sunLight.shadow.camera.bottom = -100;
         scene.add(sunLight);
+        sunLightRef.current = sunLight;
+        
+        // ==================== SNOWFALL PARTICLE SYSTEM ====================
+        const createSnowfall = () => {
+            const particleCount = 2500; // Optimized count
+            const positions = new Float32Array(particleCount * 3);
+            const velocities = new Float32Array(particleCount * 3);
+            const sizes = new Float32Array(particleCount);
+            
+            const spreadX = 120; // Area width around player
+            const spreadZ = 120; // Area depth around player
+            const height = 50; // Fall height
+            
+            // Get initial player position (center of town if not set)
+            const spawnX = posRef.current?.x || 50;
+            const spawnZ = posRef.current?.z || 50;
+            
+            for (let i = 0; i < particleCount; i++) {
+                // Random position around spawn point (world coordinates)
+                positions[i * 3] = spawnX + (Math.random() - 0.5) * spreadX;
+                positions[i * 3 + 1] = Math.random() * height + 5; // Start above ground
+                positions[i * 3 + 2] = spawnZ + (Math.random() - 0.5) * spreadZ;
+                
+                // Random velocity (downward with slight drift)
+                velocities[i * 3] = (Math.random() - 0.5) * 0.3; // X drift
+                velocities[i * 3 + 1] = -(3 + Math.random() * 4); // Fall speed (faster)
+                velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.3; // Z drift
+                
+                // Random sizes for depth effect
+                sizes[i] = 0.2 + Math.random() * 0.25;
+            }
+            
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
+            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            
+            const material = new THREE.PointsMaterial({
+                color: 0xffffff,
+                size: 0.3, // Visible snowflakes
+                transparent: true,
+                opacity: 0.9,
+                depthWrite: false,
+                sizeAttenuation: true
+            });
+            
+            const snow = new THREE.Points(geometry, material);
+            snow.name = 'snowfall';
+            snow.frustumCulled = false; // Always render
+            snow.renderOrder = 999; // Render on top
+            scene.add(snow);
+            
+            console.log('❄️ Snowfall system initialized with', particleCount, 'particles');
+            
+            return { particles: snow, velocities, spreadX, spreadZ, height };
+        };
+        
+        const snowSystem = createSnowfall();
+        snowParticlesRef.current = snowSystem;
+        
+        // Randomize initial snow intensity
+        const initialIntensity = 0.5 + Math.random() * 0.3; // 0.5 to 0.8
+        snowIntensityRef.current = initialIntensity;
+        snowTargetIntensityRef.current = initialIntensity;
         
         // --- ICY ICEBERG ISLAND GENERATION ---
         const generateCity = () => {
@@ -617,8 +715,8 @@ const VoxelWorld = ({
             
             const iceMat = new THREE.MeshStandardMaterial({
                 vertexColors: true,
-                roughness: 0.4,
-                metalness: 0.1,
+                roughness: 0.85, // High roughness to prevent specular glare
+                metalness: 0, // No metallic reflections
             });
             
             const icePlane = new THREE.Mesh(iceGeo, iceMat);
@@ -652,8 +750,8 @@ const VoxelWorld = ({
                 const waterGeo = new THREE.BoxGeometry(1, 1, 1);
                 const waterMat = new THREE.MeshStandardMaterial({
                     vertexColors: true,
-                    roughness: 0.2,
-                    metalness: 0.1,
+                    roughness: 0.6, // Reduce water reflections
+                    metalness: 0, // No metallic shine
                 });
                 const waterMesh = new THREE.InstancedMesh(waterGeo, waterMat, waterGroup.mats.length);
                 waterGroup.mats.forEach((m, i) => waterMesh.setMatrixAt(i, m));
@@ -891,6 +989,424 @@ const VoxelWorld = ({
             return { 
                 bounds: { minX: -DOJO_SIZE/2 + 1, maxX: DOJO_SIZE/2 - 1, minZ: -DOJO_SIZE/2 + 1, maxZ: DOJO_SIZE/2 - 1 },
                 spawnPos: { x: 0, z: 14 }  // Spawn near exit
+            };
+        };
+        
+        // ==================== PIZZA PARLOR INTERIOR ====================
+        const generatePizzaRoom = () => {
+            const PIZZA_SIZE = 32; // Room dimensions
+            scene.background = new THREE.Color(0x1a0a05); // Warm dark brown
+            
+            // Simple collision map
+            const map = [];
+            for(let x = 0; x < 10; x++) {
+                map[x] = [];
+                for(let z = 0; z < 10; z++) {
+                    map[x][z] = 2; // All walkable
+                }
+            }
+            mapRef.current = map;
+            
+            // --- FLOOR: Red & white checkered tiles ---
+            const tileSize = 2;
+            const tilesPerSide = Math.ceil(PIZZA_SIZE / tileSize);
+            for (let tx = -tilesPerSide/2; tx < tilesPerSide/2; tx++) {
+                for (let tz = -tilesPerSide/2; tz < tilesPerSide/2; tz++) {
+                    const isWhite = (tx + tz) % 2 === 0;
+                    const tileGeo = new THREE.BoxGeometry(tileSize, 0.1, tileSize);
+                    const tileMat = new THREE.MeshStandardMaterial({ 
+                        color: isWhite ? 0xf5f5f5 : 0xcc2222,
+                        roughness: 0.3
+                    });
+                    const tile = new THREE.Mesh(tileGeo, tileMat);
+                    tile.position.set(tx * tileSize + tileSize/2, 0, tz * tileSize + tileSize/2);
+                    tile.receiveShadow = true;
+                    scene.add(tile);
+                }
+            }
+            
+            // --- WALLS: Warm Italian restaurant style ---
+            const wallMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.7 }); // Saddle brown
+            const wallAccentMat = new THREE.MeshStandardMaterial({ color: 0xCD853F, roughness: 0.6 }); // Peru
+            
+            // Back wall
+            const backWall = new THREE.Mesh(new THREE.BoxGeometry(PIZZA_SIZE, 10, 0.5), wallMat);
+            backWall.position.set(0, 5, -PIZZA_SIZE/2);
+            scene.add(backWall);
+            
+            // Side walls
+            const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 10, PIZZA_SIZE), wallMat);
+            leftWall.position.set(-PIZZA_SIZE/2, 5, 0);
+            scene.add(leftWall);
+            
+            const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 10, PIZZA_SIZE), wallMat);
+            rightWall.position.set(PIZZA_SIZE/2, 5, 0);
+            scene.add(rightWall);
+            
+            // Front wall with door opening
+            const frontWall1 = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 0.5), wallMat);
+            frontWall1.position.set(-11, 5, PIZZA_SIZE/2);
+            scene.add(frontWall1);
+            const frontWall2 = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 0.5), wallMat);
+            frontWall2.position.set(11, 5, PIZZA_SIZE/2);
+            scene.add(frontWall2);
+            // Door header
+            const doorHeader = new THREE.Mesh(new THREE.BoxGeometry(12, 3, 0.5), wallMat);
+            doorHeader.position.set(0, 8.5, PIZZA_SIZE/2);
+            scene.add(doorHeader);
+            
+            // --- CEILING ---
+            const ceilingGeo = new THREE.PlaneGeometry(PIZZA_SIZE, PIZZA_SIZE);
+            const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x2d1810, roughness: 0.9 });
+            const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.set(0, 10, 0);
+            scene.add(ceiling);
+            
+            // --- COUNTER/BAR AREA (snug against back wall) ---
+            const counterMat = new THREE.MeshStandardMaterial({ color: 0x4a2810, roughness: 0.5 });
+            const COUNTER_Z = -PIZZA_SIZE/2 + 2.5; // Snug against back wall (-16 + 2.5 = -13.5)
+            const COUNTER_DEPTH = 3;
+            const STOOL_Z = COUNTER_Z + COUNTER_DEPTH/2 + 1.5; // In front of counter
+            
+            // Main counter top
+            const counterTop = new THREE.Mesh(new THREE.BoxGeometry(20, 0.3, COUNTER_DEPTH), counterMat);
+            counterTop.position.set(0, 3.5, COUNTER_Z);
+            counterTop.castShadow = true;
+            scene.add(counterTop);
+            
+            // Counter front panel (customer side)
+            const counterFront = new THREE.Mesh(new THREE.BoxGeometry(20, 3.5, 0.3), wallAccentMat);
+            counterFront.position.set(0, 1.75, COUNTER_Z + COUNTER_DEPTH/2);
+            scene.add(counterFront);
+            
+            // Counter back panel (against wall)
+            const counterBack = new THREE.Mesh(new THREE.BoxGeometry(20, 3.5, 0.3), wallAccentMat);
+            counterBack.position.set(0, 1.75, COUNTER_Z - COUNTER_DEPTH/2);
+            scene.add(counterBack);
+            
+            // Counter sides
+            const counterSideL = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.5, COUNTER_DEPTH), wallAccentMat);
+            counterSideL.position.set(-10, 1.75, COUNTER_Z);
+            scene.add(counterSideL);
+            
+            const counterSideR = new THREE.Mesh(new THREE.BoxGeometry(0.3, 3.5, COUNTER_DEPTH), wallAccentMat);
+            counterSideR.position.set(10, 1.75, COUNTER_Z);
+            scene.add(counterSideR);
+            
+            // --- PIZZA OVEN (on back wall, behind counter) ---
+            const ovenMat = new THREE.MeshStandardMaterial({ color: 0x8B0000, roughness: 0.4 });
+            const ovenBody = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 2), ovenMat);
+            ovenBody.position.set(-5, 2.5, -PIZZA_SIZE/2 + 1);
+            ovenBody.castShadow = true;
+            scene.add(ovenBody);
+            
+            // Oven opening (dark)
+            const ovenOpening = new THREE.Mesh(
+                new THREE.BoxGeometry(3, 2.5, 0.1),
+                new THREE.MeshBasicMaterial({ color: 0x1a0500 })
+            );
+            ovenOpening.position.set(-5, 2, -PIZZA_SIZE/2 + 2.1);
+            scene.add(ovenOpening);
+            
+            // Oven fire glow
+            const ovenGlow = new THREE.PointLight(0xff4400, 2, 8);
+            ovenGlow.position.set(-5, 2, -PIZZA_SIZE/2 + 1.5);
+            scene.add(ovenGlow);
+            
+            // --- BAR STOOLS (along counter) ---
+            const barStoolPositions = [-7, -4, -1, 2, 5, 8];
+            const createBarStool = (x, z, faceDirection = 0) => {
+                const stoolGroup = new THREE.Group();
+                const metalMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.3 });
+                const seatMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5 });
+                
+                // Base (wider for stability)
+                const base = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.5, 0.1, 12), metalMat);
+                base.position.y = 0.05;
+                stoolGroup.add(base);
+                
+                // Stool leg (taller for bar height)
+                const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 2.6, 8), metalMat);
+                leg.position.y = 1.3;
+                stoolGroup.add(leg);
+                
+                // Foot rest ring
+                const footRest = new THREE.Mesh(new THREE.TorusGeometry(0.4, 0.05, 8, 16), metalMat);
+                footRest.rotation.x = Math.PI / 2;
+                footRest.position.y = 0.7;
+                stoolGroup.add(footRest);
+                
+                // Seat (padded) - raised to be proper bar height
+                const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.45, 0.3, 16), seatMat);
+                seat.position.y = 2.8; // Raised from 2.15 for proper bar height
+                seat.castShadow = true;
+                stoolGroup.add(seat);
+                
+                stoolGroup.position.set(x, 0, z);
+                stoolGroup.rotation.y = faceDirection;
+                return stoolGroup;
+            };
+            
+            // Bar stools along counter (facing counter)
+            barStoolPositions.forEach(x => {
+                const stool = createBarStool(x, STOOL_Z, Math.PI); // Face the counter (north)
+                scene.add(stool);
+            });
+            
+            // --- ROUND TABLES WITH CHAIRS ---
+            const tablePositions = [
+                { x: -8, z: 2 },
+                { x: 8, z: 2 },
+                { x: -8, z: 9 },
+                { x: 8, z: 9 }
+            ];
+            
+            const createRoundTable = (tableX, tableZ, numChairs = 4) => {
+                const tableGroup = new THREE.Group();
+                const woodMat = new THREE.MeshStandardMaterial({ color: 0x5D3A1A, roughness: 0.6 });
+                const tableclothMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.7 });
+                
+                // Table leg (pedestal style)
+                const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 2.5, 8), woodMat);
+                pedestal.position.y = 1.25;
+                pedestal.castShadow = true;
+                tableGroup.add(pedestal);
+                
+                // Table top (thicker for collision)
+                const tableTop = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 0.2, 24), woodMat);
+                tableTop.position.y = 2.6;
+                tableTop.castShadow = true;
+                tableGroup.add(tableTop);
+                
+                // Red checkered tablecloth (slightly larger)
+                const cloth = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.3, 0.05, 24), tableclothMat);
+                cloth.position.y = 2.72;
+                tableGroup.add(cloth);
+                
+                tableGroup.position.set(tableX, 0, tableZ);
+                return tableGroup;
+            };
+            
+            // Create a chair as a separate object (for better collision/interaction)
+            // Chair faces -Z direction when rotation.y = 0 (back at +Z)
+            // TALL chairs to match table height (table top at y=3.5)
+            const createChair = (x, z, faceAngle) => {
+                const chairGroup = new THREE.Group();
+                const chairWoodMat = new THREE.MeshStandardMaterial({ color: 0x4a2810, roughness: 0.6 });
+                
+                // Chair seat (raised to match table height)
+                const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 1.2), chairWoodMat);
+                chairSeat.position.y = 2.8; // Raised from 1.5 to match table
+                chairSeat.castShadow = true;
+                chairGroup.add(chairSeat);
+                
+                // Chair back (taller, positioned above seat)
+                const chairBack = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.8, 0.15), chairWoodMat);
+                chairBack.position.set(0, 3.8, -0.52); // Raised to match new seat height
+                chairGroup.add(chairBack);
+                
+                // Chair legs (longer to support higher seat)
+                for (let lx = -0.45; lx <= 0.45; lx += 0.9) {
+                    for (let lz = -0.45; lz <= 0.45; lz += 0.9) {
+                        const chairLeg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.8, 0.1), chairWoodMat);
+                        chairLeg.position.set(lx, 1.4, lz); // Taller legs
+                        chairGroup.add(chairLeg);
+                    }
+                }
+                
+                chairGroup.position.set(x, 0, z);
+                chairGroup.rotation.y = faceAngle; // Chair faces this direction (+Z local → world faceAngle)
+                return chairGroup;
+            };
+            
+            // Track all chair positions for collision/interaction
+            const chairData = [];
+            
+            // Place tables and their chairs
+            tablePositions.forEach(table => {
+                const tableGroup = createRoundTable(table.x, table.z, 4);
+                scene.add(tableGroup);
+                
+                // Create 4 chairs around each table (at cardinal directions)
+                for (let i = 0; i < 4; i++) {
+                    const angle = (i / 4) * Math.PI * 2; // 0, π/2, π, 3π/2 (N, E, S, W from table)
+                    const chairDist = 3;
+                    const chairX = table.x + Math.cos(angle) * chairDist;
+                    const chairZ = table.z + Math.sin(angle) * chairDist;
+                    
+                    // Calculate direction from chair to table center for rotation
+                    const dirX = table.x - chairX;
+                    const dirZ = table.z - chairZ;
+                    const faceAngle = Math.atan2(dirX, dirZ); // Face toward table
+                    
+                    const chair = createChair(chairX, chairZ, faceAngle);
+                    scene.add(chair);
+                    
+                    // Store chair data for collision and sitting
+                    chairData.push({
+                        type: 'chair',
+                        position: { x: chairX, z: chairZ },
+                        seatHeight: 1.8, // Chair seat mesh at y=2.8, penguin body centered on seat
+                        faceAngle: faceAngle,
+                        radius: 0.7
+                    });
+                }
+            });
+            
+            // --- DECORATIONS ---
+            
+            // Hanging pendant lights
+            const createPendantLight = (x, z) => {
+                const lightGroup = new THREE.Group();
+                
+                // Cord
+                const cord = new THREE.Mesh(
+                    new THREE.CylinderGeometry(0.02, 0.02, 3, 8),
+                    new THREE.MeshBasicMaterial({ color: 0x333333 })
+                );
+                cord.position.y = 8.5;
+                lightGroup.add(cord);
+                
+                // Lamp shade (cone) - wide end DOWN for proper lamp shade
+                const shade = new THREE.Mesh(
+                    new THREE.ConeGeometry(0.8, 1, 16, 1, true),
+                    new THREE.MeshStandardMaterial({ 
+                        color: 0xcc2222, 
+                        side: THREE.DoubleSide,
+                        roughness: 0.7
+                    })
+                );
+                shade.position.y = 7.5;
+                // No rotation - cone tip up, wide base down (natural lamp shade)
+                lightGroup.add(shade);
+                
+                // Light bulb glow (inside the shade)
+                const bulb = new THREE.Mesh(
+                    new THREE.SphereGeometry(0.2, 8, 8),
+                    new THREE.MeshBasicMaterial({ color: 0xffffcc })
+                );
+                bulb.position.y = 7.0; // Lower to be inside shade
+                lightGroup.add(bulb);
+                
+                // Point light
+                const light = new THREE.PointLight(0xffcc88, 1.5, 12);
+                light.position.y = 7;
+                lightGroup.add(light);
+                
+                lightGroup.position.set(x, 0, z);
+                return lightGroup;
+            };
+            
+            // Lights over tables
+            scene.add(createPendantLight(-8, 2));
+            scene.add(createPendantLight(8, 2));
+            scene.add(createPendantLight(-8, 9));
+            scene.add(createPendantLight(8, 9));
+            scene.add(createPendantLight(0, STOOL_Z)); // Over counter/bar area
+            
+            // --- WALL DECORATIONS ---
+            
+            // Italian flag on back wall
+            const flagColors = [0x008C45, 0xF4F5F0, 0xCD212A]; // Green, white, red
+            flagColors.forEach((color, i) => {
+                const stripe = new THREE.Mesh(
+                    new THREE.BoxGeometry(1.5, 3, 0.1),
+                    new THREE.MeshStandardMaterial({ color })
+                );
+                stripe.position.set(-5 + (i * 1.5) - 1.5, 7, -PIZZA_SIZE/2 + 0.3);
+                scene.add(stripe);
+            });
+            
+            // "PIZZA" sign (neon style)
+            const signBack = new THREE.Mesh(
+                new THREE.BoxGeometry(8, 2, 0.2),
+                new THREE.MeshStandardMaterial({ color: 0x1a0a00 })
+            );
+            signBack.position.set(5, 7, -PIZZA_SIZE/2 + 0.3);
+            scene.add(signBack);
+            
+            // Neon glow
+            const neonLight = new THREE.PointLight(0xff6600, 2, 8);
+            neonLight.position.set(5, 7, -PIZZA_SIZE/2 + 1);
+            scene.add(neonLight);
+            
+            // Menu boards on side walls
+            const menuMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+            const menuLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4, 6), menuMat);
+            menuLeft.position.set(-PIZZA_SIZE/2 + 0.3, 6, -5);
+            scene.add(menuLeft);
+            
+            const menuRight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4, 6), menuMat);
+            menuRight.position.set(PIZZA_SIZE/2 - 0.3, 6, -5);
+            scene.add(menuRight);
+            
+            // --- AMBIENT LIGHTING ---
+            const ambientFill = new THREE.AmbientLight(0xffeedd, 0.3);
+            scene.add(ambientFill);
+            
+            // Exit sign light
+            const exitLight = new THREE.PointLight(0x00ff00, 0.5, 5);
+            exitLight.position.set(0, 9, PIZZA_SIZE/2 - 1);
+            scene.add(exitLight);
+            
+            // Build furniture sitting data (bar stools + chairs)
+            const furnitureData = [
+                // Bar stools (facing counter) - tall bar stools with seat at y=2.8
+                ...barStoolPositions.map(x => ({
+                    type: 'stool',
+                    position: { x, z: STOOL_Z },
+                    seatHeight: 1.8, // Stool seat mesh at y=2.8, penguin body centered on seat
+                    faceAngle: Math.PI, // Facing counter (north)
+                    radius: 0.5,
+                    dismountBack: true // Flag to dismount backwards (away from counter)
+                })),
+                // Chairs (from chairData)
+                ...chairData
+            ];
+            
+            // Store pizza parlor bounds for collision
+            return { 
+                bounds: { 
+                    minX: -PIZZA_SIZE/2 + 1, 
+                    maxX: PIZZA_SIZE/2 - 1, 
+                    minZ: -PIZZA_SIZE/2 + 1, 
+                    maxZ: PIZZA_SIZE/2 - 1 
+                },
+                spawnPos: { x: 0, z: 12 },  // Spawn near exit
+                
+                // Furniture for sitting interactions
+                furniture: furnitureData,
+                
+                // Landing surfaces for jumping (Y heights)
+                landingSurfaces: [
+                    // Table tops (can jump on)
+                    ...tablePositions.map(t => ({ 
+                        type: 'circle', x: t.x, z: t.z, radius: 2.2, height: 2.75 
+                    })),
+                    // Counter top (can jump on) - snug against back wall
+                    { type: 'box', minX: -10, maxX: 10, minZ: COUNTER_Z - COUNTER_DEPTH/2, maxZ: COUNTER_Z + COUNTER_DEPTH/2, height: 3.6 },
+                    // Bar stool seats (can jump on) - raised to match new stool height
+                    ...barStoolPositions.map(x => ({ 
+                        type: 'circle', x, z: STOOL_Z, radius: 0.55, height: 2.95 
+                    })),
+                    // Chair seats (can jump on) - raised to match tall chairs
+                    ...chairData.map(c => ({ 
+                        type: 'circle', x: c.position.x, z: c.position.z, radius: 0.7, height: 2.9 
+                    }))
+                ],
+                
+                // Table collision (can't walk through pedestal)
+                tables: tablePositions.map(t => ({ x: t.x, z: t.z, radius: 0.6 })),
+                
+                // Chair collision (small radius for legs)
+                chairs: chairData.map(c => ({ x: c.position.x, z: c.position.z, radius: 0.7 })),
+                
+                // Bar stool collision
+                stools: barStoolPositions.map(x => ({ x, z: STOOL_Z, radius: 0.5 })),
+                
+                // Counter collision (rectangular) - snug against back wall
+                counter: { minX: -10, maxX: 10, minZ: COUNTER_Z - COUNTER_DEPTH/2, maxZ: COUNTER_Z + COUNTER_DEPTH/2 }
             };
         };
         
@@ -1359,6 +1875,8 @@ const VoxelWorld = ({
             };
         } else if (room === 'dojo') {
             roomData = generateDojoRoom();
+        } else if (room === 'pizza') {
+            roomData = generatePizzaRoom();
         } else if (room === 'igloo1' || room === 'igloo2') {
             roomData = generateIglooRoom();
             // Request ball sync from server when entering igloo
@@ -1628,31 +2146,95 @@ const VoxelWorld = ({
                  
                  group.add(body, head, flippersLeft, flippersRight, footL, footR);
                  
-                 if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
-                     const p = buildPartMerged(ASSETS.HATS[data.hat], PALETTE);
-                     p.name = 'hat';
-                     group.add(p);
-                 }
+                if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+                    const p = buildPartMerged(ASSETS.HATS[data.hat], PALETTE);
+                    p.name = 'hat';
+                    group.add(p);
+                    
+                    // Add spinning propeller blades for propeller hat
+                    if (data.hat === 'propeller') {
+                        const blades = new THREE.Group();
+                        blades.name = 'propeller_blades';
+                        blades.position.set(0, 13 * VOXEL_SIZE, 0);
+                        const bladeGeo = new THREE.BoxGeometry(4 * VOXEL_SIZE, 0.2 * VOXEL_SIZE, 0.5 * VOXEL_SIZE);
+                        const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                        const b1 = new THREE.Mesh(bladeGeo, bladeMat);
+                        const b2 = new THREE.Mesh(bladeGeo, bladeMat);
+                        b2.rotation.y = Math.PI / 2;
+                        blades.add(b1, b2);
+                        group.add(blades);
+                    }
+                }
                  
-                 if (data.eyes && ASSETS.EYES[data.eyes]) {
-                     const p = buildPartMerged(ASSETS.EYES[data.eyes], PALETTE);
-                     p.name = 'eyes';
-                     group.add(p);
-                 } else if (ASSETS.EYES.normal) {
-                     const p = buildPartMerged(ASSETS.EYES.normal, PALETTE);
-                     p.name = 'eyes';
-                     group.add(p);
-                 }
+                if (data.eyes && ASSETS.EYES[data.eyes]) {
+                    const p = buildPartMerged(ASSETS.EYES[data.eyes], PALETTE);
+                    p.name = 'eyes';
+                    group.add(p);
+                    
+                    // Add laser eye lights for laser eyes
+                    if (data.eyes === 'laser') {
+                        const laserGroup = new THREE.Group();
+                        laserGroup.name = 'laser_lights';
+                        
+                        const lightLeft = new THREE.PointLight(0xff0000, 1, 10);
+                        lightLeft.position.set(-2 * VOXEL_SIZE, 7 * VOXEL_SIZE, 5 * VOXEL_SIZE);
+                        lightLeft.name = 'laser_left';
+                        
+                        const lightRight = new THREE.PointLight(0xff0000, 1, 10);
+                        lightRight.position.set(2 * VOXEL_SIZE, 7 * VOXEL_SIZE, 5 * VOXEL_SIZE);
+                        lightRight.name = 'laser_right';
+                        
+                        laserGroup.add(lightLeft, lightRight);
+                        laserGroup.userData.isLaserEyes = true;
+                        group.add(laserGroup);
+                    }
+                } else if (ASSETS.EYES.normal) {
+                    const p = buildPartMerged(ASSETS.EYES.normal, PALETTE);
+                    p.name = 'eyes';
+                    group.add(p);
+                }
                  
-                 if (data.mouth && ASSETS.MOUTH[data.mouth]) {
-                     const p = buildPartMerged(ASSETS.MOUTH[data.mouth], PALETTE);
-                     p.name = 'mouth';
-                     group.add(p);
-                 } else if (ASSETS.MOUTH.beak) {
-                     const p = buildPartMerged(ASSETS.MOUTH.beak, PALETTE);
-                     p.name = 'mouth';
-                     group.add(p);
-                 }
+                if (data.mouth && ASSETS.MOUTH[data.mouth]) {
+                    const p = buildPartMerged(ASSETS.MOUTH[data.mouth], PALETTE);
+                    p.name = 'mouth';
+                    group.add(p);
+                    
+                    // Add smoke particles for cigarette or pipe
+                    if (data.mouth === 'cigarette' || data.mouth === 'pipe') {
+                        const smokeGroup = new THREE.Group();
+                        smokeGroup.name = 'smoke_particles';
+                        
+                        // Position based on mouth type
+                        const tipX = data.mouth === 'pipe' ? 2 * VOXEL_SIZE : 4.5 * VOXEL_SIZE;
+                        const tipY = data.mouth === 'pipe' ? 6 * VOXEL_SIZE : 5.5 * VOXEL_SIZE;
+                        const tipZ = data.mouth === 'pipe' ? 6 * VOXEL_SIZE : 5.5 * VOXEL_SIZE;
+                        smokeGroup.position.set(tipX, tipY, tipZ);
+                        
+                        // Create smoke particles
+                        const particleCount = 8;
+                        for (let i = 0; i < particleCount; i++) {
+                            const pGeo = new THREE.BoxGeometry(0.3 * VOXEL_SIZE, 0.3 * VOXEL_SIZE, 0.3 * VOXEL_SIZE);
+                            const pMat = new THREE.MeshBasicMaterial({ 
+                                color: 0xaaaaaa, 
+                                transparent: true, 
+                                opacity: 0.6 
+                            });
+                            const pMesh = new THREE.Mesh(pGeo, pMat);
+                            // Stagger initial positions
+                            pMesh.position.y = i * 0.3 * VOXEL_SIZE;
+                            pMesh.userData.particleIndex = i;
+                            pMesh.userData.baseY = pMesh.position.y;
+                            smokeGroup.add(pMesh);
+                        }
+                        
+                        smokeGroup.userData.isSmokeEmitter = true;
+                        group.add(smokeGroup);
+                    }
+                } else if (ASSETS.MOUTH.beak) {
+                    const p = buildPartMerged(ASSETS.MOUTH.beak, PALETTE);
+                    p.name = 'mouth';
+                    group.add(p);
+                }
                  
                  if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
                      const p = buildPartMerged(ASSETS.BODY[data.bodyItem], PALETTE);
@@ -2030,26 +2612,34 @@ const VoxelWorld = ({
                 setActiveBubble(null);
             }
             
-            // If seated on bench, check for movement to stand up
+            // If seated on bench/chair, check for movement to stand up
             if (seatedRef.current) {
                 if (anyMovementInput) {
-                    // Stand up from bench - move forward to avoid collision
+                    // Stand up - move to clear the seat
                     const seatData = seatedRef.current;
                     const benchRot = seatData.benchRotation || 0;
-                    const dismountDist = 3.0; // Distance to move forward when standing (clear of bench collision)
+                    const dismountDist = 1.5; // Distance to clear seat
                     
-                    // Calculate forward direction based on bench rotation
-                    const forwardX = Math.sin(benchRot) * dismountDist;
-                    const forwardZ = Math.cos(benchRot) * dismountDist;
+                    // Check if we should dismount backwards (for bar stools facing counter)
+                    // INVERTED: dismountBack=true now goes FORWARD (opposite of face direction)
+                    const dismountBackward = seatData.dismountBack === true;
+                    const direction = dismountBackward ? 1 : -1; // INVERTED: 1 = forwards (behind stool), -1 = backwards
                     
-                    // Move player forward from bench
-                    posRef.current.x = seatData.worldPos.x + forwardX;
-                    posRef.current.z = seatData.worldPos.z + forwardZ;
+                    // Calculate dismount direction based on seat rotation
+                    const offsetX = Math.sin(benchRot) * dismountDist * direction;
+                    const offsetZ = Math.cos(benchRot) * dismountDist * direction;
+                    
+                    // Move player in dismount direction from seat
+                    posRef.current.x = seatData.worldPos.x + offsetX;
+                    posRef.current.z = seatData.worldPos.z + offsetZ;
+                    posRef.current.y = 0; // Put on ground level
+                    velRef.current.y = 0; // Stop any vertical velocity
                     
                     // Update mesh position
                     if (playerRef.current) {
                         playerRef.current.position.x = posRef.current.x;
                         playerRef.current.position.z = posRef.current.z;
+                        playerRef.current.position.y = 0;
                     }
                     
                     // Clear seated state
@@ -2067,9 +2657,18 @@ const VoxelWorld = ({
                         m.rotation.x = 0;
                     }
                 }
-                // While seated, don't move
+                // While seated, don't move and maintain seat height
                 velRef.current.x = 0;
                 velRef.current.z = 0;
+                velRef.current.y = 0; // No vertical velocity while seated
+                
+                // Keep player at seat height
+                if (seatedRef.current.seatHeight) {
+                    posRef.current.y = seatedRef.current.seatHeight;
+                    if (playerRef.current) {
+                        playerRef.current.position.y = seatedRef.current.seatHeight;
+                    }
+                }
             }
             else if (!emoteRef.current.type) {
                 // Joystick movement (PUBG-style - analog control)
@@ -2122,6 +2721,87 @@ const VoxelWorld = ({
                 finalZ = Math.max(b.minZ + playerRadius, Math.min(b.maxZ - playerRadius, nextZ));
                 if (finalX !== nextX || finalZ !== nextZ) {
                     collided = true;
+                }
+            } else if (roomRef.current === 'pizza' && roomData && roomData.bounds) {
+                // Pizza parlor collision - enclosed room like igloos
+                const b = roomData.bounds;
+                const playerRadius = 0.6;
+                const playerY = posRef.current.y;
+                
+                // Wall bounds - ALWAYS enforced (enclosed room)
+                finalX = Math.max(b.minX + playerRadius, Math.min(b.maxX - playerRadius, nextX));
+                finalZ = Math.max(b.minZ + playerRadius, Math.min(b.maxZ - playerRadius, nextZ));
+                if (finalX !== nextX || finalZ !== nextZ) collided = true;
+                
+                // Counter collision - ALWAYS enforced (it's a solid bar)
+                // Counter blocks movement regardless of player height
+                if (roomData.counter) {
+                    const c = roomData.counter;
+                    if (finalX > c.minX - playerRadius && finalX < c.maxX + playerRadius &&
+                        finalZ > c.minZ - playerRadius && finalZ < c.maxZ + playerRadius) {
+                        // Only block if player is below counter top height (3.6)
+                        if (playerY < 3.5) {
+                            const fromLeft = finalX - (c.minX - playerRadius);
+                            const fromRight = (c.maxX + playerRadius) - finalX;
+                            const fromFront = finalZ - (c.minZ - playerRadius);
+                            const fromBack = (c.maxZ + playerRadius) - finalZ;
+                            
+                            const minDist = Math.min(fromLeft, fromRight, fromFront, fromBack);
+                            if (minDist === fromFront) finalZ = c.minZ - playerRadius;
+                            else if (minDist === fromBack) finalZ = c.maxZ + playerRadius;
+                            else if (minDist === fromLeft) finalX = c.minX - playerRadius;
+                            else finalX = c.maxX + playerRadius;
+                            collided = true;
+                        }
+                    }
+                }
+                
+                // Only check small furniture collision if player is on ground
+                if (playerY < 1.5) {
+                    // Table pedestal collision (circular, small radius)
+                    if (roomData.tables) {
+                        for (const table of roomData.tables) {
+                            const dx = finalX - table.x;
+                            const dz = finalZ - table.z;
+                            const dist = Math.sqrt(dx * dx + dz * dz);
+                            if (dist < table.radius + playerRadius) {
+                                const angle = Math.atan2(dz, dx);
+                                finalX = table.x + Math.cos(angle) * (table.radius + playerRadius);
+                                finalZ = table.z + Math.sin(angle) * (table.radius + playerRadius);
+                                collided = true;
+                            }
+                        }
+                    }
+                    
+                    // Chair collision (when on ground)
+                    if (roomData.chairs) {
+                        for (const chair of roomData.chairs) {
+                            const dx = finalX - chair.x;
+                            const dz = finalZ - chair.z;
+                            const dist = Math.sqrt(dx * dx + dz * dz);
+                            if (dist < chair.radius + playerRadius) {
+                                const angle = Math.atan2(dz, dx);
+                                finalX = chair.x + Math.cos(angle) * (chair.radius + playerRadius);
+                                finalZ = chair.z + Math.sin(angle) * (chair.radius + playerRadius);
+                                collided = true;
+                            }
+                        }
+                    }
+                    
+                    // Bar stool collision (when on ground)
+                    if (roomData.stools) {
+                        for (const stool of roomData.stools) {
+                            const dx = finalX - stool.x;
+                            const dz = finalZ - stool.z;
+                            const dist = Math.sqrt(dx * dx + dz * dz);
+                            if (dist < stool.radius + playerRadius) {
+                                const angle = Math.atan2(dz, dx);
+                                finalX = stool.x + Math.cos(angle) * (stool.radius + playerRadius);
+                                finalZ = stool.z + Math.sin(angle) * (stool.radius + playerRadius);
+                                collided = true;
+                            }
+                        }
+                    }
                 }
             } else if ((roomRef.current === 'igloo1' || roomRef.current === 'igloo2') && roomData && roomData.bounds) {
                 // Igloos use CIRCULAR bounds to match dome shape
@@ -2363,7 +3043,60 @@ const VoxelWorld = ({
                 // Also check triggers (benches, snowmen, etc.)
                 // Pass Y position so triggers can filter by height (e.g., don't show "sit" prompt when standing ON furniture)
                 townCenterRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
-            } else {
+            }
+            
+            // Pizza room furniture interactions
+            if (roomRef.current === 'pizza' && roomDataRef.current?.furniture) {
+                const px = posRef.current.x;
+                const pz = posRef.current.z;
+                const py = posRef.current.y;
+                
+                // Only check when on ground level (not standing on furniture)
+                if (py < 1.0) {
+                    let foundSeat = null;
+                    let closestDist = 1.5; // Interaction radius
+                    
+                    for (const seat of roomDataRef.current.furniture) {
+                        const dx = px - seat.position.x;
+                        const dz = pz - seat.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (dist < closestDist) {
+                            closestDist = dist;
+                            foundSeat = seat;
+                        }
+                    }
+                    
+                    if (foundSeat) {
+                        const seatName = foundSeat.type === 'stool' ? 'bar stool' : 'chair';
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: {
+                                action: 'sit',
+                                emote: 'Sit',
+                                data: {
+                                    worldX: foundSeat.position.x,
+                                    worldZ: foundSeat.position.z,
+                                    worldRotation: foundSeat.faceAngle || 0,
+                                    seatHeight: foundSeat.seatHeight,
+                                    snapPoints: [{ x: 0, z: 0, rotation: 0 }]
+                                }
+                            }
+                        }));
+                    } else {
+                        // Clear interaction when not near any seat
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: { action: 'exit' }
+                        }));
+                    }
+                } else {
+                    // Clear interaction when on furniture
+                    window.dispatchEvent(new CustomEvent('townInteraction', {
+                        detail: { action: 'exit' }
+                    }));
+                }
+            }
+            
+            if (roomRef.current !== 'town' && roomRef.current !== 'pizza') {
                 // Fallback: Town uses tile-based collision (water at edges) + building collision
                 const gridX = Math.floor((nextX + BUILDING_SCALE/2) / BUILDING_SCALE);
                 const gridZ = Math.floor((nextZ + BUILDING_SCALE/2) / BUILDING_SCALE);
@@ -2492,6 +3225,34 @@ const VoxelWorld = ({
                     if (landing.landingY >= groundHeight) {
                         groundHeight = landing.landingY;
                         foundGround = true;
+                    }
+                }
+            }
+            
+            // Check for landing on pizza parlor furniture
+            if (room === 'pizza' && roomDataRef.current?.landingSurfaces && velRef.current.y <= 0) {
+                const px = posRef.current.x;
+                const pz = posRef.current.z;
+                const py = posRef.current.y;
+                
+                for (const surface of roomDataRef.current.landingSurfaces) {
+                    let isOver = false;
+                    
+                    if (surface.type === 'circle') {
+                        const dx = px - surface.x;
+                        const dz = pz - surface.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        isOver = dist <= surface.radius;
+                    } else if (surface.type === 'box') {
+                        isOver = px >= surface.minX && px <= surface.maxX &&
+                                 pz >= surface.minZ && pz <= surface.maxZ;
+                    }
+                    
+                    if (isOver && py >= surface.height - 0.5 && py <= surface.height + 1) {
+                        if (surface.height >= groundHeight) {
+                            groundHeight = surface.height;
+                            foundGround = true;
+                        }
                     }
                 }
             }
@@ -2661,6 +3422,42 @@ const VoxelWorld = ({
             if (playerRef.current) {
                 // Pass local player's seatedRef state for furniture sitting and character type
                 animateMesh(playerRef.current, moving, emoteRef.current.type, emoteRef.current.startTime, !!seatedRef.current, penguinData?.characterType || 'penguin');
+                
+                // Animate local player's propeller, smoke, and laser eyes
+                playerRef.current.traverse(child => {
+                    if (child.name === 'propeller_blades') {
+                        child.rotation.y += delta * 15; // Fast spin
+                    }
+                    
+                    // Animate smoke particles
+                    if (child.userData?.isSmokeEmitter) {
+                        child.children.forEach((particle, i) => {
+                            particle.position.y += delta * 2;
+                            particle.position.x += Math.sin(time * 2 + i) * delta * 0.5;
+                            
+                            const height = particle.position.y - (particle.userData.baseY || 0);
+                            if (particle.material) {
+                                particle.material.opacity = Math.max(0, 0.6 - height * 0.3);
+                            }
+                            
+                            if (height > 2) {
+                                particle.position.y = particle.userData.baseY || 0;
+                                particle.position.x = 0;
+                                if (particle.material) particle.material.opacity = 0.6;
+                            }
+                        });
+                    }
+                    
+                    // Animate laser eyes - pulsing intensity
+                    if (child.userData?.isLaserEyes) {
+                        const intensity = 1 + Math.sin(time * 10) * 0.5;
+                        child.children.forEach(light => {
+                            if (light.isPointLight) {
+                                light.intensity = intensity;
+                            }
+                        });
+                    }
+                });
             }
             
             // --- AI UPDATE LOOP (runs always, AI have their own room state) ---
@@ -2976,6 +3773,31 @@ const VoxelWorld = ({
                             if (Math.abs(nextX) > DOJO_HALF - 1 || Math.abs(nextZ) > DOJO_HALF - 1) {
                                 collided = true;
                             }
+                        } else if (ai.currentRoom === 'pizza') {
+                            // Pizza parlor bounds (PIZZA_SIZE = 32, so -16 to 16)
+                            const PIZZA_HALF = 16;
+                            if (Math.abs(nextX) > PIZZA_HALF - 1 || Math.abs(nextZ) > PIZZA_HALF - 1) {
+                                collided = true;
+                            }
+                            // Table collision (pedestals)
+                            const tables = [
+                                { x: -8, z: 2, r: 0.6 },
+                                { x: 8, z: 2, r: 0.6 },
+                                { x: -8, z: 9, r: 0.6 },
+                                { x: 8, z: 9, r: 0.6 }
+                            ];
+                            for (const t of tables) {
+                                const dx = nextX - t.x;
+                                const dz = nextZ - t.z;
+                                if (Math.sqrt(dx*dx + dz*dz) < t.r + 0.8) {
+                                    collided = true;
+                                    break;
+                                }
+                            }
+                            // Counter collision (snug against back wall at z = -13.5, depth 3)
+                            if (nextZ < -12 && nextZ > -16 && Math.abs(nextX) < 10) {
+                                collided = true;
+                            }
                         }
 
                         if (!collided) {
@@ -3064,6 +3886,9 @@ const VoxelWorld = ({
                 if (playerData.position) {
                     meshData.mesh.position.x += (playerData.position.x - meshData.mesh.position.x) * lerpFactor;
                     meshData.mesh.position.z += (playerData.position.z - meshData.mesh.position.z) * lerpFactor;
+                    // Sync Y position for jumps (with slightly faster lerp for responsiveness)
+                    const targetY = playerData.position.y ?? 0;
+                    meshData.mesh.position.y += (targetY - meshData.mesh.position.y) * Math.min(1, delta * 15);
                 }
                 
                 if (playerData.rotation !== undefined) {
@@ -3134,6 +3959,45 @@ const VoxelWorld = ({
                 );
                 // Pass each player's seatedOnFurniture state (synced from server) and character type
                 animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin');
+                
+                // Animate propeller hat, smoke, and laser eyes if present
+                meshData.mesh.traverse(child => {
+                    if (child.name === 'propeller_blades') {
+                        child.rotation.y += delta * 15; // Fast spin
+                    }
+                    
+                    // Animate smoke particles
+                    if (child.userData?.isSmokeEmitter) {
+                        child.children.forEach((particle, i) => {
+                            // Rise and drift
+                            particle.position.y += delta * 2;
+                            particle.position.x += Math.sin(time * 2 + i) * delta * 0.5;
+                            
+                            // Fade out as it rises
+                            const height = particle.position.y - (particle.userData.baseY || 0);
+                            if (particle.material) {
+                                particle.material.opacity = Math.max(0, 0.6 - height * 0.3);
+                            }
+                            
+                            // Reset when too high
+                            if (height > 2) {
+                                particle.position.y = particle.userData.baseY || 0;
+                                particle.position.x = 0;
+                                if (particle.material) particle.material.opacity = 0.6;
+                            }
+                        });
+                    }
+                    
+                    // Animate laser eyes - pulsing intensity
+                    if (child.userData?.isLaserEyes) {
+                        const intensity = 1 + Math.sin(time * 10) * 0.5;
+                        child.children.forEach(light => {
+                            if (light.isPointLight) {
+                                light.intensity = intensity;
+                            }
+                        });
+                    }
+                });
                 
                 // Handle chat bubbles
                 if (playerData.chatMessage && playerData.chatTime) {
@@ -3220,6 +4084,134 @@ const VoxelWorld = ({
             controls.target.copy(targetPos);
             controls.update();
             
+            // ==================== DAY/NIGHT CYCLE (Town only, Server-synchronized) ====================
+            if (room === 'town' && sunLightRef.current && ambientLightRef.current) {
+                // Use server-synchronized time (or local time for debug override)
+                const serverTime = serverWorldTimeRef?.current ?? 0.35;
+                const t = daySpeedRef.current === 0 ? dayTimeRef.current : serverTime; // Allow local override when paused
+                
+                // Calculate sun position (arc across sky)
+                const sunAngle = t * Math.PI * 2 - Math.PI / 2; // Full rotation
+                const sunHeight = Math.sin(sunAngle);
+                const sunX = Math.cos(sunAngle) * 100;
+                const sunY = Math.max(5, sunHeight * 100 + 50); // Never go below horizon completely
+                
+                sunLightRef.current.position.set(sunX, sunY, 60);
+                
+                // Day/night colors based on time
+                // 0.0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset
+                let sunIntensity, ambientIntensity, sunColor, ambientColor, skyColor;
+                
+                if (t < 0.2) {
+                    // Night (0.0 - 0.2) - Keep ambient higher for navigation
+                    const nightT = t / 0.2;
+                    sunIntensity = 0.05 + nightT * 0.1; // Very dim moonlight
+                    ambientIntensity = 0.25 + nightT * 0.1; // Higher ambient for visibility
+                    sunColor = new THREE.Color(0x4466aa); // Moonlight blue
+                    ambientColor = new THREE.Color(0x2a3a5a); // Dark blue but not too dark
+                    skyColor = new THREE.Color().lerpColors(new THREE.Color(0x0a1525), new THREE.Color(0x1a3050), nightT);
+                } else if (t < 0.3) {
+                    // Sunrise (0.2 - 0.3)
+                    const sunriseT = (t - 0.2) / 0.1;
+                    sunIntensity = 0.15 + sunriseT * 0.45;
+                    ambientIntensity = 0.35 + sunriseT * 0.15;
+                    sunColor = new THREE.Color().lerpColors(new THREE.Color(0x4466aa), new THREE.Color(0xffaa66), sunriseT);
+                    ambientColor = new THREE.Color().lerpColors(new THREE.Color(0x2a3a5a), new THREE.Color(0x8090a0), sunriseT);
+                    skyColor = new THREE.Color().lerpColors(new THREE.Color(0x1a3050), new THREE.Color(0xffcc88), sunriseT);
+                } else if (t < 0.7) {
+                    // Day (0.3 - 0.7) - Reduced peak intensity to prevent glare
+                    const dayT = (t - 0.3) / 0.4;
+                    const middayT = 1 - Math.abs(dayT - 0.5) * 2; // Peak at 0.5
+                    sunIntensity = 0.6 + middayT * 0.3; // Reduced from 0.8-1.2 to 0.6-0.9
+                    ambientIntensity = 0.4 + middayT * 0.1; // Reduced slightly
+                    sunColor = new THREE.Color(0xF8F8FF); // Bright white
+                    ambientColor = new THREE.Color(0xC0E0F0); // Icy blue
+                    skyColor = new THREE.Color(0x87CEEB); // Sky blue
+                } else if (t < 0.8) {
+                    // Sunset (0.7 - 0.8) - Golden hour
+                    const sunsetT = (t - 0.7) / 0.1;
+                    sunIntensity = 0.6 - sunsetT * 0.4; // Fade out sun
+                    ambientIntensity = 0.45 - sunsetT * 0.1; // Keep ambient reasonable
+                    sunColor = new THREE.Color().lerpColors(new THREE.Color(0xF8F8FF), new THREE.Color(0xff6644), sunsetT);
+                    ambientColor = new THREE.Color().lerpColors(new THREE.Color(0xC0E0F0), new THREE.Color(0x4a4060), sunsetT);
+                    skyColor = new THREE.Color().lerpColors(new THREE.Color(0x87CEEB), new THREE.Color(0xff7755), sunsetT);
+                } else {
+                    // Night (0.8 - 1.0) - Maintain navigable visibility
+                    const nightT = (t - 0.8) / 0.2;
+                    sunIntensity = 0.2 - nightT * 0.15; // Very dim
+                    ambientIntensity = 0.35 - nightT * 0.1; // Keep ambient for navigation
+                    sunColor = new THREE.Color().lerpColors(new THREE.Color(0xff6644), new THREE.Color(0x4466aa), nightT);
+                    ambientColor = new THREE.Color().lerpColors(new THREE.Color(0x4a4060), new THREE.Color(0x2a3a5a), nightT);
+                    skyColor = new THREE.Color().lerpColors(new THREE.Color(0xff7755), new THREE.Color(0x0a1525), nightT);
+                }
+                
+                sunLightRef.current.intensity = sunIntensity;
+                sunLightRef.current.color.copy(sunColor);
+                ambientLightRef.current.intensity = ambientIntensity;
+                ambientLightRef.current.color.copy(ambientColor);
+                
+                // Update sky/fog color
+                scene.background = skyColor;
+                if (scene.fog) scene.fog.color.copy(skyColor);
+                
+                // Update state for UI (throttled) - show server time unless debug override
+                if (frameCount % 30 === 0) {
+                    setDayTime(daySpeedRef.current === 0 ? dayTimeRef.current : serverTime);
+                }
+            }
+            
+            // ==================== SNOWFALL UPDATE ====================
+            if (room === 'town' && snowParticlesRef.current && gameSettingsRef.current.snowEnabled !== false) {
+                const snow = snowParticlesRef.current;
+                const positions = snow.particles.geometry.attributes.position.array;
+                const velocities = snow.velocities;
+                
+                // Smoothly change intensity over time (random fluctuations)
+                if (frameCount % 300 === 0) { // Every ~5 seconds
+                    snowTargetIntensityRef.current = 0.2 + Math.random() * 0.5; // 0.2 to 0.7 (never blizzard)
+                }
+                snowIntensityRef.current += (snowTargetIntensityRef.current - snowIntensityRef.current) * delta * 0.5;
+                
+                const intensity = snowIntensityRef.current;
+                const windX = Math.sin(time * 0.3) * intensity * 2; // Gentle wind sway
+                const windZ = Math.cos(time * 0.2) * intensity;
+                
+                // Get player position in world space
+                const playerX = posRef.current.x;
+                const playerZ = posRef.current.z;
+                
+                // Update particle positions (all in world space)
+                for (let i = 0; i < positions.length / 3; i++) {
+                    // Apply velocity with wind
+                    positions[i * 3] += (velocities[i * 3] + windX) * delta * intensity * 3;
+                    positions[i * 3 + 1] += velocities[i * 3 + 1] * delta * intensity * 3;
+                    positions[i * 3 + 2] += (velocities[i * 3 + 2] + windZ) * delta * intensity * 3;
+                    
+                    // Reset particles that fall below ground or drift too far from player
+                    const distX = positions[i * 3] - playerX;
+                    const distZ = positions[i * 3 + 2] - playerZ;
+                    const tooFar = Math.abs(distX) > snow.spreadX * 0.6 || Math.abs(distZ) > snow.spreadZ * 0.6;
+                    
+                    if (positions[i * 3 + 1] < -2 || tooFar) {
+                        // Reset to new position around player (in world space)
+                        positions[i * 3] = playerX + (Math.random() - 0.5) * snow.spreadX;
+                        positions[i * 3 + 1] = snow.height + Math.random() * 10;
+                        positions[i * 3 + 2] = playerZ + (Math.random() - 0.5) * snow.spreadZ;
+                    }
+                }
+                
+                snow.particles.geometry.attributes.position.needsUpdate = true;
+                
+                // Adjust snow visibility based on time of day (more visible at night)
+                const serverTime = serverWorldTimeRef?.current ?? 0.35;
+                const isNight = serverTime < 0.25 || serverTime > 0.75;
+                const nightBoost = isNight ? 0.15 : 0;
+                snow.particles.material.opacity = 0.6 + intensity * 0.3 + nightBoost;
+                snow.particles.visible = true;
+            } else if (snowParticlesRef.current) {
+                snowParticlesRef.current.particles.visible = false;
+            }
+            
             renderer.render(scene, camera);
         };
         update();
@@ -3284,17 +4276,14 @@ const VoxelWorld = ({
             return canvas;
         };
         
-        // Helper: Render match info to canvas
-        const renderBannerToCanvas = (ctx, matchData) => {
-            const canvas = ctx.canvas;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
+        // Helper: Draw purple bubble background
+        const drawBubbleBackground = (ctx, canvas) => {
             // Background - purple gradient
             const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
             gradient.addColorStop(0, 'rgba(88, 28, 135, 0.95)');
             gradient.addColorStop(1, 'rgba(67, 56, 202, 0.95)');
             
-            // Rounded rect background
+            // Rounded rect background with speech bubble pointer
             const radius = 20;
             ctx.beginPath();
             ctx.moveTo(radius, 0);
@@ -3317,11 +4306,10 @@ const VoxelWorld = ({
             ctx.strokeStyle = 'rgba(168, 85, 247, 0.8)';
             ctx.lineWidth = 3;
             ctx.stroke();
-            
-            const players = matchData.players || [];
-            const state = matchData.state || {};
-            const wager = (matchData.wagerAmount || 0) * 2;
-            
+        };
+        
+        // Helper: Render Card Jitsu match
+        const renderCardJitsuBanner = (ctx, canvas, players, state, wager) => {
             // Header
             ctx.fillStyle = '#FBBF24';
             ctx.font = 'bold 22px Arial';
@@ -3372,6 +4360,198 @@ const VoxelWorld = ({
             ctx.fillText(statusText, canvas.width / 2, 155);
         };
         
+        // Helper: Render Tic Tac Toe match
+        const renderTicTacToeBanner = (ctx, canvas, players, state, wager) => {
+            // Header
+            ctx.fillStyle = '#FBBF24';
+            ctx.font = 'bold 22px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`⭕ TIC TAC TOE • 💰 ${wager}`, canvas.width / 2, 35);
+            
+            // Player names
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 20px Arial';
+            const p1Name = (players[0]?.name || 'Player 1').substring(0, 8);
+            const p2Name = (players[1]?.name || 'Player 2').substring(0, 8);
+            ctx.textAlign = 'left';
+            ctx.fillText(p1Name, 20, 65);
+            ctx.fillStyle = '#22D3EE'; // Cyan for X
+            ctx.fillText('(X)', 20, 85);
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.textAlign = 'right';
+            ctx.fillText(p2Name, canvas.width - 20, 65);
+            ctx.fillStyle = '#F472B6'; // Pink for O
+            ctx.fillText('(O)', canvas.width - 20, 85);
+            
+            // Draw mini board in center
+            const board = state.board || Array(9).fill(null);
+            const winningLine = state.winningLine || [];
+            const cellSize = 28;
+            const boardX = (canvas.width - cellSize * 3) / 2;
+            const boardY = 55;
+            
+            for (let i = 0; i < 9; i++) {
+                const row = Math.floor(i / 3);
+                const col = i % 3;
+                const x = boardX + col * cellSize;
+                const y = boardY + row * cellSize;
+                
+                // Cell background
+                const isWinning = winningLine.includes(i);
+                ctx.fillStyle = isWinning ? 'rgba(34, 197, 94, 0.5)' : 'rgba(0, 0, 0, 0.3)';
+                ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
+                
+                // Cell border
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x, y, cellSize, cellSize);
+                
+                // X or O
+                if (board[i]) {
+                    ctx.fillStyle = board[i] === 'X' ? '#22D3EE' : '#F472B6';
+                    ctx.font = 'bold 20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(board[i], x + cellSize / 2, y + cellSize / 2 + 7);
+                }
+            }
+            
+            // Status
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            let statusText = '';
+            if (state.winner === 'draw') {
+                statusText = '🤝 Draw!';
+            } else if (state.winner) {
+                const winnerName = state.winner === 'X' ? players[0]?.name : players[1]?.name;
+                statusText = `🏆 ${winnerName} wins!`;
+            } else {
+                const turnName = state.currentTurn === 'player1' ? players[0]?.name : players[1]?.name;
+                statusText = `${turnName}'s turn`;
+            }
+            ctx.fillText(statusText, canvas.width / 2, 155);
+        };
+        
+        // Helper: Render Connect 4 match
+        const renderConnect4Banner = (ctx, canvas, players, state, wager) => {
+            // Header
+            ctx.fillStyle = '#FBBF24';
+            ctx.font = 'bold 22px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(`🔴 CONNECT 4 • 💰 ${wager}`, canvas.width / 2, 35);
+            
+            // Player names
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 18px Arial';
+            const p1Name = (players[0]?.name || 'Player 1').substring(0, 6);
+            const p2Name = (players[1]?.name || 'Player 2').substring(0, 6);
+            ctx.textAlign = 'left';
+            ctx.fillText(p1Name, 15, 60);
+            // Red disc for P1
+            ctx.fillStyle = '#EF4444';
+            ctx.beginPath();
+            ctx.arc(25, 75, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.textAlign = 'right';
+            ctx.fillText(p2Name, canvas.width - 15, 60);
+            // Yellow disc for P2
+            ctx.fillStyle = '#FACC15';
+            ctx.beginPath();
+            ctx.arc(canvas.width - 25, 75, 8, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw mini board in center (7 cols x 6 rows)
+            const board = state.board || Array(42).fill(null);
+            const winningCells = state.winningCells || [];
+            const cellSize = 12;
+            const cols = 7;
+            const rows = 6;
+            const boardX = (canvas.width - cellSize * cols) / 2;
+            const boardY = 50;
+            
+            // Board background
+            ctx.fillStyle = 'rgba(30, 64, 175, 0.8)';
+            ctx.fillRect(boardX - 2, boardY - 2, cellSize * cols + 4, cellSize * rows + 4);
+            
+            for (let row = 0; row < rows; row++) {
+                for (let col = 0; col < cols; col++) {
+                    // Board is stored bottom-to-top, display top-to-bottom
+                    const displayRow = rows - 1 - row;
+                    const index = displayRow * cols + col;
+                    const x = boardX + col * cellSize + cellSize / 2;
+                    const y = boardY + row * cellSize + cellSize / 2;
+                    
+                    const isWinning = winningCells.some(([r, c]) => r === displayRow && c === col);
+                    
+                    // Cell (disc)
+                    ctx.beginPath();
+                    ctx.arc(x, y, cellSize / 2 - 1, 0, Math.PI * 2);
+                    
+                    if (board[index] === 'R') {
+                        ctx.fillStyle = isWinning ? '#FCA5A5' : '#EF4444';
+                    } else if (board[index] === 'Y') {
+                        ctx.fillStyle = isWinning ? '#FDE68A' : '#FACC15';
+                    } else {
+                        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+                    }
+                    ctx.fill();
+                    
+                    if (isWinning) {
+                        ctx.strokeStyle = '#FFFFFF';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    }
+                }
+            }
+            
+            // Status
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            let statusText = '';
+            if (state.winner === 'draw') {
+                statusText = '🤝 Draw!';
+            } else if (state.winner) {
+                const winnerName = state.winner === 'R' ? players[0]?.name : players[1]?.name;
+                statusText = `🏆 ${winnerName} wins!`;
+            } else {
+                const turnName = state.currentTurn === 'player1' ? players[0]?.name : players[1]?.name;
+                statusText = `${turnName}'s turn`;
+            }
+            ctx.fillText(statusText, canvas.width / 2, 155);
+        };
+        
+        // Helper: Render match info to canvas (routes to game-specific renderer)
+        const renderBannerToCanvas = (ctx, matchData) => {
+            const canvas = ctx.canvas;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw common purple bubble background
+            drawBubbleBackground(ctx, canvas);
+            
+            const players = matchData.players || [];
+            const state = matchData.state || {};
+            const wager = (matchData.wagerAmount || 0) * 2;
+            const gameType = matchData.gameType || 'card_jitsu';
+            
+            // Route to game-specific renderer
+            switch (gameType) {
+                case 'tic_tac_toe':
+                    renderTicTacToeBanner(ctx, canvas, players, state, wager);
+                    break;
+                case 'connect4':
+                    renderConnect4Banner(ctx, canvas, players, state, wager);
+                    break;
+                case 'card_jitsu':
+                default:
+                    renderCardJitsuBanner(ctx, canvas, players, state, wager);
+                    break;
+            }
+        };
+        
         // Get current match IDs
         const currentMatchIds = new Set(activeMatches.map(m => m.matchId));
         
@@ -3392,7 +4572,8 @@ const VoxelWorld = ({
             const matchData = {
                 ...match,
                 state: spectateData?.state || match.state || {},
-                wagerAmount: spectateData?.wagerAmount || match.wagerAmount
+                wagerAmount: spectateData?.wagerAmount || match.wagerAmount,
+                gameType: spectateData?.gameType || match.gameType || 'card_jitsu'
             };
             
             // Find player positions
@@ -3853,14 +5034,17 @@ const VoxelWorld = ({
                         worldPos: { x: closestWorldX, z: closestWorldZ },
                         seatHeight: benchData.seatHeight || 0.8,
                         benchRotation: benchRotation,
-                        benchDepth: benchData.benchDepth || 0.8
+                        benchDepth: benchData.benchDepth || 0.8,
+                        dismountBack: benchData.dismountBack || false // For bar stools
                     };
                     setSeatedOnBench(seatData);
                     seatedRef.current = seatData;
                     
-                    // Move player to seat position
+                    // Move player to seat position (including Y height!)
                     posRef.current.x = closestWorldX;
                     posRef.current.z = closestWorldZ;
+                    posRef.current.y = seatData.seatHeight; // SET Y TO SEAT HEIGHT!
+                    velRef.current.y = 0; // Stop any falling
                     
                     // Face forward (same direction bench faces, +Z in bench local space)
                     rotRef.current = benchRotation;
@@ -3869,6 +5053,7 @@ const VoxelWorld = ({
                     if (playerRef.current) {
                         playerRef.current.position.x = closestWorldX;
                         playerRef.current.position.z = closestWorldZ;
+                        playerRef.current.position.y = seatData.seatHeight; // SET Y TO SEAT HEIGHT!
                         playerRef.current.rotation.y = rotRef.current;
                     }
                     
@@ -3985,14 +5170,17 @@ const VoxelWorld = ({
             
             const dx = pos.x - last.x;
             const dz = pos.z - last.z;
+            const dy = (pos.y || 0) - (last.y || 0);
             const dRot = Math.abs(rot - last.rot);
             const distSq = dx * dx + dz * dz;
+            const yChanged = Math.abs(dy) > 0.1; // Detect jumps
             
-            // Only send if moved significantly
-            if (distSq > 0.05 || dRot > 0.1) {
+            // Only send if moved significantly (including Y for jumps)
+            if (distSq > 0.05 || dRot > 0.1 || yChanged) {
                 const pufflePos = playerPuffleRef.current?.position || null;
-                sendPosition(pos, rot, pufflePos);
-                lastPositionSentRef.current = { x: pos.x, z: pos.z, rot, time: Date.now() };
+                // Send full 3D position including Y for jump sync
+                sendPosition({ x: pos.x, y: pos.y, z: pos.z }, rot, pufflePos);
+                lastPositionSentRef.current = { x: pos.x, y: pos.y, z: pos.z, rot, time: Date.now() };
             }
             
             // Always update local position for proximity checking
@@ -4264,18 +5452,22 @@ const VoxelWorld = ({
                                             worldPos: { x: closestWorldX, z: closestWorldZ },
                                             seatHeight: benchData.seatHeight || 0.8,
                                             benchRotation: benchRotation,
-                                            benchDepth: benchData.benchDepth || 0.8
+                                            benchDepth: benchData.benchDepth || 0.8,
+                                            dismountBack: benchData.dismountBack || false // For bar stools
                                         };
                                         setSeatedOnBench(seatData);
                                         seatedRef.current = seatData;
                                         
                                         posRef.current.x = closestWorldX;
                                         posRef.current.z = closestWorldZ;
+                                        posRef.current.y = seatData.seatHeight; // SET Y TO SEAT HEIGHT!
+                                        velRef.current.y = 0; // Stop any falling
                                         rotRef.current = benchRotation; // Face forward
                                         
                                         if (playerRef.current) {
                                             playerRef.current.position.x = closestWorldX;
                                             playerRef.current.position.z = closestWorldZ;
+                                            playerRef.current.position.y = seatData.seatHeight; // SET Y TO SEAT HEIGHT!
                                             playerRef.current.rotation.y = rotRef.current;
                                         }
                                         
@@ -4347,8 +5539,8 @@ const VoxelWorld = ({
              
              {/* Title & Controls - Top Left */}
              <div className="absolute top-4 left-4 retro-text text-white drop-shadow-md z-10 pointer-events-none">
-                 <h2 className={`text-xl drop-shadow-lg ${room === 'dojo' ? 'text-red-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
-                     {room === 'dojo' ? 'THE DOJO' : room === 'igloo1' ? 'IGLOO 1' : room === 'igloo2' ? 'IGLOO 2' : 'TOWN'}
+                 <h2 className={`text-xl drop-shadow-lg ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
+                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'igloo1' ? 'IGLOO 1' : room === 'igloo2' ? 'IGLOO 2' : 'TOWN'}
                  </h2>
                  {!isMobile && (
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>
@@ -4409,6 +5601,61 @@ const VoxelWorld = ({
                      </button>
                      <div className="mt-2 text-[9px] text-white/40 text-center">
                          Use offsets in TownCenter.js props
+                     </div>
+                     
+                     {/* Day/Night Cycle Controls */}
+                     <div className="border-t border-white/20 mt-3 pt-3">
+                         <div className="text-yellow-400 font-bold mb-2 text-[10px]">☀️ DAY/NIGHT CYCLE</div>
+                         <div className="text-green-400 text-[9px] mb-2">🌐 Server Synced</div>
+                         <div className="space-y-2">
+                             <div className="flex justify-between items-center">
+                                 <span className="text-white/70 text-[10px]">Time:</span>
+                                 <span className="text-yellow-300 text-[10px]">
+                                     {dayTime < 0.2 ? '🌙 Night' : dayTime < 0.3 ? '🌅 Sunrise' : dayTime < 0.7 ? '☀️ Day' : dayTime < 0.8 ? '🌇 Sunset' : '🌙 Night'}
+                                     {' '}({(dayTime * 24).toFixed(1)}h)
+                                 </span>
+                             </div>
+                             <div>
+                                 <label className="text-white/50 text-[9px] block mb-1">Debug Override (pause to use)</label>
+                                 <input
+                                     type="range"
+                                     min="0"
+                                     max="1"
+                                     step="0.01"
+                                     value={dayTime}
+                                     onChange={(e) => {
+                                         const val = parseFloat(e.target.value);
+                                         setDayTime(val);
+                                         dayTimeRef.current = val;
+                                     }}
+                                     disabled={daySpeed !== 0}
+                                     className="w-full h-1 bg-gray-700 rounded appearance-none cursor-pointer disabled:opacity-30"
+                                 />
+                             </div>
+                             <div className="flex gap-1 mt-1">
+                                 <button
+                                     onClick={() => { setDaySpeed(0); daySpeedRef.current = 0; }}
+                                     className={`flex-1 text-white text-[9px] py-1 rounded ${daySpeed === 0 ? 'bg-red-500' : 'bg-red-600/50 hover:bg-red-500'}`}
+                                 >
+                                     ⏸ Pause
+                                 </button>
+                                 <button
+                                     onClick={() => { setDaySpeed(1); daySpeedRef.current = 1; }}
+                                     className={`flex-1 text-white text-[9px] py-1 rounded ${daySpeed !== 0 ? 'bg-green-500' : 'bg-green-600/50 hover:bg-green-500'}`}
+                                 >
+                                     ▶ Server
+                                 </button>
+                             </div>
+                         </div>
+                     </div>
+                     
+                     {/* Snow Controls */}
+                     <div className="border-t border-white/20 mt-3 pt-3">
+                         <div className="text-cyan-400 font-bold mb-2 text-[10px]">❄️ SNOWFALL</div>
+                         <div className="flex justify-between items-center">
+                             <span className="text-white/70 text-[10px]">Intensity:</span>
+                             <span className="text-cyan-300 text-[10px]">{(snowIntensityRef.current * 100).toFixed(0)}%</span>
+                         </div>
                      </div>
                  </div>
              )}

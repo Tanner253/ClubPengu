@@ -238,7 +238,8 @@ export function ChallengeProvider({ children }) {
                         [message.matchId]: {
                             players: message.players,
                             state: message.state,
-                            wagerAmount: message.wagerAmount
+                            wagerAmount: message.wagerAmount,
+                            gameType: message.gameType
                         }
                     }));
                     break;
@@ -293,9 +294,8 @@ export function ChallengeProvider({ children }) {
                 handleMessage(event);
             };
             
-            // Request initial data
+            // Request initial data (coins are synced via 'join' message, not separately)
             ws.send(JSON.stringify({ type: 'inbox_sync' }));
-            ws.send(JSON.stringify({ type: 'coins_sync' }));
             ws.send(JSON.stringify({ type: 'active_matches_request' }));
             
             return () => {

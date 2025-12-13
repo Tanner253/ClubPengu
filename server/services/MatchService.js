@@ -1,6 +1,7 @@
 /**
  * MatchService - Manages active P2P matches
  * Handles game state, turns, timing, and win/loss resolution
+ * Supports: Card Jitsu, Tic Tac Toe
  */
 
 // Turn time limit (30 seconds)
@@ -13,6 +14,23 @@ const CARD_EMOJIS = {
     water: ['💧', '🌊', '🌧️', '❄️', '🐚'],
     snow: ['❄️', '⛄', '🏔️', '🌨️', '🧊']
 };
+
+// Tic Tac Toe winning combinations
+const TTT_WIN_LINES = [
+    [0, 1, 2], // Top row
+    [3, 4, 5], // Middle row
+    [6, 7, 8], // Bottom row
+    [0, 3, 6], // Left column
+    [1, 4, 7], // Middle column
+    [2, 5, 8], // Right column
+    [0, 4, 8], // Diagonal top-left to bottom-right
+    [2, 4, 6], // Diagonal top-right to bottom-left
+];
+
+// Connect 4 constants
+const C4_ROWS = 6;
+const C4_COLS = 7;
+const C4_WIN_LENGTH = 4;
 
 class MatchService {
     constructor(statsService, broadcastToRoom, sendToPlayer) {
@@ -36,10 +54,6 @@ class MatchService {
     createMatch(challenge, player1Data, player2Data) {
         const matchId = `match_${this.nextMatchId++}`;
         
-        // Generate initial hands for both players
-        const player1Hand = this._generateHand();
-        const player2Hand = this._generateHand();
-        
         const match = {
             id: matchId,
             gameType: challenge.gameType,
@@ -58,18 +72,7 @@ class MatchService {
             wagerAmount: challenge.wagerAmount,
             room: challenge.room,
             status: 'active',
-            state: {
-                round: 1,
-                phase: 'select', // 'select', 'reveal', 'complete'
-                player1Hand,
-                player2Hand,
-                player1SelectedCard: null,
-                player2SelectedCard: null,
-                player1Wins: { fire: 0, water: 0, snow: 0 },
-                player2Wins: { fire: 0, water: 0, snow: 0 },
-                turnStartedAt: Date.now(),
-                lastRoundResult: null
-            },
+            state: this._createInitialState(challenge.gameType),
             createdAt: Date.now(),
             endedAt: null,
             winnerId: null
@@ -79,9 +82,55 @@ class MatchService {
         this.playerMatches.set(challenge.challengerId, matchId);
         this.playerMatches.set(challenge.targetId, matchId);
         
-        console.log(`🎮 Match started: ${match.player1.name} vs ${match.player2.name} (${challenge.wagerAmount} coins)`);
+        console.log(`🎮 Match started: ${match.player1.name} vs ${match.player2.name} (${challenge.gameType}, ${challenge.wagerAmount} coins)`);
         
         return match;
+    }
+    
+    /**
+     * Create initial game state based on game type
+     */
+    _createInitialState(gameType) {
+        switch (gameType) {
+            case 'tic_tac_toe':
+                return {
+                    board: Array(9).fill(null),
+                    currentTurn: 'player1', // Player 1 is X, goes first
+                    phase: 'playing',
+                    winner: null,
+                    winningLine: null,
+                    turnStartedAt: Date.now()
+                };
+            
+            case 'connect4':
+                return {
+                    board: Array(C4_ROWS * C4_COLS).fill(null), // 6 rows x 7 cols, flat array
+                    currentTurn: 'player1', // Player 1 is Red (R), goes first
+                    phase: 'playing',
+                    winner: null,
+                    winningCells: null,
+                    lastMove: null,
+                    turnStartedAt: Date.now()
+                };
+            
+            case 'card_jitsu':
+            default:
+                // Generate initial hands for both players
+                const player1Hand = this._generateHand();
+                const player2Hand = this._generateHand();
+                return {
+                    round: 1,
+                    phase: 'select', // 'select', 'reveal', 'complete'
+                    player1Hand,
+                    player2Hand,
+                    player1SelectedCard: null,
+                    player2SelectedCard: null,
+                    player1Wins: { fire: 0, water: 0, snow: 0 },
+                    player2Wins: { fire: 0, water: 0, snow: 0 },
+                    turnStartedAt: Date.now(),
+                    lastRoundResult: null
+                };
+        }
     }
 
     /**
@@ -133,7 +182,7 @@ class MatchService {
     }
 
     /**
-     * Play a card
+     * Play a card (or make a move in other game types)
      */
     playCard(matchId, playerId, cardIndex) {
         const match = this.matches.get(matchId);
@@ -145,6 +194,264 @@ class MatchService {
             return { error: 'MATCH_NOT_ACTIVE' };
         }
 
+        // Route to appropriate game handler
+        if (match.gameType === 'tic_tac_toe') {
+            return this._playTicTacToe(match, playerId, cardIndex);
+        }
+        
+        if (match.gameType === 'connect4') {
+            return this._playConnect4(match, playerId, cardIndex); // cardIndex is column for Connect4
+        }
+        
+        // Default: Card Jitsu
+        return this._playCardJitsu(match, playerId, cardIndex);
+    }
+    
+    /**
+     * Handle Tic Tac Toe move
+     */
+    _playTicTacToe(match, playerId, cellIndex) {
+        const state = match.state;
+        
+        if (state.phase !== 'playing') {
+            return { error: 'GAME_OVER' };
+        }
+        
+        const isPlayer1 = playerId === match.player1.id;
+        const isPlayer2 = playerId === match.player2.id;
+        
+        if (!isPlayer1 && !isPlayer2) {
+            return { error: 'NOT_IN_MATCH' };
+        }
+        
+        // Check if it's this player's turn
+        const isMyTurn = (state.currentTurn === 'player1' && isPlayer1) || 
+                         (state.currentTurn === 'player2' && isPlayer2);
+        
+        if (!isMyTurn) {
+            return { error: 'NOT_YOUR_TURN' };
+        }
+        
+        // Validate cell
+        if (cellIndex < 0 || cellIndex > 8) {
+            return { error: 'INVALID_CELL' };
+        }
+        
+        if (state.board[cellIndex] !== null) {
+            return { error: 'CELL_TAKEN' };
+        }
+        
+        // Make the move
+        const symbol = isPlayer1 ? 'X' : 'O';
+        state.board[cellIndex] = symbol;
+        
+        // Check for winner
+        const winResult = this._checkTicTacToeWinner(state.board);
+        
+        if (winResult.winner) {
+            state.phase = 'complete';
+            state.winner = winResult.winner;
+            state.winningLine = winResult.line;
+            match.status = 'complete';
+            match.winnerId = winResult.winner === 'X' ? match.player1.id : match.player2.id;
+            match.endedAt = Date.now();
+            
+            console.log(`🏆 Tic Tac Toe complete: ${winResult.winner === 'X' ? match.player1.name : match.player2.name} wins ${match.wagerAmount * 2} coins!`);
+            
+            return { success: true, gameComplete: true };
+        }
+        
+        // Check for draw
+        if (state.board.every(cell => cell !== null)) {
+            state.phase = 'complete';
+            state.winner = 'draw';
+            state.winningLine = null;
+            match.status = 'complete';
+            match.winnerId = null; // Draw - no winner
+            match.endedAt = Date.now();
+            
+            console.log(`🤝 Tic Tac Toe draw: ${match.player1.name} vs ${match.player2.name}`);
+            
+            return { success: true, gameComplete: true, isDraw: true };
+        }
+        
+        // Switch turns
+        state.currentTurn = state.currentTurn === 'player1' ? 'player2' : 'player1';
+        state.turnStartedAt = Date.now();
+        
+        return { success: true };
+    }
+    
+    /**
+     * Check Tic Tac Toe winner
+     */
+    _checkTicTacToeWinner(board) {
+        for (const line of TTT_WIN_LINES) {
+            const [a, b, c] = line;
+            if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                return { winner: board[a], line };
+            }
+        }
+        return { winner: null, line: null };
+    }
+    
+    /**
+     * Handle Connect 4 move
+     * @param {Object} match - The match object
+     * @param {string} playerId - The player making the move
+     * @param {number} column - Column to drop disc (0-6)
+     */
+    _playConnect4(match, playerId, column) {
+        const state = match.state;
+        
+        if (state.phase !== 'playing') {
+            return { error: 'GAME_OVER' };
+        }
+        
+        const isPlayer1 = playerId === match.player1.id;
+        const isPlayer2 = playerId === match.player2.id;
+        
+        if (!isPlayer1 && !isPlayer2) {
+            return { error: 'NOT_IN_MATCH' };
+        }
+        
+        // Check if it's this player's turn
+        const isMyTurn = (state.currentTurn === 'player1' && isPlayer1) || 
+                         (state.currentTurn === 'player2' && isPlayer2);
+        
+        if (!isMyTurn) {
+            return { error: 'NOT_YOUR_TURN' };
+        }
+        
+        // Validate column
+        if (column < 0 || column >= C4_COLS) {
+            return { error: 'INVALID_COLUMN' };
+        }
+        
+        // Find lowest empty row in column
+        const row = this._getConnect4LowestRow(state.board, column);
+        if (row === -1) {
+            return { error: 'COLUMN_FULL' };
+        }
+        
+        // Make the move
+        const disc = isPlayer1 ? 'R' : 'Y'; // Red or Yellow
+        const cellIndex = row * C4_COLS + column;
+        state.board[cellIndex] = disc;
+        state.lastMove = { row, col: column };
+        
+        // Check for winner
+        const winResult = this._checkConnect4Winner(state.board, row, column);
+        
+        if (winResult.winner) {
+            state.phase = 'complete';
+            state.winner = winResult.winner;
+            state.winningCells = winResult.cells;
+            match.status = 'complete';
+            match.winnerId = winResult.winner === 'R' ? match.player1.id : match.player2.id;
+            match.endedAt = Date.now();
+            
+            console.log(`🏆 Connect 4 complete: ${winResult.winner === 'R' ? match.player1.name : match.player2.name} wins ${match.wagerAmount * 2} coins!`);
+            
+            return { success: true, gameComplete: true };
+        }
+        
+        // Check for draw (board full)
+        if (state.board.every(cell => cell !== null)) {
+            state.phase = 'complete';
+            state.winner = 'draw';
+            state.winningCells = null;
+            match.status = 'complete';
+            match.winnerId = null;
+            match.endedAt = Date.now();
+            
+            console.log(`🤝 Connect 4 draw: ${match.player1.name} vs ${match.player2.name}`);
+            
+            return { success: true, gameComplete: true, isDraw: true };
+        }
+        
+        // Switch turns
+        state.currentTurn = state.currentTurn === 'player1' ? 'player2' : 'player1';
+        state.turnStartedAt = Date.now();
+        
+        return { success: true };
+    }
+    
+    /**
+     * Get lowest empty row in a Connect 4 column
+     * @returns {number} Row index (0 = bottom) or -1 if full
+     */
+    _getConnect4LowestRow(board, column) {
+        for (let row = 0; row < C4_ROWS; row++) {
+            const index = row * C4_COLS + column;
+            if (board[index] === null) {
+                return row;
+            }
+        }
+        return -1;
+    }
+    
+    /**
+     * Check Connect 4 winner from last move position
+     */
+    _checkConnect4Winner(board, lastRow, lastCol) {
+        const lastIndex = lastRow * C4_COLS + lastCol;
+        const player = board[lastIndex];
+        if (!player) return { winner: null, cells: null };
+        
+        // Check all four directions
+        const directions = [
+            [0, 1],   // Horizontal
+            [1, 0],   // Vertical
+            [1, 1],   // Diagonal /
+            [1, -1],  // Diagonal \
+        ];
+        
+        for (const [dr, dc] of directions) {
+            const cells = this._countConnect4Line(board, lastRow, lastCol, dr, dc, player);
+            if (cells.length >= C4_WIN_LENGTH) {
+                return { winner: player, cells };
+            }
+        }
+        
+        return { winner: null, cells: null };
+    }
+    
+    /**
+     * Count connected cells in a line (both directions)
+     */
+    _countConnect4Line(board, row, col, dr, dc, player) {
+        const cells = [[row, col]];
+        
+        // Count in positive direction
+        let r = row + dr;
+        let c = col + dc;
+        while (r >= 0 && r < C4_ROWS && c >= 0 && c < C4_COLS) {
+            const index = r * C4_COLS + c;
+            if (board[index] !== player) break;
+            cells.push([r, c]);
+            r += dr;
+            c += dc;
+        }
+        
+        // Count in negative direction
+        r = row - dr;
+        c = col - dc;
+        while (r >= 0 && r < C4_ROWS && c >= 0 && c < C4_COLS) {
+            const index = r * C4_COLS + c;
+            if (board[index] !== player) break;
+            cells.push([r, c]);
+            r -= dr;
+            c -= dc;
+        }
+        
+        return cells;
+    }
+    
+    /**
+     * Handle Card Jitsu card play
+     */
+    _playCardJitsu(match, playerId, cardIndex) {
         if (match.state.phase !== 'select') {
             return { error: 'NOT_SELECT_PHASE' };
         }
@@ -318,24 +625,98 @@ class MatchService {
         const now = Date.now();
         
         for (const [matchId, match] of this.matches) {
-            if (match.status !== 'active' || match.state.phase !== 'select') continue;
+            if (match.status !== 'active') continue;
             
             const elapsed = now - match.state.turnStartedAt;
-            if (elapsed >= TURN_TIME_LIMIT_MS) {
-                // Auto-play for players who haven't selected
-                if (match.state.player1SelectedCard === null) {
-                    match.state.player1SelectedCard = 0; // First card
-                    console.log(`⏰ Auto-play for ${match.player1.name}`);
-                }
-                if (match.state.player2SelectedCard === null) {
-                    match.state.player2SelectedCard = 0; // First card
-                    console.log(`⏰ Auto-play for ${match.player2.name}`);
-                }
-                
-                this._resolveRound(match);
-                this._notifyMatchState(match);
+            if (elapsed < TURN_TIME_LIMIT_MS) continue;
+            
+            // Handle timeout based on game type
+            if (match.gameType === 'tic_tac_toe') {
+                this._handleTicTacToeTimeout(match);
+            } else if (match.gameType === 'connect4') {
+                this._handleConnect4Timeout(match);
+            } else {
+                this._handleCardJitsuTimeout(match);
+            }
+            
+            this._notifyMatchState(match);
+        }
+    }
+    
+    /**
+     * Handle Tic Tac Toe timeout - auto-play random empty cell
+     */
+    _handleTicTacToeTimeout(match) {
+        const state = match.state;
+        if (state.phase !== 'playing') return;
+        
+        // Find empty cells
+        const emptyCells = state.board
+            .map((cell, index) => cell === null ? index : -1)
+            .filter(index => index !== -1);
+        
+        if (emptyCells.length === 0) return;
+        
+        // Pick random empty cell
+        const randomCell = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+        const currentPlayerId = state.currentTurn === 'player1' ? match.player1.id : match.player2.id;
+        
+        console.log(`⏰ Auto-play for ${state.currentTurn === 'player1' ? match.player1.name : match.player2.name} (Tic Tac Toe)`);
+        
+        this._playTicTacToe(match, currentPlayerId, randomCell);
+    }
+    
+    /**
+     * Handle Connect 4 timeout - auto-play random available column
+     */
+    _handleConnect4Timeout(match) {
+        const state = match.state;
+        if (state.phase !== 'playing') return;
+        
+        // Find columns that aren't full
+        const availableCols = [];
+        for (let col = 0; col < C4_COLS; col++) {
+            // Check if top row of column is empty
+            const topIndex = (C4_ROWS - 1) * C4_COLS + col;
+            if (state.board[topIndex] === null) {
+                availableCols.push(col);
             }
         }
+        
+        if (availableCols.length === 0) return;
+        
+        // Prefer center column, then random
+        let column;
+        if (availableCols.includes(3)) {
+            column = 3;
+        } else {
+            column = availableCols[Math.floor(Math.random() * availableCols.length)];
+        }
+        
+        const currentPlayerId = state.currentTurn === 'player1' ? match.player1.id : match.player2.id;
+        
+        console.log(`⏰ Auto-play for ${state.currentTurn === 'player1' ? match.player1.name : match.player2.name} (Connect 4)`);
+        
+        this._playConnect4(match, currentPlayerId, column);
+    }
+    
+    /**
+     * Handle Card Jitsu timeout - auto-play first card
+     */
+    _handleCardJitsuTimeout(match) {
+        if (match.state.phase !== 'select') return;
+        
+        // Auto-play for players who haven't selected
+        if (match.state.player1SelectedCard === null) {
+            match.state.player1SelectedCard = 0; // First card
+            console.log(`⏰ Auto-play for ${match.player1.name}`);
+        }
+        if (match.state.player2SelectedCard === null) {
+            match.state.player2SelectedCard = 0; // First card
+            console.log(`⏰ Auto-play for ${match.player2.name}`);
+        }
+        
+        this._resolveRound(match);
     }
 
     /**
@@ -366,14 +747,33 @@ class MatchService {
     _broadcastSpectatorUpdate(match) {
         if (!match.room) return;
         
-        this.broadcastToRoom(match.room, {
-            type: 'match_spectate',
-            matchId: match.id,
-            players: [
-                { id: match.player1.id, name: match.player1.name, position: match.player1.position },
-                { id: match.player2.id, name: match.player2.name, position: match.player2.position }
-            ],
-            state: {
+        let spectatorState;
+        
+        if (match.gameType === 'tic_tac_toe') {
+            spectatorState = {
+                board: [...match.state.board],
+                currentTurn: match.state.currentTurn,
+                phase: match.state.phase,
+                winner: match.state.winner,
+                winningLine: match.state.winningLine,
+                status: match.status,
+                winnerId: match.winnerId
+            };
+        } else if (match.gameType === 'connect4') {
+            // Connect 4 spectator state
+            spectatorState = {
+                board: [...match.state.board],
+                currentTurn: match.state.currentTurn,
+                phase: match.state.phase,
+                winner: match.state.winner,
+                winningCells: match.state.winningCells,
+                lastMove: match.state.lastMove,
+                status: match.status,
+                winnerId: match.winnerId
+            };
+        } else {
+            // Card Jitsu spectator state
+            spectatorState = {
                 round: match.state.round,
                 phase: match.state.phase,
                 player1Wins: match.state.player1Wins,
@@ -385,7 +785,18 @@ class MatchService {
                 } : null,
                 status: match.status,
                 winnerId: match.winnerId
-            },
+            };
+        }
+        
+        this.broadcastToRoom(match.room, {
+            type: 'match_spectate',
+            matchId: match.id,
+            gameType: match.gameType,
+            players: [
+                { id: match.player1.id, name: match.player1.name, position: match.player1.position },
+                { id: match.player2.id, name: match.player2.name, position: match.player2.position }
+            ],
+            state: spectatorState,
             wagerAmount: match.wagerAmount
         }, match.player1.id, match.player2.id); // Exclude players in match
     }
@@ -398,13 +809,80 @@ class MatchService {
         if (!match) return null;
 
         const isPlayer1 = playerId === match.player1.id;
-        const myHand = isPlayer1 ? match.state.player1Hand : match.state.player2Hand;
-        const mySelection = isPlayer1 ? match.state.player1SelectedCard : match.state.player2SelectedCard;
-        const opponentSelection = isPlayer1 ? match.state.player2SelectedCard : match.state.player1SelectedCard;
         
         const timeRemaining = Math.max(0, Math.ceil(
             (TURN_TIME_LIMIT_MS - (Date.now() - match.state.turnStartedAt)) / 1000
         ));
+
+        // Return game-type specific state
+        if (match.gameType === 'tic_tac_toe') {
+            return this._getTicTacToeState(match, playerId, isPlayer1, timeRemaining);
+        }
+        
+        if (match.gameType === 'connect4') {
+            return this._getConnect4State(match, playerId, isPlayer1, timeRemaining);
+        }
+        
+        // Default: Card Jitsu state
+        return this._getCardJitsuState(match, playerId, isPlayer1, timeRemaining);
+    }
+    
+    /**
+     * Get Tic Tac Toe state for a player
+     */
+    _getTicTacToeState(match, playerId, isPlayer1, timeRemaining) {
+        const state = match.state;
+        const isMyTurn = (state.currentTurn === 'player1' && isPlayer1) || 
+                         (state.currentTurn === 'player2' && !isPlayer1);
+        
+        return {
+            board: [...state.board],
+            currentTurn: state.currentTurn,
+            isMyTurn,
+            mySymbol: isPlayer1 ? 'X' : 'O',
+            opponentSymbol: isPlayer1 ? 'O' : 'X',
+            phase: state.phase,
+            winner: state.winner,
+            winningLine: state.winningLine,
+            turnTimeRemaining: timeRemaining,
+            isPlayer1,
+            status: match.status,
+            winnerId: match.winnerId
+        };
+    }
+    
+    /**
+     * Get Connect 4 state for a player
+     */
+    _getConnect4State(match, playerId, isPlayer1, timeRemaining) {
+        const state = match.state;
+        const isMyTurn = (state.currentTurn === 'player1' && isPlayer1) || 
+                         (state.currentTurn === 'player2' && !isPlayer1);
+        
+        return {
+            board: [...state.board],
+            currentTurn: state.currentTurn,
+            isMyTurn,
+            myColor: isPlayer1 ? 'R' : 'Y',
+            opponentColor: isPlayer1 ? 'Y' : 'R',
+            phase: state.phase,
+            winner: state.winner,
+            winningCells: state.winningCells,
+            lastMove: state.lastMove,
+            turnTimeRemaining: timeRemaining,
+            isPlayer1,
+            status: match.status,
+            winnerId: match.winnerId
+        };
+    }
+    
+    /**
+     * Get Card Jitsu state for a player
+     */
+    _getCardJitsuState(match, playerId, isPlayer1, timeRemaining) {
+        const myHand = isPlayer1 ? match.state.player1Hand : match.state.player2Hand;
+        const mySelection = isPlayer1 ? match.state.player1SelectedCard : match.state.player2SelectedCard;
+        const opponentSelection = isPlayer1 ? match.state.player2SelectedCard : match.state.player1SelectedCard;
 
         return {
             round: match.state.round,
@@ -481,17 +959,47 @@ class MatchService {
         const matches = [];
         for (const [, match] of this.matches) {
             if (match.room === room && match.status === 'active') {
+                // Build game-type specific state for spectators
+                let spectatorState;
+                if (match.gameType === 'tic_tac_toe') {
+                    spectatorState = {
+                        board: [...match.state.board],
+                        currentTurn: match.state.currentTurn,
+                        phase: match.state.phase,
+                        winner: match.state.winner,
+                        winningLine: match.state.winningLine,
+                        status: match.status
+                    };
+                } else if (match.gameType === 'connect4') {
+                    spectatorState = {
+                        board: [...match.state.board],
+                        currentTurn: match.state.currentTurn,
+                        phase: match.state.phase,
+                        winner: match.state.winner,
+                        winningCells: match.state.winningCells,
+                        lastMove: match.state.lastMove,
+                        status: match.status
+                    };
+                } else {
+                    // Card Jitsu
+                    spectatorState = {
+                        round: match.state.round,
+                        phase: match.state.phase,
+                        player1Wins: match.state.player1Wins,
+                        player2Wins: match.state.player2Wins,
+                        status: match.status
+                    };
+                }
+                
                 matches.push({
                     matchId: match.id,
-                    player1: { id: match.player1.id, name: match.player1.name, position: match.player1.position },
-                    player2: { id: match.player2.id, name: match.player2.name, position: match.player2.position },
+                    players: [
+                        { id: match.player1.id, name: match.player1.name, position: match.player1.position },
+                        { id: match.player2.id, name: match.player2.name, position: match.player2.position }
+                    ],
                     gameType: match.gameType,
                     wagerAmount: match.wagerAmount,
-                    state: {
-                        round: match.state.round,
-                        player1Wins: match.state.player1Wins,
-                        player2Wins: match.state.player2Wins
-                    }
+                    state: spectatorState
                 });
             }
         }

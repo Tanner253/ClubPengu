@@ -564,10 +564,10 @@ class PropsFactory {
         globe.position.y = postHeight + 0.35;
         group.add(globe);
         
-        // Point light with configurable shadows
+        // Point light with configurable shadows - brighter for nighttime visibility
         let light = null;
         if (isOn) {
-            light = new THREE.PointLight(0xFFE4B5, 1.2, 12, 2);
+            light = new THREE.PointLight(0xFFE4B5, 2.5, 18, 1.5); // Increased intensity, range, reduced decay
             light.position.y = postHeight + 0.35;
             light.castShadow = castShadow;
             
@@ -576,7 +576,7 @@ class PropsFactory {
                 light.shadow.mapSize.width = 512;
                 light.shadow.mapSize.height = 512;
                 light.shadow.camera.near = 0.5;
-                light.shadow.camera.far = 15;
+                light.shadow.camera.far = 20;
                 light.shadow.bias = -0.001;
             }
             group.add(light);
@@ -2239,12 +2239,19 @@ class PropsFactory {
         foundation.receiveShadow = true;
         group.add(foundation);
 
-        // Steps at front - each step clearly separated
+        // Steps at front - bottom step is widest, top step is narrowest
+        // Step 0 = farthest from door (ground level), Step 2 = closest to door (highest)
         for (let i = 0; i < 3; i++) {
-            const stepGeo = new THREE.BoxGeometry(4 - i * 0.4, 0.28, 0.9);
+            // Width increases as steps go DOWN (away from building)
+            const stepWidth = 3.2 + (2 - i) * 0.4; // i=0: 4, i=1: 3.6, i=2: 3.2
+            const stepGeo = new THREE.BoxGeometry(stepWidth, 0.28, 0.9);
             const step = new THREE.Mesh(stepGeo, foundationMat);
-            step.position.set(0, 0.14 + i * 0.28, d / 2 + 1.5 + i * 0.95);
+            // i=0 is highest (closest to door), i=2 is lowest (farthest from door)
+            const stepY = 0.84 - i * 0.28; // i=0: 0.84, i=1: 0.56, i=2: 0.28
+            const stepZ = d / 2 + 1.5 + (2 - i) * 0.95; // i=0: closest, i=2: farthest
+            step.position.set(0, stepY, stepZ);
             step.receiveShadow = true;
+            step.name = `dojo_step_${i}`;
             group.add(step);
         }
 
@@ -2340,7 +2347,7 @@ class PropsFactory {
                 group.add(edge);
             });
 
-            // Upturned corner pieces - positioned at actual corners
+            // Upturned corner pieces - positioned at actual corners (tips pointing UP)
             [
                 [-roofWidth / 2 - 0.3, roofDepth / 2 + 0.3],
                 [roofWidth / 2 + 0.3, roofDepth / 2 + 0.3],
@@ -2349,7 +2356,7 @@ class PropsFactory {
             ].forEach(([cx, cz]) => {
                 const upturnGeo = new THREE.ConeGeometry(0.5 * tierScale, 1.2 * tierScale, 4);
                 const upturn = new THREE.Mesh(upturnGeo, edgeMat);
-                upturn.rotation.x = Math.PI;
+                // No rotation - cone tip points UP naturally (traditional upturned roof corner)
                 upturn.position.set(cx, roofY + 0.4, cz);
                 group.add(upturn);
             });

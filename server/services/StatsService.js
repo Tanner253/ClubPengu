@@ -41,8 +41,13 @@ class StatsService {
 
     /**
      * Record a match result
+     * @param {string} playerId - Player ID
+     * @param {string} gameType - Game type (cardJitsu, ticTacToe, etc.)
+     * @param {boolean} won - Whether player won
+     * @param {number} coinsAmount - Coins won/lost
+     * @param {boolean} isDraw - Whether the match was a draw
      */
-    recordResult(playerId, gameType, won, coinsAmount) {
+    recordResult(playerId, gameType, won, coinsAmount, isDraw = false) {
         const stats = this.getStats(playerId);
         const gameStats = stats[gameType];
         
@@ -51,7 +56,11 @@ class StatsService {
             return;
         }
 
-        if (won) {
+        if (isDraw) {
+            // Draws don't count as wins or losses
+            gameStats.draws = (gameStats.draws || 0) + 1;
+            console.log(`📊 Stats updated: ${playerId} drew ${gameType} - Total draws: ${gameStats.draws}`);
+        } else if (won) {
             gameStats.wins++;
             gameStats.coinsWon += coinsAmount;
             console.log(`📊 Stats updated: ${playerId} won ${gameType} (+${coinsAmount} coins) - Total wins: ${gameStats.wins}`);
@@ -69,8 +78,16 @@ class StatsService {
         const stats = this.getStats(playerId);
         return {
             playerId,
+            // Card Jitsu
             cardJitsuWins: stats.cardJitsu.wins,
             cardJitsuLosses: stats.cardJitsu.losses,
+            // Tic Tac Toe
+            ticTacToeWins: stats.ticTacToe.wins,
+            ticTacToeLosses: stats.ticTacToe.losses,
+            // Connect 4
+            connect4Wins: stats.connect4.wins,
+            connect4Losses: stats.connect4.losses,
+            // Totals
             totalWins: stats.cardJitsu.wins + stats.connect4.wins + stats.pong.wins + stats.ticTacToe.wins,
             totalLosses: stats.cardJitsu.losses + stats.connect4.losses + stats.pong.losses + stats.ticTacToe.losses
         };

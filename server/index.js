@@ -29,6 +29,31 @@ beachBalls.set('igloo2', { x: 4.5, z: 3, vx: 0, vz: 0 });
 // In production, this would be in a database
 const playerCoins = new Map();
 
+// ==================== DAY/NIGHT CYCLE (Server-synchronized) ====================
+// Time of day: 0-1 (0 = midnight, 0.25 = sunrise, 0.5 = noon, 0.75 = sunset)
+let worldTime = 0.35; // Start at morning
+const DAY_CYCLE_SPEED = 0.001; // Speed of day cycle (full day in ~16 minutes)
+const TIME_BROADCAST_INTERVAL = 5000; // Broadcast time every 5 seconds
+
+// Update world time
+setInterval(() => {
+    worldTime = (worldTime + DAY_CYCLE_SPEED) % 1;
+}, 1000);
+
+// Broadcast world time to all players
+setInterval(() => {
+    const timeMessage = JSON.stringify({
+        type: 'world_time',
+        time: worldTime
+    });
+    
+    for (const [, player] of players) {
+        if (player.ws && player.ws.readyState === 1) {
+            player.ws.send(timeMessage);
+        }
+    }
+}, TIME_BROADCAST_INTERVAL);
+
 // Create HTTP server to access request headers for IP
 const server = http.createServer();
 
@@ -194,7 +219,7 @@ const matchService = new MatchService(statsService, broadcastToRoom, sendToPlaye
 // Get player coins (with default)
 function getPlayerCoins(playerId) {
     if (!playerCoins.has(playerId)) {
-        playerCoins.set(playerId, 500); // Default starting coins
+        playerCoins.set(playerId, 0); // New players start with 0 coins
     }
     return playerCoins.get(playerId);
 }
@@ -413,6 +438,18 @@ function handleMessage(playerId, message) {
             player.appearance = message.appearance || {};
             player.puffle = message.puffle || null;
             
+            // Sync coins from client (client has localStorage persistence)
+            // Only accept if server doesn't already have this player's coins
+            // or if the client has more coins (they earned them before server restart)
+            if (message.coins !== undefined && message.coins >= 0) {
+                const serverCoins = playerCoins.get(playerId);
+                if (serverCoins === undefined) {
+                    // Server doesn't know this player yet, trust client
+                    playerCoins.set(playerId, message.coins);
+                    console.log(`💰 Synced ${player.name}'s coins from client: ${message.coins}`);
+                }
+            }
+            
             console.log(`Join request from ${player.name}:`, message.puffle ? `has ${message.puffle.color} puffle` : 'no puffle');
             
             const roomId = message.room || 'town';
@@ -439,7 +476,8 @@ function handleMessage(playerId, message) {
             sendToPlayer(playerId, {
                 type: 'room_state',
                 room: roomId,
-                players: existingPlayers
+                players: existingPlayers,
+                worldTime: worldTime // Sync day/night cycle
             });
             
             // Notify others in room about new player
@@ -466,13 +504,15 @@ function handleMessage(playerId, message) {
         
         case 'move': {
             // Player position update - OPTIMIZED: only broadcast if actually changed
+            // Now includes Y position for jump synchronization
             const posChanged = !player.position || 
                 Math.abs(player.position.x - message.position.x) > 0.01 ||
-                Math.abs(player.position.z - message.position.z) > 0.01;
+                Math.abs(player.position.z - message.position.z) > 0.01 ||
+                Math.abs((player.position.y || 0) - (message.position.y || 0)) > 0.05; // Y threshold for jumps
             const rotChanged = player.rotation === undefined ||
                 Math.abs(player.rotation - message.rotation) > 0.01;
             
-            player.position = message.position;
+            player.position = message.position; // Now includes x, y, z
             player.rotation = message.rotation;
             
             // Store puffle position on player object (not inside puffle)
@@ -480,8 +520,11 @@ function handleMessage(playerId, message) {
                 player.pufflePosition = message.pufflePosition;
             }
             
-            // Clear AFK status when player moves
-            if (posChanged && player.isAfk) {
+            // Clear AFK status when player moves (only horizontal movement)
+            const horizontalMove = !player.position || 
+                Math.abs(player.position.x - (message.position?.x || 0)) > 0.01 ||
+                Math.abs(player.position.z - (message.position?.z || 0)) > 0.01;
+            if (horizontalMove && player.isAfk) {
                 player.isAfk = false;
                 player.afkMessage = null;
                 if (player.room) {
@@ -499,7 +542,7 @@ function handleMessage(playerId, message) {
                 broadcastToRoom(player.room, {
                     type: 'player_moved',
                     playerId: playerId,
-                    position: player.position,
+                    position: player.position, // Includes x, y, z
                     rotation: player.rotation,
                     pufflePosition: player.pufflePosition
                 }, playerId);
@@ -782,11 +825,14 @@ function handleMessage(playerId, message) {
         
         case 'coins_sync': {
             // Client requesting their coin balance
-            const coins = getPlayerCoins(playerId);
-            sendToPlayer(playerId, {
-                type: 'coins_update',
-                coins
-            });
+            // Only return coins if they've been set (don't create default)
+            if (playerCoins.has(playerId)) {
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: playerCoins.get(playerId)
+                });
+            }
+            // If no coins set yet, wait for 'join' message to sync from client
             break;
         }
         
@@ -1073,16 +1119,31 @@ function handleMessage(playerId, message) {
                 state: state2
             });
             
-            // Broadcast spectate update to other players in room
+            // Broadcast spectate update to other players in room (game-type aware)
             if (match.room) {
-                broadcastToRoom(match.room, {
-                    type: 'match_spectate',
-                    matchId: match.id,
-                    players: [
-                        { id: match.player1.id, name: match.player1.name },
-                        { id: match.player2.id, name: match.player2.name }
-                    ],
-                    state: {
+                let spectateState;
+                if (match.gameType === 'tic_tac_toe') {
+                    spectateState = {
+                        board: [...match.state.board],
+                        currentTurn: match.state.currentTurn,
+                        phase: match.state.phase,
+                        winner: match.state.winner,
+                        winningLine: match.state.winningLine,
+                        status: match.status
+                    };
+                } else if (match.gameType === 'connect4') {
+                    spectateState = {
+                        board: [...match.state.board],
+                        currentTurn: match.state.currentTurn,
+                        phase: match.state.phase,
+                        winner: match.state.winner,
+                        winningCells: match.state.winningCells,
+                        lastMove: match.state.lastMove,
+                        status: match.status
+                    };
+                } else {
+                    // Card Jitsu
+                    spectateState = {
                         round: match.state.round,
                         phase: match.state.phase,
                         player1Wins: match.state.player1Wins,
@@ -1093,7 +1154,18 @@ function handleMessage(playerId, message) {
                             winner: match.state.lastRoundResult.winner
                         } : null,
                         status: match.status
-                    },
+                    };
+                }
+                
+                broadcastToRoom(match.room, {
+                    type: 'match_spectate',
+                    matchId: match.id,
+                    gameType: match.gameType,
+                    players: [
+                        { id: match.player1.id, name: match.player1.name },
+                        { id: match.player2.id, name: match.player2.name }
+                    ],
+                    state: spectateState,
                     wagerAmount: match.wagerAmount
                 }, match.player1.id, match.player2.id);
             }
@@ -1101,47 +1173,90 @@ function handleMessage(playerId, message) {
             // If match is complete, handle win/loss
             if (match.status === 'complete') {
                 const winnerId = match.winnerId;
-                const loserId = winnerId === match.player1.id ? match.player2.id : match.player1.id;
                 const totalPot = match.wagerAmount * 2;
+                const isDraw = result.isDraw || match.state.winner === 'draw';
+                const gameTypeName = match.gameType === 'tic_tac_toe' ? 'ticTacToe' : 
+                                 match.gameType === 'connect4' ? 'connect4' : 'cardJitsu';
                 
-                // Transfer coins to winner
-                setPlayerCoins(winnerId, getPlayerCoins(winnerId) + totalPot);
-                
-                // Record stats
-                statsService.recordResult(winnerId, 'cardJitsu', true, totalPot);
-                statsService.recordResult(loserId, 'cardJitsu', false, match.wagerAmount);
-                
-                // Notify both players of match end
-                sendToPlayer(match.player1.id, {
-                    type: 'match_end',
-                    matchId: match.id,
-                    result: {
-                        winner: winnerId === match.player1.id ? 'player1' : 'player2',
-                        winnerPlayerId: winnerId,
-                        coinsWon: winnerId === match.player1.id ? totalPot : 0,
-                        yourCoins: getPlayerCoins(match.player1.id),
-                        reason: 'win'
-                    }
-                });
-                
-                sendToPlayer(match.player2.id, {
-                    type: 'match_end',
-                    matchId: match.id,
-                    result: {
-                        winner: winnerId === match.player2.id ? 'player2' : 'player1',
-                        winnerPlayerId: winnerId,
-                        coinsWon: winnerId === match.player2.id ? totalPot : 0,
-                        yourCoins: getPlayerCoins(match.player2.id),
-                        reason: 'win'
-                    }
-                });
+                if (isDraw) {
+                    // Draw - refund both players
+                    setPlayerCoins(match.player1.id, getPlayerCoins(match.player1.id) + match.wagerAmount);
+                    setPlayerCoins(match.player2.id, getPlayerCoins(match.player2.id) + match.wagerAmount);
+                    
+                    // Record draw stats
+                    statsService.recordResult(match.player1.id, gameTypeName, false, 0, true);
+                    statsService.recordResult(match.player2.id, gameTypeName, false, 0, true);
+                    
+                    // Notify both players of draw
+                    sendToPlayer(match.player1.id, {
+                        type: 'match_end',
+                        matchId: match.id,
+                        result: {
+                            winner: 'draw',
+                            winnerPlayerId: null,
+                            coinsWon: 0,
+                            yourCoins: getPlayerCoins(match.player1.id),
+                            reason: 'draw',
+                            refunded: match.wagerAmount
+                        }
+                    });
+                    
+                    sendToPlayer(match.player2.id, {
+                        type: 'match_end',
+                        matchId: match.id,
+                        result: {
+                            winner: 'draw',
+                            winnerPlayerId: null,
+                            coinsWon: 0,
+                            yourCoins: getPlayerCoins(match.player2.id),
+                            reason: 'draw',
+                            refunded: match.wagerAmount
+                        }
+                    });
+                    
+                    console.log(`🤝 ${match.gameType} draw: ${match.player1.name} vs ${match.player2.name} - wagers refunded`);
+                } else {
+                    // Normal win - transfer coins to winner
+                    const loserId = winnerId === match.player1.id ? match.player2.id : match.player1.id;
+                    setPlayerCoins(winnerId, getPlayerCoins(winnerId) + totalPot);
+                    
+                    // Record stats
+                    statsService.recordResult(winnerId, gameTypeName, true, totalPot);
+                    statsService.recordResult(loserId, gameTypeName, false, match.wagerAmount);
+                    
+                    // Notify both players of match end
+                    sendToPlayer(match.player1.id, {
+                        type: 'match_end',
+                        matchId: match.id,
+                        result: {
+                            winner: winnerId === match.player1.id ? 'player1' : 'player2',
+                            winnerPlayerId: winnerId,
+                            coinsWon: winnerId === match.player1.id ? totalPot : 0,
+                            yourCoins: getPlayerCoins(match.player1.id),
+                            reason: 'win'
+                        }
+                    });
+                    
+                    sendToPlayer(match.player2.id, {
+                        type: 'match_end',
+                        matchId: match.id,
+                        result: {
+                            winner: winnerId === match.player2.id ? 'player2' : 'player1',
+                            winnerPlayerId: winnerId,
+                            coinsWon: winnerId === match.player2.id ? totalPot : 0,
+                            yourCoins: getPlayerCoins(match.player2.id),
+                            reason: 'win'
+                        }
+                    });
+                }
                 
                 // Broadcast match end to spectators
                 broadcastToRoom(match.room, {
                     type: 'match_spectate_end',
                     matchId: match.id,
                     winnerId,
-                    winnerName: winnerId === match.player1.id ? match.player1.name : match.player2.name
+                    winnerName: winnerId ? (winnerId === match.player1.id ? match.player1.name : match.player2.name) : null,
+                    isDraw
                 }, match.player1.id, match.player2.id);
                 
                 // Send updated stats to both players
@@ -1172,9 +1287,11 @@ function handleMessage(playerId, message) {
             // Transfer coins to winner
             setPlayerCoins(winnerId, getPlayerCoins(winnerId) + totalPot);
             
-            // Record stats
-            statsService.recordResult(winnerId, 'cardJitsu', true, totalPot);
-            statsService.recordResult(forfeiterId, 'cardJitsu', false, match.wagerAmount);
+            // Record stats (use correct game type)
+            const forfeitGameType = match.gameType === 'tic_tac_toe' ? 'ticTacToe' : 
+                                    match.gameType === 'connect4' ? 'connect4' : 'cardJitsu';
+            statsService.recordResult(winnerId, forfeitGameType, true, totalPot);
+            statsService.recordResult(forfeiterId, forfeitGameType, false, match.wagerAmount);
             
             // Notify both players
             sendToPlayer(match.player1.id, {

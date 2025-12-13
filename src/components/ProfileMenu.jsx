@@ -79,9 +79,9 @@ const ProfileMenu = () => {
     // Available games
     const availableGames = [
         { id: 'card_jitsu', name: 'Card Jitsu', emoji: '⚔️', available: true },
-        { id: 'connect4', name: 'Connect 4', emoji: '🔴', available: false },
+        { id: 'tic_tac_toe', name: 'Tic Tac Toe', emoji: '⭕', available: true },
+        { id: 'connect4', name: 'Connect 4', emoji: '🔴', available: true },
         { id: 'pong', name: 'Pong', emoji: '🏓', available: false },
-        { id: 'tic_tac_toe', name: 'Tic Tac Toe', emoji: '⭕', available: false },
     ];
     
     // Stop all event propagation to prevent 3D canvas interactions
@@ -140,19 +140,31 @@ const ProfileMenu = () => {
                 )}
                 
                 {/* Stats */}
-                <div className="bg-black/30 rounded-xl p-2.5 sm:p-3 mb-3 sm:mb-4">
+                <div className="bg-black/30 rounded-xl p-2.5 sm:p-3 mb-3 sm:mb-4 space-y-1.5">
                     <div className="flex items-center justify-between text-xs sm:text-sm">
-                        <span className="text-white/60">🏆 Card Jitsu Wins</span>
+                        <span className="text-white/60">⚔️ Card Jitsu</span>
                         <span className="text-yellow-400 font-bold">
-                            {stats?.cardJitsuWins ?? '...'}
+                            {stats?.cardJitsuWins ?? 0}W / {stats?.cardJitsuLosses ?? 0}L
                         </span>
                     </div>
-                    {stats?.totalWins !== undefined && (
-                        <div className="flex items-center justify-between text-xs sm:text-sm mt-2">
-                            <span className="text-white/60">📊 Total Wins</span>
-                            <span className="text-cyan-400 font-bold">{stats.totalWins}</span>
-                        </div>
-                    )}
+                    <div className="flex items-center justify-between text-xs sm:text-sm">
+                        <span className="text-white/60">⭕ Tic Tac Toe</span>
+                        <span className="text-cyan-400 font-bold">
+                            {stats?.ticTacToeWins ?? 0}W / {stats?.ticTacToeLosses ?? 0}L
+                        </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs sm:text-sm">
+                        <span className="text-white/60">🔴 Connect 4</span>
+                        <span className="text-red-400 font-bold">
+                            {stats?.connect4Wins ?? 0}W / {stats?.connect4Losses ?? 0}L
+                        </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs sm:text-sm pt-1.5 border-t border-white/10">
+                        <span className="text-white/60">📊 Total</span>
+                        <span className="text-green-400 font-bold">
+                            {(stats?.cardJitsuWins ?? 0) + (stats?.ticTacToeWins ?? 0) + (stats?.connect4Wins ?? 0)}W
+                        </span>
+                    </div>
                 </div>
                 
                 {/* Challenge Button */}

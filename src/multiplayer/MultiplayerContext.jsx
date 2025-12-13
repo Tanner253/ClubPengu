@@ -4,6 +4,7 @@
  */
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import GameManager from '../engine/GameManager';
 
 const MultiplayerContext = createContext(null);
 
@@ -51,6 +52,9 @@ export function MultiplayerProvider({ children }) {
     
     // Connection error state
     const [connectionError, setConnectionError] = useState(null);
+    
+    // World time (synchronized from server)
+    const worldTimeRef = useRef(0.35); // Default morning
     
     // Callbacks for game integration
     const callbacksRef = useRef({
@@ -132,6 +136,12 @@ export function MultiplayerProvider({ children }) {
                 // Received current state of room (other players)
                 console.log(`📍 Entered ${message.room} with ${message.players.length} other players`);
                 setServerRoom(message.room);
+                
+                // Sync world time from server
+                if (message.worldTime !== undefined) {
+                    worldTimeRef.current = message.worldTime;
+                    console.log(`🌅 Synced world time: ${(message.worldTime * 24).toFixed(1)}h`);
+                }
                 
                 // Clear and rebuild player data
                 playersDataRef.current.clear();
@@ -304,6 +314,11 @@ export function MultiplayerProvider({ children }) {
             case 'pong':
                 break;
             
+            case 'world_time':
+                // Server-synchronized day/night cycle time
+                worldTimeRef.current = message.time;
+                break;
+            
             case 'whisper': {
                 // Received a whisper from another player
                 const whisperMsg = {
@@ -376,20 +391,26 @@ export function MultiplayerProvider({ children }) {
     
     // Join a room with player data
     const joinRoom = useCallback((room, appearance, puffle = null) => {
+        // Get coins from local storage to sync with server
+        const gm = GameManager.getInstance();
+        const coins = gm.getCoins();
+        
         send({
             type: 'join',
             room,
             name: playerName,
             appearance,
-            puffle
+            puffle,
+            coins // Send coins to server for persistence across restarts
         });
     }, [send, playerName]);
     
     // Send position update (called frequently during movement)
+    // Position now includes x, y, z for jump support
     const sendPosition = useCallback((position, rotation, pufflePosition = null) => {
         send({
             type: 'move',
-            position,
+            position, // { x, y, z }
             rotation,
             pufflePosition
         });
@@ -490,6 +511,7 @@ export function MultiplayerProvider({ children }) {
         playerList,           // Array of player IDs (for triggering mesh creation)
         getPlayersData,       // Function to get ref (for real-time position access)
         playersDataRef,       // Direct ref access for game loop
+        worldTimeRef,         // Server-synchronized world time (0-1)
         chatMessages,
         serverRoom,
         connectionError,      // Error if connection was rejected

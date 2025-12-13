@@ -36,37 +36,48 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange }) => {
     if (!isOpen) return null;
     
     const handleToggle = (key) => {
-        onSettingsChange({ ...settings, [key]: !settings[key] });
+        // Some toggles default to true (soundEnabled, snowEnabled), others to false (leftHanded, musicMuted)
+        const defaultsToTrue = ['soundEnabled', 'snowEnabled'];
+        const currentValue = defaultsToTrue.includes(key) 
+            ? settings[key] !== false  // For default-true: undefined = true
+            : settings[key] === true;  // For default-false: undefined = false
+        const newSettings = { ...settings, [key]: !currentValue };
+        onSettingsChange(newSettings);
+        // Dispatch event for music player
+        window.dispatchEvent(new CustomEvent('settingsChanged'));
     };
     
     const handleSlider = (key, value) => {
-        onSettingsChange({ ...settings, [key]: value });
+        const newSettings = { ...settings, [key]: value };
+        onSettingsChange(newSettings);
+        // Dispatch event for music player
+        window.dispatchEvent(new CustomEvent('settingsChanged'));
     };
     
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4">
             <div 
                 ref={menuRef}
-                className="bg-gradient-to-br from-gray-900/95 to-gray-800/95 rounded-2xl border border-white/10 shadow-2xl p-4 w-full max-w-[320px] animate-fade-in"
+                className="bg-gradient-to-br from-gray-900/95 to-gray-800/95 rounded-2xl border border-white/10 shadow-2xl w-full max-w-[320px] landscape:max-w-[400px] max-h-[85vh] landscape:max-h-[90vh] flex flex-col animate-fade-in"
                 onClick={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
             >
-                {/* Header */}
-                <div className="flex items-center justify-between mb-4">
+                {/* Header - Fixed */}
+                <div className="flex items-center justify-between p-4 pb-2 shrink-0">
                     <h2 className="text-base font-bold text-white flex items-center gap-2">
                         <span>⚙️</span>
                         <span>Settings</span>
                     </h2>
                     <button 
                         onClick={onClose}
-                        className="text-white/50 hover:text-white active:text-white transition-colors w-8 h-8 flex items-center justify-center text-lg"
+                        className="text-white/50 hover:text-white active:text-white transition-colors w-10 h-10 flex items-center justify-center text-lg touch-manipulation select-none rounded-full hover:bg-white/10 active:bg-white/20"
                     >
                         ✕
                     </button>
                 </div>
                 
-                {/* Settings List */}
-                <div className="space-y-3">
+                {/* Settings List - Scrollable */}
+                <div className="flex-1 overflow-y-auto px-4 pb-2 space-y-3 overscroll-contain">
                     {/* Controls Guide */}
                     <div className="bg-black/30 rounded-xl p-3">
                         <h3 className="text-white font-medium text-sm mb-2">Controls</h3>
@@ -99,13 +110,13 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange }) => {
                             </div>
                             <button
                                 onClick={() => handleToggle('leftHanded')}
-                                className={`relative w-12 h-7 rounded-full transition-colors duration-200 shrink-0 ${
+                                className={`relative w-14 h-8 rounded-full transition-colors duration-200 shrink-0 touch-manipulation select-none ${
                                     settings.leftHanded ? 'bg-green-500' : 'bg-gray-600'
                                 }`}
                             >
                                 <div 
-                                    className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
-                                        settings.leftHanded ? 'translate-x-6' : 'translate-x-1'
+                                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
+                                        settings.leftHanded ? 'translate-x-7' : 'translate-x-1'
                                     }`}
                                 />
                             </button>
@@ -151,15 +162,106 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange }) => {
                             <span>Fast</span>
                         </div>
                     </div>
+                    
+                    {/* Snowfall Toggle */}
+                    <div className="bg-black/30 rounded-xl p-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex-1 mr-3">
+                                <h3 className="text-white font-medium text-sm">❄️ Snowfall Effects</h3>
+                                <p className="text-white/50 text-[11px] mt-0.5">
+                                    Disable for better performance
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => handleToggle('snowEnabled')}
+                                className={`relative w-14 h-8 rounded-full transition-colors duration-200 shrink-0 touch-manipulation select-none ${
+                                    settings.snowEnabled !== false ? 'bg-cyan-500' : 'bg-gray-600'
+                                }`}
+                            >
+                                <div 
+                                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
+                                        settings.snowEnabled !== false ? 'translate-x-7' : 'translate-x-1'
+                                    }`}
+                                />
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* Master Sound Toggle */}
+                    <div className="bg-black/30 rounded-xl p-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex-1 mr-3">
+                                <h3 className="text-white font-medium text-sm">🔊 Master Sound</h3>
+                                <p className="text-white/50 text-[11px] mt-0.5">
+                                    Toggle all game audio
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => handleToggle('soundEnabled')}
+                                className={`relative w-14 h-8 rounded-full transition-colors duration-200 shrink-0 touch-manipulation select-none ${
+                                    settings.soundEnabled !== false ? 'bg-green-500' : 'bg-gray-600'
+                                }`}
+                            >
+                                <div 
+                                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
+                                        settings.soundEnabled !== false ? 'translate-x-7' : 'translate-x-1'
+                                    }`}
+                                />
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* Music Volume with Mute Toggle */}
+                    <div className="bg-black/30 rounded-xl p-3">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-white font-medium text-sm">🎵 Music</h3>
+                                <button
+                                    onClick={() => handleToggle('musicMuted')}
+                                    className={`px-3 py-1 text-[11px] font-medium rounded-lg transition-colors touch-manipulation select-none active:scale-95 ${
+                                        settings.musicMuted 
+                                            ? 'bg-red-500/80 text-white' 
+                                            : 'bg-green-500/80 text-white'
+                                    }`}
+                                >
+                                    {settings.musicMuted ? '🔇 MUTED' : '🔊 ON'}
+                                </button>
+                            </div>
+                            <span className="text-purple-400 text-xs font-mono bg-black/30 px-2 py-0.5 rounded">
+                                {Math.round((settings.musicVolume ?? 0.3) * 100)}%
+                            </span>
+                        </div>
+                        <input
+                            type="range"
+                            min="0"
+                            max="1"
+                            step="0.05"
+                            value={settings.musicVolume ?? 0.3}
+                            onChange={(e) => handleSlider('musicVolume', parseFloat(e.target.value))}
+                            disabled={settings.musicMuted}
+                            className={`w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-400 ${
+                                settings.musicMuted ? 'opacity-50' : ''
+                            }`}
+                        />
+                        <div className="flex justify-between text-[10px] text-white/40 mt-1">
+                            <span>Off</span>
+                            <span>Max</span>
+                        </div>
+                    </div>
+                    
+                    {/* Spacer for scroll padding */}
+                    <div className="h-2" />
                 </div>
                 
-                {/* Close Button */}
-                <button
-                    onClick={onClose}
-                    className="w-full mt-4 py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 active:from-cyan-600 active:to-blue-600 text-white rounded-xl font-medium text-sm transition-all"
-                >
-                    Done
-                </button>
+                {/* Close Button - Fixed at bottom */}
+                <div className="p-4 pt-2 shrink-0">
+                    <button
+                        onClick={onClose}
+                        className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 active:from-cyan-600 active:to-blue-600 text-white rounded-xl font-medium text-sm transition-all"
+                    >
+                        Done
+                    </button>
+                </div>
             </div>
         </div>
     );

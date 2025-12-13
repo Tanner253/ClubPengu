@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import VoxelPenguinDesigner from './VoxelPenguinDesigner';
 import VoxelWorld from './VoxelWorld';
 import CardJitsu from './minigames/CardJitsu';
 import P2PCardJitsu from './minigames/P2PCardJitsu';
+import P2PTicTacToe from './minigames/P2PTicTacToe';
+import P2PConnect4 from './minigames/P2PConnect4';
 import GameManager from './engine/GameManager';
 import { MultiplayerProvider } from './multiplayer';
 import { ChallengeProvider, useChallenge } from './challenge';
@@ -10,6 +12,91 @@ import ProfileMenu from './components/ProfileMenu';
 import WagerModal from './components/WagerModal';
 import Inbox from './components/Inbox';
 import Notification from './components/Notification';
+
+// Background Music Player Component
+const BackgroundMusic = () => {
+    const audioRef = useRef(null);
+    const hasInteractedRef = useRef(false);
+    
+    useEffect(() => {
+        // Create audio element
+        const audio = new Audio('/lofi.mp3');
+        audio.loop = true;
+        audio.preload = 'auto';
+        audioRef.current = audio;
+        
+        // Load volume from settings and apply
+        const applyVolume = () => {
+            try {
+                const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
+                const volume = settings.musicVolume ?? 0.3;
+                const isMusicMuted = settings.musicMuted === true;
+                const isSoundEnabled = settings.soundEnabled !== false; // Master sound toggle
+                
+                if (audioRef.current) {
+                    // Clamp volume between 0 and 1
+                    const clampedVolume = Math.max(0, Math.min(1, volume));
+                    audioRef.current.volume = clampedVolume;
+                    
+                    // If master sound off, music muted, or volume is 0, pause the audio
+                    if (!isSoundEnabled || isMusicMuted || clampedVolume === 0) {
+                        audioRef.current.pause();
+                    } else if (hasInteractedRef.current && audioRef.current.paused) {
+                        // Sound enabled, not muted, volume > 0, and we've interacted - resume
+                        audioRef.current.play().catch(() => {});
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to apply music volume:', e);
+            }
+        };
+        
+        // Initial volume
+        applyVolume();
+        
+        // Listen for settings changes
+        window.addEventListener('storage', applyVolume);
+        window.addEventListener('settingsChanged', applyVolume);
+        
+        // Start playing after first user interaction (browser autoplay policy)
+        const startMusic = () => {
+            hasInteractedRef.current = true;
+            if (audioRef.current) {
+                // Check settings before playing
+                const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
+                const volume = settings.musicVolume ?? 0.3;
+                const isMusicMuted = settings.musicMuted === true;
+                const isSoundEnabled = settings.soundEnabled !== false;
+                
+                // Only play if sound enabled, not muted, and volume > 0
+                if (isSoundEnabled && !isMusicMuted && volume > 0) {
+                    audioRef.current.volume = volume;
+                    audioRef.current.play().catch((err) => {
+                        console.warn('Failed to start music:', err);
+                    });
+                }
+            }
+        };
+        
+        document.addEventListener('click', startMusic, { once: true });
+        document.addEventListener('keydown', startMusic, { once: true });
+        document.addEventListener('touchstart', startMusic, { once: true });
+        
+        return () => {
+            window.removeEventListener('storage', applyVolume);
+            window.removeEventListener('settingsChanged', applyVolume);
+            document.removeEventListener('click', startMusic);
+            document.removeEventListener('keydown', startMusic);
+            document.removeEventListener('touchstart', startMusic);
+            if (audioRef.current) {
+                audioRef.current.pause();
+                audioRef.current = null;
+            }
+        };
+    }, []);
+    
+    return null; // No UI, just audio
+};
 
 // --- MAIN APP CONTROLLER ---
 
@@ -55,12 +142,6 @@ const AppContent = () => {
     // Initialize GameManager on mount
     useEffect(() => {
         const gm = GameManager.getInstance();
-        
-        // Give new players starting coins
-        if (gm.getCoins() === 0) {
-            gm.addCoins(500, 'welcome_bonus');
-        }
-        
         console.log('🐧 Club Penguin Clone Loaded!');
         console.log('💰 Coins:', gm.getCoins());
     }, []);
@@ -163,10 +244,23 @@ const AppContent = () => {
                 </div>
             )}
             
-            {/* P2P Card Jitsu - overlay on top of game world (players stay visible) */}
-            {isInMatch && activeMatch && (
+            {/* P2P Games - overlay on top of game world (players stay visible) */}
+            {isInMatch && activeMatch && activeMatch.gameType === 'card_jitsu' && (
                 <div className="absolute inset-0 z-40">
                     <P2PCardJitsu onMatchEnd={handleP2PMatchEnd} />
+                </div>
+            )}
+            
+            {isInMatch && activeMatch && activeMatch.gameType === 'tic_tac_toe' && (
+                <div className="absolute inset-0 z-40">
+                    <P2PTicTacToe onMatchEnd={handleP2PMatchEnd} />
+                </div>
+            )}
+            
+            {/* P2P Connect 4 - overlay on top of game world */}
+            {isInMatch && activeMatch && activeMatch.gameType === 'connect4' && (
+                <div className="absolute inset-0 z-40">
+                    <P2PConnect4 onMatchEnd={handleP2PMatchEnd} />
                 </div>
             )}
             
@@ -176,7 +270,7 @@ const AppContent = () => {
                     {!isInMatch && <ProfileMenu />}
                     {!isInMatch && <WagerModal />}
                     {!isInMatch && <Inbox />}
-                    {/* Match spectator banners are now rendered in 3D in VoxelWorld */}
+                    {/* Match spectator banners are rendered in 3D above the players in VoxelWorld */}
                 </>
             )}
             
@@ -193,6 +287,7 @@ const App = () => {
     return (
         <MultiplayerProvider>
             <ChallengeProvider>
+                <BackgroundMusic />
                 <AppContent />
             </ChallengeProvider>
         </MultiplayerProvider>

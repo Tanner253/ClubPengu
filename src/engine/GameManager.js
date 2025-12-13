@@ -167,7 +167,7 @@ class GameManager {
     }
     
     reset() {
-        this.coins = 500; // Starting bonus
+        this.coins = 0; // New players start with 0 coins
         this.inventory = [];
         this.stamps = [];
         this.stats = {

@@ -164,15 +164,36 @@ class TownCenter {
             { type: 'lamp_post', x: C + 8, z: C + 6, isOn: true, castShadow: true },
             { type: 'lamp_post', x: C - 8, z: C + 6, isOn: true, castShadow: true },
             
-            // Path to dojo
+            // Path to dojo - additional lights for navigation
             { type: 'lamp_post', x: C, z: C - 10, isOn: true, castShadow: true },
+            { type: 'lamp_post', x: C + 5, z: C - 18, isOn: true, castShadow: false },  // Extra dojo path
+            { type: 'lamp_post', x: C - 5, z: C - 18, isOn: true, castShadow: false },  // Extra dojo path
             
             // Near buildings (ambient, no shadows)
             { type: 'lamp_post', x: C - 18, z: C - 5, isOn: true, castShadow: false },  // Gift shop
+            { type: 'lamp_post', x: C - 25, z: C - 3, isOn: true, castShadow: false },  // Gift shop side
             { type: 'lamp_post', x: C + 28, z: C + 8, isOn: true, castShadow: false },  // Pizza
+            { type: 'lamp_post', x: C + 20, z: C + 2, isOn: true, castShadow: false },  // Pizza entrance
             
             // Igloo village - warm lighting
             { type: 'lamp_post', x: campsiteX + 10, z: campsiteZ - 3, isOn: true, castShadow: true },  // Near campsite
+            { type: 'lamp_post', x: campsiteX - 5, z: campsiteZ + 5, isOn: true, castShadow: false },  // Igloo area
+        );
+        
+        // ==================== BUILDING LIGHTS ====================
+        // Wall-mounted warm lights on building entrances for nighttime visibility
+        props.push(
+            // Gift Shop entrance lights
+            { type: 'building_light', x: C - 22, z: C - 3, color: 0xFFE4B5, intensity: 3.0, distance: 15, height: 4 },
+            
+            // Pizza Parlor entrance lights  
+            { type: 'building_light', x: C + 25, z: C + 10, color: 0xFFAA55, intensity: 3.5, distance: 18, height: 4 },
+            { type: 'building_light', x: C + 28, z: C + 2, color: 0xFFAA55, intensity: 2.5, distance: 12, height: 4 },
+            
+            // Dojo entrance lights (warm torchlight)
+            { type: 'building_light', x: C - 3, z: C - 20, color: 0xFF8844, intensity: 3.0, distance: 15, height: 3 },
+            { type: 'building_light', x: C + 3, z: C - 20, color: 0xFF8844, intensity: 3.0, distance: 15, height: 3 },
+            { type: 'building_light', x: C, z: C - 28, color: 0xFFCC77, intensity: 2.0, distance: 12, height: 5 },  // Rear dojo
         );
         
         // ==================== BENCHES ====================
@@ -303,6 +324,19 @@ class TownCenter {
                     if (mesh.userData.light) {
                         this.lights.push(mesh.userData.light);
                     }
+                    break;
+                case 'building_light':
+                    // Create invisible point light for building illumination
+                    const buildingLight = new this.THREE.PointLight(
+                        prop.color || 0xFFE4B5,
+                        prop.intensity || 2.5,
+                        prop.distance || 15,
+                        1.5 // decay
+                    );
+                    buildingLight.position.set(0, prop.height || 4, 0);
+                    mesh = new this.THREE.Group();
+                    mesh.add(buildingLight);
+                    this.lights.push(buildingLight);
                     break;
                 case 'bench':
                     mesh = this.propsFactory.createBench(true);
@@ -479,6 +513,27 @@ class TownCenter {
                     0,
                     roofY  // Y position of roof
                 );
+                
+                // Add step collision for dojo entrance (3 steps)
+                const d = building.size.d;
+                for (let i = 0; i < 3; i++) {
+                    const stepWidth = 3.2 + (2 - i) * 0.4;
+                    const stepY = 0.84 - i * 0.28;
+                    const stepZ = bz + d / 2 + 1.5 + (2 - i) * 0.95;
+                    this.collisionSystem.addCollider(
+                        bx,
+                        stepZ,
+                        {
+                            type: 'box',
+                            size: { x: stepWidth, y: 0.28, z: 0.9 },
+                            height: 0.28
+                        },
+                        CollisionSystem.TYPES.SOLID,
+                        { name: `dojo_step_${i}`, isStep: true },
+                        0,
+                        stepY
+                    );
+                }
             }
         });
         
