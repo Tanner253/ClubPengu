@@ -403,17 +403,18 @@ class TownCenter {
                             action: 'sit',
                             message: '🪑 Sit (Secret VIP Spot!)',
                             emote: 'Sit',
-                            seatHeight: 0.8,
+                            seatHeight: bench.y + 0.8, // Actual seat height (platform + bench seat)
                             benchDepth: 1,
                             worldX: bench.x,
                             worldZ: bench.z,
                             worldRotation: bench.rotation || 0,
+                            platformHeight: bench.y, // Height of the platform the bench sits on
                             snapPoints: [
                                 { x: -0.6, z: 0 },
                                 { x: 0, z: 0 },
                                 { x: 0.6, z: 0 }
                             ],
-                            data: { seatHeight: bench.y + 0.8 }
+                            data: { seatHeight: bench.y + 0.8, platformHeight: bench.y }
                         };
                         this.collisionSystem.addTrigger(
                             bench.x,

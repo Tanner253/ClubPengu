@@ -96,6 +96,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange }) => {
                             <div className="text-white/80">/w name msg</div>
                             <div className="text-white/50">AFK</div>
                             <div className="text-white/80">/afk message</div>
+                            <div className="text-white/50">Unstuck</div>
+                            <div className="text-white/80">/spawn</div>
                         </div>
                     </div>
                     

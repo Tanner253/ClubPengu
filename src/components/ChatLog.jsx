@@ -178,6 +178,25 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose }) => {
             return;
         }
         
+        // Check for spawn command: /spawn - teleport to spawn point if stuck
+        if (text.toLowerCase() === '/spawn') {
+            // Dispatch event to VoxelWorld to handle spawn teleport
+            window.dispatchEvent(new CustomEvent('chatCommand', { detail: { command: 'spawn' } }));
+            
+            setLocalMessages(prev => [...prev.slice(-100), {
+                id: Date.now(),
+                type: 'system',
+                name: 'System',
+                text: '✨ Teleporting to spawn point...',
+                timestamp: Date.now()
+            }]);
+            
+            setInputValue('');
+            resetFadeTimer();
+            inputRef.current?.blur();
+            return;
+        }
+        
         // Regular chat message
         sendChat(text);
         setInputValue('');
@@ -306,7 +325,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose }) => {
                             </button>
                         </div>
                         <div className="text-[10px] text-white/40 mt-2 text-center">
-                            /w name msg • /r reply • /afk message
+                            /w name msg • /r reply • /afk • /spawn
                         </div>
                     </div>
                 </div>

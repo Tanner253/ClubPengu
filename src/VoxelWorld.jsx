@@ -2632,14 +2632,19 @@ const VoxelWorld = ({
                     // Move player in dismount direction from seat
                     posRef.current.x = seatData.worldPos.x + offsetX;
                     posRef.current.z = seatData.worldPos.z + offsetZ;
-                    posRef.current.y = 0; // Put on ground level
+                    
+                    // Calculate dismount Y: stay at platform height if elevated, otherwise ground
+                    // If seat has platformHeight (rooftop benches), stay at that height
+                    const platformHeight = seatData.platformHeight || 0;
+                    const dismountY = platformHeight > 0 ? platformHeight : 0;
+                    posRef.current.y = dismountY;
                     velRef.current.y = 0; // Stop any vertical velocity
                     
                     // Update mesh position
                     if (playerRef.current) {
                         playerRef.current.position.x = posRef.current.x;
                         playerRef.current.position.z = posRef.current.z;
-                        playerRef.current.position.y = 0;
+                        playerRef.current.position.y = dismountY;
                     }
                     
                     // Clear seated state
@@ -5035,7 +5040,8 @@ const VoxelWorld = ({
                         seatHeight: benchData.seatHeight || 0.8,
                         benchRotation: benchRotation,
                         benchDepth: benchData.benchDepth || 0.8,
-                        dismountBack: benchData.dismountBack || false // For bar stools
+                        dismountBack: benchData.dismountBack || false, // For bar stools
+                        platformHeight: benchData.platformHeight || benchData.data?.platformHeight || 0 // For rooftop benches
                     };
                     setSeatedOnBench(seatData);
                     seatedRef.current = seatData;
@@ -5077,6 +5083,52 @@ const VoxelWorld = ({
         window.addEventListener('keydown', handleInteract);
         return () => window.removeEventListener('keydown', handleInteract);
     }, [nearbyInteraction, nearbyPortal]);
+    
+    // ==================== CHAT COMMANDS ====================
+    // Handle /spawn command to teleport to TOWN CENTER spawn (always)
+    useEffect(() => {
+        const handleChatCommand = (e) => {
+            const { command } = e.detail;
+            
+            if (command === 'spawn') {
+                // ALWAYS teleport to town center spawn - no questions asked
+                const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE; // 80
+                const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE; // 80
+                
+                // Clear any seated state first
+                if (seatedRef.current) {
+                    seatedRef.current = null;
+                    setSeatedOnBench(null);
+                    emoteRef.current.type = null;
+                    mpSendEmote(null);
+                }
+                
+                // If not in town, change room to town first
+                if (roomRef.current !== 'town') {
+                    // Change to town room
+                    if (onChangeRoom) {
+                        onChangeRoom('town', null);
+                    }
+                } else {
+                    // Already in town - just teleport
+                    posRef.current.x = townCenterX;
+                    posRef.current.y = 0;
+                    posRef.current.z = townCenterZ;
+                    velRef.current = { x: 0, y: 0, z: 0 };
+                    
+                    // Update mesh position
+                    if (playerRef.current) {
+                        playerRef.current.position.set(townCenterX, 0, townCenterZ);
+                    }
+                }
+                
+                console.log('🌟 Teleported to Town Center spawn:', { x: townCenterX, z: townCenterZ });
+            }
+        };
+        
+        window.addEventListener('chatCommand', handleChatCommand);
+        return () => window.removeEventListener('chatCommand', handleChatCommand);
+    }, [mpSendEmote, onChangeRoom]);
     
     // ==================== MULTIPLAYER SYNC (OPTIMIZED) ====================
     
@@ -5453,7 +5505,8 @@ const VoxelWorld = ({
                                             seatHeight: benchData.seatHeight || 0.8,
                                             benchRotation: benchRotation,
                                             benchDepth: benchData.benchDepth || 0.8,
-                                            dismountBack: benchData.dismountBack || false // For bar stools
+                                            dismountBack: benchData.dismountBack || false, // For bar stools
+                                            platformHeight: benchData.platformHeight || benchData.data?.platformHeight || 0 // For rooftop benches
                                         };
                                         setSeatedOnBench(seatData);
                                         seatedRef.current = seatData;
