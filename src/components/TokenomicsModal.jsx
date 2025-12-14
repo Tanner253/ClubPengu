@@ -1,6 +1,5 @@
 /**
  * TokenomicsModal - $CPw3 Token Utility & Tokenomics Information
- * Showcases the future of Club Penguin on Web3
  */
 
 import React, { useEffect, useRef } from 'react';
@@ -35,36 +34,12 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
     
     const features = [
-        {
-            emoji: '🏠',
-            title: 'Igloo Rentals',
-            description: 'Rent and customize your igloo with $CPw3. Host parties, show off rare items, and earn passive income by renting premium locations.'
-        },
-        {
-            emoji: '🏗️',
-            title: 'Building Ownership',
-            description: 'Own exclusive buildings across Club Penguin. Coffee shops, pizza parlors, ski lodges - stake $CPw3 to claim your territory.'
-        },
-        {
-            emoji: '🎰',
-            title: 'Casino & Slots',
-            description: 'Spin the slots, play blackjack, and hit the tables. Win exclusive cosmetics, rare items, and $CPw3 jackpots. House always feeds the community pool.'
-        },
-        {
-            emoji: '👕',
-            title: 'Cosmetic Marketplace',
-            description: 'Trade hats, outfits, and accessories. Limited drops, seasonal exclusives, and creator collaborations all powered by $CPw3.'
-        },
-        {
-            emoji: '🎮',
-            title: 'Universal Wagering',
-            description: 'Wager ANY Solana token on PvP games. Tic-tac-toe, Connect 4, Card Jitsu - bring your favorite cult tokens and battle it out.'
-        },
-        {
-            emoji: '🤝',
-            title: 'Cult Collabs',
-            description: 'We partner with ALL Solana cults. Your community, your tokens, your games. Cross-community tournaments with massive prize pools.'
-        }
+        { emoji: '🏠', title: 'Igloo Rentals', description: 'Rent and customize your igloo with $CPw3. Host parties and earn passive income.' },
+        { emoji: '🏗️', title: 'Building Ownership', description: 'Own exclusive buildings. Coffee shops, pizza parlors - stake $CPw3 to claim territory.' },
+        { emoji: '🎰', title: 'Casino & Slots', description: 'Spin slots, play blackjack. Win cosmetics, rare items, and $CPw3 jackpots.' },
+        { emoji: '👕', title: 'Cosmetic Marketplace', description: 'Trade hats, outfits. Limited drops and creator collaborations powered by $CPw3.' },
+        { emoji: '🎮', title: 'Universal Wagering', description: 'Wager ANY Solana token on PvP games. Tic-tac-toe, Connect 4, Card Jitsu.' },
+        { emoji: '🤝', title: 'Cult Collabs', description: 'We partner with ALL Solana cults. Cross-community tournaments with massive prizes.' }
     ];
 
     const roadmapItems = [
@@ -82,12 +57,6 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                 onClick={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
             >
-                {/* Animated Background Glow */}
-                <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                    <div className="absolute -top-1/2 -left-1/2 w-full h-full bg-gradient-radial from-cyan-500/20 to-transparent rounded-full animate-pulse-slow" />
-                    <div className="absolute -bottom-1/2 -right-1/2 w-full h-full bg-gradient-radial from-purple-500/20 to-transparent rounded-full animate-pulse-slow" style={{ animationDelay: '1s' }} />
-                </div>
-                
                 {/* Header */}
                 <div className="relative flex items-center justify-between p-4 sm:p-6 pb-2 shrink-0 border-b border-white/5">
                     <div className="flex items-center gap-3">
@@ -101,7 +70,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                     </div>
                     <button 
                         onClick={onClose}
-                        className="text-white/50 hover:text-white active:text-white transition-colors w-10 h-10 flex items-center justify-center text-xl touch-manipulation select-none rounded-full hover:bg-white/10 active:bg-white/20"
+                        className="text-white/50 hover:text-white transition-colors w-10 h-10 flex items-center justify-center text-xl rounded-full hover:bg-white/10"
                     >
                         ✕
                     </button>
@@ -111,24 +80,20 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                 <div className="relative flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6 overscroll-contain">
                     
                     {/* Hero Banner */}
-                    <div className="relative bg-gradient-to-r from-cyan-600/30 via-blue-600/30 to-purple-600/30 rounded-xl p-4 sm:p-6 border border-white/10 overflow-hidden">
-                        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGRlZnM+PHBhdHRlcm4gaWQ9ImdyaWQiIHdpZHRoPSI0MCIgaGVpZ2h0PSI0MCIgcGF0dGVyblVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+PHBhdGggZD0iTSAwIDEwIEwgNDAgMTAgTSAxMCAwIEwgMTAgNDAiIGZpbGw9Im5vbmUiIHN0cm9rZT0icmdiYSgyNTUsMjU1LDI1NSwwLjAzKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-50" />
-                        <div className="relative">
-                            <h3 className="text-lg sm:text-xl font-bold text-white mb-2">🚀 Web3 Meets Nostalgia</h3>
-                            <p className="text-white/70 text-sm sm:text-base leading-relaxed">
-                                Remember the OG Club Penguin? We're bringing it back, but this time <span className="text-cyan-400 font-bold">YOU</span> own everything. 
-                                Powered by <span className="text-purple-400 font-bold">Solana</span>, secured by <span className="text-green-400 font-bold">x402</span>, 
-                                authenticated with <span className="text-yellow-400 font-bold">x403</span>.
-                            </p>
-                            <div className="mt-4 flex flex-wrap gap-2">
-                                <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-bold border border-green-500/30">✓ P2P PAYMENTS</span>
-                                <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs font-bold border border-purple-500/30">✓ DECENTRALIZED</span>
-                                <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded-full text-xs font-bold border border-cyan-500/30">✓ COMMUNITY OWNED</span>
-                            </div>
+                    <div className="relative bg-gradient-to-r from-cyan-600/30 via-blue-600/30 to-purple-600/30 rounded-xl p-4 sm:p-6 border border-white/10">
+                        <h3 className="text-lg sm:text-xl font-bold text-white mb-2">🚀 Web3 Meets Nostalgia</h3>
+                        <p className="text-white/70 text-sm sm:text-base leading-relaxed">
+                            Remember the OG Club Penguin? We're bringing it back, but this time <span className="text-cyan-400 font-bold">YOU</span> own everything. 
+                            Powered by <span className="text-purple-400 font-bold">Solana</span>, secured by <span className="text-green-400 font-bold">x402</span>.
+                        </p>
+                        <div className="mt-4 flex flex-wrap gap-2">
+                            <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-bold border border-green-500/30">✓ P2P PAYMENTS</span>
+                            <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs font-bold border border-purple-500/30">✓ DECENTRALIZED</span>
+                            <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded-full text-xs font-bold border border-cyan-500/30">✓ COMMUNITY OWNED</span>
                         </div>
                     </div>
                     
-                    {/* Token Utility Section */}
+                    {/* Token Utility */}
                     <div>
                         <h3 className="text-white font-bold text-base sm:text-lg mb-3 flex items-center gap-2">
                             <span className="text-2xl">💎</span>
@@ -136,10 +101,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                         </h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {features.map((feature, idx) => (
-                                <div 
-                                    key={idx}
-                                    className="bg-white/5 hover:bg-white/10 rounded-xl p-3 sm:p-4 border border-white/5 hover:border-cyan-500/30 transition-all group"
-                                >
+                                <div key={idx} className="bg-white/5 hover:bg-white/10 rounded-xl p-3 sm:p-4 border border-white/5 hover:border-cyan-500/30 transition-all group">
                                     <div className="flex items-start gap-3">
                                         <span className="text-2xl group-hover:scale-110 transition-transform">{feature.emoji}</span>
                                         <div>
@@ -152,16 +114,15 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                         </div>
                     </div>
                     
-                    {/* Universal Wagering Highlight */}
-                    <div className="relative bg-gradient-to-r from-orange-600/20 via-red-600/20 to-pink-600/20 rounded-xl p-4 sm:p-5 border border-orange-500/30 overflow-hidden">
-                        <div className="absolute top-0 right-0 text-6xl opacity-10">🎲</div>
+                    {/* Wagering Highlight */}
+                    <div className="relative bg-gradient-to-r from-orange-600/20 via-red-600/20 to-pink-600/20 rounded-xl p-4 sm:p-5 border border-orange-500/30">
                         <h3 className="text-lg sm:text-xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-pink-400 mb-2">
                             🔥 WAGER ANY SOLANA TOKEN
                         </h3>
                         <p className="text-white/70 text-sm leading-relaxed mb-3">
                             Tired of tokens with no utility? Bring them here. <span className="text-orange-400 font-bold">$BONK</span>, 
                             <span className="text-purple-400 font-bold"> $WIF</span>, <span className="text-green-400 font-bold">$POPCAT</span> - 
-                            every cult token becomes a gambling chip. We give utility to ALL Solana communities.
+                            every cult token becomes a gambling chip.
                         </p>
                         <div className="flex flex-wrap gap-2 text-xs">
                             <span className="px-2 py-1 bg-orange-500/30 text-orange-300 rounded-lg">🎯 Tic-Tac-Toe</span>
@@ -178,7 +139,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                             <span>Cult Partnerships</span>
                         </h3>
                         <p className="text-white/60 text-sm mb-3">
-                            We're not competing - we're collaborating. Every Solana community is welcome. Bring your cult, bring your tokens, let's build together.
+                            We're collaborating with every Solana community. Bring your cult, bring your tokens, let's build together.
                         </p>
                         <div className="flex flex-wrap gap-2">
                             {['🐕 DOG CULTS', '🐱 CAT CULTS', '🐸 FROG CULTS', '🎭 MEME CULTS', '🎮 GAMING CULTS', '💀 DEGEN CULTS'].map((cult, idx) => (
@@ -238,9 +199,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                     {/* Call to Action */}
                     <div className="bg-gradient-to-r from-cyan-500/20 to-purple-500/20 rounded-xl p-4 text-center border border-cyan-500/20">
                         <h3 className="text-xl font-black text-white mb-2">🌊 JOIN THE WADDLE</h3>
-                        <p className="text-white/60 text-sm mb-4">
-                            Be early. Build with us. The game-fi meta is here.
-                        </p>
+                        <p className="text-white/60 text-sm mb-4">Be early. Build with us. The game-fi meta is here.</p>
                         <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
                             <a 
                                 href="https://dexscreener.com/solana/5yfmefzrompokc2r9j8b1mzqututhywr9vrqmsxhzd3r"
@@ -261,7 +220,6 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                         </div>
                     </div>
                     
-                    {/* Spacer */}
                     <div className="h-4" />
                 </div>
                 
@@ -269,7 +227,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                 <div className="relative p-4 shrink-0 border-t border-white/5 bg-black/30">
                     <button
                         onClick={onClose}
-                        className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 active:from-cyan-600 active:to-purple-600 text-white rounded-xl font-bold text-sm transition-all hover:shadow-lg hover:shadow-cyan-500/20"
+                        className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white rounded-xl font-bold text-sm transition-all hover:shadow-lg hover:shadow-cyan-500/20"
                     >
                         LFG 🚀
                     </button>
@@ -280,4 +238,3 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
 };
 
 export default TokenomicsModal;
-

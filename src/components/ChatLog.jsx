@@ -265,17 +265,18 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose }) => {
                     </div>
                     
                     {/* Messages Container - fixed height with scroll */}
-                    <div className="chat-messages h-40 overflow-y-auto overscroll-contain scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+                    <div className="chat-messages h-40 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
                         <div className="p-3 space-y-1 min-h-full">
                             {localMessages.length === 0 ? (
                                 <div className="text-white/30 text-sm py-4 text-center">
                                     No messages yet
                                 </div>
                             ) : (
-                                localMessages.map((msg) => (
+                                localMessages.map((msg, idx) => (
                                     <div 
-                                        key={msg.id} 
-                                        className={`text-sm leading-relaxed break-words ${MESSAGE_COLORS[msg.type] || MESSAGE_COLORS.local}`}
+                                        key={`${msg.id}-${idx}`} 
+                                        className={`text-sm leading-relaxed break-words overflow-hidden ${MESSAGE_COLORS[msg.type] || MESSAGE_COLORS.local}`}
+                                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                                     >
                                         <span className="text-white/30 mr-1 text-xs">[{formatTime(msg.timestamp)}]</span>
                                         {msg.type === 'whisperIn' && (
@@ -347,7 +348,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose }) => {
         >
             {/* Messages Container */}
             <div 
-                className="chat-messages bg-black/70 backdrop-blur-sm overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent rounded-t-lg max-h-48"
+                className="chat-messages bg-black/70 backdrop-blur-sm overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent rounded-t-lg max-h-48"
             >
                 <div className="p-2 space-y-0.5">
                     {localMessages.length === 0 ? (
@@ -355,10 +356,11 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose }) => {
                             Press Enter to chat • /w name msg to whisper
                         </div>
                     ) : (
-                        localMessages.map((msg) => (
+                        localMessages.map((msg, idx) => (
                             <div 
-                                key={msg.id} 
-                                className={`text-xs leading-relaxed ${MESSAGE_COLORS[msg.type] || MESSAGE_COLORS.local}`}
+                                key={`${msg.id}-${idx}`} 
+                                className={`text-xs leading-relaxed break-words overflow-hidden ${MESSAGE_COLORS[msg.type] || MESSAGE_COLORS.local}`}
+                                style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
                             >
                                 <span className="text-white/30 mr-1">[{formatTime(msg.timestamp)}]</span>
                                 {msg.type === 'whisperIn' && (
@@ -375,7 +377,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose }) => {
                                         {msg.name}: 
                                     </span>
                                 )}
-                                <span className="ml-1">{msg.text || msg.displayText}</span>
+                                <span className="ml-1 break-words">{msg.text || msg.displayText}</span>
                             </div>
                         ))
                     )}

@@ -54,6 +54,35 @@ setInterval(() => {
     }
 }, TIME_BROADCAST_INTERVAL);
 
+// Broadcast room counts to players in town (for igloo occupancy bubbles)
+const ROOM_COUNTS_INTERVAL = 3000; // Every 3 seconds
+setInterval(() => {
+    // Build room counts object for igloo rooms
+    const roomCounts = {};
+    for (const [roomId, playerSet] of rooms) {
+        if (roomId.startsWith('igloo')) {
+            roomCounts[roomId] = playerSet.size;
+        }
+    }
+    
+    // Only broadcast if there are any igloo rooms with players OR if there are town players
+    const townPlayers = rooms.get('town');
+    if (!townPlayers || townPlayers.size === 0) return;
+    
+    const countsMessage = JSON.stringify({
+        type: 'room_counts',
+        counts: roomCounts
+    });
+    
+    // Send to all players in town
+    for (const playerId of townPlayers) {
+        const player = players.get(playerId);
+        if (player && player.ws && player.ws.readyState === 1) {
+            player.ws.send(countsMessage);
+        }
+    }
+}, ROOM_COUNTS_INTERVAL);
+
 // Create HTTP server to access request headers for IP
 const server = http.createServer();
 

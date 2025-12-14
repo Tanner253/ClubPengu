@@ -129,11 +129,18 @@ const VoxelWorld = ({
     const isGroundedRef = useRef(true);
     const jumpRequestedRef = useRef(false);
     
+    // Store igloo entry spawn position (so exiting returns to correct igloo)
+    const iglooEntrySpawnRef = useRef(null);
+    
     // Chat State (for local player bubble)
     const [activeBubble, setActiveBubble] = useState(null);
     const bubbleSpriteRef = useRef(null);
     const isAfkRef = useRef(false);
     const afkMessageRef = useRef(null);
+    
+    // Igloo Occupancy Bubbles
+    const iglooOccupancySpritesRef = useRef(new Map()); // Map of igloo id -> sprite
+    const [iglooOccupancy, setIglooOccupancy] = useState({}); // { igloo1: 2, igloo2: 0, ... }
     
     // AI State
     const aiAgentsRef = useRef([]);
@@ -263,6 +270,8 @@ const VoxelWorld = ({
     // Lighting refs for day/night cycle
     const sunLightRef = useRef(null);
     const ambientLightRef = useRef(null);
+    const propLightsRef = useRef([]); // Town prop lights (lamps, campfire, tree, etc.)
+    const lightsOnRef = useRef(true); // Track if lights are currently on
     
     // Snowfall refs
     const snowParticlesRef = useRef(null);
@@ -321,7 +330,7 @@ const VoxelWorld = ({
     
     // Room-specific portals/doors
     // Town portal positions are OFFSETS from center (centerX/Z added in checkPortals)
-    // Door positions are at the FRONT of buildings (z + d/2 + small offset)
+    // T-STREET LAYOUT - FULL MAP SCALE (220x220)
     const ROOM_PORTALS = {
         town: [
             { 
@@ -330,31 +339,113 @@ const VoxelWorld = ({
                 emoji: '⛩️', 
                 description: 'Enter the Dojo',
                 targetRoom: 'dojo',
-                // Dojo at (0, -25), size d=14, door at front: z = -25 + 7 + 1.5 = -16.5
-                position: { x: 0, z: -16.5 },
+                // Dojo at (0, 70), rotated π (door faces north)
+                position: { x: 0, z: 62 },
                 doorRadius: 3.5
             },
+            // NORTH ROW IGLOOS (north of T-bar, rotation: 0, door faces SOUTH toward street)
+            // Igloos at z ~ -75, doors at z ~ -70, exit spawn at z ~ -62 (on street)
             { 
                 id: 'igloo-1', 
-                name: 'IGLOO', 
+                name: 'IGLOO 1', 
                 emoji: '🏠', 
                 description: 'Enter Igloo',
                 targetRoom: 'igloo1',
-                // Igloo 1 at (-40, 32) offset, rotated 0.7π (entrance faces southeast)
-                // Entrance at: center + 4.2 units in direction of rotation
-                position: { x: -36.5, z: 29.5 },
-                doorRadius: 3
+                position: { x: -75, z: -70 },  // Door position (south of igloo)
+                doorRadius: 3,
+                exitSpawnPos: { x: -75, z: -62 }  // Spawn on street when exiting
             },
             { 
                 id: 'igloo-2', 
-                name: 'IGLOO', 
+                name: 'IGLOO 2', 
                 emoji: '🏠', 
                 description: 'Enter Igloo',
                 targetRoom: 'igloo2',
-                // Igloo 2 at (-27, 30) offset, rotated 0.6π (entrance faces east-southeast)
-                // Entrance at: center + 4.2 units in direction of rotation  
-                position: { x: -23, z: 28.5 },
-                doorRadius: 3
+                position: { x: -50, z: -73 },
+                doorRadius: 3,
+                exitSpawnPos: { x: -50, z: -62 }
+            },
+            { 
+                id: 'igloo-3', 
+                name: 'IGLOO 3', 
+                emoji: '🏠', 
+                description: 'Enter Igloo',
+                targetRoom: 'igloo3',
+                position: { x: -25, z: -70 },
+                doorRadius: 3,
+                exitSpawnPos: { x: -25, z: -62 }
+            },
+            { 
+                id: 'igloo-4', 
+                name: 'IGLOO 4', 
+                emoji: '🏠', 
+                description: 'Enter Igloo',
+                targetRoom: 'igloo4',
+                position: { x: 25, z: -70 },
+                doorRadius: 3,
+                exitSpawnPos: { x: 25, z: -62 }
+            },
+            { 
+                id: 'igloo-5', 
+                name: 'IGLOO 5', 
+                emoji: '🏠', 
+                description: 'Enter Igloo',
+                targetRoom: 'igloo1',  // Reuse igloo1 room
+                position: { x: 50, z: -73 },
+                doorRadius: 3,
+                exitSpawnPos: { x: 50, z: -62 }  // Exit at THIS igloo, not igloo-1
+            },
+            { 
+                id: 'igloo-6', 
+                name: 'IGLOO 6', 
+                emoji: '🏠', 
+                description: 'Enter Igloo',
+                targetRoom: 'igloo2',  // Reuse igloo2 room
+                position: { x: 75, z: -70 },
+                doorRadius: 3,
+                exitSpawnPos: { x: 75, z: -62 }  // Exit at THIS igloo
+            },
+            // SOUTH ROW IGLOOS (south of T-bar, rotation: π, door faces NORTH toward street)
+            // Igloos at z ~ -15, doors at z ~ -20, exit spawn at z ~ -28 (on street)
+            { 
+                id: 'igloo-7', 
+                name: 'IGLOO 7', 
+                emoji: '🏠', 
+                description: 'Enter Igloo',
+                targetRoom: 'igloo3',  // Reuse igloo3 room
+                position: { x: -70, z: -20 },  // Door is NORTH of igloo (faces street)
+                doorRadius: 3,
+                exitSpawnPos: { x: -70, z: -28 }  // Exit on street
+            },
+            { 
+                id: 'igloo-8', 
+                name: 'IGLOO 8', 
+                emoji: '🏠', 
+                description: 'Enter Igloo',
+                targetRoom: 'igloo4',  // Reuse igloo4 room
+                position: { x: -40, z: -23 },
+                doorRadius: 3,
+                exitSpawnPos: { x: -40, z: -28 }
+            },
+            { 
+                id: 'igloo-9', 
+                name: 'IGLOO 9', 
+                emoji: '🏠', 
+                description: 'Enter Igloo',
+                targetRoom: 'igloo1',  // Reuse igloo1 room
+                position: { x: 40, z: -23 },
+                doorRadius: 3,
+                exitSpawnPos: { x: 40, z: -28 }
+            },
+            { 
+                id: 'igloo-10', 
+                name: 'IGLOO 10', 
+                emoji: '🏠', 
+                description: 'Enter Igloo',
+                targetRoom: 'igloo2',  // Reuse igloo2 room
+                position: { x: 70, z: -20 },
+                doorRadius: 3,
+                exitSpawnPos: { x: 70, z: -28 }
             },
             { 
                 id: 'market', 
@@ -362,8 +453,8 @@ const VoxelWorld = ({
                 emoji: '🛒', 
                 description: 'Coming Soon',
                 targetRoom: null,
-                // Market at (-22, -8), size d=10, door at front: z = -8 + 5 + 1.5 = -1.5
-                position: { x: -22, z: -1.5 },
+                // Gift Shop at (45, 35), door faces west
+                position: { x: 38, z: 35 },
                 doorRadius: 3
             },
             { 
@@ -372,8 +463,8 @@ const VoxelWorld = ({
                 emoji: '🍕', 
                 description: 'Enter Pizza Parlor',
                 targetRoom: 'pizza',
-                // Pizza at (25, 5), size d=10, door at front: z = 5 + 5 + 1.5 = 11.5
-                position: { x: 25, z: 11.5 },
+                // Pizza at (-45, 35), door faces east
+                position: { x: -38, z: 35 },
                 doorRadius: 3
             }
         ],
@@ -384,11 +475,10 @@ const VoxelWorld = ({
                 emoji: '🚪', 
                 description: 'Return to Town',
                 targetRoom: 'town',
-                position: { x: 0, z: 14 }, // Exit door inside pizza parlor
+                position: { x: 0, z: 14 },
                 doorRadius: 3,
-                // Spawn at pizza entrance in town (OFFSET from center, like dojo)
-                // Pizza building at { x: 25, z: 5 }, door at z ≈ 12, spawn in front
-                exitSpawnPos: { x: 25, z: 14 }
+                // Spawn outside pizza door
+                exitSpawnPos: { x: -38, z: 35 }
             }
         ],
         igloo1: [
@@ -398,10 +488,9 @@ const VoxelWorld = ({
                 emoji: '🚪', 
                 description: 'Return to Town',
                 targetRoom: 'town',
-                position: { x: 0, z: 13.5 }, // Exit door inside igloo room
+                position: { x: 0, z: 13.5 },
                 doorRadius: 3,
-                // Spawn at igloo 1 entrance in town when exiting (outside doorway)
-                exitSpawnPos: { x: -34, z: 27 }
+                exitSpawnPos: { x: -75, z: -55 }  // On street south of igloo
             }
         ],
         igloo2: [
@@ -411,10 +500,33 @@ const VoxelWorld = ({
                 emoji: '🚪', 
                 description: 'Return to Town',
                 targetRoom: 'town',
-                position: { x: 0, z: 13.5 }, // Exit door inside igloo room
+                position: { x: 0, z: 13.5 },
                 doorRadius: 3,
-                // Spawn at igloo 2 entrance in town when exiting (outside doorway)
-                exitSpawnPos: { x: -20, z: 27 }
+                exitSpawnPos: { x: -50, z: -55 }  // On street south of igloo
+            }
+        ],
+        igloo3: [
+            { 
+                id: 'igloo3-exit', 
+                name: 'EXIT', 
+                emoji: '🚪', 
+                description: 'Return to Town',
+                targetRoom: 'town',
+                position: { x: 0, z: 13.5 },
+                doorRadius: 3,
+                exitSpawnPos: { x: 50, z: -55 }  // On street south of igloo
+            }
+        ],
+        igloo4: [
+            { 
+                id: 'igloo4-exit', 
+                name: 'EXIT', 
+                emoji: '🚪', 
+                description: 'Return to Town',
+                targetRoom: 'town',
+                position: { x: 0, z: 13.5 },
+                doorRadius: 3,
+                exitSpawnPos: { x: 75, z: -55 }  // On street south of igloo
             }
         ],
         dojo: [
@@ -426,8 +538,8 @@ const VoxelWorld = ({
                 targetRoom: 'town',
                 position: { x: 0, z: 16 },
                 doorRadius: 3,
-                // Spawn at dojo entrance in town when exiting
-                exitSpawnPos: { x: 0, z: -14 }
+                // Spawn at dojo entrance in town when exiting (dojo at z: 70, door faces north)
+                exitSpawnPos: { x: 0, z: 58 }
             },
             { 
                 id: 'sensei', 
@@ -442,6 +554,8 @@ const VoxelWorld = ({
     };
     
     // Building/Door Definitions for town (visual only)
+    // T-STREET LAYOUT - FULL MAP SCALE (220x220)
+    // Dojo at base of T (south), Nightclub at top (north), shops on sides
     const BUILDINGS = [
         { 
             id: 'dojo', 
@@ -450,10 +564,11 @@ const VoxelWorld = ({
             description: 'Enter to play Card Jitsu!',
             color: 0xc0392b, // Red roof
             wallColor: 0x7f8c8d,
-            position: { x: 0, z: -25 },
-            doorRadius: 3, // How close to door to trigger
+            position: { x: 0, z: 70 },    // Far south - base of T stem
+            doorRadius: 3,
             size: { w: 14, h: 8, d: 14 },
-            roofType: 'pagoda'
+            roofType: 'pagoda',
+            rotation: Math.PI  // Door faces north toward campfire
         },
         { 
             id: 'market', 
@@ -463,10 +578,11 @@ const VoxelWorld = ({
             gameId: null,
             color: 0xf39c12, // Gold roof
             wallColor: 0xecf0f1,
-            position: { x: -22, z: -8 },
+            position: { x: 45, z: 35 },   // East side of T stem
             doorRadius: 3,
             size: { w: 10, h: 6, d: 10 },
-            roofType: 'flat'
+            roofType: 'flat',
+            rotation: -Math.PI / 2  // Door faces west toward street
         },
         { 
             id: 'plaza', 
@@ -476,21 +592,22 @@ const VoxelWorld = ({
             gameId: null,
             color: 0xe74c3c, // Red/orange
             wallColor: 0xf5deb3,
-            position: { x: 25, z: 5 },
+            position: { x: -45, z: 35 },  // West side of T stem
             doorRadius: 3,
             size: { w: 12, h: 7, d: 10 },
-            roofType: 'slanted'
+            roofType: 'slanted',
+            rotation: Math.PI / 2  // Door faces east toward street
         }
     ];
     
-    // City Generation
-    const CITY_SIZE = 40; 
+    // City Generation - EXPANDED for T-street layout
+    const CITY_SIZE = 55;  // 55 * 4 = 220 (expanded from 40 * 4 = 160)
     const BUILDING_SCALE = 4;
     
     // Create Chat Bubble Sprite
-    // Height constants for different character types
-    const BUBBLE_HEIGHT_PENGUIN = 4.5;
-    const BUBBLE_HEIGHT_MARCUS = 5.5; // Marcus is taller but not too high to block view
+    // Height constants for different character types (raised higher to be less intrusive)
+    const BUBBLE_HEIGHT_PENGUIN = 5.8;
+    const BUBBLE_HEIGHT_MARCUS = 6.8; // Marcus is taller
     const NAME_HEIGHT_PENGUIN = 5;
     const NAME_HEIGHT_MARCUS = 6;
     
@@ -503,23 +620,56 @@ const VoxelWorld = ({
         
         ctx.font = `bold ${fontSize}px sans-serif`;
         
-        // Word Wrap Logic
-        const maxLineWidth = 600; 
-        const words = message.split(' ');
+        // Word Wrap Logic - handles both words and very long strings without spaces
+        const maxLineWidth = 500; 
+        const maxCharsPerLine = 25; // Force break for very long words
         let lines = [];
-        let currentLine = words[0];
+        
+        // First, break very long words into chunks
+        const breakLongWord = (word) => {
+            const chunks = [];
+            while (word.length > maxCharsPerLine) {
+                chunks.push(word.slice(0, maxCharsPerLine));
+                word = word.slice(maxCharsPerLine);
+            }
+            if (word.length > 0) chunks.push(word);
+            return chunks;
+        };
+        
+        const words = message.split(' ');
+        let currentLine = '';
 
-        for (let i = 1; i < words.length; i++) {
-            const word = words[i];
-            const width = ctx.measureText(currentLine + " " + word).width;
-            if (width < maxLineWidth) {
-                currentLine += " " + word;
+        for (let i = 0; i < words.length; i++) {
+            let word = words[i];
+            
+            // Break very long words
+            if (word.length > maxCharsPerLine) {
+                // Push current line if not empty
+                if (currentLine) {
+                    lines.push(currentLine);
+                    currentLine = '';
+                }
+                // Add broken word chunks as separate lines
+                const chunks = breakLongWord(word);
+                for (let j = 0; j < chunks.length - 1; j++) {
+                    lines.push(chunks[j]);
+                }
+                currentLine = chunks[chunks.length - 1];
             } else {
-                lines.push(currentLine);
-                currentLine = word;
+                const testLine = currentLine ? currentLine + " " + word : word;
+                const width = ctx.measureText(testLine).width;
+                if (width < maxLineWidth) {
+                    currentLine = testLine;
+                } else {
+                    if (currentLine) lines.push(currentLine);
+                    currentLine = word;
+                }
             }
         }
-        lines.push(currentLine);
+        if (currentLine) lines.push(currentLine);
+        
+        // Ensure at least one line
+        if (lines.length === 0) lines.push(message.slice(0, maxCharsPerLine) || ' ');
         
         // Canvas Dimensions
         const textHeight = lines.length * (fontSize * 1.2);
@@ -571,10 +721,97 @@ const VoxelWorld = ({
         const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, depthWrite: false }); 
         const sprite = new THREE.Sprite(material);
         
-        const scale = 0.02;
+        // Scale down larger messages to prevent screen coverage
+        // Base scale for short messages, shrink for longer ones
+        const baseScale = 0.015;
+        const messageLength = message.length;
+        const lineCount = lines.length;
+        
+        // Scale factor: shrink based on length and line count
+        // Short messages (< 30 chars, 1 line): full size
+        // Medium messages (30-80 chars, 1-2 lines): 80% size
+        // Long messages (80-150 chars, 2-4 lines): 60% size  
+        // Very long messages (150+ chars, 4+ lines): 45% size
+        let scaleFactor = 1.0;
+        if (messageLength > 150 || lineCount > 4) {
+            scaleFactor = 0.45;
+        } else if (messageLength > 80 || lineCount > 2) {
+            scaleFactor = 0.60;
+        } else if (messageLength > 30 || lineCount > 1) {
+            scaleFactor = 0.80;
+        }
+        
+        const scale = baseScale * scaleFactor;
         sprite.scale.set(w * scale, h * scale, 1);
         sprite.position.set(0, height, 0);
         sprite.renderOrder = 999;
+        
+        return sprite;
+    };
+    
+    // Create Igloo Occupancy Bubble Sprite
+    const createIglooOccupancySprite = (count) => {
+        const THREE = window.THREE;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const fontSize = 36;
+        const padding = 16;
+        const text = count > 0 ? `🐧 ${count}` : '🐧 empty';
+        
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        const textWidth = ctx.measureText(text).width;
+        
+        const w = textWidth + padding * 2;
+        const h = fontSize + padding * 2;
+        
+        canvas.width = w;
+        canvas.height = h;
+        
+        // Re-apply font after resize
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        
+        // Draw bubble background - semi-transparent dark blue
+        ctx.fillStyle = count > 0 ? 'rgba(30, 60, 100, 0.85)' : 'rgba(60, 60, 80, 0.75)';
+        ctx.strokeStyle = count > 0 ? '#4a9eff' : '#666';
+        ctx.lineWidth = 3;
+        
+        const r = 12;
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(w - r, 0);
+        ctx.quadraticCurveTo(w, 0, w, r);
+        ctx.lineTo(w, h - r);
+        ctx.quadraticCurveTo(w, h, w - r, h);
+        ctx.lineTo(r, h);
+        ctx.quadraticCurveTo(0, h, 0, h - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        
+        ctx.fill();
+        ctx.stroke();
+        
+        // Draw text
+        ctx.fillStyle = count > 0 ? '#ffffff' : '#aaaaaa';
+        ctx.fillText(text, w / 2, h / 2);
+        
+        const texture = new THREE.CanvasTexture(canvas);
+        const material = new THREE.SpriteMaterial({ 
+            map: texture, 
+            depthTest: false, 
+            depthWrite: false,
+            transparent: true
+        });
+        const sprite = new THREE.Sprite(material);
+        
+        const scale = 0.012;
+        sprite.scale.set(w * scale, h * scale, 1);
+        sprite.position.y = 8; // Height above igloo
+        sprite.renderOrder = 998;
+        sprite.visible = false; // Start hidden, show when player is close
         
         return sprite;
     };
@@ -774,20 +1011,11 @@ const VoxelWorld = ({
             const WATER_ARCTIC = '#1A4A6A';
             const WATER_DEEP = '#0A3A5A';
             
-            // All tiles are now ice (type 2) - no procedural buildings
+            // All tiles are now ice (type 2) - no water, walls handle boundaries
             for(let x=0; x<CITY_SIZE; x++) {
                 map[x] = [];
                 for(let z=0; z<CITY_SIZE; z++) {
-                    const dx = x - CITY_SIZE/2;
-                    const dz = z - CITY_SIZE/2;
-                    const dist = Math.sqrt(dx*dx + dz*dz);
-                    
-                    // Ice ground, water at edges
-                    if (dist > CITY_SIZE/2 - 2) {
-                        map[x][z] = 3; // Water at edges
-                    } else {
-                        map[x][z] = 2; // Ice ground
-                    }
+                    map[x][z] = 2; // All ice ground - walls handle boundaries
                 }
             }
             
@@ -830,42 +1058,7 @@ const VoxelWorld = ({
             icePlane.receiveShadow = true;
             scene.add(icePlane);
             
-            // Water ring around the island
-            const waterGroup = { mats: [], cols: [] };
-            for(let x=0; x<CITY_SIZE; x++) {
-                for(let z=0; z<CITY_SIZE; z++) {
-                    const type = map[x][z];
-                    if (type === 3) {
-                        const px = x * BUILDING_SCALE;
-                        const pz = z * BUILDING_SCALE;
-                        dummy.position.set(px, -0.4, pz);
-                        dummy.rotation.set(0, 0, 0);
-                        dummy.scale.set(BUILDING_SCALE, 0.1, BUILDING_SCALE);
-                        dummy.updateMatrix();
-                        
-                        // Darker water variation
-                        const waterColor = new THREE.Color(Math.random() > 0.5 ? WATER_ARCTIC : WATER_DEEP);
-                        waterGroup.mats.push(dummy.matrix.clone());
-                        waterGroup.cols.push(waterColor.r, waterColor.g, waterColor.b);
-                    }
-                }
-            }
-            
-            // Create water instances
-            if (waterGroup.mats.length > 0) {
-                const waterGeo = new THREE.BoxGeometry(1, 1, 1);
-                const waterMat = new THREE.MeshStandardMaterial({
-                    vertexColors: true,
-                    roughness: 0.6, // Reduce water reflections
-                    metalness: 0, // No metallic shine
-                });
-                const waterMesh = new THREE.InstancedMesh(waterGeo, waterMat, waterGroup.mats.length);
-                waterGroup.mats.forEach((m, i) => waterMesh.setMatrixAt(i, m));
-                const cArray = new Float32Array(waterGroup.cols);
-                waterGeo.setAttribute('color', new THREE.InstancedBufferAttribute(cArray, 3));
-                waterMesh.receiveShadow = true;
-                scene.add(waterMesh);
-            }
+            // No water ring - walls handle boundaries now
             
             // ==================== SPAWN TOWN CENTER PROPS ====================
             // Create TownCenter room instance and spawn all props (trees, igloos, lamps, etc.)
@@ -873,7 +1066,53 @@ const VoxelWorld = ({
             townCenterRef.current = townCenter;
             const { meshes: propMeshes, lights: propLights, collisionSystem } = townCenter.spawn(scene);
             
+            // Store prop lights for day/night cycle toggling
+            propLightsRef.current = propLights;
+            
             console.log(`Town Center spawned: ${propMeshes.length} props, ${propLights.length} lights`);
+            
+            // ==================== IGLOO OCCUPANCY BUBBLES ====================
+            // Create occupancy indicator sprites above each igloo
+            const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
+            const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+            
+            const iglooData = [
+                { id: 'igloo1', x: -75, z: -75, room: 'igloo1' },
+                { id: 'igloo2', x: -50, z: -78, room: 'igloo2' },
+                { id: 'igloo3', x: -25, z: -75, room: 'igloo3' },
+                { id: 'igloo4', x: 25, z: -75, room: 'igloo4' },
+                { id: 'igloo5', x: 50, z: -78, room: 'igloo1' },
+                { id: 'igloo6', x: 75, z: -75, room: 'igloo2' },
+                { id: 'igloo7', x: -70, z: -15, room: 'igloo3' },
+                { id: 'igloo8', x: -40, z: -18, room: 'igloo4' },
+                { id: 'igloo9', x: 40, z: -18, room: 'igloo1' },
+                { id: 'igloo10', x: 70, z: -15, room: 'igloo2' },
+            ];
+            
+            // Clear any existing sprites
+            iglooOccupancySpritesRef.current.forEach(sprite => {
+                if (sprite.parent) sprite.parent.remove(sprite);
+            });
+            iglooOccupancySpritesRef.current.clear();
+            
+            // Create sprite for each igloo
+            iglooData.forEach(igloo => {
+                const sprite = createIglooOccupancySprite(0); // Start with 0 (empty)
+                sprite.position.set(
+                    townCenterX + igloo.x,
+                    8, // Height above igloo
+                    townCenterZ + igloo.z
+                );
+                sprite.userData.iglooId = igloo.id;
+                sprite.userData.iglooRoom = igloo.room;
+                sprite.userData.iglooX = townCenterX + igloo.x;
+                sprite.userData.iglooZ = townCenterZ + igloo.z;
+                sprite.visible = false; // Start hidden, show when player is close
+                scene.add(sprite);
+                iglooOccupancySpritesRef.current.set(igloo.id, sprite);
+            });
+            
+            console.log(`Created ${iglooOccupancySpritesRef.current.size} igloo occupancy sprites`);
             
             return { butterflyGroup: null, townCenter }; // No butterflies in arctic
         };
@@ -2171,15 +2410,17 @@ const VoxelWorld = ({
         if (room === 'town') {
             const cityResult = generateCity();
             butterflyGroup = cityResult.butterflyGroup;
+            const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
+            const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
             roomData = {
-                bounds: null, // Town uses tile-based collision
-                spawnPos: { x: (CITY_SIZE/2) * BUILDING_SCALE, z: (CITY_SIZE/2) * BUILDING_SCALE + 10 }
+                bounds: null, // Town uses wall collision
+                spawnPos: { x: townCenterX, z: townCenterZ + 85 } // South of dojo, facing north
             };
         } else if (room === 'dojo') {
             roomData = generateDojoRoom();
         } else if (room === 'pizza') {
             roomData = generatePizzaRoom();
-        } else if (room === 'igloo1' || room === 'igloo2') {
+        } else if (room.startsWith('igloo')) {
             roomData = generateIglooRoom();
             // Request ball sync from server when entering igloo
             if (mpRequestBallSync) {
@@ -2302,15 +2543,26 @@ const VoxelWorld = ({
                 centerZ + building.position.z
             );
             
+            // Apply building rotation (for T-street layout)
+            if (building.rotation) {
+                buildingGroup.rotation.y = building.rotation;
+            }
+            
             scene.add(buildingGroup);
+            
+            // Calculate door position based on rotation
+            const doorOffset = building.size.d / 2 + 1.5;
+            const rot = building.rotation || 0;
+            const doorX = centerX + building.position.x + Math.sin(rot) * doorOffset;
+            const doorZ = centerZ + building.position.z + Math.cos(rot) * doorOffset;
             
             // Store building mesh for visuals and portal detection
             portalsRef.current.push({ 
                 ...building, 
                 mesh: buildingGroup,
                 doorPosition: {
-                    x: centerX + building.position.x,
-                    z: centerZ + building.position.z + building.size.d / 2 + 1.5
+                    x: doorX,
+                    z: doorZ
                 },
                 radius: building.doorRadius
             });
@@ -2321,6 +2573,10 @@ const VoxelWorld = ({
         // Material cache - reuse materials for same colors (HUGE performance gain)
         const materialCache = new Map();
         const getMaterial = (color) => {
+            // Guard against undefined/null colors
+            if (color === undefined || color === null) {
+                color = 0x888888; // Default gray
+            }
             const colorKey = typeof color === 'string' ? color : color.toString();
             if (!materialCache.has(colorKey)) {
                 materialCache.set(colorKey, new THREE.MeshStandardMaterial({ color }));
@@ -2900,15 +3156,23 @@ const VoxelWorld = ({
                 console.warn('Failed to load saved position:', e);
             }
             
-            // If no saved position, use default spawn
+            // If no saved position, use default spawn (south of map, facing north toward town)
             if (!loadedFromStorage) {
-                posRef.current = { x: (CITY_SIZE/2) * BUILDING_SCALE, y: 0, z: (CITY_SIZE/2) * BUILDING_SCALE + 10 };
+                const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
+                const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+                // Spawn south of the dojo, facing north toward the action
+                posRef.current = { x: townCenterX, y: 0, z: townCenterZ + 85 };
+                rotRef.current = Math.PI; // Face north (toward -Z direction)
             }
         } else if (roomData && roomData.spawnPos) {
             // Other rooms: use room's spawn position
             posRef.current = { x: roomData.spawnPos.x, y: 0, z: roomData.spawnPos.z };
         } else {
-            posRef.current = { x: (CITY_SIZE/2) * BUILDING_SCALE, y: 0, z: (CITY_SIZE/2) * BUILDING_SCALE + 10 };
+            // Fallback spawn (same as town default)
+            const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
+            const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+            posRef.current = { x: townCenterX + 0.4, y: 0, z: townCenterZ - 27.2 };
+            rotRef.current = 0; // Face north
         }
 
         // Spawn player puffle if equipped (ensure it's a Puffle instance)
@@ -3293,17 +3557,18 @@ const VoxelWorld = ({
                         m.position.y = 0.8;
                         m.rotation.x = 0;
                     }
-                }
-                // While seated, don't move and maintain seat height
-                velRef.current.x = 0;
-                velRef.current.z = 0;
-                velRef.current.y = 0; // No vertical velocity while seated
-                
-                // Keep player at seat height
-                if (seatedRef.current.seatHeight) {
-                    posRef.current.y = seatedRef.current.seatHeight;
-                    if (playerRef.current) {
-                        playerRef.current.position.y = seatedRef.current.seatHeight;
+                } else {
+                    // While seated (no movement input), don't move and maintain seat height
+                    velRef.current.x = 0;
+                    velRef.current.z = 0;
+                    velRef.current.y = 0; // No vertical velocity while seated
+                    
+                    // Keep player at seat height
+                    if (seatedRef.current && seatedRef.current.seatHeight) {
+                        posRef.current.y = seatedRef.current.seatHeight;
+                        if (playerRef.current) {
+                            playerRef.current.position.y = seatedRef.current.seatHeight;
+                        }
                     }
                 }
             }
@@ -3523,7 +3788,7 @@ const VoxelWorld = ({
                         }
                     }
                 }
-            } else if ((roomRef.current === 'igloo1' || roomRef.current === 'igloo2') && roomData && roomData.bounds) {
+            } else if (roomRef.current.startsWith('igloo') && roomData && roomData.bounds) {
                 // Igloos use CIRCULAR bounds to match dome shape
                 const b = roomData.bounds;
                 const playerRadius = 0.8;
@@ -3820,15 +4085,14 @@ const VoxelWorld = ({
             }
             
             if (roomRef.current !== 'town' && roomRef.current !== 'pizza') {
-                // Fallback: Town uses tile-based collision (water at edges) + building collision
-                const gridX = Math.floor((nextX + BUILDING_SCALE/2) / BUILDING_SCALE);
-                const gridZ = Math.floor((nextZ + BUILDING_SCALE/2) / BUILDING_SCALE);
+                // Fallback: Non-town rooms use different collision
+                // Town uses wall boundaries now, not water
+                const WALL_MARGIN = 10;
+                const MAP_SIZE = CITY_SIZE * BUILDING_SCALE;
                 
-                if (gridX >= 0 && gridX < CITY_SIZE && gridZ >= 0 && gridZ < CITY_SIZE) {
-                    const type = mapRef.current?.[gridX]?.[gridZ];
-                    if (type === 3) collided = true; // Can't walk into water
-                } else {
-                    collided = true; // Can't walk off map
+                if (nextX < WALL_MARGIN || nextX > MAP_SIZE - WALL_MARGIN ||
+                    nextZ < WALL_MARGIN || nextZ > MAP_SIZE - WALL_MARGIN) {
+                    collided = true; // Can't walk past walls
                 }
                 
                 // Check collision with custom buildings (dojo, market, pizza)
@@ -3858,13 +4122,13 @@ const VoxelWorld = ({
             }
             
             // Update position (use clamped finalX/finalZ for all rooms)
-            if (roomRef.current === 'dojo' || roomRef.current === 'igloo1' || roomRef.current === 'igloo2') {
+            if (roomRef.current === 'dojo' || roomRef.current.startsWith('igloo')) {
                 // Dojo/Igloo: always use clamped position
                 posRef.current.x = finalX;
                 posRef.current.z = finalZ;
                 
                 // Check igloo furniture proximity for interaction
-                if ((roomRef.current === 'igloo1' || roomRef.current === 'igloo2') && roomData && roomData.furniture) {
+                if (roomRef.current.startsWith('igloo') && roomData && roomData.furniture) {
                     let nearFurniture = null;
                     for (const furn of roomData.furniture) {
                         const dx = finalX - furn.position.x;
@@ -4852,52 +5116,100 @@ const VoxelWorld = ({
                             
                             if (ai.currentRoom === 'town') {
                                 const walkChoice = Math.random();
-                                if (walkChoice < 0.15) {
+                                if (walkChoice < 0.12) {
                                     // Walk towards dojo door
                                     const doorX = dojoBxCached + (Math.random() - 0.5) * 4;
                                     const doorZ = dojoBzCached + dojoHdCached + 2;
                                     ai.target = { x: doorX, z: doorZ };
-                                } else if (walkChoice < 0.30) {
+                                } else if (walkChoice < 0.24) {
                                     // Walk towards pizza door
                                     const doorX = pizzaBx + (Math.random() - 0.5) * 4;
                                     const doorZ = pizzaDoorZ + 2;
                                     ai.target = { x: doorX, z: doorZ };
-                                } else if (walkChoice < 0.40) {
-                                    // Walk to campfire/igloo village area
+                                } else if (walkChoice < 0.35) {
+                                    // Walk to campfire area (center of T intersection)
                                     ai.target = { 
-                                        x: centerX - 32 + (Math.random() - 0.5) * 12, 
-                                        z: centerZ + 17 + (Math.random() - 0.5) * 10 
+                                        x: centerX + (Math.random() - 0.5) * 15, 
+                                        z: centerZ + (Math.random() - 0.5) * 15 
                                     };
-                                } else if (walkChoice < 0.50) {
-                                    // Walk to plaza center (benches)
+                                } else if (walkChoice < 0.45) {
+                                    // Walk to Christmas tree area (east side)
                                     ai.target = { 
-                                        x: centerX + (Math.random() - 0.5) * 10, 
-                                        z: centerZ + 3 + Math.random() * 5 
+                                        x: centerX + 29 + (Math.random() - 0.5) * 8, 
+                                        z: centerZ - 1 + (Math.random() - 0.5) * 8 
+                                    };
+                                } else if (walkChoice < 0.55) {
+                                    // Walk along the top of the T (horizontal street)
+                                    ai.target = { 
+                                        x: centerX + (Math.random() - 0.5) * 80, 
+                                        z: centerZ - 15 + (Math.random() - 0.5) * 10 
+                                    };
+                                } else if (walkChoice < 0.65) {
+                                    // Walk along T-bar street near igloos (but NOT into igloos)
+                                    // Stay on the street (z around centerZ - 45, between the two rows of igloos)
+                                    const isLeft = Math.random() > 0.5;
+                                    ai.target = { 
+                                        x: centerX + (isLeft ? -50 : 50) + (Math.random() - 0.5) * 20, 
+                                        z: centerZ - 45 + (Math.random() - 0.5) * 15  // Stay on street
                                     };
                                 } else {
-                                    // Random walk in town - avoid buildings
+                                    // Random walk in town - avoid buildings, stay within walls
                                     let tx, tz;
                                     let attempts = 0;
                                     let validTarget = false;
+                                    const mapMargin = 15; // Stay away from wall boundaries
                                     
                                     do {
-                                        tx = centerX + (Math.random()-0.5) * 55;
-                                        tz = centerZ + (Math.random()-0.5) * 55;
+                                        tx = centerX + (Math.random()-0.5) * 180; // Larger map
+                                        tz = centerZ + (Math.random()-0.5) * 180;
                                         validTarget = true;
                                         
-                                        for (const building of BUILDINGS) {
-                                            const bx = centerX + building.position.x;
-                                            const bz = centerZ + building.position.z;
-                                            const hw = building.size.w / 2 + 3;
-                                            const hd = building.size.d / 2 + 3;
+                                        // Check wall boundaries
+                                        if (tx < mapMargin || tx > CITY_SIZE * BUILDING_SCALE - mapMargin ||
+                                            tz < mapMargin || tz > CITY_SIZE * BUILDING_SCALE - mapMargin) {
+                                            validTarget = false;
+                                        }
+                                        
+                                        // Check against all buildings
+                                        if (validTarget) {
+                                            for (const building of BUILDINGS) {
+                                                const bx = centerX + building.position.x;
+                                                const bz = centerZ + building.position.z;
+                                                const hw = building.size.w / 2 + 4;
+                                                const hd = building.size.d / 2 + 4;
+                                                
+                                                if (tx > bx - hw && tx < bx + hw && tz > bz - hd && tz < bz + hd) {
+                                                    validTarget = false;
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                        
+                                        // Check against igloo positions (AI cannot enter igloos)
+                                        if (validTarget) {
+                                            const iglooPositions = [
+                                                // North row igloos
+                                                { x: -75, z: -75 }, { x: -50, z: -78 }, { x: -25, z: -75 },
+                                                { x: 25, z: -75 }, { x: 50, z: -78 }, { x: 75, z: -75 },
+                                                // South row igloos  
+                                                { x: -70, z: -15 }, { x: -40, z: -18 },
+                                                { x: 40, z: -18 }, { x: 70, z: -15 }
+                                            ];
+                                            const iglooRadius = 8; // Keep AI away from igloo centers
                                             
-                                            if (tx > bx - hw && tx < bx + hw && tz > bz - hd && tz < bz + hd) {
-                                                validTarget = false;
-                                                break;
+                                            for (const igloo of iglooPositions) {
+                                                const ix = centerX + igloo.x;
+                                                const iz = centerZ + igloo.z;
+                                                const dx = tx - ix;
+                                                const dz = tz - iz;
+                                                if (Math.sqrt(dx*dx + dz*dz) < iglooRadius) {
+                                                    validTarget = false;
+                                                    break;
+                                                }
                                             }
                                         }
                                         attempts++;
-                                    } while (!validTarget && attempts < 5);
+                                    } while (!validTarget && attempts < 8);
                                     
                                     ai.target = { x: tx, z: tz };
                                 }
@@ -4965,15 +5277,14 @@ const VoxelWorld = ({
                         
                         // Collision depends on room
                         if (ai.currentRoom === 'town') {
-                            // Town grid collision (water at edges)
-                            const gridX = Math.floor((nextX + BUILDING_SCALE/2) / BUILDING_SCALE);
-                            const gridZ = Math.floor((nextZ + BUILDING_SCALE/2) / BUILDING_SCALE);
+                            // Town wall collision - use wall boundaries
+                            const WALL_MARGIN = 10;
+                            const MAP_SIZE = CITY_SIZE * BUILDING_SCALE;
                             
-                            if (gridX >= 0 && gridX < CITY_SIZE && gridZ >= 0 && gridZ < CITY_SIZE) {
-                                const type = mapRef.current?.[gridX]?.[gridZ];
-                                if (type === 3) collided = true; // Can't walk into water
-                            } else {
-                                collided = true; // Can't walk off map
+                            // Check wall boundaries
+                            if (nextX < WALL_MARGIN || nextX > MAP_SIZE - WALL_MARGIN ||
+                                nextZ < WALL_MARGIN || nextZ > MAP_SIZE - WALL_MARGIN) {
+                                collided = true;
                             }
                             
                             // Building collision (with door exception)
@@ -5045,13 +5356,15 @@ const VoxelWorld = ({
                                 ai.target = null;
                                 ai.stuckCounter = 0;
                                 
-                                // Schedule a walk away from current area
+                                // Schedule a walk away from current area (larger map)
+                                const mapMargin = 15;
+                                const maxCoord = CITY_SIZE * BUILDING_SCALE - mapMargin;
                                 ai.nextWalkTarget = {
                                     x: ai.currentRoom === 'town' 
-                                        ? centerX + (Math.random() - 0.5) * 40 
+                                        ? Math.max(mapMargin, Math.min(maxCoord, centerX + (Math.random() - 0.5) * 100))
                                         : (Math.random() - 0.5) * 20,
                                     z: ai.currentRoom === 'town' 
-                                        ? centerZ + (Math.random() - 0.5) * 40 
+                                        ? Math.max(mapMargin, Math.min(maxCoord, centerZ + (Math.random() - 0.5) * 100))
                                         : (Math.random() - 0.5) * 20
                                 };
                             } else if (ai.stuckCounter > 10) {
@@ -5068,10 +5381,12 @@ const VoxelWorld = ({
                                 ai.rot += slideAngle;
                                 
                                 const newDist = 4 + Math.random() * 6;
+                                const mapMargin2 = 15;
+                                const maxCoord2 = CITY_SIZE * BUILDING_SCALE - mapMargin2;
                                 if (ai.currentRoom === 'town') {
                                     ai.target = {
-                                        x: Math.max(centerX - 60, Math.min(centerX + 60, ai.pos.x + Math.sin(ai.rot) * newDist)),
-                                        z: Math.max(centerZ - 60, Math.min(centerZ + 60, ai.pos.z + Math.cos(ai.rot) * newDist))
+                                        x: Math.max(mapMargin2, Math.min(maxCoord2, ai.pos.x + Math.sin(ai.rot) * newDist)),
+                                        z: Math.max(mapMargin2, Math.min(maxCoord2, ai.pos.z + Math.cos(ai.rot) * newDist))
                                     };
                                 } else if (ai.currentRoom === 'pizza') {
                                     ai.target = {
@@ -5833,13 +6148,13 @@ const VoxelWorld = ({
                 const ambientColor = ambientLightRef.current.color;
                 
                 if (t < 0.2) {
-                    // Night
+                    // Night - bright enough to see clearly
                     const nightT = t / 0.2;
-                    sunIntensity = 0.05 + nightT * 0.1;
-                    ambientIntensity = 0.25 + nightT * 0.1;
-                    sunColor.setHex(0x4466aa);
-                    ambientColor.setHex(0x2a3a5a);
-                    scene.background.lerpColors(scene.background.setHex(0x0a1525), ambientColor, nightT * 0.5);
+                    sunIntensity = 0.25 + nightT * 0.1;  // Min 0.25
+                    ambientIntensity = 0.55 + nightT * 0.1;  // Min 0.55
+                    sunColor.setHex(0x6688cc);  // Brighter moonlight blue
+                    ambientColor.setHex(0x4a5a7a);  // Brighter ambient
+                    scene.background.lerpColors(scene.background.setHex(0x1a3045), ambientColor, nightT * 0.5);
                 } else if (t < 0.3) {
                     // Sunrise
                     const sunriseT = (t - 0.2) / 0.1;
@@ -5866,13 +6181,13 @@ const VoxelWorld = ({
                     ambientColor.setRGB(0.75 - sunsetT * 0.46, 0.88 - sunsetT * 0.63, 0.94 - sunsetT * 0.56);
                     scene.background.setRGB(0.53 + sunsetT * 0.47, 0.81 - sunsetT * 0.34, 0.92 - sunsetT * 0.59);
                 } else {
-                    // Night
+                    // Night - bright enough to see clearly
                     const nightT = (t - 0.8) / 0.2;
-                    sunIntensity = 0.2 - nightT * 0.15;
-                    ambientIntensity = 0.35 - nightT * 0.1;
-                    sunColor.setRGB(1 - nightT * 0.73, 0.4 + nightT * 0, 0.27 + nightT * 0.4);
-                    ambientColor.setRGB(0.29 - nightT * 0.13, 0.25 - nightT * 0.02, 0.38 - nightT * 0.03);
-                    scene.background.setRGB(1 - nightT * 0.96, 0.47 - nightT * 0.39, 0.33 - nightT * 0.19);
+                    sunIntensity = 0.35 - nightT * 0.1;  // Goes to 0.25
+                    ambientIntensity = 0.65 - nightT * 0.1;  // Goes to 0.55
+                    sunColor.setRGB(1 - nightT * 0.6, 0.4 + nightT * 0.13, 0.27 + nightT * 0.53);
+                    ambientColor.setRGB(0.35 - nightT * 0.06, 0.35 - nightT * 0, 0.48 - nightT * 0);
+                    scene.background.setRGB(1 - nightT * 0.90, 0.47 - nightT * 0.28, 0.33 - nightT * 0.06);
                 }
                 
                 sunLightRef.current.intensity = sunIntensity;
@@ -5880,6 +6195,26 @@ const VoxelWorld = ({
                 
                 // Update fog color to match sky
                 if (scene.fog) scene.fog.color.copy(scene.background);
+                
+                // ==================== PROP LIGHTS DAY/NIGHT TOGGLE ====================
+                // Lights ON at night (t < 0.25 or t >= 0.75), OFF during day
+                const shouldLightsBeOn = t < 0.25 || t >= 0.75;
+                
+                if (shouldLightsBeOn !== lightsOnRef.current && propLightsRef.current.length > 0) {
+                    lightsOnRef.current = shouldLightsBeOn;
+                    
+                    propLightsRef.current.forEach(light => {
+                        if (light && light.isLight) {
+                            // Store original intensity on first toggle if not stored
+                            if (light.userData.originalIntensity === undefined) {
+                                light.userData.originalIntensity = light.intensity;
+                            }
+                            
+                            // Toggle light
+                            light.intensity = shouldLightsBeOn ? light.userData.originalIntensity : 0;
+                        }
+                    });
+                }
                 
                 // Update state for UI (throttled)
                 if (frameCount % 30 === 0) {
@@ -6658,9 +6993,100 @@ const VoxelWorld = ({
         }
     };
     
+    // Check igloo proximity and show/hide occupancy bubbles
+    const checkIglooProximity = () => {
+        if (room !== 'town') return;
+        
+        const playerPos = posRef.current;
+        const VISIBILITY_DISTANCE = 25; // Show bubble when within 25 units
+        
+        iglooOccupancySpritesRef.current.forEach((sprite, iglooId) => {
+            if (!sprite.userData) return;
+            
+            const dx = playerPos.x - sprite.userData.iglooX;
+            const dz = playerPos.z - sprite.userData.iglooZ;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            // Show sprite if player is close enough
+            const shouldShow = dist < VISIBILITY_DISTANCE;
+            
+            if (sprite.visible !== shouldShow) {
+                sprite.visible = shouldShow;
+            }
+            
+            // Make sprite face camera (billboard effect)
+            if (shouldShow && cameraRef.current) {
+                sprite.quaternion.copy(cameraRef.current.quaternion);
+            }
+        });
+    };
+    
+    // Update igloo occupancy sprite with new count
+    const updateIglooOccupancy = (iglooId, count) => {
+        const sprite = iglooOccupancySpritesRef.current.get(iglooId);
+        if (!sprite) return;
+        
+        // Recreate the sprite texture with new count
+        const THREE = window.THREE;
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const fontSize = 36;
+        const padding = 16;
+        const text = count > 0 ? `🐧 ${count}` : '🐧 empty';
+        
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        const textWidth = ctx.measureText(text).width;
+        
+        const w = textWidth + padding * 2;
+        const h = fontSize + padding * 2;
+        
+        canvas.width = w;
+        canvas.height = h;
+        
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        
+        ctx.fillStyle = count > 0 ? 'rgba(30, 60, 100, 0.85)' : 'rgba(60, 60, 80, 0.75)';
+        ctx.strokeStyle = count > 0 ? '#4a9eff' : '#666';
+        ctx.lineWidth = 3;
+        
+        const r = 12;
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(w - r, 0);
+        ctx.quadraticCurveTo(w, 0, w, r);
+        ctx.lineTo(w, h - r);
+        ctx.quadraticCurveTo(w, h, w - r, h);
+        ctx.lineTo(r, h);
+        ctx.quadraticCurveTo(0, h, 0, h - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.fillStyle = count > 0 ? '#ffffff' : '#aaaaaa';
+        ctx.fillText(text, w / 2, h / 2);
+        
+        // Update sprite texture
+        if (sprite.material.map) {
+            sprite.material.map.dispose();
+        }
+        sprite.material.map = new THREE.CanvasTexture(canvas);
+        sprite.material.needsUpdate = true;
+        
+        const scale = 0.012;
+        sprite.scale.set(w * scale, h * scale, 1);
+    };
+    
     // Portal check effect
     useEffect(() => {
-        const interval = setInterval(checkPortals, 200);
+        const interval = setInterval(() => {
+            checkPortals();
+            checkIglooProximity();
+        }, 200);
         return () => clearInterval(interval);
     }, [nearbyPortal, room]);
     
@@ -6670,8 +7096,23 @@ const VoxelWorld = ({
         
         // Room transition
         if (nearbyPortal.targetRoom && onChangeRoom) {
+            let exitSpawnPos = nearbyPortal.exitSpawnPos;
+            
+            // If entering an igloo from town, store the exit spawn position
+            if (room === 'town' && nearbyPortal.targetRoom.startsWith('igloo')) {
+                iglooEntrySpawnRef.current = nearbyPortal.exitSpawnPos;
+            }
+            
+            // If exiting an igloo back to town, use the stored entry position
+            if (room.startsWith('igloo') && nearbyPortal.targetRoom === 'town') {
+                if (iglooEntrySpawnRef.current) {
+                    exitSpawnPos = iglooEntrySpawnRef.current;
+                    iglooEntrySpawnRef.current = null; // Clear after use
+                }
+            }
+            
             // Pass exit spawn position if available (for returning to town)
-            onChangeRoom(nearbyPortal.targetRoom, nearbyPortal.exitSpawnPos);
+            onChangeRoom(nearbyPortal.targetRoom, exitSpawnPos);
             return;
         }
         
@@ -6788,8 +7229,30 @@ const VoxelWorld = ({
                     posRef.current.y = seatData.seatHeight; // SET Y TO SEAT HEIGHT!
                     velRef.current.y = 0; // Stop any falling
                     
-                    // Face forward (same direction bench faces, +Z in bench local space)
-                    rotRef.current = benchRotation;
+                    // Determine facing direction
+                    let finalRotation = benchRotation;
+                    
+                    // BIDIRECTIONAL SIT (log seats only): Face based on approach side
+                    if (benchData.bidirectionalSit) {
+                        // Calculate which side of the log the player approached from
+                        // Get the log's forward direction (+Z in local space after rotation)
+                        const logForwardX = Math.sin(benchRotation);
+                        const logForwardZ = Math.cos(benchRotation);
+                        
+                        // Vector from log center to player position
+                        const toPlayerX = playerX - benchX;
+                        const toPlayerZ = playerZ - benchZ;
+                        
+                        // Dot product to determine which side player is on
+                        const dotProduct = toPlayerX * logForwardX + toPlayerZ * logForwardZ;
+                        
+                        // If player approached from back side (negative dot), flip 180°
+                        if (dotProduct < 0) {
+                            finalRotation = benchRotation + Math.PI;
+                        }
+                    }
+                    
+                    rotRef.current = finalRotation;
                     
                     // Update player mesh position and rotation
                     if (playerRef.current) {
@@ -6865,6 +7328,96 @@ const VoxelWorld = ({
         window.addEventListener('chatCommand', handleChatCommand);
         return () => window.removeEventListener('chatCommand', handleChatCommand);
     }, [mpSendEmote, onChangeRoom]);
+    
+    // Listen for room counts updates from server (for igloo occupancy bubbles)
+    useEffect(() => {
+        const handleRoomCounts = (event) => {
+            const counts = event.detail;
+            if (!counts) return;
+            
+            // Update each igloo sprite with the count from server
+            // Map room names to igloo IDs (multiple igloos can share the same room)
+            const roomToIgloos = {
+                'igloo1': ['igloo1', 'igloo5', 'igloo9'],
+                'igloo2': ['igloo2', 'igloo6', 'igloo10'],
+                'igloo3': ['igloo3', 'igloo7'],
+                'igloo4': ['igloo4', 'igloo8']
+            };
+            
+            // Update sprites for each room's igloos
+            for (const [roomName, iglooIds] of Object.entries(roomToIgloos)) {
+                const count = counts[roomName] || 0;
+                iglooIds.forEach(iglooId => {
+                    const sprite = iglooOccupancySpritesRef.current.get(iglooId);
+                    if (sprite) {
+                        // Update the sprite texture with new count
+                        updateIglooOccupancySprite(sprite, count);
+                    }
+                });
+            }
+        };
+        
+        window.addEventListener('roomCounts', handleRoomCounts);
+        return () => window.removeEventListener('roomCounts', handleRoomCounts);
+    }, []);
+    
+    // Helper to update igloo sprite texture
+    const updateIglooOccupancySprite = (sprite, count) => {
+        const THREE = window.THREE;
+        if (!THREE) return;
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        
+        const fontSize = 36;
+        const padding = 16;
+        const text = count > 0 ? `🐧 ${count}` : '🐧 empty';
+        
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        const textWidth = ctx.measureText(text).width;
+        
+        const w = textWidth + padding * 2;
+        const h = fontSize + padding * 2;
+        
+        canvas.width = w;
+        canvas.height = h;
+        
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'center';
+        
+        ctx.fillStyle = count > 0 ? 'rgba(30, 60, 100, 0.85)' : 'rgba(60, 60, 80, 0.75)';
+        ctx.strokeStyle = count > 0 ? '#4a9eff' : '#666';
+        ctx.lineWidth = 3;
+        
+        const r = 12;
+        ctx.beginPath();
+        ctx.moveTo(r, 0);
+        ctx.lineTo(w - r, 0);
+        ctx.quadraticCurveTo(w, 0, w, r);
+        ctx.lineTo(w, h - r);
+        ctx.quadraticCurveTo(w, h, w - r, h);
+        ctx.lineTo(r, h);
+        ctx.quadraticCurveTo(0, h, 0, h - r);
+        ctx.lineTo(0, r);
+        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        
+        ctx.fillStyle = count > 0 ? '#ffffff' : '#aaaaaa';
+        ctx.fillText(text, w / 2, h / 2);
+        
+        // Update sprite texture
+        if (sprite.material.map) {
+            sprite.material.map.dispose();
+        }
+        sprite.material.map = new THREE.CanvasTexture(canvas);
+        sprite.material.needsUpdate = true;
+        
+        const scale = 0.012;
+        sprite.scale.set(w * scale, h * scale, 1);
+    };
     
     // ==================== MULTIPLAYER SYNC (OPTIMIZED) ====================
     
@@ -7235,11 +7788,26 @@ const VoxelWorld = ({
                                             }
                                         }
                                         
+                                        // Determine facing direction
+                                        let finalRotation = benchRotation;
+                                        
+                                        // BIDIRECTIONAL SIT (log seats only): Face based on approach side
+                                        if (benchData.bidirectionalSit) {
+                                            const logForwardX = Math.sin(benchRotation);
+                                            const logForwardZ = Math.cos(benchRotation);
+                                            const toPlayerX = playerX - benchX;
+                                            const toPlayerZ = playerZ - benchZ;
+                                            const dotProduct = toPlayerX * logForwardX + toPlayerZ * logForwardZ;
+                                            if (dotProduct < 0) {
+                                                finalRotation = benchRotation + Math.PI;
+                                            }
+                                        }
+                                        
                                         const seatData = {
                                             snapPoint: closestPoint,
                                             worldPos: { x: closestWorldX, z: closestWorldZ },
                                             seatHeight: benchData.seatHeight || 0.8,
-                                            benchRotation: benchRotation,
+                                            benchRotation: finalRotation,
                                             benchDepth: benchData.benchDepth || 0.8,
                                             dismountBack: benchData.dismountBack || false, // For bar stools
                                             platformHeight: benchData.platformHeight || benchData.data?.platformHeight || 0 // For rooftop benches
@@ -7251,7 +7819,7 @@ const VoxelWorld = ({
                                         posRef.current.z = closestWorldZ;
                                         posRef.current.y = seatData.seatHeight; // SET Y TO SEAT HEIGHT!
                                         velRef.current.y = 0; // Stop any falling
-                                        rotRef.current = benchRotation; // Face forward
+                                        rotRef.current = finalRotation; // Face based on approach
                                         
                                         if (playerRef.current) {
                                             playerRef.current.position.x = closestWorldX;
@@ -7329,7 +7897,7 @@ const VoxelWorld = ({
              {/* Title & Controls - Top Left */}
              <div className="absolute top-4 left-4 retro-text text-white drop-shadow-md z-10 pointer-events-none">
                  <h2 className={`text-xl drop-shadow-lg ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
-                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'igloo1' ? 'IGLOO 1' : room === 'igloo2' ? 'IGLOO 2' : 'TOWN'}
+                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room.startsWith('igloo') ? `IGLOO ${room.slice(-1)}` : 'TOWN'}
                  </h2>
                  {!isMobile && (
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>

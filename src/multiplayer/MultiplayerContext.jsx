@@ -319,6 +319,14 @@ export function MultiplayerProvider({ children }) {
                 worldTimeRef.current = message.time;
                 break;
             
+            case 'room_counts':
+                // Server sending igloo room occupancy counts
+                // Dispatch custom event for VoxelWorld to handle
+                window.dispatchEvent(new CustomEvent('roomCounts', { 
+                    detail: message.counts 
+                }));
+                break;
+            
             case 'whisper': {
                 // Received a whisper from another player
                 const whisperMsg = {

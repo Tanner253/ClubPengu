@@ -4,41 +4,51 @@ import CollisionSystem from '../engine/CollisionSystem';
 /**
  * TownCenter - Room definition for the main town hub
  * 
- * Handles:
- * - Prop placement (trees, igloos, lamps, etc.)
- * - Collision setup
- * - Interactive zones
- * - Lighting
+ * T-STREET LAYOUT:
+ * - Dojo at the base of the T (south)
+ * - Campfire at the T intersection
+ * - Pizza & Gift Shop on sides of the stem
+ * - Nightclub at the top of the T (north)
+ * - Igloos in the "armpits" of the T
  */
 class TownCenter {
     static ID = 'town';
     static NAME = 'Town Center';
     
-    // World dimensions (in units, matches VoxelWorld CITY_SIZE * BUILDING_SCALE)
-    static WORLD_SIZE = 160; // 40 * 4
-    static CENTER = TownCenter.WORLD_SIZE / 2;
+    // EXPANDED World dimensions for T-street layout
+    static WORLD_SIZE = 220; // Increased from 160
+    static CENTER = TownCenter.WORLD_SIZE / 2; // 110
     
-    // Building definitions (existing buildings from VoxelWorld)
+    // Building definitions - T-STREET LAYOUT (FULL MAP SCALE)
+    // Positions are OFFSETS from center (110, 110)
+    // Map is 220x220, so offsets range from -105 to +105
+    // +Z = South (toward dojo), -Z = North (toward nightclub)
     static BUILDINGS = [
         { 
             id: 'dojo', 
             name: 'THE DOJO', 
-            position: { x: 0, z: -25 },
+            position: { x: 0, z: 70 },  // Far south - base of T stem
             size: { w: 14, h: 8, d: 14 },
+            rotation: 0, // Door faces north (toward campfire)
         },
         { 
             id: 'market', 
             name: 'GIFT SHOP', 
-            position: { x: -22, z: -8 },
+            position: { x: 45, z: 35 },  // East side of T stem
             size: { w: 10, h: 6, d: 10 },
+            rotation: -Math.PI / 2, // Door faces west (toward street)
         },
         { 
             id: 'plaza', 
             name: 'PIZZA PARLOR', 
-            position: { x: 25, z: 5 },
+            position: { x: -45, z: 35 },  // West side of T stem
             size: { w: 12, h: 7, d: 10 },
+            rotation: Math.PI / 2, // Door faces east (toward street)
         }
     ];
+    
+    // Dojo position for parkour course binding
+    static DOJO_OFFSET = { x: 0, z: 70 };
 
     constructor(THREE) {
         this.THREE = THREE;
@@ -46,72 +56,261 @@ class TownCenter {
         this.collisionSystem = new CollisionSystem(
             TownCenter.WORLD_SIZE,
             TownCenter.WORLD_SIZE,
-            4 // Cell size for spatial hashing
+            4
         );
         
-        // Track spawned objects for cleanup
         this.propMeshes = [];
         this.lights = [];
-        
-        // Generate prop placements
         this.propPlacements = this._generatePropPlacements();
     }
 
     /**
-     * Generate prop placement positions
-     * Creates a detailed, organic layout
+     * Generate prop placement positions - T-STREET LAYOUT
      */
     _generatePropPlacements() {
-        const C = TownCenter.CENTER;
+        const C = TownCenter.CENTER; // 110
+        const SIZE = TownCenter.WORLD_SIZE; // 220
         const props = [];
         
-        // ==================== PINE TREES ====================
-        // Strategic tree placement - clusters around perimeter and between buildings
+        // ==================== T-INTERSECTION CAMPFIRE ====================
+        // At the center of the T intersection (where stem meets horizontal bar)
+        const campfireX = C;
+        const campfireZ = C + 10; // In the T intersection area
         
-        // Northern tree line (behind dojo)
+        props.push({ type: 'campfire', x: campfireX, z: campfireZ });
+        
+        // Log seats in a proper circle around the campfire
+        // Logs should be TANGENT to circle (perpendicular to radius) so sitting faces fire
+        const seatRadius = 5.5;
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
+            const seatX = campfireX + Math.cos(angle) * seatRadius;
+            const seatZ = campfireZ + Math.sin(angle) * seatRadius;
+            
+            // rotation = angle + PI/2 makes log TANGENT to circle
+            // i=1,2 (top/north) and i=4,5 (bottom/south) need 180° flip
+            const needsFlip = (i === 1 || i === 2 || i === 4 || i === 5);
+            const flipOffset = needsFlip ? Math.PI : 0;
+            
+            props.push({ 
+                type: 'log_seat', 
+                x: seatX, 
+                z: seatZ, 
+                rotation: angle + Math.PI / 2 + flipOffset,
+                // Log seats allow sitting from both sides (bidirectional)
+                bidirectionalSit: true,
+                campfireCenter: { x: campfireX, z: campfireZ }
+            });
+        }
+        
+        // ==================== SIGNPOSTS ====================
+        // Main intersection signpost
+        props.push({
+            type: 'signpost',
+            x: C + 12,
+            z: C + 15,
+            signs: [
+                { text: 'DOJO', direction: -90 },      // South
+                { text: 'NIGHT CLUB', direction: 90 }, // North
+                { text: 'PIZZA', direction: 180 },     // West
+                { text: 'GIFT SHOP', direction: 0 },   // East
+            ]
+        });
+        
+        // ==================== CHRISTMAS TREE ====================
+        // Positioned near the Gift Shop
+        const treeX = C + 43.2;
+        const treeZ = C + 6.8;
+        props.push({ type: 'christmas_tree', x: treeX, z: treeZ });
+        
+        // Benches in a circle around the Christmas tree (4 benches at cardinal directions)
+        const treeBenchRadius = 8;
+        const treeBenchCount = 4;
+        for (let i = 0; i < treeBenchCount; i++) {
+            const angle = (i / treeBenchCount) * Math.PI * 2;
+            const benchX = treeX + Math.cos(angle) * treeBenchRadius;
+            const benchZ = treeZ + Math.sin(angle) * treeBenchRadius;
+            // Benches at i=0 (east) and i=2 (west) need 180° flip to face tree
+            const flipRotation = (i === 0 || i === 2) ? Math.PI : 0;
+            props.push({ 
+                type: 'bench', 
+                x: benchX, 
+                z: benchZ, 
+                rotation: angle + Math.PI / 2 + flipRotation
+            });
+        }
+        
+        // ==================== NIGHTCLUB PLACEHOLDER ====================
+        // At the very top center of the map (will be replaced with actual nightclub later)
+        props.push({
+            type: 'nightclub_placeholder',
+            x: C,
+            z: C - 75,  // Far north, against world border
+            width: 25,
+            depth: 20,
+            height: 12
+        });
+        
+        // ==================== GRAVEL ICE WALKING PATH (T-SHAPE) ====================
+        // Dark blue gravel texture - NO OVERLAPPING to prevent z-fighting
+        // Each piece connects edge-to-edge
+        
+        // T-stem (vertical part from dojo to T-junction)
+        // Goes from z = C + 75 (dojo) to z = C - 29 (where T-bar starts)
+        props.push({
+            type: 'gravel_path',
+            x: C,
+            z: C + 23,    // Center: (75 + -29) / 2 = 23
+            width: 28,
+            depth: 104,   // From C+75 to C-29
+        });
+        
+        // T-bar (horizontal street between igloo rows)
+        // Goes from z = C - 29 to z = C - 61
+        props.push({
+            type: 'gravel_path',
+            x: C,
+            z: C - 45,    // Center of horizontal bar
+            width: 190,
+            depth: 32,    // From C-29 to C-61
+        });
+        
+        // Path to Nightclub (north from T-bar)
+        // Goes from z = C - 61 to z = C - 75 (nightclub entrance)
+        props.push({
+            type: 'gravel_path',
+            x: C,
+            z: C - 68,    // Center: (-61 + -75) / 2 = -68
+            width: 28,
+            depth: 14,    // From C-61 to C-75
+        });
+        
+        // Path to Pizza Parlor (west branch from stem)
+        // Starts at edge of stem (x = C - 14) and goes to pizza (x = C - 45)
+        props.push({
+            type: 'gravel_path',
+            x: C - 30,    // Center: (-14 + -45) / 2 = -29.5 ≈ -30
+            z: C + 35,
+            width: 32,    // From stem edge to pizza
+            depth: 18,
+        });
+        
+        // Path to Gift Shop (east branch from stem)
+        // Starts at edge of stem (x = C + 14) and goes to gift shop (x = C + 45)
+        props.push({
+            type: 'gravel_path',
+            x: C + 30,    // Center: (14 + 45) / 2 = 29.5 ≈ 30
+            z: C + 35,
+            width: 32,    // From stem edge to gift shop
+            depth: 18,
+        });
+        
+        // ==================== IGLOOS - ALONG TOP STREET EDGES ====================
+        // T-bar walkway is at z = C-29 to C-61
+        // NORTH side of walkway (z < C-61, facing south toward street)
+        props.push(
+            { type: 'igloo', x: C - 75, z: C - 75, rotation: 0 },      // Far west
+            { type: 'igloo', x: C - 50, z: C - 78, rotation: 0 },
+            { type: 'igloo', x: C - 25, z: C - 75, rotation: 0 },
+            { type: 'igloo', x: C + 25, z: C - 75, rotation: 0 },
+            { type: 'igloo', x: C + 50, z: C - 78, rotation: 0 },
+            { type: 'igloo', x: C + 75, z: C - 75, rotation: 0 },      // Far east
+        );
+        
+        // SOUTH side of walkway (z > C-29, facing north toward street)
+        props.push(
+            { type: 'igloo', x: C - 70, z: C - 15, rotation: Math.PI }, // West side
+            { type: 'igloo', x: C - 40, z: C - 18, rotation: Math.PI },
+            { type: 'igloo', x: C + 40, z: C - 18, rotation: Math.PI },
+            { type: 'igloo', x: C + 70, z: C - 15, rotation: Math.PI }, // East side
+        );
+        
+        // ==================== BENCHES - OUTSIDE WALKWAYS ====================
+        // T-stem walkway is x = C ± 14, so benches at x = C ± 22
+        props.push(
+            { type: 'bench', x: C - 22, z: C + 20, rotation: Math.PI / 2 },   // West of stem, face east
+            { type: 'bench', x: C + 22, z: C + 20, rotation: -Math.PI / 2 },  // East of stem, face west
+            { type: 'bench', x: C - 22, z: C + 45, rotation: Math.PI / 2 },   // West of stem
+            { type: 'bench', x: C + 22, z: C + 45, rotation: -Math.PI / 2 },  // East of stem
+        );
+        
+        // T-bar walkway is z = C-29 to C-61, so benches outside those edges
+        props.push(
+            // South edge of T-bar (z = C - 22, just outside C-29) - face SOUTH toward street
+            { type: 'bench', x: C - 35, z: C - 22, rotation: Math.PI },
+            { type: 'bench', x: C + 35, z: C - 22, rotation: Math.PI },
+            { type: 'bench', x: C - 65, z: C - 22, rotation: Math.PI },
+            { type: 'bench', x: C + 65, z: C - 22, rotation: Math.PI },
+            // North edge of T-bar (z = C - 68, just outside C-61) - face NORTH toward street
+            { type: 'bench', x: C - 35, z: C - 68, rotation: 0 },
+            { type: 'bench', x: C + 35, z: C - 68, rotation: 0 },
+            { type: 'bench', x: C - 65, z: C - 68, rotation: 0 },
+            { type: 'bench', x: C + 65, z: C - 68, rotation: 0 },
+        );
+        
+        // Benches near buildings (outside pizza and gift shop paths)
+        props.push(
+            { type: 'bench', x: C - 55, z: C + 48, rotation: -Math.PI / 2 },  // Near pizza
+            { type: 'bench', x: C + 55, z: C + 48, rotation: Math.PI / 2 },   // Near gift shop
+        );
+        
+        // ==================== PINE TREES - FULL MAP PERIMETER ====================
+        // Northern tree line (at map edge, behind nightclub area)
         const northTrees = [
-            { x: C - 30, z: C - 45, size: 'large' },
-            { x: C - 20, z: C - 48, size: 'medium' },
-            { x: C - 10, z: C - 50, size: 'large' },
-            { x: C + 5, z: C - 48, size: 'medium' },
-            { x: C + 15, z: C - 45, size: 'large' },
-            { x: C + 25, z: C - 48, size: 'medium' },
-            { x: C + 35, z: C - 45, size: 'large' },
+            { x: C - 95, z: C - 95, size: 'large' },
+            { x: C - 75, z: C - 90, size: 'medium' },
+            { x: C - 55, z: C - 92, size: 'large' },
+            { x: C - 35, z: C - 88, size: 'medium' },
+            { x: C - 15, z: C - 95, size: 'large' },
+            { x: C + 5, z: C - 90, size: 'medium' },
+            { x: C + 25, z: C - 93, size: 'large' },
+            { x: C + 45, z: C - 88, size: 'medium' },
+            { x: C + 65, z: C - 92, size: 'large' },
+            { x: C + 85, z: C - 90, size: 'medium' },
+            { x: C + 95, z: C - 95, size: 'large' },
         ];
         
-        // Western tree cluster (near gift shop)
+        // Western tree line (at map edge)
         const westTrees = [
-            { x: C - 45, z: C - 20, size: 'large' },
-            { x: C - 48, z: C - 5, size: 'medium' },
-            { x: C - 45, z: C + 10, size: 'large' },
-            { x: C - 50, z: C + 25, size: 'medium' },
-            { x: C - 42, z: C, size: 'small' },
+            { x: C - 95, z: C - 70, size: 'large' },
+            { x: C - 92, z: C - 40, size: 'medium' },
+            { x: C - 95, z: C - 10, size: 'large' },
+            { x: C - 90, z: C + 20, size: 'medium' },
+            { x: C - 95, z: C + 50, size: 'large' },
+            { x: C - 92, z: C + 75, size: 'medium' },
+            { x: C - 95, z: C + 95, size: 'large' },
         ];
         
-        // Eastern tree cluster
+        // Eastern tree line (at map edge)
         const eastTrees = [
-            { x: C + 45, z: C - 15, size: 'large' },
-            { x: C + 48, z: C, size: 'medium' },
-            { x: C + 45, z: C + 15, size: 'large' },
-            { x: C + 42, z: C + 30, size: 'medium' },
+            { x: C + 95, z: C - 70, size: 'large' },
+            { x: C + 92, z: C - 40, size: 'medium' },
+            { x: C + 95, z: C - 10, size: 'large' },
+            { x: C + 90, z: C + 20, size: 'medium' },
+            { x: C + 95, z: C + 50, size: 'large' },
+            { x: C + 92, z: C + 75, size: 'medium' },
+            { x: C + 95, z: C + 95, size: 'large' },
         ];
         
-        // Southern tree line (beach transition)
+        // Southern tree line (at map edge, behind dojo)
         const southTrees = [
-            { x: C - 35, z: C + 40, size: 'medium' },
-            { x: C - 15, z: C + 45, size: 'large' },
-            { x: C + 5, z: C + 42, size: 'medium' },
-            { x: C + 25, z: C + 45, size: 'large' },
-            { x: C + 40, z: C + 40, size: 'medium' },
+            { x: C - 80, z: C + 95, size: 'large' },
+            { x: C - 55, z: C + 92, size: 'medium' },
+            { x: C - 30, z: C + 95, size: 'large' },
+            { x: C, z: C + 90, size: 'medium' },
+            { x: C + 30, z: C + 95, size: 'large' },
+            { x: C + 55, z: C + 92, size: 'medium' },
+            { x: C + 80, z: C + 95, size: 'large' },
         ];
         
-        // Interior decorative trees - frame key areas
+        // Interior accent trees (between areas)
         const interiorTrees = [
-            { x: C - 32, z: C - 18, size: 'small' },  // Near gift shop
-            { x: C + 35, z: C - 8, size: 'small' },   // Near pizza
-            { x: C + 18, z: C + 20, size: 'medium' }, // East plaza
-            { x: C - 42, z: C + 12, size: 'medium' }, // Frame igloo village
-            { x: C - 48, z: C + 25, size: 'large' },  // Behind igloos
+            { x: C - 70, z: C + 10, size: 'medium' },   // West of pizza
+            { x: C + 70, z: C + 10, size: 'medium' },   // East of gift shop
+            { x: C - 25, z: C + 60, size: 'small' },    // Near dojo west
+            { x: C + 25, z: C + 60, size: 'small' },    // Near dojo east
+            { x: C - 60, z: C - 15, size: 'medium' },   // T armpit areas
+            { x: C + 60, z: C - 15, size: 'medium' },
         ];
         
         [...northTrees, ...westTrees, ...eastTrees, ...southTrees, ...interiorTrees].forEach(tree => {
@@ -122,199 +321,161 @@ class TownCenter {
             });
         });
         
-        // ==================== IGLOO VILLAGE ====================
-        // Cozy residential cluster in the southwest with campsite
-        const villageX = C - 32;
-        const villageZ = C + 22;
-        
+        // ==================== LAMP POSTS - ALONG OUTER STREET EDGES ====================
+        // Posts are on the OUTSIDE of the walkway, lining the street edges
+        // Based on layout image: many posts along both edges of T-bar and T-stem
         props.push(
-            // Igloos with entrances facing toward town center (southeast direction)
-            { type: 'igloo', x: villageX - 8, z: villageZ + 10, rotation: Math.PI * 0.7 },   // Back left igloo - faces town
-            { type: 'igloo', x: villageX + 5, z: villageZ + 8, rotation: Math.PI * 0.6 },    // Back right igloo - faces town
+            // ===== T-BAR SOUTH EDGE (z = C - 25) - Full row of posts =====
+            { type: 'lamp_post', x: C - 95, z: C - 25, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C - 75, z: C - 25, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C - 55, z: C - 25, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C - 35, z: C - 25, isOn: true, castShadow: false },
+            // Gap for T-stem entrance
+            { type: 'lamp_post', x: C + 35, z: C - 25, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C + 55, z: C - 25, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C + 75, z: C - 25, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C + 95, z: C - 25, isOn: true, castShadow: false },
+            
+            // ===== T-BAR NORTH EDGE (z = C - 65) - Full row of posts =====
+            { type: 'lamp_post', x: C - 95, z: C - 65, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C - 75, z: C - 65, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C - 55, z: C - 65, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C - 35, z: C - 65, isOn: true, castShadow: false },
+            // Gap for nightclub entrance
+            { type: 'lamp_post', x: C + 35, z: C - 65, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C + 55, z: C - 65, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C + 75, z: C - 65, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C + 95, z: C - 65, isOn: true, castShadow: false },
+            
+            // ===== T-STEM LEFT EDGE (x = C - 22) - Posts from T-junction to dojo =====
+            { type: 'lamp_post', x: C - 22, z: C - 15, isOn: true, castShadow: false },  // Near T-junction
+            { type: 'lamp_post', x: C - 22, z: C + 10, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C - 22, z: C + 35, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C - 22, z: C + 60, isOn: true, castShadow: false },  // Near dojo
+            
+            // ===== T-STEM RIGHT EDGE (x = C + 22) - Posts from T-junction to dojo =====
+            { type: 'lamp_post', x: C + 22, z: C - 15, isOn: true, castShadow: false },  // Near T-junction
+            { type: 'lamp_post', x: C + 22, z: C + 10, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C + 22, z: C + 35, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: C + 22, z: C + 60, isOn: true, castShadow: false },  // Near dojo
         );
         
-        // Campsite in front of the igloos - the village gathering spot
-        const campsiteX = villageX;
-        const campsiteZ = villageZ - 5;
+        // ==================== CHRISTMAS LIGHT STRINGS (T-STREET ONLY) ====================
+        // Light strings connecting lamp posts ALONG the outer street edges
+        // NO crossing the street - lights run parallel on each side
+        const lampHeight = 5.5; // Height where lights attach to lamp posts
         
+        // ===== T-BAR SOUTH EDGE - WEST SIDE (connecting posts) =====
         props.push(
-            // Campfire in the center
-            { type: 'campfire', x: campsiteX, z: campsiteZ },
-            // Log seats arranged around the fire (3 seats, leaving opening toward igloos)
-            { type: 'log_seat', x: campsiteX - 4, z: campsiteZ - 1, rotation: Math.PI / 2 },       // Left
-            { type: 'log_seat', x: campsiteX + 4, z: campsiteZ - 1, rotation: -Math.PI / 2 },      // Right  
-            { type: 'log_seat', x: campsiteX, z: campsiteZ - 4.5, rotation: 0 },                   // Front (facing fireplace)
+            { type: 'light_string', from: { x: C - 95, z: C - 25 }, to: { x: C - 75, z: C - 25 }, height: lampHeight },
+            { type: 'light_string', from: { x: C - 75, z: C - 25 }, to: { x: C - 55, z: C - 25 }, height: lampHeight },
+            { type: 'light_string', from: { x: C - 55, z: C - 25 }, to: { x: C - 35, z: C - 25 }, height: lampHeight },
         );
         
-        // ==================== ROCKS ====================
-        // Natural rock formations - one large rock by the campsite
+        // ===== T-BAR SOUTH EDGE - EAST SIDE (connecting posts) =====
         props.push(
-            { type: 'rock', x: campsiteX + 8, z: campsiteZ + 2, size: 'large' },   // Scenic rock by campfire
-            { type: 'rock', x: C + 42, z: C - 28, size: 'medium' },                 // Northeast corner
-            { type: 'rock', x: C - 45, z: C - 30, size: 'large' },                  // Northwest corner
-            { type: 'rock', x: C + 38, z: C + 35, size: 'medium' },                 // Southeast
-            { type: 'rock', x: C, z: C - 38, size: 'small' },                       // Near dojo
+            { type: 'light_string', from: { x: C + 35, z: C - 25 }, to: { x: C + 55, z: C - 25 }, height: lampHeight },
+            { type: 'light_string', from: { x: C + 55, z: C - 25 }, to: { x: C + 75, z: C - 25 }, height: lampHeight },
+            { type: 'light_string', from: { x: C + 75, z: C - 25 }, to: { x: C + 95, z: C - 25 }, height: lampHeight },
         );
         
-        // ==================== LAMP POSTS ====================
-        // OPTIMIZED: Only 2 key lamps cast shadows (major performance gain)
-        // All others provide ambient light without shadow cost (emissive globe only)
+        // ===== T-BAR NORTH EDGE - WEST SIDE (connecting posts) =====
         props.push(
-            // Main plaza - ONLY these 2 cast shadows (player area)
-            { type: 'lamp_post', x: C + 8, z: C + 6, isOn: true, castShadow: true },
-            { type: 'lamp_post', x: C - 8, z: C + 6, isOn: true, castShadow: true },
-            
-            // Path to dojo - ambient lights (no shadows)
-            { type: 'lamp_post', x: C, z: C - 10, isOn: true, castShadow: false },
-            { type: 'lamp_post', x: C + 5, z: C - 18, isOn: true, castShadow: false },
-            { type: 'lamp_post', x: C - 5, z: C - 18, isOn: true, castShadow: false },
-            
-            // Near buildings (ambient, no shadows)
-            { type: 'lamp_post', x: C - 18, z: C - 5, isOn: true, castShadow: false },
-            { type: 'lamp_post', x: C - 25, z: C - 3, isOn: true, castShadow: false },
-            { type: 'lamp_post', x: C + 28, z: C + 8, isOn: true, castShadow: false },
-            { type: 'lamp_post', x: C + 20, z: C + 2, isOn: true, castShadow: false },
-            
-            // Igloo village - ambient lighting (no shadows)
-            { type: 'lamp_post', x: campsiteX + 10, z: campsiteZ - 3, isOn: true, castShadow: false },
-            { type: 'lamp_post', x: campsiteX - 5, z: campsiteZ + 5, isOn: true, castShadow: false },
-            
-            // Behind dojo - lights the back area (no shadows, emissive only)
-            { type: 'lamp_post', x: C - 8, z: C - 42, isOn: true, castShadow: false },
-            { type: 'lamp_post', x: C + 8, z: C - 42, isOn: true, castShadow: false },
-            
-            // Parkour course area - right side of dojo (no shadows, emissive only)
-            { type: 'lamp_post', x: C + 22, z: C - 20, isOn: true, castShadow: false },  // Near parkour start
-            { type: 'lamp_post', x: C + 18, z: C - 35, isOn: true, castShadow: false },  // Along parkour path
+            { type: 'light_string', from: { x: C - 95, z: C - 65 }, to: { x: C - 75, z: C - 65 }, height: lampHeight },
+            { type: 'light_string', from: { x: C - 75, z: C - 65 }, to: { x: C - 55, z: C - 65 }, height: lampHeight },
+            { type: 'light_string', from: { x: C - 55, z: C - 65 }, to: { x: C - 35, z: C - 65 }, height: lampHeight },
         );
         
-        // ==================== BUILDING LIGHTS ====================
-        // OPTIMIZED: Reduced from 6 to 3 key lights (major entrances only)
-        // Each PointLight has performance cost - keep minimal
+        // ===== T-BAR NORTH EDGE - EAST SIDE (connecting posts) =====
         props.push(
-            // Gift Shop entrance - single light, slightly brighter
-            { type: 'building_light', x: C - 22, z: C - 3, color: 0xFFE4B5, intensity: 3.5, distance: 18, height: 4 },
-            
-            // Pizza Parlor entrance - single light, covers both areas
-            { type: 'building_light', x: C + 26, z: C + 6, color: 0xFFAA55, intensity: 4.0, distance: 22, height: 4 },
-            
-            // Dojo entrance - single centered light
-            { type: 'building_light', x: C, z: C - 20, color: 0xFF8844, intensity: 3.5, distance: 18, height: 3 },
+            { type: 'light_string', from: { x: C + 35, z: C - 65 }, to: { x: C + 55, z: C - 65 }, height: lampHeight },
+            { type: 'light_string', from: { x: C + 55, z: C - 65 }, to: { x: C + 75, z: C - 65 }, height: lampHeight },
+            { type: 'light_string', from: { x: C + 75, z: C - 65 }, to: { x: C + 95, z: C - 65 }, height: lampHeight },
         );
         
-        // ==================== BENCHES ====================
-        // Rest spots with scenic views
+        // ===== T-STEM LEFT EDGE (connecting posts down to dojo) =====
         props.push(
-            // Central plaza benches - facing each other
-            { type: 'bench', x: C + 6, z: C + 3, rotation: Math.PI },      // Faces south
-            { type: 'bench', x: C - 6, z: C + 3, rotation: Math.PI },      // Faces south
-            
-            // Near gift shop - scenic view of plaza
-            { type: 'bench', x: C - 25, z: C - 8, rotation: Math.PI / 3 },
-            
-            // Southern scenic overlook
-            { type: 'bench', x: C + 8, z: C + 32, rotation: Math.PI / 6 },
+            { type: 'light_string', from: { x: C - 22, z: C - 15 }, to: { x: C - 22, z: C + 10 }, height: lampHeight },
+            { type: 'light_string', from: { x: C - 22, z: C + 10 }, to: { x: C - 22, z: C + 35 }, height: lampHeight },
+            { type: 'light_string', from: { x: C - 22, z: C + 35 }, to: { x: C - 22, z: C + 60 }, height: lampHeight },
         );
         
-        // ==================== SNOWMEN ====================
-        // Fun interactive snowmen in discoverable spots
+        // ===== T-STEM RIGHT EDGE (connecting posts down to dojo) =====
         props.push(
-            { type: 'snowman', x: C - 5, z: C + 18 },      // Plaza area
-            { type: 'snowman', x: C + 25, z: C - 18 },     // Near pizza/dojo path
+            { type: 'light_string', from: { x: C + 22, z: C - 15 }, to: { x: C + 22, z: C + 10 }, height: lampHeight },
+            { type: 'light_string', from: { x: C + 22, z: C + 10 }, to: { x: C + 22, z: C + 35 }, height: lampHeight },
+            { type: 'light_string', from: { x: C + 22, z: C + 35 }, to: { x: C + 22, z: C + 60 }, height: lampHeight },
         );
         
-        // ==================== CHRISTMAS TREE ====================
-        // Festive Christmas tree with twinkling lights
+        // ==================== BUILDING ENTRANCE LIGHTS ====================
         props.push(
-            { type: 'christmas_tree', x: C - 10.3, z: C + 31.3 },
+            // Pizza entrance (west side, door faces east) - UPDATED POSITION
+            { type: 'building_light', x: C - 38, z: C + 35, color: 0xFFAA55, intensity: 3.5, distance: 15, height: 4 },
+            
+            // Gift Shop entrance (east side, door faces west) - UPDATED POSITION
+            { type: 'building_light', x: C + 38, z: C + 35, color: 0xFFE4B5, intensity: 3.5, distance: 15, height: 4 },
+            
+            // Dojo entrance (south, door faces north) - UPDATED POSITION
+            { type: 'building_light', x: C, z: C + 62, color: 0xFF8844, intensity: 3.5, distance: 18, height: 3 },
+        );
+        
+        // ==================== SNOWMEN - SPREAD ACROSS MAP ====================
+        props.push(
+            { type: 'snowman', x: C - 40, z: C - 60 },  // Far west north
+            { type: 'snowman', x: C + 40, z: C - 60 },  // Far east north
+            { type: 'snowman', x: C, z: C + 85 },       // Near dojo (south)
+            { type: 'snowman', x: C - 70, z: C + 5 },   // West side
+            { type: 'snowman', x: C + 70, z: C + 5 },   // East side
+        );
+        
+        // ==================== ROCKS - SPREAD ACROSS MAP ====================
+        props.push(
+            { type: 'rock', x: C - 85, z: C - 70, size: 'large' },
+            { type: 'rock', x: C + 85, z: C - 70, size: 'large' },
+            { type: 'rock', x: C - 80, z: C + 70, size: 'medium' },
+            { type: 'rock', x: C + 80, z: C + 70, size: 'medium' },
+            { type: 'rock', x: C - 60, z: C - 20, size: 'small' },
+            { type: 'rock', x: C + 60, z: C - 20, size: 'small' },
+        );
+        
+        // ==================== SNOW PILES - SPREAD ACROSS MAP ====================
+        const snowPiles = [
+            { x: C - 65, z: C + 40, size: 'medium' },
+            { x: C + 65, z: C + 40, size: 'medium' },
+            { x: C - 55, z: C - 65, size: 'large' },
+            { x: C + 55, z: C - 65, size: 'large' },
+            { x: C, z: C - 75, size: 'medium' },
+            { x: C - 85, z: C + 15, size: 'small' },
+            { x: C + 85, z: C + 15, size: 'small' },
+            { x: C - 30, z: C + 80, size: 'medium' },
+            { x: C + 30, z: C + 80, size: 'medium' },
+        ];
+        snowPiles.forEach(pile => props.push({ type: 'snow_pile', ...pile }));
+        
+        // ==================== FENCES - ALONG PERIMETER ====================
+        props.push(
+            { type: 'fence', x: C - 85, z: C - 60, rotation: Math.PI / 6, length: 5 },
+            { type: 'fence', x: C + 85, z: C - 60, rotation: -Math.PI / 6, length: 5 },
+            { type: 'fence', x: C - 85, z: C + 60, rotation: -Math.PI / 6, length: 4 },
+            { type: 'fence', x: C + 85, z: C + 60, rotation: Math.PI / 6, length: 4 },
         );
         
         // ==================== DOJO PARKOUR COURSE ====================
-        // Obstacle course behind the dojo leading to roof hangout spot
-        props.push(
-            { type: 'dojo_parkour', x: 0, z: 0 },  // Position is handled internally - don't offset
-        );
-        
-        // ==================== SNOW PILES ====================
-        // Decorative snow drifts scattered naturally
-        const snowPilePositions = [
-            // Near buildings
-            { x: C - 28, z: C - 15, size: 'medium' },
-            { x: C + 32, z: C - 5, size: 'small' },
-            { x: C + 3, z: C - 32, size: 'medium' },
-            
-            // Around igloo village
-            { x: villageX - 18, z: villageZ + 5, size: 'small' },
-            { x: villageX + 10, z: villageZ + 15, size: 'medium' },
-            
-            // Path edges
-            { x: C - 5, z: C + 25, size: 'large' },
-            { x: C + 15, z: C + 30, size: 'medium' },
-            { x: C - 20, z: C + 35, size: 'small' },
-            
-            // Random natural drifts
-            { x: C - 38, z: C + 5, size: 'medium' },
-            { x: C + 38, z: C + 25, size: 'large' },
-        ];
-        
-        snowPilePositions.forEach(pile => {
-            props.push({ type: 'snow_pile', ...pile });
-        });
-        
-        // ==================== SIGNPOSTS ====================
-        // Directional signs at key intersections
-        // Direction: 0=East(+X), 90=North(-Z), 180=West(-X), -90=South(+Z)
-        props.push(
-            // Main plaza signpost
-            {
-                type: 'signpost',
-                x: C,
-                z: C + 6,
-                signs: [
-                    { text: 'DOJO', direction: 90 },       // North
-                    { text: 'BEACH', direction: -90 },     // South
-                    { text: 'GIFT SHOP', direction: 160 }, // West
-                    { text: 'PIZZA', direction: -20 },     // East
-                ]
-            },
-            // Near igloo village - points to town and ski areas
-            {
-                type: 'signpost',
-                x: campsiteX + 15,
-                z: campsiteZ - 2,
-                signs: [
-                    { text: 'IGLOOS', direction: 140 },    // Southwest (toward igloos)
-                    { text: 'TOWN CENTER', direction: 20 }, // Northeast (toward plaza)
-                ]
-            },
-        );
-        
-        // ==================== FENCES ====================
-        // Boundary fences near water edges - rustic village feel
-        props.push(
-            // Near igloo village (protective fencing)
-            { type: 'fence', x: villageX - 15, z: villageZ + 18, rotation: -Math.PI / 6, length: 5 },
-            { type: 'fence', x: villageX - 20, z: villageZ + 12, rotation: -Math.PI / 3, length: 4 },
-            
-            // Southeast corner
-            { type: 'fence', x: C + 45, z: C + 38, rotation: Math.PI / 6, length: 5 },
-        );
+        // Bound to dojo position - moves with dojo
+        props.push({ type: 'dojo_parkour', x: 0, z: 0 });
         
         return props;
     }
 
     /**
      * Spawn all props into the scene
-     * @param {THREE.Scene} scene - The Three.js scene
-     * @returns {Object} { meshes, lights, collisionSystem }
      */
     spawn(scene) {
         const C = TownCenter.CENTER;
+        const dojoOffset = TownCenter.DOJO_OFFSET;
         
-        // Clear previous spawns
         this.cleanup();
         
-        // Spawn each prop
         this.propPlacements.forEach(prop => {
             let mesh = null;
             
@@ -332,12 +493,11 @@ class TownCenter {
                     }
                     break;
                 case 'building_light':
-                    // Create invisible point light for building illumination
                     const buildingLight = new this.THREE.PointLight(
                         prop.color || 0xFFE4B5,
                         prop.intensity || 2.5,
                         prop.distance || 15,
-                        1.5 // decay
+                        1.5
                     );
                     buildingLight.position.set(0, prop.height || 4, 0);
                     mesh = new this.THREE.Group();
@@ -356,51 +516,36 @@ class TownCenter {
                 case 'campfire':
                     const campfireResult = this.propsFactory.createCampfire(true);
                     mesh = campfireResult.mesh;
-                    // Store light and particles for animation
-                    if (campfireResult.light) {
-                        mesh.userData.fireLight = campfireResult.light;
-                    }
-                    if (campfireResult.particles) {
-                        mesh.userData.particles = campfireResult.particles;
-                    }
+                    if (campfireResult.light) mesh.userData.fireLight = campfireResult.light;
+                    if (campfireResult.particles) mesh.userData.particles = campfireResult.particles;
                     break;
                 case 'christmas_tree':
                     const treeResult = this.propsFactory.createChristmasTree();
                     mesh = treeResult.mesh;
-                    // Store update function for twinkling animation
-                    if (treeResult.update) {
-                        mesh.userData.treeUpdate = treeResult.update;
-                    }
+                    if (treeResult.update) mesh.userData.treeUpdate = treeResult.update;
                     break;
                 case 'dojo_parkour':
-                    // Create parkour course with dojo dimensions
+                    // Parkour course is BOUND to dojo position
+                    // mirrored: true rotates the course 180 degrees (goes on opposite side)
                     const parkourResult = this.propsFactory.createDojoParkourCourse({
-                        dojoX: C,           // Dojo at center X
-                        dojoZ: C - 25,      // Dojo Z position
+                        dojoX: C + dojoOffset.x,
+                        dojoZ: C + dojoOffset.z,
                         dojoWidth: 14,
                         dojoHeight: 8,
-                        dojoDepth: 14
+                        dojoDepth: 14,
+                        mirrored: true  // Rotate parkour 180 degrees
                     });
                     mesh = parkourResult.mesh;
                     
-                    // Register collision for each platform with proper Y position
                     parkourResult.colliders.forEach((collider, idx) => {
                         this.collisionSystem.addCollider(
-                            collider.x,                        // x position
-                            collider.z,                        // z position
-                            {                                  // shape
-                                type: 'box', 
-                                size: collider.size,
-                                height: collider.size.y        // Platform thickness
-                            },
-                            1,                                 // type (SOLID)
-                            { name: `parkour_plat_${idx}` },   // data
-                            collider.rotation || 0,            // rotation
-                            collider.y                         // Y position of platform base
+                            collider.x, collider.z,
+                            { type: 'box', size: collider.size, height: collider.size.y },
+                            1, { name: `parkour_plat_${idx}` },
+                            collider.rotation || 0, collider.y
                         );
                     });
                     
-                    // Register bench interaction zones on the VIP platform (elevated)
                     parkourResult.roofBenches.forEach((bench, idx) => {
                         const benchZoneData = {
                             type: 'box',
@@ -409,42 +554,28 @@ class TownCenter {
                             action: 'sit',
                             message: '🪑 Sit (Secret VIP Spot!)',
                             emote: 'Sit',
-                            seatHeight: bench.y + 0.8, // Actual seat height (platform + bench seat)
+                            seatHeight: bench.y + 0.8,
                             benchDepth: 1,
                             worldX: bench.x,
                             worldZ: bench.z,
                             worldRotation: bench.rotation || 0,
-                            platformHeight: bench.y, // Height of the platform the bench sits on
-                            snapPoints: [
-                                { x: -0.6, z: 0 },
-                                { x: 0, z: 0 },
-                                { x: 0.6, z: 0 }
-                            ],
+                            platformHeight: bench.y,
+                            snapPoints: [{ x: -0.6, z: 0 }, { x: 0, z: 0 }, { x: 0.6, z: 0 }],
                             data: { seatHeight: bench.y + 0.8, platformHeight: bench.y }
                         };
                         this.collisionSystem.addTrigger(
-                            bench.x,
-                            bench.z,
-                            benchZoneData,
-                            (event) => {
-                                // Extract zone data from trigger shape and merge with event
-                                const zoneData = event.trigger?.shape || benchZoneData;
-                                this._handleInteraction(event, zoneData);
-                            },
+                            bench.x, bench.z, benchZoneData,
+                            (event) => this._handleInteraction(event, benchZoneData),
                             { name: `vip_bench_${idx}` },
-                            bench.rotation || 0,
-                            bench.y  // Pass the Y position for elevated trigger
+                            bench.rotation || 0, bench.y
                         );
                     });
                     
-                    // Store parkour data for reference
                     mesh.userData.parkourData = parkourResult;
-                    
-                    // DON'T reposition this mesh - positions are already absolute
                     mesh.position.set(0, 0, 0);
                     scene.add(mesh);
                     this.propMeshes.push(mesh);
-                    mesh = null;  // Prevent double-add in the generic handler below
+                    mesh = null;
                     break;
                 case 'log_seat':
                     mesh = this.propsFactory.createLogSeat(prop.rotation || 0);
@@ -458,21 +589,50 @@ class TownCenter {
                 case 'fence':
                     mesh = this.propsFactory.createFence(prop.length);
                     break;
+                case 'nightclub_placeholder':
+                    // Simple placeholder cube for nightclub (to be replaced later)
+                    const THREE = this.THREE;
+                    const ncGeo = new THREE.BoxGeometry(prop.width, prop.height, prop.depth);
+                    const ncMat = new THREE.MeshStandardMaterial({ 
+                        color: 0x8B4513, // Brown
+                        roughness: 0.8 
+                    });
+                    mesh = new THREE.Mesh(ncGeo, ncMat);
+                    mesh.position.y = prop.height / 2; // Lift to sit on ground
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                    mesh.name = 'nightclub_placeholder';
+                    
+                    // Add collision for the nightclub
+                    this.collisionSystem.addCollider(
+                        prop.x, prop.z,
+                        { type: 'box', size: { x: prop.width + 2, z: prop.depth + 2 }, height: prop.height },
+                        1, // SOLID
+                        { name: 'nightclub' }
+                    );
+                    break;
+                case 'light_string':
+                    // Christmas light string connecting two points
+                    mesh = this._createLightString(prop.from, prop.to, prop.height);
+                    mesh.name = 'light_string';
+                    // Light strings position themselves, don't use standard positioning
+                    scene.add(mesh);
+                    this.propMeshes.push(mesh);
+                    mesh = null; // Skip standard positioning
+                    break;
+                case 'gravel_path':
+                    // Create blue gravel ice texture for walking path
+                    mesh = this._createGravelPath(prop.width, prop.depth);
+                    mesh.position.y = 0.15; // Elevated well above ice ground to avoid z-fighting
+                    mesh.name = 'gravel_path';
+                    break;
             }
             
             if (mesh) {
-                // Position and rotate the mesh
                 mesh.position.set(prop.x, 0, prop.z);
-                if (prop.rotation) {
-                    mesh.rotation.y = prop.rotation;
-                }
-                
-                // Add to scene
+                if (prop.rotation) mesh.rotation.y = prop.rotation;
                 scene.add(mesh);
                 this.propMeshes.push(mesh);
-                
-                // Register prop with collision system - handles everything automatically
-                // The mesh already has position/rotation set, and userData contains collision/interaction data
                 this.collisionSystem.registerProp(
                     mesh,
                     (event, zoneData) => this._handleInteraction(event, zoneData)
@@ -480,265 +640,323 @@ class TownCenter {
             }
         });
         
-        // Add building collisions (walls)
+        // Add building collisions with NEW positions
         TownCenter.BUILDINGS.forEach(building => {
             const bx = C + building.position.x;
             const bz = C + building.position.z;
             
             this.collisionSystem.addCollider(
-                bx,
-                bz,
-                {
-                    type: 'box',
-                    size: {
-                        x: building.size.w + 1,
-                        y: building.size.h,
-                        z: building.size.d + 1,
-                    }
-                },
+                bx, bz,
+                { type: 'box', size: { x: building.size.w + 1, y: building.size.h, z: building.size.d + 1 } },
                 CollisionSystem.TYPES.SOLID,
                 { name: building.id, isBuilding: true }
             );
             
-            // Add roof collision for dojo (THREE tiers - walkable surfaces)
+            // Dojo roof collision (3 tiers)
             if (building.id === 'dojo') {
-                const h = building.size.h;
-                const w = building.size.w;
-                const d = building.size.d;
-                
-                // Tier gaps match PropsFactory: [0, 5.5, 11]
+                const h = building.size.h, w = building.size.w, d = building.size.d;
                 const tierGaps = [0, 5.5, 11];
-                const tierScales = [1, 0.75, 0.5]; // 1 - tier * 0.25 for 3 tiers
+                const tierScales = [1, 0.75, 0.5];
                 
                 tierGaps.forEach((gap, tier) => {
                     const roofY = h + 1.2 + gap;
-                    const tierScale = tierScales[tier];
-                    const roofWidth = (w + 4) * tierScale;
-                    const roofDepth = (d + 4) * tierScale;
-                    
+                    const scale = tierScales[tier];
                     this.collisionSystem.addCollider(
-                        bx,
-                        bz,
-                        {
-                            type: 'box',
-                            size: {
-                                x: roofWidth,
-                                y: 0.5,
-                                z: roofDepth,
-                            },
-                            height: 0.5
-                        },
+                        bx, bz,
+                        { type: 'box', size: { x: (w + 4) * scale, y: 0.5, z: (d + 4) * scale }, height: 0.5 },
                         CollisionSystem.TYPES.SOLID,
                         { name: `dojo_roof_tier${tier}`, isRoof: true },
-                        0,
-                        roofY
+                        0, roofY
                     );
                 });
                 
-                // Add step collision for dojo entrance (3 steps)
+                // Dojo steps
                 for (let i = 0; i < 3; i++) {
-                    const stepWidth = 4 - i * 0.4; // Same as PropsFactory
-                    const stepY = 0.28 + i * 0.28; // Same as PropsFactory (fixed)
-                    const stepZ = bz + d / 2 + 1.5 + (2 - i) * 0.95;
+                    const stepWidth = 4 - i * 0.4;
+                    const stepY = 0.28 + i * 0.28;
+                    const stepZ = bz - d / 2 - 1.5 - (2 - i) * 0.95; // Steps face NORTH now
                     this.collisionSystem.addCollider(
-                        bx,
-                        stepZ,
-                        {
-                            type: 'box',
-                            size: { x: stepWidth, y: 0.28, z: 0.9 },
-                            height: 0.28
-                        },
+                        bx, stepZ,
+                        { type: 'box', size: { x: stepWidth, y: 0.28, z: 0.9 }, height: 0.28 },
                         CollisionSystem.TYPES.SOLID,
                         { name: `dojo_step_${i}`, isStep: true },
-                        0,
-                        stepY
+                        0, stepY
                     );
                 }
             }
             
-            // Add roof collision for gift shop (peaked roof - walkable at edges)
+            // Gift shop roof
             if (building.id === 'market') {
-                const w = building.size.w; // 10
-                const h = building.size.h; // 6
-                const d = building.size.d; // 10
-                const roofOverhang = 1;
-                const roofHeight = 2.5;
+                const w = building.size.w, h = building.size.h, d = building.size.d;
+                const roofEdgeY = h + 1;
                 
-                // Lower roof edges (where it meets the walls) - easier to land on
-                const roofEdgeY = h + 0.5 + 0.5; // Just above wall top
-                
-                // Left side roof slope landing zone
-                this.collisionSystem.addCollider(
-                    bx - w/4,
-                    bz,
-                    {
-                        type: 'box',
-                        size: { x: w/2 + roofOverhang, y: 0.3, z: d + roofOverhang * 2 },
-                        height: 0.3
-                    },
-                    CollisionSystem.TYPES.SOLID,
-                    { name: 'gift_shop_roof_left', isRoof: true },
-                    0,
-                    roofEdgeY + 0.8 // Mid-slope height
-                );
-                
-                // Right side roof slope landing zone
-                this.collisionSystem.addCollider(
-                    bx + w/4,
-                    bz,
-                    {
-                        type: 'box',
-                        size: { x: w/2 + roofOverhang, y: 0.3, z: d + roofOverhang * 2 },
-                        height: 0.3
-                    },
-                    CollisionSystem.TYPES.SOLID,
-                    { name: 'gift_shop_roof_right', isRoof: true },
-                    0,
-                    roofEdgeY + 0.8 // Mid-slope height
-                );
-                
-                // Roof ridge (peak) - can stand on top
-                this.collisionSystem.addCollider(
-                    bx,
-                    bz,
-                    {
-                        type: 'box',
-                        size: { x: 1, y: 0.4, z: d + roofOverhang * 2 + 0.4 },
-                        height: 0.4
-                    },
-                    CollisionSystem.TYPES.SOLID,
-                    { name: 'gift_shop_roof_ridge', isRoof: true },
-                    0,
-                    h + 0.5 + roofHeight // Peak height
-                );
+                this.collisionSystem.addCollider(bx - w/4, bz,
+                    { type: 'box', size: { x: w/2 + 1, y: 0.3, z: d + 2 }, height: 0.3 },
+                    CollisionSystem.TYPES.SOLID, { name: 'gift_shop_roof_left', isRoof: true },
+                    0, roofEdgeY + 0.8);
+                this.collisionSystem.addCollider(bx + w/4, bz,
+                    { type: 'box', size: { x: w/2 + 1, y: 0.3, z: d + 2 }, height: 0.3 },
+                    CollisionSystem.TYPES.SOLID, { name: 'gift_shop_roof_right', isRoof: true },
+                    0, roofEdgeY + 0.8);
+                this.collisionSystem.addCollider(bx, bz,
+                    { type: 'box', size: { x: 1, y: 0.4, z: d + 2.4 }, height: 0.4 },
+                    CollisionSystem.TYPES.SOLID, { name: 'gift_shop_roof_ridge', isRoof: true },
+                    0, h + 3);
             }
         });
         
-        // Add water boundary collision (circular perimeter)
-        this._addWaterBoundary();
+        this._addWallBoundary(scene);
         
-        return {
-            meshes: this.propMeshes,
-            lights: this.lights,
-            collisionSystem: this.collisionSystem,
-        };
+        return { meshes: this.propMeshes, lights: this.lights, collisionSystem: this.collisionSystem };
     }
 
-    /**
-     * Add circular water boundary collision
-     */
-    _addWaterBoundary() {
+    _addWallBoundary(scene) {
+        const THREE = this.THREE;
         const C = TownCenter.CENTER;
-        const radius = TownCenter.WORLD_SIZE / 2 - 8; // Island radius
+        const SIZE = TownCenter.WORLD_SIZE;
+        const WALL_HEIGHT = 50; // Super tall walls
+        const WALL_THICKNESS = 4;
+        const MARGIN = 5; // Distance from edge
         
-        // Add ring of collision points around water edge - OPTIMIZED: fewer, larger segments
-        const segments = 16; // Reduced from 32
-        for (let i = 0; i < segments; i++) {
-            const angle = (i / segments) * Math.PI * 2;
-            const x = C + Math.cos(angle) * (radius + 5);
-            const z = C + Math.sin(angle) * (radius + 5);
-            
-            this.collisionSystem.addCollider(
-                x,
-                z,
-                { type: 'cylinder', radius: 12, height: 2 }, // Larger radius to compensate
-                CollisionSystem.TYPES.WATER,
-                { name: 'water_boundary' }
-            );
-        }
+        // Create invisible but solid wall colliders on all 4 sides
+        // North wall (z = margin)
+                this.collisionSystem.addCollider(
+            C, MARGIN,
+            { type: 'box', size: { x: SIZE, z: WALL_THICKNESS }, height: WALL_HEIGHT },
+            CollisionSystem.TYPES.WALL,
+            { name: 'wall_north' }
+        );
+        
+        // South wall (z = SIZE - margin)
+                this.collisionSystem.addCollider(
+            C, SIZE - MARGIN,
+            { type: 'box', size: { x: SIZE, z: WALL_THICKNESS }, height: WALL_HEIGHT },
+            CollisionSystem.TYPES.WALL,
+            { name: 'wall_south' }
+        );
+        
+        // West wall (x = margin)
+                this.collisionSystem.addCollider(
+            MARGIN, C,
+            { type: 'box', size: { x: WALL_THICKNESS, z: SIZE }, height: WALL_HEIGHT },
+            CollisionSystem.TYPES.WALL,
+            { name: 'wall_west' }
+        );
+        
+        // East wall (x = SIZE - margin)
+        this.collisionSystem.addCollider(
+            SIZE - MARGIN, C,
+            { type: 'box', size: { x: WALL_THICKNESS, z: SIZE }, height: WALL_HEIGHT },
+            CollisionSystem.TYPES.WALL,
+            { name: 'wall_east' }
+        );
+        
+        // Walls are invisible - collision only, no visible meshes
     }
 
     /**
-     * Handle interaction zone triggers
+     * Create Christmas light string between two lamp posts
+     * Features a curved catenary line with colorful bulbs
      */
+    _createLightString(from, to, height) {
+        const THREE = this.THREE;
+        const group = new THREE.Group();
+        
+        // Calculate distance and direction
+        const dx = to.x - from.x;
+        const dz = to.z - from.z;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        const angle = Math.atan2(dz, dx);
+        
+        // Number of bulbs based on distance
+        const bulbCount = Math.max(8, Math.floor(distance / 3));
+        const sagAmount = Math.min(distance * 0.15, 3); // Sag in the middle
+        
+        // Christmas light colors
+        const lightColors = [
+            0xFF0000, // Red
+            0x00FF00, // Green
+            0x0000FF, // Blue
+            0xFFFF00, // Yellow
+            0xFF00FF, // Magenta
+            0x00FFFF, // Cyan
+            0xFFAA00, // Orange
+            0xFF6699, // Pink
+        ];
+        
+        // Create the wire/string (thin dark line)
+        const wirePoints = [];
+        for (let i = 0; i <= 20; i++) {
+            const t = i / 20;
+            const x = from.x + dx * t;
+            const z = from.z + dz * t;
+            // Catenary-like sag (parabola)
+            const sag = sagAmount * (1 - Math.pow(2 * t - 1, 2));
+            const y = height - sag;
+            wirePoints.push(new THREE.Vector3(x, y, z));
+        }
+        
+        const wireCurve = new THREE.CatmullRomCurve3(wirePoints);
+        const wireGeo = new THREE.TubeGeometry(wireCurve, 20, 0.02, 4, false);
+        const wireMat = new THREE.MeshBasicMaterial({ color: 0x222222 });
+        const wire = new THREE.Mesh(wireGeo, wireMat);
+        group.add(wire);
+        
+        // Create bulbs along the string
+        const bulbGeo = new THREE.SphereGeometry(0.12, 6, 6);
+        
+        for (let i = 0; i < bulbCount; i++) {
+            const t = (i + 0.5) / bulbCount;
+            const x = from.x + dx * t;
+            const z = from.z + dz * t;
+            const sag = sagAmount * (1 - Math.pow(2 * t - 1, 2));
+            const y = height - sag - 0.1; // Slightly below wire
+            
+            const color = lightColors[i % lightColors.length];
+            const bulbMat = new THREE.MeshStandardMaterial({
+                color: color,
+                emissive: color,
+                emissiveIntensity: 0.8,
+                roughness: 0.3,
+                metalness: 0.1
+            });
+            
+            const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+            bulb.position.set(x, y, z);
+            group.add(bulb);
+            
+            // Add small point light for every 3rd bulb (for performance)
+            if (i % 3 === 0) {
+                const light = new THREE.PointLight(color, 0.3, 4);
+                light.position.set(x, y, z);
+                group.add(light);
+                this.lights.push(light);
+            }
+        }
+        
+        return group;
+    }
+
+    /**
+     * Create a blue gravel ice texture for walking paths
+     * Uses procedural canvas texture for icy gravel look
+     */
+    _createGravelPath(width, depth) {
+        const THREE = this.THREE;
+        
+        // Create procedural canvas texture for blue gravel ice
+        const canvas = document.createElement('canvas');
+        const size = 256;
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        
+        // Base dark blue color
+        ctx.fillStyle = '#1a3a4a';
+        ctx.fillRect(0, 0, size, size);
+        
+        // Add gravel-like noise pattern in various blue shades
+        const gravelColors = [
+            '#0d2633', // Very dark blue
+            '#1e4455', // Dark blue
+            '#2a5566', // Medium dark blue
+            '#163344', // Deep blue
+            '#0f2d3d', // Darker blue
+            '#234a5a', // Slightly lighter
+            '#1a3f4f', // Base variation
+            '#122838', // Near black blue
+        ];
+        
+        // Draw many small irregular shapes for gravel effect
+        for (let i = 0; i < 3000; i++) {
+            const x = Math.random() * size;
+            const y = Math.random() * size;
+            const gravelSize = 1 + Math.random() * 3;
+            
+            ctx.fillStyle = gravelColors[Math.floor(Math.random() * gravelColors.length)];
+            ctx.beginPath();
+            // Irregular shapes for natural gravel look
+            if (Math.random() > 0.5) {
+                ctx.ellipse(x, y, gravelSize, gravelSize * 0.7, Math.random() * Math.PI, 0, Math.PI * 2);
+            } else {
+                ctx.arc(x, y, gravelSize, 0, Math.PI * 2);
+            }
+            ctx.fill();
+        }
+        
+        // Add some icy highlights/sparkles
+        ctx.fillStyle = 'rgba(180, 220, 255, 0.15)';
+        for (let i = 0; i < 200; i++) {
+            const x = Math.random() * size;
+            const y = Math.random() * size;
+            ctx.beginPath();
+            ctx.arc(x, y, 0.5 + Math.random(), 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Create texture from canvas
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(width / 15, depth / 15); // Tile the texture
+        
+        // Create material with the gravel texture
+        const material = new THREE.MeshStandardMaterial({
+            map: texture,
+            roughness: 0.9,
+            metalness: 0.1,
+            depthWrite: true,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -1,
+        });
+        
+        // Create flat plane for the path
+        const geometry = new THREE.PlaneGeometry(width, depth);
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.rotation.x = -Math.PI / 2; // Lay flat on ground
+        mesh.receiveShadow = true;
+        
+        return mesh;
+    }
+
     _handleInteraction(event, zone) {
         if (event.type === 'enter') {
-            // Dispatch enter event for UI to handle
             window.dispatchEvent(new CustomEvent('townInteraction', {
-                detail: {
-                    action: zone.action,
-                    message: zone.message,
-                    emote: zone.emote,
-                    data: zone
-                }
+                detail: { action: zone.action, message: zone.message, emote: zone.emote, data: zone }
             }));
         } else if (event.type === 'exit') {
-            // Dispatch exit event to clear UI prompt
             window.dispatchEvent(new CustomEvent('townInteraction', {
-                detail: {
-                    action: 'exit',
-                    exitedZone: zone.action,
-                    message: null,
-                    emote: null,
-                    data: zone
-                }
+                detail: { action: 'exit', exitedZone: zone.action, message: null, emote: null, data: zone }
             }));
         }
     }
 
-    /**
-     * Update collision check for player
-     * @param {number} x - Current X position
-     * @param {number} z - Current Z position
-     * @param {number} newX - Target X position
-     * @param {number} newZ - Target Z position
-     * @param {number} radius - Player collision radius
-     * @param {number} y - Player Y position for height-based collision
-     * @returns {Object} { x, z, collided, collider }
-     */
     checkPlayerMovement(x, z, newX, newZ, radius = 0.8, y = 0) {
         return this.collisionSystem.checkMovement(x, z, newX, newZ, radius, y);
     }
     
-    /**
-     * Check if player can land on any object at position
-     * @returns {{ canLand: boolean, landingY: number, collider: Object|null }}
-     */
     checkLanding(x, z, y, radius = 0.8) {
         return this.collisionSystem.checkLanding(x, z, y, radius);
     }
 
-    /**
-     * Check triggers at player position
-     * @param {number} playerY - Player Y for height-based filtering (e.g., don't trigger "sit" when standing ON bench)
-     */
     checkTriggers(playerX, playerZ, playerY = 0) {
         return this.collisionSystem.checkTriggers(playerX, playerZ, 0.5, playerY);
     }
 
-    /**
-     * Get active trigger zones player is inside
-     */
     getActiveTriggers(playerX, playerZ) {
         return this.collisionSystem.getActiveTriggers(playerX, playerZ);
     }
 
-    /**
-     * Update animated elements (call every frame)
-     * OPTIMIZED: Cache references to animated props, throttle updates
-     * @param {number} time - Current time in seconds
-     * @param {number} delta - Delta time since last frame
-     * @param {number} nightFactor - 0.0 (day) to 1.0 (night) for lighting contrast
-     */
     update(time, delta, nightFactor = 0.5) {
-        // OPTIMIZATION: Build cache on first call (avoid iterating ALL props every frame)
         if (!this._animatedCache) {
-            this._animatedCache = {
-                campfires: [],
-                christmasTrees: [],
-                frameCounter: 0
-            };
+            this._animatedCache = { campfires: [], christmasTrees: [], frameCounter: 0 };
             this.propMeshes.forEach(mesh => {
                 if (mesh.name === 'campfire') {
-                    // Pre-cache flame children to avoid traverse() every frame
                     const flames = [];
-                    mesh.traverse(child => {
-                        if (child.userData.isFlame) flames.push(child);
-                    });
+                    mesh.traverse(child => { if (child.userData.isFlame) flames.push(child); });
                     this._animatedCache.campfires.push({
-                        flames,
-                        particles: mesh.userData.particles,
-                        light: mesh.userData.fireLight
+                        flames, particles: mesh.userData.particles, light: mesh.userData.fireLight
                     });
                 }
                 if (mesh.name === 'christmas_tree' && mesh.userData.treeUpdate) {
@@ -750,9 +968,7 @@ class TownCenter {
         this._animatedCache.frameCounter++;
         const frame = this._animatedCache.frameCounter;
         
-        // Animate campfires
         this._animatedCache.campfires.forEach(({ flames, particles, light }) => {
-            // Flames: every frame (visible motion)
             flames.forEach(flame => {
                 const offset = flame.userData.offset || 0;
                 flame.position.y = flame.userData.baseY + Math.sin(time * 8 + offset) * 0.1;
@@ -761,14 +977,12 @@ class TownCenter {
                 flame.rotation.y = time * 2 + offset;
             });
             
-            // OPTIMIZED: Embers: every 3rd frame (subtle effect, reduce CPU)
             if (particles && frame % 3 === 0) {
                 const positions = particles.geometry.attributes.position.array;
-                const delta2 = delta * 2;
                 for (let i = 0; i < positions.length / 3; i++) {
-                    positions[i * 3 + 1] += delta2 * (1 + Math.random() * 0.5);
-                    positions[i * 3] += (Math.random() - 0.5) * delta2 * 0.5;
-                    positions[i * 3 + 2] += (Math.random() - 0.5) * delta2 * 0.5;
+                    positions[i * 3 + 1] += delta * 2 * (1 + Math.random() * 0.5);
+                    positions[i * 3] += (Math.random() - 0.5) * delta;
+                    positions[i * 3 + 2] += (Math.random() - 0.5) * delta;
                     if (positions[i * 3 + 1] > 3) {
                         positions[i * 3] = (Math.random() - 0.5) * 0.8;
                         positions[i * 3 + 1] = 0.2;
@@ -778,14 +992,11 @@ class TownCenter {
                 particles.geometry.attributes.position.needsUpdate = true;
             }
             
-            // Light flicker: every 3rd frame
             if (light && frame % 3 === 0) {
                 light.intensity = 1.5 + Math.sin(time * 15) * 0.3 + Math.random() * 0.2;
             }
         });
         
-        // OPTIMIZED: Christmas tree: every 6th frame (twinkling is subtle, reduce CPU)
-        // Pass nightFactor for day/night lighting contrast
         if (frame % 6 === 0) {
             this._animatedCache.christmasTrees.forEach(mesh => {
                 if (mesh.userData.treeUpdate) mesh.userData.treeUpdate(time, nightFactor);
@@ -793,57 +1004,41 @@ class TownCenter {
         }
     }
 
-    /**
-     * Cleanup all spawned objects
-     */
     cleanup() {
         this.propMeshes.forEach(mesh => {
-            if (mesh.parent) {
-                mesh.parent.remove(mesh);
-            }
-            // Dispose geometry and materials
+            if (mesh.parent) mesh.parent.remove(mesh);
             mesh.traverse(child => {
                 if (child.geometry) child.geometry.dispose();
                 if (child.material) {
-                    if (Array.isArray(child.material)) {
-                        child.material.forEach(m => m.dispose());
-                    } else {
-                        child.material.dispose();
-                    }
+                    if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                    else child.material.dispose();
                 }
             });
         });
-        
         this.propMeshes = [];
         this.lights = [];
         this.collisionSystem.clear();
-        this._animatedCache = null; // Clear animation cache for rebuild
+        this._animatedCache = null;
     }
 
-    /**
-     * Dispose all resources
-     */
     dispose() {
         this.cleanup();
         this.propsFactory.dispose();
     }
 
-    /**
-     * Get room spawn position
-     */
     getSpawnPosition() {
+        // Spawn south of dojo, at the base of the T
         return {
             x: TownCenter.CENTER,
-            z: TownCenter.CENTER + 10
+            z: TownCenter.CENTER + 50  // South of dojo
         };
     }
 
-    /**
-     * Get debug visualization
-     */
     getDebugMesh() {
         return this.collisionSystem.createDebugMesh(this.THREE);
     }
 }
 
 export default TownCenter;
+
+
