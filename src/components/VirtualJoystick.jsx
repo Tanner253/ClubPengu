@@ -139,16 +139,21 @@ const VirtualJoystick = ({
         };
     }, [handleTouchStart, handleTouchMove, handleTouchEnd]);
     
-    const positionClass = position === 'left' 
-        ? 'left-4 bottom-[70px]' 
-        : 'right-4 bottom-[70px]';
+    // Detect iPad/tablet for extra padding
+    const isTablet = window.innerWidth >= 768;
+    const horizontalPadding = isTablet ? '40px' : '16px';
+    const bottomPadding = isTablet ? '100px' : '70px';
+    
+    const positionStyle = position === 'left' 
+        ? { left: horizontalPadding, bottom: bottomPadding }
+        : { right: horizontalPadding, bottom: bottomPadding };
     
     return (
         <div 
             ref={containerRef}
             data-joystick="true"
-            className={`absolute ${positionClass} z-30 touch-none select-none`}
-            style={{ width: size, height: size }}
+            className="absolute z-30 touch-none select-none"
+            style={{ width: size, height: size, ...positionStyle }}
         >
             {/* Outer ring */}
             <div 

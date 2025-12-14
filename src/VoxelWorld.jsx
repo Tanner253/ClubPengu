@@ -180,8 +180,17 @@ const VoxelWorld = ({
     // Mobile detection and orientation handling
     useEffect(() => {
         const checkMobile = () => {
-            const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) 
-                || ('ontouchstart' in window && window.innerWidth < 1024);
+            // Check for mobile user agents
+            const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            
+            // Check for iPadOS 13+ (reports as Macintosh but has touch)
+            const isIPadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            
+            // Any device with touch support should show mobile controls
+            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            
+            // Mobile = mobile UA OR iPadOS OR touch device
+            const mobile = mobileUA || isIPadOS || hasTouch;
             setIsMobile(mobile);
         };
         
@@ -3333,7 +3342,7 @@ const VoxelWorld = ({
                             if (dirMag > 0.01) {
                                 velRef.current.x = (worldDirX / dirMag) * moveSpeed;
                                 velRef.current.z = (worldDirZ / dirMag) * moveSpeed;
-                                
+                    
                                 // Auto-rotate player to face movement direction
                                 const targetRot = Math.atan2(worldDirX, worldDirZ);
                                 // Smooth rotation interpolation
@@ -4260,12 +4269,12 @@ const VoxelWorld = ({
                                         }
                                         if (particle.isPointLight) {
                                             particle.intensity = 0.5 + Math.sin(time * 15) * 0.3;
-                        }
+                }
                     });
                 }
                             });
-                        }
-                        
+            }
+            
                         // Animate angel/demon wings - butterfly flapping
                         if (child.userData?.isWings) {
                             const phase = child.userData.wingPhase || 0;
@@ -7144,7 +7153,7 @@ const VoxelWorld = ({
              {isMobile && isLandscape && (
                 <VirtualJoystick
                     onMove={(input) => { joystickInputRef.current = input; }}
-                    size={120}
+                    size={window.innerWidth >= 768 ? 150 : 120}
                     position={gameSettings.leftHanded ? 'right' : 'left'}
                     deadzone={0.1}
                 />
