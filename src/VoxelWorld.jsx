@@ -619,23 +619,30 @@ const VoxelWorld = ({
         cameraRef.current = camera;
         camera.position.set(0, 15, -15);
         
-        // Detect Mac for performance optimizations
-        const isMac = /Mac|iPhone|iPad|iPod/.test(navigator.platform) || 
-                      (navigator.userAgent.includes('Mac') && !navigator.userAgent.includes('Windows'));
+        // Detect Mac for performance optimizations (WebGL via Metal causes issues on Safari)
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0 || 
+                      navigator.userAgent.toUpperCase().indexOf('MAC') >= 0;
+        
+        // Log for debugging
+        console.log('🖥️ Platform:', navigator.platform, '| isMac:', isMac);
         
         // Mac-specific renderer settings (PC/Android unchanged)
+        // Fixes WebGL via Metal performance issues on Safari/macOS
         const renderer = new THREE.WebGLRenderer({ 
-            antialias: !isMac, // Mac: false, Others: true
+            antialias: isMac ? false : true, // Mac: false, Others: true
             powerPreference: 'high-performance'
         });
         
         // Mac: dpr capped at 1.5, Others: capped at 2
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMac ? 1.5 : 2));
+        const dpr = isMac ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2);
+        renderer.setPixelRatio(dpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
         
-        // Mac: flat rendering (no tone mapping), Others: normal
+        // Mac: flat rendering (no tone mapping) - fixes Metal rendering issues
         if (isMac) {
             renderer.toneMapping = THREE.NoToneMapping;
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+            console.log('🍎 Mac detected - applied performance fixes: antialias=false, dpr=1.5, flat rendering');
         }
         
         renderer.shadowMap.enabled = true;

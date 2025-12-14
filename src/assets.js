@@ -885,7 +885,110 @@ export const ASSETS = {
         nervous: [
             {x:-2, y:7, z:4, c:'black'}, {x:2, y:7, z:4, c:'black'},
             {x:4, y:9, z:4, c:'#87CEEB'}, {x:4, y:8, z:4.2, c:'#87CEEB'}
-        ]
+        ],
+        
+        // LEGENDARY: LMAO Face - Crying laughing emoji with CYLINDRICAL popping eyes
+        // Unlocked via promo code "LMAO" - covers eyes AND mouth area
+        lmao: (() => {
+            let v = [];
+            const white = '#FFFFFF';
+            const black = '#000000';
+            const tearBlue = '#29B6F6';
+            const faceYellow = '#FFCC02'; // Dark golden emoji yellow
+            
+            // === ROUND YELLOW EMOJI FACE (circular like the meme) ===
+            const faceCenterY = 6; // Center of face
+            const faceRadius = 5; // Round face radius
+            for(let y = 1; y <= 11; y++) {
+                for(let x = -5; x <= 5; x++) {
+                    // Check if within circular face
+                    const distFromCenter = Math.sqrt(x*x + (y - faceCenterY)*(y - faceCenterY));
+                    if(distFromCenter <= faceRadius) {
+                        // Skip ONLY the inner part of eye cylinders (smaller gap)
+                        const leftEyeDist = Math.sqrt((x+2)*(x+2) + (y-7)*(y-7));
+                        const rightEyeDist = Math.sqrt((x-2)*(x-2) + (y-7)*(y-7));
+                        if(leftEyeDist > 1.8 && rightEyeDist > 1.8) {
+                            v.push({x, y, z: 4, c: faceYellow});
+                        }
+                    }
+                }
+            }
+            
+            // === SOLID WHITE CYLINDER EYES popping straight out ===
+            const eyeLength = 5; // How far cylinders extend
+            const eyeStart = 3; // Start closer to face (pushed into head)
+            
+            // LEFT EYE - SOLID white cylinder
+            for(let z = eyeStart; z <= eyeStart + eyeLength; z++) {
+                for(let dx = -2; dx <= 2; dx++) {
+                    for(let dy = -2; dy <= 2; dy++) {
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if(dist <= 2) {
+                            v.push({x: -2 + dx, y: 7 + dy, z: z, c: white});
+                        }
+                    }
+                }
+            }
+            // Left pupil at front
+            v.push({x: -2, y: 7, z: eyeStart + eyeLength + 0.5, c: black});
+            
+            // RIGHT EYE - SOLID white cylinder
+            for(let z = eyeStart; z <= eyeStart + eyeLength; z++) {
+                for(let dx = -2; dx <= 2; dx++) {
+                    for(let dy = -2; dy <= 2; dy++) {
+                        const dist = Math.sqrt(dx*dx + dy*dy);
+                        if(dist <= 2) {
+                            v.push({x: 2 + dx, y: 7 + dy, z: z, c: white});
+                        }
+                    }
+                }
+            }
+            // Right pupil at front
+            v.push({x: 2, y: 7, z: eyeStart + eyeLength + 0.5, c: black});
+            
+            // === TEAR STREAMS (angled outward as they flow down) ===
+            // Left tears - angle outward to the left as going down
+            for(let t = 0; t < 6; t++) {
+                v.push({x: -4 - t*0.6, y: 5 - t*0.8, z: 4.5, c: tearBlue, glow: true});
+                v.push({x: -4.5 - t*0.5, y: 5.5 - t*0.8, z: 4.3, c: tearBlue, glow: true});
+                v.push({x: -3.5 - t*0.7, y: 4.5 - t*0.8, z: 4.6, c: tearBlue, glow: true});
+            }
+            // Right tears - angle outward to the right as going down
+            for(let t = 0; t < 6; t++) {
+                v.push({x: 4 + t*0.6, y: 5 - t*0.8, z: 4.5, c: tearBlue, glow: true});
+                v.push({x: 4.5 + t*0.5, y: 5.5 - t*0.8, z: 4.3, c: tearBlue, glow: true});
+                v.push({x: 3.5 + t*0.7, y: 4.5 - t*0.8, z: 4.6, c: tearBlue, glow: true});
+            }
+            
+            // === WIDE OPEN LAUGHING MOUTH (no overlapping voxels) ===
+            // Top lip (black outline) - brought forward to prevent overlap
+            for(let x = -3; x <= 3; x++) {
+                v.push({x, y: 4, z: 5.51, c: black});
+            }
+            // Bottom lip - corners removed
+            for(let x = -2; x <= 2; x++) {
+                v.push({x, y: 1, z: 5.5, c: black});
+            }
+            
+            // Mouth interior (dark red) - back layer z: 5
+            for(let y = 2; y <= 3; y++) {
+                for(let x = -2; x <= 2; x++) {
+                    v.push({x, y, z: 5, c: '#4A0000'});
+                }
+            }
+            
+            // Teeth (top row - white) - front layer z: 5.5
+            for(let x = -2; x <= 2; x++) {
+                v.push({x, y: 3.5, z: 5.5, c: white});
+            }
+            
+            // Tongue (pink) - middle layer z: 5.3
+            v.push({x: -1, y: 1.5, z: 5.3, c: '#FF6B6B'});
+            v.push({x: 0, y: 1.5, z: 5.3, c: '#FF6B6B'});
+            v.push({x: 1, y: 1.5, z: 5.3, c: '#FF6B6B'});
+            
+            return v;
+        })()
     },
     MOUTH: {
         beak: [{x:0, y:5.5, z:5, c:'orange'}, {x:-1, y:5.5, z:4.5, c:'orange'}, {x:1, y:5.5, z:4.5, c:'orange'}],
@@ -1968,7 +2071,7 @@ export const ASSETS = {
                 v.push({x:3, y:3+i, z:5-i*0.5, c:'#654321'});
             }
             
-            return v;
+             return v;
         })()
     },
     

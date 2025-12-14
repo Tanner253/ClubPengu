@@ -43,6 +43,16 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         }
     });
     
+    // Cosmetic unlock system - promo code required for special items
+    const [unlockedCosmetics, setUnlockedCosmetics] = useState(() => {
+        try {
+            const saved = localStorage.getItem('unlocked_cosmetics');
+            return saved ? JSON.parse(saved) : [];
+        } catch {
+            return [];
+        }
+    });
+    
     // Check if current mount is unlocked, reset to none if not
     const [mount, setMount] = useState(() => {
         const savedMount = currentData?.mount || 'none';
@@ -74,6 +84,19 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         'BOATCOIN': 'minecraftBoat'
     };
     
+    // Cosmetic promo codes (case-sensitive) - { code: { id, category, name } }
+    const COSMETIC_PROMO_CODES = {
+        'LMAO': { id: 'lmao', category: 'eyes', name: '😂 LMAO Face' }
+    };
+    
+    // Check if a cosmetic is unlocked (or doesn't require unlock)
+    const isCosmeticUnlocked = (cosmeticId) => {
+        // Check if this cosmetic requires a promo code
+        const requiresCode = Object.values(COSMETIC_PROMO_CODES).some(c => c.id === cosmeticId);
+        if (!requiresCode) return true; // Doesn't require promo code
+        return unlockedCosmetics.includes(cosmeticId);
+    };
+    
     // Handle promo code submission
     const handlePromoCodeSubmit = () => {
         if (!promoCode.trim()) return;
@@ -97,6 +120,23 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             localStorage.setItem('unlocked_mounts', JSON.stringify(newUnlocked));
             setMount(mountId); // Auto-equip the unlocked mount
             setPromoMessage({ type: 'success', text: `🚣 Unlocked: Minecraft Boat!` });
+            setPromoCode('');
+            setTimeout(() => setPromoMessage(null), 3000);
+            return;
+        }
+        
+        // Check cosmetic promo codes (case-sensitive)
+        const cosmeticData = COSMETIC_PROMO_CODES[promoCode.trim()];
+        if (cosmeticData) {
+            const newUnlocked = [...unlockedCosmetics, cosmeticData.id];
+            setUnlockedCosmetics(newUnlocked);
+            localStorage.setItem('unlocked_cosmetics', JSON.stringify(newUnlocked));
+            // Auto-equip based on category
+            if (cosmeticData.category === 'eyes') setEyes(cosmeticData.id);
+            else if (cosmeticData.category === 'hat') setHat(cosmeticData.id);
+            else if (cosmeticData.category === 'mouth') setMouth(cosmeticData.id);
+            else if (cosmeticData.category === 'body') setBodyItem(cosmeticData.id);
+            setPromoMessage({ type: 'success', text: `🎉 Unlocked: ${cosmeticData.name}!` });
             setPromoCode('');
             setTimeout(() => setPromoMessage(null), 3000);
             return;
@@ -578,10 +618,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
 
     const options = {
         skin: Object.keys(PALETTE).filter(k => !['floorLight','floorDark','wood','rug','glass','beerGold','mirrorFrame','mirrorGlass', 'asphalt', 'roadLine', 'buildingBrickRed', 'buildingBrickYellow', 'buildingBrickBlue', 'windowLight', 'windowDark', 'grass', 'snow', 'water', 'waterDeep', 'butterfly1', 'butterfly2', 'butterfly3'].includes(k) && !k.startsWith('tie') && !k.startsWith('shirt') && !k.startsWith('camo') && !k.startsWith('jeans')),
-        head: Object.keys(ASSETS.HATS),
-        eyes: Object.keys(ASSETS.EYES),
-        mouth: Object.keys(ASSETS.MOUTH),
-        body: Object.keys(ASSETS.BODY),
+        head: Object.keys(ASSETS.HATS).filter(k => isCosmeticUnlocked(k)),
+        eyes: Object.keys(ASSETS.EYES).filter(k => isCosmeticUnlocked(k)),
+        mouth: Object.keys(ASSETS.MOUTH).filter(k => isCosmeticUnlocked(k)),
+        body: Object.keys(ASSETS.BODY).filter(k => isCosmeticUnlocked(k)),
         mounts: Object.keys(ASSETS.MOUNTS || {})
     };
     
