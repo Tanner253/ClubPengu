@@ -490,8 +490,9 @@ const VoxelWorld = ({
                 targetRoom: 'town',
                 position: { x: 0, z: 14 },
                 doorRadius: 3,
-                // Spawn outside pizza door
-                exitSpawnPos: { x: -38, z: 35 }
+                // Spawn outside pizza door (building at x=-45, door faces east)
+                // Building collision extends to x=-33.5 (world x=76.5), so spawn at x=-30 (world x=80)
+                exitSpawnPos: { x: -30, z: 35 }
             }
         ],
         nightclub: [
