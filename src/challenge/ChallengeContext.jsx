@@ -304,6 +304,30 @@ export function ChallengeProvider({ children }) {
         }
     }, [connected, handleMessage]);
     
+    // Sync local coin changes to server (when player earns coins from activities)
+    useEffect(() => {
+        if (!connected) return;
+        
+        const gm = GameManager.getInstance();
+        
+        // Listen for local coin changes and sync to server
+        const unsubscribe = gm.on('coinsChanged', (data) => {
+            // Only sync if NOT from server (avoid echo)
+            // Server syncs have reason: 'sync' or come from match_end
+            if (data.reason !== 'sync') {
+                if (window.__multiplayerWs?.readyState === WebSocket.OPEN) {
+                    window.__multiplayerWs.send(JSON.stringify({
+                        type: 'coins_update',
+                        coins: data.coins
+                    }));
+                    console.log('💰 Synced coins to server:', data.coins);
+                }
+            }
+        });
+        
+        return () => unsubscribe();
+    }, [connected]);
+    
     // Send message helper
     const send = useCallback((message) => {
         if (window.__multiplayerWs?.readyState === WebSocket.OPEN) {

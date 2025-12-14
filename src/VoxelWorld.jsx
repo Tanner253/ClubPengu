@@ -776,54 +776,259 @@ const VoxelWorld = ({
         return sprite;
     };
     
-    // Create Igloo Occupancy Bubble Sprite
-    const createIglooOccupancySprite = (count) => {
+    // MapleStory-style Igloo Banner Styles
+    const IGLOO_BANNER_STYLES = [
+        { // Pink/Rose - Oberon style
+            bgGradient: ['#FFE4EC', '#FFB6C1', '#FF69B4'],
+            borderColor: '#FF1493',
+            accentColor: '#FF69B4',
+            textColor: '#8B0A50',
+            decorColor: '#FF69B4',
+            titleBg: '#FFB6C1'
+        },
+        { // Cyan/Teal - Titania style  
+            bgGradient: ['#E0FFFF', '#AFEEEE', '#40E0D0'],
+            borderColor: '#00CED1',
+            accentColor: '#20B2AA',
+            textColor: '#006666',
+            decorColor: '#00CED1',
+            titleBg: '#AFEEEE'
+        },
+        { // Lime/Green - Petite Pico style
+            bgGradient: ['#F0FFF0', '#98FB98', '#7CFC00'],
+            borderColor: '#32CD32',
+            accentColor: '#00FF00',
+            textColor: '#006400',
+            decorColor: '#32CD32',
+            titleBg: '#98FB98'
+        },
+        { // Purple/Violet
+            bgGradient: ['#F8F0FF', '#DDA0DD', '#DA70D6'],
+            borderColor: '#9400D3',
+            accentColor: '#BA55D3',
+            textColor: '#4B0082',
+            decorColor: '#9400D3',
+            titleBg: '#DDA0DD'
+        },
+        { // Orange/Peach
+            bgGradient: ['#FFF8DC', '#FFDAB9', '#FFA500'],
+            borderColor: '#FF8C00',
+            accentColor: '#FF7F50',
+            textColor: '#8B4513',
+            decorColor: '#FF8C00',
+            titleBg: '#FFDAB9'
+        },
+        { // Blue/Sky
+            bgGradient: ['#F0F8FF', '#B0E0E6', '#87CEEB'],
+            borderColor: '#4169E1',
+            accentColor: '#6495ED',
+            textColor: '#00008B',
+            decorColor: '#4169E1',
+            titleBg: '#B0E0E6'
+        },
+        { // Gold/Yellow
+            bgGradient: ['#FFFACD', '#FFE4B5', '#FFD700'],
+            borderColor: '#DAA520',
+            accentColor: '#FFC125',
+            textColor: '#8B6914',
+            decorColor: '#DAA520',
+            titleBg: '#FFE4B5'
+        },
+        { // Red/Coral
+            bgGradient: ['#FFF0F0', '#FFB6B6', '#FF6B6B'],
+            borderColor: '#DC143C',
+            accentColor: '#FF4444',
+            textColor: '#8B0000',
+            decorColor: '#DC143C',
+            titleBg: '#FFB6B6'
+        }
+    ];
+    
+    // Placeholder content for igloo banners
+    const IGLOO_BANNER_CONTENT = [
+        { title: "🌙 Moon Crew HQ", ticker: "$MOON", shill: "Private Alpha • DM for invite" },
+        { title: "🔥 Degen's Den", ticker: "$DEGEN", shill: "100x gems daily • VIP access" },
+        { title: "🐧 Penguin Mafia", ticker: "$PENG", shill: "OG holders only • t.me/pengmafia" },
+        { title: "💎 Diamond Flippers", ticker: "$FLIP", shill: "We don't sell • Join the cult" },
+        { title: "🚀 Launch Pad", ticker: "$PAD", shill: "Early access • Presale alerts" },
+        { title: "🎰 Whale Watchers", ticker: "$WHALE", shill: "Track big wallets • Free signals" },
+        { title: "⚡ Speed Runners", ticker: "$SPEED", shill: "Snipe bots • Fast entry" },
+        { title: "🏠 Cozy Corner", ticker: "$COZY", shill: "Chill vibes • Good company" },
+        { title: "🎮 Gamer Guild", ticker: "$GG", shill: "P2E alpha • Gaming NFTs" },
+        { title: "🌈 Rainbow Room", ticker: "$RGB", shill: "All welcome • Good energy only" }
+    ];
+    
+    // Create MapleStory-style Igloo Banner Sprite
+    const createIglooOccupancySprite = (count, iglooIndex = 0) => {
         const THREE = window.THREE;
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        const fontSize = 36;
-        const padding = 16;
-        const text = count > 0 ? `🐧 ${count}` : '🐧 empty';
+        // Get style and content based on igloo index
+        const style = IGLOO_BANNER_STYLES[iglooIndex % IGLOO_BANNER_STYLES.length];
+        const content = IGLOO_BANNER_CONTENT[iglooIndex % IGLOO_BANNER_CONTENT.length];
         
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        const textWidth = ctx.measureText(text).width;
-        
-        const w = textWidth + padding * 2;
-        const h = fontSize + padding * 2;
+        // Bigger banner size
+        const w = 280;
+        const h = 160;
+        const padding = 12;
+        const cornerRadius = 16;
         
         canvas.width = w;
         canvas.height = h;
         
-        // Re-apply font after resize
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'center';
+        // Create gradient background
+        const gradient = ctx.createLinearGradient(0, 0, 0, h);
+        gradient.addColorStop(0, style.bgGradient[0]);
+        gradient.addColorStop(0.5, style.bgGradient[1]);
+        gradient.addColorStop(1, style.bgGradient[2]);
         
-        // Draw bubble background - semi-transparent dark blue
-        ctx.fillStyle = count > 0 ? 'rgba(30, 60, 100, 0.85)' : 'rgba(60, 60, 80, 0.75)';
-        ctx.strokeStyle = count > 0 ? '#4a9eff' : '#666';
-        ctx.lineWidth = 3;
-        
-        const r = 12;
+        // Draw main banner shape with rounded corners
         ctx.beginPath();
-        ctx.moveTo(r, 0);
-        ctx.lineTo(w - r, 0);
-        ctx.quadraticCurveTo(w, 0, w, r);
-        ctx.lineTo(w, h - r);
-        ctx.quadraticCurveTo(w, h, w - r, h);
-        ctx.lineTo(r, h);
-        ctx.quadraticCurveTo(0, h, 0, h - r);
-        ctx.lineTo(0, r);
-        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.moveTo(cornerRadius, 0);
+        ctx.lineTo(w - cornerRadius, 0);
+        ctx.quadraticCurveTo(w, 0, w, cornerRadius);
+        ctx.lineTo(w, h - cornerRadius);
+        ctx.quadraticCurveTo(w, h, w - cornerRadius, h);
+        ctx.lineTo(cornerRadius, h);
+        ctx.quadraticCurveTo(0, h, 0, h - cornerRadius);
+        ctx.lineTo(0, cornerRadius);
+        ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
         ctx.closePath();
         
+        ctx.fillStyle = gradient;
         ctx.fill();
+        
+        // Draw border
+        ctx.strokeStyle = style.borderColor;
+        ctx.lineWidth = 4;
         ctx.stroke();
         
-        // Draw text
-        ctx.fillStyle = count > 0 ? '#ffffff' : '#aaaaaa';
-        ctx.fillText(text, w / 2, h / 2);
+        // Draw inner border accent
+        ctx.strokeStyle = style.accentColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cornerRadius + 6, 6);
+        ctx.lineTo(w - cornerRadius - 6, 6);
+        ctx.quadraticCurveTo(w - 6, 6, w - 6, cornerRadius + 6);
+        ctx.lineTo(w - 6, h - cornerRadius - 6);
+        ctx.quadraticCurveTo(w - 6, h - 6, w - cornerRadius - 6, h - 6);
+        ctx.lineTo(cornerRadius + 6, h - 6);
+        ctx.quadraticCurveTo(6, h - 6, 6, h - cornerRadius - 6);
+        ctx.lineTo(6, cornerRadius + 6);
+        ctx.quadraticCurveTo(6, 6, cornerRadius + 6, 6);
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Draw corner decorations (flower/leaf style like MapleStory)
+        const drawFlowerDecor = (x, y, size) => {
+            ctx.fillStyle = style.decorColor;
+            // Center circle
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+            // Petals
+            for (let i = 0; i < 5; i++) {
+                const angle = (i * Math.PI * 2) / 5 - Math.PI / 2;
+                ctx.beginPath();
+                ctx.ellipse(
+                    x + Math.cos(angle) * size * 0.5,
+                    y + Math.sin(angle) * size * 0.5,
+                    size * 0.35, size * 0.2,
+                    angle, 0, Math.PI * 2
+                );
+                ctx.fill();
+            }
+            // White center
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+        };
+        
+        // Corner flowers
+        drawFlowerDecor(20, 20, 14);
+        drawFlowerDecor(w - 20, 20, 14);
+        drawFlowerDecor(20, h - 20, 12);
+        drawFlowerDecor(w - 20, h - 20, 12);
+        
+        // Title area background
+        ctx.fillStyle = style.titleBg;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(padding + 20, padding + 8, w - padding * 2 - 40, 32);
+        ctx.globalAlpha = 1;
+        
+        // Draw title
+        ctx.font = 'bold 20px "Comic Sans MS", cursive, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = style.textColor;
+        ctx.fillText(content.title, w / 2, padding + 24);
+        
+        // Draw ticker
+        ctx.font = 'bold 24px "Arial Black", sans-serif';
+        ctx.fillStyle = style.borderColor;
+        ctx.fillText(content.ticker, w / 2, padding + 56);
+        
+        // Draw shill text
+        ctx.font = '14px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = style.textColor;
+        ctx.globalAlpha = 0.9;
+        ctx.fillText(content.shill, w / 2, padding + 82);
+        ctx.globalAlpha = 1;
+        
+        // Draw separator line
+        ctx.strokeStyle = style.borderColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(padding + 30, h - 40);
+        ctx.lineTo(w - padding - 30, h - 40);
+        ctx.stroke();
+        
+        // Draw penguin icon (simple pixel art style)
+        const penguinX = w / 2 - 25;
+        const penguinY = h - 28;
+        
+        // Penguin body (black)
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.ellipse(penguinX, penguinY, 10, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Penguin belly (white)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.ellipse(penguinX, penguinY + 2, 6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Penguin eyes
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(penguinX - 3, penguinY - 5, 2, 0, Math.PI * 2);
+        ctx.arc(penguinX + 3, penguinY - 5, 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Penguin beak
+        ctx.fillStyle = '#FFA500';
+        ctx.beginPath();
+        ctx.moveTo(penguinX, penguinY - 2);
+        ctx.lineTo(penguinX - 4, penguinY + 2);
+        ctx.lineTo(penguinX + 4, penguinY + 2);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw count
+        ctx.font = 'bold 22px Arial, sans-serif';
+        ctx.fillStyle = count > 0 ? style.textColor : '#888888';
+        ctx.textAlign = 'left';
+        const countText = count > 0 ? `${count}` : '0';
+        ctx.fillText(countText, penguinX + 18, penguinY + 6);
+        
+        // Status indicator
+        ctx.font = '12px Arial, sans-serif';
+        ctx.fillStyle = count > 0 ? '#22c55e' : '#888888';
+        ctx.textAlign = 'right';
+        ctx.fillText(count > 0 ? '● OPEN' : '○ EMPTY', w - padding - 15, h - 22);
         
         const texture = new THREE.CanvasTexture(canvas);
         const material = new THREE.SpriteMaterial({ 
@@ -834,11 +1039,15 @@ const VoxelWorld = ({
         });
         const sprite = new THREE.Sprite(material);
         
-        const scale = 0.012;
+        // Bigger scale for the banner
+        const scale = 0.025;
         sprite.scale.set(w * scale, h * scale, 1);
-        sprite.position.y = 8; // Height above igloo
+        sprite.position.y = 10; // Higher above igloo
         sprite.renderOrder = 998;
         sprite.visible = false; // Start hidden, show when player is close
+        
+        // Store style index for updates
+        sprite.userData.styleIndex = iglooIndex;
         
         return sprite;
     };
@@ -1122,18 +1331,19 @@ const VoxelWorld = ({
             });
             iglooOccupancySpritesRef.current.clear();
             
-            // Create sprite for each igloo
-            iglooData.forEach(igloo => {
-                const sprite = createIglooOccupancySprite(0); // Start with 0 (empty)
+            // Create sprite for each igloo with unique MapleStory-style banners
+            iglooData.forEach((igloo, index) => {
+                const sprite = createIglooOccupancySprite(0, index); // Start with 0, unique style per igloo
                 sprite.position.set(
                     townCenterX + igloo.x,
-                    8, // Height above igloo
+                    10, // Higher above igloo for bigger banners
                     townCenterZ + igloo.z
                 );
                 sprite.userData.iglooId = igloo.id;
                 sprite.userData.iglooRoom = igloo.room;
                 sprite.userData.iglooX = townCenterX + igloo.x;
                 sprite.userData.iglooZ = townCenterZ + igloo.z;
+                sprite.userData.iglooIndex = index; // Store index for style
                 sprite.visible = false; // Start hidden, show when player is close
                 scene.add(sprite);
                 iglooOccupancySpritesRef.current.set(igloo.id, sprite);
@@ -3266,23 +3476,23 @@ const VoxelWorld = ({
                 console.warn('Failed to load saved position:', e);
             }
             
-            // If no saved position, use default spawn (south of map, facing north toward town)
+            // If no saved position, use default spawn at TOWN CENTER (same as /spawn command)
             if (!loadedFromStorage) {
                 const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
                 const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
-                // Spawn south of the dojo, facing north toward the action
-                posRef.current = { x: townCenterX, y: 0, z: townCenterZ + 85 };
-                rotRef.current = Math.PI; // Face north (toward -Z direction)
+                // Spawn at town center - same location as /spawn command
+                posRef.current = { x: townCenterX, y: 0, z: townCenterZ };
+                rotRef.current = 0; // Face south (default orientation)
             }
         } else if (roomData && roomData.spawnPos) {
             // Other rooms: use room's spawn position
             posRef.current = { x: roomData.spawnPos.x, y: 0, z: roomData.spawnPos.z };
         } else {
-            // Fallback spawn (same as town default)
+            // Fallback spawn at TOWN CENTER (same as /spawn command)
             const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
             const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
-            posRef.current = { x: townCenterX + 0.4, y: 0, z: townCenterZ - 27.2 };
-            rotRef.current = 0; // Face north
+            posRef.current = { x: townCenterX, y: 0, z: townCenterZ };
+            rotRef.current = 0; // Face south (default orientation)
         }
         
         // CRITICAL: Sync mesh position with posRef IMMEDIATELY after spawn logic
@@ -7743,52 +7953,171 @@ const VoxelWorld = ({
         return () => window.removeEventListener('roomCounts', handleRoomCounts);
     }, []);
     
-    // Helper to update igloo sprite texture
+    // Helper to update igloo sprite texture (MapleStory-style)
     const updateIglooOccupancySprite = (sprite, count) => {
         const THREE = window.THREE;
         if (!THREE) return;
         
+        const iglooIndex = sprite.userData.iglooIndex || 0;
+        const style = IGLOO_BANNER_STYLES[iglooIndex % IGLOO_BANNER_STYLES.length];
+        const content = IGLOO_BANNER_CONTENT[iglooIndex % IGLOO_BANNER_CONTENT.length];
+        
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         
-        const fontSize = 36;
-        const padding = 16;
-        const text = count > 0 ? `🐧 ${count}` : '🐧 empty';
-        
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        const textWidth = ctx.measureText(text).width;
-        
-        const w = textWidth + padding * 2;
-        const h = fontSize + padding * 2;
+        // Bigger banner size
+        const w = 280;
+        const h = 160;
+        const padding = 12;
+        const cornerRadius = 16;
         
         canvas.width = w;
         canvas.height = h;
         
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'center';
+        // Create gradient background
+        const gradient = ctx.createLinearGradient(0, 0, 0, h);
+        gradient.addColorStop(0, style.bgGradient[0]);
+        gradient.addColorStop(0.5, style.bgGradient[1]);
+        gradient.addColorStop(1, style.bgGradient[2]);
         
-        ctx.fillStyle = count > 0 ? 'rgba(30, 60, 100, 0.85)' : 'rgba(60, 60, 80, 0.75)';
-        ctx.strokeStyle = count > 0 ? '#4a9eff' : '#666';
-        ctx.lineWidth = 3;
-        
-        const r = 12;
+        // Draw main banner shape with rounded corners
         ctx.beginPath();
-        ctx.moveTo(r, 0);
-        ctx.lineTo(w - r, 0);
-        ctx.quadraticCurveTo(w, 0, w, r);
-        ctx.lineTo(w, h - r);
-        ctx.quadraticCurveTo(w, h, w - r, h);
-        ctx.lineTo(r, h);
-        ctx.quadraticCurveTo(0, h, 0, h - r);
-        ctx.lineTo(0, r);
-        ctx.quadraticCurveTo(0, 0, r, 0);
+        ctx.moveTo(cornerRadius, 0);
+        ctx.lineTo(w - cornerRadius, 0);
+        ctx.quadraticCurveTo(w, 0, w, cornerRadius);
+        ctx.lineTo(w, h - cornerRadius);
+        ctx.quadraticCurveTo(w, h, w - cornerRadius, h);
+        ctx.lineTo(cornerRadius, h);
+        ctx.quadraticCurveTo(0, h, 0, h - cornerRadius);
+        ctx.lineTo(0, cornerRadius);
+        ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
         ctx.closePath();
+        
+        ctx.fillStyle = gradient;
         ctx.fill();
+        
+        // Draw border
+        ctx.strokeStyle = style.borderColor;
+        ctx.lineWidth = 4;
         ctx.stroke();
         
-        ctx.fillStyle = count > 0 ? '#ffffff' : '#aaaaaa';
-        ctx.fillText(text, w / 2, h / 2);
+        // Draw inner border accent
+        ctx.strokeStyle = style.accentColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(cornerRadius + 6, 6);
+        ctx.lineTo(w - cornerRadius - 6, 6);
+        ctx.quadraticCurveTo(w - 6, 6, w - 6, cornerRadius + 6);
+        ctx.lineTo(w - 6, h - cornerRadius - 6);
+        ctx.quadraticCurveTo(w - 6, h - 6, w - cornerRadius - 6, h - 6);
+        ctx.lineTo(cornerRadius + 6, h - 6);
+        ctx.quadraticCurveTo(6, h - 6, 6, h - cornerRadius - 6);
+        ctx.lineTo(6, cornerRadius + 6);
+        ctx.quadraticCurveTo(6, 6, cornerRadius + 6, 6);
+        ctx.closePath();
+        ctx.stroke();
+        
+        // Draw corner decorations (flower/leaf style like MapleStory)
+        const drawFlowerDecor = (x, y, size) => {
+            ctx.fillStyle = style.decorColor;
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.4, 0, Math.PI * 2);
+            ctx.fill();
+            for (let i = 0; i < 5; i++) {
+                const angle = (i * Math.PI * 2) / 5 - Math.PI / 2;
+                ctx.beginPath();
+                ctx.ellipse(
+                    x + Math.cos(angle) * size * 0.5,
+                    y + Math.sin(angle) * size * 0.5,
+                    size * 0.35, size * 0.2,
+                    angle, 0, Math.PI * 2
+                );
+                ctx.fill();
+            }
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(x, y, size * 0.2, 0, Math.PI * 2);
+            ctx.fill();
+        };
+        
+        drawFlowerDecor(20, 20, 14);
+        drawFlowerDecor(w - 20, 20, 14);
+        drawFlowerDecor(20, h - 20, 12);
+        drawFlowerDecor(w - 20, h - 20, 12);
+        
+        // Title area background
+        ctx.fillStyle = style.titleBg;
+        ctx.globalAlpha = 0.7;
+        ctx.fillRect(padding + 20, padding + 8, w - padding * 2 - 40, 32);
+        ctx.globalAlpha = 1;
+        
+        // Draw title
+        ctx.font = 'bold 20px "Comic Sans MS", cursive, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = style.textColor;
+        ctx.fillText(content.title, w / 2, padding + 24);
+        
+        // Draw ticker
+        ctx.font = 'bold 24px "Arial Black", sans-serif';
+        ctx.fillStyle = style.borderColor;
+        ctx.fillText(content.ticker, w / 2, padding + 56);
+        
+        // Draw shill text
+        ctx.font = '14px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = style.textColor;
+        ctx.globalAlpha = 0.9;
+        ctx.fillText(content.shill, w / 2, padding + 82);
+        ctx.globalAlpha = 1;
+        
+        // Draw separator line
+        ctx.strokeStyle = style.borderColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(padding + 30, h - 40);
+        ctx.lineTo(w - padding - 30, h - 40);
+        ctx.stroke();
+        
+        // Draw penguin icon
+        const penguinX = w / 2 - 25;
+        const penguinY = h - 28;
+        
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.ellipse(penguinX, penguinY, 10, 12, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.ellipse(penguinX, penguinY + 2, 6, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#1a1a2e';
+        ctx.beginPath();
+        ctx.arc(penguinX - 3, penguinY - 5, 2, 0, Math.PI * 2);
+        ctx.arc(penguinX + 3, penguinY - 5, 2, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.fillStyle = '#FFA500';
+        ctx.beginPath();
+        ctx.moveTo(penguinX, penguinY - 2);
+        ctx.lineTo(penguinX - 4, penguinY + 2);
+        ctx.lineTo(penguinX + 4, penguinY + 2);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Draw count
+        ctx.font = 'bold 22px Arial, sans-serif';
+        ctx.fillStyle = count > 0 ? style.textColor : '#888888';
+        ctx.textAlign = 'left';
+        const countText = count > 0 ? `${count}` : '0';
+        ctx.fillText(countText, penguinX + 18, penguinY + 6);
+        
+        // Status indicator
+        ctx.font = '12px Arial, sans-serif';
+        ctx.fillStyle = count > 0 ? '#22c55e' : '#888888';
+        ctx.textAlign = 'right';
+        ctx.fillText(count > 0 ? '● OPEN' : '○ EMPTY', w - padding - 15, h - 22);
         
         // Update sprite texture
         if (sprite.material.map) {
@@ -7797,7 +8126,8 @@ const VoxelWorld = ({
         sprite.material.map = new THREE.CanvasTexture(canvas);
         sprite.material.needsUpdate = true;
         
-        const scale = 0.012;
+        // Bigger scale for the banner
+        const scale = 0.025;
         sprite.scale.set(w * scale, h * scale, 1);
     };
     

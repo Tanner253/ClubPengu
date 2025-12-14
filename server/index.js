@@ -468,15 +468,11 @@ function handleMessage(playerId, message) {
             player.puffle = message.puffle || null;
             
             // Sync coins from client (client has localStorage persistence)
-            // Only accept if server doesn't already have this player's coins
-            // or if the client has more coins (they earned them before server restart)
+            // Always trust the client's coins on join - client localStorage is source of truth
+            // Server only modifies coins during matches (which then syncs back to client)
             if (message.coins !== undefined && message.coins >= 0) {
-                const serverCoins = playerCoins.get(playerId);
-                if (serverCoins === undefined) {
-                    // Server doesn't know this player yet, trust client
-                    playerCoins.set(playerId, message.coins);
-                    console.log(`💰 Synced ${player.name}'s coins from client: ${message.coins}`);
-                }
+                playerCoins.set(playerId, message.coins);
+                console.log(`💰 Synced ${player.name}'s coins from client: ${message.coins}`);
             }
             
             console.log(`Join request from ${player.name}:`, message.puffle ? `has ${message.puffle.color} puffle` : 'no puffle');
@@ -486,7 +482,7 @@ function handleMessage(playerId, message) {
             
             // Set initial position based on room
             if (roomId === 'town') {
-                player.position = { x: 80, y: 0, z: 90 }; // Town center spawn
+                player.position = { x: 110, y: 0, z: 110 }; // Town center spawn (same as /spawn)
             } else if (roomId === 'dojo') {
                 player.position = { x: 0, y: 0, z: 14 }; // Dojo entrance
             }
@@ -723,7 +719,7 @@ function handleMessage(playerId, message) {
                 
                 // Set spawn position for new room
                 if (newRoom === 'town') {
-                    player.position = { x: 80, y: 0, z: 70 }; // Near dojo exit
+                    player.position = { x: 110, y: 0, z: 110 }; // Town center spawn (same as /spawn)
                 } else if (newRoom === 'dojo') {
                     player.position = { x: 0, y: 0, z: 14 }; // Near entrance
                 }
