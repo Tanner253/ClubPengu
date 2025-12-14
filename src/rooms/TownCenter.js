@@ -140,15 +140,42 @@ class TownCenter {
             });
         }
         
-        // ==================== NIGHTCLUB PLACEHOLDER ====================
-        // At the very top center of the map (will be replaced with actual nightclub later)
+        // ==================== NIGHTCLUB ====================
+        // Epic nightclub at the north end of the T-bar street
         props.push({
-            type: 'nightclub_placeholder',
+            type: 'nightclub',
             x: C,
             z: C - 75,  // Far north, against world border
             width: 25,
             depth: 20,
             height: 12
+        });
+        
+        // Nightclub entrance trigger (in front of the building)
+        props.push({
+            type: 'nightclub_entrance',
+            x: C,
+            z: C - 60,  // In front of nightclub entrance
+        });
+        
+        // ==================== HIGHWAY BILLBOARD ====================
+        // Tall illuminated billboard facing the main T-stem street
+        // Positioned on the east side of town, facing west toward the street
+        props.push({
+            type: 'billboard',
+            x: C + 80,      // East side of map
+            z: C + 20,      // Near the T intersection
+            rotation: Math.PI / 2 + Math.PI,  // Face west toward the street
+            imagePath: '/advert.png'
+        });
+        
+        // Second billboard on the west side facing east
+        props.push({
+            type: 'billboard',
+            x: C - 80,      // West side of map
+            z: C + 40,      // Along the stem
+            rotation: -Math.PI / 2,  // Face east toward the street
+            imagePath: '/advert.png'
         });
         
         // ==================== GRAVEL ICE WALKING PATH (T-SHAPE) ====================
@@ -589,27 +616,80 @@ class TownCenter {
                 case 'fence':
                     mesh = this.propsFactory.createFence(prop.length);
                     break;
-                case 'nightclub_placeholder':
-                    // Simple placeholder cube for nightclub (to be replaced later)
-                    const THREE = this.THREE;
-                    const ncGeo = new THREE.BoxGeometry(prop.width, prop.height, prop.depth);
-                    const ncMat = new THREE.MeshStandardMaterial({ 
-                        color: 0x8B4513, // Brown
-                        roughness: 0.8 
+                case 'nightclub':
+                    // Epic nightclub with animated speakers and neon lights
+                    const nightclubResult = this.propsFactory.createNightclub({
+                        width: prop.width,
+                        depth: prop.depth,
+                        height: prop.height
                     });
-                    mesh = new THREE.Mesh(ncGeo, ncMat);
-                    mesh.position.y = prop.height / 2; // Lift to sit on ground
-                    mesh.castShadow = true;
-                    mesh.receiveShadow = true;
-                    mesh.name = 'nightclub_placeholder';
+                    mesh = nightclubResult.mesh;
+                    mesh.userData.nightclubUpdate = nightclubResult.update;
+                    mesh.userData.speakers = nightclubResult.speakers;
+                    mesh.name = 'nightclub';
                     
-                    // Add collision for the nightclub
+                    // Add collision for the nightclub building
                     this.collisionSystem.addCollider(
                         prop.x, prop.z,
                         { type: 'box', size: { x: prop.width + 2, z: prop.depth + 2 }, height: prop.height },
                         1, // SOLID
                         { name: 'nightclub' }
                     );
+                    
+                    // Add collisions for the speakers (outside the building)
+                    if (nightclubResult.speakerColliders) {
+                        nightclubResult.speakerColliders.forEach((speaker, idx) => {
+                            this.collisionSystem.addCollider(
+                                prop.x + speaker.x,
+                                prop.z + speaker.z,
+                                { type: 'box', size: speaker.size, height: speaker.height },
+                                1, // SOLID
+                                { name: `nightclub_speaker_${idx}` },
+                                0,
+                                speaker.y || 0
+                            );
+                        });
+                    }
+                    break;
+                    
+                case 'billboard':
+                    // Highway-style billboard with lit-up advertisement
+                    const billboardResult = this.propsFactory.createBillboard(
+                        prop.imagePath || '/advert.png',
+                        { width: 12, height: 4, poleHeight: 15 }
+                    );
+                    mesh = billboardResult.mesh;
+                    mesh.name = 'billboard';
+                    
+                    // Add collision for billboard poles
+                    this.collisionSystem.addCollider(
+                        prop.x, prop.z,
+                        { type: 'box', size: { x: 2, z: 1 }, height: 20 },
+                        1, // SOLID
+                        { name: 'billboard' }
+                    );
+                    break;
+                    
+                case 'nightclub_entrance':
+                    // Trigger zone for entering the nightclub interior
+                    this.collisionSystem.addTrigger(
+                        prop.x, prop.z,
+                        {
+                            type: 'box',
+                            size: { x: 8, z: 5 },
+                            action: 'enter_nightclub',
+                            message: '🎵 Enter Nightclub (Press E)',
+                            destination: 'nightclub'
+                        },
+                        (event) => this._handleInteraction(event, { 
+                            action: 'enter_nightclub',
+                            message: '🎵 Enter Nightclub (Press E)',
+                            destination: 'nightclub'
+                        }),
+                        { name: 'nightclub_entrance' }
+                    );
+                    // No mesh for this - just a trigger
+                    mesh = null;
                     break;
                 case 'light_string':
                     // Christmas light string connecting two points
@@ -950,7 +1030,7 @@ class TownCenter {
 
     update(time, delta, nightFactor = 0.5) {
         if (!this._animatedCache) {
-            this._animatedCache = { campfires: [], christmasTrees: [], frameCounter: 0 };
+            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], frameCounter: 0 };
             this.propMeshes.forEach(mesh => {
                 if (mesh.name === 'campfire') {
                     const flames = [];
@@ -962,11 +1042,21 @@ class TownCenter {
                 if (mesh.name === 'christmas_tree' && mesh.userData.treeUpdate) {
                     this._animatedCache.christmasTrees.push(mesh);
                 }
+                if (mesh.name === 'nightclub' && mesh.userData.nightclubUpdate) {
+                    this._animatedCache.nightclubs.push(mesh);
+                }
             });
         }
         
         this._animatedCache.frameCounter++;
         const frame = this._animatedCache.frameCounter;
+        
+        // Animate nightclub speakers and neon lights (every frame for smooth bass)
+        this._animatedCache.nightclubs.forEach(mesh => {
+            if (mesh.userData.nightclubUpdate) {
+                mesh.userData.nightclubUpdate(time);
+            }
+        });
         
         this._animatedCache.campfires.forEach(({ flames, particles, light }) => {
             flames.forEach(flame => {

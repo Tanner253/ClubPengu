@@ -14,6 +14,7 @@ import GameManager from './engine/GameManager';
 import Puffle from './engine/Puffle';
 import PropsFactory from './engine/PropsFactory';
 import TownCenter from './rooms/TownCenter';
+import Nightclub from './rooms/Nightclub';
 import { useMultiplayer } from './multiplayer';
 import { useChallenge } from './challenge';
 import { MarcusGenerators, MARCUS_PALETTE } from './characters';
@@ -43,6 +44,7 @@ const VoxelWorld = ({
     const clockRef = useRef(null);
     const roomRef = useRef(room); // Track current room
     const townCenterRef = useRef(null); // TownCenter room instance
+    const nightclubRef = useRef(null); // Nightclub room instance
     const roomDataRef = useRef(null); // Store room data (including beach ball) for multiplayer sync
     const raycasterRef = useRef(null); // For player click detection
     const mouseRef = useRef({ x: 0, y: 0 }); // Mouse position for raycasting
@@ -466,6 +468,17 @@ const VoxelWorld = ({
                 // Pizza at (-45, 35), door faces east
                 position: { x: -38, z: 35 },
                 doorRadius: 3
+            },
+            { 
+                id: 'nightclub-entrance', 
+                name: 'NIGHTCLUB', 
+                emoji: '🎵', 
+                description: 'Enter the Nightclub',
+                targetRoom: 'nightclub',
+                // Nightclub at (0, -75), door faces south
+                position: { x: 0, z: -60 },
+                doorRadius: 4,
+                exitSpawnPos: { x: 0, z: -55 }  // Spawn south of nightclub when exiting
             }
         ],
         pizza: [
@@ -479,6 +492,19 @@ const VoxelWorld = ({
                 doorRadius: 3,
                 // Spawn outside pizza door
                 exitSpawnPos: { x: -38, z: 35 }
+            }
+        ],
+        nightclub: [
+            { 
+                id: 'nightclub-exit', 
+                name: 'EXIT', 
+                emoji: '🚪', 
+                description: 'Return to Town',
+                targetRoom: 'town',
+                position: { x: 2, z: 30 },  // Exit door on left wall
+                doorRadius: 4,  // Larger radius to make it easier to trigger
+                // Spawn outside nightclub door in town
+                exitSpawnPos: { x: 0, z: -55 }
             }
         ],
         igloo1: [
@@ -2420,6 +2446,89 @@ const VoxelWorld = ({
             roomData = generateDojoRoom();
         } else if (room === 'pizza') {
             roomData = generatePizzaRoom();
+        } else if (room === 'nightclub') {
+            // Generate nightclub interior
+            const nightclub = new Nightclub(THREE);
+            const nightclubResult = nightclub.spawn(scene);
+            nightclubRef.current = nightclub;
+            
+            // Use Nightclub spawn position
+            const spawnPos = nightclub.getSpawnPosition();
+            
+            // Simple bounds-based collision like pizza parlor
+            const W = Nightclub.ROOM_WIDTH;
+            const D = Nightclub.ROOM_DEPTH;
+            const CX = W / 2;
+            
+            // Dance floor dimensions (from Nightclub.js)
+            // Created at (CX, CZ+5) = (20, 22.5)
+            // 8 cols x 6 rows, tileSize=2, gap=0.1
+            const danceFloorWidth = 8 * 2.1; // ~16.8
+            const danceFloorDepth = 6 * 2.1; // ~12.6
+            const danceFloorCenterZ = D / 2 + 5; // 22.5
+            
+            roomData = {
+                bounds: {
+                    // Walls are at x=0, x=W, z=0, z=D
+                    // Use actual room size - collision buffer applied in movement code
+                    minX: 0,
+                    maxX: W,
+                    minZ: 0,
+                    maxZ: D
+                },
+                spawnPos: spawnPos,
+                nightclub: nightclub,
+                // Dance floor - raised platform player walks ON
+                danceFloor: {
+                    minX: CX - danceFloorWidth / 2 - 0.5,
+                    maxX: CX + danceFloorWidth / 2 + 0.5,
+                    minZ: danceFloorCenterZ - danceFloorDepth / 2 - 0.5,
+                    maxZ: danceFloorCenterZ + danceFloorDepth / 2 + 0.5,
+                    height: 0.4 // Tile surface height
+                },
+                // DJ booth platform collision (can walk on it when above) - LOWERED 50%
+                djBooth: {
+                    minX: CX - 6,
+                    maxX: CX + 6,
+                    minZ: 0,
+                    maxZ: 6,
+                    height: 0.75
+                },
+                // Equipment rack behind DJ (solid wall) - LOWERED
+                equipmentRack: {
+                    minX: CX - 1.5,
+                    maxX: CX + 1.5,
+                    minZ: 0,
+                    maxZ: 2,
+                    height: 2.75
+                },
+                // Speakers (small base collision, landable on top)
+                speakers: [
+                    { x: 2, z: D / 2 - 5, w: 2.5, d: 2, h: 4.8 },
+                    { x: 2, z: D / 2 + 5, w: 2.5, d: 2, h: 4.8 },
+                    { x: W - 2, z: D / 2 - 5, w: 2.5, d: 2, h: 4.8 },
+                    { x: W - 2, z: D / 2 + 5, w: 2.5, d: 2, h: 4.8 },
+                    { x: W / 2 - 8, z: 5, w: 3, d: 2.5, h: 6 },
+                    { x: W / 2 + 8, z: 5, w: 3, d: 2.5, h: 6 },
+                    { x: W / 2 - 10, z: D / 2 + 8, w: 2, d: 1.5, h: 4 },
+                    { x: W / 2 + 10, z: D / 2 + 8, w: 2, d: 1.5, h: 4 },
+                ],
+                // Stairs - ramp from z=22.5 going north, each step
+                stairs: {
+                    x: W - 4,
+                    startZ: D / 2 + 5, // z = 22.5
+                    stepHeight: 0.4,
+                    stepDepth: 0.6,
+                    width: 3,
+                    totalSteps: 30 // Goes to ceiling
+                },
+                // Records crate
+                recordsCrate: {
+                    x: 5, z: 8, w: 1.5, d: 1.5, h: 1
+                },
+                // Landing surfaces for parkour
+                landingSurfaces: nightclubResult.landingSurfaces || []
+            };
         } else if (room.startsWith('igloo')) {
             roomData = generateIglooRoom();
             // Request ball sync from server when entering igloo
@@ -4008,6 +4117,107 @@ const VoxelWorld = ({
                     const bobAmount = speed > 0.5 ? Math.sin(time * 15) * 0.05 : 0;
                     ball.mesh.position.y = 0.5 + bobAmount;
                 }
+            } else if (roomRef.current === 'nightclub') {
+                // Nightclub collision - walls + interior objects
+                // Room is 40 wide (X) by 35 deep (Z)
+                const ROOM_W = 40;
+                const ROOM_D = 35;
+                const WALL = 0.5; // Thin wall buffer
+                const CX = ROOM_W / 2; // Center X = 20
+                const py = posRef.current.y; // Player Y for height-based collision
+                const PLAYER_RADIUS = 0.6;
+                
+                // Start with intended position
+                finalX = nextX;
+                finalZ = nextZ;
+                
+                // Helper to check box collision (returns true if colliding)
+                const checkBoxCollision = (px, pz, box) => {
+                    // Skip collision if player is above the object
+                    if (py >= box.top - 0.1) return false;
+                    
+                    return px > box.minX - PLAYER_RADIUS && px < box.maxX + PLAYER_RADIUS &&
+                           pz > box.minZ - PLAYER_RADIUS && pz < box.maxZ + PLAYER_RADIUS;
+                };
+                
+                // Define solid objects (can't walk through, only over when high enough)
+                // DJ booth is at (CX=20, 3), Stairs at (36, 22.5), etc.
+                const CZ = ROOM_D / 2; // Center Z = 17.5
+                const solidObjects = [
+                    // === DJ BOOTH AREA (placed at cx=20, cz=3) ===
+                    // DJ Platform - raised platform (12x0.75x6) - LOWERED 50%
+                    { minX: CX - 6, maxX: CX + 6, minZ: 0, maxZ: 6, top: 0.75, name: 'dj_platform' },
+                    // Equipment rack behind DJ (3x4x1 at relative (0, 1.75, -1.5))
+                    { minX: CX - 1.5, maxX: CX + 1.5, minZ: 1, maxZ: 2, top: 2.75, name: 'equipment_rack' },
+                    // DJ desk on platform (8x0.6x2 at relative (0, 1.05, 1)) - top at ~1.35
+                    { minX: CX - 4, maxX: CX + 4, minZ: 3, maxZ: 5, top: 1.35, name: 'dj_desk' },
+                    
+                    // === RECORDS CRATE (at x=5, z=8) ===
+                    { minX: 4.4, maxX: 5.6, minZ: 7.5, maxZ: 8.5, top: 1.0, name: 'records_crate' },
+                    
+                    // === MIC STAND (at x=34, z=15.5) ===
+                    { minX: 33.5, maxX: 34.5, minZ: 15, maxZ: 16, top: 2.2, name: 'mic_stand' },
+                    
+                    // === SPEAKERS - Wall mounted (scale 1.2 = 2.4w x 4.8h x 1.8d) ===
+                    // Left wall speakers at (2, D/2-5=12.5) and (2, D/2+5=22.5)
+                    { minX: 0.8, maxX: 3.2, minZ: 11.5, maxZ: 13.5, top: 4.8, name: 'speaker_left1' },
+                    { minX: 0.8, maxX: 3.2, minZ: 21.5, maxZ: 23.5, top: 4.8, name: 'speaker_left2' },
+                    // Right wall speakers at (38, D/2-5=12.5) and (38, D/2+5=22.5)
+                    { minX: 36.8, maxX: 39.2, minZ: 11.5, maxZ: 13.5, top: 4.8, name: 'speaker_right1' },
+                    { minX: 36.8, maxX: 39.2, minZ: 21.5, maxZ: 23.5, top: 4.8, name: 'speaker_right2' },
+                    
+                    // === SPEAKERS - Large front by DJ (scale 1.5 = 3w x 6h x 2.25d) ===
+                    // At (CX-8=12, 5) and (CX+8=28, 5)
+                    { minX: 10.5, maxX: 13.5, minZ: 3.9, maxZ: 6.1, top: 6.0, name: 'speaker_front_left' },
+                    { minX: 26.5, maxX: 29.5, minZ: 3.9, maxZ: 6.1, top: 6.0, name: 'speaker_front_right' },
+                    
+                    // === SPEAKERS - Stack behind dance floor (scale 1.0 = 2w x 4h x 1.5d) ===
+                    // At (CX-10=10, CZ+8=25.5) and (CX+10=30, CZ+8=25.5)
+                    { minX: 9, maxX: 11, minZ: 24.8, maxZ: 26.3, top: 4.0, name: 'speaker_back_left' },
+                    { minX: 29, maxX: 31, minZ: 24.8, maxZ: 26.3, top: 4.0, name: 'speaker_back_right' },
+                    
+                    // === STAIRS (at x=36, z=22.5) ===
+                    // NO solid collision - stairs use walk-up ground height behavior instead
+                    // Player walks up by having ground height increase as they move north
+                    
+                    // === DANCE CONTEST SIGN (at x=39, z=25.5, on right wall) ===
+                    // Board is 3x4x0.1, against wall
+                    { minX: 38.5, maxX: 39.5, minZ: 24, maxZ: 27, top: 7, name: 'dance_contest_sign' },
+                    
+                    // === EXIT DOOR FRAME (at x=0, z=30) ===
+                    // Frame is 0.3x5x3 against left wall
+                    { minX: 0, maxX: 0.5, minZ: 28.5, maxZ: 31.5, top: 5, name: 'exit_door_frame' },
+                    
+                    // === DANCE FLOOR BASE (at CX=20, CZ+5=22.5) ===
+                    // Floor base is (totalWidth+1) x 0.3 x (totalDepth+1) = ~17.8 x 0.3 x ~13.6
+                    // But dance floor is walk-on, not blocking - skip solid collision
+                ];
+                
+                // Check collision with each solid object
+                for (const obj of solidObjects) {
+                    if (checkBoxCollision(finalX, finalZ, obj)) {
+                        // Try sliding along X axis
+                        const canSlideX = !checkBoxCollision(finalX, posRef.current.z, obj);
+                        // Try sliding along Z axis
+                        const canSlideZ = !checkBoxCollision(posRef.current.x, finalZ, obj);
+                        
+                        if (canSlideX && !canSlideZ) {
+                            finalZ = posRef.current.z;
+                        } else if (canSlideZ && !canSlideX) {
+                            finalX = posRef.current.x;
+                        } else if (!canSlideX && !canSlideZ) {
+                            // Blocked completely
+                            finalX = posRef.current.x;
+                            finalZ = posRef.current.z;
+                        }
+                    }
+                }
+                
+                // Clamp to room bounds (walls)
+                if (finalX < WALL) finalX = WALL;
+                if (finalX > ROOM_W - WALL) finalX = ROOM_W - WALL;
+                if (finalZ < WALL) finalZ = WALL;
+                if (finalZ > ROOM_D - WALL) finalZ = ROOM_D - WALL;
             } else if (townCenterRef.current) {
                 // Town uses TownCenter collision system (props + buildings + water)
                 // Pass Y position for height-based collision (so player can jump on objects)
@@ -4084,9 +4294,10 @@ const VoxelWorld = ({
                 }
             }
             
-            if (roomRef.current !== 'town' && roomRef.current !== 'pizza') {
+            if (roomRef.current !== 'town' && roomRef.current !== 'pizza' && roomRef.current !== 'nightclub') {
                 // Fallback: Non-town rooms use different collision
                 // Town uses wall boundaries now, not water
+                // Nightclub has its own wall-clamping collision above
                 const WALL_MARGIN = 10;
                 const MAP_SIZE = CITY_SIZE * BUILDING_SCALE;
                 
@@ -4163,6 +4374,10 @@ const VoxelWorld = ({
                         }));
                     }
                 }
+            } else if (roomRef.current === 'nightclub') {
+                // Nightclub: use wall-clamped position (free movement inside, walls only block)
+                posRef.current.x = finalX;
+                posRef.current.z = finalZ;
             } else if (townCenterRef.current && roomRef.current === 'town') {
                 // Town: use TownCenter's safe position
                 posRef.current.x = finalX;
@@ -4216,6 +4431,152 @@ const VoxelWorld = ({
                 }
             }
             
+            // Check for landing on nightclub surfaces (dance floor, DJ booth, speakers, stairs)
+            // Also handles walking UP onto raised surfaces (like stairs behavior)
+            if (room === 'nightclub' && roomDataRef.current) {
+                const px = posRef.current.x;
+                const pz = posRef.current.z;
+                const py = posRef.current.y;
+                const rd = roomDataRef.current;
+                const isDescending = velRef.current.y <= 0;
+                
+                // Dance floor - ALWAYS lift player when on it (walk-up behavior)
+                if (rd.danceFloor) {
+                    const df = rd.danceFloor;
+                    if (px >= df.minX && px <= df.maxX && pz >= df.minZ && pz <= df.maxZ) {
+                        // If player is at or below floor height, lift them up
+                        if (py <= df.height + 0.3) {
+                            if (df.height > groundHeight) {
+                                groundHeight = df.height;
+                                foundGround = true;
+                            }
+                        }
+                    }
+                }
+                
+                // DJ Booth platform - walk-up behavior (always active, not just descending)
+                if (rd.djBooth) {
+                    const dj = rd.djBooth;
+                    if (px >= dj.minX && px <= dj.maxX && pz >= dj.minZ && pz <= dj.maxZ) {
+                        // If player is at or below platform height, lift them up
+                        if (py <= dj.height + 0.3) {
+                            if (dj.height > groundHeight) {
+                                groundHeight = dj.height;
+                                foundGround = true;
+                            }
+                        }
+                    }
+                }
+                
+                // DJ Booth STEPS - walk-up ramp behavior (3 steps on each side, IN FRONT)
+                // DJ booth is at (CX=20, cz=3), platform front edge at world z=6
+                // Steps are in front: z=7.2, 8.4, 9.6 with heights 0.73, 0.48, 0.24
+                const CX_DJ = 20; // DJ booth center X
+                const CZ_DJ = 3;  // DJ booth center Z
+                const djStepWidth = 3.5;
+                const djStepDepth = 1.2;
+                const djStepHeights = [0.73, 0.48, 0.24]; // Top step closest to platform
+                
+                // Left front steps (X around 15.5 = CX_DJ - 4.5)
+                const leftStepX = CX_DJ - 4.5;
+                if (px >= leftStepX - djStepWidth/2 && px <= leftStepX + djStepWidth/2) {
+                    for (let i = 0; i < 3; i++) {
+                        // Step 0 (top): z=7.2, height 0.73
+                        // Step 1: z=8.4, height 0.48
+                        // Step 2 (bottom): z=9.6, height 0.24
+                        const stepZ = CZ_DJ + 4.2 + i * djStepDepth;
+                        const stepTop = djStepHeights[i];
+                        if (pz >= stepZ - djStepDepth/2 && pz <= stepZ + djStepDepth/2) {
+                            if (py <= stepTop + 0.3) {
+                                if (stepTop > groundHeight) {
+                                    groundHeight = stepTop;
+                                    foundGround = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Right front steps (X around 24.5 = CX_DJ + 4.5)
+                const rightStepX = CX_DJ + 4.5;
+                if (px >= rightStepX - djStepWidth/2 && px <= rightStepX + djStepWidth/2) {
+                    for (let i = 0; i < 3; i++) {
+                        const stepZ = CZ_DJ + 4.2 + i * djStepDepth;
+                        const stepTop = djStepHeights[i];
+                        if (pz >= stepZ - djStepDepth/2 && pz <= stepZ + djStepDepth/2) {
+                            if (py <= stepTop + 0.3) {
+                                if (stepTop > groundHeight) {
+                                    groundHeight = stepTop;
+                                    foundGround = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Speaker landing (only when falling)
+                if (rd.speakers && isDescending) {
+                    for (const spk of rd.speakers) {
+                        const sMinX = spk.x - spk.w / 2 - 0.3;
+                        const sMaxX = spk.x + spk.w / 2 + 0.3;
+                        const sMinZ = spk.z - spk.d / 2 - 0.3;
+                        const sMaxZ = spk.z + spk.d / 2 + 0.3;
+                        
+                        if (px >= sMinX && px <= sMaxX && pz >= sMinZ && pz <= sMaxZ) {
+                            if (py <= spk.h + 0.5 && py >= spk.h - 1) {
+                                if (spk.h > groundHeight) {
+                                    groundHeight = spk.h;
+                                    foundGround = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Stairs landing - walk-up ramp behavior (always active)
+                if (rd.stairs) {
+                    const st = rd.stairs;
+                    const stMinX = st.x - st.width / 2;
+                    const stMaxX = st.x + st.width / 2;
+                    
+                    if (px >= stMinX && px <= stMaxX) {
+                        // Calculate which step based on Z position
+                        const distFromStart = st.startZ - pz; // Going north (negative Z)
+                        if (distFromStart >= 0) {
+                            const stepIndex = Math.floor(distFromStart / st.stepDepth);
+                            if (stepIndex >= 0 && stepIndex < st.totalSteps) {
+                                const stepY = (stepIndex + 1) * st.stepHeight;
+                                // Walk-up behavior - if player is at or below step, lift them
+                                if (py <= stepY + 0.5) {
+                                    if (stepY > groundHeight) {
+                                        groundHeight = stepY;
+                                        foundGround = true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Records crate landing
+                if (rd.recordsCrate) {
+                    const crate = rd.recordsCrate;
+                    const cMinX = crate.x - crate.w / 2 - 0.2;
+                    const cMaxX = crate.x + crate.w / 2 + 0.2;
+                    const cMinZ = crate.z - crate.d / 2 - 0.2;
+                    const cMaxZ = crate.z + crate.d / 2 + 0.2;
+                    
+                    if (px >= cMinX && px <= cMaxX && pz >= cMinZ && pz <= cMaxZ) {
+                        if (py <= crate.h + 0.5 && py >= crate.h - 1) {
+                            if (crate.h > groundHeight) {
+                                groundHeight = crate.h;
+                                foundGround = true;
+                            }
+                        }
+                    }
+                }
+            }
+            
             // Check for landing on pizza parlor furniture
             if (room === 'pizza' && roomDataRef.current?.landingSurfaces && velRef.current.y <= 0) {
                 const px = posRef.current.x;
@@ -4245,8 +4606,11 @@ const VoxelWorld = ({
             }
             
             // Ground plane collision (y = 0)
+            // Only use ground level if no higher surface was already found
             if (posRef.current.y <= GROUND_Y) {
-                groundHeight = GROUND_Y;
+                if (groundHeight <= GROUND_Y) {
+                    groundHeight = GROUND_Y;
+                }
                 foundGround = true;
             }
             
@@ -6084,6 +6448,11 @@ const VoxelWorld = ({
                 townCenterRef.current.update(time, delta, nightFactor);
             }
             
+            // Animate nightclub interior (dance floor, stage lights, speakers, disco ball)
+            if (nightclubRef.current && roomRef.current === 'nightclub') {
+                nightclubRef.current.update(time, delta, 0.7); // Always club lighting
+            }
+            
             // Animate building door glows (pulse for interactive doors, town only)
             if (roomRef.current === 'town') {
                 portalsRef.current.forEach(building => {
@@ -6304,6 +6673,11 @@ const VoxelWorld = ({
             if (townCenterRef.current) {
                 townCenterRef.current.dispose();
                 townCenterRef.current = null;
+            }
+            // Cleanup Nightclub
+            if (nightclubRef.current) {
+                nightclubRef.current.dispose();
+                nightclubRef.current = null;
             }
             // Cleanup match banners
             for (const [, bannerData] of matchBannersRef.current) {
@@ -7896,8 +8270,8 @@ const VoxelWorld = ({
              
              {/* Title & Controls - Top Left */}
              <div className="absolute top-4 left-4 retro-text text-white drop-shadow-md z-10 pointer-events-none">
-                 <h2 className={`text-xl drop-shadow-lg ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
-                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room.startsWith('igloo') ? `IGLOO ${room.slice(-1)}` : 'TOWN'}
+                 <h2 className={`text-xl drop-shadow-lg ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
+                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room.startsWith('igloo') ? `IGLOO ${room.slice(-1)}` : 'TOWN'}
                  </h2>
                  {!isMobile && (
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>

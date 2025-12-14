@@ -3176,6 +3176,1095 @@ class PropsFactory {
         return group;
     }
 
+    // ==================== NIGHTCLUB ====================
+    
+    /**
+     * Create an EPIC nightclub exterior with animated speakers, neon lights, disco ball,
+     * searchlights, smoke effects, and all the bells and whistles!
+     * @param {Object} config - { width, depth, height }
+     * @returns {{ mesh: THREE.Group, speakers: Array, update: Function }}
+     */
+    createNightclub(config = {}) {
+        const THREE = this.THREE;
+        const group = new THREE.Group();
+        group.name = 'nightclub';
+        
+        const w = config.width || 25;
+        const d = config.depth || 20;
+        const h = config.height || 12;
+        
+        // Neon colors - ENHANCED palette
+        const neonPink = 0xFF1493;
+        const neonHotPink = 0xFF69B4;
+        const neonBlue = 0x00BFFF;
+        const neonCyan = 0x00FFFF;
+        const neonPurple = 0x9400D3;
+        const neonViolet = 0x8B00FF;
+        const neonGreen = 0x39FF14;
+        const neonLime = 0x00FF00;
+        const neonYellow = 0xFFFF00;
+        const neonOrange = 0xFF6600;
+        const neonRed = 0xFF0040;
+        const neonWhite = 0xFFFFFF;
+        
+        // ==================== MAIN BUILDING ====================
+        // Dark concrete/industrial base
+        const buildingMat = this.getMaterial(0x1a1a2e, { roughness: 0.9 });
+        const buildingGeo = new THREE.BoxGeometry(w, h, d);
+        const building = new THREE.Mesh(buildingGeo, buildingMat);
+        building.position.y = h / 2;
+        building.castShadow = true;
+        building.receiveShadow = true;
+        group.add(building);
+        
+        // Darker trim/accent bands
+        const trimMat = this.getMaterial(0x0f0f1a, { roughness: 0.85 });
+        
+        // Bottom trim
+        const bottomTrimGeo = new THREE.BoxGeometry(w + 0.4, 0.5, d + 0.4);
+        const bottomTrim = new THREE.Mesh(bottomTrimGeo, trimMat);
+        bottomTrim.position.y = 0.25;
+        group.add(bottomTrim);
+        
+        // Top trim/parapet
+        const topTrimGeo = new THREE.BoxGeometry(w + 0.4, 1, d + 0.4);
+        const topTrim = new THREE.Mesh(topTrimGeo, trimMat);
+        topTrim.position.y = h + 0.5;
+        group.add(topTrim);
+        
+        // ==================== ENTRANCE ====================
+        // Large entrance cutout visual (dark recessed area)
+        const entranceMat = this.getMaterial(0x050510, { roughness: 0.95 });
+        const entranceGeo = new THREE.BoxGeometry(6, 5, 1);
+        const entrance = new THREE.Mesh(entranceGeo, entranceMat);
+        entrance.position.set(0, 2.5, d / 2 + 0.1);
+        group.add(entrance);
+        
+        // Entrance frame - neon pink
+        const frameGlowMat = this.getMaterial(neonPink, {
+            emissive: neonPink,
+            emissiveIntensity: 0.8,
+            roughness: 0.3
+        });
+        
+        // Frame pieces
+        const frameThickness = 0.3;
+        // Left frame
+        const leftFrameGeo = new THREE.BoxGeometry(frameThickness, 5.5, frameThickness);
+        const leftFrame = new THREE.Mesh(leftFrameGeo, frameGlowMat);
+        leftFrame.position.set(-3.2, 2.75, d / 2 + 0.3);
+        group.add(leftFrame);
+        
+        // Right frame
+        const rightFrame = leftFrame.clone();
+        rightFrame.position.set(3.2, 2.75, d / 2 + 0.3);
+        group.add(rightFrame);
+        
+        // Top frame
+        const topFrameGeo = new THREE.BoxGeometry(6.7, frameThickness, frameThickness);
+        const topFrame = new THREE.Mesh(topFrameGeo, frameGlowMat);
+        topFrame.position.set(0, 5.2, d / 2 + 0.3);
+        group.add(topFrame);
+        
+        // Entrance point light
+        const entranceLight = new THREE.PointLight(neonPink, 2, 15);
+        entranceLight.position.set(0, 3, d / 2 + 2);
+        group.add(entranceLight);
+        
+        // ==================== HUGE NIGHTCLUB SIGN ====================
+        // Sign backing board
+        const signBackMat = this.getMaterial(0x0a0a15, { roughness: 0.9 });
+        const signBackGeo = new THREE.BoxGeometry(18, 4, 0.5);
+        const signBack = new THREE.Mesh(signBackGeo, signBackMat);
+        signBack.position.set(0, h + 3, d / 2 - 2);
+        group.add(signBack);
+        
+        // NIGHTCLUB letters - 3D block letters with neon glow
+        const letterMat = this.getMaterial(neonBlue, {
+            emissive: neonBlue,
+            emissiveIntensity: 1.0,
+            roughness: 0.2,
+            metalness: 0.3
+        });
+        
+        // Create "NIGHTCLUB" text as 3D boxes
+        const letters = 'NIGHTCLUB';
+        const letterWidth = 1.5;
+        const letterHeight = 2.5;
+        const letterDepth = 0.4;
+        const letterSpacing = 1.7;
+        const startX = -((letters.length - 1) * letterSpacing) / 2;
+        
+        for (let i = 0; i < letters.length; i++) {
+            // Each letter is a stylized block
+            const letterGeo = new THREE.BoxGeometry(letterWidth, letterHeight, letterDepth);
+            const letter = new THREE.Mesh(letterGeo, letterMat);
+            letter.position.set(startX + i * letterSpacing, h + 3, d / 2 - 1.5);
+            letter.userData.isNeonLetter = true;
+            letter.userData.letterIndex = i;
+            group.add(letter);
+            
+            // Add decorative notch to give letter shape variation
+            if (i % 3 === 0) {
+                const notchGeo = new THREE.BoxGeometry(0.3, 0.8, letterDepth + 0.1);
+                const notchMat = this.getMaterial(0x0a0a15, { roughness: 0.9 });
+                const notch = new THREE.Mesh(notchGeo, notchMat);
+                notch.position.set(startX + i * letterSpacing, h + 2.5, d / 2 - 1.5);
+                group.add(notch);
+            }
+        }
+        
+        // Sign glow light
+        const signLight = new THREE.PointLight(neonBlue, 3, 25);
+        signLight.position.set(0, h + 3, d / 2 + 2);
+        group.add(signLight);
+        
+        // ==================== HUGE SPEAKERS (4 total - 2 on each side) ====================
+        const speakers = [];
+        
+        // Speaker creation function
+        const createSpeaker = (x, z, scale = 1, rotation = 0) => {
+            const speakerGroup = new THREE.Group();
+            
+            const sw = 4 * scale;
+            const sh = 6 * scale;
+            const sd = 3 * scale;
+            
+            // Speaker cabinet - dark wood/black
+            const cabinetMat = this.getMaterial(0x1a1a1a, { roughness: 0.7 });
+            const cabinetGeo = new THREE.BoxGeometry(sw, sh, sd);
+            const cabinet = new THREE.Mesh(cabinetGeo, cabinetMat);
+            cabinet.position.y = sh / 2;
+            cabinet.castShadow = true;
+            speakerGroup.add(cabinet);
+            
+            // Speaker frame/grille
+            const grilleMat = this.getMaterial(0x2a2a2a, { 
+                roughness: 0.5,
+                metalness: 0.3
+            });
+            const grilleGeo = new THREE.BoxGeometry(sw - 0.3, sh - 0.3, 0.15);
+            const grille = new THREE.Mesh(grilleGeo, grilleMat);
+            grille.position.set(0, sh / 2, sd / 2 + 0.1);
+            speakerGroup.add(grille);
+            
+            // Main woofer (large cone)
+            const wooferMat = this.getMaterial(0x333333, { roughness: 0.4, metalness: 0.2 });
+            const wooferGeo = new THREE.CylinderGeometry(sw * 0.35, sw * 0.4, 0.5 * scale, 24);
+            const woofer = new THREE.Mesh(wooferGeo, wooferMat);
+            woofer.rotation.x = Math.PI / 2;
+            woofer.position.set(0, sh * 0.35, sd / 2 + 0.3);
+            woofer.userData.isWoofer = true;
+            woofer.userData.baseZ = sd / 2 + 0.3;
+            speakerGroup.add(woofer);
+            
+            // Woofer cone center
+            const coneMat = this.getMaterial(0x444444, { roughness: 0.3, metalness: 0.4 });
+            const coneGeo = new THREE.CylinderGeometry(sw * 0.08, sw * 0.25, 0.4 * scale, 16);
+            const cone = new THREE.Mesh(coneGeo, coneMat);
+            cone.rotation.x = Math.PI / 2;
+            cone.position.set(0, sh * 0.35, sd / 2 + 0.5);
+            cone.userData.isWoofer = true;
+            cone.userData.baseZ = sd / 2 + 0.5;
+            speakerGroup.add(cone);
+            
+            // Woofer dust cap
+            const dustCapMat = this.getMaterial(0x222222, { roughness: 0.2 });
+            const dustCapGeo = new THREE.SphereGeometry(sw * 0.06, 12, 12);
+            const dustCap = new THREE.Mesh(dustCapGeo, dustCapMat);
+            dustCap.scale.z = 0.3;
+            dustCap.position.set(0, sh * 0.35, sd / 2 + 0.65);
+            dustCap.userData.isWoofer = true;
+            dustCap.userData.baseZ = sd / 2 + 0.65;
+            speakerGroup.add(dustCap);
+            
+            // Mid-range driver
+            const midGeo = new THREE.CylinderGeometry(sw * 0.15, sw * 0.18, 0.3 * scale, 16);
+            const mid = new THREE.Mesh(midGeo, wooferMat);
+            mid.rotation.x = Math.PI / 2;
+            mid.position.set(0, sh * 0.65, sd / 2 + 0.25);
+            mid.userData.isWoofer = true;
+            mid.userData.baseZ = sd / 2 + 0.25;
+            speakerGroup.add(mid);
+            
+            // Tweeter (small dome)
+            const tweeterMat = this.getMaterial(0x666666, { roughness: 0.2, metalness: 0.6 });
+            const tweeterGeo = new THREE.SphereGeometry(sw * 0.08, 12, 12);
+            const tweeter = new THREE.Mesh(tweeterGeo, tweeterMat);
+            tweeter.scale.z = 0.5;
+            tweeter.position.set(0, sh * 0.82, sd / 2 + 0.2);
+            speakerGroup.add(tweeter);
+            
+            // Speaker LED strip (bass reactive)
+            const ledMat = this.getMaterial(neonPurple, {
+                emissive: neonPurple,
+                emissiveIntensity: 0.8
+            });
+            const ledGeo = new THREE.BoxGeometry(sw - 0.1, 0.15, 0.1);
+            const ledTop = new THREE.Mesh(ledGeo, ledMat);
+            ledTop.position.set(0, sh - 0.2, sd / 2 + 0.2);
+            ledTop.userData.isLED = true;
+            speakerGroup.add(ledTop);
+            
+            const ledBottom = ledTop.clone();
+            ledBottom.position.set(0, 0.2, sd / 2 + 0.2);
+            ledBottom.userData.isLED = true;
+            speakerGroup.add(ledBottom);
+            
+            speakerGroup.position.set(x, 0, z);
+            speakerGroup.rotation.y = rotation;
+            
+            return speakerGroup;
+        };
+        
+        // Create 4 huge speakers - 2 on each side of the entrance
+        // Front left speakers (facing south/forward)
+        const speaker1 = createSpeaker(-w / 2 - 3, d / 2 - 5, 1.5, Math.PI * 0.1);
+        speakers.push(speaker1);
+        group.add(speaker1);
+        
+        const speaker2 = createSpeaker(-w / 2 - 1.5, d / 2 + 3, 1.2, Math.PI * 0.3);
+        speakers.push(speaker2);
+        group.add(speaker2);
+        
+        // Front right speakers
+        const speaker3 = createSpeaker(w / 2 + 3, d / 2 - 5, 1.5, -Math.PI * 0.1);
+        speakers.push(speaker3);
+        group.add(speaker3);
+        
+        const speaker4 = createSpeaker(w / 2 + 1.5, d / 2 + 3, 1.2, -Math.PI * 0.3);
+        speakers.push(speaker4);
+        group.add(speaker4);
+        
+        // ==================== NEON ACCENT LIGHTS ====================
+        // Horizontal neon strips on building
+        const createNeonStrip = (y, color, width = w + 1) => {
+            const stripMat = this.getMaterial(color, {
+                emissive: color,
+                emissiveIntensity: 0.9,
+                roughness: 0.2
+            });
+            const stripGeo = new THREE.BoxGeometry(width, 0.15, 0.15);
+            const strip = new THREE.Mesh(stripGeo, stripMat);
+            strip.position.set(0, y, d / 2 + 0.2);
+            strip.userData.isNeonStrip = true;
+            strip.userData.baseColor = color;
+            return strip;
+        };
+        
+        // Multiple neon strips at different heights
+        const strip1 = createNeonStrip(1, neonPink);
+        group.add(strip1);
+        
+        const strip2 = createNeonStrip(h * 0.5, neonBlue);
+        group.add(strip2);
+        
+        const strip3 = createNeonStrip(h - 1, neonPurple);
+        group.add(strip3);
+        
+        // Side neon accents
+        const sideStripMat = this.getMaterial(neonGreen, {
+            emissive: neonGreen,
+            emissiveIntensity: 0.7
+        });
+        
+        [-1, 1].forEach(side => {
+            const sideStripGeo = new THREE.BoxGeometry(0.15, h - 2, 0.15);
+            const sideStrip = new THREE.Mesh(sideStripGeo, sideStripMat);
+            sideStrip.position.set(side * (w / 2 + 0.2), h / 2, d / 2 + 0.2);
+            group.add(sideStrip);
+        });
+        
+        // ==================== ROOF SPEAKERS (smaller, on top) ====================
+        const roofSpeaker1 = createSpeaker(-w / 3, 0, 0.8, 0);
+        roofSpeaker1.position.y = h + 1;
+        speakers.push(roofSpeaker1);
+        group.add(roofSpeaker1);
+        
+        const roofSpeaker2 = createSpeaker(w / 3, 0, 0.8, 0);
+        roofSpeaker2.position.y = h + 1;
+        speakers.push(roofSpeaker2);
+        group.add(roofSpeaker2);
+        
+        // ==================== STAGE LIGHTS ON ROOF ====================
+        const stageLightColors = [neonPink, neonBlue, neonGreen, neonYellow, neonOrange, neonPurple];
+        
+        for (let i = 0; i < 8; i++) {
+            const lightColor = stageLightColors[i % stageLightColors.length];
+            const lightMat = this.getMaterial(lightColor, {
+                emissive: lightColor,
+                emissiveIntensity: 1.0
+            });
+            
+            // Light housing
+            const housingGeo = new THREE.CylinderGeometry(0.3, 0.5, 0.8, 8);
+            const housing = new THREE.Mesh(housingGeo, this.getMaterial(0x222222, { metalness: 0.5 }));
+            housing.position.set(-w / 2 + 1.5 + i * (w / 7), h + 1.3, d / 2 - 1);
+            housing.rotation.x = Math.PI / 6; // Angle down
+            group.add(housing);
+            
+            // Light lens
+            const lensGeo = new THREE.CylinderGeometry(0.25, 0.25, 0.1, 8);
+            const lens = new THREE.Mesh(lensGeo, lightMat);
+            lens.position.set(-w / 2 + 1.5 + i * (w / 7), h + 1.1, d / 2 - 0.5);
+            lens.rotation.x = Math.PI / 6;
+            lens.userData.isStageLight = true;
+            lens.userData.lightIndex = i;
+            group.add(lens);
+        }
+        
+        // ==================== DANCE FLOOR PREVIEW WINDOW ====================
+        // Large window showing dance floor colors inside
+        const windowGlowMat = this.getMaterial(0x220033, {
+            transparent: true,
+            opacity: 0.7,
+            emissive: neonPurple,
+            emissiveIntensity: 0.4
+        });
+        const windowGeo = new THREE.BoxGeometry(8, 3, 0.1);
+        const window1 = new THREE.Mesh(windowGeo, windowGlowMat);
+        window1.position.set(-w / 4 - 1, h / 2 + 2, d / 2 + 0.2);
+        group.add(window1);
+        
+        const window2 = window1.clone();
+        window2.position.set(w / 4 + 1, h / 2 + 2, d / 2 + 0.2);
+        group.add(window2);
+        
+        // Window frames
+        const windowFrameMat = this.getMaterial(0x333333, { metalness: 0.4 });
+        [-w / 4 - 1, w / 4 + 1].forEach(wx => {
+            // Frame
+            const frameGeo = new THREE.BoxGeometry(8.4, 3.4, 0.15);
+            const edges = new THREE.EdgesGeometry(frameGeo);
+            const frameMat = new THREE.LineBasicMaterial({ color: neonBlue });
+            const frame = new THREE.LineSegments(edges, frameMat);
+            frame.position.set(wx, h / 2 + 2, d / 2 + 0.15);
+            group.add(frame);
+        });
+        
+        // ==================== VELVET ROPE ENTRANCE ====================
+        const ropeMat = this.getMaterial(0x8B0000, { roughness: 0.6 }); // Velvet red
+        const postMat = this.getMaterial(0xFFD700, { metalness: 0.8, roughness: 0.2 }); // Gold
+        
+        // Posts
+        [-4, 4].forEach(px => {
+            const postGeo = new THREE.CylinderGeometry(0.15, 0.2, 1.5, 12);
+            const post = new THREE.Mesh(postGeo, postMat);
+            post.position.set(px, 0.75, d / 2 + 4);
+            group.add(post);
+            
+            // Post top ball
+            const ballGeo = new THREE.SphereGeometry(0.22, 12, 12);
+            const ball = new THREE.Mesh(ballGeo, postMat);
+            ball.position.set(px, 1.6, d / 2 + 4);
+            group.add(ball);
+        });
+        
+        // Rope (catenary curve)
+        const ropePoints = [];
+        for (let i = 0; i <= 20; i++) {
+            const t = i / 20;
+            const x = -4 + t * 8;
+            const sag = 0.3 * (1 - Math.pow(2 * t - 1, 2));
+            ropePoints.push(new THREE.Vector3(x, 1.4 - sag, d / 2 + 4));
+        }
+        const ropeCurve = new THREE.CatmullRomCurve3(ropePoints);
+        const ropeGeo = new THREE.TubeGeometry(ropeCurve, 20, 0.08, 8, false);
+        const rope = new THREE.Mesh(ropeGeo, ropeMat);
+        group.add(rope);
+        
+        // ==================== GROUND LIGHTS ====================
+        // Uplighting the building - MORE DRAMATIC
+        const groundLightPositions = [
+            { x: -w / 2 - 1, z: d / 2 + 2, color: neonPink },
+            { x: w / 2 + 1, z: d / 2 + 2, color: neonBlue },
+            { x: -w / 4, z: d / 2 + 3, color: neonPurple },
+            { x: w / 4, z: d / 2 + 3, color: neonGreen },
+            { x: 0, z: d / 2 + 5, color: neonCyan },
+            { x: -w / 2 + 2, z: d / 2 + 1, color: neonViolet },
+            { x: w / 2 - 2, z: d / 2 + 1, color: neonOrange },
+        ];
+        
+        const groundLights = [];
+        groundLightPositions.forEach(({ x, z, color }, idx) => {
+            const light = new THREE.SpotLight(color, 3, 25, Math.PI / 5, 0.5);
+            light.position.set(x, 0.5, z);
+            light.target.position.set(x, h + 5, z - 8);
+            light.userData.isGroundLight = true;
+            light.userData.lightIndex = idx;
+            light.userData.baseColor = color;
+            groundLights.push(light);
+            group.add(light);
+            group.add(light.target);
+            
+            // Ground light fixture
+            const fixtureMat = this.getMaterial(0x222222, { metalness: 0.5 });
+            const fixtureGeo = new THREE.CylinderGeometry(0.3, 0.4, 0.3, 8);
+            const fixture = new THREE.Mesh(fixtureGeo, fixtureMat);
+            fixture.position.set(x, 0.15, z);
+            group.add(fixture);
+            
+            // Lens glow
+            const lensMat = this.getMaterial(color, { emissive: color, emissiveIntensity: 1 });
+            const lensGeo = new THREE.CircleGeometry(0.25, 12);
+            const lens = new THREE.Mesh(lensGeo, lensMat);
+            lens.rotation.x = -Math.PI / 2;
+            lens.position.set(x, 0.31, z);
+            lens.userData.isGroundLens = true;
+            lens.userData.lightIndex = idx;
+            group.add(lens);
+        });
+        
+        // ==================== MASSIVE DISCO BALL ====================
+        const discoBallGroup = new THREE.Group();
+        discoBallGroup.userData.isDiscoBall = true;
+        
+        // Main sphere
+        const ballRadius = 2;
+        const ballGeo = new THREE.SphereGeometry(ballRadius, 32, 32);
+        const ballMat = this.getMaterial(0xCCCCCC, { 
+            metalness: 0.9, 
+            roughness: 0.1 
+        });
+        const discoBall = new THREE.Mesh(ballGeo, ballMat);
+        discoBallGroup.add(discoBall);
+        
+        // Mirror tiles on disco ball
+        const mirrorMat = this.getMaterial(0xFFFFFF, {
+            metalness: 1,
+            roughness: 0,
+            emissive: 0xFFFFFF,
+            emissiveIntensity: 0.3
+        });
+        
+        const tileRows = 12;
+        const tileCols = 24;
+        for (let row = 1; row < tileRows - 1; row++) {
+            const phi = (row / tileRows) * Math.PI;
+            const rowRadius = Math.sin(phi) * ballRadius;
+            const y = Math.cos(phi) * ballRadius;
+            const tilesInRow = Math.floor(tileCols * Math.sin(phi));
+            
+            for (let col = 0; col < tilesInRow; col++) {
+                const theta = (col / tilesInRow) * Math.PI * 2;
+                const tileGeo = new THREE.PlaneGeometry(0.25, 0.25);
+                const tile = new THREE.Mesh(tileGeo, mirrorMat);
+                
+                tile.position.set(
+                    rowRadius * Math.cos(theta),
+                    y,
+                    rowRadius * Math.sin(theta)
+                );
+                tile.lookAt(0, 0, 0);
+                tile.rotateY(Math.PI);
+                tile.userData.isMirrorTile = true;
+                discoBallGroup.add(tile);
+            }
+        }
+        
+        // Disco ball mounting
+        const mountGeo = new THREE.CylinderGeometry(0.15, 0.15, 3, 8);
+        const mountMat = this.getMaterial(0x333333, { metalness: 0.6 });
+        const mount = new THREE.Mesh(mountGeo, mountMat);
+        mount.position.y = ballRadius + 1.5;
+        discoBallGroup.add(mount);
+        
+        // Disco ball light (projects colored light)
+        const discoLight = new THREE.PointLight(0xFFFFFF, 2, 30);
+        discoLight.position.set(0, 0, 0);
+        discoBallGroup.add(discoLight);
+        
+        discoBallGroup.position.set(0, h + 6, d / 2 - 5);
+        group.add(discoBallGroup);
+        
+        // ==================== SEARCHLIGHTS / SKY BEAMS ====================
+        const searchlights = [];
+        const searchlightColors = [neonPink, neonBlue, neonGreen, neonPurple];
+        
+        for (let i = 0; i < 4; i++) {
+            const searchlightGroup = new THREE.Group();
+            const color = searchlightColors[i];
+            
+            // Searchlight base
+            const baseMat = this.getMaterial(0x222222, { metalness: 0.5 });
+            const baseGeo = new THREE.CylinderGeometry(0.5, 0.6, 0.8, 12);
+            const base = new THREE.Mesh(baseGeo, baseMat);
+            searchlightGroup.add(base);
+            
+            // Searchlight housing
+            const housingGeo = new THREE.CylinderGeometry(0.3, 0.5, 1.2, 12);
+            const housing = new THREE.Mesh(housingGeo, baseMat);
+            housing.position.y = 0.8;
+            housing.rotation.x = -Math.PI / 4;
+            searchlightGroup.add(housing);
+            
+            // Light beam (visible cone)
+            const beamMat = new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.15,
+                side: THREE.DoubleSide
+            });
+            const beamGeo = new THREE.ConeGeometry(8, 40, 16, 1, true);
+            const beam = new THREE.Mesh(beamGeo, beamMat);
+            beam.position.y = 21;
+            beam.rotation.x = Math.PI;
+            beam.userData.isSearchBeam = true;
+            beam.userData.beamIndex = i;
+            searchlightGroup.add(beam);
+            
+            // Actual spotlight
+            const spotlight = new THREE.SpotLight(color, 3, 60, Math.PI / 12, 0.3);
+            spotlight.position.y = 1;
+            searchlightGroup.add(spotlight);
+            searchlightGroup.add(spotlight.target);
+            spotlight.target.position.y = 50;
+            
+            // Position searchlights on roof corners
+            const positions = [
+                { x: -w / 2 + 2, z: -d / 2 + 2 },
+                { x: w / 2 - 2, z: -d / 2 + 2 },
+                { x: -w / 2 + 2, z: d / 2 - 2 },
+                { x: w / 2 - 2, z: d / 2 - 2 },
+            ];
+            searchlightGroup.position.set(positions[i].x, h + 1, positions[i].z);
+            searchlightGroup.userData.isSearchlight = true;
+            searchlightGroup.userData.searchIndex = i;
+            searchlights.push(searchlightGroup);
+            group.add(searchlightGroup);
+        }
+        
+        // ==================== LASER BEAMS ====================
+        const laserColors = [neonRed, neonGreen, neonBlue, neonPink];
+        const lasers = [];
+        
+        for (let i = 0; i < 6; i++) {
+            const laserMat = new THREE.MeshBasicMaterial({
+                color: laserColors[i % laserColors.length],
+                transparent: true,
+                opacity: 0.6
+            });
+            const laserGeo = new THREE.CylinderGeometry(0.03, 0.03, 30, 4);
+            const laser = new THREE.Mesh(laserGeo, laserMat);
+            laser.userData.isLaser = true;
+            laser.userData.laserIndex = i;
+            laser.position.set(
+                -w / 3 + (i % 3) * (w / 3),
+                h + 3,
+                d / 2 - 3
+            );
+            lasers.push(laser);
+            group.add(laser);
+        }
+        
+        // ==================== SMOKE/FOG PARTICLES ====================
+        const smokeParticles = [];
+        const smokeCount = 50;
+        const smokeMat = new THREE.PointsMaterial({
+            color: 0xFFFFFF,
+            size: 1.5,
+            transparent: true,
+            opacity: 0.3,
+            sizeAttenuation: true
+        });
+        
+        const smokeGeo = new THREE.BufferGeometry();
+        const smokePositions = new Float32Array(smokeCount * 3);
+        const smokeVelocities = [];
+        
+        for (let i = 0; i < smokeCount; i++) {
+            smokePositions[i * 3] = (Math.random() - 0.5) * 6;
+            smokePositions[i * 3 + 1] = Math.random() * 3;
+            smokePositions[i * 3 + 2] = d / 2 + 2 + Math.random() * 3;
+            smokeVelocities.push({
+                x: (Math.random() - 0.5) * 0.02,
+                y: 0.02 + Math.random() * 0.03,
+                z: (Math.random() - 0.5) * 0.01
+            });
+        }
+        smokeGeo.setAttribute('position', new THREE.BufferAttribute(smokePositions, 3));
+        const smoke = new THREE.Points(smokeGeo, smokeMat);
+        smoke.userData.isSmoke = true;
+        smoke.userData.velocities = smokeVelocities;
+        group.add(smoke);
+        
+        // ==================== MUSIC NOTE PARTICLES ====================
+        const noteMat = this.getMaterial(neonCyan, {
+            emissive: neonCyan,
+            emissiveIntensity: 0.8,
+            transparent: true,
+            opacity: 0.8
+        });
+        
+        const musicNotes = [];
+        for (let i = 0; i < 8; i++) {
+            const noteGroup = new THREE.Group();
+            
+            // Note head (oval)
+            const headGeo = new THREE.SphereGeometry(0.2, 8, 8);
+            const head = new THREE.Mesh(headGeo, noteMat);
+            head.scale.set(1, 0.7, 0.3);
+            head.rotation.z = -Math.PI / 6;
+            noteGroup.add(head);
+            
+            // Note stem
+            const stemGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.6, 4);
+            const stem = new THREE.Mesh(stemGeo, noteMat);
+            stem.position.set(0.15, 0.3, 0);
+            noteGroup.add(stem);
+            
+            // Note flag
+            const flagGeo = new THREE.BoxGeometry(0.02, 0.25, 0.1);
+            const flag = new THREE.Mesh(flagGeo, noteMat);
+            flag.position.set(0.2, 0.5, 0);
+            flag.rotation.z = Math.PI / 4;
+            noteGroup.add(flag);
+            
+            noteGroup.position.set(
+                (Math.random() - 0.5) * w,
+                h + Math.random() * 5,
+                d / 2 + Math.random() * 3
+            );
+            noteGroup.userData.isMusicNote = true;
+            noteGroup.userData.noteIndex = i;
+            noteGroup.userData.baseY = noteGroup.position.y;
+            noteGroup.userData.floatSpeed = 0.5 + Math.random() * 0.5;
+            noteGroup.userData.swaySpeed = 1 + Math.random();
+            musicNotes.push(noteGroup);
+            group.add(noteGroup);
+        }
+        
+        // ==================== BOUNCER SILHOUETTES ====================
+        const bouncerMat = this.getMaterial(0x111111, { roughness: 0.9 });
+        
+        [-5, 5].forEach((x, idx) => {
+            const bouncerGroup = new THREE.Group();
+            
+            // Body
+            const bodyGeo = new THREE.CylinderGeometry(0.5, 0.6, 2, 8);
+            const body = new THREE.Mesh(bodyGeo, bouncerMat);
+            body.position.y = 1.2;
+            bouncerGroup.add(body);
+            
+            // Head
+            const headGeo = new THREE.SphereGeometry(0.35, 8, 8);
+            const head = new THREE.Mesh(headGeo, bouncerMat);
+            head.position.y = 2.5;
+            bouncerGroup.add(head);
+            
+            // Arms (crossed)
+            const armGeo = new THREE.CylinderGeometry(0.15, 0.12, 0.9, 6);
+            const arm1 = new THREE.Mesh(armGeo, bouncerMat);
+            arm1.rotation.z = Math.PI / 3;
+            arm1.position.set(0.3, 1.5, 0.3);
+            bouncerGroup.add(arm1);
+            
+            const arm2 = new THREE.Mesh(armGeo, bouncerMat);
+            arm2.rotation.z = -Math.PI / 3;
+            arm2.position.set(-0.3, 1.5, 0.3);
+            bouncerGroup.add(arm2);
+            
+            // Sunglasses (even at night, they're bouncers)
+            const glassesMat = this.getMaterial(0x000000, { roughness: 0.1, metalness: 0.8 });
+            const glassGeo = new THREE.BoxGeometry(0.5, 0.12, 0.05);
+            const glasses = new THREE.Mesh(glassGeo, glassesMat);
+            glasses.position.set(0, 2.55, 0.35);
+            bouncerGroup.add(glasses);
+            
+            bouncerGroup.position.set(x, 0, d / 2 + 4.5);
+            bouncerGroup.rotation.y = x > 0 ? -Math.PI / 8 : Math.PI / 8;
+            group.add(bouncerGroup);
+        });
+        
+        // ==================== ANIMATED "OPEN" SIGN ====================
+        const openSignGroup = new THREE.Group();
+        
+        // Sign backing
+        const openBackMat = this.getMaterial(0x111111, { roughness: 0.8 });
+        const openBackGeo = new THREE.BoxGeometry(3, 1.2, 0.2);
+        const openBack = new THREE.Mesh(openBackGeo, openBackMat);
+        openSignGroup.add(openBack);
+        
+        // OPEN letters
+        const openLetterMat = this.getMaterial(neonRed, {
+            emissive: neonRed,
+            emissiveIntensity: 1.0
+        });
+        
+        const openLetters = ['O', 'P', 'E', 'N'];
+        openLetters.forEach((letter, i) => {
+            const letterGeo = new THREE.BoxGeometry(0.5, 0.8, 0.15);
+            const letterMesh = new THREE.Mesh(letterGeo, openLetterMat);
+            letterMesh.position.set(-1.1 + i * 0.7, 0, 0.15);
+            letterMesh.userData.isOpenLetter = true;
+            letterMesh.userData.letterIdx = i;
+            openSignGroup.add(letterMesh);
+        });
+        
+        // Border glow
+        const borderMat = this.getMaterial(neonRed, {
+            emissive: neonRed,
+            emissiveIntensity: 0.8
+        });
+        
+        // Top/bottom borders
+        const hBorderGeo = new THREE.BoxGeometry(3.2, 0.1, 0.25);
+        const topBorder = new THREE.Mesh(hBorderGeo, borderMat);
+        topBorder.position.set(0, 0.65, 0.05);
+        openSignGroup.add(topBorder);
+        
+        const bottomBorder = topBorder.clone();
+        bottomBorder.position.y = -0.65;
+        openSignGroup.add(bottomBorder);
+        
+        // Side borders
+        const vBorderGeo = new THREE.BoxGeometry(0.1, 1.4, 0.25);
+        const leftBorder = new THREE.Mesh(vBorderGeo, borderMat);
+        leftBorder.position.set(-1.6, 0, 0.05);
+        openSignGroup.add(leftBorder);
+        
+        const rightBorder = leftBorder.clone();
+        rightBorder.position.x = 1.6;
+        openSignGroup.add(rightBorder);
+        
+        openSignGroup.position.set(w / 2 + 0.5, 3, d / 2 + 0.5);
+        openSignGroup.rotation.y = -Math.PI / 6;
+        openSignGroup.userData.isOpenSign = true;
+        group.add(openSignGroup);
+        
+        // ==================== STAR BURST AROUND SIGN ====================
+        const starBurstColors = [neonPink, neonBlue, neonYellow, neonGreen];
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const radius = 11;
+            const color = starBurstColors[i % starBurstColors.length];
+            
+            const starMat = this.getMaterial(color, {
+                emissive: color,
+                emissiveIntensity: 1.0
+            });
+            
+            // Star point
+            const starGeo = new THREE.ConeGeometry(0.15, 0.8, 4);
+            const star = new THREE.Mesh(starGeo, starMat);
+            star.position.set(
+                Math.cos(angle) * radius,
+                h + 3,
+                d / 2 - 1.5 + Math.sin(angle) * 2
+            );
+            star.rotation.z = -angle - Math.PI / 2;
+            star.userData.isStarBurst = true;
+            star.userData.starIndex = i;
+            group.add(star);
+        }
+        
+        // Store references for animation
+        group.userData.speakers = speakers;
+        group.userData.discoBall = discoBallGroup;
+        group.userData.searchlights = searchlights;
+        group.userData.lasers = lasers;
+        group.userData.smoke = smoke;
+        group.userData.musicNotes = musicNotes;
+        group.userData.groundLights = groundLights;
+        
+        // EPIC Animation update function
+        const update = (time) => {
+            // Animate speaker woofers - bass "bounce" (MORE INTENSE)
+            const bassIntensity = Math.sin(time * 15) * 0.5 + 0.5;
+            const bassOffset = bassIntensity * 0.25; // Bigger bounce!
+            
+            speakers.forEach((speaker, idx) => {
+                speaker.traverse(child => {
+                    if (child.userData.isWoofer) {
+                        child.position.z = child.userData.baseZ + bassOffset * (0.8 + idx * 0.15);
+                    }
+                    if (child.userData.isLED) {
+                        child.material.emissiveIntensity = 0.4 + bassIntensity * 1.0;
+                    }
+                });
+                // Subtle speaker shake
+                speaker.rotation.z = Math.sin(time * 20 + idx) * 0.01 * bassIntensity;
+            });
+            
+            // Disco ball rotation
+            if (discoBallGroup) {
+                discoBallGroup.rotation.y = time * 0.5;
+                // Pulse the disco light with bass
+                const discoL = discoBallGroup.children.find(c => c.isLight);
+                if (discoL) {
+                    discoL.intensity = 1.5 + bassIntensity * 1.5;
+                    // Color shift
+                    const hue = (time * 0.1) % 1;
+                    discoL.color.setHSL(hue, 1, 0.5);
+                }
+            }
+            
+            // Searchlight sweep
+            searchlights.forEach((sl, idx) => {
+                const sweepAngle = time * 0.5 + idx * Math.PI / 2;
+                sl.rotation.y = Math.sin(sweepAngle) * Math.PI / 3;
+                sl.rotation.x = Math.sin(time * 0.3 + idx) * 0.2;
+            });
+            
+            // Laser animation
+            lasers.forEach((laser, idx) => {
+                const laserAngle = time * 2 + idx * Math.PI / 3;
+                laser.rotation.x = Math.sin(laserAngle) * Math.PI / 4;
+                laser.rotation.z = Math.cos(laserAngle * 0.7) * Math.PI / 6;
+                laser.material.opacity = 0.3 + bassIntensity * 0.5;
+            });
+            
+            // Smoke particles
+            if (smoke && smoke.geometry) {
+                const positions = smoke.geometry.attributes.position.array;
+                const velocities = smoke.userData.velocities;
+                
+                for (let i = 0; i < smokeCount; i++) {
+                    positions[i * 3] += velocities[i].x;
+                    positions[i * 3 + 1] += velocities[i].y;
+                    positions[i * 3 + 2] += velocities[i].z;
+                    
+                    // Reset when too high
+                    if (positions[i * 3 + 1] > 8) {
+                        positions[i * 3] = (Math.random() - 0.5) * 6;
+                        positions[i * 3 + 1] = 0;
+                        positions[i * 3 + 2] = d / 2 + 2 + Math.random() * 2;
+                    }
+                }
+                smoke.geometry.attributes.position.needsUpdate = true;
+                smoke.material.opacity = 0.2 + bassIntensity * 0.15;
+            }
+            
+            // Music notes float and sway
+            musicNotes.forEach((note, idx) => {
+                note.position.y = note.userData.baseY + Math.sin(time * note.userData.floatSpeed + idx) * 1.5;
+                note.position.x += Math.sin(time * note.userData.swaySpeed + idx * 2) * 0.01;
+                note.rotation.z = Math.sin(time + idx) * 0.3;
+                
+                // Reset if too high
+                if (note.position.y > h + 12) {
+                    note.position.y = h;
+                    note.userData.baseY = h;
+                    note.position.x = (Math.random() - 0.5) * w;
+                }
+            });
+            
+            // Ground lights pulse with bass
+            groundLights.forEach((light, idx) => {
+                const phase = time * 3 + idx * 0.5;
+                light.intensity = 2 + bassIntensity * 3 + Math.sin(phase) * 0.5;
+            });
+            
+            // Neon letters wave animation
+            group.traverse(child => {
+                if (child.userData.isNeonLetter) {
+                    const letterPhase = time * 3 + child.userData.letterIndex * 0.5;
+                    child.material.emissiveIntensity = 0.6 + Math.sin(letterPhase) * 0.4;
+                    child.position.y = (h + 3) + Math.sin(letterPhase * 2) * 0.1;
+                }
+                if (child.userData.isStageLight) {
+                    const lightPhase = time * 5 + child.userData.lightIndex * 0.8;
+                    child.material.emissiveIntensity = 0.5 + Math.sin(lightPhase) * 0.5;
+                }
+                if (child.userData.isOpenLetter) {
+                    // Blink effect for OPEN sign
+                    const blinkPhase = Math.floor(time * 4 + child.userData.letterIdx * 0.3) % 2;
+                    child.material.emissiveIntensity = blinkPhase ? 1.0 : 0.3;
+                }
+                if (child.userData.isStarBurst) {
+                    // Twinkle stars
+                    const twinkle = Math.sin(time * 8 + child.userData.starIndex * 0.8);
+                    child.material.emissiveIntensity = 0.5 + twinkle * 0.5;
+                    child.scale.setScalar(0.8 + twinkle * 0.3);
+                }
+                if (child.userData.isGroundLens) {
+                    child.material.emissiveIntensity = 0.5 + bassIntensity * 0.8;
+                }
+            });
+        };
+        
+        // Speaker collision data for external registration
+        // Positions are relative to nightclub center
+        const speakerColliders = [
+            // Front left speakers
+            { x: -w / 2 - 3, z: d / 2 - 5, size: { x: 6, z: 5 }, height: 9 },
+            { x: -w / 2 - 1.5, z: d / 2 + 3, size: { x: 5, z: 4 }, height: 7 },
+            // Front right speakers
+            { x: w / 2 + 3, z: d / 2 - 5, size: { x: 6, z: 5 }, height: 9 },
+            { x: w / 2 + 1.5, z: d / 2 + 3, size: { x: 5, z: 4 }, height: 7 },
+            // Roof speakers (smaller)
+            { x: -w / 3, z: 0, size: { x: 3.5, z: 2.5 }, height: 5, y: h + 1 },
+            { x: w / 3, z: 0, size: { x: 3.5, z: 2.5 }, height: 5, y: h + 1 },
+        ];
+        
+        return { mesh: group, speakers, update, speakerColliders };
+    }
+
+    // ==================== HIGHWAY BILLBOARD ====================
+    
+    /**
+     * Create a tall highway-style billboard with lit-up advertisement
+     * @param {string} imagePath - Path to the advertisement image
+     * @param {Object} config - { width, height, poleHeight }
+     * @returns {{ mesh: THREE.Group }}
+     */
+    createBillboard(imagePath = '/advert.png', config = {}) {
+        const THREE = this.THREE;
+        const group = new THREE.Group();
+        group.name = 'billboard';
+        
+        const boardWidth = config.width || 12;  // 600px at 50px per unit
+        const boardHeight = config.height || 4; // 200px at 50px per unit  
+        const poleHeight = config.poleHeight || 15;
+        const frameDepth = 0.5;
+        
+        // Colors
+        const metalGray = 0x4a4a4a;
+        const steelDark = 0x2a2a2a;
+        
+        // ==================== SUPPORT POLES ====================
+        const poleMat = this.getMaterial(metalGray, { metalness: 0.6, roughness: 0.4 });
+        
+        // Two main support poles
+        const poleRadius = 0.4;
+        const poleGeo = new THREE.CylinderGeometry(poleRadius, poleRadius * 1.2, poleHeight, 12);
+        
+        const pole1 = new THREE.Mesh(poleGeo, poleMat);
+        pole1.position.set(-boardWidth / 3, poleHeight / 2, 0);
+        pole1.castShadow = true;
+        group.add(pole1);
+        
+        const pole2 = new THREE.Mesh(poleGeo, poleMat);
+        pole2.position.set(boardWidth / 3, poleHeight / 2, 0);
+        pole2.castShadow = true;
+        group.add(pole2);
+        
+        // Cross bracing
+        const braceMat = this.getMaterial(steelDark, { metalness: 0.5, roughness: 0.5 });
+        const braceGeo = new THREE.CylinderGeometry(0.1, 0.1, boardWidth * 0.8, 8);
+        
+        const brace1 = new THREE.Mesh(braceGeo, braceMat);
+        brace1.rotation.z = Math.PI / 2;
+        brace1.position.set(0, poleHeight * 0.3, 0);
+        group.add(brace1);
+        
+        const brace2 = new THREE.Mesh(braceGeo, braceMat);
+        brace2.rotation.z = Math.PI / 2;
+        brace2.position.set(0, poleHeight * 0.7, 0);
+        group.add(brace2);
+        
+        // Diagonal braces
+        const diagLength = Math.sqrt(Math.pow(boardWidth / 3, 2) + Math.pow(poleHeight * 0.4, 2));
+        const diagGeo = new THREE.CylinderGeometry(0.08, 0.08, diagLength, 6);
+        
+        const diagAngle = Math.atan2(poleHeight * 0.4, boardWidth / 3);
+        
+        const diag1 = new THREE.Mesh(diagGeo, braceMat);
+        diag1.rotation.z = diagAngle;
+        diag1.position.set(-boardWidth / 6, poleHeight * 0.5, 0);
+        group.add(diag1);
+        
+        const diag2 = new THREE.Mesh(diagGeo, braceMat);
+        diag2.rotation.z = -diagAngle;
+        diag2.position.set(boardWidth / 6, poleHeight * 0.5, 0);
+        group.add(diag2);
+        
+        // ==================== BILLBOARD FRAME ====================
+        const frameMat = this.getMaterial(steelDark, { metalness: 0.4, roughness: 0.6 });
+        
+        // Main backing
+        const backingGeo = new THREE.BoxGeometry(boardWidth + 1, boardHeight + 1, frameDepth);
+        const backing = new THREE.Mesh(backingGeo, frameMat);
+        backing.position.set(0, poleHeight + boardHeight / 2, frameDepth / 2);
+        backing.castShadow = true;
+        group.add(backing);
+        
+        // ==================== ADVERTISEMENT DISPLAY ====================
+        // Create texture from image
+        const textureLoader = new THREE.TextureLoader();
+        const advertTexture = textureLoader.load(imagePath);
+        advertTexture.colorSpace = THREE.SRGBColorSpace;
+        
+        // Emissive material for lit-up effect
+        const advertMat = new THREE.MeshStandardMaterial({
+            map: advertTexture,
+            emissive: 0xffffff,
+            emissiveMap: advertTexture,
+            emissiveIntensity: 0.5,
+            roughness: 0.3,
+            metalness: 0.1
+        });
+        
+        const advertGeo = new THREE.PlaneGeometry(boardWidth, boardHeight);
+        const advert = new THREE.Mesh(advertGeo, advertMat);
+        advert.position.set(0, poleHeight + boardHeight / 2, frameDepth + 0.05);
+        group.add(advert);
+        
+        // ==================== LIGHTING ====================
+        // Top-mounted lights pointing down at the sign
+        const lightHousingMat = this.getMaterial(metalGray, { metalness: 0.5 });
+        const lightCount = 4;
+        
+        for (let i = 0; i < lightCount; i++) {
+            const lx = -boardWidth / 2 + boardWidth / (lightCount - 1) * i;
+            
+            // Light housing
+            const housingGeo = new THREE.BoxGeometry(1.5, 0.4, 0.8);
+            const housing = new THREE.Mesh(housingGeo, lightHousingMat);
+            housing.position.set(lx, poleHeight + boardHeight + 0.8, frameDepth + 0.8);
+            group.add(housing);
+            
+            // Light arm
+            const armGeo = new THREE.CylinderGeometry(0.08, 0.08, 1.2, 6);
+            const arm = new THREE.Mesh(armGeo, lightHousingMat);
+            arm.rotation.x = Math.PI / 3;
+            arm.position.set(lx, poleHeight + boardHeight + 0.5, frameDepth + 0.4);
+            group.add(arm);
+            
+            // Actual light (warm white)
+            const light = new THREE.SpotLight(0xFFF5E6, 1.5, 15, Math.PI / 4, 0.5);
+            light.position.set(lx, poleHeight + boardHeight + 1, frameDepth + 1.2);
+            light.target.position.set(lx, poleHeight + boardHeight / 2, frameDepth + 0.1);
+            group.add(light);
+            group.add(light.target);
+        }
+        
+        // Glow effect behind sign at night
+        const glowLight = new THREE.PointLight(0xFFFFFF, 0.8, 20);
+        glowLight.position.set(0, poleHeight + boardHeight / 2, -1);
+        group.add(glowLight);
+        
+        // ==================== DECORATIVE ELEMENTS ====================
+        // Corner accent lights (small LEDs)
+        const accentColors = [0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00];
+        const corners = [
+            { x: -boardWidth / 2 - 0.3, y: poleHeight + boardHeight + 0.3 },
+            { x: boardWidth / 2 + 0.3, y: poleHeight + boardHeight + 0.3 },
+            { x: -boardWidth / 2 - 0.3, y: poleHeight - 0.3 },
+            { x: boardWidth / 2 + 0.3, y: poleHeight - 0.3 },
+        ];
+        
+        corners.forEach((corner, i) => {
+            const accentMat = this.getMaterial(accentColors[i], {
+                emissive: accentColors[i],
+                emissiveIntensity: 0.8
+            });
+            const accentGeo = new THREE.SphereGeometry(0.15, 8, 8);
+            const accent = new THREE.Mesh(accentGeo, accentMat);
+            accent.position.set(corner.x, corner.y, frameDepth + 0.2);
+            group.add(accent);
+        });
+        
+        // Store for potential animation
+        group.userData.collision = {
+            type: 'box',
+            size: { x: boardWidth / 3, z: 1 },
+            height: poleHeight + boardHeight
+        };
+        
+        return { mesh: group };
+    }
+
     // ==================== UTILITY METHODS ====================
     
     /**
