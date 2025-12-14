@@ -1105,18 +1105,31 @@ const VoxelWorld = ({
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0 || 
                       navigator.userAgent.toUpperCase().indexOf('MAC') >= 0;
         
+        // Store Mac detection globally for other components to use
+        window._isMacDevice = isMac;
+        
         // Log for debugging
         console.log('🖥️ Platform:', navigator.platform, '| isMac:', isMac);
         
         // Mac-specific renderer settings (PC/Android unchanged)
         // Fixes WebGL via Metal performance issues on Safari/macOS
-        const renderer = new THREE.WebGLRenderer({ 
-            antialias: isMac ? false : true, // Mac: false, Others: true
-            powerPreference: 'high-performance'
-        });
+        const rendererOptions = {
+            antialias: !isMac, // Mac: false (big perf gain), Others: true
+            powerPreference: 'high-performance',
+            depth: true
+        };
         
-        // Mac: dpr capped at 1.5, Others: capped at 2
-        const dpr = isMac ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2);
+        // Mac-only: lower precision and disable stencil for Metal compatibility
+        if (isMac) {
+            rendererOptions.precision = 'mediump';
+            rendererOptions.stencil = false;
+        }
+        
+        const renderer = new THREE.WebGLRenderer(rendererOptions);
+        
+        // Mac: DPR capped at 1.0 for Retina (renders at native resolution, not 2x)
+        // This is the BIGGEST performance win on Mac - Retina renders 4x fewer pixels
+        const dpr = isMac ? Math.min(window.devicePixelRatio, 1.0) : Math.min(window.devicePixelRatio, 2);
         renderer.setPixelRatio(dpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
         
@@ -1124,16 +1137,19 @@ const VoxelWorld = ({
         if (isMac) {
             renderer.toneMapping = THREE.NoToneMapping;
             renderer.outputColorSpace = THREE.SRGBColorSpace;
-            console.log('🍎 Mac detected - applied performance fixes: antialias=false, dpr=1.5, flat rendering');
+            console.log('🍎 Mac detected - applied performance fixes: antialias=false, dpr=1.0, mediump precision, flat rendering');
         }
         
+        // Shadows: Mac gets simpler shadows or none, Others get PCFShadowMap
         renderer.shadowMap.enabled = true;
-        // Mac: Use BasicShadowMap (much faster on Metal), Others: PCFShadowMap
-        renderer.shadowMap.type = isMac ? THREE.BasicShadowMap : THREE.PCFShadowMap;
+        if (isMac) {
+            // Mac: Use BasicShadowMap (fastest) or disable entirely for very old Macs
+            renderer.shadowMap.type = THREE.BasicShadowMap;
+            console.log('🍎 Mac: Using BasicShadowMap for better performance');
+        } else {
+            renderer.shadowMap.type = THREE.PCFShadowMap;
+        }
         mountRef.current.appendChild(renderer.domElement);
-        
-        // Store isMac for use in game loop
-        renderer.userData.isMac = isMac;
         rendererRef.current = renderer;
         
         // Initialize raycaster for player click detection
@@ -1174,7 +1190,7 @@ const VoxelWorld = ({
         
         // ==================== SNOWFALL PARTICLE SYSTEM ====================
         const createSnowfall = () => {
-            // Mac: fewer particles (400), Others: 800
+            // Mac: fewer particles for better performance, Others: more particles
             const particleCount = isMac ? 400 : 800;
             const positions = new Float32Array(particleCount * 3);
             const velocities = new Float32Array(particleCount * 3);
@@ -3940,7 +3956,6 @@ const VoxelWorld = ({
         
         // --- GAME LOOP ---
         let frameCount = 0;
-        const isMacDevice = renderer.userData.isMac;
         const update = () => {
             reqRef.current = requestAnimationFrame(update);
             frameCount++;
@@ -4650,9 +4665,8 @@ const VoxelWorld = ({
                 
                 // Landing on objects is now handled in the unified ground collision section below
                 
-                // OPTIMIZED: Check triggers less frequently (Mac: every 5th, Others: every 3rd)
-                const triggerThrottle = isMacDevice ? 5 : 3;
-                if (frameCount % triggerThrottle === 0) {
+                // OPTIMIZED: Only check triggers every 3rd frame (still responsive, but 3x faster)
+                if (frameCount % 3 === 0) {
                 // Also check triggers (benches, snowmen, etc.)
                 // Pass Y position so triggers can filter by height (e.g., don't show "sit" prompt when standing ON furniture)
                 townCenterRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
@@ -5403,10 +5417,9 @@ const VoxelWorld = ({
             const now = Date.now();
             // Using cached values: centerX, centerZ, dojoBxCached, dojoBzCached, dojoHdCached, puffleMap, aiMap
             
-            // OPTIMIZATION: Run full AI logic less frequently
-            // Mac: every 3rd frame (20fps AI), Others: every 2nd frame (30fps AI)
-            const aiThrottle = isMacDevice ? 3 : 2;
-            const runFullAILogic = frameCount % aiThrottle === 0;
+            // OPTIMIZATION: Only run full AI logic every 2nd frame (60fps -> 30fps AI updates)
+            // Visibility updates still happen every frame for smooth enter/exit
+            const runFullAILogic = frameCount % 2 === 0;
             
             aiAgentsRef.current.forEach(ai => {
                 // Only show AI that are in the same room as the player (every frame for smoothness)
@@ -6476,7 +6489,7 @@ const VoxelWorld = ({
                     // Night (late)
                     nightFactor = 1.0;
                 }
-                townCenterRef.current.update(time, delta, nightFactor, isMacDevice);
+                townCenterRef.current.update(time, delta, nightFactor);
             }
             
             // Animate nightclub interior (dance floor, stage lights, speakers, disco ball)
@@ -6528,9 +6541,8 @@ const VoxelWorld = ({
             controls.update();
             
             // ==================== DAY/NIGHT CYCLE (Town only, Server-synchronized) ====================
-            // OPTIMIZED: Update lighting less frequently (Mac: every 6th, Others: every 3rd)
-            const lightingThrottle = isMacDevice ? 6 : 3;
-            if (room === 'town' && sunLightRef.current && ambientLightRef.current && frameCount % lightingThrottle === 0) {
+            // OPTIMIZED: Only update lighting every 3rd frame (still smooth at 60fps = 20 updates/sec)
+            if (room === 'town' && sunLightRef.current && ambientLightRef.current && frameCount % 3 === 0) {
                 // Use server-synchronized time (or local time for debug override)
                 const serverTime = serverWorldTimeRef?.current ?? 0.35;
                 const t = daySpeedRef.current === 0 ? dayTimeRef.current : serverTime;

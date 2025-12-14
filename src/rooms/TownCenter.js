@@ -904,8 +904,10 @@ class TownCenter {
             group.add(bulb);
             
             // OPTIMIZED: Only add point light for 1st bulb per string (was every 3rd)
+            // Mac: Skip point lights entirely (use emissive materials only)
             // The emissive bulbs provide visual glow, we only need 1 light per string for ambiance
-            if (i === Math.floor(bulbCount / 2)) {
+            const isMac = typeof window !== 'undefined' && window._isMacDevice;
+            if (!isMac && i === Math.floor(bulbCount / 2)) {
                 const light = new THREE.PointLight(0xFFFFAA, 0.4, 6); // Warm white, merged color
                 light.position.set(x, y, z);
                 group.add(light);
@@ -1027,7 +1029,7 @@ class TownCenter {
         return this.collisionSystem.getActiveTriggers(playerX, playerZ);
     }
 
-    update(time, delta, nightFactor = 0.5, isMac = false) {
+    update(time, delta, nightFactor = 0.5) {
         if (!this._animatedCache) {
             this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], frameCounter: 0 };
             this.propMeshes.forEach(mesh => {
@@ -1050,13 +1052,8 @@ class TownCenter {
         this._animatedCache.frameCounter++;
         const frame = this._animatedCache.frameCounter;
         
-        // Mac: more aggressive throttling (every 4th vs 2nd frame)
-        const animThrottle = isMac ? 4 : 2;
-        const particleThrottle = isMac ? 12 : 6;
-        const treeThrottle = isMac ? 24 : 12;
-        
-        // OPTIMIZED: Nightclub speakers and neon
-        if (frame % animThrottle === 0) {
+        // OPTIMIZED: Nightclub speakers and neon - every 2nd frame (still smooth for bass pulse)
+        if (frame % 2 === 0) {
             this._animatedCache.nightclubs.forEach(mesh => {
                 if (mesh.userData.nightclubUpdate) {
                     mesh.userData.nightclubUpdate(time);
@@ -1064,8 +1061,8 @@ class TownCenter {
             });
         }
         
-        // OPTIMIZED: Campfire flames
-        if (frame % animThrottle === 0) {
+        // OPTIMIZED: Campfire flames - every 2nd frame (still looks fluid)
+        if (frame % 2 === 0) {
             this._animatedCache.campfires.forEach(({ flames, particles, light }) => {
                 flames.forEach(flame => {
                     const offset = flame.userData.offset || 0;
@@ -1075,14 +1072,13 @@ class TownCenter {
                     flame.rotation.y = time * 2 + offset;
                 });
                 
-                // OPTIMIZED: Particles (Mac: every 12th, Others: every 6th)
-                if (particles && frame % particleThrottle === 0) {
+                // OPTIMIZED: Particles every 6th frame (was every 3rd)
+                if (particles && frame % 6 === 0) {
                     const positions = particles.geometry.attributes.position.array;
                     const len = positions.length / 3;
-                    const speedMult = isMac ? 8 : 4; // Compensate for lower update rate
                     for (let i = 0; i < len; i++) {
                         const idx = i * 3;
-                        positions[idx + 1] += delta * speedMult * (1 + Math.random() * 0.5);
+                        positions[idx + 1] += delta * 4 * (1 + Math.random() * 0.5); // Double speed to compensate
                         positions[idx] += (Math.random() - 0.5) * delta * 2;
                         positions[idx + 2] += (Math.random() - 0.5) * delta * 2;
                         if (positions[idx + 1] > 3) {
@@ -1094,15 +1090,15 @@ class TownCenter {
                     particles.geometry.attributes.position.needsUpdate = true;
                 }
                 
-                // OPTIMIZED: Light flicker
-                if (light && frame % particleThrottle === 0) {
+                // OPTIMIZED: Light flicker every 6th frame
+                if (light && frame % 6 === 0) {
                     light.intensity = 1.5 + Math.sin(time * 15) * 0.3 + Math.random() * 0.2;
                 }
             });
         }
         
-        // OPTIMIZED: Christmas trees (Mac: every 24th, Others: every 12th)
-        if (frame % treeThrottle === 0) {
+        // OPTIMIZED: Christmas trees every 12th frame (was every 6th)
+        if (frame % 12 === 0) {
             this._animatedCache.christmasTrees.forEach(mesh => {
                 if (mesh.userData.treeUpdate) mesh.userData.treeUpdate(time, nightFactor);
             });
