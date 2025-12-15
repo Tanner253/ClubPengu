@@ -702,13 +702,28 @@ function handleMessage(playerId, message) {
                 }, playerId);
             }
             
-            // Clear emote after duration (except Sit, Breakdance, and DJ which are continuous)
-            // 67 emote lasts 5 seconds, others last 3 seconds
-            if (message.emote && message.emote !== 'Sit' && message.emote !== 'Breakdance' && message.emote !== 'DJ') {
-                const emoteDuration = message.emote === '67' ? 5000 : 3000;
+            // Continuous emotes - don't auto-clear (Sit, Breakdance, DJ, 67, Headbang)
+            // These persist until player explicitly stops them or moves
+            // Non-continuous emotes (Wave, Dance, Laugh) clear after 3 seconds
+            const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang'];
+            if (message.emote && !continuousEmotes.includes(message.emote)) {
+                const emoteDuration = 3000;
                 setTimeout(() => {
-                    player.emote = null;
-                    player.seatedOnFurniture = false;
+                    // Only clear if still the same emote
+                    if (player.emote === message.emote) {
+                        player.emote = null;
+                        player.seatedOnFurniture = false;
+                        
+                        // Broadcast emote end to all players in room
+                        if (player.room) {
+                            broadcastToRoomAll(player.room, {
+                                type: 'player_emote',
+                                playerId: playerId,
+                                emote: null,
+                                seatedOnFurniture: false
+                            });
+                        }
+                    }
                 }, emoteDuration);
             }
             break;

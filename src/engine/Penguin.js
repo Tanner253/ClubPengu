@@ -271,10 +271,10 @@ class Penguin {
                 break;
         }
         
-        // Auto-end non-persistent emotes (Sit, Breakdance, and DJ are continuous)
-        // 67 emote lasts 5 seconds, others last 3 seconds
-        const emoteDuration = this.emote === '67' ? 5 : 3;
-        if (this.emote !== 'Sit' && this.emote !== 'Breakdance' && this.emote !== 'DJ' && eTime > emoteDuration) {
+        // Auto-end non-persistent emotes
+        // Continuous emotes: Sit, Breakdance, DJ, 67, Headbang - don't auto-end
+        const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang'];
+        if (!continuousEmotes.includes(this.emote) && eTime > 3) {
             this.stopEmote();
         }
     }

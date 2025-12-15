@@ -6883,9 +6883,10 @@ const VoxelWorld = ({
                     meshData.emoteStartTime = playerData.emoteStartTime || Date.now();
                 }
                 
-                // Auto-end emotes after 3.5 seconds (client-side fallback)
-                // Sit and Breakdance are continuous emotes - don't auto-clear
-                if (meshData.currentEmote && meshData.currentEmote !== 'Sit' && meshData.currentEmote !== 'Breakdance') {
+                // Auto-end emotes after 3.5 seconds (client-side fallback for local player only)
+                // Continuous emotes: Sit, Breakdance, DJ, 67, Headbang - don't auto-clear
+                const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang'];
+                if (meshData.currentEmote && !continuousEmotes.includes(meshData.currentEmote)) {
                     const emoteAge = (Date.now() - meshData.emoteStartTime) / 1000;
                     if (emoteAge > 3.5) {
                         meshData.currentEmote = null;
