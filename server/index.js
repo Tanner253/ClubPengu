@@ -621,6 +621,23 @@ function handleMessage(playerId, message) {
             break;
         }
         
+        case 'emote_bubble': {
+            // Emote bubble - shows chat bubble but doesn't log to chat history
+            if (player.room && message.text) {
+                const text = message.text.substring(0, 50); // Shorter limit for emote bubbles
+                
+                // Broadcast to all players in room (including sender) as a bubble-only message
+                broadcastToRoomAll(player.room, {
+                    type: 'emote_bubble',
+                    playerId: playerId,
+                    name: player.name,
+                    text: text,
+                    timestamp: Date.now()
+                });
+            }
+            break;
+        }
+        
         case 'whisper': {
             // Private message to another player by name
             if (!message.targetName || !message.text) break;

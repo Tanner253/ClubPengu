@@ -273,6 +273,16 @@ export function MultiplayerProvider({ children }) {
                 callbacksRef.current.onChatMessage?.(chatMsg);
                 break;
             
+            case 'emote_bubble':
+                // Emote bubble - shows above player but does NOT log to chat
+                const emoteBubblePlayer = playersDataRef.current.get(message.playerId);
+                if (emoteBubblePlayer) {
+                    emoteBubblePlayer.chatMessage = message.text;
+                    emoteBubblePlayer.chatTime = Date.now();
+                }
+                // Note: No setChatMessages - bubble only, no chat log
+                break;
+            
             case 'player_afk': {
                 // Player AFK status changed
                 const afkPlayer = playersDataRef.current.get(message.playerId);
@@ -432,6 +442,14 @@ export function MultiplayerProvider({ children }) {
         });
     }, [send]);
     
+    // Send emote bubble (shows chat bubble but doesn't log to chat)
+    const sendEmoteBubble = useCallback((text) => {
+        send({
+            type: 'emote_bubble',
+            text
+        });
+    }, [send]);
+    
     // Send emote (with optional seatedOnFurniture flag for furniture sit vs ground sit)
     const sendEmote = useCallback((emote, seatedOnFurniture = false) => {
         send({
@@ -529,6 +547,7 @@ export function MultiplayerProvider({ children }) {
         joinRoom,
         sendPosition,
         sendChat,
+        sendEmoteBubble,
         sendEmote,
         stopEmote,
         changeRoom,

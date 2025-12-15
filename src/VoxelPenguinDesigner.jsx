@@ -86,7 +86,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     
     // Cosmetic promo codes (case-sensitive) - { code: { id, category, name } }
     const COSMETIC_PROMO_CODES = {
-        'LMAO': { id: 'lmao', category: 'eyes', name: '😂 LMAO Face' }
+        'LMAO': { id: 'lmao', category: 'eyes', name: '😂 LMAO Face' },
+        'JOE': { id: 'joe', category: 'bodyItem', name: '👻 Invisible Body' }
     };
     
     // Check if a cosmetic is unlocked (or doesn't require unlock)
@@ -456,17 +457,110 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             const hatVoxels = ASSETS.HATS[hat] || [];
             const eyeVoxels = ASSETS.EYES[eyes] || [];
             const mouthVoxels = ASSETS.MOUTH[mouth] || [];
-            const bodyItemVoxels = ASSETS.BODY[bodyItem] || [];
+            const bodyItemData = ASSETS.BODY[bodyItem];
+            const bodyItemVoxels = bodyItemData?.voxels || bodyItemData || [];
+            
+            // Check if bodyItem hides the body (e.g., "joe" clothing)
+            const hideBody = bodyItemData?.hideBody === true;
 
-            addPart(bodyVoxels, 'body');
-            addPart(headVoxels, 'head');
-            addPart(flippersLeft, 'flipper_l');
-            addPart(flippersRight, 'flipper_r');
-            addPart(feetVoxels, 'feet');
-            addPart(hatVoxels, 'hat');
-            addPart(eyeVoxels, 'eyes');
-            addPart(mouthVoxels, 'mouth');
-            addPart(bodyItemVoxels, 'accessory');
+            // Only render body if not hidden by clothing item
+            if (!hideBody) {
+                addPart(bodyVoxels, 'body');
+                addPart(headVoxels, 'head');
+                addPart(flippersLeft, 'flipper_l');
+                addPart(flippersRight, 'flipper_r');
+                addPart(feetVoxels, 'feet');
+                addPart(hatVoxels, 'hat');
+                addPart(eyeVoxels, 'eyes');
+                addPart(mouthVoxels, 'mouth');
+                addPart(bodyItemVoxels, 'accessory');
+            } else {
+                // JOE MODE: Big floating head like M&M meme
+                // Create a wrapper group for the enlarged head
+                const joeHeadGroup = new THREE.Group();
+                joeHeadGroup.name = 'joe_head';
+                
+                // Build head parts into a sub-group for scaling
+                const headGroup = new THREE.Group();
+                
+                // Add head voxels
+                headVoxels.forEach(v => {
+                    const geo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+                    const mat = new THREE.MeshStandardMaterial({ color: PALETTE[v.c] || v.c });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(v.x * VOXEL_SIZE, v.y * VOXEL_SIZE, v.z * VOXEL_SIZE);
+                    mesh.castShadow = true;
+                    headGroup.add(mesh);
+                });
+                
+                // Add eyes
+                eyeVoxels.forEach(v => {
+                    const geo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+                    const mat = new THREE.MeshStandardMaterial({ color: PALETTE[v.c] || v.c });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(v.x * VOXEL_SIZE, v.y * VOXEL_SIZE, v.z * VOXEL_SIZE);
+                    headGroup.add(mesh);
+                });
+                
+                // Add mouth
+                mouthVoxels.forEach(v => {
+                    const geo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+                    const mat = new THREE.MeshStandardMaterial({ color: PALETTE[v.c] || v.c });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(v.x * VOXEL_SIZE, v.y * VOXEL_SIZE, v.z * VOXEL_SIZE);
+                    headGroup.add(mesh);
+                });
+                
+                // Add hat
+                hatVoxels.forEach(v => {
+                    const geo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+                    const mat = new THREE.MeshStandardMaterial({ color: PALETTE[v.c] || v.c });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(v.x * VOXEL_SIZE, v.y * VOXEL_SIZE, v.z * VOXEL_SIZE);
+                    headGroup.add(mesh);
+                });
+                
+                // Scale up the head (1.8x bigger)
+                headGroup.scale.set(1.8, 1.8, 1.8);
+                // Move head down since no body (center it vertically)
+                headGroup.position.y = -2 * VOXEL_SIZE;
+                joeHeadGroup.add(headGroup);
+                group.add(joeHeadGroup);
+                
+                // Add WHITE floating hands (like M&M gloves) - positioned higher near head
+                const whiteFlippersLeft = generateFlippers('#FFFFFF', true);
+                const leftHandGroup = new THREE.Group();
+                whiteFlippersLeft.forEach(v => {
+                    const geo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+                    const mat = new THREE.MeshStandardMaterial({ color: '#FFFFFF' });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(v.x * VOXEL_SIZE, v.y * VOXEL_SIZE, v.z * VOXEL_SIZE);
+                    mesh.castShadow = true;
+                    leftHandGroup.add(mesh);
+                });
+                leftHandGroup.scale.set(0.9, 0.9, 0.9);
+                leftHandGroup.position.set(6 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
+                leftHandGroup.name = 'flipper_l';
+                group.add(leftHandGroup);
+                
+                const whiteFlippersRight = generateFlippers('#FFFFFF', false);
+                const rightHandGroup = new THREE.Group();
+                whiteFlippersRight.forEach(v => {
+                    const geo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+                    const mat = new THREE.MeshStandardMaterial({ color: '#FFFFFF' });
+                    const mesh = new THREE.Mesh(geo, mat);
+                    mesh.position.set(v.x * VOXEL_SIZE, v.y * VOXEL_SIZE, v.z * VOXEL_SIZE);
+                    mesh.castShadow = true;
+                    rightHandGroup.add(mesh);
+                });
+                rightHandGroup.scale.set(0.9, 0.9, 0.9);
+                rightHandGroup.position.set(-6 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
+                rightHandGroup.name = 'flipper_r';
+                group.add(rightHandGroup);
+                
+                // Add feet at the bottom
+                addPart(feetVoxels, 'feet');
+            }
         }
 
         if (hat === 'propeller') {

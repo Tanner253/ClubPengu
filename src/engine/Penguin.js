@@ -220,10 +220,35 @@ class Penguin {
                     flipperR.rotation.x = 0;
                 }
                 break;
+                
+            case '67':
+                // 67 emote: Arms held straight out in FRONT, seesaw UP/DOWN like weighing scales
+                const scaleSpeed = eTime * 4; // 50% faster oscillation
+                const seesaw = Math.sin(scaleSpeed) * 0.35; // Seesaw amount (up/down tilt)
+                
+                // Arms point FORWARD, seesaw moves them UP and DOWN (not in/out)
+                if (flipperL) {
+                    flipperL.rotation.x = -Math.PI / 2 + seesaw; // Forward + seesaw UP/DOWN
+                    flipperL.rotation.y = 0;
+                    flipperL.rotation.z = 0.2; // Slight outward spread (constant)
+                }
+                if (flipperR) {
+                    flipperR.rotation.x = -Math.PI / 2 - seesaw; // Forward + OPPOSITE seesaw
+                    flipperR.rotation.y = 0;
+                    flipperR.rotation.z = -0.2; // Slight outward spread (constant)
+                }
+                
+                // Slight head tilt to look at the "scales"
+                if (head) {
+                    head.rotation.x = -0.1;
+                }
+                break;
         }
         
         // Auto-end non-persistent emotes (Sit and Breakdance are continuous)
-        if (this.emote !== 'Sit' && this.emote !== 'Breakdance' && eTime > 3) {
+        // 67 emote lasts 5 seconds, others last 3 seconds
+        const emoteDuration = this.emote === '67' ? 5 : 3;
+        if (this.emote !== 'Sit' && this.emote !== 'Breakdance' && eTime > emoteDuration) {
             this.stopEmote();
         }
     }

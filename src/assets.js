@@ -2072,7 +2072,11 @@ export const ASSETS = {
             }
             
              return v;
-        })()
+        })(),
+        
+        // JOE - Special promo item that makes the body invisible (floating head effect)
+        // This is a marker - the rendering code checks for this and skips body rendering
+        joe: { hideBody: true, voxels: [] }
     },
     
     // ==================== MOUNTS ====================

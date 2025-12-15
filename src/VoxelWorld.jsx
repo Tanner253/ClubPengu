@@ -101,6 +101,7 @@ const VoxelWorld = ({
         joinRoom: mpJoinRoom,
         sendPosition,
         sendChat: mpSendChat,
+        sendEmoteBubble: mpSendEmoteBubble,
         sendEmote: mpSendEmote,
         changeRoom: mpChangeRoom,
         updatePuffle: mpUpdatePuffle,
@@ -161,8 +162,21 @@ const VoxelWorld = ({
 
     const AI_EMOTES = ['Wave', 'Dance', 'Laugh', 'Sit', 'Breakdance'];
     
-    // Game State
-    const [showEmoteWheel, setShowEmoteWheel] = useState(false);
+    // Emote wheel configuration (ordered clockwise from top)
+    const EMOTE_WHEEL_ITEMS = [
+        { id: 'Wave', emoji: '👋', label: 'Wave', color: 'bg-blue-500' },
+        { id: 'Laugh', emoji: '😂', label: 'Laugh', color: 'bg-red-500' },
+        { id: 'Breakdance', emoji: '🤸', label: 'Break', color: 'bg-orange-500' },
+        { id: 'Dance', emoji: '💃', label: 'Dance', color: 'bg-green-500' },
+        { id: 'Sit', emoji: '🧘', label: 'Sit', color: 'bg-purple-500' },
+        { id: '67', emoji: '⚖️', label: '67', color: 'bg-yellow-500' },
+    ];
+    
+    // Emote Wheel State
+    const [emoteWheelOpen, setEmoteWheelOpen] = useState(false);
+    const [emoteWheelSelection, setEmoteWheelSelection] = useState(-1);
+    const emoteSelectionRef = useRef(-1); // Sticky selection - persists until changed
+    const emoteWheelKeyHeld = useRef(false); // Track if T is currently held
     const emoteRef = useRef({ type: null, startTime: 0 });
     const [showPufflePanel, setShowPufflePanel] = useState(false);
     const playerPuffleRef = useRef(null);
@@ -853,7 +867,7 @@ const VoxelWorld = ({
         { title: "🚀 Launch Pad", ticker: "$PAD", shill: "Early access • Presale alerts" },
         { title: "🎰 Whale Watchers", ticker: "$WHALE", shill: "Track big wallets • Free signals" },
         { title: "⚡ Speed Runners", ticker: "$SPEED", shill: "Snipe bots • Fast entry" },
-        { title: "🏠 Cozy Corner", ticker: "$COZY", shill: "Chill vibes • Good company" },
+        { title: "Regen", ticker: "", shill: "A group of like-minded individuals", owner: "jj" },
         { title: "🎮 Gamer Guild", ticker: "$GG", shill: "P2E alpha • Gaming NFTs" },
         { title: "🌈 Rainbow Room", ticker: "$RGB", shill: "All welcome • Good energy only" }
     ];
@@ -965,17 +979,29 @@ const VoxelWorld = ({
         ctx.fillStyle = style.textColor;
         ctx.fillText(content.title, w / 2, padding + 24);
         
-        // Draw ticker
+        // Draw ticker (if not empty)
+        if (content.ticker) {
         ctx.font = 'bold 24px "Arial Black", sans-serif';
         ctx.fillStyle = style.borderColor;
         ctx.fillText(content.ticker, w / 2, padding + 56);
+        }
         
-        // Draw shill text
+        // Draw shill/description text (adjust position if no ticker)
+        const shillY = content.ticker ? padding + 82 : padding + 56;
         ctx.font = '14px "Segoe UI", Arial, sans-serif';
         ctx.fillStyle = style.textColor;
         ctx.globalAlpha = 0.9;
-        ctx.fillText(content.shill, w / 2, padding + 82);
+        ctx.fillText(content.shill, w / 2, shillY);
         ctx.globalAlpha = 1;
+        
+        // Draw owner (if exists)
+        if (content.owner) {
+            ctx.font = 'italic 12px "Segoe UI", Arial, sans-serif';
+            ctx.fillStyle = style.accentColor;
+            ctx.globalAlpha = 0.8;
+            ctx.fillText(`owned by ${content.owner}`, w / 2, shillY + 18);
+            ctx.globalAlpha = 1;
+        }
         
         // Draw separator line
         ctx.strokeStyle = style.borderColor;
@@ -1147,7 +1173,7 @@ const VoxelWorld = ({
             renderer.shadowMap.type = THREE.BasicShadowMap;
             console.log('🍎 Mac: Using BasicShadowMap for better performance');
         } else {
-            renderer.shadowMap.type = THREE.PCFShadowMap;
+        renderer.shadowMap.type = THREE.PCFShadowMap;
         }
         mountRef.current.appendChild(renderer.domElement);
         rendererRef.current = renderer;
@@ -3044,9 +3070,72 @@ const VoxelWorld = ({
                  head.name = 'head';
                  body.name = 'body';
                  
-                 group.add(body, head, flippersLeft, flippersRight, footL, footR);
+                 // Check if bodyItem hides the body (e.g., "joe" clothing)
+                 const bodyItemData = data.bodyItem ? ASSETS.BODY[data.bodyItem] : null;
+                 const hideBody = bodyItemData?.hideBody === true;
                  
+                 // Add body parts - skip body if hidden by clothing item (e.g., "joe")
+                 if (hideBody) {
+                     // JOE MODE: Big floating head like M&M meme
+                     // Create a wrapper group for the head and all cosmetics
+                     const joeHeadWrapper = new THREE.Group();
+                     joeHeadWrapper.name = 'joe_head_wrapper';
+                     joeHeadWrapper.add(head);
+                     
+                     // Add hat to the wrapper (if exists)
                 if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+                         const hatMesh = buildPartMerged(ASSETS.HATS[data.hat], PALETTE);
+                         hatMesh.name = 'hat';
+                         joeHeadWrapper.add(hatMesh);
+                     }
+                     
+                     // Add eyes to the wrapper (if exists)
+                     if (data.eyes && ASSETS.EYES[data.eyes]) {
+                         const eyesMesh = buildPartMerged(ASSETS.EYES[data.eyes], PALETTE);
+                         eyesMesh.name = 'eyes';
+                         joeHeadWrapper.add(eyesMesh);
+                     }
+                     
+                     // Add mouth to the wrapper
+                     if (data.mouth && ASSETS.MOUTH[data.mouth]) {
+                         const mouthMesh = buildPartMerged(ASSETS.MOUTH[data.mouth], PALETTE);
+                         mouthMesh.name = 'mouth';
+                         joeHeadWrapper.add(mouthMesh);
+                     } else if (ASSETS.MOUTH.beak) {
+                         const mouthMesh = buildPartMerged(ASSETS.MOUTH.beak, PALETTE);
+                         mouthMesh.name = 'mouth';
+                         joeHeadWrapper.add(mouthMesh);
+                     }
+                     
+                     // Scale up the entire head wrapper (1.8x bigger)
+                     joeHeadWrapper.scale.set(1.8, 1.8, 1.8);
+                     // Move down since no body
+                     joeHeadWrapper.position.y = -2 * VOXEL_SIZE;
+                     group.add(joeHeadWrapper);
+                     
+                     // Rebuild flippers as WHITE for joe mode (like M&M gloves)
+                     const whiteFlippersLeft = buildPartMerged(generateFlippers('#FFFFFF', true), PALETTE, {x:5, y:0, z:0});
+                     const whiteFlippersRight = buildPartMerged(generateFlippers('#FFFFFF', false), PALETTE, {x:-5, y:0, z:0});
+                     whiteFlippersLeft.name = 'flipper_l';
+                     whiteFlippersRight.name = 'flipper_r';
+                     
+                     // Position flippers higher up near the head as floating hands
+                     whiteFlippersLeft.scale.set(0.9, 0.9, 0.9);
+                     whiteFlippersLeft.position.set(6 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
+                     
+                     whiteFlippersRight.scale.set(0.9, 0.9, 0.9);
+                     whiteFlippersRight.position.set(-6 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
+                     
+                     // Mark as joe mode for animation and cosmetic handling
+                     group.userData.isJoeMode = true;
+                     
+                     group.add(whiteFlippersLeft, whiteFlippersRight, footL, footR);
+                 } else {
+                     group.add(body, head, flippersLeft, flippersRight, footL, footR);
+                 }
+                 
+                // Skip hat/eyes/mouth for joe mode (already added to wrapper above)
+                if (!hideBody && data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
                     const p = buildPartMerged(ASSETS.HATS[data.hat], PALETTE);
                     p.name = 'hat';
                     group.add(p);
@@ -3104,7 +3193,8 @@ const VoxelWorld = ({
                     }
                 }
                  
-                if (data.eyes && ASSETS.EYES[data.eyes]) {
+                // Skip eyes for joe mode (already added to wrapper above)
+                if (!hideBody && data.eyes && ASSETS.EYES[data.eyes]) {
                     const p = buildPartMerged(ASSETS.EYES[data.eyes], PALETTE);
                     p.name = 'eyes';
                     group.add(p);
@@ -3168,13 +3258,14 @@ const VoxelWorld = ({
                         fireEyesGroup.userData.isFireEyes = true;
                         group.add(fireEyesGroup);
                     }
-                } else if (ASSETS.EYES.normal) {
+                } else if (!hideBody && ASSETS.EYES.normal) {
                     const p = buildPartMerged(ASSETS.EYES.normal, PALETTE);
                     p.name = 'eyes';
                     group.add(p);
                 }
                  
-                if (data.mouth && ASSETS.MOUTH[data.mouth]) {
+                // Skip mouth for joe mode (already added to wrapper above)
+                if (!hideBody && data.mouth && ASSETS.MOUTH[data.mouth]) {
                     const p = buildPartMerged(ASSETS.MOUTH[data.mouth], PALETTE);
                     p.name = 'mouth';
                     group.add(p);
@@ -3283,21 +3374,32 @@ const VoxelWorld = ({
                         bubbleGroup.userData.isBubblegum = true;
                         group.add(bubbleGroup);
                     }
-                } else if (ASSETS.MOUTH.beak) {
+                } else if (!hideBody && ASSETS.MOUTH.beak) {
                     const p = buildPartMerged(ASSETS.MOUTH.beak, PALETTE);
                     p.name = 'mouth';
                     group.add(p);
                 }
                  
                  if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
-                     const p = buildPartMerged(ASSETS.BODY[data.bodyItem], PALETTE);
-                     p.name = 'accessory';
-                     group.add(p);
+                     // Check if this bodyItem hides the body (like "joe")
+                     const bodyItemInfo = ASSETS.BODY[data.bodyItem];
+                     const isHideBodyItem = bodyItemInfo?.hideBody === true;
+                     
+                     // Only add accessory voxels if it has any (joe has none)
+                     let accessoryMesh = null;
+                     if (!isHideBodyItem) {
+                         const voxels = bodyItemInfo?.voxels || bodyItemInfo || [];
+                         if (voxels.length > 0) {
+                             accessoryMesh = buildPartMerged(voxels, PALETTE);
+                             accessoryMesh.name = 'accessory';
+                             group.add(accessoryMesh);
+                         }
+                     }
                      
                      // Add wing flapping for angel/demon wings
-                     if (data.bodyItem === 'angelWings' || data.bodyItem === 'demonWings') {
-                         p.userData.isWings = true;
-                         p.userData.wingPhase = Math.random() * Math.PI * 2;
+                     if ((data.bodyItem === 'angelWings' || data.bodyItem === 'demonWings') && accessoryMesh) {
+                         accessoryMesh.userData.isWings = true;
+                         accessoryMesh.userData.wingPhase = Math.random() * Math.PI * 2;
                      }
                      
                      // Fire Aura - animated fire ring (like campfire)
@@ -3742,7 +3844,8 @@ const VoxelWorld = ({
             AI_NAMES.forEach((name, i) => {
                 const skins = Object.keys(PALETTE).filter(k => !['floorLight','floorDark','wood','rug','glass','beerGold','mirrorFrame','mirrorGlass', 'asphalt', 'roadLine', 'buildingBrickRed', 'buildingBrickYellow', 'buildingBrickBlue', 'windowLight', 'windowDark', 'grass', 'snow', 'water', 'waterDeep', 'butterfly1', 'butterfly2', 'butterfly3'].includes(k));
                 const hats = Object.keys(ASSETS.HATS);
-                const bodyItems = Object.keys(ASSETS.BODY);
+                // Filter out promo-code-only items like "joe" from AI clothing
+                const bodyItems = Object.keys(ASSETS.BODY).filter(k => !ASSETS.BODY[k]?.hideBody);
                 
                 const aiData = {
                     skin: skins[Math.floor(Math.random() * skins.length)],
@@ -3909,8 +4012,13 @@ const VoxelWorld = ({
                 }
             }
             if(e.code === 'KeyT') {
-                // T key opens emote wheel
-                setShowEmoteWheel(true);
+                // Only open once when T is first pressed (not on repeat)
+                if (!emoteWheelKeyHeld.current) {
+                    emoteWheelKeyHeld.current = true;
+                    setEmoteWheelOpen(true);
+                    setEmoteWheelSelection(-1);
+                    emoteSelectionRef.current = -1;
+                }
             }
             if(e.code === 'F3') {
                 // F3 toggles debug position panel (like Minecraft) - DEV ONLY
@@ -3931,7 +4039,20 @@ const VoxelWorld = ({
         };
         const handleUp = (e) => {
             keysRef.current[e.code] = false;
-            if(e.code === 'KeyT') setShowEmoteWheel(false);
+            if(e.code === 'KeyT') {
+                // T released - close wheel and play selection if any
+                emoteWheelKeyHeld.current = false;
+                
+                const idx = emoteSelectionRef.current;
+                if (idx >= 0 && idx < EMOTE_WHEEL_ITEMS.length) {
+                    triggerEmote(EMOTE_WHEEL_ITEMS[idx].id);
+                }
+                
+                // Always close the wheel on T release
+                setEmoteWheelOpen(false);
+                setEmoteWheelSelection(-1);
+                emoteSelectionRef.current = -1;
+            }
         };
         window.addEventListener('keydown', handleDown);
         window.addEventListener('keyup', handleUp);
@@ -5233,9 +5354,33 @@ const VoxelWorld = ({
                             flipperR.rotation.x = 0;
                         }
                     }
+                    else if (emoteType === '67') {
+                        // 67 emote: Arms held straight out in FRONT, seesaw UP/DOWN like weighing scales
+                        const scaleSpeed = eTime * 4; // 50% faster oscillation
+                        const seesaw = Math.sin(scaleSpeed) * 0.35; // Seesaw amount (up/down tilt)
+                        
+                        // Arms point FORWARD, seesaw moves them UP and DOWN (not in/out)
+                        if(flipperL) {
+                            flipperL.rotation.x = -Math.PI / 2 + seesaw; // Forward + seesaw UP/DOWN
+                            flipperL.rotation.y = 0;
+                            flipperL.rotation.z = 0.2; // Slight outward spread (constant)
+                        }
+                        if(flipperR) {
+                            flipperR.rotation.x = -Math.PI / 2 - seesaw; // Forward + OPPOSITE seesaw
+                            flipperR.rotation.y = 0;
+                            flipperR.rotation.z = -0.2; // Slight outward spread (constant)
+                        }
+                        
+                        // Slight head tilt to look at the "scales"
+                        if(head) {
+                            head.rotation.x = -0.1;
+                        }
+                    }
                     
-                    // Auto-stop non-persistent emotes after 3 seconds (Sit and Breakdance are continuous)
-                    if (emoteType !== 'Sit' && emoteType !== 'Breakdance' && eTime > 3) {
+                    // Auto-stop non-persistent emotes (Sit and Breakdance are continuous)
+                    // 67 emote lasts 5 seconds, others last 3 seconds
+                    const emoteDuration = emoteType === '67' ? 5 : 3;
+                    if (emoteType !== 'Sit' && emoteType !== 'Breakdance' && eTime > emoteDuration) {
                         if (playerRef.current === meshWrapper) {
                             emoteRef.current.type = null;
                             // Notify server that emote ended
@@ -6734,10 +6879,54 @@ const VoxelWorld = ({
     
     const triggerEmote = (type) => {
         emoteRef.current = { type, startTime: Date.now() };
-        setShowEmoteWheel(false);
         // Send emote to other players (emote wheel = ground emotes, not furniture)
         mpSendEmote(type, false);
+        
+        // Special handling for "67" emote - show chat bubble without logging
+        if (type === '67') {
+            mpSendEmoteBubble('67!'); // Send to other players
+            setActiveBubble('67!'); // Show locally above own head
+        }
     };
+    
+    // ==================== EMOTE WHEEL - STICKY SELECTION ====================
+    // Selection stays on last hovered sector until a DIFFERENT sector is entered
+    useEffect(() => {
+        if (!emoteWheelOpen) return;
+        
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        const DEAD_ZONE = 50; // pixels from center
+        const NUM_SECTORS = EMOTE_WHEEL_ITEMS.length;
+        const SECTOR_SIZE = 360 / NUM_SECTORS;
+        
+        const handleMouseMove = (e) => {
+            const dx = e.clientX - centerX;
+            const dy = e.clientY - centerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // DEAD ZONE: Don't change selection, keep the sticky value
+            if (distance < DEAD_ZONE) {
+                return; // Keep current selection
+            }
+            
+            // Calculate angle (0° at top, clockwise)
+            let angle = Math.atan2(dx, -dy) * (180 / Math.PI);
+            if (angle < 0) angle += 360;
+            
+            // Determine sector index
+            const newIndex = Math.floor(angle / SECTOR_SIZE) % NUM_SECTORS;
+            
+            // STICKY: Only update if entering a DIFFERENT sector
+            if (newIndex !== emoteSelectionRef.current) {
+                emoteSelectionRef.current = newIndex;
+                setEmoteWheelSelection(newIndex);
+            }
+        };
+        
+        document.addEventListener('mousemove', handleMouseMove);
+        return () => document.removeEventListener('mousemove', handleMouseMove);
+    }, [emoteWheelOpen]);
     
     // ==================== VICTORY DANCE ====================
     // Auto-trigger dance animation when player wins a match
@@ -7544,7 +7733,7 @@ const VoxelWorld = ({
     // Handle E key for portal entry
     useEffect(() => {
         const handleKeyPress = (e) => {
-            if (e.code === 'KeyE' && nearbyPortal && !showEmoteWheel) {
+            if (e.code === 'KeyE' && nearbyPortal && !emoteWheelOpen) {
                 if (nearbyPortal.targetRoom || nearbyPortal.minigame) {
                     handlePortalEnter();
                 }
@@ -7552,7 +7741,7 @@ const VoxelWorld = ({
         };
         window.addEventListener('keydown', handleKeyPress);
         return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [nearbyPortal, showEmoteWheel]);
+    }, [nearbyPortal, emoteWheelOpen]);
     
     // Handle town interactions (benches, snowmen, etc.)
     useEffect(() => {
@@ -7884,17 +8073,29 @@ const VoxelWorld = ({
         ctx.fillStyle = style.textColor;
         ctx.fillText(content.title, w / 2, padding + 24);
         
-        // Draw ticker
+        // Draw ticker (if not empty)
+        if (content.ticker) {
         ctx.font = 'bold 24px "Arial Black", sans-serif';
         ctx.fillStyle = style.borderColor;
         ctx.fillText(content.ticker, w / 2, padding + 56);
+        }
         
-        // Draw shill text
+        // Draw shill/description text (adjust position if no ticker)
+        const shillY = content.ticker ? padding + 82 : padding + 56;
         ctx.font = '14px "Segoe UI", Arial, sans-serif';
         ctx.fillStyle = style.textColor;
         ctx.globalAlpha = 0.9;
-        ctx.fillText(content.shill, w / 2, padding + 82);
+        ctx.fillText(content.shill, w / 2, shillY);
         ctx.globalAlpha = 1;
+        
+        // Draw owner (if exists)
+        if (content.owner) {
+            ctx.font = 'italic 12px "Segoe UI", Arial, sans-serif';
+            ctx.fillStyle = style.accentColor;
+            ctx.globalAlpha = 0.8;
+            ctx.fillText(`owned by ${content.owner}`, w / 2, shillY + 18);
+            ctx.globalAlpha = 1;
+        }
         
         // Draw separator line
         ctx.strokeStyle = style.borderColor;
@@ -8302,7 +8503,7 @@ const VoxelWorld = ({
                     {/* Emote Button */}
                     <button 
                         className="w-12 h-12 rounded-full bg-purple-600/80 border-2 border-white/40 flex items-center justify-center active:scale-90 transition-transform touch-none"
-                        onClick={() => setShowEmoteWheel(true)}
+                        onClick={() => { setEmoteWheelOpen(true); emoteSelectionRef.current = -1; setEmoteWheelSelection(-1); }}
                     >
                         <span className="text-xl">😄</span>
                     </button>
@@ -8575,51 +8776,69 @@ const VoxelWorld = ({
              )}
 
              
-             {showEmoteWheel && (
-                 <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/50 backdrop-blur-sm animate-fade-in">
-                     <div className="relative w-64 h-64 rounded-full border-4 border-white/20 bg-black/80 flex items-center justify-center">
-                         <div className="absolute top-2 text-center w-full retro-text text-yellow-400 text-[10px]">EMOTES</div>
-                         
-                         {/* 5 buttons evenly spaced in a circle (72 degrees apart) */}
-                         {/* Top: Wave */}
-                         <button 
-                             className="absolute hover:scale-110 transition-transform p-3 bg-blue-500 rounded-full border-2 border-white shadow-lg"
-                             style={{ top: '12%', left: '50%', transform: 'translateX(-50%)' }}
-                             onClick={() => triggerEmote('Wave')} 
-                             title="Wave">👋</button>
-                         
-                         {/* Top-right: Laugh */}
-                         <button 
-                             className="absolute hover:scale-110 transition-transform p-3 bg-red-500 rounded-full border-2 border-white shadow-lg"
-                             style={{ top: '30%', right: '12%' }}
-                             onClick={() => triggerEmote('Laugh')} 
-                             title="Laugh">😂</button>
-                         
-                         {/* Bottom-right: Breakdance */}
-                         <button 
-                             className="absolute hover:scale-110 transition-transform p-3 bg-orange-500 rounded-full border-2 border-white shadow-lg"
-                             style={{ bottom: '18%', right: '18%' }}
-                             onClick={() => triggerEmote('Breakdance')} 
-                             title="Breakdance">🤸</button>
-                         
-                         {/* Bottom-left: Dance */}
-                         <button 
-                             className="absolute hover:scale-110 transition-transform p-3 bg-green-500 rounded-full border-2 border-white shadow-lg"
-                             style={{ bottom: '18%', left: '18%' }}
-                             onClick={() => triggerEmote('Dance')} 
-                             title="Dance">💃</button>
-                         
-                         {/* Top-left: Sit */}
-                         <button 
-                             className="absolute hover:scale-110 transition-transform p-3 bg-purple-500 rounded-full border-2 border-white shadow-lg"
-                             style={{ top: '30%', left: '12%' }}
-                             onClick={() => triggerEmote('Sit')} 
-                             title="Sit">🧘</button>
-                         
-                         <div className="text-white text-[10px] text-center opacity-50 retro-text">Press E<br/>to close</div>
-                     </div>
-                 </div>
-             )}
+            {emoteWheelOpen && (
+                <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/40">
+                    <div className="relative w-80 h-80">
+                        {/* Emote sectors arranged in a circle (top = index 0, clockwise) */}
+                        {EMOTE_WHEEL_ITEMS.map((emote, index) => {
+                            const SECTOR_SIZE = 360 / EMOTE_WHEEL_ITEMS.length;
+                            const angle = (index * SECTOR_SIZE - 90) * (Math.PI / 180); // -90 to start at top
+                            const radius = 110;
+                            const x = Math.cos(angle) * radius;
+                            const y = Math.sin(angle) * radius;
+                            const isSelected = emoteWheelSelection === index;
+                            
+                            return (
+                                <div
+                                    key={emote.id}
+                                    className="absolute flex flex-col items-center justify-center"
+                                    style={{ 
+                                        left: `calc(50% + ${x}px)`, 
+                                        top: `calc(50% + ${y}px)`,
+                                        transform: `translate(-50%, -50%) scale(${isSelected ? 1.2 : 1})`,
+                                        opacity: isSelected ? 1 : 0.6,
+                                        transition: 'transform 0.1s, opacity 0.1s'
+                                    }}
+                                    onClick={() => { triggerEmote(emote.id); setEmoteWheelOpen(false); }}
+                                    onTouchStart={() => { triggerEmote(emote.id); setEmoteWheelOpen(false); }}
+                                >
+                                    <div className={`w-16 h-16 rounded-full ${emote.color} flex items-center justify-center shadow-lg`}
+                                        style={{
+                                            border: isSelected ? '4px solid white' : '2px solid rgba(255,255,255,0.4)',
+                                            boxShadow: isSelected ? '0 0 20px rgba(255,255,255,0.5)' : 'none'
+                                        }}>
+                                        <span className="text-2xl">{emote.emoji}</span>
+                                    </div>
+                                    <span className={`text-xs mt-2 retro-text font-bold ${isSelected ? 'text-white' : 'text-white/50'}`}>
+                                        {emote.label}
+                                    </span>
+                                </div>
+                            );
+                        })}
+                        
+                        {/* Center - shows current selection */}
+                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 
+                            w-24 h-24 rounded-full bg-black/90 border-2 border-white/30 
+                            flex flex-col items-center justify-center">
+                            {emoteWheelSelection >= 0 ? (
+                                <>
+                                    <span className="text-4xl">{EMOTE_WHEEL_ITEMS[emoteWheelSelection]?.emoji}</span>
+                                    <span className="text-white text-xs retro-text mt-1 font-bold">
+                                        {EMOTE_WHEEL_ITEMS[emoteWheelSelection]?.label}
+                                    </span>
+                                </>
+                            ) : (
+                                <span className="text-white/40 text-xs retro-text text-center">Drag to<br/>select</span>
+                            )}
+                        </div>
+                        
+                        {/* Instructions */}
+                        <div className="absolute left-1/2 -translate-x-1/2 bottom-0 text-white/50 text-xs retro-text">
+                            Release [T] to use
+                        </div>
+                    </div>
+                </div>
+            )}
              
              {/* Settings Menu Modal */}
              <SettingsMenu
