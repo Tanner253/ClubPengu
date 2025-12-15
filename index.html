@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/penguin.svg" />
-    <!-- iOS fullscreen viewport - covers entire screen including notch area -->
+    <!-- Viewport: iOS uses viewport-fit=cover for fullscreen, works fine for Android too -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <!-- iOS PWA/fullscreen support -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -15,34 +15,36 @@
     <meta name="format-detection" content="telephone=no" />
     <title>Club Pengu</title>
     <style>
-      /* Mobile fullscreen fixes - only applies on touch devices */
-      @media (hover: none) and (pointer: coarse) {
-        /* Mobile: use dynamic viewport height (accounts for URL bar) */
+      /* Base styles for all devices */
+      html, body, #root {
+        height: 100%;
+        overflow: hidden;
+      }
+      
+      /* iOS Safari ONLY fixes - uses -webkit-touch-callout which is iOS Safari specific */
+      /* This does NOT match Android Chrome or any other browser */
+      @supports (-webkit-touch-callout: none) {
         html, body, #root {
-          height: 100dvh;
+          /* iOS: use -webkit-fill-available for proper fullscreen */
+          height: -webkit-fill-available;
           overflow: hidden;
           overscroll-behavior: none;
           touch-action: manipulation;
         }
-        /* Prevent pull-to-refresh on mobile */
+        /* Prevent pull-to-refresh on iOS */
         body {
           position: fixed;
           width: 100%;
           overflow: hidden;
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
         }
-        /* Handle safe areas (notch, home indicator) */
+        /* Handle safe areas (notch, home indicator) - iOS only */
         #root {
           padding-top: env(safe-area-inset-top);
           padding-bottom: env(safe-area-inset-bottom);
           padding-left: env(safe-area-inset-left);
           padding-right: env(safe-area-inset-right);
-        }
-      }
-      /* Desktop: standard 100% height */
-      @media (hover: hover) and (pointer: fine) {
-        html, body, #root {
-          height: 100%;
-          overflow: hidden;
         }
       }
     </style>

@@ -958,10 +958,10 @@ class TownCenter {
             group.add(bulb);
             
             // OPTIMIZED: Only add point light for 1st bulb per string (was every 3rd)
-            // Apple only: Skip point lights (emissive materials only for Metal/Safari performance)
-            // PC/Android: Keep point lights for better lighting quality
-            const isApple = typeof window !== 'undefined' && window._isMacDevice;
-            if (!isApple && i === Math.floor(bulbCount / 2)) {
+            // Mac: Skip point lights entirely (use emissive materials only)
+            // The emissive bulbs provide visual glow, we only need 1 light per string for ambiance
+            const isMac = typeof window !== 'undefined' && window._isMacDevice;
+            if (!isMac && i === Math.floor(bulbCount / 2)) {
                 const light = new THREE.PointLight(0xFFFFAA, 0.4, 6); // Warm white, merged color
                 light.position.set(x, y, z);
                 group.add(light);

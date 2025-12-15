@@ -14,26 +14,19 @@ html, body, #root {
   overflow: hidden;
 }
 
-/* Mobile fullscreen fixes (iOS + Android) */
-@media (hover: none) and (pointer: coarse) {
+/* iOS Safari ONLY fixes - -webkit-touch-callout is iOS Safari specific */
+/* Android is NOT affected by this - it uses the standard 100% height above */
+@supports (-webkit-touch-callout: none) {
   html, body, #root {
-    height: 100dvh; /* Dynamic viewport height - accounts for URL bar */
+    /* iOS: use -webkit-fill-available for proper fullscreen with URL bar */
+    height: -webkit-fill-available;
     overscroll-behavior: none;
   }
-}
-
-/* iOS Safari specific fixes */
-@supports (-webkit-touch-callout: none) {
-  @media (hover: none) and (pointer: coarse) {
-    html, body, #root {
-      height: -webkit-fill-available;
-    }
-    
-    body {
-      /* Prevent iOS bounce scroll and pull-to-refresh */
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-    }
+  
+  body {
+    /* Prevent iOS bounce scroll and pull-to-refresh */
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
   }
 }
 
