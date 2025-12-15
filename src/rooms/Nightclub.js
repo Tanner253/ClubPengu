@@ -41,6 +41,13 @@ class Nightclub {
         this.speakerPositions = []; // Store speaker positions for landing
         this.animatedElements = [];
         this.landingSurfaces = []; // Surfaces player can land on
+        
+        // Disco mode - lasers and moving lights
+        this.discoLasers = [];
+        this.discoSpotlights = [];
+        this.discoMode = false;
+        this.discoStartTime = 0;
+        this.lastDiscoCheck = 0;
     }
 
     /**
@@ -68,9 +75,9 @@ class Nightclub {
         
         // ==================== FLOOR ====================
         const floorMat = new THREE.MeshStandardMaterial({ 
-            color: 0x2a2a2a,
-            roughness: 0.8,
-            metalness: 0.2
+            color: 0x0a0a0a,  // Very dark floor
+            roughness: 0.95,
+            metalness: 0.1
         });
         const floorGeo = new THREE.PlaneGeometry(W, D);
         const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -82,8 +89,8 @@ class Nightclub {
         
         // ==================== WALLS ====================
         const wallMat = new THREE.MeshStandardMaterial({ 
-            color: 0x3a3a3a,
-            roughness: 0.9
+            color: 0x0c0c0c,  // Very dark walls - absorb light
+            roughness: 0.95
         });
         
         // Back wall (behind DJ booth)
@@ -116,10 +123,10 @@ class Nightclub {
         scene.add(frontWall);
         this.propMeshes.push(frontWall);
         
-        // Ceiling
+        // Ceiling - pitch black
         const ceilingMat = new THREE.MeshStandardMaterial({ 
-            color: 0x1a1a1a,
-            roughness: 0.95
+            color: 0x050505,
+            roughness: 1.0
         });
         const ceilingGeo = new THREE.PlaneGeometry(W, D);
         const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
@@ -156,26 +163,27 @@ class Nightclub {
         // ==================== MICROPHONE STAND ====================
         this._createMicStand(scene, W - 6, 0, CZ - 2);
         
+        // ==================== LOUNGE COUCH ====================
+        // Blue couch flush against left wall (x=1.5), between the two speaker stacks (z~17.5)
+        this._createBlueCouch(scene, 1.5, 0, 17.5);
+        
+        // Couch collision/landing surface (rotated 90 degrees, so width and depth swap)
+        // Position: (1.5, 0, 17.5), rotation: Math.PI/2
+        // Original: 5 wide (X) x 2 deep (Z), after rotation: 2 wide (X) x 5 deep (Z)
+        this.landingSurfaces.push({
+            name: 'interior_couch',
+            minX: 0.5, maxX: 2.5,       // Couch X: 1.5 ± 1 (half of rotated depth 2)
+            minZ: 15, maxZ: 20,         // Couch Z: 17.5 ± 2.5 (half of rotated width 5)
+            height: 1.0                  // Seat surface height (base 0.8 + cushion)
+        });
+        
         // ==================== AMBIENT LIGHTING ====================
-        // Main ambient light (dim for club atmosphere)
-        const ambient = new THREE.AmbientLight(0x222233, 0.3);
+        // Minimal ambient light - dark club aesthetic where only actual lights illuminate
+        const ambient = new THREE.AmbientLight(0x050508, 0.3);
         scene.add(ambient);
         this.lights.push(ambient);
         
-        // Colored point lights for atmosphere
-        const coloredLights = [
-            { x: CX - 8, z: CZ, color: neonPink },
-            { x: CX + 8, z: CZ, color: neonBlue },
-            { x: CX, z: CZ - 5, color: neonPurple },
-            { x: CX, z: CZ + 8, color: neonGreen },
-        ];
-        
-        coloredLights.forEach(({ x, z, color }) => {
-            const light = new THREE.PointLight(color, 0.8, 20);
-            light.position.set(x, H - 2, z);
-            scene.add(light);
-            this.lights.push(light);
-        });
+        // No atmospheric point lights - only actual light fixtures illuminate the space
         
         // ==================== DISCO BALL (interior) ====================
         this._createDiscoBall(scene, CX, H - 1, CZ + 3);
@@ -183,16 +191,19 @@ class Nightclub {
         // ==================== BACK WALL BANNER ====================
         this._createBackWallBanner(scene, CX, D);
         
+        // ==================== DISCO MODE (Lasers & Moving Lights) ====================
+        this._createDiscoElements(scene, W, H, CX, CZ);
+        
         // ==================== COLLISION & LANDING ====================
         // All collision is handled by VoxelWorld using simple bounds (like pizza parlor)
         // We just need to track landing surfaces for the return value
         
-        // DJ Booth platform - landable surface
+        // DJ Booth platform - landable surface (platform top is at 0.75)
         this.landingSurfaces.push({
             name: 'dj_platform',
             minX: CX - 6, maxX: CX + 6,
             minZ: 0, maxZ: 6,
-            height: 1.5
+            height: 0.75
         });
         
         // DJ Booth desk (on top of platform) - landable
@@ -975,17 +986,67 @@ class Nightclub {
     }
 
     /**
+     * Create blue couch (same style as igloo)
+     */
+    _createBlueCouch(scene, x, y, z) {
+        const THREE = this.THREE;
+        const couchGroup = new THREE.Group();
+        
+        // Same colors as igloo couch
+        const couchMat = new THREE.MeshStandardMaterial({ color: 0x2E4A62, roughness: 0.8 });
+        const cushionMat = new THREE.MeshStandardMaterial({ color: 0x3D5A80, roughness: 0.9 });
+        
+        // Couch base
+        const baseGeo = new THREE.BoxGeometry(5, 0.8, 2);
+        const couchBase = new THREE.Mesh(baseGeo, couchMat);
+        couchBase.position.y = 0.4;
+        couchGroup.add(couchBase);
+        
+        // Couch back
+        const backGeo = new THREE.BoxGeometry(5, 1.5, 0.5);
+        const couchBack = new THREE.Mesh(backGeo, couchMat);
+        couchBack.position.set(0, 1.15, -0.75);
+        couchGroup.add(couchBack);
+        
+        // Armrests
+        const armGeo = new THREE.BoxGeometry(0.5, 1, 2);
+        [-2.5, 2.5].forEach(xOffset => {
+            const arm = new THREE.Mesh(armGeo, couchMat);
+            arm.position.set(xOffset, 0.7, 0);
+            couchGroup.add(arm);
+        });
+        
+        // Cushions
+        [-1.5, 0, 1.5].forEach(xOffset => {
+            const cushion = new THREE.Mesh(
+                new THREE.BoxGeometry(1.4, 0.3, 1.6),
+                cushionMat
+            );
+            cushion.position.set(xOffset, 0.95, 0.1);
+            couchGroup.add(cushion);
+        });
+        
+        couchGroup.position.set(x, y, z);
+        couchGroup.rotation.y = Math.PI / 2; // Back against left wall, seats face right toward dance floor
+        scene.add(couchGroup);
+        this.propMeshes.push(couchGroup);
+    }
+
+    /**
      * Create disco ball for interior
      */
     _createDiscoBall(scene, x, y, z) {
         const THREE = this.THREE;
         const group = new THREE.Group();
+        group.userData.isDiscoBall = true;
         
-        // Ball
+        // Ball - shiny reflective surface
         const ballMat = new THREE.MeshStandardMaterial({ 
-            color: 0xCCCCCC,
-            metalness: 0.9,
-            roughness: 0.1
+            color: 0xEEEEEE,
+            metalness: 1.0,
+            roughness: 0.05,
+            emissive: 0xFFFFFF,
+            emissiveIntensity: 0.1
         });
         const ballGeo = new THREE.SphereGeometry(0.8, 24, 24);
         const ball = new THREE.Mesh(ballGeo, ballMat);
@@ -993,13 +1054,13 @@ class Nightclub {
         group.add(ball);
         this.animatedElements.push(ball);
         
-        // Mirror tiles
+        // Mirror tiles - brighter and more emissive
         const mirrorMat = new THREE.MeshStandardMaterial({
             color: 0xFFFFFF,
             metalness: 1,
             roughness: 0,
             emissive: 0xFFFFFF,
-            emissiveIntensity: 0.2
+            emissiveIntensity: 0.6
         });
         
         for (let lat = 0; lat < 8; lat++) {
@@ -1011,7 +1072,9 @@ class Nightclub {
             for (let lon = 0; lon < tilesInRow; lon++) {
                 const theta = (lon / tilesInRow) * Math.PI * 2;
                 const tileGeo = new THREE.PlaneGeometry(0.12, 0.12);
-                const tile = new THREE.Mesh(tileGeo, mirrorMat);
+                const tile = new THREE.Mesh(tileGeo, mirrorMat.clone());
+                tile.userData.isMirrorTile = true;
+                tile.userData.tileIndex = lat * tilesInRow + lon;
                 
                 tile.position.set(
                     rowRadius * Math.cos(theta),
@@ -1024,15 +1087,16 @@ class Nightclub {
             }
         }
         
-        // Mount
+        // Mount (hangs from ceiling)
         const mountGeo = new THREE.CylinderGeometry(0.05, 0.05, 1, 6);
         const mountMat = new THREE.MeshStandardMaterial({ color: 0x333333 });
         const mount = new THREE.Mesh(mountGeo, mountMat);
         mount.position.y = 1.3;
         group.add(mount);
         
-        // Disco ball light
-        const discoLight = new THREE.PointLight(0xFFFFFF, 1, 15);
+        // Main disco ball light - bright and colorful
+        const discoLight = new THREE.PointLight(0xFFFFFF, 3, 25);
+        discoLight.userData.isDiscoLight = true;
         group.add(discoLight);
         this.lights.push(discoLight);
         
@@ -1151,6 +1215,108 @@ class Nightclub {
         this.propMeshes.push(group);
     }
 
+    /**
+     * Create disco mode elements - lasers and moving spotlights
+     * These are hidden by default and only visible during disco mode
+     */
+    _createDiscoElements(scene, W, H, CX, CZ) {
+        const THREE = this.THREE;
+        
+        // Laser colors
+        const laserColors = [
+            0xFF0040, // Red
+            0x00FF40, // Green  
+            0x4000FF, // Blue
+            0xFF00FF, // Magenta
+            0x00FFFF, // Cyan
+            0xFFFF00, // Yellow
+        ];
+        
+        // Create laser beams from ceiling corners
+        const laserOrigins = [
+            { x: 3, z: 3 },           // Back-left corner
+            { x: W - 3, z: 3 },       // Back-right corner
+            { x: 3, z: CZ + 10 },     // Front-left
+            { x: W - 3, z: CZ + 10 }, // Front-right
+            { x: CX, z: 2 },          // Center back (behind DJ)
+            { x: CX, z: CZ + 12 },    // Center front
+        ];
+        
+        laserOrigins.forEach((origin, idx) => {
+            // Laser beam geometry - thin cylinder
+            const laserLength = 15;
+            const laserGeo = new THREE.CylinderGeometry(0.03, 0.03, laserLength, 8);
+            const laserMat = new THREE.MeshBasicMaterial({
+                color: laserColors[idx % laserColors.length],
+                transparent: true,
+                opacity: 0.9,
+                blending: THREE.AdditiveBlending
+            });
+            
+            const laser = new THREE.Mesh(laserGeo, laserMat);
+            laser.position.set(origin.x, H - 1.5 - laserLength / 4, origin.z); // Push down more to fit in room
+            laser.visible = false; // Hidden by default
+            
+            // Store animation data
+            laser.userData.laserIndex = idx;
+            laser.userData.baseX = origin.x;
+            laser.userData.baseZ = origin.z;
+            laser.userData.color = laserColors[idx % laserColors.length];
+            
+            scene.add(laser);
+            this.discoLasers.push(laser);
+            this.propMeshes.push(laser);
+            
+            // Add glow effect (larger transparent cylinder)
+            const glowGeo = new THREE.CylinderGeometry(0.15, 0.15, laserLength, 8);
+            const glowMat = new THREE.MeshBasicMaterial({
+                color: laserColors[idx % laserColors.length],
+                transparent: true,
+                opacity: 0.3,
+                blending: THREE.AdditiveBlending
+            });
+            const glow = new THREE.Mesh(glowGeo, glowMat);
+            laser.add(glow); // Attach glow to laser
+        });
+        
+        // Create moving spotlights (cone-shaped light beams)
+        const spotlightPositions = [
+            { x: CX - 8, z: CZ - 2 },
+            { x: CX + 8, z: CZ - 2 },
+            { x: CX - 5, z: CZ + 8 },
+            { x: CX + 5, z: CZ + 8 },
+        ];
+        
+        spotlightPositions.forEach((pos, idx) => {
+            // Spotlight cone geometry
+            const coneHeight = H - 1;
+            const coneRadius = 4;
+            const coneGeo = new THREE.ConeGeometry(coneRadius, coneHeight, 16, 1, true);
+            const coneMat = new THREE.MeshBasicMaterial({
+                color: laserColors[(idx + 2) % laserColors.length],
+                transparent: true,
+                opacity: 0.15,
+                blending: THREE.AdditiveBlending,
+                side: THREE.DoubleSide
+            });
+            
+            const spotlight = new THREE.Mesh(coneGeo, coneMat);
+            spotlight.position.set(pos.x, (H - 1) / 2, pos.z); // Center cone vertically
+            // Cone naturally points up, no rotation needed for spotlight effect
+            spotlight.visible = false; // Hidden by default
+            
+            // Store animation data
+            spotlight.userData.spotIndex = idx;
+            spotlight.userData.baseX = pos.x;
+            spotlight.userData.baseZ = pos.z;
+            spotlight.userData.colorIndex = (idx + 2) % laserColors.length;
+            
+            scene.add(spotlight);
+            this.discoSpotlights.push(spotlight);
+            this.propMeshes.push(spotlight);
+        });
+    }
+
     // Collision is handled by VoxelWorld using simple bounds (like pizza parlor)
     // Landing surfaces are returned in spawn() result for VoxelWorld to use
 
@@ -1162,6 +1328,86 @@ class Nightclub {
         const bassIntensity = Math.sin(time * 15) * 0.5 + 0.5;
         const beatPhase = Math.sin(time * 8) * 0.5 + 0.5;
         
+        // ==================== DISCO MODE TIMING ====================
+        // Server-synchronized: uses real wall-clock time so all clients agree
+        // Disco mode activates every 5 minutes (300 seconds) for 1 minute (60 seconds)
+        const DISCO_INTERVAL = 300; // 5 minutes in seconds
+        const DISCO_DURATION = 60;  // 1 minute in seconds
+        
+        // Use real time (seconds since epoch) for synchronization across all clients
+        const realTimeSeconds = Math.floor(Date.now() / 1000);
+        const cycleTime = realTimeSeconds % DISCO_INTERVAL;
+        const shouldBeDiscoMode = cycleTime < DISCO_DURATION;
+        
+        // Toggle disco mode
+        if (shouldBeDiscoMode && !this.discoMode) {
+            this.discoMode = true;
+            this.discoStartTime = time;
+            // Show all disco elements (lasers, spotlights)
+            this.discoLasers.forEach(laser => laser.visible = true);
+            this.discoSpotlights.forEach(spot => spot.visible = true);
+        } else if (!shouldBeDiscoMode && this.discoMode) {
+            this.discoMode = false;
+            // Hide all disco elements
+            this.discoLasers.forEach(laser => laser.visible = false);
+            this.discoSpotlights.forEach(spot => spot.visible = false);
+        }
+        
+        // ==================== DISCO MODE ANIMATIONS ====================
+        if (this.discoMode) {
+            const discoTime = time - this.discoStartTime;
+            
+            // Animate lasers - sweeping motion
+            this.discoLasers.forEach((laser, idx) => {
+                const phase = idx * (Math.PI / 3); // Offset each laser
+                const sweepSpeed = 2 + (idx % 3) * 0.5; // Varying speeds
+                
+                // Rotation sweep pattern
+                const sweepAngle = Math.sin(discoTime * sweepSpeed + phase) * 0.8;
+                const tiltAngle = Math.cos(discoTime * (sweepSpeed * 0.7) + phase) * 0.6;
+                
+                laser.rotation.x = tiltAngle;
+                laser.rotation.z = sweepAngle;
+                
+                // Pulse opacity with beat - very visible in dark room
+                laser.material.opacity = 0.8 + beatPhase * 0.2;
+                if (laser.children[0]) {
+                    laser.children[0].material.opacity = 0.4 + beatPhase * 0.3;
+                }
+                
+                // Color shift
+                const hue = (discoTime * 0.3 + idx * 0.15) % 1;
+                laser.material.color.setHSL(hue, 1, 0.5);
+                if (laser.children[0]) {
+                    laser.children[0].material.color.setHSL(hue, 1, 0.5);
+                }
+            });
+            
+            // Animate spotlights - circular sweep and color change
+            this.discoSpotlights.forEach((spot, idx) => {
+                const phase = idx * (Math.PI / 2);
+                const orbitSpeed = 1.5 + (idx % 2) * 0.3;
+                
+                // Circular wobble motion
+                const wobbleX = Math.sin(discoTime * orbitSpeed + phase) * 3;
+                const wobbleZ = Math.cos(discoTime * orbitSpeed + phase) * 3;
+                
+                spot.position.x = spot.userData.baseX + wobbleX;
+                spot.position.z = spot.userData.baseZ + wobbleZ;
+                
+                // Tilt rotation for sweeping effect
+                spot.rotation.x = Math.sin(discoTime * 2 + phase) * 0.2;
+                spot.rotation.z = Math.cos(discoTime * 1.5 + phase) * 0.15;
+                
+                // Color cycling
+                const hue = (discoTime * 0.2 + idx * 0.25) % 1;
+                spot.material.color.setHSL(hue, 1, 0.5);
+                
+                // Opacity pulse - more visible in dark room
+                spot.material.opacity = 0.2 + beatPhase * 0.2;
+            });
+        }
+        
         // Dance floor animation - vibrant color wave pattern
         this.danceFloorTiles.forEach((tile, idx) => {
             const row = tile.userData.tileRow;
@@ -1172,9 +1418,9 @@ class Nightclub {
             const wave2 = Math.sin(time * 3 - col * 0.4 + row * 0.2);
             const wave3 = Math.sin(time * 2 + (row + col) * 0.3);
             
-            // Pulse intensity synced to bass
-            const intensity = 0.3 + bassIntensity * 0.5 + wave1 * 0.2;
-            tile.material.emissiveIntensity = Math.max(0.2, Math.min(1.0, intensity));
+            // Pulse intensity synced to bass - bright in dark room
+            const intensity = 0.5 + bassIntensity * 0.5 + wave1 * 0.3;
+            tile.material.emissiveIntensity = Math.max(0.4, Math.min(1.2, intensity));
             
             // Color cycling - rainbow wave across the floor
             const hue = (time * 0.15 + row * 0.08 + col * 0.06) % 1;
@@ -1190,8 +1436,8 @@ class Nightclub {
             const phase = time * 5 + idx * 0.7;
             const pulsePhase = time * 3 + idx * 0.4;
             
-            // Intensity pulse synced to beat
-            light.material.emissiveIntensity = 0.4 + beatPhase * 0.4 + Math.sin(pulsePhase) * 0.2;
+            // Intensity pulse synced to beat - brighter in dark room
+            light.material.emissiveIntensity = 0.6 + beatPhase * 0.5 + Math.sin(pulsePhase) * 0.3;
             
             // Subtle color shift
             const hue = (time * 0.1 + idx * 0.1) % 1;
@@ -1212,15 +1458,33 @@ class Nightclub {
         // Animated elements
         this.animatedElements.forEach(elem => {
             if (elem.userData.isDiscoBall) {
-                // Spin the disco ball
-                elem.parent.rotation.y = time * 0.5;
-                // Pulse the disco light color
-                const discoHue = (time * 0.2) % 1;
+                // Spin the disco ball (always spins, even when lights off)
+                elem.parent.rotation.y = time * 0.8;
+                
+                // Animate all children of the disco ball group
                 if (elem.parent.children) {
                     elem.parent.children.forEach(child => {
+                        // Main disco light - ONLY active during disco mode
                         if (child.isLight) {
-                            child.color.setHSL(discoHue, 0.8, 0.6);
-                            child.intensity = 0.8 + beatPhase * 0.4;
+                            if (this.discoMode) {
+                                const discoHue = (time * 0.3) % 1;
+                                child.color.setHSL(discoHue, 1.0, 0.6);
+                                child.intensity = 2.0 + beatPhase * 2.0;
+                            } else {
+                                child.intensity = 0; // Light OFF when not in disco mode
+                            }
+                        }
+                        // Mirror tiles sparkle effect - ONLY during disco mode
+                        if (child.userData.isMirrorTile) {
+                            if (this.discoMode) {
+                                const sparkle = Math.sin(time * 15 + child.userData.tileIndex * 0.5);
+                                child.material.emissiveIntensity = 0.4 + sparkle * 0.4 + beatPhase * 0.3;
+                                const tileHue = (time * 0.2 + child.userData.tileIndex * 0.02) % 1;
+                                child.material.emissive.setHSL(tileHue, 0.8, 0.5);
+                            } else {
+                                child.material.emissiveIntensity = 0.05; // Dim when not in disco mode
+                                child.material.emissive.setHSL(0, 0, 0.2); // Gray/dark
+                            }
                         }
                     });
                 }
@@ -1239,13 +1503,17 @@ class Nightclub {
             }
         });
         
-        // Animate ambient lights
+        // Animate disco ball light only (no ambient point lights in dark club aesthetic)
         this.lights.forEach((light, idx) => {
-            if (light.isPointLight && !light.parent?.userData?.isDiscoBall) {
-                // Gentle color shifting for atmosphere lights
-                const hue = (time * 0.05 + idx * 0.15) % 1;
-                light.color.setHSL(hue, 0.9, 0.5);
-                light.intensity = 0.6 + beatPhase * 0.3;
+            if (light.isPointLight && light.parent?.userData?.isDiscoBall) {
+                // Disco ball light - ONLY active during disco mode
+                if (this.discoMode) {
+                    const discoHue = (time * 0.2) % 1;
+                    light.color.setHSL(discoHue, 0.8, 0.6);
+                    light.intensity = 1.0 + beatPhase * 0.5;
+                } else {
+                    light.intensity = 0; // OFF when not in disco mode
+                }
             }
         });
     }
@@ -1269,6 +1537,9 @@ class Nightclub {
         this.speakerPositions = [];
         this.animatedElements = [];
         this.landingSurfaces = [];
+        this.discoLasers = [];
+        this.discoSpotlights = [];
+        this.discoMode = false;
         this.collisionSystem.clear();
     }
 

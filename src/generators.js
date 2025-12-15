@@ -5,7 +5,7 @@ import { PALETTE } from './constants';
 export const generateBaseBody = (mainColor) => {
     const bodyMap = new Map();
     for(let x=-6; x<=6; x++) {
-        for(let y=-7; y<=6; y++) {
+        for(let y=-7; y<=5; y++) {  // Changed from y<=6 to y<=5 - removes top layer to prevent head clipping
             for(let z=-5; z<=5; z++) {
                 let yMod = y > 0 ? 1 : 1.2;
                 if(x*x + (y*yMod)*(y*yMod) + z*z <= 36) {

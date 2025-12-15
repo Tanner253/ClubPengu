@@ -158,6 +158,15 @@ class TownCenter {
             z: C - 60,  // In front of nightclub entrance
         });
         
+        // Nightclub roof ladder trigger (behind the building)
+        // Nightclub collision is: center (C, C-75) with size (27, 22), so back wall collision is at z = C-75-11 = C-86
+        // Trigger MUST be outside collision, so position at z = C-89 (3 units behind collision)
+        props.push({
+            type: 'nightclub_ladder',
+            x: C + 6,        // Right side of building where ladder is (w/4 = 25/4 ≈ 6)
+            z: C - 89,       // Behind building collision (collision ends at C-86, trigger at C-89)
+        });
+        
         // ==================== HIGHWAY BILLBOARD ====================
         // Tall illuminated billboard facing the main T-stem street
         // Positioned on the east side of town, facing west toward the street
@@ -628,12 +637,33 @@ class TownCenter {
                     mesh.userData.speakers = nightclubResult.speakers;
                     mesh.name = 'nightclub';
                     
-                    // Add collision for the nightclub building
+                    // Add collision for the nightclub building walls (blocks walking through)
                     this.collisionSystem.addCollider(
                         prop.x, prop.z,
                         { type: 'box', size: { x: prop.width + 2, z: prop.depth + 2 }, height: prop.height },
                         1, // SOLID
                         { name: 'nightclub' }
+                    );
+                    
+                    // Add roof as a landing surface (can walk/stand on top)
+                    // Roof is at height h (12) + parapet (1) = 13
+                    this.collisionSystem.addCollider(
+                        prop.x, prop.z,
+                        { type: 'box', size: { x: prop.width, z: prop.depth }, height: 0.5 },
+                        1, // SOLID (landing surface)
+                        { name: 'nightclub_roof' },
+                        0, // rotation
+                        prop.height + 1 // y position = roof height
+                    );
+                    
+                    // Add roof couch collision (centered on nightclub roof)
+                    this.collisionSystem.addCollider(
+                        prop.x, prop.z, // Centered on nightclub
+                        { type: 'box', size: { x: 5, z: 2 }, height: 1.5 },
+                        1, // SOLID
+                        { name: 'nightclub_roof_couch' },
+                        0,
+                        prop.height + 1 // On the roof (height 12 + 1 = 13)
                     );
                     
                     // Add collisions for the speakers (outside the building)
@@ -689,6 +719,29 @@ class TownCenter {
                         { name: 'nightclub_entrance' }
                     );
                     // No mesh for this - just a trigger
+                    mesh = null;
+                    break;
+                    
+                case 'nightclub_ladder':
+                    // Trigger zone for climbing to nightclub roof
+                    // Large trigger area positioned OUTSIDE building collision
+                    this.collisionSystem.addTrigger(
+                        prop.x, prop.z,
+                        {
+                            type: 'box',
+                            size: { x: 8, z: 8 }, // Large trigger area for easy interaction
+                            action: 'climb_roof',
+                            message: '🪜 Climb to Roof (Press E)',
+                            destination: 'nightclub_roof'
+                        },
+                        (event) => this._handleInteraction(event, { 
+                            action: 'climb_roof',
+                            message: '🪜 Climb to Roof (Press E)',
+                            destination: 'nightclub_roof'
+                        }),
+                        { name: 'nightclub_ladder' }
+                    );
+                    // No mesh for this - ladder is part of nightclub building
                     mesh = null;
                     break;
                 case 'light_string':

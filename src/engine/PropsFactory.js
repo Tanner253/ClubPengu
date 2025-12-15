@@ -3641,6 +3641,7 @@ class PropsFactory {
         
         const tileRows = 12;
         const tileCols = 24;
+        let tileIndex = 0;
         for (let row = 1; row < tileRows - 1; row++) {
             const phi = (row / tileRows) * Math.PI;
             const rowRadius = Math.sin(phi) * ballRadius;
@@ -3650,7 +3651,7 @@ class PropsFactory {
             for (let col = 0; col < tilesInRow; col++) {
                 const theta = (col / tilesInRow) * Math.PI * 2;
                 const tileGeo = new THREE.PlaneGeometry(0.25, 0.25);
-                const tile = new THREE.Mesh(tileGeo, mirrorMat);
+                const tile = new THREE.Mesh(tileGeo, mirrorMat.clone());
                 
                 tile.position.set(
                     rowRadius * Math.cos(theta),
@@ -3660,23 +3661,26 @@ class PropsFactory {
                 tile.lookAt(0, 0, 0);
                 tile.rotateY(Math.PI);
                 tile.userData.isMirrorTile = true;
+                tile.userData.tileIndex = tileIndex++;
                 discoBallGroup.add(tile);
             }
         }
         
-        // Disco ball mounting
-        const mountGeo = new THREE.CylinderGeometry(0.15, 0.15, 3, 8);
+        // Disco ball mounting pole - BELOW the ball (ball sits on top of pole)
+        const mountGeo = new THREE.CylinderGeometry(0.15, 0.2, 6, 8);
         const mountMat = this.getMaterial(0x333333, { metalness: 0.6 });
         const mount = new THREE.Mesh(mountGeo, mountMat);
-        mount.position.y = ballRadius + 1.5;
+        mount.position.y = -(ballRadius + 3); // Pole goes DOWN from ball
         discoBallGroup.add(mount);
         
-        // Disco ball light (projects colored light)
-        const discoLight = new THREE.PointLight(0xFFFFFF, 2, 30);
+        // Disco ball light (projects colored light) - brighter
+        const discoLight = new THREE.PointLight(0xFFFFFF, 4, 40);
         discoLight.position.set(0, 0, 0);
+        discoLight.userData.isDiscoLight = true;
         discoBallGroup.add(discoLight);
         
-        discoBallGroup.position.set(0, h + 6, d / 2 - 5);
+        // Position: ball ON TOP of pole, above building
+        discoBallGroup.position.set(0, h + 8, d / 2 - 5);
         group.add(discoBallGroup);
         
         // ==================== SEARCHLIGHTS / SKY BEAMS ====================
@@ -3960,6 +3964,81 @@ class PropsFactory {
             group.add(star);
         }
         
+        // ==================== LADDER TO ROOF (Back of building) ====================
+        const ladderGroup = new THREE.Group();
+        ladderGroup.name = 'roof_ladder';
+        
+        const ladderMat = this.getMaterial(0x444444, { metalness: 0.7, roughness: 0.4 });
+        const ladderHeight = h + 1;
+        const ladderWidth = 1.2;
+        const rungCount = Math.floor(ladderHeight / 0.8);
+        
+        // Side rails
+        const railGeo = new THREE.CylinderGeometry(0.05, 0.05, ladderHeight, 8);
+        const leftRail = new THREE.Mesh(railGeo, ladderMat);
+        leftRail.position.set(-ladderWidth / 2, ladderHeight / 2, 0);
+        ladderGroup.add(leftRail);
+        
+        const rightRail = new THREE.Mesh(railGeo, ladderMat);
+        rightRail.position.set(ladderWidth / 2, ladderHeight / 2, 0);
+        ladderGroup.add(rightRail);
+        
+        // Rungs
+        const rungGeo = new THREE.CylinderGeometry(0.04, 0.04, ladderWidth, 8);
+        for (let i = 0; i < rungCount; i++) {
+            const rung = new THREE.Mesh(rungGeo, ladderMat);
+            rung.rotation.z = Math.PI / 2;
+            rung.position.set(0, 0.5 + i * 0.8, 0);
+            ladderGroup.add(rung);
+        }
+        
+        // Position ladder on back wall of building
+        ladderGroup.position.set(w / 4, 0, -d / 2 - 0.1);
+        group.add(ladderGroup);
+        
+        // ==================== ROOF COUCH (Blue - same as igloo) ====================
+        const roofCouchGroup = new THREE.Group();
+        roofCouchGroup.name = 'roof_couch';
+        
+        // Same colors as igloo couch
+        const couchMat = this.getMaterial(0x2E4A62, { roughness: 0.8 });
+        const cushionMat = this.getMaterial(0x3D5A80, { roughness: 0.9 });
+        
+        // Couch base
+        const baseGeo = new THREE.BoxGeometry(5, 0.8, 2);
+        const couchBase = new THREE.Mesh(baseGeo, couchMat);
+        couchBase.position.y = 0.4;
+        roofCouchGroup.add(couchBase);
+        
+        // Couch back
+        const backGeo = new THREE.BoxGeometry(5, 1.5, 0.5);
+        const couchBack = new THREE.Mesh(backGeo, couchMat);
+        couchBack.position.set(0, 1.15, -0.75);
+        roofCouchGroup.add(couchBack);
+        
+        // Armrests
+        const armGeo = new THREE.BoxGeometry(0.5, 1, 2);
+        [-2.5, 2.5].forEach(xOffset => {
+            const arm = new THREE.Mesh(armGeo, couchMat);
+            arm.position.set(xOffset, 0.7, 0);
+            roofCouchGroup.add(arm);
+        });
+        
+        // Cushions
+        [-1.5, 0, 1.5].forEach(xOffset => {
+            const cushion = new THREE.Mesh(
+                new THREE.BoxGeometry(1.4, 0.3, 1.6),
+                cushionMat
+            );
+            cushion.position.set(xOffset, 0.95, 0.1);
+            roofCouchGroup.add(cushion);
+        });
+        
+        // Position couch on roof - centered
+        roofCouchGroup.position.set(0, h + 1, 0);
+        roofCouchGroup.rotation.y = 0;
+        group.add(roofCouchGroup);
+        
         // Store references for animation
         group.userData.speakers = speakers;
         group.userData.discoBall = discoBallGroup;
@@ -3968,6 +4047,8 @@ class PropsFactory {
         group.userData.smoke = smoke;
         group.userData.musicNotes = musicNotes;
         group.userData.groundLights = groundLights;
+        group.userData.ladderPosition = { x: w / 4, z: -d / 2 - 0.5 }; // For interaction trigger
+        group.userData.roofHeight = h + 1;
         
         // EPIC Animation update function
         const update = (time) => {
@@ -3988,17 +4069,24 @@ class PropsFactory {
                 speaker.rotation.z = Math.sin(time * 20 + idx) * 0.01 * bassIntensity;
             });
             
-            // Disco ball rotation
+            // Disco ball rotation and sparkle
             if (discoBallGroup) {
-                discoBallGroup.rotation.y = time * 0.5;
-                // Pulse the disco light with bass
-                const discoL = discoBallGroup.children.find(c => c.isLight);
-                if (discoL) {
-                    discoL.intensity = 1.5 + bassIntensity * 1.5;
-                    // Color shift
-                    const hue = (time * 0.1) % 1;
-                    discoL.color.setHSL(hue, 1, 0.5);
-                }
+                discoBallGroup.rotation.y = time * 0.8;
+                
+                // Animate all disco ball children
+                discoBallGroup.children.forEach(child => {
+                    // Main disco light - color cycling and pulsing
+                    if (child.isLight) {
+                        const hue = (time * 0.3) % 1;
+                        child.color.setHSL(hue, 1.0, 0.6);
+                        child.intensity = 3.0 + bassIntensity * 3.0;
+                    }
+                    // Mirror tiles sparkle effect
+                    if (child.userData.isMirrorTile && child.material) {
+                        const sparkle = Math.sin(time * 12 + (child.userData.tileIndex || 0) * 0.3);
+                        child.material.emissiveIntensity = 0.3 + sparkle * 0.3 + bassIntensity * 0.2;
+                    }
+                });
             }
             
             // Searchlight sweep

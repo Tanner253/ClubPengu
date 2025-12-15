@@ -243,12 +243,38 @@ class Penguin {
                     head.rotation.x = -0.1;
                 }
                 break;
+                
+            case 'DJ':
+                // DJ pose: One arm STRAIGHT UP (headphones), one arm FORWARD (turntable)
+                const djScratchSpeed = eTime * 3;
+                const djScratch = Math.sin(djScratchSpeed) * 0.15;
+                const djHeadBob = Math.sin(eTime * 4) * 0.08;
+                
+                // Default: Left arm up, right arm forward (left DJ spot)
+                // Left arm STRAIGHT UP (headphones) - nearly vertical
+                if (flipperL) {
+                    flipperL.rotation.x = 0;
+                    flipperL.rotation.y = 0.2;
+                    flipperL.rotation.z = Math.PI * 0.85; // Nearly straight up
+                }
+                // Right arm FORWARD (turntable) with scratching
+                if (flipperR) {
+                    flipperR.rotation.x = -Math.PI / 2 + djScratch;
+                    flipperR.rotation.y = 0.3;
+                    flipperR.rotation.z = -0.1;
+                }
+                
+                // Head bob to the beat
+                if (head) {
+                    head.rotation.x = djHeadBob;
+                }
+                break;
         }
         
-        // Auto-end non-persistent emotes (Sit and Breakdance are continuous)
+        // Auto-end non-persistent emotes (Sit, Breakdance, and DJ are continuous)
         // 67 emote lasts 5 seconds, others last 3 seconds
         const emoteDuration = this.emote === '67' ? 5 : 3;
-        if (this.emote !== 'Sit' && this.emote !== 'Breakdance' && eTime > emoteDuration) {
+        if (this.emote !== 'Sit' && this.emote !== 'Breakdance' && this.emote !== 'DJ' && eTime > emoteDuration) {
             this.stopEmote();
         }
     }

@@ -701,12 +701,14 @@ function handleMessage(playerId, message) {
                 }, playerId);
             }
             
-            // Clear emote after duration (except Sit and Breakdance which are continuous)
-            if (message.emote && message.emote !== 'Sit' && message.emote !== 'Breakdance') {
+            // Clear emote after duration (except Sit, Breakdance, and DJ which are continuous)
+            // 67 emote lasts 5 seconds, others last 3 seconds
+            if (message.emote && message.emote !== 'Sit' && message.emote !== 'Breakdance' && message.emote !== 'DJ') {
+                const emoteDuration = message.emote === '67' ? 5000 : 3000;
                 setTimeout(() => {
                     player.emote = null;
                     player.seatedOnFurniture = false;
-                }, 3000);
+                }, emoteDuration);
             }
             break;
         }

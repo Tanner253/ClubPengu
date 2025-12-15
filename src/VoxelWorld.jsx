@@ -170,6 +170,7 @@ const VoxelWorld = ({
         { id: 'Dance', emoji: '💃', label: 'Dance', color: 'bg-green-500' },
         { id: 'Sit', emoji: '🧘', label: 'Sit', color: 'bg-purple-500' },
         { id: '67', emoji: '⚖️', label: '67', color: 'bg-yellow-500' },
+        { id: 'Headbang', emoji: '🎸', label: 'Rock', color: 'bg-pink-500' },
     ];
     
     // Emote Wheel State
@@ -493,6 +494,18 @@ const VoxelWorld = ({
                 position: { x: 0, z: -60 },
                 doorRadius: 4,
                 exitSpawnPos: { x: 0, z: -55 }  // Spawn south of nightclub when exiting
+            },
+            {
+                id: 'nightclub-ladder',
+                name: 'ROOF LADDER',
+                emoji: '🪜',
+                description: 'Climb to Roof (Press E)',
+                // Ladder is on back of nightclub (north side)
+                // Nightclub center at (0, -75), back wall at z = -75 - 10 = -85
+                // Ladder positioned at x = +6 (w/4 of building width 25)
+                position: { x: 6, z: -88 },
+                doorRadius: 6,  // Large radius for easy interaction
+                teleportToRoof: true  // Special flag - teleport to roof instead of room change
             }
         ],
         pizza: [
@@ -2698,7 +2711,23 @@ const VoxelWorld = ({
             const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
             roomData = {
                 bounds: null, // Town uses wall collision
-                spawnPos: { x: townCenterX, z: townCenterZ + 85 } // South of dojo, facing north
+                spawnPos: { x: townCenterX, z: townCenterZ + 85 }, // South of dojo, facing north
+                // Nightclub roof couch (on top of the nightclub building)
+                furniture: [
+                    {
+                        type: 'couch',
+                        position: { x: townCenterX, z: townCenterZ - 75 }, // Nightclub roof (CENTER, CENTER-75)
+                        rotation: 0, // Facing south
+                        seatHeight: 13 + 0.95, // Platform height (13) + cushion height (0.95)
+                        platformHeight: 13, // Roof height (building height 12 + 1)
+                        snapPoints: [
+                            { x: -1.5, z: 0 },   // Left cushion
+                            { x: 0, z: 0 },       // Middle cushion  
+                            { x: 1.5, z: 0 }      // Right cushion
+                        ],
+                        interactionRadius: 3
+                    }
+                ]
             };
         } else if (room === 'dojo') {
             roomData = generateDojoRoom();
@@ -2785,7 +2814,39 @@ const VoxelWorld = ({
                     x: 5, z: 8, w: 1.5, d: 1.5, h: 1
                 },
                 // Landing surfaces for parkour
-                landingSurfaces: nightclubResult.landingSurfaces || []
+                landingSurfaces: nightclubResult.landingSurfaces || [],
+                // Furniture for sitting (couch only)
+                furniture: [
+                    {
+                        type: 'couch',
+                        position: { x: 1.5, z: 17.5 }, // Left wall, between speakers
+                        rotation: Math.PI / 2, // Back against wall, facing right
+                        seatHeight: 0.95,
+                        snapPoints: [
+                            { x: -1.5, z: 0 },   // Left cushion
+                            { x: 0, z: 0 },       // Middle cushion  
+                            { x: 1.5, z: 0 }      // Right cushion
+                        ],
+                        interactionRadius: 3
+                    }
+                ],
+                // DJ spots - trigger zones at the turntables
+                djSpots: [
+                    {
+                        id: 'dj_left',
+                        position: { x: CX - 2.2, z: 2.85 }, // At left turntable
+                        standHeight: 0.75, // Platform height
+                        rotation: 0, // Face south toward dance floor
+                        interactionRadius: 1.5
+                    },
+                    {
+                        id: 'dj_right', 
+                        position: { x: CX + 2.2, z: 2.85 }, // At right turntable
+                        standHeight: 0.75, // Platform height
+                        rotation: 0, // Face south toward dance floor
+                        interactionRadius: 1.5
+                    }
+                ]
             };
         } else if (room.startsWith('igloo')) {
             roomData = generateIglooRoom();
@@ -4929,10 +4990,124 @@ const VoxelWorld = ({
                 // Nightclub: use wall-clamped position (free movement inside, walls only block)
                 posRef.current.x = finalX;
                 posRef.current.z = finalZ;
+                
+                // Check nightclub furniture proximity for interaction (couch)
+                let nearInteraction = null;
+                if (roomData && roomData.furniture) {
+                    for (const furn of roomData.furniture) {
+                        const dx = finalX - furn.position.x;
+                        const dz = finalZ - furn.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        if (dist < furn.interactionRadius) {
+                            nearInteraction = { type: 'furniture', data: furn };
+                            break;
+                        }
+                    }
+                }
+                
+                // Check DJ spots (only when on the platform - Y ~= 0.75)
+                if (!nearInteraction && roomData && roomData.djSpots) {
+                    const playerY = posRef.current.y;
+                    const onPlatform = playerY >= 0.5 && playerY <= 1.2; // On DJ platform
+                    if (onPlatform) {
+                        for (const dj of roomData.djSpots) {
+                            const dx = finalX - dj.position.x;
+                            const dz = finalZ - dj.position.z;
+                            const dist = Math.sqrt(dx * dx + dz * dz);
+                            if (dist < dj.interactionRadius) {
+                                nearInteraction = { type: 'dj', data: dj };
+                                break;
+                            }
+                        }
+                    }
+                }
+                
+                // Dispatch interaction event
+                if (nearInteraction && !seatedRef.current) {
+                    if (nearInteraction.type === 'dj') {
+                        const dj = nearInteraction.data;
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: {
+                                action: 'dj',
+                                message: '🎧 Press E to DJ',
+                                emote: 'DJ',
+                                data: {
+                                    worldX: dj.position.x,
+                                    worldZ: dj.position.z,
+                                    worldRotation: dj.rotation,
+                                    seatHeight: dj.standHeight
+                                }
+                            }
+                        }));
+                    } else {
+                        const furn = nearInteraction.data;
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: {
+                                action: 'sit',
+                                message: `Press E to sit on ${furn.type}`,
+                                emote: 'Sit',
+                                data: {
+                                    worldX: furn.position.x,
+                                    worldZ: furn.position.z,
+                                    worldRotation: furn.rotation,
+                                    snapPoints: furn.snapPoints,
+                                    seatHeight: furn.seatHeight
+                                }
+                            }
+                        }));
+                    }
+                } else if (!nearInteraction && !seatedRef.current) {
+                    // Exited interaction zone
+                    window.dispatchEvent(new CustomEvent('townInteraction', {
+                        detail: { action: 'exit' }
+                    }));
+                }
             } else if (townCenterRef.current && roomRef.current === 'town') {
                 // Town: use TownCenter's safe position
                 posRef.current.x = finalX;
                 posRef.current.z = finalZ;
+                
+                // Check town furniture proximity for interaction (roof couch)
+                if (roomData && roomData.furniture) {
+                    let nearFurniture = null;
+                    for (const furn of roomData.furniture) {
+                        const dx = finalX - furn.position.x;
+                        const dz = finalZ - furn.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        // Only interact if player is at the right height (on the roof)
+                        const playerY = posRef.current.y;
+                        const furnY = furn.platformHeight || 0;
+                        const yMatch = Math.abs(playerY - furnY) < 2; // Within 2 units height
+                        if (dist < furn.interactionRadius && yMatch) {
+                            nearFurniture = furn;
+                            break;
+                        }
+                    }
+                    
+                    // Dispatch interaction event
+                    if (nearFurniture && !seatedRef.current) {
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: {
+                                action: 'sit',
+                                message: `Press E to sit on ${nearFurniture.type}`,
+                                emote: 'Sit',
+                                data: {
+                                    worldX: nearFurniture.position.x,
+                                    worldZ: nearFurniture.position.z,
+                                    worldRotation: nearFurniture.rotation,
+                                    snapPoints: nearFurniture.snapPoints,
+                                    seatHeight: nearFurniture.seatHeight,
+                                    platformHeight: nearFurniture.platformHeight
+                                }
+                            }
+                        }));
+                    } else if (!nearFurniture && !seatedRef.current) {
+                        // Only clear if we were showing a furniture prompt
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: { action: 'exit' }
+                        }));
+                    }
+                }
             } else if (!collided) {
                 // Fallback: only move if no collision
                 posRef.current.x = nextX;
@@ -5156,6 +5331,37 @@ const VoxelWorld = ({
                 }
             }
             
+            // Check for landing/walking on nightclub landing surfaces (couch, speakers, etc.)
+            if (room === 'nightclub' && roomDataRef.current?.landingSurfaces) {
+                const px = posRef.current.x;
+                const pz = posRef.current.z;
+                const py = posRef.current.y;
+                
+                for (const surface of roomDataRef.current.landingSurfaces) {
+                    // Nightclub uses minX/maxX/minZ/maxZ format (box type)
+                    const isOver = px >= surface.minX && px <= surface.maxX &&
+                                   pz >= surface.minZ && pz <= surface.maxZ;
+                    
+                    // Allow walk-up behavior (like dance floor) AND landing from above
+                    if (isOver) {
+                        // If player is near or below surface height, lift them up (walk-up)
+                        if (py <= surface.height + 0.5 && py >= surface.height - 1.0) {
+                            if (surface.height >= groundHeight) {
+                                groundHeight = surface.height;
+                                foundGround = true;
+                            }
+                        }
+                        // Also allow landing from above (jumping onto)
+                        else if (py >= surface.height && py <= surface.height + 2.0 && velRef.current.y <= 0) {
+                            if (surface.height >= groundHeight) {
+                                groundHeight = surface.height;
+                                foundGround = true;
+                            }
+                        }
+                    }
+                }
+            }
+            
             // Ground plane collision (y = 0)
             // Only use ground level if no higher surface was already found
             if (posRef.current.y <= GROUND_Y) {
@@ -5212,7 +5418,7 @@ const VoxelWorld = ({
             
             // animateMesh now accepts isSeatedOnFurniture as 5th param, characterType as 6th, isMounted as 7th
             // OPTIMIZED: Cache part references to avoid getObjectByName every frame
-            const animateMesh = (meshWrapper, isMoving, emoteType, emoteStartTime, isSeatedOnFurniture = false, characterType = 'penguin', isMounted = false) => {
+            const animateMesh = (meshWrapper, isMoving, emoteType, emoteStartTime, isSeatedOnFurniture = false, characterType = 'penguin', isMounted = false, isAirborne = false) => {
                 if (!meshWrapper || !meshWrapper.children[0]) return;
                 const meshInner = meshWrapper.children[0];
                 const isMarcus = characterType === 'marcus';
@@ -5241,8 +5447,17 @@ const VoxelWorld = ({
                 meshInner.rotation.x = 0;
                 if(footL) { footL.rotation.x = 0; footL.position.z = 0; }
                 if(footR) { footR.rotation.x = 0; footR.position.z = 0; }
-                if(head) { head.rotation.x = 0; }
-                if(hatPart) { hatPart.rotation.x = 0; }
+                if(head) { head.rotation.x = 0; head.position.y = 0; head.position.z = 0; }
+                if(hatPart) { hatPart.rotation.x = 0; hatPart.position.y = 0; hatPart.position.z = 0; }
+                if(eyesPart) { eyesPart.position.y = 0; eyesPart.position.z = 0; }
+                if(mouthPart) { mouthPart.position.y = 0; mouthPart.position.z = 0; }
+                
+                // Jumping animation - feet point down ONLY when airborne (not touching ground)
+                // This runs BEFORE walk/emote animations, so it gets overridden when walking
+                if (isAirborne && !isSeatedOnFurniture && !isMounted) {
+                    if(footL) footL.rotation.x = 0.4; // Point toes down
+                    if(footR) footR.rotation.x = 0.4; // Point toes down
+                }
                 if(eyesPart) { eyesPart.rotation.x = 0; }
                 if(mouthPart) { mouthPart.rotation.x = 0; }
 
@@ -5376,11 +5591,75 @@ const VoxelWorld = ({
                             head.rotation.x = -0.1;
                         }
                     }
+                    else if (emoteType === 'Headbang') {
+                        // Headbang emote: Head banging to music
+                        const bangSpeed = eTime * 6; // Fast head banging
+                        const headBangAmount = Math.sin(bangSpeed) * 0.25;
+                        const HEAD_LIFT = 1.0; // Raise head higher to prevent clipping
+                        const HEAD_FORWARD = 0.25; // Move head forward off body axis
+                        
+                        // Head bob (intense) + lifted position + forward offset
+                        if(head) {
+                            head.rotation.x = headBangAmount;
+                            head.position.y = HEAD_LIFT;
+                            head.position.z = HEAD_FORWARD;
+                        }
+                        if(hatPart) {
+                            hatPart.rotation.x = headBangAmount;
+                            hatPart.position.y = HEAD_LIFT;
+                            hatPart.position.z = HEAD_FORWARD;
+                        }
+                        if(eyesPart) {
+                            eyesPart.rotation.x = headBangAmount;
+                            eyesPart.position.y = HEAD_LIFT;
+                            eyesPart.position.z = HEAD_FORWARD;
+                        }
+                        if(mouthPart) {
+                            mouthPart.rotation.x = headBangAmount;
+                            mouthPart.position.y = HEAD_LIFT;
+                            mouthPart.position.z = HEAD_FORWARD;
+                        }
+                        
+                        // Arms pumping slightly
+                        const pumpAmount = Math.sin(bangSpeed) * 0.15;
+                        if(flipperL) {
+                            flipperL.rotation.x = -0.3 + pumpAmount;
+                            flipperL.rotation.z = 0.3;
+                        }
+                        if(flipperR) {
+                            flipperR.rotation.x = -0.3 + pumpAmount;
+                            flipperR.rotation.z = -0.3;
+                        }
+                    }
+                    else if (emoteType === 'DJ') {
+                        // DJ pose: One arm up (headphones), one arm forward (scratching turntable)
+                        const djScratchSpeed = eTime * 3;
+                        const djScratch = Math.sin(djScratchSpeed) * 0.15;
+                        const djHeadBob = Math.sin(eTime * 4) * 0.08;
+                        
+                        // Left arm STRAIGHT UP (holding headphones) - nearly vertical
+                        if(flipperL) {
+                            flipperL.rotation.x = 0;
+                            flipperL.rotation.y = 0.2;
+                            flipperL.rotation.z = Math.PI * 0.85; // Nearly straight up
+                        }
+                        // Right arm FORWARD (turntable) with scratching motion
+                        if(flipperR) {
+                            flipperR.rotation.x = -Math.PI / 2 + djScratch;
+                            flipperR.rotation.y = 0.3;
+                            flipperR.rotation.z = -0.1;
+                        }
+                        
+                        // Head bob to the beat (with eyes, beak attached)
+                        if(head) head.rotation.x = djHeadBob;
+                        if(hatPart) hatPart.rotation.x = djHeadBob;
+                        if(eyesPart) eyesPart.rotation.x = djHeadBob;
+                        if(mouthPart) mouthPart.rotation.x = djHeadBob;
+                    }
                     
-                    // Auto-stop non-persistent emotes (Sit and Breakdance are continuous)
-                    // 67 emote lasts 5 seconds, others last 3 seconds
-                    const emoteDuration = emoteType === '67' ? 5 : 3;
-                    if (emoteType !== 'Sit' && emoteType !== 'Breakdance' && eTime > emoteDuration) {
+                    // Auto-stop non-persistent emotes (Sit, Breakdance, DJ, 67, Headbang are continuous)
+                    const loopingEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang'];
+                    if (!loopingEmotes.includes(emoteType) && eTime > 3) {
                         if (playerRef.current === meshWrapper) {
                             emoteRef.current.type = null;
                             // Notify server that emote ended
@@ -5403,7 +5682,9 @@ const VoxelWorld = ({
                 // Pass local player's seatedRef state for furniture sitting, character type, and mounted state
                 // Only consider mounted if mount is enabled in settings
                 const isMounted = !!(playerRef.current.userData?.mount && playerRef.current.userData?.mountData && mountEnabledRef.current);
-                animateMesh(playerRef.current, moving, emoteRef.current.type, emoteRef.current.startTime, !!seatedRef.current, penguinData?.characterType || 'penguin', isMounted);
+                // Simple airborne check: feet not touching ground (Y above threshold)
+                const isAirborne = velRef.current.y !== 0 && posRef.current.y > 0.05;
+                animateMesh(playerRef.current, moving, emoteRef.current.type, emoteRef.current.startTime, !!seatedRef.current, penguinData?.characterType || 'penguin', isMounted, isAirborne);
                 
                 // OPTIMIZATION: Use cached animated parts instead of traverse() every frame
                 // Cache is built once when mesh is created, avoiding expensive tree traversal
@@ -5584,7 +5865,19 @@ const VoxelWorld = ({
                 if (!runFullAILogic) {
                     // Just sync mesh position on skipped frames
                     if (ai.mesh && sameRoom) {
-                        ai.mesh.position.set(ai.pos.x, 0, ai.pos.z);
+                        // Respect dance floor height in nightclub
+                        let aiY = 0;
+                        if (ai.currentRoom === 'nightclub') {
+                            const rd = roomDataRef.current;
+                            if (rd && rd.danceFloor) {
+                                const df = rd.danceFloor;
+                                if (ai.pos.x >= df.minX && ai.pos.x <= df.maxX && 
+                                    ai.pos.z >= df.minZ && ai.pos.z <= df.maxZ) {
+                                    aiY = df.height;
+                                }
+                            }
+                        }
+                        ai.mesh.position.set(ai.pos.x, aiY, ai.pos.z);
                     }
                     return; // Skip to next AI (forEach continues)
                 }
@@ -6245,7 +6538,19 @@ const VoxelWorld = ({
                 // OPTIMIZATION: Skip expensive mesh updates for invisible AIs
                 if (!sameRoom) return; // Early exit - AI not visible
                 
-                ai.mesh.position.set(ai.pos.x, 0, ai.pos.z);
+                // Calculate AI Y position - respect dance floor in nightclub
+                let aiY = 0;
+                if (ai.currentRoom === 'nightclub') {
+                    const rd = roomDataRef.current;
+                    if (rd && rd.danceFloor) {
+                        const df = rd.danceFloor;
+                        if (ai.pos.x >= df.minX && ai.pos.x <= df.maxX && 
+                            ai.pos.z >= df.minZ && ai.pos.z <= df.maxZ) {
+                            aiY = df.height; // Raise AI to dance floor height
+                        }
+                    }
+                }
+                ai.mesh.position.set(ai.pos.x, aiY, ai.pos.z);
                 if (ai.action !== 'chatting') ai.mesh.rotation.y = ai.rot;
                 
                 animateMesh(ai.mesh, aiMoving, ai.emoteType, ai.emoteStart);
@@ -6366,6 +6671,19 @@ const VoxelWorld = ({
                     if (aiPuffle.mesh && aiPuffle.position) {
                         aiPuffle.mesh.position.x = aiPuffle.position.x;
                         aiPuffle.mesh.position.z = aiPuffle.position.z;
+                        // Respect dance floor height in nightclub
+                        let puffleY = 0.5; // Default puffle height
+                        if (ai.currentRoom === 'nightclub') {
+                            const rd = roomDataRef.current;
+                            if (rd && rd.danceFloor) {
+                                const df = rd.danceFloor;
+                                if (aiPuffle.position.x >= df.minX && aiPuffle.position.x <= df.maxX && 
+                                    aiPuffle.position.z >= df.minZ && aiPuffle.position.z <= df.maxZ) {
+                                    puffleY = df.height + 0.5; // Dance floor + puffle offset
+                                }
+                            }
+                        }
+                        aiPuffle.mesh.position.y = puffleY;
                     }
                 }
             }); // End AI update loop
@@ -6458,7 +6776,9 @@ const VoxelWorld = ({
                 );
                 // Pass each player's seatedOnFurniture state (synced from server), character type, and mounted state
                 const otherPlayerMounted = !!(meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData);
-                animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted);
+                // Check if other player is airborne based on their Y position
+                const otherIsAirborne = (playerData.position?.y ?? 0) > 0.1;
+                animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted, otherIsAirborne);
                 
                 // OPTIMIZATION: Use cached animated parts for other players
                 // Build cache lazily on first animation frame if needed
@@ -7701,6 +8021,38 @@ const VoxelWorld = ({
     const handlePortalEnter = () => {
         if (!nearbyPortal) return;
         
+        // Teleport to roof (ladder climb)
+        if (nearbyPortal.teleportToRoof) {
+            const centerX = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
+            const centerZ = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
+            
+            // Nightclub center is at (0, -75) offset, building depth is 20
+            // Spawn near rear of roof: center - 25% of depth = -75 - 5 = -80
+            const roofX = centerX;
+            const roofZ = centerZ - 75 - 5; // Offset -25% to spawn near rear
+            const roofY = 16; // Spawn above roof collision (roof at 13) to land on it
+            
+            posRef.current.x = roofX;
+            posRef.current.z = roofZ;
+            posRef.current.y = roofY;
+            velRef.current.y = 0;
+            
+            if (playerRef.current) {
+                playerRef.current.position.set(roofX, roofY, roofZ);
+            }
+            
+            // Immediately save position so Y is preserved on refresh/reconnect
+            try {
+                localStorage.setItem('player_position', JSON.stringify({
+                    x: roofX, y: roofY, z: roofZ, room: 'town', savedAt: Date.now()
+                }));
+                console.log('💾 Saved roof position:', { x: roofX, y: roofY, z: roofZ });
+            } catch (e) { /* ignore */ }
+            
+            setNearbyPortal(null);
+            return;
+        }
+        
         // Room transition
         if (nearbyPortal.targetRoom && onChangeRoom) {
             let exitSpawnPos = nearbyPortal.exitSpawnPos;
@@ -7734,7 +8086,7 @@ const VoxelWorld = ({
     useEffect(() => {
         const handleKeyPress = (e) => {
             if (e.code === 'KeyE' && nearbyPortal && !emoteWheelOpen) {
-                if (nearbyPortal.targetRoom || nearbyPortal.minigame) {
+                if (nearbyPortal.targetRoom || nearbyPortal.minigame || nearbyPortal.teleportToRoof) {
                     handlePortalEnter();
                 }
             }
@@ -7765,6 +8117,23 @@ const VoxelWorld = ({
                     message: 'Press E to sit', 
                     emote,
                     benchData: data // Contains snapPoints, seatHeight, etc.
+                });
+            } else if (action === 'dj') {
+                // Don't show prompt if already DJing
+                if (seatedRef.current) return;
+                // Pass DJ booth data
+                setNearbyInteraction({ 
+                    action, 
+                    message: message || '🎧 Press E to DJ',
+                    emote: emote || 'DJ',
+                    benchData: data // Contains position, rotation, etc.
+                });
+            } else if (action === 'climb_roof') {
+                // Show ladder climb prompt
+                setNearbyInteraction({ 
+                    action, 
+                    message: message || '🪜 Climb to Roof (Press E)',
+                    data: data
                 });
             } else if (action === 'interact_snowman') {
                 // Show snowman message
@@ -7874,6 +8243,67 @@ const VoxelWorld = ({
                     mpSendEmote('Sit', true); // true = seatedOnFurniture
                     
                     // Clear the interaction prompt
+                    setNearbyInteraction(null);
+                }
+                else if (nearbyInteraction.action === 'dj' && nearbyInteraction.benchData) {
+                    // DJ at the turntable
+                    const djData = nearbyInteraction.benchData;
+                    const djX = djData.worldX;
+                    const djZ = djData.worldZ;
+                    const djRotation = djData.worldRotation !== undefined ? djData.worldRotation : 0;
+                    const djHeight = djData.seatHeight || 0.75;
+                    
+                    // Set seated/DJ state
+                    const seatData = {
+                        snapPoint: { x: 0, z: 0 },
+                        worldPos: { x: djX, z: djZ },
+                        seatHeight: djHeight,
+                        benchRotation: djRotation,
+                        benchDepth: 1,
+                        dismountBack: true, // Step back when exiting DJ booth
+                        platformHeight: djHeight
+                    };
+                    setSeatedOnBench(seatData);
+                    seatedRef.current = seatData;
+                    
+                    // Move player to DJ position
+                    posRef.current.x = djX;
+                    posRef.current.z = djZ;
+                    posRef.current.y = djHeight;
+                    velRef.current.y = 0;
+                    rotRef.current = djRotation;
+                    
+                    if (playerRef.current) {
+                        playerRef.current.position.set(djX, djHeight, djZ);
+                        playerRef.current.rotation.y = djRotation;
+                    }
+                    
+                    // Trigger DJ emote
+                    emoteRef.current = { type: 'DJ', startTime: Date.now() };
+                    mpSendEmote('DJ', true); // true = seatedOnFurniture (continuous emote)
+                    
+                    // Clear the interaction prompt
+                    setNearbyInteraction(null);
+                }
+                else if (nearbyInteraction.action === 'climb_roof') {
+                    // Teleport to nightclub roof
+                    const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
+                    const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
+                    
+                    // Nightclub is at (CENTER, CENTER - 75), roof height is ~13 (building height 12 + 1)
+                    const roofX = townCenterX;
+                    const roofZ = townCenterZ - 75;
+                    const roofY = 15; // Spawn above roof to land on it
+                    
+                    posRef.current.x = roofX;
+                    posRef.current.z = roofZ;
+                    posRef.current.y = roofY;
+                    velRef.current.y = 0;
+                    
+                    if (playerRef.current) {
+                        playerRef.current.position.set(roofX, roofY, roofZ);
+                    }
+                    
                     setNearbyInteraction(null);
                 }
                 else if (nearbyInteraction.emote) {
@@ -8590,6 +9020,41 @@ const VoxelWorld = ({
                                         mpSendEmote('Sit', true); // true = seatedOnFurniture
                                         setNearbyInteraction(null);
                                     }
+                                    else if (nearbyInteraction.action === 'dj' && nearbyInteraction.benchData) {
+                                        // DJ at the turntable (mobile)
+                                        const djData = nearbyInteraction.benchData;
+                                        const djX = djData.worldX;
+                                        const djZ = djData.worldZ;
+                                        const djRotation = djData.worldRotation !== undefined ? djData.worldRotation : 0;
+                                        const djHeight = djData.seatHeight || 0.75;
+                                        
+                                        const seatData = {
+                                            snapPoint: { x: 0, z: 0 },
+                                            worldPos: { x: djX, z: djZ },
+                                            seatHeight: djHeight,
+                                            benchRotation: djRotation,
+                                            benchDepth: 1,
+                                            dismountBack: true,
+                                            platformHeight: djHeight
+                                        };
+                                        setSeatedOnBench(seatData);
+                                        seatedRef.current = seatData;
+                                        
+                                        posRef.current.x = djX;
+                                        posRef.current.z = djZ;
+                                        posRef.current.y = djHeight;
+                                        velRef.current.y = 0;
+                                        rotRef.current = djRotation;
+                                        
+                                        if (playerRef.current) {
+                                            playerRef.current.position.set(djX, djHeight, djZ);
+                                            playerRef.current.rotation.y = djRotation;
+                                        }
+                                        
+                                        emoteRef.current = { type: 'DJ', startTime: Date.now() };
+                                        mpSendEmote('DJ', true);
+                                        setNearbyInteraction(null);
+                                    }
                                     else if (nearbyInteraction.emote) {
                                         emoteRef.current = { type: nearbyInteraction.emote, startTime: Date.now() };
                                         mpSendEmote(nearbyInteraction.emote, false); // Ground emote
@@ -8627,8 +9092,8 @@ const VoxelWorld = ({
                 description={nearbyPortal?.description}
                 isNearby={!!nearbyPortal}
                 onEnter={handlePortalEnter}
-                color={nearbyPortal?.targetRoom || nearbyPortal?.minigame ? 'green' : 'gray'}
-                hasGame={!!(nearbyPortal?.targetRoom || nearbyPortal?.minigame)}
+                color={nearbyPortal?.targetRoom || nearbyPortal?.minigame || nearbyPortal?.teleportToRoof ? 'green' : 'gray'}
+                hasGame={!!(nearbyPortal?.targetRoom || nearbyPortal?.minigame || nearbyPortal?.teleportToRoof)}
              />
              
              {/* Town Interaction Prompt */}
@@ -8836,9 +9301,9 @@ const VoxelWorld = ({
                         <div className="absolute left-1/2 -translate-x-1/2 bottom-0 text-white/50 text-xs retro-text">
                             Release [T] to use
                         </div>
-                    </div>
-                </div>
-            )}
+                     </div>
+                 </div>
+             )}
              
              {/* Settings Menu Modal */}
              <SettingsMenu
