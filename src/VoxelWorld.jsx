@@ -95,6 +95,7 @@ const VoxelWorld = ({
         playerId,
         playerName,
         playerCount,
+        totalPlayerCount,     // Total players online (all rooms)
         playerList,           // Triggers mesh creation/removal
         playersDataRef,       // Real-time position data (no re-renders)
         connectionError,      // Error if connection rejected
@@ -9158,6 +9159,8 @@ const VoxelWorld = ({
                 onOpenPuffles={() => setShowPufflePanel(true)}
                 onOpenSettings={() => setShowSettings(true)}
                 isMobile={isMobile}
+                playerCount={playerCount}
+                totalPlayerCount={totalPlayerCount}
              />
              
              {/* Chat Log - Desktop: bottom-left, Mobile: toggleable overlay */}
@@ -9207,14 +9210,6 @@ const VoxelWorld = ({
                  {!isMobile && (
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>
                  )}
-                 
-                 {/* Multiplayer Status */}
-                 <div className="flex items-center gap-2 mt-2">
-                     <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`} />
-                     <span className="text-[10px] opacity-80">
-                         {connected ? `Online • ${playerCount + 1} players` : 'Connecting...'}
-                     </span>
-                 </div>
              </div>
              
              {/* Debug Position Panel - Press F3 to toggle (DEV ONLY) */}

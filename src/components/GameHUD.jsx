@@ -6,7 +6,7 @@ import TokenomicsModal from './TokenomicsModal';
 /**
  * GameHUD - Heads Up Display showing coins, stats, and quick actions
  */
-const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenSettings, isMobile = false }) => {
+const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenSettings, isMobile = false, playerCount = 0, totalPlayerCount = 0 }) => {
     const [coins, setCoins] = useState(0);
     const [showStats, setShowStats] = useState(false);
     const [recentReward, setRecentReward] = useState(null);
@@ -89,6 +89,14 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 >
                     <span className="text-sm">📊</span>
                 </button>
+                
+                {/* Player Count - Room / Total */}
+                <div className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-cyan-400/30" title="In Room / Online Total">
+                    <span className="text-lg">👥</span>
+                    <span className="text-cyan-300 font-bold retro-text text-sm">{playerCount + 1}</span>
+                    <span className="text-white/40 retro-text text-xs">/</span>
+                    <span className="text-green-400 font-bold retro-text text-sm">{totalPlayerCount || playerCount + 1}</span>
+                </div>
                 
                 {/* Coins Display */}
                 <div className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-yellow-400/30">

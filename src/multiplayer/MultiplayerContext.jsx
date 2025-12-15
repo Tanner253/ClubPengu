@@ -44,6 +44,9 @@ export function MultiplayerProvider({ children }) {
     // Player count for UI (updated less frequently)
     const [playerCount, setPlayerCount] = useState(0);
     
+    // Total players online (across all rooms)
+    const [totalPlayerCount, setTotalPlayerCount] = useState(0);
+    
     // Chat messages (recent)
     const [chatMessages, setChatMessages] = useState([]);
     
@@ -327,6 +330,10 @@ export function MultiplayerProvider({ children }) {
             case 'world_time':
                 // Server-synchronized day/night cycle time
                 worldTimeRef.current = message.time;
+                // Update total player count if provided
+                if (message.totalPlayers !== undefined) {
+                    setTotalPlayerCount(message.totalPlayers);
+                }
                 break;
             
             case 'room_counts':
@@ -534,6 +541,7 @@ export function MultiplayerProvider({ children }) {
         playerId,
         playerName,
         playerCount,
+        totalPlayerCount,     // Total players online (across all rooms)
         playerList,           // Array of player IDs (for triggering mesh creation)
         getPlayersData,       // Function to get ref (for real-time position access)
         playersDataRef,       // Direct ref access for game loop

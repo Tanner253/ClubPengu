@@ -40,11 +40,12 @@ setInterval(() => {
     worldTime = (worldTime + DAY_CYCLE_SPEED) % 1;
 }, 1000);
 
-// Broadcast world time to all players
+// Broadcast world time and total player count to all players
 setInterval(() => {
     const timeMessage = JSON.stringify({
         type: 'world_time',
-        time: worldTime
+        time: worldTime,
+        totalPlayers: players.size
     });
     
     for (const [, player] of players) {
