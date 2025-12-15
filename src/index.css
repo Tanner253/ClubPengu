@@ -14,21 +14,26 @@ html, body, #root {
   overflow: hidden;
 }
 
-/* iOS Safari ONLY fixes - -webkit-touch-callout is iOS Safari specific */
-/* Android is NOT affected by this - it uses the standard 100% height above */
+/* iOS Safari specific fullscreen fixes */
+/* Using @supports to target WebKit only - prevents Android issues */
 @supports (-webkit-touch-callout: none) {
-  html, body, #root {
-    /* iOS: use -webkit-fill-available for proper fullscreen with URL bar */
-    height: -webkit-fill-available;
-    overscroll-behavior: none;
-  }
-  
-  body {
-    /* Prevent iOS bounce scroll and pull-to-refresh */
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
+  @media (hover: none) and (pointer: coarse) {
+    html, body, #root {
+      height: 100dvh;
+      height: -webkit-fill-available;
+      overscroll-behavior: none;
+    }
+    
+    body {
+      /* Prevent iOS bounce scroll and pull-to-refresh */
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+    }
   }
 }
+
+/* Android/other mobile: just prevent overscroll, no height hacks */
+/* Android Chrome handles viewport correctly with standard height: 100% */
 
 /* Retro text styling */
 .retro-text {

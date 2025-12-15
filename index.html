@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/penguin.svg" />
-    <!-- Viewport: iOS uses viewport-fit=cover for fullscreen, works fine for Android too -->
+    <!-- iOS fullscreen viewport - covers entire screen including notch area -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <!-- iOS PWA/fullscreen support -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -15,38 +15,44 @@
     <meta name="format-detection" content="telephone=no" />
     <title>Club Pengu</title>
     <style>
-      /* Base styles for all devices */
+      /* Base styles for all devices (including Android) */
       html, body, #root {
         height: 100%;
+        width: 100%;
         overflow: hidden;
       }
       
-      /* iOS Safari ONLY fixes - uses -webkit-touch-callout which is iOS Safari specific */
-      /* This does NOT match Android Chrome or any other browser */
+      /* iOS Safari specific fullscreen fixes - using @supports to target WebKit only */
+      /* This prevents Android from getting position:fixed which breaks WebGL rendering */
       @supports (-webkit-touch-callout: none) {
-        html, body, #root {
-          /* iOS: use -webkit-fill-available for proper fullscreen */
-          height: -webkit-fill-available;
-          overflow: hidden;
-          overscroll-behavior: none;
-          touch-action: manipulation;
-        }
-        /* Prevent pull-to-refresh on iOS */
-        body {
-          position: fixed;
-          width: 100%;
-          overflow: hidden;
-          -webkit-touch-callout: none;
-          -webkit-user-select: none;
-        }
-        /* Handle safe areas (notch, home indicator) - iOS only */
-        #root {
-          padding-top: env(safe-area-inset-top);
-          padding-bottom: env(safe-area-inset-bottom);
-          padding-left: env(safe-area-inset-left);
-          padding-right: env(safe-area-inset-right);
+        @media (hover: none) and (pointer: coarse) {
+          /* iOS: use dynamic viewport height for URL bar handling */
+          html, body, #root {
+            height: 100dvh;
+            height: -webkit-fill-available;
+            overscroll-behavior: none;
+            touch-action: manipulation;
+          }
+          /* Prevent iOS pull-to-refresh and bounce scroll */
+          body {
+            position: fixed;
+            width: 100%;
+            overflow: hidden;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+          }
+          /* Handle iOS safe areas (notch, home indicator) */
+          #root {
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+            padding-left: env(safe-area-inset-left);
+            padding-right: env(safe-area-inset-right);
+          }
         }
       }
+      
+      /* Android/other touch devices: keep simple overflow hidden, no position:fixed */
+      /* Android handles fullscreen differently and doesn't need iOS workarounds */
     </style>
   </head>
   <body>
