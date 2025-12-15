@@ -7784,20 +7784,38 @@ const VoxelWorld = ({
         const raycaster = raycasterRef.current;
         
         // Unified handler for both mouse clicks and touch taps
-        const handleInteraction = (clientX, clientY, eventTarget) => {
-            // Don't process clicks that originated from UI elements
-            if (eventTarget !== renderer.domElement) {
+        const handleInteraction = (clientX, clientY, eventTarget, isTouch = false) => {
+            // Don't process if any UI overlay is open (check by z-index elements)
+            const elementsAtPoint = document.elementsFromPoint(clientX, clientY);
+            
+            // Check if click/tap is on a UI element (buttons, menus, joystick, etc.)
+            const isUIElement = elementsAtPoint.some(el => {
+                // Skip canvas and its container
+                if (el === renderer.domElement || el === renderer.domElement.parentElement) {
+                    return false;
+                }
+                // Check for high z-index (UI overlays)
+                const zIndex = window.getComputedStyle(el).zIndex;
+                if (zIndex && parseInt(zIndex) >= 40) {
+                    return true;
+                }
+                // Check for common UI element classes/tags
+                if (el.tagName === 'BUTTON' || el.tagName === 'INPUT' || 
+                    el.closest('button') || el.closest('[role="button"]') ||
+                    el.closest('[data-joystick]') || el.hasAttribute?.('data-joystick') ||
+                    el.closest('.joystick') || el.closest('[class*="joystick"]')) {
+                    return true;
+                }
+                return false;
+            });
+            
+            if (isUIElement) {
                 return;
             }
             
-            // Don't process if any UI overlay is open (check by z-index elements)
-            const elementsAtPoint = document.elementsFromPoint(clientX, clientY);
-            const hasUIOverlay = elementsAtPoint.some(el => {
-                const zIndex = window.getComputedStyle(el).zIndex;
-                return zIndex && parseInt(zIndex) >= 40 && el !== renderer.domElement.parentElement;
-            });
-            
-            if (hasUIOverlay) {
+            // For mouse clicks, require exact target match
+            // For touch, be more lenient (touch events can bubble differently)
+            if (!isTouch && eventTarget !== renderer.domElement) {
                 return;
             }
             
@@ -7866,7 +7884,7 @@ const VoxelWorld = ({
         
         // Mouse click handler
         const handleClick = (event) => {
-            handleInteraction(event.clientX, event.clientY, event.target);
+            handleInteraction(event.clientX, event.clientY, event.target, false);
         };
         
         // Touch handler - detect taps on players
@@ -7889,14 +7907,15 @@ const VoxelWorld = ({
             
             const touch = event.changedTouches[0];
             const touchDuration = Date.now() - touchStartTime;
-            const touchMoved = Math.abs(touch.clientX - touchStartPos.x) > 15 ||
-                              Math.abs(touch.clientY - touchStartPos.y) > 15;
+            const touchMoved = Math.abs(touch.clientX - touchStartPos.x) > 20 ||
+                              Math.abs(touch.clientY - touchStartPos.y) > 20;
             
-            // Only treat as tap if touch was short (< 300ms) and didn't move much
-            if (touchDuration < 300 && !touchMoved) {
+            // Only treat as tap if touch was short (< 400ms) and didn't move much
+            // Slightly more lenient for mobile (was 300ms/15px, now 400ms/20px)
+            if (touchDuration < 400 && !touchMoved) {
                 // Get the element under the touch point
                 const targetElement = document.elementFromPoint(touch.clientX, touch.clientY);
-                handleInteraction(touch.clientX, touch.clientY, targetElement);
+                handleInteraction(touch.clientX, touch.clientY, targetElement, true);
             }
         };
         
