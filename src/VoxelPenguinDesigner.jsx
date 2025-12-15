@@ -262,6 +262,12 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         if (!scriptsLoaded || !mountRef.current) return;
 
         const THREE = window.THREE;
+        
+        // Detect mobile GPU for performance optimizations
+        const isIOSDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent) || 
+                           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isAndroidDevice = /Android/i.test(navigator.userAgent);
+        const isMobileGPU = isIOSDevice || isAndroidDevice;
 
         const scene = new THREE.Scene();
         sceneRef.current = scene;
@@ -271,10 +277,22 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
         camera.position.set(20, 20, 30);
         
-        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        // Mobile: disable antialias for performance
+        const rendererOptions = {
+            antialias: !isMobileGPU,
+            alpha: false
+        };
+        if (isMobileGPU) {
+            rendererOptions.precision = 'mediump';
+        }
+        const renderer = new THREE.WebGLRenderer(rendererOptions);
         renderer.setSize(window.innerWidth, window.innerHeight);
+        // Mobile: cap DPR at 1.0 to avoid rendering 4-9x more pixels
+        const dpr = isMobileGPU ? Math.min(window.devicePixelRatio, 1.0) : Math.min(window.devicePixelRatio, 2);
+        renderer.setPixelRatio(dpr);
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        // Mobile: BasicShadowMap (fastest), Desktop: PCFSoftShadowMap (best quality)
+        renderer.shadowMap.type = isMobileGPU ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
         mountRef.current.appendChild(renderer.domElement);
         rendererRef.current = renderer;
 
@@ -284,17 +302,22 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dirLight.position.set(10, 20, 10);
         dirLight.castShadow = true;
-        dirLight.shadow.mapSize.width = 2048;
-        dirLight.shadow.mapSize.height = 2048;
+        // Mobile: smaller shadow map for performance
+        const shadowMapSize = isMobileGPU ? 512 : 2048;
+        dirLight.shadow.mapSize.width = shadowMapSize;
+        dirLight.shadow.mapSize.height = shadowMapSize;
         scene.add(dirLight);
         
-        const warmLight = new THREE.PointLight(0xFFDDAA, 1.2, 50);
-        warmLight.position.set(0, 15, 5);
-        scene.add(warmLight);
-        
-        const rimLight = new THREE.SpotLight(0x4455ff, 1.5);
-        rimLight.position.set(-20, 10, -10);
-        scene.add(rimLight);
+        // Mobile: skip expensive point and spot lights (ambient + directional is enough)
+        if (!isMobileGPU) {
+            const warmLight = new THREE.PointLight(0xFFDDAA, 1.2, 50);
+            warmLight.position.set(0, 15, 5);
+            scene.add(warmLight);
+            
+            const rimLight = new THREE.SpotLight(0x4455ff, 1.5);
+            rimLight.position.set(-20, 10, -10);
+            scene.add(rimLight);
+        }
 
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;

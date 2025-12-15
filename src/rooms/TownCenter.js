@@ -529,16 +529,22 @@ class TownCenter {
                     }
                     break;
                 case 'building_light':
-                    const buildingLight = new this.THREE.PointLight(
-                        prop.color || 0xFFE4B5,
-                        prop.intensity || 2.5,
-                        prop.distance || 15,
-                        1.5
-                    );
-                    buildingLight.position.set(0, prop.height || 4, 0);
-                    mesh = new this.THREE.Group();
-                    mesh.add(buildingLight);
-                    this.lights.push(buildingLight);
+                    // Skip expensive building lights on mobile GPUs
+                    const isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
+                    if (!isMobileGPU) {
+                        const buildingLight = new this.THREE.PointLight(
+                            prop.color || 0xFFE4B5,
+                            prop.intensity || 2.5,
+                            prop.distance || 15,
+                            1.5
+                        );
+                        buildingLight.position.set(0, prop.height || 4, 0);
+                        mesh = new this.THREE.Group();
+                        mesh.add(buildingLight);
+                        this.lights.push(buildingLight);
+                    } else {
+                        mesh = new this.THREE.Group(); // Empty group for mobile
+                    }
                     break;
                 case 'bench':
                     mesh = this.propsFactory.createBench(true);
@@ -958,10 +964,10 @@ class TownCenter {
             group.add(bulb);
             
             // OPTIMIZED: Only add point light for 1st bulb per string (was every 3rd)
-            // Mac: Skip point lights entirely (use emissive materials only)
+            // Mobile: Skip point lights entirely (use emissive materials only)
             // The emissive bulbs provide visual glow, we only need 1 light per string for ambiance
-            const isMac = typeof window !== 'undefined' && window._isMacDevice;
-            if (!isMac && i === Math.floor(bulbCount / 2)) {
+            const isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
+            if (!isMobileGPU && i === Math.floor(bulbCount / 2)) {
                 const light = new THREE.PointLight(0xFFFFAA, 0.4, 6); // Warm white, merged color
                 light.position.set(x, y, z);
                 group.add(light);

@@ -61,6 +61,10 @@ class Nightclub {
         const CX = Nightclub.CENTER_X;
         const CZ = Nightclub.CENTER_Z;
         
+        // Mobile GPU detection - skip expensive lights on mobile for performance
+        const isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
+        this.isMobileGPU = isMobileGPU;
+        
         this.cleanup();
         
         // Neon colors
@@ -656,13 +660,15 @@ class Nightclub {
             mount.position.y = 0.4;
             group.add(mount);
             
-            // Actual spotlight
-            const spotlight = new THREE.SpotLight(color, 2, 20, Math.PI / 6, 0.5);
-            spotlight.position.set(0, 0, 0.4);
-            spotlight.target.position.set(0, -10, 5);
-            group.add(spotlight);
-            group.add(spotlight.target);
-            this.lights.push(spotlight);
+            // Actual spotlight (skip on mobile for performance)
+            if (!this.isMobileGPU) {
+                const spotlight = new THREE.SpotLight(color, 2, 20, Math.PI / 6, 0.5);
+                spotlight.position.set(0, 0, 0.4);
+                spotlight.target.position.set(0, -10, 5);
+                group.add(spotlight);
+                group.add(spotlight.target);
+                this.lights.push(spotlight);
+            }
             
             group.position.set(x, H - 0.5, 2);
             group.rotation.x = Math.PI / 6;
@@ -1094,11 +1100,13 @@ class Nightclub {
         mount.position.y = 1.3;
         group.add(mount);
         
-        // Main disco ball light - bright and colorful
-        const discoLight = new THREE.PointLight(0xFFFFFF, 3, 25);
-        discoLight.userData.isDiscoLight = true;
-        group.add(discoLight);
-        this.lights.push(discoLight);
+        // Main disco ball light - bright and colorful (skip on mobile for performance)
+        if (!this.isMobileGPU) {
+            const discoLight = new THREE.PointLight(0xFFFFFF, 3, 25);
+            discoLight.userData.isDiscoLight = true;
+            group.add(discoLight);
+            this.lights.push(discoLight);
+        }
         
         group.position.set(x, y, z);
         scene.add(group);
@@ -1179,19 +1187,21 @@ class Nightclub {
             housing.position.set(xOffset, bannerHeight / 2 + 1.5, 1.5);
             group.add(housing);
             
-            // Actual spotlight
-            const spotlight = new THREE.SpotLight(
-                spotlightColors[idx],
-                3,      // intensity
-                12,     // distance
-                Math.PI / 5, // angle
-                0.4     // penumbra
-            );
-            spotlight.position.set(xOffset, bannerHeight / 2 + 2, 2);
-            spotlight.target.position.set(xOffset, 0, 0);
-            group.add(spotlight);
-            group.add(spotlight.target);
-            this.lights.push(spotlight);
+            // Actual spotlight (skip on mobile for performance)
+            if (!this.isMobileGPU) {
+                const spotlight = new THREE.SpotLight(
+                    spotlightColors[idx],
+                    3,      // intensity
+                    12,     // distance
+                    Math.PI / 5, // angle
+                    0.4     // penumbra
+                );
+                spotlight.position.set(xOffset, bannerHeight / 2 + 2, 2);
+                spotlight.target.position.set(xOffset, 0, 0);
+                group.add(spotlight);
+                group.add(spotlight.target);
+                this.lights.push(spotlight);
+            }
             
             // Lens glow
             const lensMat = new THREE.MeshStandardMaterial({
