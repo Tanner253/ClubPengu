@@ -1141,60 +1141,59 @@ const VoxelWorld = ({
         cameraRef.current = camera;
         camera.position.set(0, 15, -15);
         
-        // Detect Mac for performance optimizations (WebGL via Metal causes issues on Safari)
-        // IMPORTANT: Exclude iOS devices - iPhones/iPads can report as "Macintosh" in desktop mode
-        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-        const hasMultiTouch = navigator.maxTouchPoints > 1; // iPads have multi-touch
-        const isIOSDevice = isMobileDevice || (navigator.platform === 'MacIntel' && hasMultiTouch);
+        // Detect Apple devices for performance optimizations (WebGL via Metal causes issues on Safari)
+        // Apply optimizations to ALL Apple devices: Mac, iPhone, iPad
+        const isIOSDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent) || 
+                           (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        const isMacDesktop = navigator.platform.toUpperCase().indexOf('MAC') >= 0 || 
+                            navigator.userAgent.toUpperCase().indexOf('MAC') >= 0;
         
-        // Only true Mac desktops - not iOS devices pretending to be Macs
-        const isMac = !isIOSDevice && (
-            navigator.platform.toUpperCase().indexOf('MAC') >= 0 || 
-            navigator.userAgent.toUpperCase().indexOf('MAC') >= 0
-        );
+        // All Apple devices get optimizations (Mac desktop + iOS)
+        const isAppleDevice = isIOSDevice || isMacDesktop;
         
-        // Store Mac detection globally for other components to use
-        window._isMacDevice = isMac;
+        // Store detection globally for other components to use
+        window._isMacDevice = isAppleDevice; // Keep same name for compatibility
         window._isIOSDevice = isIOSDevice;
+        window._isAppleDevice = isAppleDevice;
         
         // Log for debugging
-        console.log('🖥️ Platform:', navigator.platform, '| isMac:', isMac, '| isIOS:', isIOSDevice);
+        console.log('🖥️ Platform:', navigator.platform, '| isApple:', isAppleDevice, '| isIOS:', isIOSDevice);
         
-        // Mac-specific renderer settings (PC/Android unchanged)
-        // Fixes WebGL via Metal performance issues on Safari/macOS
+        // Apple device renderer settings (PC/Android unchanged)
+        // Fixes WebGL via Metal performance issues on Safari/macOS/iOS
         const rendererOptions = {
-            antialias: !isMac, // Mac: false (big perf gain), Others: true
+            antialias: !isAppleDevice, // Apple: false (big perf gain), Others: true
             powerPreference: 'high-performance',
             depth: true
         };
         
-        // Mac-only: lower precision and disable stencil for Metal compatibility
-        if (isMac) {
+        // Apple-only: lower precision and disable stencil for Metal compatibility
+        if (isAppleDevice) {
             rendererOptions.precision = 'mediump';
             rendererOptions.stencil = false;
         }
         
         const renderer = new THREE.WebGLRenderer(rendererOptions);
         
-        // Mac: DPR capped at 1.0 for Retina (renders at native resolution, not 2x)
-        // This is the BIGGEST performance win on Mac - Retina renders 4x fewer pixels
-        const dpr = isMac ? Math.min(window.devicePixelRatio, 1.0) : Math.min(window.devicePixelRatio, 2);
+        // Apple: DPR capped at 1.0 for Retina (renders at native resolution, not 2x)
+        // This is the BIGGEST performance win - Retina renders 4x fewer pixels
+        const dpr = isAppleDevice ? Math.min(window.devicePixelRatio, 1.0) : Math.min(window.devicePixelRatio, 2);
         renderer.setPixelRatio(dpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
         
-        // Mac: flat rendering (no tone mapping) - fixes Metal rendering issues
-        if (isMac) {
+        // Apple: flat rendering (no tone mapping) - fixes Metal rendering issues
+        if (isAppleDevice) {
             renderer.toneMapping = THREE.NoToneMapping;
             renderer.outputColorSpace = THREE.SRGBColorSpace;
-            console.log('🍎 Mac detected - applied performance fixes: antialias=false, dpr=1.0, mediump precision, flat rendering');
+            console.log('🍎 Apple device detected - applied performance fixes: antialias=false, dpr=1.0, mediump precision, flat rendering');
         }
         
-        // Shadows: Mac gets simpler shadows or none, Others get PCFShadowMap
+        // Shadows: Apple gets simpler shadows, Others get PCFShadowMap
         renderer.shadowMap.enabled = true;
-        if (isMac) {
-            // Mac: Use BasicShadowMap (fastest) or disable entirely for very old Macs
+        if (isAppleDevice) {
+            // Apple: Use BasicShadowMap (fastest) for better performance
             renderer.shadowMap.type = THREE.BasicShadowMap;
-            console.log('🍎 Mac: Using BasicShadowMap for better performance');
+            console.log('🍎 Apple: Using BasicShadowMap for better performance');
         } else {
         renderer.shadowMap.type = THREE.PCFShadowMap;
         }
@@ -1241,8 +1240,8 @@ const VoxelWorld = ({
         const sunLight = new THREE.DirectionalLight(0xF8F8FF, 1.0); // Cold bright sun
         sunLight.position.set(80, 100, 60);
         sunLight.castShadow = true;
-        // Mac: 512 shadow map (faster), Others: 1024 (better quality)
-        const shadowMapSize = isMac ? 512 : 1024;
+        // Apple: 512 shadow map (faster), Others: 1024 (better quality)
+        const shadowMapSize = isAppleDevice ? 512 : 1024;
         sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
         sunLight.shadow.camera.left = -100;
         sunLight.shadow.camera.right = 100;
@@ -1254,8 +1253,8 @@ const VoxelWorld = ({
         
         // ==================== SNOWFALL PARTICLE SYSTEM ====================
         const createSnowfall = () => {
-            // Mac: fewer particles for better performance, Others: more particles
-            const particleCount = isMac ? 400 : 800;
+            // Apple: fewer particles for better performance, Others: more particles
+            const particleCount = isAppleDevice ? 400 : 800;
             const positions = new Float32Array(particleCount * 3);
             const velocities = new Float32Array(particleCount * 3);
             const sizes = new Float32Array(particleCount);
