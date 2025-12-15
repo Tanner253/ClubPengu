@@ -84,16 +84,27 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         'BOATCOIN': 'minecraftBoat'
     };
     
-    // Cosmetic promo codes (case-sensitive) - { code: { id, category, name } }
+    // Cosmetic promo codes (case-sensitive) - { code: { id, category, name } } or { code: { items: [...], name } }
     const COSMETIC_PROMO_CODES = {
         'LMAO': { id: 'lmao', category: 'eyes', name: '😂 LMAO Face' },
-        'JOE': { id: 'joe', category: 'bodyItem', name: '👻 Invisible Body' }
+        'JOE': { id: 'joe', category: 'bodyItem', name: '👻 Invisible Body' },
+        'MISTORGOAT': { 
+            items: [
+                { id: 'mistorHair', category: 'hat' },
+                { id: 'mistorEyes', category: 'eyes' },
+                { id: 'mistorShirt', category: 'bodyItem' }
+            ],
+            skin: 'silver',  // Set feathers to soft grey/cream
+            name: '🐐 Mistor Goat Set'
+        }
     };
     
     // Check if a cosmetic is unlocked (or doesn't require unlock)
     const isCosmeticUnlocked = (cosmeticId) => {
         // Check if this cosmetic requires a promo code
-        const requiresCode = Object.values(COSMETIC_PROMO_CODES).some(c => c.id === cosmeticId);
+        const requiresCode = Object.values(COSMETIC_PROMO_CODES).some(c => 
+            c.id === cosmeticId || (c.items && c.items.some(i => i.id === cosmeticId))
+        );
         if (!requiresCode) return true; // Doesn't require promo code
         return unlockedCosmetics.includes(cosmeticId);
     };
@@ -129,14 +140,34 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         // Check cosmetic promo codes (case-sensitive)
         const cosmeticData = COSMETIC_PROMO_CODES[promoCode.trim()];
         if (cosmeticData) {
-            const newUnlocked = [...unlockedCosmetics, cosmeticData.id];
-            setUnlockedCosmetics(newUnlocked);
-            localStorage.setItem('unlocked_cosmetics', JSON.stringify(newUnlocked));
-            // Auto-equip based on category
-            if (cosmeticData.category === 'eyes') setEyes(cosmeticData.id);
-            else if (cosmeticData.category === 'hat') setHat(cosmeticData.id);
-            else if (cosmeticData.category === 'mouth') setMouth(cosmeticData.id);
-            else if (cosmeticData.category === 'body') setBodyItem(cosmeticData.id);
+            // Handle multi-item promo codes
+            if (cosmeticData.items) {
+                const itemIds = cosmeticData.items.map(i => i.id);
+                const newUnlocked = [...unlockedCosmetics, ...itemIds];
+                setUnlockedCosmetics(newUnlocked);
+                localStorage.setItem('unlocked_cosmetics', JSON.stringify(newUnlocked));
+                // Auto-equip all items
+                cosmeticData.items.forEach(item => {
+                    if (item.category === 'eyes') setEyes(item.id);
+                    else if (item.category === 'hat') setHat(item.id);
+                    else if (item.category === 'mouth') setMouth(item.id);
+                    else if (item.category === 'bodyItem') setBodyItem(item.id);
+                });
+                // Set skin color if specified
+                if (cosmeticData.skin) {
+                    setSkinColor(cosmeticData.skin);
+                }
+            } else {
+                // Single item promo code
+                const newUnlocked = [...unlockedCosmetics, cosmeticData.id];
+                setUnlockedCosmetics(newUnlocked);
+                localStorage.setItem('unlocked_cosmetics', JSON.stringify(newUnlocked));
+                // Auto-equip based on category
+                if (cosmeticData.category === 'eyes') setEyes(cosmeticData.id);
+                else if (cosmeticData.category === 'hat') setHat(cosmeticData.id);
+                else if (cosmeticData.category === 'mouth') setMouth(cosmeticData.id);
+                else if (cosmeticData.category === 'bodyItem') setBodyItem(cosmeticData.id);
+            }
             setPromoMessage({ type: 'success', text: `🎉 Unlocked: ${cosmeticData.name}!` });
             setPromoCode('');
             setTimeout(() => setPromoMessage(null), 3000);
@@ -474,6 +505,52 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 addPart(eyeVoxels, 'eyes');
                 addPart(mouthVoxels, 'mouth');
                 addPart(bodyItemVoxels, 'accessory');
+                
+                // Handle text decal body items (e.g., lobotomy shirt)
+                if (bodyItemData?.textDecal) {
+                    const decal = bodyItemData.textDecal;
+                    const scale = decal.scale || 1;
+                    
+                    // Create canvas for text
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 512;
+                    canvas.height = 128;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Transparent background
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Draw text centered
+                    ctx.font = decal.font || 'bold 32px Arial';
+                    ctx.fillStyle = decal.color || '#000000';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(decal.text, canvas.width / 2, canvas.height / 2);
+                    
+                    // Create texture from canvas
+                    const texture = new THREE.CanvasTexture(canvas);
+                    texture.needsUpdate = true;
+                    
+                    // Create plane with text - size based on scale
+                    const planeWidth = 2.5 * scale;
+                    const planeHeight = 0.6 * scale;
+                    const planeGeo = new THREE.PlaneGeometry(planeWidth, planeHeight);
+                    const planeMat = new THREE.MeshBasicMaterial({ 
+                        map: texture, 
+                        transparent: true,
+                        depthWrite: false,
+                        side: THREE.DoubleSide
+                    });
+                    const textPlane = new THREE.Mesh(planeGeo, planeMat);
+                    textPlane.position.set(0, (decal.y || 0) * VOXEL_SIZE, (decal.z || 6) * VOXEL_SIZE);
+                    textPlane.name = 'text_decal';
+                    group.add(textPlane);
+                    
+                    if (mirrorGroup) {
+                        const mirrorText = textPlane.clone();
+                        mirrorGroup.add(mirrorText);
+                    }
+                }
             } else {
                 // JOE MODE: Big floating head like M&M meme
                 // Create a wrapper group for the enlarged head

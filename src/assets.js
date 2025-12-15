@@ -583,6 +583,71 @@ export const ASSETS = {
             v.push({x:2, y:15, z:0, c:'#228B22'});
             
             return v;
+        })(),
+        
+        // PROMO: Mistor Goat White Hair - Anime bob cut with face-framing bangs
+        // Unlocked via promo code "MISTORGOAT"
+        // Head is sphere at y=6 with r=4.5 - hair is a spherical shell around it
+        mistorHair: (() => {
+            const v = [];
+            const hairLight = '#FFFFFF';
+            const hairBase = '#F0F0F0';
+            const hairMid = '#E5E5E5';
+            const hairDark = '#D8D8D8';
+            
+            const headCenterY = 7.5; // Raised up from head center (6) for better fit
+            const headR = 4.5;      // Head radius
+            const hairR = 5.5;      // Hair outer radius (shell around head)
+            
+            // === ROUNDED HAIR SHELL (spherical shell around head) ===
+            for(let x=-6; x<=6; x++) {
+                for(let y=3; y<=12; y++) {
+                    for(let z=-6; z<=6; z++) {
+                        const dy = y - headCenterY;
+                        const dist = Math.sqrt(x*x + dy*dy + z*z);
+                        
+                        // Hair shell: between head surface and hair outer radius
+                        // Only on top half and sides (not under chin)
+                        if(dist > headR && dist <= hairR && dy >= -1) {
+                            // Skip face area (front lower portion where eyes/beak are)
+                            if(z > 3 && dy < 2 && Math.abs(x) < 3) continue;
+                            
+                            // Color based on height
+                            let col;
+                            if(y >= 10) col = hairLight;
+                            else if(y >= 7) col = hairBase;
+                            else col = hairMid;
+                            
+                            v.push({x, y, z, c: col});
+                        }
+                    }
+                }
+            }
+            
+            // === FRONT BANGS (face-framing strands hanging down) ===
+            // Left bang - hangs down beside face
+            for(let y=5; y<=9; y++) {
+                v.push({x:-4, y, z:4, c: y >= 8 ? hairBase : hairMid});
+                if(y <= 7) v.push({x:-3, y, z:5, c: hairMid});
+            }
+            v.push({x:-4, y:4, z:4, c: hairDark}); // Tip
+            v.push({x:-3, y:5, z:5, c: hairDark}); // Tip
+            
+            // Right bang - mirror
+            for(let y=5; y<=9; y++) {
+                v.push({x:4, y, z:4, c: y >= 8 ? hairBase : hairMid});
+                if(y <= 7) v.push({x:3, y, z:5, c: hairMid});
+            }
+            v.push({x:4, y:4, z:4, c: hairDark}); // Tip
+            v.push({x:3, y:5, z:5, c: hairDark}); // Tip
+            
+            // Center forehead wispy bangs
+            for(let x=-2; x<=2; x++) {
+                v.push({x, y:9, z:5, c: hairBase});
+                v.push({x, y:8, z:5, c: hairMid});
+            }
+            
+            return v;
         })()
     },
     EYES: {
@@ -607,6 +672,12 @@ export const ASSETS = {
             return v;
         })(),
         cute: [
+             {x:-2, y:7, z:4, c:'black'}, {x:2, y:7, z:4, c:'black'},
+             {x:-2, y:8, z:4, c:'black'}, {x:2, y:8, z:4, c:'black'},
+             {x:-1.5, y:7.5, z:4.2, c:'white'}, {x:2.5, y:7.5, z:4.2, c:'white'}
+        ],
+        // PROMO: Mistor Goat Eyes - Big cute anime eyes (unlocked via MISTORGOAT)
+        mistorEyes: [
              {x:-2, y:7, z:4, c:'black'}, {x:2, y:7, z:4, c:'black'},
              {x:-2, y:8, z:4, c:'black'}, {x:2, y:8, z:4, c:'black'},
              {x:-1.5, y:7.5, z:4.2, c:'white'}, {x:2.5, y:7.5, z:4.2, c:'white'}
@@ -2073,6 +2144,20 @@ export const ASSETS = {
             
              return v;
         })(),
+        
+        // PROMO: Mistor Goat Lobotomy Shirt - Text decal on belly (unlocked via MISTORGOAT)
+        // This renders "LOBOTOMY" text directly on the penguin's white belly
+        mistorShirt: { 
+            textDecal: {
+                text: 'LOBOTOMY',
+                color: '#000000',
+                font: 'bold 64px Arial Black, Arial, sans-serif',
+                y: 0,     // Center of belly
+                z: 5.51,  // Moved forward slightly to not clip into belly
+                scale: 1.0  // Full size to fit belly
+            },
+            voxels: [] 
+        },
         
         // JOE - Special promo item that makes the body invisible (floating head effect)
         // This is a marker - the rendering code checks for this and skips body rendering

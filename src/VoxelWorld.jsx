@@ -3536,6 +3536,47 @@ const VoxelWorld = ({
                              accessoryMesh.name = 'accessory';
                              group.add(accessoryMesh);
                          }
+                         
+                         // Handle text decal body items (e.g., lobotomy shirt)
+                         if (bodyItemInfo?.textDecal) {
+                             const decal = bodyItemInfo.textDecal;
+                             const scale = decal.scale || 1;
+                             
+                             // Create canvas for text
+                             const canvas = document.createElement('canvas');
+                             canvas.width = 512;
+                             canvas.height = 128;
+                             const ctx = canvas.getContext('2d');
+                             
+                             // Transparent background
+                             ctx.clearRect(0, 0, canvas.width, canvas.height);
+                             
+                             // Draw text centered
+                             ctx.font = decal.font || 'bold 32px Arial';
+                             ctx.fillStyle = decal.color || '#000000';
+                             ctx.textAlign = 'center';
+                             ctx.textBaseline = 'middle';
+                             ctx.fillText(decal.text, canvas.width / 2, canvas.height / 2);
+                             
+                             // Create texture from canvas
+                             const texture = new THREE.CanvasTexture(canvas);
+                             texture.needsUpdate = true;
+                             
+                             // Create plane with text - size based on scale
+                             const planeWidth = 2.5 * scale;
+                             const planeHeight = 0.6 * scale;
+                             const planeGeo = new THREE.PlaneGeometry(planeWidth, planeHeight);
+                             const planeMat = new THREE.MeshBasicMaterial({ 
+                                 map: texture, 
+                                 transparent: true,
+                                 depthWrite: false,
+                                 side: THREE.DoubleSide
+                             });
+                             const textPlane = new THREE.Mesh(planeGeo, planeMat);
+                             textPlane.position.set(0, (decal.y || 0) * VOXEL_SIZE, (decal.z || 6) * VOXEL_SIZE);
+                             textPlane.name = 'text_decal';
+                             group.add(textPlane);
+                         }
                      }
                      
                      // Add wing flapping for angel/demon wings
