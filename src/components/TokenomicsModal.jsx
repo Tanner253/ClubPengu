@@ -2,34 +2,15 @@
  * TokenomicsModal - $CPw3 Token Utility & Tokenomics Information
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
+import { useClickOutside, useEscapeKey } from '../hooks';
 
 const TokenomicsModal = ({ isOpen, onClose }) => {
     const modalRef = useRef(null);
     
-    useEffect(() => {
-        if (!isOpen) return;
-        
-        const handleClickOutside = (e) => {
-            if (modalRef.current && !modalRef.current.contains(e.target)) {
-                onClose();
-            }
-        };
-        
-        const handleEscape = (e) => {
-            if (e.key === 'Escape') onClose();
-        };
-        
-        document.addEventListener('mousedown', handleClickOutside);
-        document.addEventListener('touchstart', handleClickOutside, { passive: true });
-        document.addEventListener('keydown', handleEscape);
-        
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('touchstart', handleClickOutside);
-            document.removeEventListener('keydown', handleEscape);
-        };
-    }, [isOpen, onClose]);
+    // Use shared hooks for click outside and escape key
+    useClickOutside(modalRef, onClose, isOpen);
+    useEscapeKey(onClose, isOpen);
     
     if (!isOpen) return null;
     

@@ -21,9 +21,10 @@ const ipConnections = new Map(); // ip -> Set of playerIds (for tracking connect
 // Beach ball state per igloo room
 const beachBalls = new Map(); // roomId -> { x, z, vx, vz }
 
-// Initialize beach balls for igloo rooms
-beachBalls.set('igloo1', { x: 4.5, z: 3, vx: 0, vz: 0 });
-beachBalls.set('igloo2', { x: 4.5, z: 3, vx: 0, vz: 0 });
+// Initialize beach balls for all igloo rooms
+for (let i = 1; i <= 10; i++) {
+    beachBalls.set(`igloo${i}`, { x: 4.5, z: 3, vx: 0, vz: 0 });
+}
 
 // Player coins storage (playerId -> coins)
 // In production, this would be in a database
@@ -524,6 +525,16 @@ function handleMessage(playerId, message) {
                 }
             }, playerId);
             
+            // Send active matches in this room to the joining player (for spectating)
+            const activeMatchesInRoom = matchService.getMatchesInRoom(roomId);
+            if (activeMatchesInRoom.length > 0) {
+                sendToPlayer(playerId, {
+                    type: 'active_matches',
+                    matches: activeMatchesInRoom
+                });
+                console.log(`📺 Sent ${activeMatchesInRoom.length} active match(es) to ${player.name} for spectating`);
+            }
+            
             console.log(`${player.name} joined ${roomId} ${player.puffle ? '(with puffle)' : ''}`);
             break;
         }
@@ -785,6 +796,22 @@ function handleMessage(playerId, message) {
                     }
                 }, playerId);
                 
+                // Send active matches in the new room (for spectating)
+                const matchesInNewRoom = matchService.getMatchesInRoom(newRoom);
+                if (matchesInNewRoom.length > 0) {
+                    sendToPlayer(playerId, {
+                        type: 'active_matches',
+                        matches: matchesInNewRoom
+                    });
+                    console.log(`📺 Sent ${matchesInNewRoom.length} active match(es) to ${player.name} for spectating`);
+                } else {
+                    // Clear any old matches from previous room
+                    sendToPlayer(playerId, {
+                        type: 'active_matches',
+                        matches: []
+                    });
+                }
+                
                 console.log(`${player.name} moved from ${oldRoom} to ${newRoom}`);
             }
             break;
@@ -841,7 +868,7 @@ function handleMessage(playerId, message) {
         case 'ball_kick': {
             // Player kicked the beach ball - update server state and broadcast
             const room = player.room;
-            if (room && (room === 'igloo1' || room === 'igloo2')) {
+            if (room && room.startsWith('igloo')) {
                 const ball = beachBalls.get(room);
                 if (ball) {
                     // Apply the kick from client
@@ -866,7 +893,7 @@ function handleMessage(playerId, message) {
         case 'ball_sync': {
             // Client requesting current ball state (on room join)
             const room = player.room;
-            if (room && (room === 'igloo1' || room === 'igloo2')) {
+            if (room && room.startsWith('igloo')) {
                 const ball = beachBalls.get(room);
                 if (ball) {
                     sendToPlayer(playerId, {
@@ -1323,13 +1350,39 @@ function handleMessage(playerId, message) {
                     });
                 }
                 
-                // Broadcast match end to spectators
+                // Broadcast match end to spectators with final game state
+                // Include final state so spectators can see the result for 5 seconds
+                let finalState;
+                if (match.gameType === 'tic_tac_toe') {
+                    finalState = {
+                        board: [...match.state.board],
+                        winner: match.state.winner,
+                        winningLine: match.state.winningLine
+                    };
+                } else if (match.gameType === 'connect4') {
+                    finalState = {
+                        board: [...match.state.board],
+                        winner: match.state.winner,
+                        winningCells: match.state.winningCells,
+                        lastMove: match.state.lastMove
+                    };
+                } else {
+                    // Card Jitsu
+                    finalState = {
+                        player1Wins: match.state.player1Wins,
+                        player2Wins: match.state.player2Wins,
+                        winner: match.state.winner
+                    };
+                }
+                
                 broadcastToRoom(match.room, {
                     type: 'match_spectate_end',
                     matchId: match.id,
                     winnerId,
                     winnerName: winnerId ? (winnerId === match.player1.id ? match.player1.name : match.player2.name) : null,
-                    isDraw
+                    isDraw,
+                    finalState,
+                    gameType: match.gameType
                 }, match.player1.id, match.player2.id);
                 
                 // Send updated stats to both players

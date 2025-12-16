@@ -3,35 +3,15 @@
  * Left/right handed mode and camera sensitivity
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
+import { useClickOutside, useEscapeKey } from '../hooks';
 
 const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange }) => {
     const menuRef = useRef(null);
     
-    // Close on click outside
-    useEffect(() => {
-        if (!isOpen) return;
-        
-        const handleClickOutside = (e) => {
-            if (menuRef.current && !menuRef.current.contains(e.target)) {
-                onClose();
-            }
-        };
-        
-        const handleEscape = (e) => {
-            if (e.key === 'Escape') onClose();
-        };
-        
-        document.addEventListener('mousedown', handleClickOutside);
-        document.addEventListener('touchstart', handleClickOutside, { passive: true });
-        document.addEventListener('keydown', handleEscape);
-        
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('touchstart', handleClickOutside);
-            document.removeEventListener('keydown', handleEscape);
-        };
-    }, [isOpen, onClose]);
+    // Use shared hooks for click outside and escape key
+    useClickOutside(menuRef, onClose, isOpen);
+    useEscapeKey(onClose, isOpen);
     
     if (!isOpen) return null;
     

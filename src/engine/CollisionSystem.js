@@ -186,6 +186,11 @@ class CollisionSystem {
     addTrigger(x, z, shape, callback, data = {}, rotation = 0, y = 0) {
         const id = this.nextId++;
         
+        // Debug log for elevated triggers
+        if (y > 1) {
+            console.log(`[addTrigger ${id}] Elevated trigger at (${x.toFixed(1)}, ${y.toFixed(1)}, ${z.toFixed(1)}), shape:`, shape, `hasCallback: ${!!callback}`);
+        }
+        
         this.triggers.set(id, {
             id,
             x,
@@ -446,21 +451,26 @@ class CollisionSystem {
         this.triggers.forEach((trigger, id) => {
             // Height check for elevated triggers
             const triggerY = trigger.y || 0;
-            const triggerHeight = trigger.data?.seatHeight || trigger.shape?.seatHeight || 1.5;
             
             // For ground-level triggers (y=0), prevent triggering when ON TOP of furniture
             // For elevated triggers (y>0), only trigger when player is at that elevation
             let heightOk;
             if (triggerY > 1) {
                 // Elevated trigger - player must be within range of trigger's Y level
-                heightOk = Math.abs(playerY - triggerY) < 2.5;
+                heightOk = Math.abs(playerY - triggerY) < 3.0; // Increased tolerance
             } else {
                 // Ground level trigger - player must not be standing on top
                 const maxHeight = trigger.data?.data?.seatHeight || trigger.data?.seatHeight || 2;
                 heightOk = playerY < maxHeight + 0.3;
             }
             
-            const isInside = heightOk && this._testCollision(playerX, playerZ, playerRadius, trigger);
+            const inXZ = this._testCollision(playerX, playerZ, playerRadius, trigger);
+            const isInside = heightOk && inXZ;
+            
+            // Debug elevated triggers
+            if (triggerY > 5 && inXZ) {
+                console.log(`[Elevated Trigger ${id}] at (${trigger.x.toFixed(1)}, ${triggerY.toFixed(1)}, ${trigger.z.toFixed(1)}) - Player Y=${playerY.toFixed(1)}, heightOk=${heightOk}, inXZ=${inXZ}`);
+            }
             
             if (isInside && !trigger.wasInside) {
                 // Just entered
@@ -484,12 +494,25 @@ class CollisionSystem {
 
     /**
      * Get all active triggers the player is currently inside
+     * @param {number} playerY - Player's Y position for height filtering
      */
-    getActiveTriggers(playerX, playerZ, playerRadius = 0.5) {
+    getActiveTriggers(playerX, playerZ, playerRadius = 0.5, playerY = 0) {
         const active = [];
         
         this.triggers.forEach(trigger => {
-            if (this._testCollision(playerX, playerZ, playerRadius, trigger)) {
+            // Height check for elevated triggers (same logic as checkTriggers)
+            const triggerY = trigger.y || 0;
+            let heightOk;
+            if (triggerY > 1) {
+                // Elevated trigger - player must be within range
+                heightOk = Math.abs(playerY - triggerY) < 2.5;
+            } else {
+                // Ground level trigger
+                const maxHeight = trigger.data?.data?.seatHeight || trigger.data?.seatHeight || 2;
+                heightOk = playerY < maxHeight + 0.3;
+            }
+            
+            if (heightOk && this._testCollision(playerX, playerZ, playerRadius, trigger)) {
                 active.push(trigger);
             }
         });
@@ -631,12 +654,27 @@ class CollisionSystem {
             const zoneX = worldX + zoneOffsetX;
             const zoneZ = worldZ + zoneOffsetZ;
             
-            // Create zone data with world transform info
+            // Use mesh Y position for the trigger (same Y as the bench/prop)
+            const triggerY = mesh.position.y || 0;
+            
+            // Calculate seat height - use zone's if already set (elevated benches), otherwise add triggerY
+            const baseSeatHeight = zone.seatHeight || 0.8;
+            const finalSeatHeight = baseSeatHeight > 1 ? baseSeatHeight : (triggerY + baseSeatHeight);
+            
+            // Create zone data with world transform info including correct Y
             const zoneData = {
                 ...zone,
                 worldX,
                 worldZ,
-                worldRotation: rotation
+                worldY: triggerY,
+                worldRotation: rotation,
+                platformHeight: zone.platformHeight || triggerY,
+                seatHeight: finalSeatHeight,
+                data: {
+                    ...(zone.data || {}),
+                    platformHeight: zone.platformHeight || triggerY,
+                    seatHeight: finalSeatHeight
+                }
             };
             
             result.triggerId = this.addTrigger(
@@ -648,8 +686,9 @@ class CollisionSystem {
                     size: zone.size
                 },
                 interactionCallback ? (event) => interactionCallback(event, zoneData) : null,
-                { action: zone.action, data: zoneData },
-                rotation
+                { action: zone.action, data: zoneData, seatHeight: zoneData.seatHeight, platformHeight: triggerY },
+                rotation,
+                triggerY
             );
         }
         

@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { VOXEL_SIZE, PALETTE } from './constants';
-import { ASSETS } from './assets';
-import { generateBaseBody, generateFlippers, generateFoot, generateHead } from './generators';
+import { ASSETS } from './assets/index';
 import { IconSend } from './Icons';
 import GameHUD from './components/GameHUD';
 import ChatLog from './components/ChatLog';
@@ -10,14 +9,36 @@ import PufflePanel from './components/PufflePanel';
 import VirtualJoystick from './components/VirtualJoystick';
 import TouchCameraControl from './components/TouchCameraControl';
 import SettingsMenu from './components/SettingsMenu';
+import EmoteWheel from './components/EmoteWheel';
 import GameManager from './engine/GameManager';
 import Puffle from './engine/Puffle';
-import PropsFactory from './engine/PropsFactory';
+import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PenguinBuilder';
 import TownCenter from './rooms/TownCenter';
 import Nightclub from './rooms/Nightclub';
+import { generateIglooInterior } from './rooms/BaseRoom';
+import { generateSKNYIglooInterior } from './rooms/SKNYIglooInterior';
 import { useMultiplayer } from './multiplayer';
 import { useChallenge } from './challenge';
-import { MarcusGenerators, MARCUS_PALETTE } from './characters';
+import { EMOTE_WHEEL_ITEMS, LOOPING_EMOTES, EMOTE_EMOJI_MAP } from './systems';
+import { 
+    CITY_SIZE, 
+    BUILDING_SCALE, 
+    CENTER_X, 
+    CENTER_Z, 
+    BUILDINGS, 
+    AI_NAMES, 
+    AI_EMOTES,
+    AI_CONVERSATIONS,
+    BUBBLE_HEIGHT_PENGUIN,
+    BUBBLE_HEIGHT_MARCUS,
+    NAME_HEIGHT_PENGUIN,
+    NAME_HEIGHT_MARCUS,
+    ROOM_PORTALS,
+    IGLOO_BANNER_STYLES,
+    IGLOO_BANNER_CONTENT
+} from './config';
+import { createChatSprite, updateAIAgents, updateMatchBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem } from './systems';
+import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 
 const VoxelWorld = ({ 
     penguinData, 
@@ -45,12 +66,13 @@ const VoxelWorld = ({
     const roomRef = useRef(room); // Track current room
     const townCenterRef = useRef(null); // TownCenter room instance
     const nightclubRef = useRef(null); // Nightclub room instance
+    const sknyIglooInteriorRef = useRef(null); // SKNY GANG igloo interior (with update function)
     const roomDataRef = useRef(null); // Store room data (including beach ball) for multiplayer sync
     const raycasterRef = useRef(null); // For player click detection
     const mouseRef = useRef({ x: 0, y: 0 }); // Mouse position for raycasting
     const isInMatchRef = useRef(isInMatch); // Track match state for game loop
     const matchBannersRef = useRef(new Map()); // matchId -> { sprite, canvas, ctx }
-    const wizardTrailRef = useRef(null); // World-space wizard hat particle trail
+    const wizardTrailSystemRef = useRef(null); // World-space wizard hat particle trail
     const mountEnabledRef = useRef(true); // Track if mount is equipped/enabled
     
     // Keep isInMatch ref up to date
@@ -148,31 +170,8 @@ const VoxelWorld = ({
     
     // AI State
     const aiAgentsRef = useRef([]);
-    const AI_NAMES = ["Puddles", "Waddle", "Snowy", "Flipper", "IceCube", "Chilly", "Pebble", "Igloo", "Frosty", "Slippy"];
-    
-    // STRUCTURED CONVERSATION DIALOGUES
-    const CONVERSATIONS = [
-        ["Did you see SOL today?", "SOLANA is skyrocketing! 🚀", "To the moon we go!", "HODL your flippers!"],
-        ["Club Penguin is back!", "I missed this place.", "Let's go dance!", "Wait for me!"],
-        ["Nice outfit.", "Thanks, it's custom.", "Very stylish.", "You look cool too."],
-        ["Is it cold?", "Ideally freezing.", "Perfect weather.", "Let's slide on the ice."],
-        ["Waddle on!", "Waddle on!", "See you around.", "Bye for now!"],
-        ["Anyone seen the dojo?", "I think it's north.", "Let's become ninjas!", "Hyah!"],
-        ["Pizza time?", "Always pizza time.", "Extra fish topping?", "Gross, but okay."]
-    ];
-
-    const AI_EMOTES = ['Wave', 'Dance', 'Laugh', 'Sit', 'Breakdance'];
-    
-    // Emote wheel configuration (ordered clockwise from top)
-    const EMOTE_WHEEL_ITEMS = [
-        { id: 'Wave', emoji: '👋', label: 'Wave', color: 'bg-blue-500' },
-        { id: 'Laugh', emoji: '😂', label: 'Laugh', color: 'bg-red-500' },
-        { id: 'Breakdance', emoji: '🤸', label: 'Break', color: 'bg-orange-500' },
-        { id: 'Dance', emoji: '💃', label: 'Dance', color: 'bg-green-500' },
-        { id: 'Sit', emoji: '🧘', label: 'Sit', color: 'bg-purple-500' },
-        { id: '67', emoji: '⚖️', label: '67', color: 'bg-yellow-500' },
-        { id: 'Headbang', emoji: '🎸', label: 'Rock', color: 'bg-pink-500' },
-    ];
+    // AI_NAMES, AI_EMOTES, AI_CONVERSATIONS imported from ./config
+    // EMOTE_WHEEL_ITEMS imported from ./systems
     
     // Emote Wheel State
     const [emoteWheelOpen, setEmoteWheelOpen] = useState(false);
@@ -291,10 +290,8 @@ const VoxelWorld = ({
     const propLightsRef = useRef([]); // Town prop lights (lamps, campfire, tree, etc.)
     const lightsOnRef = useRef(true); // Track if lights are currently on
     
-    // Snowfall refs
-    const snowParticlesRef = useRef(null);
-    const snowIntensityRef = useRef(0.5); // 0-1, current intensity
-    const snowTargetIntensityRef = useRef(0.5); // Target intensity for smooth transitions
+    // Snowfall system ref
+    const snowfallSystemRef = useRef(null);
     
     // Save settings when they change
     useEffect(() => {
@@ -346,751 +343,6 @@ const VoxelWorld = ({
     const mobileControlsRef = useRef({ forward: false, back: false, left: false, right: false });
     const pinchRef = useRef({ startDist: 0, active: false });
     
-    // Room-specific portals/doors
-    // Town portal positions are OFFSETS from center (centerX/Z added in checkPortals)
-    // T-STREET LAYOUT - FULL MAP SCALE (220x220)
-    const ROOM_PORTALS = {
-        town: [
-            { 
-                id: 'dojo-entrance', 
-                name: 'THE DOJO', 
-                emoji: '⛩️', 
-                description: 'Enter the Dojo',
-                targetRoom: 'dojo',
-                // Dojo at (0, 70), rotated π (door faces north)
-                position: { x: 0, z: 62 },
-                doorRadius: 3.5
-            },
-            // NORTH ROW IGLOOS (north of T-bar, rotation: 0, door faces SOUTH toward street)
-            // Igloos at z ~ -75, doors at z ~ -70, exit spawn at z ~ -62 (on street)
-            { 
-                id: 'igloo-1', 
-                name: 'IGLOO 1', 
-                emoji: '🏠', 
-                description: 'Enter Igloo',
-                targetRoom: 'igloo1',
-                position: { x: -75, z: -70 },  // Door position (south of igloo)
-                doorRadius: 3,
-                exitSpawnPos: { x: -75, z: -62 }  // Spawn on street when exiting
-            },
-            { 
-                id: 'igloo-2', 
-                name: 'IGLOO 2', 
-                emoji: '🏠', 
-                description: 'Enter Igloo',
-                targetRoom: 'igloo2',
-                position: { x: -50, z: -73 },
-                doorRadius: 3,
-                exitSpawnPos: { x: -50, z: -62 }
-            },
-            { 
-                id: 'igloo-3', 
-                name: 'IGLOO 3', 
-                emoji: '🏠', 
-                description: 'Enter Igloo',
-                targetRoom: 'igloo3',
-                position: { x: -25, z: -70 },
-                doorRadius: 3,
-                exitSpawnPos: { x: -25, z: -62 }
-            },
-            { 
-                id: 'igloo-4', 
-                name: 'IGLOO 4', 
-                emoji: '🏠', 
-                description: 'Enter Igloo',
-                targetRoom: 'igloo4',
-                position: { x: 25, z: -70 },
-                doorRadius: 3,
-                exitSpawnPos: { x: 25, z: -62 }
-            },
-            { 
-                id: 'igloo-5', 
-                name: 'IGLOO 5', 
-                emoji: '🏠', 
-                description: 'Enter Igloo',
-                targetRoom: 'igloo1',  // Reuse igloo1 room
-                position: { x: 50, z: -73 },
-                doorRadius: 3,
-                exitSpawnPos: { x: 50, z: -62 }  // Exit at THIS igloo, not igloo-1
-            },
-            { 
-                id: 'igloo-6', 
-                name: 'IGLOO 6', 
-                emoji: '🏠', 
-                description: 'Enter Igloo',
-                targetRoom: 'igloo2',  // Reuse igloo2 room
-                position: { x: 75, z: -70 },
-                doorRadius: 3,
-                exitSpawnPos: { x: 75, z: -62 }  // Exit at THIS igloo
-            },
-            // SOUTH ROW IGLOOS (south of T-bar, rotation: π, door faces NORTH toward street)
-            // Igloos at z ~ -15, doors at z ~ -20, exit spawn at z ~ -28 (on street)
-            { 
-                id: 'igloo-7', 
-                name: 'IGLOO 7', 
-                emoji: '🏠', 
-                description: 'Enter Igloo',
-                targetRoom: 'igloo3',  // Reuse igloo3 room
-                position: { x: -70, z: -20 },  // Door is NORTH of igloo (faces street)
-                doorRadius: 3,
-                exitSpawnPos: { x: -70, z: -28 }  // Exit on street
-            },
-            { 
-                id: 'igloo-8', 
-                name: 'IGLOO 8', 
-                emoji: '🏠', 
-                description: 'Enter Igloo',
-                targetRoom: 'igloo4',  // Reuse igloo4 room
-                position: { x: -40, z: -23 },
-                doorRadius: 3,
-                exitSpawnPos: { x: -40, z: -28 }
-            },
-            { 
-                id: 'igloo-9', 
-                name: 'IGLOO 9', 
-                emoji: '🏠', 
-                description: 'Enter Igloo',
-                targetRoom: 'igloo1',  // Reuse igloo1 room
-                position: { x: 40, z: -23 },
-                doorRadius: 3,
-                exitSpawnPos: { x: 40, z: -28 }
-            },
-            { 
-                id: 'igloo-10', 
-                name: 'IGLOO 10', 
-                emoji: '🏠', 
-                description: 'Enter Igloo',
-                targetRoom: 'igloo2',  // Reuse igloo2 room
-                position: { x: 70, z: -20 },
-                doorRadius: 3,
-                exitSpawnPos: { x: 70, z: -28 }
-            },
-            { 
-                id: 'market', 
-                name: 'GIFT SHOP', 
-                emoji: '🛒', 
-                description: 'Coming Soon',
-                targetRoom: null,
-                // Gift Shop at (45, 35), door faces west
-                position: { x: 38, z: 35 },
-                doorRadius: 3
-            },
-            { 
-                id: 'pizza', 
-                name: 'PIZZA PARLOR', 
-                emoji: '🍕', 
-                description: 'Enter Pizza Parlor',
-                targetRoom: 'pizza',
-                // Pizza at (-45, 35), door faces east
-                position: { x: -38, z: 35 },
-                doorRadius: 3
-            },
-            { 
-                id: 'nightclub-entrance', 
-                name: 'NIGHTCLUB', 
-                emoji: '🎵', 
-                description: 'Enter the Nightclub',
-                targetRoom: 'nightclub',
-                // Nightclub at (0, -75), door faces south
-                position: { x: 0, z: -60 },
-                doorRadius: 4,
-                exitSpawnPos: { x: 0, z: -55 }  // Spawn south of nightclub when exiting
-            },
-            {
-                id: 'nightclub-ladder',
-                name: 'ROOF LADDER',
-                emoji: '🪜',
-                description: 'Climb to Roof (Press E)',
-                // Ladder is on back of nightclub (north side)
-                // Nightclub center at (0, -75), back wall at z = -75 - 10 = -85
-                // Ladder positioned at x = +6 (w/4 of building width 25)
-                position: { x: 6, z: -88 },
-                doorRadius: 6,  // Large radius for easy interaction
-                teleportToRoof: true  // Special flag - teleport to roof instead of room change
-            }
-        ],
-        pizza: [
-            { 
-                id: 'pizza-exit', 
-                name: 'EXIT', 
-                emoji: '🚪', 
-                description: 'Return to Town',
-                targetRoom: 'town',
-                position: { x: 0, z: 14 },
-                doorRadius: 3,
-                // Spawn outside pizza door (building at x=-45, door faces east)
-                // Building collision extends to x=-33.5 (world x=76.5), so spawn at x=-30 (world x=80)
-                exitSpawnPos: { x: -30, z: 35 }
-            }
-        ],
-        nightclub: [
-            { 
-                id: 'nightclub-exit', 
-                name: 'EXIT', 
-                emoji: '🚪', 
-                description: 'Return to Town',
-                targetRoom: 'town',
-                position: { x: 2, z: 30 },  // Exit door on left wall
-                doorRadius: 4,  // Larger radius to make it easier to trigger
-                // Spawn outside nightclub door in town
-                exitSpawnPos: { x: 0, z: -55 }
-            }
-        ],
-        igloo1: [
-            { 
-                id: 'igloo1-exit', 
-                name: 'EXIT', 
-                emoji: '🚪', 
-                description: 'Return to Town',
-                targetRoom: 'town',
-                position: { x: 0, z: 13.5 },
-                doorRadius: 3,
-                exitSpawnPos: { x: -75, z: -55 }  // On street south of igloo
-            }
-        ],
-        igloo2: [
-            { 
-                id: 'igloo2-exit', 
-                name: 'EXIT', 
-                emoji: '🚪', 
-                description: 'Return to Town',
-                targetRoom: 'town',
-                position: { x: 0, z: 13.5 },
-                doorRadius: 3,
-                exitSpawnPos: { x: -50, z: -55 }  // On street south of igloo
-            }
-        ],
-        igloo3: [
-            { 
-                id: 'igloo3-exit', 
-                name: 'EXIT', 
-                emoji: '🚪', 
-                description: 'Return to Town',
-                targetRoom: 'town',
-                position: { x: 0, z: 13.5 },
-                doorRadius: 3,
-                exitSpawnPos: { x: 50, z: -55 }  // On street south of igloo
-            }
-        ],
-        igloo4: [
-            { 
-                id: 'igloo4-exit', 
-                name: 'EXIT', 
-                emoji: '🚪', 
-                description: 'Return to Town',
-                targetRoom: 'town',
-                position: { x: 0, z: 13.5 },
-                doorRadius: 3,
-                exitSpawnPos: { x: 75, z: -55 }  // On street south of igloo
-            }
-        ],
-        dojo: [
-            { 
-                id: 'dojo-exit', 
-                name: 'EXIT', 
-                emoji: '🚪', 
-                description: 'Return to Town',
-                targetRoom: 'town',
-                position: { x: 0, z: 16 },
-                doorRadius: 3,
-                // Spawn at dojo entrance in town when exiting (dojo at z: 70, door faces north)
-                exitSpawnPos: { x: 0, z: 58 }
-            },
-            { 
-                id: 'sensei', 
-                name: 'SENSEI', 
-                emoji: '🥋', 
-                description: 'Challenge me to Card Jitsu!',
-                minigame: 'card-jitsu',
-                position: { x: 0, z: -10 },
-                doorRadius: 3.5
-            }
-        ]
-    };
-    
-    // Building/Door Definitions for town (visual only)
-    // T-STREET LAYOUT - FULL MAP SCALE (220x220)
-    // Dojo at base of T (south), Nightclub at top (north), shops on sides
-    const BUILDINGS = [
-        { 
-            id: 'dojo', 
-            name: 'THE DOJO', 
-            emoji: '⛩️', 
-            description: 'Enter to play Card Jitsu!',
-            color: 0xc0392b, // Red roof
-            wallColor: 0x7f8c8d,
-            position: { x: 0, z: 70 },    // Far south - base of T stem
-            doorRadius: 3,
-            size: { w: 14, h: 8, d: 14 },
-            roofType: 'pagoda',
-            rotation: Math.PI  // Door faces north toward campfire
-        },
-        { 
-            id: 'market', 
-            name: 'GIFT SHOP', 
-            emoji: '🛒', 
-            description: 'Browse hats & items (coming soon)',
-            gameId: null,
-            color: 0xf39c12, // Gold roof
-            wallColor: 0xecf0f1,
-            position: { x: 45, z: 35 },   // East side of T stem
-            doorRadius: 3,
-            size: { w: 10, h: 6, d: 10 },
-            roofType: 'flat',
-            rotation: -Math.PI / 2  // Door faces west toward street
-        },
-        { 
-            id: 'plaza', 
-            name: 'PIZZA PARLOR', 
-            emoji: '🍕', 
-            description: 'Pizza minigame coming soon!',
-            gameId: null,
-            color: 0xe74c3c, // Red/orange
-            wallColor: 0xf5deb3,
-            position: { x: -45, z: 35 },  // West side of T stem
-            doorRadius: 3,
-            size: { w: 12, h: 7, d: 10 },
-            roofType: 'slanted',
-            rotation: Math.PI / 2  // Door faces east toward street
-        }
-    ];
-    
-    // City Generation - EXPANDED for T-street layout
-    const CITY_SIZE = 55;  // 55 * 4 = 220 (expanded from 40 * 4 = 160)
-    const BUILDING_SCALE = 4;
-    
-    // Create Chat Bubble Sprite
-    // Height constants for different character types (raised higher to be less intrusive)
-    const BUBBLE_HEIGHT_PENGUIN = 5.8;
-    const BUBBLE_HEIGHT_MARCUS = 6.8; // Marcus is taller
-    const NAME_HEIGHT_PENGUIN = 5;
-    const NAME_HEIGHT_MARCUS = 6;
-    
-    const createChatSprite = (message, height = BUBBLE_HEIGHT_PENGUIN) => {
-        const THREE = window.THREE;
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const fontSize = 48;
-        const padding = 20;
-        
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        
-        // Word Wrap Logic - handles both words and very long strings without spaces
-        const maxLineWidth = 500; 
-        const maxCharsPerLine = 25; // Force break for very long words
-        let lines = [];
-        
-        // First, break very long words into chunks
-        const breakLongWord = (word) => {
-            const chunks = [];
-            while (word.length > maxCharsPerLine) {
-                chunks.push(word.slice(0, maxCharsPerLine));
-                word = word.slice(maxCharsPerLine);
-            }
-            if (word.length > 0) chunks.push(word);
-            return chunks;
-        };
-        
-        const words = message.split(' ');
-        let currentLine = '';
-
-        for (let i = 0; i < words.length; i++) {
-            let word = words[i];
-            
-            // Break very long words
-            if (word.length > maxCharsPerLine) {
-                // Push current line if not empty
-                if (currentLine) {
-                    lines.push(currentLine);
-                    currentLine = '';
-                }
-                // Add broken word chunks as separate lines
-                const chunks = breakLongWord(word);
-                for (let j = 0; j < chunks.length - 1; j++) {
-                    lines.push(chunks[j]);
-                }
-                currentLine = chunks[chunks.length - 1];
-            } else {
-                const testLine = currentLine ? currentLine + " " + word : word;
-                const width = ctx.measureText(testLine).width;
-                if (width < maxLineWidth) {
-                    currentLine = testLine;
-                } else {
-                    if (currentLine) lines.push(currentLine);
-                    currentLine = word;
-                }
-            }
-        }
-        if (currentLine) lines.push(currentLine);
-        
-        // Ensure at least one line
-        if (lines.length === 0) lines.push(message.slice(0, maxCharsPerLine) || ' ');
-        
-        // Canvas Dimensions
-        const textHeight = lines.length * (fontSize * 1.2);
-        const textWidth = lines.length > 1 ? maxLineWidth : ctx.measureText(lines[0]).width;
-        
-        const w = textWidth + padding * 3;
-        const h = textHeight + padding * 3;
-        
-        canvas.width = w;
-        canvas.height = h;
-        
-        // Re-apply font context after resize
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.textBaseline = 'top';
-        ctx.textAlign = 'center';
-        
-        // Draw Bubble Background
-        ctx.fillStyle = 'white';
-        ctx.strokeStyle = '#222';
-        ctx.lineWidth = 6;
-        
-        const r = 25;
-        ctx.beginPath();
-        ctx.moveTo(r, 0);
-        ctx.lineTo(w-r, 0);
-        ctx.quadraticCurveTo(w, 0, w, r);
-        ctx.lineTo(w, h-r);
-        ctx.quadraticCurveTo(w, h, w-r, h);
-        ctx.lineTo(r, h);
-        ctx.quadraticCurveTo(0, h, 0, h-r);
-        ctx.lineTo(0, r);
-        ctx.quadraticCurveTo(0, 0, r, 0);
-        ctx.closePath();
-        
-        ctx.shadowColor = 'rgba(0,0,0,0.3)';
-        ctx.shadowBlur = 10;
-        ctx.shadowOffsetY = 5;
-        ctx.fill();
-        ctx.shadowColor = 'transparent';
-        ctx.stroke();
-        
-        // Draw Text
-        ctx.fillStyle = 'black';
-        lines.forEach((line, i) => {
-            ctx.fillText(line, w/2, padding + (i * fontSize * 1.2));
-        });
-        
-        const texture = new THREE.CanvasTexture(canvas);
-        const material = new THREE.SpriteMaterial({ map: texture, depthTest: false, depthWrite: false }); 
-        const sprite = new THREE.Sprite(material);
-        
-        // Scale down larger messages to prevent screen coverage
-        // Base scale for short messages, shrink for longer ones
-        const baseScale = 0.015;
-        const messageLength = message.length;
-        const lineCount = lines.length;
-        
-        // Scale factor: shrink based on length and line count
-        // Short messages (< 30 chars, 1 line): full size
-        // Medium messages (30-80 chars, 1-2 lines): 80% size
-        // Long messages (80-150 chars, 2-4 lines): 60% size  
-        // Very long messages (150+ chars, 4+ lines): 45% size
-        let scaleFactor = 1.0;
-        if (messageLength > 150 || lineCount > 4) {
-            scaleFactor = 0.45;
-        } else if (messageLength > 80 || lineCount > 2) {
-            scaleFactor = 0.60;
-        } else if (messageLength > 30 || lineCount > 1) {
-            scaleFactor = 0.80;
-        }
-        
-        const scale = baseScale * scaleFactor;
-        sprite.scale.set(w * scale, h * scale, 1);
-        sprite.position.set(0, height, 0);
-        sprite.renderOrder = 999;
-        
-        return sprite;
-    };
-    
-    // MapleStory-style Igloo Banner Styles
-    const IGLOO_BANNER_STYLES = [
-        { // Pink/Rose - Oberon style
-            bgGradient: ['#FFE4EC', '#FFB6C1', '#FF69B4'],
-            borderColor: '#FF1493',
-            accentColor: '#FF69B4',
-            textColor: '#8B0A50',
-            decorColor: '#FF69B4',
-            titleBg: '#FFB6C1'
-        },
-        { // Cyan/Teal - Titania style  
-            bgGradient: ['#E0FFFF', '#AFEEEE', '#40E0D0'],
-            borderColor: '#00CED1',
-            accentColor: '#20B2AA',
-            textColor: '#006666',
-            decorColor: '#00CED1',
-            titleBg: '#AFEEEE'
-        },
-        { // Lime/Green - Petite Pico style
-            bgGradient: ['#F0FFF0', '#98FB98', '#7CFC00'],
-            borderColor: '#32CD32',
-            accentColor: '#00FF00',
-            textColor: '#006400',
-            decorColor: '#32CD32',
-            titleBg: '#98FB98'
-        },
-        { // Purple/Violet
-            bgGradient: ['#F8F0FF', '#DDA0DD', '#DA70D6'],
-            borderColor: '#9400D3',
-            accentColor: '#BA55D3',
-            textColor: '#4B0082',
-            decorColor: '#9400D3',
-            titleBg: '#DDA0DD'
-        },
-        { // Orange/Peach
-            bgGradient: ['#FFF8DC', '#FFDAB9', '#FFA500'],
-            borderColor: '#FF8C00',
-            accentColor: '#FF7F50',
-            textColor: '#8B4513',
-            decorColor: '#FF8C00',
-            titleBg: '#FFDAB9'
-        },
-        { // Blue/Sky
-            bgGradient: ['#F0F8FF', '#B0E0E6', '#87CEEB'],
-            borderColor: '#4169E1',
-            accentColor: '#6495ED',
-            textColor: '#00008B',
-            decorColor: '#4169E1',
-            titleBg: '#B0E0E6'
-        },
-        { // Gold/Yellow
-            bgGradient: ['#FFFACD', '#FFE4B5', '#FFD700'],
-            borderColor: '#DAA520',
-            accentColor: '#FFC125',
-            textColor: '#8B6914',
-            decorColor: '#DAA520',
-            titleBg: '#FFE4B5'
-        },
-        { // Red/Coral
-            bgGradient: ['#FFF0F0', '#FFB6B6', '#FF6B6B'],
-            borderColor: '#DC143C',
-            accentColor: '#FF4444',
-            textColor: '#8B0000',
-            decorColor: '#DC143C',
-            titleBg: '#FFB6B6'
-        }
-    ];
-    
-    // Placeholder content for igloo banners
-    const IGLOO_BANNER_CONTENT = [
-        { title: "🌙 Moon Crew HQ", ticker: "$MOON", shill: "Private Alpha • DM for invite" },
-        { title: "🔥 Degen's Den", ticker: "$DEGEN", shill: "100x gems daily • VIP access" },
-        { title: "🐧 Penguin Mafia", ticker: "$PENG", shill: "OG holders only • t.me/pengmafia" },
-        { title: "💎 Diamond Flippers", ticker: "$FLIP", shill: "We don't sell • Join the cult" },
-        { title: "🚀 Launch Pad", ticker: "$PAD", shill: "Early access • Presale alerts" },
-        { title: "🎰 Whale Watchers", ticker: "$WHALE", shill: "Track big wallets • Free signals" },
-        { title: "⚡ Speed Runners", ticker: "$SPEED", shill: "Snipe bots • Fast entry" },
-        { title: "Regen", ticker: "", shill: "A group of like-minded individuals", owner: "jj" },
-        { title: "🎮 Gamer Guild", ticker: "$GG", shill: "P2E alpha • Gaming NFTs" },
-        { title: "🌈 Rainbow Room", ticker: "$RGB", shill: "All welcome • Good energy only" }
-    ];
-    
-    // Create MapleStory-style Igloo Banner Sprite
-    const createIglooOccupancySprite = (count, iglooIndex = 0) => {
-        const THREE = window.THREE;
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Get style and content based on igloo index
-        const style = IGLOO_BANNER_STYLES[iglooIndex % IGLOO_BANNER_STYLES.length];
-        const content = IGLOO_BANNER_CONTENT[iglooIndex % IGLOO_BANNER_CONTENT.length];
-        
-        // Bigger banner size
-        const w = 280;
-        const h = 160;
-        const padding = 12;
-        const cornerRadius = 16;
-        
-        canvas.width = w;
-        canvas.height = h;
-        
-        // Create gradient background
-        const gradient = ctx.createLinearGradient(0, 0, 0, h);
-        gradient.addColorStop(0, style.bgGradient[0]);
-        gradient.addColorStop(0.5, style.bgGradient[1]);
-        gradient.addColorStop(1, style.bgGradient[2]);
-        
-        // Draw main banner shape with rounded corners
-        ctx.beginPath();
-        ctx.moveTo(cornerRadius, 0);
-        ctx.lineTo(w - cornerRadius, 0);
-        ctx.quadraticCurveTo(w, 0, w, cornerRadius);
-        ctx.lineTo(w, h - cornerRadius);
-        ctx.quadraticCurveTo(w, h, w - cornerRadius, h);
-        ctx.lineTo(cornerRadius, h);
-        ctx.quadraticCurveTo(0, h, 0, h - cornerRadius);
-        ctx.lineTo(0, cornerRadius);
-        ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
-        ctx.closePath();
-        
-        ctx.fillStyle = gradient;
-        ctx.fill();
-        
-        // Draw border
-        ctx.strokeStyle = style.borderColor;
-        ctx.lineWidth = 4;
-        ctx.stroke();
-        
-        // Draw inner border accent
-        ctx.strokeStyle = style.accentColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cornerRadius + 6, 6);
-        ctx.lineTo(w - cornerRadius - 6, 6);
-        ctx.quadraticCurveTo(w - 6, 6, w - 6, cornerRadius + 6);
-        ctx.lineTo(w - 6, h - cornerRadius - 6);
-        ctx.quadraticCurveTo(w - 6, h - 6, w - cornerRadius - 6, h - 6);
-        ctx.lineTo(cornerRadius + 6, h - 6);
-        ctx.quadraticCurveTo(6, h - 6, 6, h - cornerRadius - 6);
-        ctx.lineTo(6, cornerRadius + 6);
-        ctx.quadraticCurveTo(6, 6, cornerRadius + 6, 6);
-        ctx.closePath();
-        ctx.stroke();
-        
-        // Draw corner decorations (flower/leaf style like MapleStory)
-        const drawFlowerDecor = (x, y, size) => {
-            ctx.fillStyle = style.decorColor;
-            // Center circle
-            ctx.beginPath();
-            ctx.arc(x, y, size * 0.4, 0, Math.PI * 2);
-            ctx.fill();
-            // Petals
-            for (let i = 0; i < 5; i++) {
-                const angle = (i * Math.PI * 2) / 5 - Math.PI / 2;
-                ctx.beginPath();
-                ctx.ellipse(
-                    x + Math.cos(angle) * size * 0.5,
-                    y + Math.sin(angle) * size * 0.5,
-                    size * 0.35, size * 0.2,
-                    angle, 0, Math.PI * 2
-                );
-                ctx.fill();
-            }
-            // White center
-            ctx.fillStyle = '#FFFFFF';
-            ctx.beginPath();
-            ctx.arc(x, y, size * 0.2, 0, Math.PI * 2);
-            ctx.fill();
-        };
-        
-        // Corner flowers
-        drawFlowerDecor(20, 20, 14);
-        drawFlowerDecor(w - 20, 20, 14);
-        drawFlowerDecor(20, h - 20, 12);
-        drawFlowerDecor(w - 20, h - 20, 12);
-        
-        // Title area background
-        ctx.fillStyle = style.titleBg;
-        ctx.globalAlpha = 0.7;
-        ctx.fillRect(padding + 20, padding + 8, w - padding * 2 - 40, 32);
-        ctx.globalAlpha = 1;
-        
-        // Draw title
-        ctx.font = 'bold 20px "Comic Sans MS", cursive, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = style.textColor;
-        ctx.fillText(content.title, w / 2, padding + 24);
-        
-        // Draw ticker (if not empty)
-        if (content.ticker) {
-        ctx.font = 'bold 24px "Arial Black", sans-serif';
-        ctx.fillStyle = style.borderColor;
-        ctx.fillText(content.ticker, w / 2, padding + 56);
-        }
-        
-        // Draw shill/description text (adjust position if no ticker)
-        const shillY = content.ticker ? padding + 82 : padding + 56;
-        ctx.font = '14px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = style.textColor;
-        ctx.globalAlpha = 0.9;
-        ctx.fillText(content.shill, w / 2, shillY);
-        ctx.globalAlpha = 1;
-        
-        // Draw owner (if exists)
-        if (content.owner) {
-            ctx.font = 'italic 12px "Segoe UI", Arial, sans-serif';
-            ctx.fillStyle = style.accentColor;
-            ctx.globalAlpha = 0.8;
-            ctx.fillText(`owned by ${content.owner}`, w / 2, shillY + 18);
-            ctx.globalAlpha = 1;
-        }
-        
-        // Draw separator line
-        ctx.strokeStyle = style.borderColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(padding + 30, h - 40);
-        ctx.lineTo(w - padding - 30, h - 40);
-        ctx.stroke();
-        
-        // Draw penguin icon (simple pixel art style)
-        const penguinX = w / 2 - 25;
-        const penguinY = h - 28;
-        
-        // Penguin body (black)
-        ctx.fillStyle = '#1a1a2e';
-        ctx.beginPath();
-        ctx.ellipse(penguinX, penguinY, 10, 12, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Penguin belly (white)
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.ellipse(penguinX, penguinY + 2, 6, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Penguin eyes
-        ctx.fillStyle = '#1a1a2e';
-        ctx.beginPath();
-        ctx.arc(penguinX - 3, penguinY - 5, 2, 0, Math.PI * 2);
-        ctx.arc(penguinX + 3, penguinY - 5, 2, 0, Math.PI * 2);
-        ctx.fill();
-        
-        // Penguin beak
-        ctx.fillStyle = '#FFA500';
-        ctx.beginPath();
-        ctx.moveTo(penguinX, penguinY - 2);
-        ctx.lineTo(penguinX - 4, penguinY + 2);
-        ctx.lineTo(penguinX + 4, penguinY + 2);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Draw count
-        ctx.font = 'bold 22px Arial, sans-serif';
-        ctx.fillStyle = count > 0 ? style.textColor : '#888888';
-        ctx.textAlign = 'left';
-        const countText = count > 0 ? `${count}` : '0';
-        ctx.fillText(countText, penguinX + 18, penguinY + 6);
-        
-        // Status indicator
-        ctx.font = '12px Arial, sans-serif';
-        ctx.fillStyle = count > 0 ? '#22c55e' : '#888888';
-        ctx.textAlign = 'right';
-        ctx.fillText(count > 0 ? '● OPEN' : '○ EMPTY', w - padding - 15, h - 22);
-        
-        const texture = new THREE.CanvasTexture(canvas);
-        const material = new THREE.SpriteMaterial({ 
-            map: texture, 
-            depthTest: false, 
-            depthWrite: false,
-            transparent: true
-        });
-        const sprite = new THREE.Sprite(material);
-        
-        // Bigger scale for the banner
-        const scale = 0.025;
-        sprite.scale.set(w * scale, h * scale, 1);
-        sprite.position.y = 10; // Higher above igloo
-        sprite.renderOrder = 998;
-        sprite.visible = false; // Start hidden, show when player is close
-        
-        // Store style index for updates
-        sprite.userData.styleIndex = iglooIndex;
-        
-        return sprite;
-    };
 
     useEffect(() => {
         if (!mountRef.current || !window.THREE) return;
@@ -1107,35 +359,8 @@ const VoxelWorld = ({
         tempVec3Ref.current = new THREE.Vector3();
         tempOffsetRef.current = new THREE.Vector3();
         
-        // Helper function to create wizard hat particle pool for a player
-        // Each player with wizard hat gets their own pool (not shared)
-        const createWizardTrailPool = () => {
-            const trailGroup = new THREE.Group();
-            trailGroup.name = 'wizard_trail_pool';
-            const WIZARD_PARTICLE_COUNT = 50; // Particles per player
-            const colors = [0xFF69B4, 0x9400D3, 0x8A2BE2, 0xFFD700, 0x00CED1, 0xFF1493];
-            for (let i = 0; i < WIZARD_PARTICLE_COUNT; i++) {
-                const size = (0.08 + Math.random() * 0.06);
-                const pGeo = new THREE.SphereGeometry(size, 8, 8);
-                const pMat = new THREE.MeshBasicMaterial({ 
-                    color: colors[Math.floor(Math.random() * colors.length)], 
-                    transparent: true, 
-                    opacity: 0
-                });
-                const pMesh = new THREE.Mesh(pGeo, pMat);
-                pMesh.visible = false;
-                pMesh.userData.active = false;
-                pMesh.userData.birthTime = 0;
-                pMesh.userData.lifespan = 3;
-                trailGroup.add(pMesh);
-            }
-            trailGroup.userData.lastSpawnTime = 0;
-            trailGroup.userData.nextParticleIndex = 0;
-            return trailGroup;
-        };
-        
-        // Store the factory function for later use
-        wizardTrailRef.current = { createPool: createWizardTrailPool, pools: new Map() };
+        // Initialize wizard trail particle system
+        wizardTrailSystemRef.current = new WizardTrailSystem(THREE, scene);
         
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 300);
         cameraRef.current = camera;
@@ -1264,68 +489,9 @@ const VoxelWorld = ({
         sunLightRef.current = sunLight;
         
         // ==================== SNOWFALL PARTICLE SYSTEM ====================
-        const createSnowfall = () => {
-            // Mobile: fewer particles for better performance, Desktop: more particles
-            const particleCount = isMobileGPU ? 400 : 800;
-            const positions = new Float32Array(particleCount * 3);
-            const velocities = new Float32Array(particleCount * 3);
-            const sizes = new Float32Array(particleCount);
-            
-            const spreadX = 120; // Area width around player
-            const spreadZ = 120; // Area depth around player
-            const height = 50; // Fall height
-            
-            // Get initial player position (center of town if not set)
-            const spawnX = posRef.current?.x || 50;
-            const spawnZ = posRef.current?.z || 50;
-            
-            for (let i = 0; i < particleCount; i++) {
-                // Random position around spawn point (world coordinates)
-                positions[i * 3] = spawnX + (Math.random() - 0.5) * spreadX;
-                positions[i * 3 + 1] = Math.random() * height + 5; // Start above ground
-                positions[i * 3 + 2] = spawnZ + (Math.random() - 0.5) * spreadZ;
-                
-                // Random velocity (downward with slight drift)
-                velocities[i * 3] = (Math.random() - 0.5) * 0.3; // X drift
-                velocities[i * 3 + 1] = -(3 + Math.random() * 4); // Fall speed (faster)
-                velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.3; // Z drift
-                
-                // Random sizes for depth effect
-                sizes[i] = 0.2 + Math.random() * 0.25;
-            }
-            
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setAttribute('velocity', new THREE.BufferAttribute(velocities, 3));
-            geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
-            
-            const material = new THREE.PointsMaterial({
-                color: 0xffffff,
-                size: 0.3, // Visible snowflakes
-                transparent: true,
-                opacity: 0.9,
-                depthWrite: false,
-                sizeAttenuation: true
-            });
-            
-            const snow = new THREE.Points(geometry, material);
-            snow.name = 'snowfall';
-            snow.frustumCulled = false; // Always render
-            snow.renderOrder = 999; // Render on top
-            scene.add(snow);
-            
-            console.log('❄️ Snowfall system initialized with', particleCount, 'particles');
-            
-            return { particles: snow, velocities, spreadX, spreadZ, height };
-        };
-        
-        const snowSystem = createSnowfall();
-        snowParticlesRef.current = snowSystem;
-        
-        // Randomize initial snow intensity
-        const initialIntensity = 0.5 + Math.random() * 0.3; // 0.5 to 0.8
-        snowIntensityRef.current = initialIntensity;
-        snowTargetIntensityRef.current = initialIntensity;
+        const snowfallSystem = new SnowfallSystem(THREE, scene, { isMobileGPU });
+        snowfallSystem.create({ x: posRef.current?.x || 50, z: posRef.current?.z || 50 });
+        snowfallSystemRef.current = snowfallSystem;
         
         // --- ICY ICEBERG ISLAND GENERATION ---
         const generateCity = () => {
@@ -1406,20 +572,22 @@ const VoxelWorld = ({
             
             // ==================== IGLOO OCCUPANCY BUBBLES ====================
             // Create occupancy indicator sprites above each igloo
-            const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
-            const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+            const townCenterX = CENTER_X;
+            const townCenterZ = CENTER_Z;
             
+            // 10 unique igloos - each has its own room
+            // igloo3 is SKNY GANG nightclub-themed igloo
             const iglooData = [
                 { id: 'igloo1', x: -75, z: -75, room: 'igloo1' },
                 { id: 'igloo2', x: -50, z: -78, room: 'igloo2' },
-                { id: 'igloo3', x: -25, z: -75, room: 'igloo3' },
+                { id: 'igloo3', x: -25, z: -75, room: 'igloo3' },   // SKNY GANG nightclub
                 { id: 'igloo4', x: 25, z: -75, room: 'igloo4' },
-                { id: 'igloo5', x: 50, z: -78, room: 'igloo1' },
-                { id: 'igloo6', x: 75, z: -75, room: 'igloo2' },
-                { id: 'igloo7', x: -70, z: -15, room: 'igloo3' },
-                { id: 'igloo8', x: -40, z: -18, room: 'igloo4' },
-                { id: 'igloo9', x: 40, z: -18, room: 'igloo1' },
-                { id: 'igloo10', x: 70, z: -15, room: 'igloo2' },
+                { id: 'igloo5', x: 50, z: -78, room: 'igloo5' },
+                { id: 'igloo6', x: 75, z: -75, room: 'igloo6' },
+                { id: 'igloo7', x: -70, z: -15, room: 'igloo7' },
+                { id: 'igloo8', x: -40, z: -18, room: 'igloo8' },
+                { id: 'igloo9', x: 40, z: -18, room: 'igloo9' },
+                { id: 'igloo10', x: 70, z: -15, room: 'igloo10' },
             ];
             
             // Clear any existing sprites
@@ -1430,7 +598,7 @@ const VoxelWorld = ({
             
             // Create sprite for each igloo with unique MapleStory-style banners
             iglooData.forEach((igloo, index) => {
-                const sprite = createIglooOccupancySprite(0, index); // Start with 0, unique style per igloo
+                const sprite = createIglooOccupancySprite(THREE, 0, index); // Start with 0, unique style per igloo
                 sprite.position.set(
                     townCenterX + igloo.x,
                     10, // Higher above igloo for bigger banners
@@ -1451,1291 +619,6 @@ const VoxelWorld = ({
             return { butterflyGroup: null, townCenter }; // No butterflies in arctic
         };
         
-        // Generate Dojo room scenery (50% bigger)
-        const generateDojoRoom = () => {
-            const DOJO_SIZE = 36; // 50% bigger than 24
-            scene.background = new THREE.Color(0x1a0808);
-            
-            // Simple collision map for dojo (just bounds)
-            const map = [];
-            for(let x = 0; x < 10; x++) {
-                map[x] = [];
-                for(let z = 0; z < 10; z++) {
-                    map[x][z] = 2; // All walkable
-                }
-            }
-            mapRef.current = map;
-            
-            // Floor - wooden planks texture look
-            const floorGeo = new THREE.PlaneGeometry(DOJO_SIZE, DOJO_SIZE);
-            const floorMat = new THREE.MeshStandardMaterial({ color: 0x5D3A1A, roughness: 0.9 });
-            const floor = new THREE.Mesh(floorGeo, floorMat);
-            floor.rotation.x = -Math.PI / 2;
-            floor.receiveShadow = true;
-            scene.add(floor);
-            
-            // Floor plank lines for detail
-            for (let i = -DOJO_SIZE/2; i < DOJO_SIZE/2; i += 2) {
-                const lineGeo = new THREE.BoxGeometry(DOJO_SIZE, 0.02, 0.05);
-                const lineMat = new THREE.MeshStandardMaterial({ color: 0x3d2515 });
-                const line = new THREE.Mesh(lineGeo, lineMat);
-                line.position.set(0, 0.01, i);
-                scene.add(line);
-            }
-            
-            // Central tatami mat area
-            const matGeo = new THREE.BoxGeometry(16, 0.1, 18);
-            const matMat = new THREE.MeshStandardMaterial({ color: 0x9acd32, roughness: 0.8 });
-            const centerMat = new THREE.Mesh(matGeo, matMat);
-            centerMat.position.set(0, 0.05, 0);
-            scene.add(centerMat);
-            
-            // Tatami mat pattern lines
-            [-4, 0, 4].forEach(x => {
-                const tLine = new THREE.Mesh(
-                    new THREE.BoxGeometry(0.1, 0.12, 18),
-                    new THREE.MeshStandardMaterial({ color: 0x7ab32a })
-                );
-                tLine.position.set(x, 0.06, 0);
-                scene.add(tLine);
-            });
-            
-            // Walls with traditional Japanese dark wood
-            const wallMat = new THREE.MeshStandardMaterial({ color: 0x2d1810, roughness: 0.8 });
-            
-            const backWall = new THREE.Mesh(new THREE.BoxGeometry(DOJO_SIZE, 14, 0.5), wallMat);
-            backWall.position.set(0, 7, -DOJO_SIZE/2);
-            scene.add(backWall);
-            
-            const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 14, DOJO_SIZE), wallMat);
-            leftWall.position.set(-DOJO_SIZE/2, 7, 0);
-            scene.add(leftWall);
-            
-            const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 14, DOJO_SIZE), wallMat);
-            rightWall.position.set(DOJO_SIZE/2, 7, 0);
-            scene.add(rightWall);
-            
-            // Front wall with door opening
-            const frontWall1 = new THREE.Mesh(new THREE.BoxGeometry(12, 14, 0.5), wallMat);
-            frontWall1.position.set(-12, 7, DOJO_SIZE/2);
-            scene.add(frontWall1);
-            const frontWall2 = new THREE.Mesh(new THREE.BoxGeometry(12, 14, 0.5), wallMat);
-            frontWall2.position.set(12, 7, DOJO_SIZE/2);
-            scene.add(frontWall2);
-            // Door header
-            const doorHeader = new THREE.Mesh(new THREE.BoxGeometry(12, 4, 0.5), wallMat);
-            doorHeader.position.set(0, 12, DOJO_SIZE/2);
-            scene.add(doorHeader);
-            
-            // Red pillars (larger, more ornate)
-            const pillarGeo = new THREE.CylinderGeometry(0.8, 0.9, 14, 12);
-            const pillarMat = new THREE.MeshStandardMaterial({ color: 0x8b0000 });
-            const pillarPositions = [
-                [-15, -15], [15, -15], [-15, 15], [15, 15],
-                [-15, 0], [15, 0] // Extra pillars on sides
-            ];
-            pillarPositions.forEach(([x, z]) => {
-                const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-                pillar.position.set(x, 7, z);
-                pillar.castShadow = true;
-                scene.add(pillar);
-                
-                // Pillar base
-                const base = new THREE.Mesh(
-                    new THREE.CylinderGeometry(1.1, 1.2, 0.5, 12),
-                    pillarMat
-                );
-                base.position.set(x, 0.25, z);
-                scene.add(base);
-                
-                // Pillar top
-                const top = new THREE.Mesh(
-                    new THREE.CylinderGeometry(1.1, 0.8, 0.5, 12),
-                    pillarMat
-                );
-                top.position.set(x, 13.75, z);
-                scene.add(top);
-            });
-            
-            // Decorative scrolls on back wall
-            const scrollPositions = [-10, -5, 0, 5, 10];
-            scrollPositions.forEach(x => {
-                // Scroll backing
-                const scrollBack = new THREE.Mesh(
-                    new THREE.BoxGeometry(3.5, 6, 0.1),
-                    new THREE.MeshStandardMaterial({ color: 0xf5deb3 })
-                );
-                scrollBack.position.set(x, 8, -DOJO_SIZE/2 + 0.3);
-                scene.add(scrollBack);
-                
-                // Scroll rod top
-                const rod = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.15, 0.15, 4, 8),
-                    new THREE.MeshStandardMaterial({ color: 0x4a2c00 })
-                );
-                rod.rotation.z = Math.PI / 2;
-                rod.position.set(x, 11.2, -DOJO_SIZE/2 + 0.35);
-                scene.add(rod);
-            });
-            
-            // Battle/play area mat (larger)
-            const battleMatGeo = new THREE.CircleGeometry(6, 32);
-            const battleMatMat = new THREE.MeshStandardMaterial({ color: 0x4a1a1a });
-            const battleMat = new THREE.Mesh(battleMatGeo, battleMatMat);
-            battleMat.rotation.x = -Math.PI / 2;
-            battleMat.position.set(0, 0.02, 2);
-            scene.add(battleMat);
-            
-            // Element symbols on battle mat (Card Jitsu elements)
-            const symbolSize = 1;
-            [
-                { color: 0xff4400, pos: [-3, 0], emoji: '🔥' },  // Fire
-                { color: 0x0066ff, pos: [3, 0], emoji: '💧' },   // Water  
-                { color: 0x88ddff, pos: [0, 4], emoji: '❄️' }    // Snow
-            ].forEach(({ color, pos }) => {
-                const sym = new THREE.Mesh(
-                    new THREE.CircleGeometry(symbolSize, 16),
-                    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 })
-                );
-                sym.rotation.x = -Math.PI / 2;
-                sym.position.set(pos[0], 0.03, pos[1]);
-                scene.add(sym);
-            });
-            
-            // Sensei cushion (meditation pillow) - sensei penguin added after buildPenguinMesh
-            const cushionGeo = new THREE.CylinderGeometry(1.8, 2, 0.4, 16);
-            const cushionMat = new THREE.MeshStandardMaterial({ color: 0x8b0000 });
-            const cushion = new THREE.Mesh(cushionGeo, cushionMat);
-            cushion.position.set(0, 0.2, -12);
-            cushion.name = 'sensei_cushion';
-            scene.add(cushion);
-            
-            // Sensei glow (interact zone)
-            const senseiGlow = new THREE.Mesh(
-                new THREE.CircleGeometry(3.5, 16),
-                new THREE.MeshBasicMaterial({ color: 0x44ff44, transparent: true, opacity: 0.15 })
-            );
-            senseiGlow.rotation.x = -Math.PI / 2;
-            senseiGlow.position.set(0, 0.01, -10);
-            senseiGlow.name = 'sensei_glow';
-            scene.add(senseiGlow);
-            
-            // Exit door glow
-            const exitGlow = new THREE.Mesh(
-                new THREE.CircleGeometry(3, 16),
-                new THREE.MeshBasicMaterial({ color: 0x4488ff, transparent: true, opacity: 0.15 })
-            );
-            exitGlow.rotation.x = -Math.PI / 2;
-            exitGlow.position.set(0, 0.01, 16);
-            exitGlow.name = 'exit_glow';
-            scene.add(exitGlow);
-            
-            // Torch lights on walls (more dramatic)
-            const torchPositions = [
-                [-15, 5, -15], [15, 5, -15],
-                [-15, 5, 0], [15, 5, 0],
-                [-15, 5, 15], [15, 5, 15]
-            ];
-            torchPositions.forEach(([x, y, z]) => {
-                // Light
-                const torch = new THREE.PointLight(0xff6622, 1.5, 15);
-                torch.position.set(x, y, z);
-                scene.add(torch);
-                
-                // Torch holder visual
-                const holder = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.15, 0.2, 0.8, 8),
-                    new THREE.MeshStandardMaterial({ color: 0x4a2c00 })
-                );
-                holder.position.set(x * 0.95, y - 1, z * 0.95);
-                scene.add(holder);
-                
-                // Flame glow
-                const flame = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.2, 8, 8),
-                    new THREE.MeshBasicMaterial({ color: 0xff6622 })
-                );
-                flame.position.set(x * 0.95, y - 0.3, z * 0.95);
-                scene.add(flame);
-            });
-            
-            // Ambient fill light
-            const ambientFill = new THREE.PointLight(0xffeedd, 0.3, 50);
-            ambientFill.position.set(0, 10, 0);
-            scene.add(ambientFill);
-            
-            // Store dojo bounds for collision
-            return { 
-                bounds: { minX: -DOJO_SIZE/2 + 1, maxX: DOJO_SIZE/2 - 1, minZ: -DOJO_SIZE/2 + 1, maxZ: DOJO_SIZE/2 - 1 },
-                spawnPos: { x: 0, z: 14 }  // Spawn near exit
-            };
-        };
-        
-        // ==================== PIZZA PARLOR INTERIOR ====================
-        const generatePizzaRoom = () => {
-            const PIZZA_SIZE = 32; // Room dimensions
-            scene.background = new THREE.Color(0x0a0502); // Very dark - moody atmosphere
-            
-            // Simple collision map
-            const map = [];
-            for(let x = 0; x < 10; x++) {
-                map[x] = [];
-                for(let z = 0; z < 10; z++) {
-                    map[x][z] = 2; // All walkable
-                }
-            }
-            mapRef.current = map;
-            
-            // --- FLOOR: Red & white checkered tiles ---
-            const tileSize = 2;
-            const tilesPerSide = Math.ceil(PIZZA_SIZE / tileSize);
-            for (let tx = -tilesPerSide/2; tx < tilesPerSide/2; tx++) {
-                for (let tz = -tilesPerSide/2; tz < tilesPerSide/2; tz++) {
-                    const isWhite = (tx + tz) % 2 === 0;
-                    const tileGeo = new THREE.BoxGeometry(tileSize, 0.1, tileSize);
-                    const tileMat = new THREE.MeshStandardMaterial({ 
-                        color: isWhite ? 0xf5f5f5 : 0xcc2222,
-                        roughness: 0.3
-                    });
-                    const tile = new THREE.Mesh(tileGeo, tileMat);
-                    tile.position.set(tx * tileSize + tileSize/2, 0, tz * tileSize + tileSize/2);
-                    tile.receiveShadow = true;
-                    scene.add(tile);
-                }
-            }
-            
-            // --- WALLS: Dark, moody Italian restaurant style ---
-            const wallMat = new THREE.MeshStandardMaterial({ color: 0x3d2010, roughness: 0.8 }); // Dark brown
-            const wallAccentMat = new THREE.MeshStandardMaterial({ color: 0x5a3520, roughness: 0.7 }); // Dark accent
-            
-            // Back wall
-            const backWall = new THREE.Mesh(new THREE.BoxGeometry(PIZZA_SIZE, 10, 0.5), wallMat);
-            backWall.position.set(0, 5, -PIZZA_SIZE/2);
-            scene.add(backWall);
-            
-            // Side walls
-            const leftWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 10, PIZZA_SIZE), wallMat);
-            leftWall.position.set(-PIZZA_SIZE/2, 5, 0);
-            scene.add(leftWall);
-            
-            const rightWall = new THREE.Mesh(new THREE.BoxGeometry(0.5, 10, PIZZA_SIZE), wallMat);
-            rightWall.position.set(PIZZA_SIZE/2, 5, 0);
-            scene.add(rightWall);
-            
-            // Front wall with door opening
-            const frontWall1 = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 0.5), wallMat);
-            frontWall1.position.set(-11, 5, PIZZA_SIZE/2);
-            scene.add(frontWall1);
-            const frontWall2 = new THREE.Mesh(new THREE.BoxGeometry(10, 10, 0.5), wallMat);
-            frontWall2.position.set(11, 5, PIZZA_SIZE/2);
-            scene.add(frontWall2);
-            // Door header
-            const doorHeader = new THREE.Mesh(new THREE.BoxGeometry(12, 3, 0.5), wallMat);
-            doorHeader.position.set(0, 8.5, PIZZA_SIZE/2);
-            scene.add(doorHeader);
-            
-            // --- CEILING ---
-            const ceilingGeo = new THREE.PlaneGeometry(PIZZA_SIZE, PIZZA_SIZE);
-            const ceilingMat = new THREE.MeshStandardMaterial({ color: 0x0a0503, roughness: 0.95 }); // Very dark
-            const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
-            ceiling.rotation.x = Math.PI / 2;
-            ceiling.position.set(0, 10, 0);
-            scene.add(ceiling);
-            
-            // --- COUNTER/BAR AREA (snug against back wall) ---
-            const counterMat = new THREE.MeshStandardMaterial({ color: 0x4a2810, roughness: 0.5 });
-            const COUNTER_Z = -PIZZA_SIZE/2 + 2.5; // Snug against back wall (-16 + 2.5 = -13.5)
-            const COUNTER_DEPTH = 3;
-            const COUNTER_HEIGHT = 2.5; // Lowered to match shorter stools
-            const STOOL_Z = COUNTER_Z + COUNTER_DEPTH/2 + 1.5; // In front of counter
-            
-            // Main counter top
-            const counterTop = new THREE.Mesh(new THREE.BoxGeometry(20, 0.25, COUNTER_DEPTH), counterMat);
-            counterTop.position.set(0, COUNTER_HEIGHT, COUNTER_Z);
-            counterTop.castShadow = true;
-            counterTop.receiveShadow = true;
-            scene.add(counterTop);
-            
-            // Counter front panel (customer side)
-            const counterFront = new THREE.Mesh(new THREE.BoxGeometry(20, COUNTER_HEIGHT, 0.3), wallAccentMat);
-            counterFront.position.set(0, COUNTER_HEIGHT / 2, COUNTER_Z + COUNTER_DEPTH/2);
-            scene.add(counterFront);
-            
-            // Counter back panel (against wall)
-            const counterBack = new THREE.Mesh(new THREE.BoxGeometry(20, COUNTER_HEIGHT, 0.3), wallAccentMat);
-            counterBack.position.set(0, COUNTER_HEIGHT / 2, COUNTER_Z - COUNTER_DEPTH/2);
-            scene.add(counterBack);
-            
-            // Counter sides
-            const counterSideL = new THREE.Mesh(new THREE.BoxGeometry(0.3, COUNTER_HEIGHT, COUNTER_DEPTH), wallAccentMat);
-            counterSideL.position.set(-10, COUNTER_HEIGHT / 2, COUNTER_Z);
-            scene.add(counterSideL);
-            
-            const counterSideR = new THREE.Mesh(new THREE.BoxGeometry(0.3, COUNTER_HEIGHT, COUNTER_DEPTH), wallAccentMat);
-            counterSideR.position.set(10, COUNTER_HEIGHT / 2, COUNTER_Z);
-            scene.add(counterSideR);
-            
-            // --- PIZZA OVEN (on back wall, behind counter) ---
-            const ovenMat = new THREE.MeshStandardMaterial({ color: 0x8B0000, roughness: 0.4 });
-            const ovenBody = new THREE.Mesh(new THREE.BoxGeometry(6, 5, 2), ovenMat);
-            ovenBody.position.set(-5, 2.5, -PIZZA_SIZE/2 + 1);
-            ovenBody.castShadow = true;
-            scene.add(ovenBody);
-            
-            // Oven opening (dark)
-            const ovenOpening = new THREE.Mesh(
-                new THREE.BoxGeometry(3, 2.5, 0.1),
-                new THREE.MeshBasicMaterial({ color: 0x1a0500 })
-            );
-            ovenOpening.position.set(-5, 2, -PIZZA_SIZE/2 + 2.1);
-            scene.add(ovenOpening);
-            
-            // Oven fire glow - warm but not too bright
-            // OPTIMIZED: Disabled shadow casting (point light shadows are expensive)
-            const ovenGlow = new THREE.PointLight(0xff3300, 2.5, 8);
-            ovenGlow.position.set(-5, 2, -PIZZA_SIZE/2 + 1.5);
-            ovenGlow.castShadow = false;
-            scene.add(ovenGlow);
-            
-            // Inner oven embers glow
-            const emberGlow = new THREE.PointLight(0xff5500, 1.0, 3);
-            emberGlow.position.set(-5, 1.5, -PIZZA_SIZE/2 + 1);
-            scene.add(emberGlow);
-            
-            // --- BAR STOOLS (along counter) ---
-            const barStoolPositions = [-7, -4, -1, 2, 5, 8];
-            const STOOL_SEAT_HEIGHT = 1.8; // Lowered so players can jump on them
-            const createBarStool = (x, z, faceDirection = 0) => {
-                const stoolGroup = new THREE.Group();
-                const metalMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.3 });
-                const seatMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.5 });
-                
-                // Base (wider for stability)
-                const base = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.45, 0.1, 12), metalMat);
-                base.position.y = 0.05;
-                stoolGroup.add(base);
-                
-                // Stool leg (shorter for jumpable height)
-                const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, STOOL_SEAT_HEIGHT - 0.2, 8), metalMat);
-                leg.position.y = (STOOL_SEAT_HEIGHT - 0.2) / 2;
-                stoolGroup.add(leg);
-                
-                // Foot rest ring
-                const footRest = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.04, 8, 16), metalMat);
-                footRest.rotation.x = Math.PI / 2;
-                footRest.position.y = 0.5;
-                stoolGroup.add(footRest);
-                
-                // Seat (padded) - jumpable height
-                const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.45, 0.25, 16), seatMat);
-                seat.position.y = STOOL_SEAT_HEIGHT;
-                seat.castShadow = true;
-                seat.receiveShadow = true;
-                stoolGroup.add(seat);
-                
-                stoolGroup.position.set(x, 0, z);
-                stoolGroup.rotation.y = faceDirection;
-                return stoolGroup;
-            };
-            
-            // Bar stools along counter (facing counter)
-            barStoolPositions.forEach(x => {
-                const stool = createBarStool(x, STOOL_Z, Math.PI); // Face the counter (north)
-                scene.add(stool);
-            });
-            
-            // --- ROUND TABLES WITH CHAIRS ---
-            const tablePositions = [
-                { x: -8, z: 2 },
-                { x: 8, z: 2 },
-                { x: -8, z: 9 },
-                { x: 8, z: 9 }
-            ];
-            
-            const createRoundTable = (tableX, tableZ, numChairs = 4) => {
-                const tableGroup = new THREE.Group();
-                const woodMat = new THREE.MeshStandardMaterial({ color: 0x5D3A1A, roughness: 0.6 });
-                const tableclothMat = new THREE.MeshStandardMaterial({ color: 0xcc2222, roughness: 0.7 });
-                
-                // Table leg (pedestal style)
-                const pedestal = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 2.5, 8), woodMat);
-                pedestal.position.y = 1.25;
-                pedestal.castShadow = true;
-                tableGroup.add(pedestal);
-                
-                // Table top (thicker for collision)
-                const tableTop = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 0.2, 24), woodMat);
-                tableTop.position.y = 2.6;
-                tableTop.castShadow = true;
-                tableGroup.add(tableTop);
-                
-                // Red checkered tablecloth (slightly larger)
-                const cloth = new THREE.Mesh(new THREE.CylinderGeometry(2.1, 2.3, 0.05, 24), tableclothMat);
-                cloth.position.y = 2.72;
-                tableGroup.add(cloth);
-                
-                tableGroup.position.set(tableX, 0, tableZ);
-                return tableGroup;
-            };
-            
-            // Create a chair as a separate object (for better collision/interaction)
-            // Chair faces -Z direction when rotation.y = 0 (back at +Z)
-            // TALL chairs to match table height (table top at y=3.5)
-            const createChair = (x, z, faceAngle) => {
-                const chairGroup = new THREE.Group();
-                const chairWoodMat = new THREE.MeshStandardMaterial({ color: 0x4a2810, roughness: 0.6 });
-                
-                // Chair seat (raised to match table height)
-                const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 1.2), chairWoodMat);
-                chairSeat.position.y = 2.8; // Raised from 1.5 to match table
-                chairSeat.castShadow = true;
-                chairGroup.add(chairSeat);
-                
-                // Chair back (taller, positioned above seat)
-                const chairBack = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.8, 0.15), chairWoodMat);
-                chairBack.position.set(0, 3.8, -0.52); // Raised to match new seat height
-                chairGroup.add(chairBack);
-                
-                // Chair legs (longer to support higher seat)
-                for (let lx = -0.45; lx <= 0.45; lx += 0.9) {
-                    for (let lz = -0.45; lz <= 0.45; lz += 0.9) {
-                        const chairLeg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 2.8, 0.1), chairWoodMat);
-                        chairLeg.position.set(lx, 1.4, lz); // Taller legs
-                        chairGroup.add(chairLeg);
-                    }
-                }
-                
-                chairGroup.position.set(x, 0, z);
-                chairGroup.rotation.y = faceAngle; // Chair faces this direction (+Z local → world faceAngle)
-                return chairGroup;
-            };
-            
-            // Track all chair positions for collision/interaction
-            const chairData = [];
-            
-            // Place tables and their chairs
-            tablePositions.forEach(table => {
-                const tableGroup = createRoundTable(table.x, table.z, 4);
-                scene.add(tableGroup);
-                
-                // Create 4 chairs around each table (at cardinal directions)
-                for (let i = 0; i < 4; i++) {
-                    const angle = (i / 4) * Math.PI * 2; // 0, π/2, π, 3π/2 (N, E, S, W from table)
-                    const chairDist = 3;
-                    const chairX = table.x + Math.cos(angle) * chairDist;
-                    const chairZ = table.z + Math.sin(angle) * chairDist;
-                    
-                    // Calculate direction from chair to table center for rotation
-                    const dirX = table.x - chairX;
-                    const dirZ = table.z - chairZ;
-                    const faceAngle = Math.atan2(dirX, dirZ); // Face toward table
-                    
-                    const chair = createChair(chairX, chairZ, faceAngle);
-                    scene.add(chair);
-                    
-                    // Store chair data for collision and sitting
-                    chairData.push({
-                        type: 'chair',
-                        position: { x: chairX, z: chairZ },
-                        seatHeight: 2.9, // Chair seat mesh at y=2.8, penguin sits at 2.9+0.5=3.4
-                        faceAngle: faceAngle,
-                        radius: 0.7
-                    });
-                }
-            });
-            
-            // --- DECORATIONS ---
-            
-            // Hanging pendant lights - moody, focused lighting
-            const createPendantLight = (x, z, intensity = 2.5, distance = 10, castShadow = false) => {
-                const lightGroup = new THREE.Group();
-                
-                // Cord
-                const cord = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.02, 0.02, 3, 8),
-                    new THREE.MeshBasicMaterial({ color: 0x222222 })
-                );
-                cord.position.y = 8.5;
-                lightGroup.add(cord);
-                
-                // Lamp shade (cone) - wide end DOWN for proper lamp shade
-                const shade = new THREE.Mesh(
-                    new THREE.ConeGeometry(0.8, 1, 16, 1, true),
-                    new THREE.MeshStandardMaterial({ 
-                        color: 0x8B0000, // Darker red
-                        side: THREE.DoubleSide,
-                        roughness: 0.8,
-                        emissive: 0x220000,
-                        emissiveIntensity: 0.2
-                    })
-                );
-                shade.position.y = 7.5;
-                lightGroup.add(shade);
-                
-                // Light bulb glow (warm, inside the shade)
-                const bulb = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.15, 8, 8),
-                    new THREE.MeshBasicMaterial({ color: 0xffaa55 })
-                );
-                bulb.position.y = 7.0;
-                lightGroup.add(bulb);
-                
-                // Point light - warm focused pool of light
-                const light = new THREE.PointLight(0xff9944, intensity, distance);
-                light.position.y = 7;
-                light.castShadow = castShadow;
-                if (castShadow) {
-                    light.shadow.mapSize.width = 512;
-                    light.shadow.mapSize.height = 512;
-                }
-                lightGroup.add(light);
-                
-                lightGroup.position.set(x, 0, z);
-                return lightGroup;
-            };
-            
-            // Lights over tables - dim pools of warm light in the darkness
-            scene.add(createPendantLight(-8, 2, 2.0, 8, true));   // Table 1 - casts shadows
-            scene.add(createPendantLight(8, 2, 2.0, 8));          // Table 2
-            scene.add(createPendantLight(-8, 9, 2.0, 8));         // Table 3
-            scene.add(createPendantLight(8, 9, 2.0, 8, true));    // Table 4 - casts shadows
-            
-            // --- BAR LIGHTING ---
-            // Pendant lights above the bar counter with cords
-            const barLightGroup = new THREE.Group();
-            
-            // Multiple pendant lights along the bar
-            for (let i = 0; i < 3; i++) {
-                const barX = -6 + i * 6;
-                
-                // Cord from ceiling to fixture
-                const cord = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.015, 0.015, 3.5, 6),
-                    new THREE.MeshBasicMaterial({ color: 0x111111 })
-                );
-                cord.position.set(barX, 8.25, COUNTER_Z);
-                barLightGroup.add(cord);
-                
-                // Small pendant fixture (shade)
-                const fixture = new THREE.Mesh(
-                    new THREE.CylinderGeometry(0.25, 0.4, 0.35, 8),
-                    new THREE.MeshStandardMaterial({ 
-                        color: 0x1a0a05, 
-                        metalness: 0.7, 
-                        roughness: 0.3,
-                        emissive: 0x0a0200,
-                        emissiveIntensity: 0.2
-                    })
-                );
-                fixture.position.set(barX, 6.5, COUNTER_Z);
-                barLightGroup.add(fixture);
-                
-                // Warm bar light - dimmer for moody atmosphere
-                const barLight = new THREE.PointLight(0xff9933, 1.8, 7);
-                barLight.position.set(barX, 6, COUNTER_Z);
-                barLight.castShadow = i === 1; // Middle one casts shadows
-                if (i === 1) {
-                    barLight.shadow.mapSize.width = 512;
-                    barLight.shadow.mapSize.height = 512;
-                }
-                barLightGroup.add(barLight);
-                
-                // Bulb glow (dimmer)
-                const barBulb = new THREE.Mesh(
-                    new THREE.SphereGeometry(0.1, 8, 8),
-                    new THREE.MeshBasicMaterial({ color: 0xffaa55 })
-                );
-                barBulb.position.set(barX, 6.25, COUNTER_Z);
-                barLightGroup.add(barBulb);
-            }
-            scene.add(barLightGroup);
-            
-            // --- WALL DECORATIONS ---
-            
-            // Italian flag on back wall
-            const flagColors = [0x008C45, 0xF4F5F0, 0xCD212A]; // Green, white, red
-            flagColors.forEach((color, i) => {
-                const stripe = new THREE.Mesh(
-                    new THREE.BoxGeometry(1.5, 3, 0.1),
-                    new THREE.MeshStandardMaterial({ color })
-                );
-                stripe.position.set(-5 + (i * 1.5) - 1.5, 7, -PIZZA_SIZE/2 + 0.3);
-                scene.add(stripe);
-            });
-            
-            // "PIZZA" sign (neon style)
-            const signBack = new THREE.Mesh(
-                new THREE.BoxGeometry(8, 2, 0.2),
-                new THREE.MeshStandardMaterial({ color: 0x1a0a00 })
-            );
-            signBack.position.set(5, 7, -PIZZA_SIZE/2 + 0.3);
-            scene.add(signBack);
-            
-            // Neon "PIZZA" sign glow - dim, moody
-            const neonLight = new THREE.PointLight(0xff4400, 0.8, 5);
-            neonLight.position.set(5, 7, -PIZZA_SIZE/2 + 1);
-            scene.add(neonLight);
-            
-            // Neon sign emissive letters (dimmer glow)
-            const neonLetters = new THREE.Mesh(
-                new THREE.BoxGeometry(6, 1, 0.1),
-                new THREE.MeshBasicMaterial({ color: 0xcc4400 })
-            );
-            neonLetters.position.set(5, 7, -PIZZA_SIZE/2 + 0.45);
-            scene.add(neonLetters);
-            
-            // Menu boards on side walls
-            const menuMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
-            const menuLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4, 6), menuMat);
-            menuLeft.position.set(-PIZZA_SIZE/2 + 0.3, 6, -5);
-            scene.add(menuLeft);
-            
-            const menuRight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4, 6), menuMat);
-            menuRight.position.set(PIZZA_SIZE/2 - 0.3, 6, -5);
-            scene.add(menuRight);
-            
-            // --- TABLE DECORATIONS (cards, drinks) ---
-            const createTableDecorations = (tableX, tableZ, tableTopY) => {
-                const decorGroup = new THREE.Group();
-                
-                // Playing cards (scattered stack)
-                const cardMat = new THREE.MeshStandardMaterial({ color: 0xf8f8ff, roughness: 0.4 });
-                const cardBackMat = new THREE.MeshStandardMaterial({ color: 0xcc0000, roughness: 0.4 });
-                
-                for (let i = 0; i < 5; i++) {
-                    const card = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 0.6), i % 2 === 0 ? cardMat : cardBackMat);
-                    card.position.set(
-                        0.4 + Math.random() * 0.3 - 0.15,
-                        tableTopY + 0.02 + i * 0.015,
-                        -0.3 + Math.random() * 0.2 - 0.1
-                    );
-                    card.rotation.y = Math.random() * 0.3 - 0.15;
-                    decorGroup.add(card);
-                }
-                
-                // Soda glasses
-                const glassMat = new THREE.MeshStandardMaterial({ 
-                    color: 0x88ccff, transparent: true, opacity: 0.6, roughness: 0.1 
-                });
-                const liquidMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.3 });
-                
-                for (let i = 0; i < 2; i++) {
-                    const glassGroup = new THREE.Group();
-                    const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.12, 0.5, 8), glassMat);
-                    glass.position.y = 0.25;
-                    glassGroup.add(glass);
-                    
-                    // Liquid inside
-                    const liquid = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.10, 0.35, 8), liquidMat);
-                    liquid.position.y = 0.2;
-                    glassGroup.add(liquid);
-                    
-                    glassGroup.position.set(
-                        -0.6 + i * 1.2,
-                        tableTopY,
-                        0.5 - i * 0.3
-                    );
-                    decorGroup.add(glassGroup);
-                }
-                
-                decorGroup.position.set(tableX, 0, tableZ);
-                return decorGroup;
-            };
-            
-            // Add decorations to each table
-            tablePositions.forEach(table => {
-                const tableDecorations = createTableDecorations(table.x, table.z, 2.78);
-                scene.add(tableDecorations);
-            });
-            
-            // --- BAR COUNTER DECORATIONS (bottles, glasses) ---
-            const barDecorations = new THREE.Group();
-            
-            // Row of bottles behind bar (on counter)
-            const bottleColors = [0x2d5c1e, 0x8B4513, 0x1a3d1a, 0x4a2c2a, 0x2a4a3a];
-            for (let i = 0; i < 8; i++) {
-                const bottleGroup = new THREE.Group();
-                const bottleMat = new THREE.MeshStandardMaterial({ 
-                    color: bottleColors[i % bottleColors.length], 
-                    transparent: true, opacity: 0.85, 
-                    roughness: 0.2 
-                });
-                
-                // Bottle body
-                const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.15, 0.6, 8), bottleMat);
-                body.position.y = 0.3;
-                bottleGroup.add(body);
-                
-                // Bottle neck
-                const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.08, 0.25, 6), bottleMat);
-                neck.position.y = 0.72;
-                bottleGroup.add(neck);
-                
-                // Cap
-                const capMat = new THREE.MeshStandardMaterial({ color: 0xffcc00, metalness: 0.8, roughness: 0.3 });
-                const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.05, 6), capMat);
-                cap.position.y = 0.87;
-                bottleGroup.add(cap);
-                
-                bottleGroup.position.set(-7 + i * 2, COUNTER_HEIGHT + 0.1, COUNTER_Z - COUNTER_DEPTH/2 + 0.5);
-                barDecorations.add(bottleGroup);
-            }
-            
-            // Glasses on counter (in front)
-            for (let i = 0; i < 4; i++) {
-                const glassMat = new THREE.MeshStandardMaterial({ 
-                    color: 0xffffff, transparent: true, opacity: 0.5, roughness: 0.05 
-                });
-                const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.08, 0.35, 8), glassMat);
-                glass.position.set(-5 + i * 3.5, COUNTER_HEIGHT + 0.27, COUNTER_Z + 0.3);
-                barDecorations.add(glass);
-            }
-            
-            // Pizza boxes stacked on one end
-            const boxMat = new THREE.MeshStandardMaterial({ color: 0xf5deb3, roughness: 0.8 });
-            for (let i = 0; i < 3; i++) {
-                const box = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.1, 0.8), boxMat);
-                box.position.set(8.5, COUNTER_HEIGHT + 0.15 + i * 0.11, COUNTER_Z);
-                box.rotation.y = i * 0.1;
-                barDecorations.add(box);
-            }
-            
-            scene.add(barDecorations);
-            
-            // --- VERY MOODY AMBIENT LIGHTING ---
-            // Extremely dim ambient - almost all light from fixtures only
-            const ambientFill = new THREE.AmbientLight(0x0a0500, 0.08);
-            scene.add(ambientFill);
-            
-            // Minimal fill light - deep shadows
-            const fillLight = new THREE.HemisphereLight(0x0a0400, 0x000000, 0.05);
-            scene.add(fillLight);
-            
-            // Exit sign light (dim green glow)
-            const exitLight = new THREE.PointLight(0x00ff00, 0.3, 4);
-            exitLight.position.set(0, 9, PIZZA_SIZE/2 - 1);
-            scene.add(exitLight);
-            
-            // Exit sign mesh
-            const exitSign = new THREE.Mesh(
-                new THREE.BoxGeometry(2, 0.5, 0.1),
-                new THREE.MeshBasicMaterial({ color: 0x005500 })
-            );
-            exitSign.position.set(0, 9.2, PIZZA_SIZE/2 - 0.3);
-            scene.add(exitSign);
-            
-            // Build furniture sitting data (bar stools + chairs)
-            const furnitureData = [
-                // Bar stools (facing counter) - jumpable height stools
-                ...barStoolPositions.map(x => ({
-                    type: 'stool',
-                    position: { x, z: STOOL_Z },
-                    seatHeight: STOOL_SEAT_HEIGHT + 0.1, // Stool seat at STOOL_SEAT_HEIGHT
-                    faceAngle: Math.PI, // Facing counter (north)
-                    radius: 0.5,
-                    dismountBack: true // Flag to dismount backwards (away from counter)
-                })),
-                // Chairs (from chairData)
-                ...chairData
-            ];
-            
-            // Store pizza parlor bounds for collision
-            return { 
-                bounds: { 
-                    minX: -PIZZA_SIZE/2 + 1, 
-                    maxX: PIZZA_SIZE/2 - 1, 
-                    minZ: -PIZZA_SIZE/2 + 1, 
-                    maxZ: PIZZA_SIZE/2 - 1 
-                },
-                spawnPos: { x: 0, z: 12 },  // Spawn near exit
-                
-                // Furniture for sitting interactions
-                furniture: furnitureData,
-                
-                // Landing surfaces for jumping (Y heights)
-                landingSurfaces: [
-                    // Table tops (can jump on)
-                    ...tablePositions.map(t => ({ 
-                        type: 'circle', x: t.x, z: t.z, radius: 2.2, height: 2.75 
-                    })),
-                    // Counter top (can jump on) - snug against back wall
-                    { type: 'box', minX: -10, maxX: 10, minZ: COUNTER_Z - COUNTER_DEPTH/2, maxZ: COUNTER_Z + COUNTER_DEPTH/2, height: COUNTER_HEIGHT + 0.1 },
-                    // Bar stool seats (can jump on) - jumpable height
-                    ...barStoolPositions.map(x => ({ 
-                        type: 'circle', x, z: STOOL_Z, radius: 0.6, height: STOOL_SEAT_HEIGHT + 0.05 
-                    })),
-                    // Chair seats (can jump on) - raised to match tall chairs
-                    ...chairData.map(c => ({ 
-                        type: 'circle', x: c.position.x, z: c.position.z, radius: 0.7, height: 2.9 
-                    }))
-                ],
-                
-                // Table collision (can't walk through pedestal)
-                tables: tablePositions.map(t => ({ x: t.x, z: t.z, radius: 0.6 })),
-                
-                // Chair collision (small radius for legs)
-                chairs: chairData.map(c => ({ x: c.position.x, z: c.position.z, radius: 0.7 })),
-                
-                // Bar stool collision
-                stools: barStoolPositions.map(x => ({ x, z: STOOL_Z, radius: 0.5 })),
-                
-                // Counter collision (rectangular) - snug against back wall
-                counter: { minX: -10, maxX: 10, minZ: COUNTER_Z - COUNTER_DEPTH/2, maxZ: COUNTER_Z + COUNTER_DEPTH/2 }
-            };
-        };
-        
-        // Generate Igloo interior room (cozy hangout space) - 50% LARGER
-        const generateIglooRoom = () => {
-            const IGLOO_SIZE = 30; // 50% larger (was 20)
-            scene.background = new THREE.Color(0x0d1520); // Darker, moodier background
-            
-            // Simple collision map for igloo
-            const map = [];
-            for(let x = 0; x < 15; x++) {
-                map[x] = [];
-                for(let z = 0; z < 15; z++) {
-                    map[x][z] = 2; // All walkable
-                }
-            }
-            mapRef.current = map;
-            
-            // ==================== FLOOR ====================
-            // Cozy carpet in center (scaled positions for larger room)
-            const carpetGeo = new THREE.CircleGeometry(10.5, 32); // Was 7
-            const carpetMat = new THREE.MeshStandardMaterial({ color: 0x6B3510, roughness: 0.9 }); // Darker brown
-            const carpet = new THREE.Mesh(carpetGeo, carpetMat);
-            carpet.rotation.x = -Math.PI / 2;
-            carpet.position.y = 0.02;
-            carpet.receiveShadow = true;
-            scene.add(carpet);
-            
-            // Carpet pattern - inner circle
-            const innerCarpet = new THREE.Mesh(
-                new THREE.CircleGeometry(7.5, 32), // Was 5
-                new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.9 })
-            );
-            innerCarpet.rotation.x = -Math.PI / 2;
-            innerCarpet.position.y = 0.03;
-            scene.add(innerCarpet);
-            
-            // Ice floor around carpet
-            const floorGeo = new THREE.CircleGeometry(IGLOO_SIZE / 2, 32);
-            const floorMat = new THREE.MeshStandardMaterial({ 
-                color: 0xB8D4E8, // Slightly darker ice 
-                roughness: 0.4,
-                metalness: 0.1
-            });
-            const floor = new THREE.Mesh(floorGeo, floorMat);
-            floor.rotation.x = -Math.PI / 2;
-            floor.position.y = 0.01;
-            floor.receiveShadow = true;
-            scene.add(floor);
-            
-            // ==================== DOME WALLS ====================
-            // Ice dome interior (hemisphere from inside)
-            const domeGeo = new THREE.SphereGeometry(IGLOO_SIZE / 2, 32, 24, 0, Math.PI * 2, 0, Math.PI / 2);
-            const domeMat = new THREE.MeshStandardMaterial({ 
-                color: 0x9CB8C8, // Darker, more atmospheric ice
-                roughness: 0.5,
-                side: THREE.BackSide
-            });
-            const dome = new THREE.Mesh(domeGeo, domeMat);
-            dome.scale.y = 0.6; // Flatten dome
-            scene.add(dome);
-            
-            // Ice block lines on dome (adjusted for larger dome)
-            for (let i = 1; i < 8; i++) {
-                const ringY = i * 1.2;
-                const ringRadius = (IGLOO_SIZE / 2) * Math.cos(Math.asin(ringY / (IGLOO_SIZE / 2 * 0.6)));
-                if (ringRadius > 1) {
-                    const ring = new THREE.Mesh(
-                        new THREE.TorusGeometry(ringRadius, 0.06, 4, 48),
-                        new THREE.MeshStandardMaterial({ color: 0x7A9AAA })
-                    );
-                    ring.position.y = ringY;
-                    ring.rotation.x = Math.PI / 2;
-                    scene.add(ring);
-                }
-            }
-            
-            // ==================== COUCH ==================== (position: 0, -9)
-            const couchGroup = new THREE.Group();
-            const couchMat = new THREE.MeshStandardMaterial({ color: 0x2E4A62, roughness: 0.8 });
-            const cushionMat = new THREE.MeshStandardMaterial({ color: 0x3D5A80, roughness: 0.9 });
-            
-            // Couch base
-            const baseGeo = new THREE.BoxGeometry(5, 0.8, 2);
-            const couchBase = new THREE.Mesh(baseGeo, couchMat);
-            couchBase.position.y = 0.4;
-            couchBase.castShadow = true;
-            couchGroup.add(couchBase);
-            
-            // Couch back
-            const backGeo = new THREE.BoxGeometry(5, 1.5, 0.5);
-            const couchBack = new THREE.Mesh(backGeo, couchMat);
-            couchBack.position.set(0, 1.15, -0.75);
-            couchBack.castShadow = true;
-            couchGroup.add(couchBack);
-            
-            // Couch armrests
-            const armGeo = new THREE.BoxGeometry(0.5, 1, 2);
-            [-2.5, 2.5].forEach(x => {
-                const arm = new THREE.Mesh(armGeo, couchMat);
-                arm.position.set(x, 0.7, 0);
-                arm.castShadow = true;
-                couchGroup.add(arm);
-            });
-            
-            // Cushions
-            [-1.5, 0, 1.5].forEach(x => {
-                const cushion = new THREE.Mesh(
-                    new THREE.BoxGeometry(1.4, 0.3, 1.6),
-                    cushionMat
-                );
-                cushion.position.set(x, 0.95, 0.1);
-                couchGroup.add(cushion);
-            });
-            
-            couchGroup.position.set(0, 0, -9); // Was -6
-            scene.add(couchGroup);
-            
-            // ==================== CHAIRS ==================== (positions adjusted)
-            const createChair = (x, z, rotY) => {
-                const chairGroup = new THREE.Group();
-                const chairMat = new THREE.MeshStandardMaterial({ color: 0x5D4E37, roughness: 0.8 });
-                const seatMat = new THREE.MeshStandardMaterial({ color: 0xC0392B, roughness: 0.9 }); // Darker red
-                
-                // Seat
-                const seat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 1.5), seatMat);
-                seat.position.y = 0.8;
-                seat.castShadow = true;
-                chairGroup.add(seat);
-                
-                // Legs
-                const legGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.8, 8);
-                [[-0.5, -0.5], [-0.5, 0.5], [0.5, -0.5], [0.5, 0.5]].forEach(([lx, lz]) => {
-                    const leg = new THREE.Mesh(legGeo, chairMat);
-                    leg.position.set(lx, 0.4, lz);
-                    chairGroup.add(leg);
-                });
-                
-                // Back
-                const back = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.2, 0.15), chairMat);
-                back.position.set(0, 1.5, -0.65);
-                back.castShadow = true;
-                chairGroup.add(back);
-                
-                chairGroup.position.set(x, 0, z);
-                chairGroup.rotation.y = rotY;
-                scene.add(chairGroup);
-            };
-            
-            createChair(-7.5, -3, Math.PI / 4);   // Was (-5, -2)
-            createChair(7.5, -3, -Math.PI / 4);   // Was (5, -2)
-            
-            // ==================== TV / GAME CONSOLE ==================== (position: 0, 9)
-            const tvGroup = new THREE.Group();
-            
-            // TV Stand
-            const standGeo = new THREE.BoxGeometry(3, 1, 1);
-            const standMat = new THREE.MeshStandardMaterial({ color: 0x2C3E50, roughness: 0.7 });
-            const stand = new THREE.Mesh(standGeo, standMat);
-            stand.position.y = 0.5;
-            stand.castShadow = true;
-            tvGroup.add(stand);
-            
-            // TV Screen
-            const screenGeo = new THREE.BoxGeometry(2.5, 1.8, 0.15);
-            const screenMat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.3 });
-            const screen = new THREE.Mesh(screenGeo, screenMat);
-            screen.position.set(0, 1.9, 0);
-            screen.castShadow = true;
-            tvGroup.add(screen);
-            
-            // Screen glow (playing game) - dimmer
-            const glowGeo = new THREE.PlaneGeometry(2.3, 1.6);
-            const glowMat = new THREE.MeshBasicMaterial({ 
-                color: 0x3366cc, 
-                transparent: true, 
-                opacity: 0.2 
-            });
-            const glow = new THREE.Mesh(glowGeo, glowMat);
-            glow.position.set(0, 1.9, 0.08);
-            tvGroup.add(glow);
-            
-            // Game console
-            const consoleMesh = new THREE.Mesh(
-                new THREE.BoxGeometry(0.6, 0.15, 0.4),
-                new THREE.MeshStandardMaterial({ color: 0x1a1a1a })
-            );
-            consoleMesh.position.set(0, 1.1, 0.2);
-            tvGroup.add(consoleMesh);
-            
-            tvGroup.position.set(0, 0, 9); // Was 6
-            tvGroup.rotation.y = Math.PI;
-            scene.add(tvGroup);
-            
-            // ==================== COFFEE TABLE ==================== (position: 0, -3)
-            const tableGroup = new THREE.Group();
-            const tableMat = new THREE.MeshStandardMaterial({ color: 0x5D4037, roughness: 0.7 });
-            
-            // Table top
-            const tableTop = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.15, 1.5), tableMat);
-            tableTop.position.y = 0.6;
-            tableTop.castShadow = true;
-            tableTop.receiveShadow = true;
-            tableGroup.add(tableTop);
-            
-            // Table legs
-            const tLegGeo = new THREE.BoxGeometry(0.15, 0.6, 0.15);
-            [[-1, -0.5], [-1, 0.5], [1, -0.5], [1, 0.5]].forEach(([tx, tz]) => {
-                const tLeg = new THREE.Mesh(tLegGeo, tableMat);
-                tLeg.position.set(tx, 0.3, tz);
-                tableGroup.add(tLeg);
-            });
-            
-            tableGroup.position.set(0, 0, -3); // Was -2
-            scene.add(tableGroup);
-            
-            // ==================== KICKABLE BEACH BALL ==================== 
-            const beachBallGroup = new THREE.Group();
-            beachBallGroup.name = 'beachBall';
-            
-            const ballGeo = new THREE.SphereGeometry(0.5, 16, 16);
-            const ballMat = new THREE.MeshStandardMaterial({ color: 0xFF6B6B, roughness: 0.6 });
-            const ball = new THREE.Mesh(ballGeo, ballMat);
-            ball.castShadow = true;
-            beachBallGroup.add(ball);
-            
-            // Ball stripes (attached to group so they move together)
-            const stripeMat = new THREE.MeshStandardMaterial({ color: 0xFFE66D });
-            for (let i = 0; i < 4; i++) {
-                const stripe = new THREE.Mesh(
-                    new THREE.TorusGeometry(0.35, 0.08, 8, 16),
-                    stripeMat
-                );
-                stripe.rotation.y = (i / 4) * Math.PI;
-                beachBallGroup.add(stripe);
-            }
-            
-            // Initial position
-            beachBallGroup.position.set(4.5, 0.5, 3);
-            scene.add(beachBallGroup);
-            
-            // Beach ball physics data (tuned for fun bouncy feel)
-            const beachBall = {
-                mesh: beachBallGroup,
-                velocity: { x: 0, z: 0 },
-                radius: 0.5,
-                friction: 0.985,    // Slight friction - rolls nicely
-                bounciness: 0.75    // Good bounce off walls
-            };
-            
-            // Furniture collision boxes (for player and ball collision)
-            // Note: Couch collider is the BACK only, so players can sit on the front
-            // Added height property for proper 3D collision - allows jumping on top!
-            const furnitureColliders = [
-                // Couch BACK at (0, -9.5) - only the back rest, not the seating area
-                { x: 0, z: -9.8, hw: 2.8, hd: 0.6, height: 1.8, y: 0, name: 'couch_back' },
-                // Couch ARMS (left and right)
-                { x: -2.5, z: -9, hw: 0.4, hd: 1.2, height: 1.2, y: 0, name: 'couch_arm_l' },
-                { x: 2.5, z: -9, hw: 0.4, hd: 1.2, height: 1.2, y: 0, name: 'couch_arm_r' },
-                // Coffee table at (0, -3) - LOW height so player can jump on top!
-                { x: 0, z: -3, hw: 1.5, hd: 1, height: 0.8, y: 0, name: 'table' }
-            ];
-            
-            // ==================== POTTED PLANT ==================== (position: -6, 6)
-            const plantGroup = new THREE.Group();
-            
-            // Pot
-            const potGeo = new THREE.CylinderGeometry(0.4, 0.3, 0.6, 12);
-            const potMat = new THREE.MeshStandardMaterial({ color: 0xB5651D, roughness: 0.8 });
-            const pot = new THREE.Mesh(potGeo, potMat);
-            pot.position.y = 0.3;
-            pot.castShadow = true;
-            plantGroup.add(pot);
-            
-            // Soil
-            const soil = new THREE.Mesh(
-                new THREE.CylinderGeometry(0.35, 0.35, 0.1, 12),
-                new THREE.MeshStandardMaterial({ color: 0x3d2817 })
-            );
-            soil.position.y = 0.55;
-            plantGroup.add(soil);
-            
-            // Plant leaves
-            const leafMat = new THREE.MeshStandardMaterial({ color: 0x228B22, roughness: 0.8 });
-            for (let i = 0; i < 8; i++) {
-                const leaf = new THREE.Mesh(
-                    new THREE.ConeGeometry(0.15, 0.8, 4),
-                    leafMat
-                );
-                const angle = (i / 8) * Math.PI * 2;
-                leaf.position.set(
-                    Math.cos(angle) * 0.2,
-                    1,
-                    Math.sin(angle) * 0.2
-                );
-                leaf.rotation.x = 0.3;
-                leaf.rotation.y = angle;
-                plantGroup.add(leaf);
-            }
-            // Center leaf
-            const centerLeaf = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.6, 4), leafMat);
-            centerLeaf.position.y = 1.1;
-            plantGroup.add(centerLeaf);
-            
-            plantGroup.position.set(-6, 0, 6); // Was (-4, 0, 4)
-            scene.add(plantGroup);
-            
-            // ==================== BOOKSHELF ==================== (position: 9, 0)
-            const shelfGroup = new THREE.Group();
-            const shelfMat = new THREE.MeshStandardMaterial({ color: 0x654321, roughness: 0.8 });
-            
-            // Shelf frame
-            const frame = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3, 0.4), shelfMat);
-            frame.position.y = 1.5;
-            frame.castShadow = true;
-            shelfGroup.add(frame);
-            
-            // Shelves
-            [0.6, 1.5, 2.4].forEach(y => {
-                const shelf = new THREE.Mesh(
-                    new THREE.BoxGeometry(2.3, 0.08, 0.35),
-                    shelfMat
-                );
-                shelf.position.set(0, y, 0.05);
-                shelfGroup.add(shelf);
-            });
-            
-            // Books (colorful)
-            const bookColors = [0xE74C3C, 0x3498DB, 0x2ECC71, 0xF39C12, 0x9B59B6];
-            [0.8, 1.7, 2.6].forEach((y, shelfIdx) => {
-                for (let i = 0; i < 5; i++) {
-                    const book = new THREE.Mesh(
-                        new THREE.BoxGeometry(0.15, 0.4 + Math.random() * 0.2, 0.25),
-                        new THREE.MeshStandardMaterial({ color: bookColors[(i + shelfIdx) % bookColors.length] })
-                    );
-                    book.position.set(-0.8 + i * 0.35, y + 0.25, 0.05);
-                    shelfGroup.add(book);
-                }
-            });
-            
-            shelfGroup.position.set(10, 0, 0); // Was (6, 0, 0)
-            shelfGroup.rotation.y = -Math.PI / 2;
-            scene.add(shelfGroup);
-            
-            // ==================== MOODY WARM LIGHTING ====================
-            // Very dim ambient - let the point lights do the work
-            const ambientLight = new THREE.AmbientLight(0x2a1a0a, 0.15); // Very dim warm brown
-            scene.add(ambientLight);
-            
-            // Main ceiling light (warm orange glow, reduced intensity)
-            const ceilingLight = new THREE.PointLight(0xFF9944, 0.8, 25);
-            ceilingLight.position.set(0, 7, 0);
-            ceilingLight.castShadow = true;
-            scene.add(ceilingLight);
-            
-            // Light fixture (warm glowing orb)
-            const fixtureMesh = new THREE.Mesh(
-                new THREE.SphereGeometry(0.6, 16, 16),
-                new THREE.MeshBasicMaterial({ color: 0xFFAA55 })
-            );
-            fixtureMesh.position.set(0, 7.5, 0);
-            scene.add(fixtureMesh);
-            
-            // Subtle warm accent lights around the room
-            const accentLight1 = new THREE.PointLight(0xFF6633, 0.3, 12);
-            accentLight1.position.set(-8, 2, -8);
-            scene.add(accentLight1);
-            
-            const accentLight2 = new THREE.PointLight(0xFF6633, 0.3, 12);
-            accentLight2.position.set(8, 2, -8);
-            scene.add(accentLight2);
-            
-            // TV glow light (subtle blue, for contrast)
-            const tvLight = new THREE.PointLight(0x3366aa, 0.4, 10);
-            tvLight.position.set(0, 2, 7);
-            scene.add(tvLight);
-            
-            // Cozy fireplace-style warm glow from below
-            const floorGlow = new THREE.PointLight(0xFF4400, 0.2, 15);
-            floorGlow.position.set(0, 0.5, 0);
-            scene.add(floorGlow);
-            
-            // ==================== EXIT GLOW ==================== (position: 0, 13.5)
-            const exitGlow = new THREE.Mesh(
-                new THREE.CircleGeometry(2.5, 16),
-                new THREE.MeshBasicMaterial({ color: 0x44aaff, transparent: true, opacity: 0.15 })
-            );
-            exitGlow.rotation.x = -Math.PI / 2;
-            exitGlow.position.set(0, 0.02, 13.5); // Was 9
-            scene.add(exitGlow);
-            
-            // Exit door frame
-            const doorFrame = new THREE.Mesh(
-                new THREE.BoxGeometry(3, 3.5, 0.3),
-                new THREE.MeshStandardMaterial({ color: 0x4a3728 })
-            );
-            doorFrame.position.set(0, 1.75, IGLOO_SIZE / 2 - 0.5);
-            scene.add(doorFrame);
-            
-            // Door opening (dark)
-            const doorOpening = new THREE.Mesh(
-                new THREE.PlaneGeometry(2.5, 3),
-                new THREE.MeshBasicMaterial({ color: 0x050a10 })
-            );
-            doorOpening.position.set(0, 1.5, IGLOO_SIZE / 2 - 0.3);
-            scene.add(doorOpening);
-            
-            // Furniture interaction data (for sitting) - UPDATED POSITIONS
-            const furniture = [
-                {
-                    type: 'couch',
-                    position: { x: 0, z: -9 },
-                    rotation: 0, // Facing +Z (toward TV)
-                    seatHeight: 0.95,
-                    snapPoints: [
-                        // Snap points are LOCAL to couch - z: 0 = center of seat
-                        { x: -1.5, z: 0 },   // Left cushion
-                        { x: 0, z: 0 },       // Middle cushion  
-                        { x: 1.5, z: 0 }      // Right cushion
-                    ],
-                    interactionRadius: 3
-                },
-                {
-                    type: 'chair',
-                    position: { x: -7.5, z: -3 },
-                    rotation: Math.PI / 4, // Angled toward center
-                    seatHeight: 0.8,
-                    snapPoints: [{ x: 0, z: 0 }],
-                    interactionRadius: 2
-                },
-                {
-                    type: 'chair',
-                    position: { x: 7.5, z: -3 },
-                    rotation: -Math.PI / 4, // Angled toward center
-                    seatHeight: 0.8,
-                    snapPoints: [{ x: 0, z: 0 }],
-                    interactionRadius: 2
-                }
-            ];
-            
-            return {
-                // Use circular bounds for igloos (radius from center)
-                bounds: { 
-                    type: 'circular',
-                    radius: IGLOO_SIZE / 2 - 1.5, // Playable radius
-                    centerX: 0,
-                    centerZ: 0
-                },
-                spawnPos: { x: 0, z: 10 },
-                furniture: furniture,
-                beachBall: beachBall, // Kickable beach ball
-                colliders: furnitureColliders // Furniture collision boxes
-            };
-        };
-        
         // Generate scenery based on current room
         let roomData = null;
         let butterflyGroup = null;
@@ -2743,8 +626,8 @@ const VoxelWorld = ({
         if (room === 'town') {
             const cityResult = generateCity();
             butterflyGroup = cityResult.butterflyGroup;
-            const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
-            const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+            const townCenterX = CENTER_X;
+            const townCenterZ = CENTER_Z;
             // Park bench positions (matching TownCenter.js propPlacements)
             const C = townCenterX; // CENTER = 110
             const benchSnapPoints = [{ x: -0.6, z: 0 }, { x: 0, z: 0 }, { x: 0.6, z: 0 }];
@@ -2846,126 +729,39 @@ const VoxelWorld = ({
                 ]
             };
         } else if (room === 'dojo') {
-            roomData = generateDojoRoom();
+            // Simple collision map for dojo
+            const map = [];
+            for(let x = 0; x < 10; x++) {
+                map[x] = [];
+                for(let z = 0; z < 10; z++) map[x][z] = 2;
+            }
+            mapRef.current = map;
+            roomData = generateDojoInterior(THREE, scene);
         } else if (room === 'pizza') {
-            roomData = generatePizzaRoom();
+            // Simple collision map for pizza
+            const map = [];
+            for(let x = 0; x < 10; x++) {
+                map[x] = [];
+                for(let z = 0; z < 10; z++) map[x][z] = 2;
+            }
+            mapRef.current = map;
+            roomData = generatePizzaInterior(THREE, scene);
         } else if (room === 'nightclub') {
-            // Generate nightclub interior
+            // Generate nightclub interior - all room data is in Nightclub.js
             const nightclub = new Nightclub(THREE);
-            const nightclubResult = nightclub.spawn(scene);
+            nightclub.spawn(scene);
             nightclubRef.current = nightclub;
-            
-            // Use Nightclub spawn position
-            const spawnPos = nightclub.getSpawnPosition();
-            
-            // Simple bounds-based collision like pizza parlor
-            const W = Nightclub.ROOM_WIDTH;
-            const D = Nightclub.ROOM_DEPTH;
-            const CX = W / 2;
-            
-            // Dance floor dimensions (from Nightclub.js)
-            // Created at (CX, CZ+5) = (20, 22.5)
-            // 8 cols x 6 rows, tileSize=2, gap=0.1
-            const danceFloorWidth = 8 * 2.1; // ~16.8
-            const danceFloorDepth = 6 * 2.1; // ~12.6
-            const danceFloorCenterZ = D / 2 + 5; // 22.5
-            
-            roomData = {
-                bounds: {
-                    // Walls are at x=0, x=W, z=0, z=D
-                    // Use actual room size - collision buffer applied in movement code
-                    minX: 0,
-                    maxX: W,
-                    minZ: 0,
-                    maxZ: D
-                },
-                spawnPos: spawnPos,
-                nightclub: nightclub,
-                // Dance floor - raised platform player walks ON
-                danceFloor: {
-                    minX: CX - danceFloorWidth / 2 - 0.5,
-                    maxX: CX + danceFloorWidth / 2 + 0.5,
-                    minZ: danceFloorCenterZ - danceFloorDepth / 2 - 0.5,
-                    maxZ: danceFloorCenterZ + danceFloorDepth / 2 + 0.5,
-                    height: 0.4 // Tile surface height
-                },
-                // DJ booth platform collision (can walk on it when above) - LOWERED 50%
-                djBooth: {
-                    minX: CX - 6,
-                    maxX: CX + 6,
-                    minZ: 0,
-                    maxZ: 6,
-                    height: 0.75
-                },
-                // Equipment rack behind DJ (solid wall) - LOWERED
-                equipmentRack: {
-                    minX: CX - 1.5,
-                    maxX: CX + 1.5,
-                    minZ: 0,
-                    maxZ: 2,
-                    height: 2.75
-                },
-                // Speakers (small base collision, landable on top)
-                speakers: [
-                    { x: 2, z: D / 2 - 5, w: 2.5, d: 2, h: 4.8 },
-                    { x: 2, z: D / 2 + 5, w: 2.5, d: 2, h: 4.8 },
-                    { x: W - 2, z: D / 2 - 5, w: 2.5, d: 2, h: 4.8 },
-                    { x: W - 2, z: D / 2 + 5, w: 2.5, d: 2, h: 4.8 },
-                    { x: W / 2 - 8, z: 5, w: 3, d: 2.5, h: 6 },
-                    { x: W / 2 + 8, z: 5, w: 3, d: 2.5, h: 6 },
-                    { x: W / 2 - 10, z: D / 2 + 8, w: 2, d: 1.5, h: 4 },
-                    { x: W / 2 + 10, z: D / 2 + 8, w: 2, d: 1.5, h: 4 },
-                ],
-                // Stairs - ramp from z=22.5 going north, each step
-                stairs: {
-                    x: W - 4,
-                    startZ: D / 2 + 5, // z = 22.5
-                    stepHeight: 0.4,
-                    stepDepth: 0.6,
-                    width: 3,
-                    totalSteps: 30 // Goes to ceiling
-                },
-                // Records crate
-                recordsCrate: {
-                    x: 5, z: 8, w: 1.5, d: 1.5, h: 1
-                },
-                // Landing surfaces for parkour
-                landingSurfaces: nightclubResult.landingSurfaces || [],
-                // Furniture for sitting (couch only)
-                furniture: [
-                    {
-                        type: 'couch',
-                        position: { x: 1.5, z: 17.5 }, // Left wall, between speakers
-                        rotation: Math.PI / 2, // Back against wall, facing right
-                        seatHeight: 0.95,
-                        snapPoints: [
-                            { x: -1.5, z: 0 },   // Left cushion
-                            { x: 0, z: 0 },       // Middle cushion  
-                            { x: 1.5, z: 0 }      // Right cushion
-                        ],
-                        interactionRadius: 3
-                    }
-                ],
-                // DJ spots - trigger zones at the turntables
-                djSpots: [
-                    {
-                        id: 'dj_left',
-                        position: { x: CX - 2.2, z: 2.85 }, // At left turntable
-                        standHeight: 0.75, // Platform height
-                        rotation: 0, // Face south toward dance floor
-                        interactionRadius: 1.5
-                    },
-                    {
-                        id: 'dj_right', 
-                        position: { x: CX + 2.2, z: 2.85 }, // At right turntable
-                        standHeight: 0.75, // Platform height
-                        rotation: 0, // Face south toward dance floor
-                        interactionRadius: 1.5
-                    }
-                ]
-            };
+            roomData = nightclub.getRoomData();
         } else if (room.startsWith('igloo')) {
-            roomData = generateIglooRoom();
+            // igloo3 is SKNY GANG nightclub-themed igloo
+            if (room === 'igloo3') {
+                roomData = generateSKNYIglooInterior(THREE, scene);
+                // Store update function for SKNY interior animations
+                sknyIglooInteriorRef.current = roomData;
+            } else {
+                roomData = generateIglooInterior(THREE, scene);
+            }
+            mapRef.current = roomData.map;
             // Request ball sync from server when entering igloo
             if (mpRequestBallSync) {
                 setTimeout(() => mpRequestBallSync(), 100);
@@ -2996,8 +792,8 @@ const VoxelWorld = ({
         };
         
         // --- PORTAL MARKERS (Town only) ---
-        const centerX = (CITY_SIZE / 2) * BUILDING_SCALE;
-        const centerZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+        const centerX = CENTER_X;
+        const centerZ = CENTER_Z;
         
         // Only generate town buildings in town room
         if (room !== 'town') {
@@ -3033,20 +829,19 @@ const VoxelWorld = ({
             return sprite;
         };
 
-        // Build high-quality procedural buildings using PropsFactory
-        const buildingFactory = new PropsFactory(THREE);
+        // Build high-quality procedural buildings using extracted building classes
         
         BUILDINGS.forEach(building => {
             let buildingGroup;
             const { w, h, d } = building.size;
             
-            // Use factory methods for high-quality building generation
+            // Use standalone building classes for high-quality building generation
             if (building.id === 'dojo') {
-                buildingGroup = buildingFactory.createDojo({ w, h, d });
+                buildingGroup = createDojo(THREE, { w, h, d });
             } else if (building.id === 'market') {
-                buildingGroup = buildingFactory.createGiftShop({ w, h, d });
+                buildingGroup = createGiftShop(THREE, { w, h, d });
             } else if (building.id === 'plaza') {
-                buildingGroup = buildingFactory.createPizzaParlor({ w, h, d });
+                buildingGroup = createPizzaParlor(THREE, { w, h, d });
             } else {
                 // Fallback to simple building
                 buildingGroup = new THREE.Group();
@@ -3113,660 +908,19 @@ const VoxelWorld = ({
         });
         } // End town-only building generation
         
-        // --- OPTIMIZED PLAYER & AI BUILDER ---
-        // Material cache - reuse materials for same colors (HUGE performance gain)
-        const materialCache = new Map();
-        const getMaterial = (color) => {
-            // Guard against undefined/null colors
-            if (color === undefined || color === null) {
-                color = 0x888888; // Default gray
-            }
-            const colorKey = typeof color === 'string' ? color : color.toString();
-            if (!materialCache.has(colorKey)) {
-                materialCache.set(colorKey, new THREE.MeshStandardMaterial({ color }));
-            }
-            return materialCache.get(colorKey);
-        };
+        // --- PENGUIN BUILDER (extracted to PenguinBuilder.js) ---
+        const penguinBuilder = createPenguinBuilder(THREE);
+        const { buildPenguinMesh } = penguinBuilder;
         
-        // Shared geometry for all voxels
-        const sharedVoxelGeo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+        // Store buildPenguinMesh for multiplayer to use
+        buildPenguinMeshRef.current = buildPenguinMesh;
         
-        const buildPenguinMesh = (data) => {
-             const group = new THREE.Group();
-             
-             // OPTIMIZED: Merge voxels by color into single meshes
-             const buildPartMerged = (voxels, palette, pivot) => {
-                 const g = new THREE.Group();
-                 
-                 // Group voxels by color
-                 const colorGroups = new Map();
-                 voxels.forEach(v => {
-                     const colorKey = palette[v.c] || v.c;
-                     if (!colorGroups.has(colorKey)) {
-                         colorGroups.set(colorKey, []);
-                     }
-                     colorGroups.get(colorKey).push(v);
-                 });
-                 
-                 // Create ONE merged mesh per color
-                 colorGroups.forEach((colorVoxels, colorKey) => {
-                     const matrices = [];
-                     const tempMatrix = new THREE.Matrix4();
-                     
-                     colorVoxels.forEach(v => {
-                         let px = v.x * VOXEL_SIZE;
-                         let py = v.y * VOXEL_SIZE;
-                         let pz = v.z * VOXEL_SIZE;
-                         
-                         if(pivot) {
-                             px -= pivot.x * VOXEL_SIZE;
-                             py -= pivot.y * VOXEL_SIZE;
-                             pz -= pivot.z * VOXEL_SIZE;
-                         }
-                         
-                         tempMatrix.makeTranslation(px, py, pz);
-                         if(v.scaleY) {
-                             tempMatrix.multiply(new THREE.Matrix4().makeScale(1, v.scaleY, 1));
-                         }
-                         matrices.push(tempMatrix.clone());
-                     });
-                     
-                     // Use InstancedMesh for many voxels of same color
-                     const instancedMesh = new THREE.InstancedMesh(
-                         sharedVoxelGeo,
-                         getMaterial(colorKey),
-                         matrices.length
-                     );
-                     matrices.forEach((m, i) => instancedMesh.setMatrixAt(i, m));
-                     instancedMesh.castShadow = true;
-                     instancedMesh.instanceMatrix.needsUpdate = true;
-                     g.add(instancedMesh);
-                 });
-                 
-                 if(pivot) {
-                      g.position.set(pivot.x * VOXEL_SIZE, pivot.y * VOXEL_SIZE, pivot.z * VOXEL_SIZE);
-                 }
-                 
-                 return g;
-             };
-             
-             // Check for special character types (Marcus, etc.)
-             if (data.characterType === 'marcus') {
-                 // Build Marcus with SEPARATE PARTS for animation (like penguin)
-                 const pivots = MarcusGenerators.pivots();
-                 
-                // Head (for laugh animation)
-                const headVoxels = MarcusGenerators.head();
-                const head = buildPartMerged(headVoxels, MARCUS_PALETTE);
-                head.name = 'head';
-                 
-                 // Body
-                 const bodyVoxels = MarcusGenerators.body();
-                 const body = buildPartMerged(bodyVoxels, MARCUS_PALETTE);
-                 body.name = 'body';
-                 
-                 // Arms (named flipper_l/flipper_r for animation compatibility)
-                 const armLVoxels = MarcusGenerators.armLeft();
-                 const armL = buildPartMerged(armLVoxels, MARCUS_PALETTE, pivots.armLeft);
-                 armL.name = 'flipper_l';
-                 
-                 const armRVoxels = MarcusGenerators.armRight();
-                 const armR = buildPartMerged(armRVoxels, MARCUS_PALETTE, pivots.armRight);
-                 armR.name = 'flipper_r';
-                 
-                 // Legs (named foot_l/foot_r for animation compatibility)
-                 const legLVoxels = MarcusGenerators.legLeft();
-                 const legL = buildPartMerged(legLVoxels, MARCUS_PALETTE, pivots.legLeft);
-                 legL.name = 'foot_l';
-                 
-                 const legRVoxels = MarcusGenerators.legRight();
-                 const legR = buildPartMerged(legRVoxels, MARCUS_PALETTE, pivots.legRight);
-                 legR.name = 'foot_r';
-                 
-                 group.add(body, head, armL, armR, legL, legR);
-                 
-                 // Same scale and position as penguin
-                 group.scale.set(0.18, 0.18, 0.18);
-                 group.position.y = 0.8;
-             } else {
-                 // Build standard Penguin character
-                 const skin = data.skin || 'blue';
-                 const body = buildPartMerged(generateBaseBody(PALETTE[skin] || skin), PALETTE);
-                 const head = buildPartMerged(generateHead(PALETTE[skin] || skin), PALETTE);
-                 
-                 const footL = buildPartMerged(generateFoot(3), PALETTE, {x:3, y:-6, z:1});
-                 footL.name = 'foot_l';
-                 const footR = buildPartMerged(generateFoot(-3), PALETTE, {x:-3, y:-6, z:1});
-                 footR.name = 'foot_r';
-                 
-                 const flippersLeft = buildPartMerged(generateFlippers(PALETTE[skin] || skin, true), PALETTE, {x:5, y:0, z:0});
-                 const flippersRight = buildPartMerged(generateFlippers(PALETTE[skin] || skin, false), PALETTE, {x:-5, y:0, z:0});
-                 
-                 flippersLeft.name = 'flipper_l';
-                 flippersRight.name = 'flipper_r';
-                 head.name = 'head';
-                 body.name = 'body';
-                 
-                 // Check if bodyItem hides the body (e.g., "joe" clothing)
-                 const bodyItemData = data.bodyItem ? ASSETS.BODY[data.bodyItem] : null;
-                 const hideBody = bodyItemData?.hideBody === true;
-                 
-                 // Add body parts - skip body if hidden by clothing item (e.g., "joe")
-                 if (hideBody) {
-                     // JOE MODE: Big floating head like M&M meme
-                     // Create a wrapper group for the head and all cosmetics
-                     const joeHeadWrapper = new THREE.Group();
-                     joeHeadWrapper.name = 'joe_head_wrapper';
-                     joeHeadWrapper.add(head);
-                     
-                     // Add hat to the wrapper (if exists)
-                if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
-                         const hatMesh = buildPartMerged(ASSETS.HATS[data.hat], PALETTE);
-                         hatMesh.name = 'hat';
-                         joeHeadWrapper.add(hatMesh);
-                     }
-                     
-                     // Add eyes to the wrapper (if exists)
-                     if (data.eyes && ASSETS.EYES[data.eyes]) {
-                         const eyesMesh = buildPartMerged(ASSETS.EYES[data.eyes], PALETTE);
-                         eyesMesh.name = 'eyes';
-                         joeHeadWrapper.add(eyesMesh);
-                     }
-                     
-                     // Add mouth to the wrapper
-                     if (data.mouth && ASSETS.MOUTH[data.mouth]) {
-                         const mouthMesh = buildPartMerged(ASSETS.MOUTH[data.mouth], PALETTE);
-                         mouthMesh.name = 'mouth';
-                         joeHeadWrapper.add(mouthMesh);
-                     } else if (ASSETS.MOUTH.beak) {
-                         const mouthMesh = buildPartMerged(ASSETS.MOUTH.beak, PALETTE);
-                         mouthMesh.name = 'mouth';
-                         joeHeadWrapper.add(mouthMesh);
-                     }
-                     
-                     // Scale up the entire head wrapper (1.8x bigger)
-                     joeHeadWrapper.scale.set(1.8, 1.8, 1.8);
-                     // Move down since no body
-                     joeHeadWrapper.position.y = -2 * VOXEL_SIZE;
-                     group.add(joeHeadWrapper);
-                     
-                     // Rebuild flippers as WHITE for joe mode (like M&M gloves)
-                     const whiteFlippersLeft = buildPartMerged(generateFlippers('#FFFFFF', true), PALETTE, {x:5, y:0, z:0});
-                     const whiteFlippersRight = buildPartMerged(generateFlippers('#FFFFFF', false), PALETTE, {x:-5, y:0, z:0});
-                     whiteFlippersLeft.name = 'flipper_l';
-                     whiteFlippersRight.name = 'flipper_r';
-                     
-                     // Position flippers higher up near the head as floating hands
-                     whiteFlippersLeft.scale.set(0.9, 0.9, 0.9);
-                     whiteFlippersLeft.position.set(6 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
-                     
-                     whiteFlippersRight.scale.set(0.9, 0.9, 0.9);
-                     whiteFlippersRight.position.set(-6 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
-                     
-                     // Mark as joe mode for animation and cosmetic handling
-                     group.userData.isJoeMode = true;
-                     
-                     group.add(whiteFlippersLeft, whiteFlippersRight, footL, footR);
-                 } else {
-                     group.add(body, head, flippersLeft, flippersRight, footL, footR);
-                 }
-                 
-                // Skip hat/eyes/mouth for joe mode (already added to wrapper above)
-                if (!hideBody && data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
-                    const p = buildPartMerged(ASSETS.HATS[data.hat], PALETTE);
-                    p.name = 'hat';
-                    group.add(p);
-                    
-                    // Add spinning propeller blades for propeller hat
-                    if (data.hat === 'propeller') {
-                        const blades = new THREE.Group();
-                        blades.name = 'propeller_blades';
-                        blades.position.set(0, 13 * VOXEL_SIZE, 0);
-                        const bladeGeo = new THREE.BoxGeometry(4 * VOXEL_SIZE, 0.2 * VOXEL_SIZE, 0.5 * VOXEL_SIZE);
-                        const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-                        const b1 = new THREE.Mesh(bladeGeo, bladeMat);
-                        const b2 = new THREE.Mesh(bladeGeo, bladeMat);
-                        b2.rotation.y = Math.PI / 2;
-                        blades.add(b1, b2);
-                        group.add(blades);
-                    }
-                    
-                    // Flaming Crown - fire particles like campfire
-                    if (data.hat === 'flamingCrown') {
-                        const fireGroup = new THREE.Group();
-                        fireGroup.name = 'crown_fire';
-                        fireGroup.position.set(0, 12 * VOXEL_SIZE, 0);
-                        
-                        // Create fire particles
-                        const particleCount = 15;
-                        for (let i = 0; i < particleCount; i++) {
-                            const size = (0.3 + Math.random() * 0.3) * VOXEL_SIZE;
-                            const pGeo = new THREE.BoxGeometry(size, size, size);
-                            const colors = [0xFF4500, 0xFF6600, 0xFFAA00, 0xFFFF00];
-                            const pMat = new THREE.MeshBasicMaterial({ 
-                                color: colors[Math.floor(Math.random() * colors.length)], 
-                                transparent: true, 
-                                opacity: 0.9 
-                            });
-                            const pMesh = new THREE.Mesh(pGeo, pMat);
-                            pMesh.position.set(
-                                (Math.random() - 0.5) * 3 * VOXEL_SIZE,
-                                i * 0.3 * VOXEL_SIZE,
-                                (Math.random() - 0.5) * 3 * VOXEL_SIZE
-                            );
-                            pMesh.userData.particleIndex = i;
-                            pMesh.userData.baseY = pMesh.position.y;
-                            pMesh.userData.baseX = pMesh.position.x;
-                            pMesh.userData.baseZ = pMesh.position.z;
-                            fireGroup.add(pMesh);
-                        }
-                        fireGroup.userData.isFireEmitter = true;
-                        group.add(fireGroup);
-                    }
-                    
-                    // Wizard Hat - mark player as having wizard hat (particles are world-space)
-                    if (data.hat === 'wizardHat') {
-                        group.userData.hasWizardHat = true;
-                    }
-                }
-                 
-                // Skip eyes for joe mode (already added to wrapper above)
-                if (!hideBody && data.eyes && ASSETS.EYES[data.eyes]) {
-                    const p = buildPartMerged(ASSETS.EYES[data.eyes], PALETTE);
-                    p.name = 'eyes';
-                    group.add(p);
-                    
-                    // Add laser eye lights for laser eyes
-                    if (data.eyes === 'laser') {
-                        const laserGroup = new THREE.Group();
-                        laserGroup.name = 'laser_lights';
-                        
-                        const lightLeft = new THREE.PointLight(0xff0000, 1, 10);
-                        lightLeft.position.set(-2 * VOXEL_SIZE, 7 * VOXEL_SIZE, 5 * VOXEL_SIZE);
-                        lightLeft.name = 'laser_left';
-                        
-                        const lightRight = new THREE.PointLight(0xff0000, 1, 10);
-                        lightRight.position.set(2 * VOXEL_SIZE, 7 * VOXEL_SIZE, 5 * VOXEL_SIZE);
-                        lightRight.name = 'laser_right';
-                        
-                        laserGroup.add(lightLeft, lightRight);
-                        laserGroup.userData.isLaserEyes = true;
-                        group.add(laserGroup);
-                    }
-                    
-                    // Add fire eye effects for fire eyes
-                    if (data.eyes === 'fire') {
-                        const fireEyesGroup = new THREE.Group();
-                        fireEyesGroup.name = 'fire_eyes';
-                        
-                        // Left eye fire particles
-                        const leftFireGroup = new THREE.Group();
-                        leftFireGroup.position.set(-2 * VOXEL_SIZE, 7 * VOXEL_SIZE, 4.5 * VOXEL_SIZE);
-                        
-                        // Right eye fire particles
-                        const rightFireGroup = new THREE.Group();
-                        rightFireGroup.position.set(2 * VOXEL_SIZE, 7 * VOXEL_SIZE, 4.5 * VOXEL_SIZE);
-                        
-                        [leftFireGroup, rightFireGroup].forEach(eyeGroup => {
-                            for (let i = 0; i < 5; i++) {
-                                const size = 0.2 * VOXEL_SIZE;
-                                const pGeo = new THREE.BoxGeometry(size, size, size);
-                                const colors = [0xFF4500, 0xFF6600, 0xFFAA00];
-                                const pMat = new THREE.MeshBasicMaterial({ 
-                                    color: colors[i % colors.length], 
-                                    transparent: true, 
-                                    opacity: 0.9 
-                                });
-                                const pMesh = new THREE.Mesh(pGeo, pMat);
-                                pMesh.position.y = i * 0.15 * VOXEL_SIZE;
-                                pMesh.userData.particleIndex = i;
-                                pMesh.userData.baseY = pMesh.position.y;
-                                eyeGroup.add(pMesh);
-                            }
-                        });
-                        
-                        // Add point lights for glow
-                        const lightLeft = new THREE.PointLight(0xff4500, 0.8, 5);
-                        lightLeft.position.copy(leftFireGroup.position);
-                        const lightRight = new THREE.PointLight(0xff4500, 0.8, 5);
-                        lightRight.position.copy(rightFireGroup.position);
-                        
-                        fireEyesGroup.add(leftFireGroup, rightFireGroup, lightLeft, lightRight);
-                        fireEyesGroup.userData.isFireEyes = true;
-                        group.add(fireEyesGroup);
-                    }
-                } else if (!hideBody && ASSETS.EYES.normal) {
-                    const p = buildPartMerged(ASSETS.EYES.normal, PALETTE);
-                    p.name = 'eyes';
-                    group.add(p);
-                }
-                 
-                // Skip mouth for joe mode (already added to wrapper above)
-                if (!hideBody && data.mouth && ASSETS.MOUTH[data.mouth]) {
-                    const p = buildPartMerged(ASSETS.MOUTH[data.mouth], PALETTE);
-                    p.name = 'mouth';
-                    group.add(p);
-                    
-                    // Add smoke particles for cigarette, pipe, or cigar
-                    if (data.mouth === 'cigarette' || data.mouth === 'pipe' || data.mouth === 'cigar') {
-                        const smokeGroup = new THREE.Group();
-                        smokeGroup.name = 'smoke_particles';
-                        
-                        // Position based on mouth type
-                        const tipX = data.mouth === 'pipe' ? 2 * VOXEL_SIZE : 
-                                     data.mouth === 'cigar' ? 6 * VOXEL_SIZE : 4.5 * VOXEL_SIZE;
-                        const tipY = data.mouth === 'pipe' ? 6 * VOXEL_SIZE : 5.5 * VOXEL_SIZE;
-                        const tipZ = data.mouth === 'pipe' ? 6 * VOXEL_SIZE : 
-                                     data.mouth === 'cigar' ? 5.6 * VOXEL_SIZE : 5.5 * VOXEL_SIZE;
-                        smokeGroup.position.set(tipX, tipY, tipZ);
-                        
-                        // Create smoke particles
-                        const particleCount = 8;
-                        for (let i = 0; i < particleCount; i++) {
-                            const pGeo = new THREE.BoxGeometry(0.3 * VOXEL_SIZE, 0.3 * VOXEL_SIZE, 0.3 * VOXEL_SIZE);
-                            const pMat = new THREE.MeshBasicMaterial({ 
-                                color: 0xaaaaaa, 
-                                transparent: true, 
-                                opacity: 0.6 
-                            });
-                            const pMesh = new THREE.Mesh(pGeo, pMat);
-                            // Stagger initial positions
-                            pMesh.position.y = i * 0.3 * VOXEL_SIZE;
-                            pMesh.userData.particleIndex = i;
-                            pMesh.userData.baseY = pMesh.position.y;
-                            smokeGroup.add(pMesh);
-                        }
-                        
-                        smokeGroup.userData.isSmokeEmitter = true;
-                        group.add(smokeGroup);
-                    }
-                    
-                    // Fire Breath - forward shooting fire particles
-                    if (data.mouth === 'fireBreath') {
-                        const fireGroup = new THREE.Group();
-                        fireGroup.name = 'breath_fire';
-                        fireGroup.position.set(0, 5 * VOXEL_SIZE, 5.5 * VOXEL_SIZE);
-                        
-                        const particleCount = 20;
-                        for (let i = 0; i < particleCount; i++) {
-                            const size = (0.2 + Math.random() * 0.3) * VOXEL_SIZE;
-                            const pGeo = new THREE.BoxGeometry(size, size, size);
-                            const colors = [0xFF4500, 0xFF6600, 0xFFAA00, 0xFFFF00];
-                            const pMat = new THREE.MeshBasicMaterial({ 
-                                color: colors[Math.floor(Math.random() * colors.length)], 
-                                transparent: true, 
-                                opacity: 0.9 
-                            });
-                            const pMesh = new THREE.Mesh(pGeo, pMat);
-                            pMesh.position.z = i * 0.5 * VOXEL_SIZE;
-                            pMesh.userData.particleIndex = i;
-                            pMesh.userData.baseZ = pMesh.position.z;
-                            fireGroup.add(pMesh);
-                        }
-                        fireGroup.userData.isBreathFire = true;
-                        group.add(fireGroup);
-                    }
-                    
-                    // Ice Breath - forward shooting ice particles
-                    if (data.mouth === 'iceBreath') {
-                        const iceGroup = new THREE.Group();
-                        iceGroup.name = 'breath_ice';
-                        iceGroup.position.set(0, 5 * VOXEL_SIZE, 5.5 * VOXEL_SIZE);
-                        
-                        const particleCount = 20;
-                        for (let i = 0; i < particleCount; i++) {
-                            const size = (0.2 + Math.random() * 0.2) * VOXEL_SIZE;
-                            const pGeo = new THREE.BoxGeometry(size, size, size);
-                            const colors = [0x87CEEB, 0xADD8E6, 0xE0FFFF, 0xFFFFFF];
-                            const pMat = new THREE.MeshBasicMaterial({ 
-                                color: colors[Math.floor(Math.random() * colors.length)], 
-                                transparent: true, 
-                                opacity: 0.8 
-                            });
-                            const pMesh = new THREE.Mesh(pGeo, pMat);
-                            pMesh.position.z = i * 0.5 * VOXEL_SIZE;
-                            pMesh.userData.particleIndex = i;
-                            pMesh.userData.baseZ = pMesh.position.z;
-                            iceGroup.add(pMesh);
-                        }
-                        iceGroup.userData.isBreathIce = true;
-                        group.add(iceGroup);
-                    }
-                    
-                    // Bubblegum - animated growing/popping bubble
-                    if (data.mouth === 'bubblegum') {
-                        const bubbleGroup = new THREE.Group();
-                        bubbleGroup.name = 'bubblegum_bubble';
-                        bubbleGroup.position.set(0, 5 * VOXEL_SIZE, 6 * VOXEL_SIZE);
-                        
-                        const bubbleGeo = new THREE.SphereGeometry(0.5 * VOXEL_SIZE, 8, 8);
-                        const bubbleMat = new THREE.MeshBasicMaterial({ 
-                            color: 0xFF69B4, 
-                            transparent: true, 
-                            opacity: 0.7 
-                        });
-                        const bubble = new THREE.Mesh(bubbleGeo, bubbleMat);
-                        bubble.userData.isBubble = true;
-                        bubbleGroup.add(bubble);
-                        bubbleGroup.userData.isBubblegum = true;
-                        group.add(bubbleGroup);
-                    }
-                } else if (!hideBody && ASSETS.MOUTH.beak) {
-                    const p = buildPartMerged(ASSETS.MOUTH.beak, PALETTE);
-                    p.name = 'mouth';
-                    group.add(p);
-                }
-                 
-                 if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
-                     // Check if this bodyItem hides the body (like "joe")
-                     const bodyItemInfo = ASSETS.BODY[data.bodyItem];
-                     const isHideBodyItem = bodyItemInfo?.hideBody === true;
-                     
-                     // Only add accessory voxels if it has any (joe has none)
-                     let accessoryMesh = null;
-                     if (!isHideBodyItem) {
-                         const voxels = bodyItemInfo?.voxels || bodyItemInfo || [];
-                         if (voxels.length > 0) {
-                             accessoryMesh = buildPartMerged(voxels, PALETTE);
-                             accessoryMesh.name = 'accessory';
-                             group.add(accessoryMesh);
-                         }
-                         
-                         // Handle text decal body items (e.g., lobotomy shirt)
-                         if (bodyItemInfo?.textDecal) {
-                             const decal = bodyItemInfo.textDecal;
-                             const scale = decal.scale || 1;
-                             
-                             // Create canvas for text
-                             const canvas = document.createElement('canvas');
-                             canvas.width = 512;
-                             canvas.height = 128;
-                             const ctx = canvas.getContext('2d');
-                             
-                             // Transparent background
-                             ctx.clearRect(0, 0, canvas.width, canvas.height);
-                             
-                             // Draw text centered
-                             ctx.font = decal.font || 'bold 32px Arial';
-                             ctx.fillStyle = decal.color || '#000000';
-                             ctx.textAlign = 'center';
-                             ctx.textBaseline = 'middle';
-                             ctx.fillText(decal.text, canvas.width / 2, canvas.height / 2);
-                             
-                             // Create texture from canvas
-                             const texture = new THREE.CanvasTexture(canvas);
-                             texture.needsUpdate = true;
-                             
-                             // Create plane with text - size based on scale
-                             const planeWidth = 2.5 * scale;
-                             const planeHeight = 0.6 * scale;
-                             const planeGeo = new THREE.PlaneGeometry(planeWidth, planeHeight);
-                             const planeMat = new THREE.MeshBasicMaterial({ 
-                                 map: texture, 
-                                 transparent: true,
-                                 depthWrite: false,
-                                 side: THREE.DoubleSide
-                             });
-                             const textPlane = new THREE.Mesh(planeGeo, planeMat);
-                             textPlane.position.set(0, (decal.y || 0) * VOXEL_SIZE, (decal.z || 6) * VOXEL_SIZE);
-                             textPlane.name = 'text_decal';
-                             group.add(textPlane);
-                         }
-                     }
-                     
-                     // Add wing flapping for angel/demon wings
-                     if ((data.bodyItem === 'angelWings' || data.bodyItem === 'demonWings') && accessoryMesh) {
-                         accessoryMesh.userData.isWings = true;
-                         accessoryMesh.userData.wingPhase = Math.random() * Math.PI * 2;
-                     }
-                     
-                     // Fire Aura - animated fire ring (like campfire)
-                     if (data.bodyItem === 'fireAura') {
-                         const fireAuraGroup = new THREE.Group();
-                         fireAuraGroup.name = 'fire_aura';
-                         fireAuraGroup.position.y = 3 * VOXEL_SIZE;
-                         
-                         // Create fire flames in a ring around the player
-                         const flameCount = 8;
-                         for (let i = 0; i < flameCount; i++) {
-                             const angle = (i / flameCount) * Math.PI * 2;
-                             const radius = 6 * VOXEL_SIZE;
-                             
-                             // Cone-shaped flame (like campfire)
-                             const flameGeo = new THREE.ConeGeometry(0.8 * VOXEL_SIZE, 3 * VOXEL_SIZE, 8);
-                             const colors = [0xFF4500, 0xFF6600, 0xFFAA00, 0xFFFF00];
-                             const flameMat = new THREE.MeshBasicMaterial({ 
-                                 color: colors[i % colors.length], 
-                                 transparent: true, 
-                                 opacity: 0.85 
-                             });
-                             const flame = new THREE.Mesh(flameGeo, flameMat);
-                             flame.position.set(
-                                 Math.cos(angle) * radius,
-                                 0,
-                                 Math.sin(angle) * radius
-                             );
-                             flame.userData.isFlame = true;
-                             flame.userData.baseY = 0;
-                             flame.userData.angle = angle;
-                             flame.userData.radius = radius;
-                             flame.userData.offset = Math.random() * Math.PI * 2;
-                             fireAuraGroup.add(flame);
-                         }
-                         
-                         // Add glow light
-                         const fireLight = new THREE.PointLight(0xFF6600, 1.5, 5);
-                         fireLight.position.y = 1.5 * VOXEL_SIZE;
-                         fireAuraGroup.add(fireLight);
-                         fireAuraGroup.userData.fireLight = fireLight;
-                         
-                         fireAuraGroup.userData.isFireAura = true;
-                         group.add(fireAuraGroup);
-                     }
-                     
-                     // Lightning Aura - animated electric bolts
-                     if (data.bodyItem === 'lightningAura') {
-                         const lightningGroup = new THREE.Group();
-                         lightningGroup.name = 'lightning_aura';
-                         lightningGroup.position.y = 3 * VOXEL_SIZE;
-                         
-                         // Create lightning bolts in a ring
-                         const boltCount = 6;
-                         for (let i = 0; i < boltCount; i++) {
-                             const angle = (i / boltCount) * Math.PI * 2;
-                             const radius = 6 * VOXEL_SIZE;
-                             
-                             // Simple bolt shape
-                             const boltGeo = new THREE.CylinderGeometry(0.15 * VOXEL_SIZE, 0.15 * VOXEL_SIZE, 4 * VOXEL_SIZE, 6);
-                             const boltMat = new THREE.MeshBasicMaterial({ 
-                                 color: 0x00FFFF, 
-                                 transparent: true, 
-                                 opacity: 0.9 
-                             });
-                             const bolt = new THREE.Mesh(boltGeo, boltMat);
-                             bolt.position.set(
-                                 Math.cos(angle) * radius,
-                                 0,
-                                 Math.sin(angle) * radius
-                             );
-                             bolt.rotation.z = Math.random() * 0.5 - 0.25;
-                             bolt.userData.angle = angle;
-                             bolt.userData.radius = radius;
-                             bolt.userData.flickerOffset = Math.random() * Math.PI * 2;
-                             lightningGroup.add(bolt);
-                         }
-                         
-                         // Add electric glow
-                         const lightningLight = new THREE.PointLight(0x00FFFF, 1.5, 5);
-                         lightningLight.position.y = 1.5 * VOXEL_SIZE;
-                         lightningGroup.add(lightningLight);
-                         lightningGroup.userData.lightningLight = lightningLight;
-                         
-                         lightningGroup.userData.isLightningAura = true;
-                         group.add(lightningGroup);
-                     }
-                 }
-                 
-                 group.scale.set(0.2, 0.2, 0.2); 
-                 group.position.y = 0.8;
-             }
-
-             const wrapper = new THREE.Group();
-             wrapper.add(group);
-             
-             // --- MOUNT SYSTEM ---
-             if (data.mount && data.mount !== 'none' && ASSETS.MOUNTS && ASSETS.MOUNTS[data.mount]) {
-                 const mountData = ASSETS.MOUNTS[data.mount];
-                 
-                 // Create mount group
-                 const mountGroup = new THREE.Group();
-                 mountGroup.name = 'mount';
-                 
-                 // Build mount hull voxels
-                 if (mountData.voxels && mountData.voxels.length > 0) {
-                     const mountMesh = buildPartMerged(mountData.voxels, PALETTE);
-                     mountMesh.name = 'mount_hull';
-                     mountGroup.add(mountMesh);
-                 }
-                 
-                // Build animated oars (for rowing mounts)
-                if (mountData.leftOar) {
-                     const leftOarMesh = buildPartMerged(mountData.leftOar, PALETTE);
-                     leftOarMesh.name = 'left_oar';
-                     // Create pivot point for oar rotation at oarlock position
-                     const leftOarPivot = new THREE.Group();
-                     leftOarPivot.name = 'left_oar_pivot';
-                     leftOarPivot.position.set(-2.0, 0, 0); // Pivot at oarlock on larger hull
-                     leftOarPivot.add(leftOarMesh);
-                     leftOarMesh.position.set(-0.2, 0, 0); // Oar extends from pivot
-                     mountGroup.add(leftOarPivot);
-                 }
-                 
-                 if (mountData.rightOar) {
-                     const rightOarMesh = buildPartMerged(mountData.rightOar, PALETTE);
-                     rightOarMesh.name = 'right_oar';
-                     const rightOarPivot = new THREE.Group();
-                     rightOarPivot.name = 'right_oar_pivot';
-                     rightOarPivot.position.set(2.0, 0, 0); // Pivot at oarlock on larger hull
-                     rightOarPivot.add(rightOarMesh);
-                     rightOarMesh.position.set(0.2, 0, 0); // Oar extends from pivot
-                     mountGroup.add(rightOarPivot);
-                 }
-                 
-                 mountGroup.scale.set(0.2, 0.2, 0.2);
-                 mountGroup.position.y = 0.4; // Position mount flush with ground
-                 wrapper.add(mountGroup);
-                 
-                // Store mount data on wrapper for animation
-                wrapper.userData.mount = data.mount;
-                wrapper.userData.mountData = mountData;
-                wrapper.userData.isMounted = true;
-                
-                // DON'T manually position feet here - let animateMesh handle it
-                // The animation system will apply the Sit pose when isMounted is true
-            }
-             
-             return wrapper;
+        // NOTE: cacheAnimatedParts and animateCosmeticsFromCache are imported from PenguinBuilder.js
+        // The inline versions below handle the animation loop specifics
+        
+        // Wrapper that uses imported functions but passes VOXEL_SIZE
+        const animateCosmetics = (cache, time, delta) => {
+            animateCosmeticsFromCache(cache, time, delta, VOXEL_SIZE);
         };
         
         // Store buildPenguinMesh for multiplayer to use
@@ -3984,8 +1138,8 @@ const VoxelWorld = ({
         if (customSpawnPos && room === 'town') {
             // Exiting dojo/igloo: spawn at portal location in town
             // customSpawnPos is an OFFSET from town center, so add center coordinates
-            const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
-            const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+            const townCenterX = CENTER_X;
+            const townCenterZ = CENTER_Z;
             posRef.current = { 
                 x: townCenterX + customSpawnPos.x, 
                 y: 0, 
@@ -4010,8 +1164,8 @@ const VoxelWorld = ({
             
             // If no saved position, use default spawn at TOWN CENTER (same as /spawn command)
             if (!loadedFromStorage) {
-                const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
-                const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+                const townCenterX = CENTER_X;
+                const townCenterZ = CENTER_Z;
                 // Spawn at town center - same location as /spawn command
                 posRef.current = { x: townCenterX, y: 0, z: townCenterZ };
                 rotRef.current = 0; // Face south (default orientation)
@@ -4021,8 +1175,8 @@ const VoxelWorld = ({
             posRef.current = { x: roomData.spawnPos.x, y: 0, z: roomData.spawnPos.z };
         } else {
             // Fallback spawn at TOWN CENTER (same as /spawn command)
-            const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
-            const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+            const townCenterX = CENTER_X;
+            const townCenterZ = CENTER_Z;
             posRef.current = { x: townCenterX, y: 0, z: townCenterZ };
             rotRef.current = 0; // Face south (default orientation)
         }
@@ -4886,107 +2040,19 @@ const VoxelWorld = ({
                     const bobAmount = speed > 0.5 ? Math.sin(time * 15) * 0.05 : 0;
                     ball.mesh.position.y = 0.5 + bobAmount;
                 }
-            } else if (roomRef.current === 'nightclub') {
-                // Nightclub collision - walls + interior objects
-                // Room is 40 wide (X) by 35 deep (Z)
-                const ROOM_W = 40;
-                const ROOM_D = 35;
-                const WALL = 0.5; // Thin wall buffer
-                const CX = ROOM_W / 2; // Center X = 20
-                const py = posRef.current.y; // Player Y for height-based collision
-                const PLAYER_RADIUS = 0.6;
-                
-                // Start with intended position
-                finalX = nextX;
-                finalZ = nextZ;
-                
-                // Helper to check box collision (returns true if colliding)
-                const checkBoxCollision = (px, pz, box) => {
-                    // Skip collision if player is above the object
-                    if (py >= box.top - 0.1) return false;
-                    
-                    return px > box.minX - PLAYER_RADIUS && px < box.maxX + PLAYER_RADIUS &&
-                           pz > box.minZ - PLAYER_RADIUS && pz < box.maxZ + PLAYER_RADIUS;
-                };
-                
-                // Define solid objects (can't walk through, only over when high enough)
-                // DJ booth is at (CX=20, 3), Stairs at (36, 22.5), etc.
-                const CZ = ROOM_D / 2; // Center Z = 17.5
-                const solidObjects = [
-                    // === DJ BOOTH AREA (placed at cx=20, cz=3) ===
-                    // DJ Platform - raised platform (12x0.75x6) - LOWERED 50%
-                    { minX: CX - 6, maxX: CX + 6, minZ: 0, maxZ: 6, top: 0.75, name: 'dj_platform' },
-                    // Equipment rack behind DJ (3x4x1 at relative (0, 1.75, -1.5))
-                    { minX: CX - 1.5, maxX: CX + 1.5, minZ: 1, maxZ: 2, top: 2.75, name: 'equipment_rack' },
-                    // DJ desk on platform (8x0.6x2 at relative (0, 1.05, 1)) - top at ~1.35
-                    { minX: CX - 4, maxX: CX + 4, minZ: 3, maxZ: 5, top: 1.35, name: 'dj_desk' },
-                    
-                    // === RECORDS CRATE (at x=5, z=8) ===
-                    { minX: 4.4, maxX: 5.6, minZ: 7.5, maxZ: 8.5, top: 1.0, name: 'records_crate' },
-                    
-                    // === MIC STAND (at x=34, z=15.5) ===
-                    { minX: 33.5, maxX: 34.5, minZ: 15, maxZ: 16, top: 2.2, name: 'mic_stand' },
-                    
-                    // === SPEAKERS - Wall mounted (scale 1.2 = 2.4w x 4.8h x 1.8d) ===
-                    // Left wall speakers at (2, D/2-5=12.5) and (2, D/2+5=22.5)
-                    { minX: 0.8, maxX: 3.2, minZ: 11.5, maxZ: 13.5, top: 4.8, name: 'speaker_left1' },
-                    { minX: 0.8, maxX: 3.2, minZ: 21.5, maxZ: 23.5, top: 4.8, name: 'speaker_left2' },
-                    // Right wall speakers at (38, D/2-5=12.5) and (38, D/2+5=22.5)
-                    { minX: 36.8, maxX: 39.2, minZ: 11.5, maxZ: 13.5, top: 4.8, name: 'speaker_right1' },
-                    { minX: 36.8, maxX: 39.2, minZ: 21.5, maxZ: 23.5, top: 4.8, name: 'speaker_right2' },
-                    
-                    // === SPEAKERS - Large front by DJ (scale 1.5 = 3w x 6h x 2.25d) ===
-                    // At (CX-8=12, 5) and (CX+8=28, 5)
-                    { minX: 10.5, maxX: 13.5, minZ: 3.9, maxZ: 6.1, top: 6.0, name: 'speaker_front_left' },
-                    { minX: 26.5, maxX: 29.5, minZ: 3.9, maxZ: 6.1, top: 6.0, name: 'speaker_front_right' },
-                    
-                    // === SPEAKERS - Stack behind dance floor (scale 1.0 = 2w x 4h x 1.5d) ===
-                    // At (CX-10=10, CZ+8=25.5) and (CX+10=30, CZ+8=25.5)
-                    { minX: 9, maxX: 11, minZ: 24.8, maxZ: 26.3, top: 4.0, name: 'speaker_back_left' },
-                    { minX: 29, maxX: 31, minZ: 24.8, maxZ: 26.3, top: 4.0, name: 'speaker_back_right' },
-                    
-                    // === STAIRS (at x=36, z=22.5) ===
-                    // NO solid collision - stairs use walk-up ground height behavior instead
-                    // Player walks up by having ground height increase as they move north
-                    
-                    // === DANCE CONTEST SIGN (at x=39, z=25.5, on right wall) ===
-                    // Board is 3x4x0.1, against wall
-                    { minX: 38.5, maxX: 39.5, minZ: 24, maxZ: 27, top: 7, name: 'dance_contest_sign' },
-                    
-                    // === EXIT DOOR FRAME (at x=0, z=30) ===
-                    // Frame is 0.3x5x3 against left wall
-                    { minX: 0, maxX: 0.5, minZ: 28.5, maxZ: 31.5, top: 5, name: 'exit_door_frame' },
-                    
-                    // === DANCE FLOOR BASE (at CX=20, CZ+5=22.5) ===
-                    // Floor base is (totalWidth+1) x 0.3 x (totalDepth+1) = ~17.8 x 0.3 x ~13.6
-                    // But dance floor is walk-on, not blocking - skip solid collision
-                ];
-                
-                // Check collision with each solid object
-                for (const obj of solidObjects) {
-                    if (checkBoxCollision(finalX, finalZ, obj)) {
-                        // Try sliding along X axis
-                        const canSlideX = !checkBoxCollision(finalX, posRef.current.z, obj);
-                        // Try sliding along Z axis
-                        const canSlideZ = !checkBoxCollision(posRef.current.x, finalZ, obj);
-                        
-                        if (canSlideX && !canSlideZ) {
-                            finalZ = posRef.current.z;
-                        } else if (canSlideZ && !canSlideX) {
-                            finalX = posRef.current.x;
-                        } else if (!canSlideX && !canSlideZ) {
-                            // Blocked completely
-                            finalX = posRef.current.x;
-                            finalZ = posRef.current.z;
-                        }
-                    }
-                }
-                
-                // Clamp to room bounds (walls)
-                if (finalX < WALL) finalX = WALL;
-                if (finalX > ROOM_W - WALL) finalX = ROOM_W - WALL;
-                if (finalZ < WALL) finalZ = WALL;
-                if (finalZ > ROOM_D - WALL) finalZ = ROOM_D - WALL;
+            } else if (roomRef.current === 'nightclub' && nightclubRef.current) {
+                // Nightclub collision - handled by Nightclub.js
+                const result = nightclubRef.current.checkPlayerMovement(
+                    posRef.current.x,
+                    posRef.current.z,
+                    nextX,
+                    nextZ,
+                    0.6, // playerRadius
+                    posRef.current.y // playerY for height-based collision
+                );
+                finalX = result.x;
+                finalZ = result.z;
+                collided = result.collided;
             } else if (townCenterRef.current) {
                 // Town uses TownCenter collision system (props + buildings + water)
                 // Pass Y position for height-based collision (so player can jump on objects)
@@ -5077,8 +2143,8 @@ const VoxelWorld = ({
                 
                 // Check collision with custom buildings (dojo, market, pizza)
                 if (!collided) {
-                    const centerX = (CITY_SIZE / 2) * BUILDING_SCALE;
-                    const centerZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+                    const centerX = CENTER_X;
+                    const centerZ = CENTER_Z;
                     
                     for (const building of BUILDINGS) {
                         const bx = centerX + building.position.x;
@@ -5109,36 +2175,68 @@ const VoxelWorld = ({
                 
                 // Check igloo furniture proximity for interaction
                 if (roomRef.current.startsWith('igloo') && roomData && roomData.furniture) {
-                    let nearFurniture = null;
+                    let nearInteraction = null;
+                    
+                    // Check furniture (couches, bar stools)
                     for (const furn of roomData.furniture) {
                         const dx = finalX - furn.position.x;
                         const dz = finalZ - furn.position.z;
                         const dist = Math.sqrt(dx * dx + dz * dz);
                         if (dist < furn.interactionRadius) {
-                            nearFurniture = furn;
+                            nearInteraction = { type: 'furniture', data: furn };
                             break;
                         }
                     }
                     
-                    // Dispatch interaction event (reuses existing townInteraction system)
-                    if (nearFurniture && !seatedRef.current) {
-                        window.dispatchEvent(new CustomEvent('townInteraction', {
-                            detail: {
-                                action: 'sit',
-                                message: `Press E to sit on ${nearFurniture.type}`,
-                                emote: 'Sit',
-                                data: {
-                                    worldX: nearFurniture.position.x,
-                                    worldZ: nearFurniture.position.z,
-                                    worldRotation: nearFurniture.rotation,
-                                    snapPoints: nearFurniture.snapPoints,
-                                    seatHeight: nearFurniture.seatHeight,
-                                    bidirectionalSit: nearFurniture.bidirectionalSit || false
-                                }
+                    // Check DJ spots (igloo3 SKNY has a DJ booth)
+                    if (!nearInteraction && roomData.djSpots) {
+                        for (const dj of roomData.djSpots) {
+                            const dx = finalX - dj.position.x;
+                            const dz = finalZ - dj.position.z;
+                            const dist = Math.sqrt(dx * dx + dz * dz);
+                            if (dist < dj.interactionRadius) {
+                                nearInteraction = { type: 'dj', data: dj };
+                                break;
                             }
-                        }));
-                    } else if (!nearFurniture && !seatedRef.current) {
-                        // Exited furniture zone
+                        }
+                    }
+                    
+                    // Dispatch interaction event (reuses existing townInteraction system)
+                    if (nearInteraction && !seatedRef.current) {
+                        if (nearInteraction.type === 'dj') {
+                            const dj = nearInteraction.data;
+                            window.dispatchEvent(new CustomEvent('townInteraction', {
+                                detail: {
+                                    action: 'dj',
+                                    message: '🎧 Press E to DJ',
+                                    emote: 'DJ',
+                                    data: {
+                                        worldX: dj.position.x,
+                                        worldZ: dj.position.z,
+                                        worldRotation: dj.rotation
+                                    }
+                                }
+                            }));
+                        } else {
+                            const furn = nearInteraction.data;
+                            window.dispatchEvent(new CustomEvent('townInteraction', {
+                                detail: {
+                                    action: 'sit',
+                                    message: `Press E to sit on ${furn.type}`,
+                                    emote: 'Sit',
+                                    data: {
+                                        worldX: furn.position.x,
+                                        worldZ: furn.position.z,
+                                        worldRotation: furn.rotation,
+                                        snapPoints: furn.snapPoints,
+                                        seatHeight: furn.seatHeight,
+                                        bidirectionalSit: furn.bidirectionalSit || false
+                                    }
+                                }
+                            }));
+                        }
+                    } else if (!nearInteraction && !seatedRef.current) {
+                        // Exited interaction zone
                         window.dispatchEvent(new CustomEvent('townInteraction', {
                             detail: { action: 'exit' }
                         }));
@@ -5316,153 +2414,19 @@ const VoxelWorld = ({
                 }
             }
             
-            // Check for landing on nightclub surfaces (dance floor, DJ booth, speakers, stairs)
-            // Also handles walking UP onto raised surfaces (like stairs behavior)
-            if (room === 'nightclub' && roomDataRef.current) {
-                const px = posRef.current.x;
-                const pz = posRef.current.z;
-                const py = posRef.current.y;
-                const rd = roomDataRef.current;
+            // Check for landing on nightclub surfaces (uses Nightclub.checkLanding)
+            if (room === 'nightclub' && nightclubRef.current) {
                 const isDescending = velRef.current.y <= 0;
-                
-                // Dance floor - ALWAYS lift player when on it (walk-up behavior)
-                if (rd.danceFloor) {
-                    const df = rd.danceFloor;
-                    if (px >= df.minX && px <= df.maxX && pz >= df.minZ && pz <= df.maxZ) {
-                        // If player is at or below floor height, lift them up
-                        if (py <= df.height + 0.3) {
-                            if (df.height > groundHeight) {
-                                groundHeight = df.height;
-                                foundGround = true;
-                            }
-                        }
-                    }
-                }
-                
-                // DJ Booth platform - walk-up behavior (always active, not just descending)
-                if (rd.djBooth) {
-                    const dj = rd.djBooth;
-                    if (px >= dj.minX && px <= dj.maxX && pz >= dj.minZ && pz <= dj.maxZ) {
-                        // If player is at or below platform height, lift them up
-                        if (py <= dj.height + 0.3) {
-                            if (dj.height > groundHeight) {
-                                groundHeight = dj.height;
-                                foundGround = true;
-                            }
-                        }
-                    }
-                }
-                
-                // DJ Booth STEPS - walk-up ramp behavior (3 steps on each side, IN FRONT)
-                // DJ booth is at (CX=20, cz=3), platform front edge at world z=6
-                // Steps are in front: z=7.2, 8.4, 9.6 with heights 0.73, 0.48, 0.24
-                const CX_DJ = 20; // DJ booth center X
-                const CZ_DJ = 3;  // DJ booth center Z
-                const djStepWidth = 3.5;
-                const djStepDepth = 1.2;
-                const djStepHeights = [0.73, 0.48, 0.24]; // Top step closest to platform
-                
-                // Left front steps (X around 15.5 = CX_DJ - 4.5)
-                const leftStepX = CX_DJ - 4.5;
-                if (px >= leftStepX - djStepWidth/2 && px <= leftStepX + djStepWidth/2) {
-                    for (let i = 0; i < 3; i++) {
-                        // Step 0 (top): z=7.2, height 0.73
-                        // Step 1: z=8.4, height 0.48
-                        // Step 2 (bottom): z=9.6, height 0.24
-                        const stepZ = CZ_DJ + 4.2 + i * djStepDepth;
-                        const stepTop = djStepHeights[i];
-                        if (pz >= stepZ - djStepDepth/2 && pz <= stepZ + djStepDepth/2) {
-                            if (py <= stepTop + 0.3) {
-                                if (stepTop > groundHeight) {
-                                    groundHeight = stepTop;
-                                    foundGround = true;
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Right front steps (X around 24.5 = CX_DJ + 4.5)
-                const rightStepX = CX_DJ + 4.5;
-                if (px >= rightStepX - djStepWidth/2 && px <= rightStepX + djStepWidth/2) {
-                    for (let i = 0; i < 3; i++) {
-                        const stepZ = CZ_DJ + 4.2 + i * djStepDepth;
-                        const stepTop = djStepHeights[i];
-                        if (pz >= stepZ - djStepDepth/2 && pz <= stepZ + djStepDepth/2) {
-                            if (py <= stepTop + 0.3) {
-                                if (stepTop > groundHeight) {
-                                    groundHeight = stepTop;
-                                    foundGround = true;
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Speaker landing (only when falling)
-                if (rd.speakers && isDescending) {
-                    for (const spk of rd.speakers) {
-                        const sMinX = spk.x - spk.w / 2 - 0.3;
-                        const sMaxX = spk.x + spk.w / 2 + 0.3;
-                        const sMinZ = spk.z - spk.d / 2 - 0.3;
-                        const sMaxZ = spk.z + spk.d / 2 + 0.3;
-                        
-                        if (px >= sMinX && px <= sMaxX && pz >= sMinZ && pz <= sMaxZ) {
-                            if (py <= spk.h + 0.5 && py >= spk.h - 1) {
-                                if (spk.h > groundHeight) {
-                                    groundHeight = spk.h;
-                                    foundGround = true;
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Stairs landing - walk-up ramp behavior (always active)
-                if (rd.stairs) {
-                    const st = rd.stairs;
-                    const stMinX = st.x - st.width / 2;
-                    const stMaxX = st.x + st.width / 2;
-                    
-                    if (px >= stMinX && px <= stMaxX) {
-                        // Calculate which step based on Z position
-                        const distFromStart = st.startZ - pz; // Going north (negative Z)
-                        if (distFromStart >= 0) {
-                            const stepIndex = Math.floor(distFromStart / st.stepDepth);
-                            if (stepIndex >= 0 && stepIndex < st.totalSteps) {
-                                const stepY = (stepIndex + 1) * st.stepHeight;
-                                // Walk-up behavior - if player is at or below step, lift them
-                                if (py <= stepY + 0.5) {
-                                    if (stepY > groundHeight) {
-                                        groundHeight = stepY;
-                                        foundGround = true;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Records crate landing
-                if (rd.recordsCrate) {
-                    const crate = rd.recordsCrate;
-                    const cMinX = crate.x - crate.w / 2 - 0.2;
-                    const cMaxX = crate.x + crate.w / 2 + 0.2;
-                    const cMinZ = crate.z - crate.d / 2 - 0.2;
-                    const cMaxZ = crate.z + crate.d / 2 + 0.2;
-                    
-                    if (px >= cMinX && px <= cMaxX && pz >= cMinZ && pz <= cMaxZ) {
-                        if (py <= crate.h + 0.5 && py >= crate.h - 1) {
-                            if (crate.h > groundHeight) {
-                                groundHeight = crate.h;
-                                foundGround = true;
-                            }
-                        }
-                    }
+                const landing = nightclubRef.current.checkLanding(
+                    posRef.current.x, posRef.current.z, posRef.current.y, isDescending
+                );
+                if (landing.canLand && landing.landingY > groundHeight) {
+                    groundHeight = landing.landingY;
+                    foundGround = true;
                 }
             }
             
-            // Check for landing on pizza parlor furniture
+            // Check for landing on pizza parlor furniture (uses room's landingSurfaces)
             if (room === 'pizza' && roomDataRef.current?.landingSurfaces && velRef.current.y <= 0) {
                 const px = posRef.current.x;
                 const pz = posRef.current.z;
@@ -5485,37 +2449,6 @@ const VoxelWorld = ({
                         if (surface.height >= groundHeight) {
                             groundHeight = surface.height;
                             foundGround = true;
-                        }
-                    }
-                }
-            }
-            
-            // Check for landing/walking on nightclub landing surfaces (couch, speakers, etc.)
-            if (room === 'nightclub' && roomDataRef.current?.landingSurfaces) {
-                const px = posRef.current.x;
-                const pz = posRef.current.z;
-                const py = posRef.current.y;
-                
-                for (const surface of roomDataRef.current.landingSurfaces) {
-                    // Nightclub uses minX/maxX/minZ/maxZ format (box type)
-                    const isOver = px >= surface.minX && px <= surface.maxX &&
-                                   pz >= surface.minZ && pz <= surface.maxZ;
-                    
-                    // Allow walk-up behavior (like dance floor) AND landing from above
-                    if (isOver) {
-                        // If player is near or below surface height, lift them up (walk-up)
-                        if (py <= surface.height + 0.5 && py >= surface.height - 1.0) {
-                            if (surface.height >= groundHeight) {
-                                groundHeight = surface.height;
-                                foundGround = true;
-                            }
-                        }
-                        // Also allow landing from above (jumping onto)
-                        else if (py >= surface.height && py <= surface.height + 2.0 && velRef.current.y <= 0) {
-                            if (surface.height >= groundHeight) {
-                                groundHeight = surface.height;
-                                foundGround = true;
-                            }
                         }
                     }
                 }
@@ -5547,8 +2480,8 @@ const VoxelWorld = ({
             
             // Update debug position display (throttled)
             if (showDebugPositionRef.current && frameCount % 10 === 0) {
-                const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE;
-                const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+                const townCenterX = CENTER_X;
+                const townCenterZ = CENTER_Z;
                 setDebugPosition({
                     x: posRef.current.x.toFixed(1),
                     y: posRef.current.y.toFixed(1),
@@ -5575,275 +2508,28 @@ const VoxelWorld = ({
                 }
             }
             
-            // animateMesh now accepts isSeatedOnFurniture as 5th param, characterType as 6th, isMounted as 7th
-            // OPTIMIZED: Cache part references to avoid getObjectByName every frame
-            const animateMesh = (meshWrapper, isMoving, emoteType, emoteStartTime, isSeatedOnFurniture = false, characterType = 'penguin', isMounted = false, isAirborne = false) => {
-                if (!meshWrapper || !meshWrapper.children[0]) return;
-                const meshInner = meshWrapper.children[0];
-                const isMarcus = characterType === 'marcus';
-                
-                // Use cached parts if available, otherwise look up and cache
-                if (!meshWrapper._animParts) {
-                    meshWrapper._animParts = {
-                        flipperL: meshInner.getObjectByName('flipper_l'),
-                        flipperR: meshInner.getObjectByName('flipper_r'),
-                        head: meshInner.getObjectByName('head'),
-                        hatPart: meshInner.getObjectByName('hat'),
-                        eyesPart: meshInner.getObjectByName('eyes'),
-                        mouthPart: meshInner.getObjectByName('mouth'),
-                        footL: meshInner.getObjectByName('foot_l'),
-                        footR: meshInner.getObjectByName('foot_r')
-                    };
-                }
-                const { flipperL, flipperR, head, hatPart, eyesPart, mouthPart, footL, footR } = meshWrapper._animParts;
-                
-                if(flipperL) { flipperL.rotation.set(0,0,0); }
-                if(flipperR) { flipperR.rotation.set(0,0,0); }
-                // Position penguin so feet touch ground
-                meshInner.position.y = 0.8;
-                meshInner.rotation.z = 0;
-                meshInner.rotation.y = 0;
-                meshInner.rotation.x = 0;
-                if(footL) { footL.rotation.x = 0; footL.position.z = 0; }
-                if(footR) { footR.rotation.x = 0; footR.position.z = 0; }
-                if(head) { head.rotation.x = 0; head.position.y = 0; head.position.z = 0; }
-                if(hatPart) { hatPart.rotation.x = 0; hatPart.position.y = 0; hatPart.position.z = 0; }
-                if(eyesPart) { eyesPart.position.y = 0; eyesPart.position.z = 0; }
-                if(mouthPart) { mouthPart.position.y = 0; mouthPart.position.z = 0; }
-                
-                // Jumping animation - feet point down ONLY when airborne (not touching ground)
-                // This runs BEFORE walk/emote animations, so it gets overridden when walking
-                if (isAirborne && !isSeatedOnFurniture && !isMounted) {
-                    if(footL) footL.rotation.x = 0.4; // Point toes down
-                    if(footR) footR.rotation.x = 0.4; // Point toes down
-                }
-                if(eyesPart) { eyesPart.rotation.x = 0; }
-                if(mouthPart) { mouthPart.rotation.x = 0; }
-
-                // When mounted, apply sitting animation (same as regular Sit emote)
-                if (isMounted && mountEnabledRef.current) {
-                    // Sitting pose - same as 'Sit' emote
-                    meshInner.position.y = 0.5;
-                    // Penguin feet extend forward (rotation + position so they're visible)
-                    if(footL) {
-                        footL.rotation.x = -Math.PI / 2.5;
-                        footL.position.z = 2.5;
-                    }
-                    if(footR) {
-                        footR.rotation.x = -Math.PI / 2.5;
-                        footR.position.z = 2.5;
-                    }
-                    // Arms/flippers rest on sides
-                    if(flipperL) flipperL.rotation.z = 0.3;
-                    if(flipperR) flipperR.rotation.z = -0.3;
-                    return; // Don't apply other animations when mounted
-                }
-
-                if (emoteType) {
-                    const eTime = (Date.now() - emoteStartTime) * 0.001;
-                    
-                    if (emoteType === 'Wave') {
-                        if(flipperR) {
-                            flipperR.rotation.z = -Math.PI / 1.25; 
-                            flipperR.rotation.x = Math.sin(eTime * 10) * 0.5; 
-                        }
-                    } 
-                    else if (emoteType === 'Dance') {
-                        meshInner.rotation.y = eTime * 6; 
-                        meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 5)) * 1;
-                        if(flipperL) flipperL.rotation.z = Math.sin(eTime * 10) * 1;
-                        if(flipperR) flipperR.rotation.z = -Math.sin(eTime * 10) * 1;
-                    }
-                    else if (emoteType === 'Sit') {
-                        // SIMPLIFIED SITTING SYSTEM:
-                        // seatHeight = Y position of seat surface (where butt goes)
-                        // meshInner offset is SAME for ground and furniture sitting
-                        // This means seatHeight alone determines elevation
-                        if (isMarcus) {
-                            // Marcus sitting - same offset for ground and furniture
-                            meshInner.position.y = -0.2;
-                            // Marcus legs extend forward
-                            if(footL) {
-                                footL.rotation.x = -Math.PI / 3;
-                                footL.position.z = 1.5;
-                            }
-                            if(footR) {
-                                footR.rotation.x = -Math.PI / 3;
-                                footR.position.z = 1.5;
-                            }
-                        } else {
-                            // Penguin sitting - same offset for ground and furniture
-                            meshInner.position.y = 0.5;
-                            // Penguin feet extend forward
-                            if(footL) {
-                                footL.rotation.x = -Math.PI / 2.5;
-                                footL.position.z = 2.5;
-                            }
-                            if(footR) {
-                                footR.rotation.x = -Math.PI / 2.5;
-                                footR.position.z = 2.5;
-                            }
-                        }
-                        // Arms/flippers rest on sides (same for both)
-                        if(flipperL) flipperL.rotation.z = 0.3;
-                        if(flipperR) flipperR.rotation.z = -0.3;
-                    }
-                    else if (emoteType === 'Laugh') {
-                          const laughRot = -0.5 + Math.sin(eTime * 20) * 0.2; 
-                          if(head) head.rotation.x = laughRot;
-                          if(hatPart) hatPart.rotation.x = laughRot;
-                          if(eyesPart) eyesPart.rotation.x = laughRot;
-                          if(mouthPart) mouthPart.rotation.x = laughRot;
-                          meshInner.rotation.x = -0.2;
-                          meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 15)) * 0.1;
-                    }
-                    else if (emoteType === 'Breakdance') {
-                        // Breakdance: penguin spins on back with kicking feet (continuous like Sit)
-                        const spinSpeed = eTime * 6; // Spin speed
-                        const kickSpeed = eTime * 10; // Leg kick speed
-                        
-                        // Fully upside down on Z axis (lying on back), spin on Y
-                        meshInner.rotation.x = 0;
-                        meshInner.rotation.z = Math.PI; // Upside down
-                        meshInner.rotation.y = spinSpeed; // Spinning
-                        meshInner.position.y = 1.8 + Math.sin(eTime * 3) * 0.1; // Raised up so head isn't underground
-                        
-                        // Kick feet in circles (bicycle motion)
-                        if(footL) {
-                            footL.rotation.x = Math.sin(kickSpeed) * 1.0;
-                            footL.position.z = 1 + Math.sin(kickSpeed) * 0.5;
-                        }
-                        if(footR) {
-                            footR.rotation.x = Math.sin(kickSpeed + Math.PI) * 1.0;
-                            footR.position.z = 1 + Math.sin(kickSpeed + Math.PI) * 0.5;
-                        }
-                        
-                        // Flippers straight out to sides (T-pose style)
-                        if(flipperL) {
-                            flipperL.rotation.z = Math.PI / 2; // Straight out left
-                            flipperL.rotation.x = 0;
-                        }
-                        if(flipperR) {
-                            flipperR.rotation.z = -Math.PI / 2; // Straight out right
-                            flipperR.rotation.x = 0;
-                        }
-                    }
-                    else if (emoteType === '67') {
-                        // 67 emote: Arms held straight out in FRONT, seesaw UP/DOWN like weighing scales
-                        const scaleSpeed = eTime * 4; // 50% faster oscillation
-                        const seesaw = Math.sin(scaleSpeed) * 0.35; // Seesaw amount (up/down tilt)
-                        
-                        // Arms point FORWARD, seesaw moves them UP and DOWN (not in/out)
-                        if(flipperL) {
-                            flipperL.rotation.x = -Math.PI / 2 + seesaw; // Forward + seesaw UP/DOWN
-                            flipperL.rotation.y = 0;
-                            flipperL.rotation.z = 0.2; // Slight outward spread (constant)
-                        }
-                        if(flipperR) {
-                            flipperR.rotation.x = -Math.PI / 2 - seesaw; // Forward + OPPOSITE seesaw
-                            flipperR.rotation.y = 0;
-                            flipperR.rotation.z = -0.2; // Slight outward spread (constant)
-                        }
-                        
-                        // Slight head tilt to look at the "scales"
-                        if(head) {
-                            head.rotation.x = -0.1;
-                        }
-                    }
-                    else if (emoteType === 'Headbang') {
-                        // Headbang emote: Head banging to music
-                        const bangSpeed = eTime * 6; // Fast head banging
-                        const headBangAmount = Math.sin(bangSpeed) * 0.25;
-                        const HEAD_LIFT = 1.0; // Raise head higher to prevent clipping
-                        const HEAD_FORWARD = 0.25; // Move head forward off body axis
-                        
-                        // Head bob (intense) + lifted position + forward offset
-                        if(head) {
-                            head.rotation.x = headBangAmount;
-                            head.position.y = HEAD_LIFT;
-                            head.position.z = HEAD_FORWARD;
-                        }
-                        if(hatPart) {
-                            hatPart.rotation.x = headBangAmount;
-                            hatPart.position.y = HEAD_LIFT;
-                            hatPart.position.z = HEAD_FORWARD;
-                        }
-                        if(eyesPart) {
-                            eyesPart.rotation.x = headBangAmount;
-                            eyesPart.position.y = HEAD_LIFT;
-                            eyesPart.position.z = HEAD_FORWARD;
-                        }
-                        if(mouthPart) {
-                            mouthPart.rotation.x = headBangAmount;
-                            mouthPart.position.y = HEAD_LIFT;
-                            mouthPart.position.z = HEAD_FORWARD;
-                        }
-                        
-                        // Arms pumping slightly
-                        const pumpAmount = Math.sin(bangSpeed) * 0.15;
-                        if(flipperL) {
-                            flipperL.rotation.x = -0.3 + pumpAmount;
-                            flipperL.rotation.z = 0.3;
-                        }
-                        if(flipperR) {
-                            flipperR.rotation.x = -0.3 + pumpAmount;
-                            flipperR.rotation.z = -0.3;
-                        }
-                    }
-                    else if (emoteType === 'DJ') {
-                        // DJ pose: One arm up (headphones), one arm forward (scratching turntable)
-                        const djScratchSpeed = eTime * 3;
-                        const djScratch = Math.sin(djScratchSpeed) * 0.15;
-                        const djHeadBob = Math.sin(eTime * 4) * 0.08;
-                        
-                        // Left arm STRAIGHT UP (holding headphones) - nearly vertical
-                        if(flipperL) {
-                            flipperL.rotation.x = 0;
-                            flipperL.rotation.y = 0.2;
-                            flipperL.rotation.z = Math.PI * 0.85; // Nearly straight up
-                        }
-                        // Right arm FORWARD (turntable) with scratching motion
-                        if(flipperR) {
-                            flipperR.rotation.x = -Math.PI / 2 + djScratch;
-                            flipperR.rotation.y = 0.3;
-                            flipperR.rotation.z = -0.1;
-                        }
-                        
-                        // Head bob to the beat (with eyes, beak attached)
-                        if(head) head.rotation.x = djHeadBob;
-                        if(hatPart) hatPart.rotation.x = djHeadBob;
-                        if(eyesPart) eyesPart.rotation.x = djHeadBob;
-                        if(mouthPart) mouthPart.rotation.x = djHeadBob;
-                    }
-                    
-                    // Auto-stop non-persistent emotes (Sit, Breakdance, DJ, 67, Headbang are continuous)
-                    const loopingEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang'];
-                    if (!loopingEmotes.includes(emoteType) && eTime > 3) {
-                        if (playerRef.current === meshWrapper) {
-                            emoteRef.current.type = null;
-                            // Notify server that emote ended
-                            mpSendEmote(null);
-                        }
-                    }
-                } else if (isMoving) {
-                    const walkCycle = time * 10;
-                    if(footL) footL.rotation.x = Math.sin(walkCycle) * 0.5;
-                    if(footR) footR.rotation.x = Math.sin(walkCycle + Math.PI) * 0.5;
-                    if(flipperL) flipperL.rotation.x = Math.sin(walkCycle) * 0.5;
-                    if(flipperR) flipperR.rotation.x = -Math.sin(walkCycle) * 0.5;
-                    meshInner.rotation.z = Math.sin(time * 8) * 0.05; 
-                } else {
-                    meshInner.rotation.z = Math.sin(time * 1.5) * 0.02;
-                }
-            };
-
             if (playerRef.current) {
                 // Pass local player's seatedRef state for furniture sitting, character type, and mounted state
                 // Only consider mounted if mount is enabled in settings
                 const isMounted = !!(playerRef.current.userData?.mount && playerRef.current.userData?.mountData && mountEnabledRef.current);
                 // Simple airborne check: feet not touching ground (Y above threshold)
                 const isAirborne = velRef.current.y !== 0 && posRef.current.y > 0.05;
-                animateMesh(playerRef.current, moving, emoteRef.current.type, emoteRef.current.startTime, !!seatedRef.current, penguinData?.characterType || 'penguin', isMounted, isAirborne);
+                animateMesh(
+                    playerRef.current, 
+                    moving, 
+                    emoteRef.current.type, 
+                    emoteRef.current.startTime, 
+                    !!seatedRef.current, 
+                    penguinData?.characterType || 'penguin', 
+                    isMounted, 
+                    isAirborne,
+                    time,
+                    () => {
+                        // Emote ended naturally - clear it
+                        emoteRef.current.type = null;
+                        mpSendEmote(null);
+                    }
+                );
                 
                 // OPTIMIZATION: Use cached animated parts instead of traverse() every frame
                 // Cache is built once when mesh is created, avoiding expensive tree traversal
@@ -5853,74 +2539,9 @@ const VoxelWorld = ({
                 }
                 
                 // --- WIZARD HAT WORLD-SPACE TRAIL (Per-Player Pools) ---
-                // Each player with wizard hat has their own particle pool (works in all rooms)
-                if (penguinData?.hat === 'wizardHat' && wizardTrailRef.current) {
-                    const poolKey = 'localPlayer';
-                    let trailGroup = wizardTrailRef.current.pools.get(poolKey);
-                    
-                    // Create pool if it doesn't exist
-                    if (!trailGroup) {
-                        trailGroup = wizardTrailRef.current.createPool();
-                        wizardTrailRef.current.pools.set(poolKey, trailGroup);
-                        sceneRef.current.add(trailGroup);
-                    }
-                    
-                    const playerWorldPos = playerRef.current.position;
-                    
-                    // Spawn particles when moving - controlled rate (15/sec for 50 particles over 3 seconds)
-                    if (moving) {
-                        const spawnInterval = 1 / 15;
-                        const timeSinceLastSpawn = time - trailGroup.userData.lastSpawnTime;
-                        
-                        if (timeSinceLastSpawn >= spawnInterval) {
-                            let spawned = false;
-                            for (let attempts = 0; attempts < trailGroup.children.length && !spawned; attempts++) {
-                                const idx = (trailGroup.userData.nextParticleIndex + attempts) % trailGroup.children.length;
-                                const particle = trailGroup.children[idx];
-                                
-                                if (!particle.userData.active) {
-                                    particle.position.set(
-                                        playerWorldPos.x + (Math.random() - 0.5) * 0.4,
-                                        playerWorldPos.y + 2.2 + (Math.random() - 0.5) * 0.2,
-                                        playerWorldPos.z + (Math.random() - 0.5) * 0.4
-                                    );
-                                    particle.userData.active = true;
-                                    particle.userData.birthTime = time;
-                                    particle.visible = true;
-                                    particle.material.opacity = 0.9;
-                                    particle.scale.setScalar(0.8 + Math.random() * 0.4);
-                                    
-                                    trailGroup.userData.nextParticleIndex = (idx + 1) % trailGroup.children.length;
-                                    trailGroup.userData.lastSpawnTime = time;
-                                    spawned = true;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Update all active particles
-                    trailGroup.children.forEach((particle) => {
-                        if (particle.userData.active) {
-                            const age = time - particle.userData.birthTime;
-                            const lifeProgress = age / particle.userData.lifespan;
-                            
-                            if (lifeProgress < 1) {
-                                particle.position.y += delta * 0.05;
-                                let opacity;
-                                if (lifeProgress < 0.7) {
-                                    opacity = 0.9;
-                                } else {
-                                    const fadeProgress = (lifeProgress - 0.7) / 0.3;
-                                    opacity = 0.9 * (1 - fadeProgress * fadeProgress);
-                                }
-                                particle.material.opacity = Math.max(0, opacity);
-                                particle.scale.setScalar(particle.scale.x * (1 + delta * 0.05));
-                            } else {
-                                particle.userData.active = false;
-                                particle.visible = false;
-                            }
-                        }
-                    });
+                if (penguinData?.hat === 'wizardHat' && wizardTrailSystemRef.current) {
+                    wizardTrailSystemRef.current.getOrCreatePool('localPlayer');
+                    wizardTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
                 }
                 
                 // --- MOUNT ANIMATION ---
@@ -6002,1124 +2623,41 @@ const VoxelWorld = ({
             const now = Date.now();
             // Using cached values: centerX, centerZ, dojoBxCached, dojoBzCached, dojoHdCached, puffleMap, aiMap
             
-            // OPTIMIZATION: Only run full AI logic every 2nd frame (60fps -> 30fps AI updates)
-            // Visibility updates still happen every frame for smooth enter/exit
-            const runFullAILogic = frameCount % 2 === 0;
-            
-            aiAgentsRef.current.forEach(ai => {
-                // Only show AI that are in the same room as the player (every frame for smoothness)
-                const sameRoom = ai.currentRoom === roomRef.current;
-                if (ai.mesh) ai.mesh.visible = sameRoom;
-                
-                // Also show/hide AI's puffle - O(1) lookup now
-                const aiPuffleEntry = puffleMap.get(ai.id);
-                if (aiPuffleEntry && aiPuffleEntry.puffle && aiPuffleEntry.puffle.mesh) {
-                    aiPuffleEntry.puffle.mesh.visible = sameRoom;
-                }
-                
-                // OPTIMIZATION: Skip full AI logic for AIs in different rooms AND throttle updates
-                let aiMoving = false;
-                
-                // Skip expensive AI logic on odd frames (but still sync mesh positions)
-                if (!runFullAILogic) {
-                    // Just sync mesh position on skipped frames
-                    if (ai.mesh && sameRoom) {
-                        // Respect dance floor height in nightclub
-                        let aiY = 0;
-                        if (ai.currentRoom === 'nightclub') {
-                            const rd = roomDataRef.current;
-                            if (rd && rd.danceFloor) {
-                                const df = rd.danceFloor;
-                                if (ai.pos.x >= df.minX && ai.pos.x <= df.maxX && 
-                                    ai.pos.z >= df.minZ && ai.pos.z <= df.maxZ) {
-                                    aiY = df.height;
-                                }
-                            }
-                        }
-                        ai.mesh.position.set(ai.pos.x, aiY, ai.pos.z);
-                    }
-                    return; // Skip to next AI (forEach continues)
-                }
-                
-                // --- AI Room Transition Logic (use cached values) ---
-                const dojoBx = dojoBxCached;
-                const dojoBz = dojoBzCached;
-                const dojoHd = dojoHdCached;
-                const dojoDoorZ = dojoBz + dojoHd; // Front of dojo (door position)
-                
-                // Pizza Parlor position (from BUILDINGS: { x: 25, z: 5 }, size w:12, d:10)
-                const pizzaBx = centerX + 25;
-                const pizzaBz = centerZ + 5;
-                const pizzaDoorZ = pizzaBz + 5 + 1; // Front of pizza (door)
-                
-                // Nightclub position (portal at { x: 0, z: -60 })
-                const nightclubDoorX = centerX;
-                const nightclubDoorZ = centerZ - 60;
-                
-                if (ai.currentRoom === 'town') {
-                    // Check if AI is at the dojo door
-                    const doorWidth = 4;
-                    const atDojoDoor = Math.abs(ai.pos.x - dojoBx) < doorWidth && 
-                                       Math.abs(ai.pos.z - dojoDoorZ) < 4; // Increased detection zone
-                    
-                    // Check if AI is at the pizza door
-                    const atPizzaDoor = Math.abs(ai.pos.x - pizzaBx) < 5 && 
-                                        Math.abs(ai.pos.z - pizzaDoorZ) < 4;
-                    
-                    // When at dojo door, chance to enter (reduced to avoid getting stuck)
-                    if (atDojoDoor && Math.random() < 0.03) { // 3% per frame
-                        ai.currentRoom = 'dojo';
-                        ai.pos.x = (Math.random() - 0.5) * 10;
-                        ai.pos.z = 12 + Math.random() * 3;
-                        ai.action = 'idle';
-                        ai.actionTimer = now + 2000 + Math.random() * 3000;
-                        ai.target = null;
-                        ai.stuckCounter = 0;
-                        if (aiPuffleEntry && aiPuffleEntry.puffle) {
-                            aiPuffleEntry.puffle.position.x = ai.pos.x + 1.5;
-                            aiPuffleEntry.puffle.position.z = ai.pos.z + 1.5;
-                        }
-                    }
-                    // When at pizza door, chance to enter
-                    else if (atPizzaDoor && Math.random() < 0.03) {
-                        ai.currentRoom = 'pizza';
-                        ai.pos.x = (Math.random() - 0.5) * 8;
-                        ai.pos.z = 12 + Math.random() * 2; // Near entrance inside pizza
-                        ai.action = 'idle';
-                        ai.actionTimer = now + 2000 + Math.random() * 3000;
-                        ai.target = null;
-                        ai.stuckCounter = 0;
-                        if (aiPuffleEntry && aiPuffleEntry.puffle) {
-                            aiPuffleEntry.puffle.position.x = ai.pos.x + 1.5;
-                            aiPuffleEntry.puffle.position.z = ai.pos.z + 1.5;
-                        }
-                    }
-                    // Check if AI is at the nightclub door
-                    const atNightclubDoor = Math.abs(ai.pos.x - nightclubDoorX) < 5 && 
-                                            Math.abs(ai.pos.z - nightclubDoorZ) < 5;
-                    
-                    // When at nightclub door, chance to enter
-                    if (atNightclubDoor && Math.random() < 0.04) { // 4% per frame - nightclub is popular!
-                        ai.currentRoom = 'nightclub';
-                        // Spawn near entrance (exit door is at x:2, z:30 so entrance area is around z:30)
-                        ai.pos.x = 20 + (Math.random() - 0.5) * 6; // Center of room width (40/2 = 20)
-                        ai.pos.z = 28 + Math.random() * 4; // Near entrance
-                        ai.action = 'idle';
-                        ai.actionTimer = now + 1000 + Math.random() * 2000; // Quick to start dancing
-                        ai.target = null;
-                        ai.stuckCounter = 0;
-                        if (aiPuffleEntry && aiPuffleEntry.puffle) {
-                            aiPuffleEntry.puffle.position.x = ai.pos.x + 1.5;
-                            aiPuffleEntry.puffle.position.z = ai.pos.z + 1.5;
-                        }
-                    }
-                    // If stuck at door too long without entering, move away
-                    else if ((atDojoDoor || atPizzaDoor || atNightclubDoor) && ai.stuckCounter > 60) {
-                        ai.action = 'walk';
-                        ai.target = { 
-                            x: centerX + (Math.random() - 0.5) * 30, 
-                            z: centerZ + (Math.random() - 0.5) * 30 
-                        };
-                        ai.actionTimer = now + 5000;
-                        ai.stuckCounter = 0;
-                    }
-                } else if (ai.currentRoom === 'dojo') {
-                    // AI in dojo can exit
-                    const atExit = ai.pos.z > 13 && Math.abs(ai.pos.x) < 6;
-                    
-                    if (atExit && Math.random() < 0.02) {
-                        ai.currentRoom = 'town';
-                        ai.pos.x = dojoBx + (Math.random() - 0.5) * 6;
-                        ai.pos.z = dojoDoorZ + 3 + Math.random() * 3;
-                        ai.action = 'idle';
-                        ai.actionTimer = now + 2000 + Math.random() * 3000;
-                        ai.target = null;
-                        ai.stuckCounter = 0;
-                        if (aiPuffleEntry && aiPuffleEntry.puffle) {
-                            aiPuffleEntry.puffle.position.x = ai.pos.x + 1.5;
-                            aiPuffleEntry.puffle.position.z = ai.pos.z + 1.5;
-                        }
-                    }
-                } else if (ai.currentRoom === 'pizza') {
-                    // AI in pizza can exit - check if near front door (z > 14)
-                    const atExit = ai.pos.z > 13 && Math.abs(ai.pos.x) < 6;
-                    
-                    if (atExit && Math.random() < 0.015) {
-                        ai.currentRoom = 'town';
-                        ai.pos.x = pizzaBx + (Math.random() - 0.5) * 6;
-                        ai.pos.z = pizzaDoorZ + 3 + Math.random() * 3;
-                        ai.action = 'idle';
-                        ai.actionTimer = now + 2000 + Math.random() * 3000;
-                        ai.target = null;
-                        ai.stuckCounter = 0;
-                        if (aiPuffleEntry && aiPuffleEntry.puffle) {
-                            aiPuffleEntry.puffle.position.x = ai.pos.x + 1.5;
-                            aiPuffleEntry.puffle.position.z = ai.pos.z + 1.5;
-                        }
-                    }
-                } else if (ai.currentRoom === 'nightclub') {
-                    // AI in nightclub can exit - check if near exit door (x around 2, z around 30)
-                    const atExit = ai.pos.z > 28 && ai.pos.x < 8;
-                    
-                    if (atExit && Math.random() < 0.01) { // 1% - nightclub is fun, they stay longer
-                        ai.currentRoom = 'town';
-                        ai.pos.x = nightclubDoorX + (Math.random() - 0.5) * 6;
-                        ai.pos.z = nightclubDoorZ + 5 + Math.random() * 3; // South of door
-                        ai.action = 'idle';
-                        ai.actionTimer = now + 2000 + Math.random() * 3000;
-                        ai.target = null;
-                        ai.stuckCounter = 0;
-                        ai.emoteType = null; // Stop dancing when leaving
-                        if (aiPuffleEntry && aiPuffleEntry.puffle) {
-                            aiPuffleEntry.puffle.position.x = ai.pos.x + 1.5;
-                            aiPuffleEntry.puffle.position.z = ai.pos.z + 1.5;
-                        }
-                    }
-                }
-                
-                // --- AI Behavior (conversation, walking, etc.) ---
-                if (ai.action === 'chatting') {
-                    if (ai.conversationPartner) {
-                        const partner = aiMap.get(ai.conversationPartner); // O(1) lookup
-                        // Only chat with AI in same room
-                        if (partner && partner.currentRoom === ai.currentRoom) {
-                            ai.mesh.lookAt(partner.pos.x, 0, partner.pos.z);
-                        } else {
-                            // Partner left room, end conversation
-                            ai.action = 'idle';
-                            ai.conversationCooldown = now + 5000;
-                            ai.conversationPartner = null;
-                        }
-                    }
+            // Update all AI agents (movement, conversations, room transitions, animations)
+            updateAIAgents({
+                aiAgents: aiAgentsRef.current,
+                aiPuffles: aiPufflesRef.current,
+                currentRoom: roomRef.current,
+                roomData: roomDataRef.current,
+                frameCount,
+                time,
+                delta,
+                centerCoords: { centerX, centerZ },
+                dojoCoords: { dojoBx: dojoBxCached, dojoBz: dojoBzCached, dojoHd: dojoHdCached },
+                constants: { CITY_SIZE, BUILDING_SCALE, BUILDINGS },
+                THREE,
+                createChatSprite: (THREE, text) => createChatSprite(THREE, text),
+                animateMesh,
+                cacheAnimatedParts,
+                animateCosmeticsFromCache,
+                wizardTrailRef: wizardTrailSystemRef
+            });
 
-                    if (ai.conversationTurn) {
-                        if (!ai.bubble) {
-                            const script = ai.conversationScript;
-                            const line = script[ai.conversationLineIdx];
-                            
-                            if (line) {
-                                const bubble = createChatSprite(line);
-                                ai.mesh.add(bubble);
-                                ai.bubble = bubble;
-                                ai.bubbleTimer = now + 3500;
-                                
-                                ai.emoteType = 'Wave';
-                                ai.emoteStart = now;
-                            } else {
-                                ai.action = 'idle';
-                                ai.conversationCooldown = now + 10000;
-                                ai.conversationPartner = null;
-                                ai.emoteType = null;
-                            }
-                        } else if (now > ai.bubbleTimer) {
-                            ai.mesh.remove(ai.bubble);
-                            ai.bubble = null;
-                            ai.conversationTurn = false;
-                            
-                            const partner = aiMap.get(ai.conversationPartner); // O(1) lookup
-                            if (partner) {
-                                partner.conversationTurn = true;
-                                partner.conversationLineIdx++;
-                            }
-                            
-                            if (ai.conversationLineIdx >= ai.conversationScript.length - 2) {
-                                 // END CONVERSATION FOR BOTH AI
-                                 ai.action = 'idle';
-                                 ai.emoteType = 'Laugh';
-                                 ai.emoteStart = now;
-                                 ai.actionTimer = now + 2000;
-                                 ai.conversationCooldown = now + 15000;
-                                 ai.conversationPartner = null;
-                                 ai.conversationScript = null;
-                                 ai.conversationTurn = false;
-                                 
-                                 // Also end for partner
-                                 if (partner) {
-                                     partner.action = 'idle';
-                                     partner.emoteType = 'Laugh';
-                                     partner.emoteStart = now;
-                                     partner.actionTimer = now + 2000;
-                                     partner.conversationCooldown = now + 15000;
-                                     partner.conversationPartner = null;
-                                     partner.conversationScript = null;
-                                     partner.conversationTurn = false;
-                                     // Clear partner's bubble if they have one
-                                     if (partner.bubble && partner.mesh) {
-                                         partner.mesh.remove(partner.bubble);
-                                         partner.bubble = null;
-                                     }
-                                 }
-                            }
-                        }
-                    } else {
-                        ai.emoteType = null;
-                    }
-                }
-                
-                else if (now > ai.actionTimer) {
-                    // Clear sitting emote when timer expires
-                    if (ai.action === 'sitting') {
-                        ai.emoteType = null;
-                    }
-                    
-                    // If we have a scheduled walk target from being stuck, use it
-                    if (ai.nextWalkTarget) {
-                        ai.action = 'walk';
-                        ai.target = ai.nextWalkTarget;
-                        ai.nextWalkTarget = null;
-                        ai.emoteType = null;
-                        ai.actionTimer = now + 5000 + Math.random() * 4000;
-                    }
-                    // Find conversation partner in same room (not if sitting nearby)
-                    else {
-                    let foundPartner = null;
-                        if (now > ai.conversationCooldown && ai.action !== 'sitting') {
-                        for(let other of aiAgentsRef.current) {
-                            if (other.id !== ai.id && 
-                                    (other.action === 'idle' || other.action === 'sitting') && 
-                                    other.currentRoom === ai.currentRoom &&
-                                now > other.conversationCooldown) {
-                                const dx = other.pos.x - ai.pos.x;
-                                const dz = other.pos.z - ai.pos.z;
-                                const dist = Math.sqrt(dx*dx + dz*dz);
-                                    if (dist < 6) { // Slightly larger conversation range
-                                    foundPartner = other;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (foundPartner) {
-                        const scriptIdx = Math.floor(Math.random() * CONVERSATIONS.length);
-                        const script = CONVERSATIONS[scriptIdx];
-                        
-                        ai.action = 'chatting';
-                        ai.conversationPartner = foundPartner.id;
-                        ai.conversationScript = script;
-                        ai.conversationLineIdx = 0;
-                        ai.conversationTurn = true;
-                        
-                        foundPartner.action = 'chatting';
-                        foundPartner.conversationPartner = ai.id;
-                        foundPartner.conversationScript = script;
-                        foundPartner.conversationLineIdx = 1;
-                        foundPartner.conversationTurn = false;
-                        
-                        foundPartner.actionTimer = now + 999999; 
-                        ai.actionTimer = now + 999999;
-                    }
-                    
-                    else {
-                        const r = Math.random();
-                        if (r < 0.10) {
-                            // Random emote (not Sit - that's handled separately)
-                            ai.action = 'idle';
-                            const nonSitEmotes = ['Wave', 'Dance', 'Laugh'];
-                            ai.emoteType = nonSitEmotes[Math.floor(Math.random() * nonSitEmotes.length)];
-                            ai.emoteStart = now;
-                            ai.actionTimer = now + 3000 + Math.random() * 2000;
-                        }
-                        else if (r < 0.20) {
-                            // Sit down for a while (organic rest behavior)
-                            ai.action = 'sitting';
-                            ai.emoteType = 'Sit';
-                            ai.emoteStart = now;
-                            // Sit for 8-20 seconds (longer, more natural)
-                            ai.actionTimer = now + 8000 + Math.random() * 12000;
-                        }
-                        else if (r < 0.75) {
-                            // Walk somewhere
-                            ai.action = 'walk';
-                            ai.emoteType = null;
-                            
-                            if (ai.currentRoom === 'town') {
-                                const walkChoice = Math.random();
-                                if (walkChoice < 0.10) {
-                                    // Walk towards dojo door
-                                    const doorX = dojoBxCached + (Math.random() - 0.5) * 4;
-                                    const doorZ = dojoBzCached + dojoHdCached + 2;
-                                    ai.target = { x: doorX, z: doorZ };
-                                } else if (walkChoice < 0.18) {
-                                    // Walk towards pizza door
-                                    const doorX = pizzaBx + (Math.random() - 0.5) * 4;
-                                    const doorZ = pizzaDoorZ + 2;
-                                    ai.target = { x: doorX, z: doorZ };
-                                } else if (walkChoice < 0.30) {
-                                    // Walk towards nightclub door (popular destination!)
-                                    ai.target = { 
-                                        x: nightclubDoorX + (Math.random() - 0.5) * 6, 
-                                        z: nightclubDoorZ + 3 + Math.random() * 3 
-                                    };
-                                } else if (walkChoice < 0.40) {
-                                    // Walk to campfire area (center of T intersection)
-                                    ai.target = { 
-                                        x: centerX + (Math.random() - 0.5) * 15, 
-                                        z: centerZ + (Math.random() - 0.5) * 15 
-                                    };
-                                } else if (walkChoice < 0.45) {
-                                    // Walk to Christmas tree area (east side)
-                                    ai.target = { 
-                                        x: centerX + 29 + (Math.random() - 0.5) * 8, 
-                                        z: centerZ - 1 + (Math.random() - 0.5) * 8 
-                                    };
-                                } else if (walkChoice < 0.55) {
-                                    // Walk along the top of the T (horizontal street)
-                                    ai.target = { 
-                                        x: centerX + (Math.random() - 0.5) * 80, 
-                                        z: centerZ - 15 + (Math.random() - 0.5) * 10 
-                                    };
-                                } else if (walkChoice < 0.65) {
-                                    // Walk along T-bar street near igloos (but NOT into igloos)
-                                    // Stay on the street (z around centerZ - 45, between the two rows of igloos)
-                                    const isLeft = Math.random() > 0.5;
-                                    ai.target = { 
-                                        x: centerX + (isLeft ? -50 : 50) + (Math.random() - 0.5) * 20, 
-                                        z: centerZ - 45 + (Math.random() - 0.5) * 15  // Stay on street
-                                    };
-                                } else {
-                                    // Random walk in town - avoid buildings, stay within walls
-                                    let tx, tz;
-                                    let attempts = 0;
-                                    let validTarget = false;
-                                    const mapMargin = 15; // Stay away from wall boundaries
-                                    
-                                    do {
-                                        tx = centerX + (Math.random()-0.5) * 180; // Larger map
-                                        tz = centerZ + (Math.random()-0.5) * 180;
-                                        validTarget = true;
-                                        
-                                        // Check wall boundaries
-                                        if (tx < mapMargin || tx > CITY_SIZE * BUILDING_SCALE - mapMargin ||
-                                            tz < mapMargin || tz > CITY_SIZE * BUILDING_SCALE - mapMargin) {
-                                            validTarget = false;
-                                        }
-                                        
-                                        // Check against all buildings
-                                        if (validTarget) {
-                                            for (const building of BUILDINGS) {
-                                                const bx = centerX + building.position.x;
-                                                const bz = centerZ + building.position.z;
-                                                const hw = building.size.w / 2 + 4;
-                                                const hd = building.size.d / 2 + 4;
-                                                
-                                                if (tx > bx - hw && tx < bx + hw && tz > bz - hd && tz < bz + hd) {
-                                                    validTarget = false;
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        
-                                        // Check against igloo positions (AI cannot enter igloos)
-                                        if (validTarget) {
-                                            const iglooPositions = [
-                                                // North row igloos
-                                                { x: -75, z: -75 }, { x: -50, z: -78 }, { x: -25, z: -75 },
-                                                { x: 25, z: -75 }, { x: 50, z: -78 }, { x: 75, z: -75 },
-                                                // South row igloos  
-                                                { x: -70, z: -15 }, { x: -40, z: -18 },
-                                                { x: 40, z: -18 }, { x: 70, z: -15 }
-                                            ];
-                                            const iglooRadius = 8; // Keep AI away from igloo centers
-                                            
-                                            for (const igloo of iglooPositions) {
-                                                const ix = centerX + igloo.x;
-                                                const iz = centerZ + igloo.z;
-                                                const dx = tx - ix;
-                                                const dz = tz - iz;
-                                                if (Math.sqrt(dx*dx + dz*dz) < iglooRadius) {
-                                                    validTarget = false;
-                                                    break;
-                                                }
-                                            }
-                                        }
-                                        attempts++;
-                                    } while (!validTarget && attempts < 8);
-                                    
-                                    ai.target = { x: tx, z: tz };
-                                }
-                            } else if (ai.currentRoom === 'dojo') {
-                                if (Math.random() < 0.30) {
-                                    // Walk towards exit
-                                    ai.target = { x: (Math.random() - 0.5) * 6, z: 14 + Math.random() * 2 };
-                                } else {
-                                    // Walk around inside dojo
-                                    const tx = (Math.random()-0.5) * 26;
-                                    const tz = (Math.random()-0.5) * 26;
-                                    ai.target = { x: tx, z: tz };
-                                }
-                            } else if (ai.currentRoom === 'pizza') {
-                                if (Math.random() < 0.20) {
-                                    // Walk towards exit
-                                    ai.target = { x: (Math.random() - 0.5) * 6, z: 14 + Math.random() * 2 };
-                                } else if (Math.random() < 0.50) {
-                                    // Walk to a table area
-                                    const tableSpots = [
-                                        { x: -8 + (Math.random()-0.5)*3, z: 2 + (Math.random()-0.5)*2 },
-                                        { x: 8 + (Math.random()-0.5)*3, z: 2 + (Math.random()-0.5)*2 },
-                                        { x: -8 + (Math.random()-0.5)*3, z: 9 + (Math.random()-0.5)*2 },
-                                        { x: 8 + (Math.random()-0.5)*3, z: 9 + (Math.random()-0.5)*2 },
-                                    ];
-                                    ai.target = tableSpots[Math.floor(Math.random() * tableSpots.length)];
-                                } else {
-                                    // Random walk in pizza (avoid counter)
-                                    let tx = (Math.random()-0.5) * 26;
-                                    let tz = -8 + Math.random() * 20; // Avoid back counter
-                                    ai.target = { x: tx, z: tz };
-                                }
-                            } else if (ai.currentRoom === 'nightclub') {
-                                // Nightclub room: 40 wide (X: 0-40), 35 deep (Z: 0-35)
-                                // Dance floor at center (around X:12-28, Z:14-26)
-                                const DANCE_FLOOR = { minX: 12, maxX: 28, minZ: 14, maxZ: 26 };
-                                
-                                // Check if AI is currently on the dance floor
-                                const onDanceFloor = ai.pos.x > DANCE_FLOOR.minX && ai.pos.x < DANCE_FLOOR.maxX &&
-                                                     ai.pos.z > DANCE_FLOOR.minZ && ai.pos.z < DANCE_FLOOR.maxZ;
-                                
-                                if (onDanceFloor && Math.random() < 0.70) {
-                                    // HIGH CHANCE to dance when on the dance floor!
-                                    ai.action = 'idle';
-                                    ai.emoteType = Math.random() < 0.7 ? 'Dance' : 'Breakdance';
-                                    ai.emoteStart = now;
-                                    ai.actionTimer = now + 4000 + Math.random() * 8000; // Dance for 4-12 seconds
-                                } else if (Math.random() < 0.08) {
-                                    // Walk towards exit
-                                    ai.target = { x: 4 + Math.random() * 4, z: 28 + Math.random() * 4 };
-                                } else if (Math.random() < 0.60) {
-                                    // Walk to the dance floor! (main attraction)
-                                    ai.target = { 
-                                        x: DANCE_FLOOR.minX + Math.random() * (DANCE_FLOOR.maxX - DANCE_FLOOR.minX), 
-                                        z: DANCE_FLOOR.minZ + Math.random() * (DANCE_FLOOR.maxZ - DANCE_FLOOR.minZ) 
-                                    };
-                                } else if (Math.random() < 0.30) {
-                                    // Walk to DJ booth area (front of room)
-                                    ai.target = { x: 20 + (Math.random() - 0.5) * 8, z: 6 + Math.random() * 4 };
-                                } else {
-                                    // Walk to sides (near speakers/bar area)
-                                    const side = Math.random() > 0.5 ? 5 : 35; // Left or right side
-                                    ai.target = { x: side + (Math.random() - 0.5) * 6, z: 10 + Math.random() * 18 };
-                                }
-                            }
-                            ai.actionTimer = now + 5000 + Math.random() * 5000;
-                        }
-                        else {
-                            // Idle - longer, more varied wait times for natural feel
-                            ai.action = 'idle';
-                            ai.emoteType = null;
-                            ai.actionTimer = now + 3000 + Math.random() * 5000;
-                        }
-                    }
-                    } // Close the else block for nextWalkTarget check
-                }
-                
-                // --- AI Movement ---
-                if (ai.action === 'walk' && ai.target) {
-                    const dx = ai.target.x - ai.pos.x;
-                    const dz = ai.target.z - ai.pos.z;
-                    const dist = Math.sqrt(dx*dx + dz*dz);
-                    
-                    if (dist > 0.5) {
-                        const targetRot = Math.atan2(dx, dz);
-                        let angleDiff = targetRot - ai.rot;
-                        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
-                        while (angleDiff < -Math.PI) angleDiff += Math.PI * 2;
-                        ai.rot += angleDiff * 0.1;
-                        
-                        const moveSpeed = speed * 0.6; 
-                        
-                        const nextX = ai.pos.x + Math.sin(ai.rot) * moveSpeed;
-                        const nextZ = ai.pos.z + Math.cos(ai.rot) * moveSpeed;
-                        
-                        let collided = false;
-                        
-                        // Collision depends on room
-                        if (ai.currentRoom === 'town') {
-                            // Town wall collision - use wall boundaries
-                            const WALL_MARGIN = 10;
-                            const MAP_SIZE = CITY_SIZE * BUILDING_SCALE;
-                            
-                            // Check wall boundaries
-                            if (nextX < WALL_MARGIN || nextX > MAP_SIZE - WALL_MARGIN ||
-                                nextZ < WALL_MARGIN || nextZ > MAP_SIZE - WALL_MARGIN) {
-                                collided = true;
-                            }
-                            
-                            // Building collision (with door exception)
-                            if (!collided) {
-                                for (const building of BUILDINGS) {
-                                    const bx = centerX + building.position.x;
-                                    const bz = centerZ + building.position.z;
-                                    const hw = building.size.w / 2 + 0.5;
-                                    const hd = building.size.d / 2 + 0.5;
-                                    
-                                    if (nextX > bx - hw && nextX < bx + hw && 
-                                        nextZ > bz - hd && nextZ < bz + hd) {
-                                        const doorWidth = 3;
-                                        const atDoor = Math.abs(nextX - bx) < doorWidth && nextZ > bz + hd - 2;
-                                        if (!atDoor) {
-                                            collided = true;
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-                        } else if (ai.currentRoom === 'dojo') {
-                            // Dojo room bounds (DOJO_SIZE = 36, so -18 to 18)
-                            const DOJO_HALF = 18;
-                            if (Math.abs(nextX) > DOJO_HALF - 1 || Math.abs(nextZ) > DOJO_HALF - 1) {
-                                collided = true;
-                            }
-                        } else if (ai.currentRoom === 'pizza') {
-                            // Pizza parlor bounds (PIZZA_SIZE = 32, so -16 to 16)
-                            const PIZZA_HALF = 16;
-                            if (Math.abs(nextX) > PIZZA_HALF - 1 || Math.abs(nextZ) > PIZZA_HALF - 1) {
-                                collided = true;
-                            }
-                            // Table collision (pedestals)
-                            const tables = [
-                                { x: -8, z: 2, r: 0.6 },
-                                { x: 8, z: 2, r: 0.6 },
-                                { x: -8, z: 9, r: 0.6 },
-                                { x: 8, z: 9, r: 0.6 }
-                            ];
-                            for (const t of tables) {
-                                const dx = nextX - t.x;
-                                const dz = nextZ - t.z;
-                                if (Math.sqrt(dx*dx + dz*dz) < t.r + 0.8) {
-                                    collided = true;
-                                    break;
-                                }
-                            }
-                            // Counter collision (snug against back wall at z = -13.5, depth 3)
-                            if (nextZ < -12 && nextZ > -16 && Math.abs(nextX) < 10) {
-                                collided = true;
-                            }
-                        } else if (ai.currentRoom === 'nightclub') {
-                            // Nightclub bounds: 40 wide (X: 0-40), 35 deep (Z: 0-35)
-                            const NC_MARGIN = 2;
-                            if (nextX < NC_MARGIN || nextX > 40 - NC_MARGIN || 
-                                nextZ < NC_MARGIN || nextZ > 35 - NC_MARGIN) {
-                                collided = true;
-                            }
-                            // Avoid DJ booth platform area (X: 14-26, Z: 0-7)
-                            if (nextX > 14 && nextX < 26 && nextZ < 7) {
-                                collided = true;
-                            }
-                            // Avoid speaker areas (corners)
-                            if ((nextX < 6 || nextX > 34) && nextZ < 10) {
-                                collided = true;
-                            }
-                        }
-
-                        if (!collided) {
-                            ai.pos.x = nextX;
-                            ai.pos.z = nextZ;
-                            aiMoving = true;
-                            ai.stuckCounter = 0;
-                        } else {
-                            // AI hit a wall - improved stuck handling
-                            ai.stuckCounter = (ai.stuckCounter || 0) + 1;
-                            
-                            if (ai.stuckCounter > 20) {
-                                // Stuck too long - take a break then pick new random target away from current position
-                                ai.action = 'idle';
-                                ai.emoteType = null;
-                                ai.actionTimer = now + 1000 + Math.random() * 2000;
-                                ai.target = null;
-                                ai.stuckCounter = 0;
-                                
-                                // Schedule a walk away from current area (room-specific)
-                                const mapMargin = 15;
-                                const maxCoord = CITY_SIZE * BUILDING_SCALE - mapMargin;
-                                if (ai.currentRoom === 'town') {
-                                    ai.nextWalkTarget = {
-                                        x: Math.max(mapMargin, Math.min(maxCoord, centerX + (Math.random() - 0.5) * 100)),
-                                        z: Math.max(mapMargin, Math.min(maxCoord, centerZ + (Math.random() - 0.5) * 100))
-                                    };
-                                } else if (ai.currentRoom === 'nightclub') {
-                                    // Move to dance floor (safe center area)
-                                    ai.nextWalkTarget = {
-                                        x: 12 + Math.random() * 16, // Dance floor X range
-                                        z: 14 + Math.random() * 12  // Dance floor Z range
-                                    };
-                                } else {
-                                    ai.nextWalkTarget = {
-                                        x: (Math.random() - 0.5) * 20,
-                                        z: (Math.random() - 0.5) * 20
-                                    };
-                                }
-                            } else if (ai.stuckCounter > 10) {
-                                // Try backing up and turning
-                                ai.rot += (Math.random() > 0.5 ? 1 : -1) * Math.PI / 2;
-                                const backDist = 2 + Math.random() * 3;
-                                ai.target = {
-                                    x: ai.pos.x + Math.sin(ai.rot) * backDist,
-                                    z: ai.pos.z + Math.cos(ai.rot) * backDist
-                                };
-                            } else {
-                                // Try sliding along the wall
-                                const slideAngle = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 4 + Math.random() * Math.PI / 4);
-                                ai.rot += slideAngle;
-                                
-                                const newDist = 4 + Math.random() * 6;
-                                const mapMargin2 = 15;
-                                const maxCoord2 = CITY_SIZE * BUILDING_SCALE - mapMargin2;
-                                if (ai.currentRoom === 'town') {
-                                    ai.target = {
-                                        x: Math.max(mapMargin2, Math.min(maxCoord2, ai.pos.x + Math.sin(ai.rot) * newDist)),
-                                        z: Math.max(mapMargin2, Math.min(maxCoord2, ai.pos.z + Math.cos(ai.rot) * newDist))
-                                    };
-                                } else if (ai.currentRoom === 'pizza') {
-                                    ai.target = {
-                                        x: Math.max(-14, Math.min(14, ai.pos.x + Math.sin(ai.rot) * newDist)),
-                                        z: Math.max(-10, Math.min(14, ai.pos.z + Math.cos(ai.rot) * newDist))
-                                    };
-                                } else if (ai.currentRoom === 'nightclub') {
-                                    // Nightclub: 0-40 X, 0-35 Z, stay away from walls/booth
-                                    ai.target = {
-                                        x: Math.max(4, Math.min(36, ai.pos.x + Math.sin(ai.rot) * newDist)),
-                                        z: Math.max(8, Math.min(32, ai.pos.z + Math.cos(ai.rot) * newDist))
-                                    };
-                                } else {
-                                    ai.target = {
-                                        x: Math.max(-15, Math.min(15, ai.pos.x + Math.sin(ai.rot) * newDist)),
-                                        z: Math.max(-15, Math.min(15, ai.pos.z + Math.cos(ai.rot) * newDist))
-                                    };
-                                }
-                            }
-                        }
-                    } else {
-                        ai.action = 'idle';
-                        ai.target = null;
-                    }
-                }
-                
-                // OPTIMIZATION: Skip expensive mesh updates for invisible AIs
-                if (!sameRoom) return; // Early exit - AI not visible
-                
-                // Calculate AI Y position - respect dance floor in nightclub
-                let aiY = 0;
-                if (ai.currentRoom === 'nightclub') {
-                    const rd = roomDataRef.current;
-                    if (rd && rd.danceFloor) {
-                        const df = rd.danceFloor;
-                        if (ai.pos.x >= df.minX && ai.pos.x <= df.maxX && 
-                            ai.pos.z >= df.minZ && ai.pos.z <= df.maxZ) {
-                            aiY = df.height; // Raise AI to dance floor height
-                        }
-                    }
-                }
-                ai.mesh.position.set(ai.pos.x, aiY, ai.pos.z);
-                if (ai.action !== 'chatting') ai.mesh.rotation.y = ai.rot;
-                
-                animateMesh(ai.mesh, aiMoving, ai.emoteType, ai.emoteStart);
-                
-                // --- AI COSMETIC ANIMATIONS (OPTIMIZED) ---
-                // Use cached animated parts instead of traverse() every frame
-                const aiAppearance = ai.aiData;
-                if (aiAppearance) {
-                    // Check and cache animated cosmetics flag once
-                    if (ai._hasAnimatedCosmetics === undefined) {
-                        ai._hasAnimatedCosmetics = aiAppearance.hat === 'propeller' || 
-                                                   aiAppearance.hat === 'flamingCrown' ||
-                                                   aiAppearance.hat === 'wizardHat' ||
-                                                   aiAppearance.mouth === 'cigarette' || 
-                                                   aiAppearance.mouth === 'pipe' ||
-                                                   aiAppearance.mouth === 'cigar' ||
-                                                   aiAppearance.eyes === 'laser' ||
-                                                   aiAppearance.eyes === 'fire' ||
-                                                   aiAppearance.bodyItem === 'angelWings' ||
-                                                   aiAppearance.bodyItem === 'demonWings' ||
-                                                   aiAppearance.bodyItem === 'fireAura' ||
-                                                   aiAppearance.bodyItem === 'lightningAura';
-                    }
-                    
-                    if (ai._hasAnimatedCosmetics) {
-                        // Build cache lazily on first animation frame
-                        if (!ai.mesh.userData._animatedPartsCache) {
-                            ai.mesh.userData._animatedPartsCache = cacheAnimatedParts(ai.mesh);
-                        }
-                        animateCosmeticsFromCache(ai.mesh.userData._animatedPartsCache, time, delta);
-                    }
-                    
-                    // AI Wizard Hat Trail - each AI gets their own particle pool (works in all rooms)
-                    if (aiAppearance.hat === 'wizardHat' && wizardTrailRef.current && sameRoom) {
-                        const poolKey = `ai_${ai.id}`;
-                        let trailGroup = wizardTrailRef.current.pools.get(poolKey);
-                        
-                        // Create pool if it doesn't exist
-                        if (!trailGroup) {
-                            trailGroup = wizardTrailRef.current.createPool();
-                            wizardTrailRef.current.pools.set(poolKey, trailGroup);
-                            sceneRef.current.add(trailGroup);
-                        }
-                        
-                        if (aiMoving) {
-                            const spawnInterval = 1 / 12; // Slightly lower rate for AI
-                            const timeSinceLastSpawn = time - trailGroup.userData.lastSpawnTime;
-                            
-                            if (timeSinceLastSpawn >= spawnInterval) {
-                                let spawned = false;
-                                for (let attempts = 0; attempts < trailGroup.children.length && !spawned; attempts++) {
-                                    const idx = (trailGroup.userData.nextParticleIndex + attempts) % trailGroup.children.length;
-                                    const particle = trailGroup.children[idx];
-                                    
-                                    if (!particle.userData.active) {
-                                        particle.position.set(
-                                            ai.pos.x + (Math.random() - 0.5) * 0.4,
-                                            2.2 + (Math.random() - 0.5) * 0.2,
-                                            ai.pos.z + (Math.random() - 0.5) * 0.4
-                                        );
-                                        particle.userData.active = true;
-                                        particle.userData.birthTime = time;
-                                        particle.visible = true;
-                                        particle.material.opacity = 0.9;
-                                        particle.scale.setScalar(0.8 + Math.random() * 0.4);
-                                        
-                                        trailGroup.userData.nextParticleIndex = (idx + 1) % trailGroup.children.length;
-                                        trailGroup.userData.lastSpawnTime = time;
-                                        spawned = true;
-                                    }
-                                }
-                            }
-                        }
-                        
-                        // Update AI's particles
-                        trailGroup.children.forEach((particle) => {
-                            if (particle.userData.active) {
-                                const age = time - particle.userData.birthTime;
-                                const lifeProgress = age / particle.userData.lifespan;
-                                
-                                if (lifeProgress < 1) {
-                                    particle.position.y += delta * 0.05;
-                                    let opacity;
-                                    if (lifeProgress < 0.7) {
-                                        opacity = 0.9;
-                                    } else {
-                                        const fadeProgress = (lifeProgress - 0.7) / 0.3;
-                                        opacity = 0.9 * (1 - fadeProgress * fadeProgress);
-                                    }
-                                    particle.material.opacity = Math.max(0, opacity);
-                                    particle.scale.setScalar(particle.scale.x * (1 + delta * 0.05));
-                                } else {
-                                    particle.userData.active = false;
-                                    particle.visible = false;
-                                }
-                            }
-                        });
-                    }
-                }
-
-                // AI puffle follow/animate
-                if (aiPuffleEntry && aiPuffleEntry.puffle && aiPuffleEntry.puffle.mesh) {
-                    const aiPuffle = aiPuffleEntry.puffle;
-                    
-                    if (typeof aiPuffle.tick === 'function') {
-                        aiPuffle.tick();
-                    }
-                    
-                    if (typeof aiPuffle.followOwner === 'function') {
-                        aiPuffle.followOwner(ai.pos, delta);
-                    }
-                    
-                    if (typeof aiPuffle.animate === 'function') {
-                        aiPuffle.animate(time);
-                    }
-                    
-                    // Sync puffle mesh position (in case followOwner didn't run)
-                    if (aiPuffle.mesh && aiPuffle.position) {
-                        aiPuffle.mesh.position.x = aiPuffle.position.x;
-                        aiPuffle.mesh.position.z = aiPuffle.position.z;
-                        // Respect dance floor height in nightclub
-                        let puffleY = 0.5; // Default puffle height
-                        if (ai.currentRoom === 'nightclub') {
-                            const rd = roomDataRef.current;
-                            if (rd && rd.danceFloor) {
-                                const df = rd.danceFloor;
-                                if (aiPuffle.position.x >= df.minX && aiPuffle.position.x <= df.maxX && 
-                                    aiPuffle.position.z >= df.minZ && aiPuffle.position.z <= df.maxZ) {
-                                    puffleY = df.height + 0.5; // Dance floor + puffle offset
-                                }
-                            }
-                        }
-                        aiPuffle.mesh.position.y = puffleY;
-                    }
-                }
-            }); // End AI update loop
-
-            // ==================== OTHER PLAYERS UPDATE (60fps in game loop) ====================
-            const otherMeshes = otherPlayerMeshesRef.current;
-            const playersData = playersDataRef.current;
-            
-            for (const [id, meshData] of otherMeshes) {
-                const playerData = playersData.get(id);
-                if (!playerData || !meshData.mesh) continue;
-                
-                // Smooth position interpolation (lerp factor based on delta for consistent speed)
-                const lerpFactor = Math.min(1, delta * 10); // Smooth catch-up
-                
-                if (playerData.position) {
-                    meshData.mesh.position.x += (playerData.position.x - meshData.mesh.position.x) * lerpFactor;
-                    meshData.mesh.position.z += (playerData.position.z - meshData.mesh.position.z) * lerpFactor;
-                    // Sync Y position for jumps (with slightly faster lerp for responsiveness)
-                    const targetY = playerData.position.y ?? 0;
-                    meshData.mesh.position.y += (targetY - meshData.mesh.position.y) * Math.min(1, delta * 15);
-                }
-                
-                if (playerData.rotation !== undefined) {
-                    // Smooth rotation interpolation
-                    let rotDiff = playerData.rotation - meshData.mesh.rotation.y;
-                    while (rotDiff > Math.PI) rotDiff -= Math.PI * 2;
-                    while (rotDiff < -Math.PI) rotDiff += Math.PI * 2;
-                    meshData.mesh.rotation.y += rotDiff * lerpFactor;
-                }
-                
-                // Handle puffle creation/removal dynamically
-                if (playerData.needsPuffleUpdate) {
-                    playerData.needsPuffleUpdate = false;
-                    
-                    // Remove old puffle mesh if exists
-                    if (meshData.puffleMesh) {
-                        scene.remove(meshData.puffleMesh);
-                        meshData.puffleMesh = null;
-                    }
-                    
-                    // Create new puffle if player has one
-                    if (playerData.puffle) {
-                        console.log(`🐾 Creating puffle for ${playerData.name}: ${playerData.puffle.color}`);
-                        const puffleInstance = new Puffle({
-                            color: playerData.puffle.color,
-                            name: playerData.puffle.name
-                        });
-                        meshData.puffleMesh = puffleInstance.createMesh(THREE);
-                        const pufflePos = playerData.pufflePosition || {
-                            x: (playerData.position?.x || 0) + 1.5,
-                            z: (playerData.position?.z || 0) + 1.5
-                        };
-                        meshData.puffleMesh.position.set(pufflePos.x, 0.5, pufflePos.z);
-                        scene.add(meshData.puffleMesh);
-                    }
-                }
-                
-                // Update puffle position (with fallback to player position offset)
-                if (meshData.puffleMesh) {
-                    const targetPufflePos = playerData.pufflePosition || {
-                        x: (playerData.position?.x || 0) + 1.5,
-                        z: (playerData.position?.z || 0) + 1.5
-                    };
-                    meshData.puffleMesh.position.x += (targetPufflePos.x - meshData.puffleMesh.position.x) * lerpFactor;
-                    meshData.puffleMesh.position.z += (targetPufflePos.z - meshData.puffleMesh.position.z) * lerpFactor;
-                    meshData.puffleMesh.position.y = 0.5;
-                }
-                
-                // Handle emotes - sync with playerData
-                if (playerData.emote !== meshData.currentEmote) {
-                    meshData.currentEmote = playerData.emote;
-                    meshData.emoteStartTime = playerData.emoteStartTime || Date.now();
-                }
-                
-                // Auto-end emotes after 3.5 seconds (client-side fallback for local player only)
-                // Continuous emotes: Sit, Breakdance, DJ, 67, Headbang - don't auto-clear
-                const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang'];
-                if (meshData.currentEmote && !continuousEmotes.includes(meshData.currentEmote)) {
-                    const emoteAge = (Date.now() - meshData.emoteStartTime) / 1000;
-                    if (emoteAge > 3.5) {
-                        meshData.currentEmote = null;
-                        playerData.emote = null; // Also clear in data
-                    }
-                }
-                
-                // Animate other player mesh (walking/emotes)
-                const isMoving = playerData.position && (
-                    Math.abs(playerData.position.x - meshData.mesh.position.x) > 0.1 ||
-                    Math.abs(playerData.position.z - meshData.mesh.position.z) > 0.1
-                );
-                // Pass each player's seatedOnFurniture state (synced from server), character type, and mounted state
-                const otherPlayerMounted = !!(meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData);
-                // Check if other player is airborne based on their Y position
-                const otherIsAirborne = (playerData.position?.y ?? 0) > 0.1;
-                animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted, otherIsAirborne);
-                
-                // OPTIMIZATION: Use cached animated parts for other players
-                // Build cache lazily on first animation frame if needed
-                if (meshData.hasAnimatedCosmetics) {
-                    if (!meshData.mesh.userData._animatedPartsCache) {
-                        meshData.mesh.userData._animatedPartsCache = cacheAnimatedParts(meshData.mesh);
-                    }
-                    animateCosmeticsFromCache(meshData.mesh.userData._animatedPartsCache, time, delta);
-                }
-
-                // --- MOUNT ANIMATION FOR OTHER PLAYERS ---
-                if (meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData?.animated) {
-                    const mountGroup = meshData.mesh.getObjectByName('mount');
-                    if (mountGroup) {
-                        const leftOarPivot = mountGroup.getObjectByName('left_oar_pivot');
-                        const rightOarPivot = mountGroup.getObjectByName('right_oar_pivot');
-                        
-                        if (leftOarPivot && rightOarPivot) {
-                            if (isMoving) {
-                                // Rowing animation when other player is moving
-                                const rowSpeed = 8;
-                                const rowAngle = Math.sin(time * rowSpeed) * 0.5;
-                                
-                                // Y rotation for forward/backward rowing motion
-                                leftOarPivot.rotation.y = rowAngle;
-                                rightOarPivot.rotation.y = -rowAngle;
-                                // Z rotation for dip into water
-                                leftOarPivot.rotation.z = Math.sin(time * rowSpeed + Math.PI/2) * 0.15;
-                                rightOarPivot.rotation.z = -Math.sin(time * rowSpeed + Math.PI/2) * 0.15;
-                            } else {
-                                // Rest position
-                                leftOarPivot.rotation.y *= 0.9;
-                                rightOarPivot.rotation.y *= 0.9;
-                                leftOarPivot.rotation.z *= 0.9;
-                                rightOarPivot.rotation.z *= 0.9;
-                            }
-                        }
-                    }
-                }
-                
-                // --- WIZARD HAT TRAIL FOR OTHER PLAYERS ---
-                const otherAppearance = playerData.appearance || {};
-                if (otherAppearance.hat === 'wizardHat' && wizardTrailRef.current) {
-                    const poolKey = `player_${id}`;
-                    let trailGroup = wizardTrailRef.current.pools.get(poolKey);
-                    
-                    // Create pool if it doesn't exist
-                    if (!trailGroup) {
-                        trailGroup = wizardTrailRef.current.createPool();
-                        wizardTrailRef.current.pools.set(poolKey, trailGroup);
-                        sceneRef.current.add(trailGroup);
-                    }
-                    
-                    if (isMoving) {
-                        const spawnInterval = 1 / 12;
-                        const timeSinceLastSpawn = time - trailGroup.userData.lastSpawnTime;
-                        
-                        if (timeSinceLastSpawn >= spawnInterval) {
-                            let spawned = false;
-                            for (let attempts = 0; attempts < trailGroup.children.length && !spawned; attempts++) {
-                                const idx = (trailGroup.userData.nextParticleIndex + attempts) % trailGroup.children.length;
-                                const particle = trailGroup.children[idx];
-                                
-                                if (!particle.userData.active) {
-                                    particle.position.set(
-                                        meshData.mesh.position.x + (Math.random() - 0.5) * 0.4,
-                                        meshData.mesh.position.y + 2.2 + (Math.random() - 0.5) * 0.2,
-                                        meshData.mesh.position.z + (Math.random() - 0.5) * 0.4
-                                    );
-                                    particle.userData.active = true;
-                                    particle.userData.birthTime = time;
-                                    particle.visible = true;
-                                    particle.material.opacity = 0.9;
-                                    particle.scale.setScalar(0.8 + Math.random() * 0.4);
-                                    
-                                    trailGroup.userData.nextParticleIndex = (idx + 1) % trailGroup.children.length;
-                                    trailGroup.userData.lastSpawnTime = time;
-                                    spawned = true;
-                                }
-                            }
-                        }
-                    }
-                    
-                    // Update particles
-                    trailGroup.children.forEach((particle) => {
-                        if (particle.userData.active) {
-                            const age = time - particle.userData.birthTime;
-                            const lifeProgress = age / particle.userData.lifespan;
-                            
-                            if (lifeProgress < 1) {
-                                particle.position.y += delta * 0.05;
-                                let opacity;
-                                if (lifeProgress < 0.7) {
-                                    opacity = 0.9;
-                                } else {
-                                    const fadeProgress = (lifeProgress - 0.7) / 0.3;
-                                    opacity = 0.9 * (1 - fadeProgress * fadeProgress);
-                                }
-                                particle.material.opacity = Math.max(0, opacity);
-                                particle.scale.setScalar(particle.scale.x * (1 + delta * 0.05));
-                            } else {
-                                particle.userData.active = false;
-                                particle.visible = false;
-                            }
-                        }
-                    });
-                }
-                
-                // Handle chat bubbles
-                if (playerData.chatMessage && playerData.chatTime) {
-                    const chatAge = Date.now() - playerData.chatTime;
-                    
-                    // Create bubble if new message
-                    if (!meshData.bubble || meshData.lastChatTime !== playerData.chatTime) {
-                        // Remove old bubble
-                        if (meshData.bubble) {
-                            meshData.mesh.remove(meshData.bubble);
-                        }
-                        // Create new bubble - adjust height for character type
-                        const bubbleHeight = playerData.appearance?.characterType === 'marcus' ? BUBBLE_HEIGHT_MARCUS : BUBBLE_HEIGHT_PENGUIN;
-                        meshData.bubble = createChatSprite(playerData.chatMessage, bubbleHeight);
-                        if (meshData.bubble) {
-                            meshData.mesh.add(meshData.bubble);
-                        }
-                        meshData.lastChatTime = playerData.chatTime;
-                    }
-                    
-                    // Remove bubble after 5 seconds - BUT NOT if it's an AFK bubble
-                    if (chatAge > 5000 && meshData.bubble && !playerData.isAfkBubble) {
-                        meshData.mesh.remove(meshData.bubble);
-                        meshData.bubble = null;
-                        playerData.chatMessage = null;
-                    }
-                } else if (!playerData.chatMessage && meshData.bubble) {
-                    // Message cleared (e.g., AFK ended) - remove bubble
-                    meshData.mesh.remove(meshData.bubble);
-                    meshData.bubble = null;
-                }
-            }
-
-            // Animate butterflies (only in town)
-            if (butterflyGroup) {
-                butterflyGroup.children.forEach(b => {
-                     const speed = b.userData.speed * 0.5; 
-                     b.position.y = 2 + Math.sin(time * speed * 20 + b.userData.yOffset) * 1;
-                     const wings = b.children;
-                     wings[0].rotation.z = Math.sin(time * 15) * 0.5;
-                     wings[1].rotation.z = -Math.sin(time * 15) * 0.5;
-                     b.position.x = b.userData.center.x + Math.cos(time * speed * 5) * 3;
-                     b.position.z = b.userData.center.z + Math.sin(time * speed * 5) * 3;
-                     b.lookAt(b.userData.center.x, b.position.y, b.userData.center.z);
-                });
-            }
-            
             // Animate campfire (flames, embers, light flicker) and Christmas tree
             if (townCenterRef.current && roomRef.current === 'town') {
-                // Calculate nightFactor for Christmas tree lighting (0=day, 1=night)
                 const worldTime = serverWorldTimeRef?.current ?? 0.35;
-                let nightFactor;
-                if (worldTime < 0.2) {
-                    // Night (early)
-                    nightFactor = 1.0;
-                } else if (worldTime < 0.3) {
-                    // Sunrise transition
-                    nightFactor = 1.0 - (worldTime - 0.2) / 0.1;
-                } else if (worldTime < 0.7) {
-                    // Day
-                    nightFactor = 0.0;
-                } else if (worldTime < 0.8) {
-                    // Sunset transition
-                    nightFactor = (worldTime - 0.7) / 0.1;
-                } else {
-                    // Night (late)
-                    nightFactor = 1.0;
-                }
+                const nightFactor = calculateNightFactor(worldTime);
                 townCenterRef.current.update(time, delta, nightFactor);
             }
             
             // Animate nightclub interior (dance floor, stage lights, speakers, disco ball)
             if (nightclubRef.current && roomRef.current === 'nightclub') {
                 nightclubRef.current.update(time, delta, 0.7); // Always club lighting
+            }
+            
+            // Animate SKNY GANG igloo interior (disco ball, lasers, LED floor, etc.)
+            if (sknyIglooInteriorRef.current?.update && roomRef.current === 'igloo3') {
+                sknyIglooInteriorRef.current.update(time);
             }
             
             // Animate building door glows (pulse for interactive doors, town only)
@@ -7142,19 +2680,13 @@ const VoxelWorld = ({
                 });
             }
             
-            // Dojo-specific animations
-            if (roomRef.current === 'dojo') {
-                // Pulse sensei glow
-                const senseiGlow = scene.getObjectByName('sensei_glow');
-                if (senseiGlow && senseiGlow.material) {
-                    senseiGlow.material.opacity = 0.1 + Math.sin(time * 1.5) * 0.1;
-                }
-                // Pulse exit glow
-                const exitGlow = scene.getObjectByName('exit_glow');
-                if (exitGlow && exitGlow.material) {
-                    exitGlow.material.opacity = 0.1 + Math.sin(time * 2) * 0.08;
-                }
+            // Room-specific updates (self-contained in room modules)
+            if (roomDataRef.current?.update) {
+                roomDataRef.current.update(time, delta);
             }
+            
+            // Match banners are updated in a separate useEffect that responds to prop changes
+            // (not in the game loop, since activeMatches/spectatingMatch are props that change)
 
             // OPTIMIZED: Reuse vectors instead of creating new ones every frame
             const offset = tempOffsetRef.current.copy(camera.position).sub(controls.target);
@@ -7168,91 +2700,17 @@ const VoxelWorld = ({
             // ==================== DAY/NIGHT CYCLE (Town only, Server-synchronized) ====================
             // OPTIMIZED: Only update lighting every 3rd frame (still smooth at 60fps = 20 updates/sec)
             if (room === 'town' && sunLightRef.current && ambientLightRef.current && frameCount % 3 === 0) {
-                // Use server-synchronized time (or local time for debug override)
                 const serverTime = serverWorldTimeRef?.current ?? 0.35;
                 const t = daySpeedRef.current === 0 ? dayTimeRef.current : serverTime;
                 
-                // Calculate sun position (arc across sky)
-                const sunAngle = t * Math.PI * 2 - Math.PI / 2;
-                const sunHeight = Math.sin(sunAngle);
-                const sunX = Math.cos(sunAngle) * 100;
-                const sunY = Math.max(5, sunHeight * 100 + 50);
-                
-                sunLightRef.current.position.set(sunX, sunY, 60);
-                
-                // Day/night colors - OPTIMIZED: Reuse color objects, avoid creating new ones
-                let sunIntensity, ambientIntensity;
-                const sunColor = sunLightRef.current.color;
-                const ambientColor = ambientLightRef.current.color;
-                
-                if (t < 0.2) {
-                    // Night - bright enough to see clearly
-                    const nightT = t / 0.2;
-                    sunIntensity = 0.25 + nightT * 0.1;  // Min 0.25
-                    ambientIntensity = 0.55 + nightT * 0.1;  // Min 0.55
-                    sunColor.setHex(0x6688cc);  // Brighter moonlight blue
-                    ambientColor.setHex(0x4a5a7a);  // Brighter ambient
-                    scene.background.lerpColors(scene.background.setHex(0x1a3045), ambientColor, nightT * 0.5);
-                } else if (t < 0.3) {
-                    // Sunrise
-                    const sunriseT = (t - 0.2) / 0.1;
-                    sunIntensity = 0.15 + sunriseT * 0.45;
-                    ambientIntensity = 0.35 + sunriseT * 0.15;
-                    sunColor.setRGB(0.27 + sunriseT * 0.73, 0.4 + sunriseT * 0.27, 0.67 - sunriseT * 0.27);
-                    ambientColor.setRGB(0.16 + sunriseT * 0.34, 0.23 + sunriseT * 0.33, 0.35 + sunriseT * 0.28);
-                    scene.background.setRGB(0.1 + sunriseT * 0.9, 0.19 + sunriseT * 0.61, 0.31 + sunriseT * 0.22);
-                } else if (t < 0.7) {
-                    // Day
-                    const dayT = (t - 0.3) / 0.4;
-                    const middayT = 1 - Math.abs(dayT - 0.5) * 2;
-                    sunIntensity = 0.6 + middayT * 0.3;
-                    ambientIntensity = 0.4 + middayT * 0.1;
-                    sunColor.setHex(0xF8F8FF);
-                    ambientColor.setHex(0xC0E0F0);
-                    scene.background.setHex(0x87CEEB);
-                } else if (t < 0.8) {
-                    // Sunset
-                    const sunsetT = (t - 0.7) / 0.1;
-                    sunIntensity = 0.6 - sunsetT * 0.4;
-                    ambientIntensity = 0.45 - sunsetT * 0.1;
-                    sunColor.setRGB(0.97 - sunsetT * 0.03, 0.97 - sunsetT * 0.57, 1 - sunsetT * 0.73);
-                    ambientColor.setRGB(0.75 - sunsetT * 0.46, 0.88 - sunsetT * 0.63, 0.94 - sunsetT * 0.56);
-                    scene.background.setRGB(0.53 + sunsetT * 0.47, 0.81 - sunsetT * 0.34, 0.92 - sunsetT * 0.59);
-                } else {
-                    // Night - bright enough to see clearly
-                    const nightT = (t - 0.8) / 0.2;
-                    sunIntensity = 0.35 - nightT * 0.1;  // Goes to 0.25
-                    ambientIntensity = 0.65 - nightT * 0.1;  // Goes to 0.55
-                    sunColor.setRGB(1 - nightT * 0.6, 0.4 + nightT * 0.13, 0.27 + nightT * 0.53);
-                    ambientColor.setRGB(0.35 - nightT * 0.06, 0.35 - nightT * 0, 0.48 - nightT * 0);
-                    scene.background.setRGB(1 - nightT * 0.90, 0.47 - nightT * 0.28, 0.33 - nightT * 0.06);
-                }
-                
-                sunLightRef.current.intensity = sunIntensity;
-                ambientLightRef.current.intensity = ambientIntensity;
-                
-                // Update fog color to match sky
-                if (scene.fog) scene.fog.color.copy(scene.background);
-                
-                // ==================== PROP LIGHTS DAY/NIGHT TOGGLE ====================
-                // Lights ON at night (t < 0.25 or t >= 0.75), OFF during day
-                const shouldLightsBeOn = t < 0.25 || t >= 0.75;
-                
-                if (shouldLightsBeOn !== lightsOnRef.current && propLightsRef.current.length > 0) {
-                    lightsOnRef.current = shouldLightsBeOn;
-                    
-                    propLightsRef.current.forEach(light => {
-                        if (light && light.isLight) {
-                            // Store original intensity on first toggle if not stored
-                            if (light.userData.originalIntensity === undefined) {
-                                light.userData.originalIntensity = light.intensity;
-                            }
-                            
-                            // Toggle light
-                            light.intensity = shouldLightsBeOn ? light.userData.originalIntensity : 0;
-                        }
-                    });
-                }
+                updateDayNightCycle({
+                    t,
+                    sunLight: sunLightRef.current,
+                    ambientLight: ambientLightRef.current,
+                    scene,
+                    propLights: propLightsRef.current,
+                    lightsOnRef
+                });
                 
                 // Update state for UI (throttled)
                 if (frameCount % 30 === 0) {
@@ -7261,69 +2719,12 @@ const VoxelWorld = ({
             }
             
             // ==================== SNOWFALL UPDATE ====================
-            // Update snow every frame to prevent flickering
-            if (room === 'town' && snowParticlesRef.current && gameSettingsRef.current.snowEnabled !== false) {
-                const snow = snowParticlesRef.current;
-                const positions = snow.particles.geometry.attributes.position.array;
-                const velocities = snow.velocities;
-                const particleCount = positions.length / 3;
-                
-                // Smoothly change intensity over time (random fluctuations)
-                if (frameCount % 300 === 0) {
-                    snowTargetIntensityRef.current = 0.2 + Math.random() * 0.5;
-                }
-                snowIntensityRef.current += (snowTargetIntensityRef.current - snowIntensityRef.current) * delta;
-                
-                const intensity = snowIntensityRef.current;
-                // OPTIMIZED: Pre-calculate wind and delta multiplier once
-                const windX = Math.sin(time * 0.3) * intensity * 2;
-                const windZ = Math.cos(time * 0.2) * intensity;
-                const deltaIntensity = delta * intensity * 3;
-                
-                // Get player position in world space
-                const playerX = posRef.current.x;
-                const playerZ = posRef.current.z;
-                // OPTIMIZED: Pre-calculate spread bounds
-                const spreadX06 = snow.spreadX * 0.6;
-                const spreadZ06 = snow.spreadZ * 0.6;
-                const halfSpreadX = snow.spreadX * 0.5;
-                const halfSpreadZ = snow.spreadZ * 0.5;
-                
-                // OPTIMIZED: Update particle positions with direct index access
-                for (let i = 0; i < particleCount; i++) {
-                    const idx = i * 3;
-                    const idx1 = idx + 1;
-                    const idx2 = idx + 2;
-                    
-                    // Apply velocity with wind
-                    positions[idx] += (velocities[idx] + windX) * deltaIntensity;
-                    positions[idx1] += velocities[idx1] * deltaIntensity;
-                    positions[idx2] += (velocities[idx2] + windZ) * deltaIntensity;
-                    
-                    // Reset particles that fall below ground or drift too far from player
-                    const distX = positions[idx] - playerX;
-                    const distZ = positions[idx2] - playerZ;
-                    
-                    if (positions[idx1] < -2 || Math.abs(distX) > spreadX06 || Math.abs(distZ) > spreadZ06) {
-                        // Reset to new position around player (in world space)
-                        positions[idx] = playerX + (Math.random() - 0.5) * snow.spreadX;
-                        positions[idx1] = snow.height + Math.random() * 10;
-                        positions[idx2] = playerZ + (Math.random() - 0.5) * snow.spreadZ;
-                    }
-                }
-                
-                snow.particles.geometry.attributes.position.needsUpdate = true;
-                
-                // OPTIMIZED: Only update opacity every 10 frames
-                if (frameCount % 10 === 0) {
-                    const serverTime = serverWorldTimeRef?.current ?? 0.35;
-                    const isNight = serverTime < 0.25 || serverTime > 0.75;
-                    const nightBoost = isNight ? 0.15 : 0;
-                    snow.particles.material.opacity = 0.6 + intensity * 0.3 + nightBoost;
-                }
-                snow.particles.visible = true;
-            } else if (snowParticlesRef.current) {
-                snowParticlesRef.current.particles.visible = false;
+            if (room === 'town' && snowfallSystemRef.current && gameSettingsRef.current.snowEnabled !== false) {
+                const serverTime = serverWorldTimeRef?.current ?? 0.35;
+                snowfallSystemRef.current.update(time, delta, posRef.current, serverTime);
+                snowfallSystemRef.current.setVisible(true);
+            } else if (snowfallSystemRef.current) {
+                snowfallSystemRef.current.setVisible(false);
             }
             
             renderer.render(scene, camera);
@@ -7356,8 +2757,41 @@ const VoxelWorld = ({
                 bannerData.sprite.material.dispose();
             }
             matchBannersRef.current.clear();
+            // Cleanup Snowfall system
+            if (snowfallSystemRef.current) {
+                snowfallSystemRef.current.dispose();
+                snowfallSystemRef.current = null;
+            }
+            // Cleanup Wizard trail system
+            if (wizardTrailSystemRef.current) {
+                wizardTrailSystemRef.current.dispose();
+                wizardTrailSystemRef.current = null;
+            }
         };
     }, [penguinData, room]); // Rebuild scene when room changes
+    
+    // ==================== 3D MATCH BANNERS (SPECTATOR VIEW) ====================
+    // Create floating banners above players in active matches
+    // This runs as a useEffect responding to prop changes, not in the game loop
+    useEffect(() => {
+        if (!sceneRef.current || !window.THREE) return;
+        
+        const THREE = window.THREE;
+        const scene = sceneRef.current;
+        const banners = matchBannersRef.current;
+        const playersData = playersDataRef.current;
+        
+        // Update banners using the extracted system
+        updateMatchBanners({
+            THREE,
+            scene,
+            bannersRef: banners,
+            playersData,
+            activeMatches,
+            spectatingMatch
+        });
+        
+    }, [activeMatches, spectatingMatch]); // Re-run when matches or spectating data changes
     
     const triggerEmote = (type) => {
         emoteRef.current = { type, startTime: Date.now() };
@@ -7423,369 +2857,7 @@ const VoxelWorld = ({
         }
     }, [shouldDance, clearDance]);
     
-    // ==================== 3D MATCH BANNERS (SPECTATOR VIEW) ====================
-    // Create floating banners above players in active matches
-    useEffect(() => {
-        if (!sceneRef.current || !window.THREE) return;
-        
-        const THREE = window.THREE;
-        const scene = sceneRef.current;
-        const banners = matchBannersRef.current;
-        const playersData = playersDataRef.current;
-        
-        // Helper: Create canvas texture for match banner
-        const createBannerCanvas = () => {
-            const canvas = document.createElement('canvas');
-            canvas.width = 512;
-            canvas.height = 200;
-            return canvas;
-        };
-        
-        // Helper: Draw purple bubble background
-        const drawBubbleBackground = (ctx, canvas) => {
-            // Background - purple gradient
-            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-            gradient.addColorStop(0, 'rgba(88, 28, 135, 0.95)');
-            gradient.addColorStop(1, 'rgba(67, 56, 202, 0.95)');
-            
-            // Rounded rect background with speech bubble pointer
-            const radius = 20;
-            ctx.beginPath();
-            ctx.moveTo(radius, 0);
-            ctx.lineTo(canvas.width - radius, 0);
-            ctx.quadraticCurveTo(canvas.width, 0, canvas.width, radius);
-            ctx.lineTo(canvas.width, canvas.height - radius - 20);
-            ctx.quadraticCurveTo(canvas.width, canvas.height - 20, canvas.width - radius, canvas.height - 20);
-            ctx.lineTo(canvas.width / 2 + 15, canvas.height - 20);
-            ctx.lineTo(canvas.width / 2, canvas.height); // Triangle point
-            ctx.lineTo(canvas.width / 2 - 15, canvas.height - 20);
-            ctx.lineTo(radius, canvas.height - 20);
-            ctx.quadraticCurveTo(0, canvas.height - 20, 0, canvas.height - radius - 20);
-            ctx.lineTo(0, radius);
-            ctx.quadraticCurveTo(0, 0, radius, 0);
-            ctx.closePath();
-            ctx.fillStyle = gradient;
-            ctx.fill();
-            
-            // Border
-            ctx.strokeStyle = 'rgba(168, 85, 247, 0.8)';
-            ctx.lineWidth = 3;
-            ctx.stroke();
-        };
-        
-        // Helper: Render Card Jitsu match
-        const renderCardJitsuBanner = (ctx, canvas, players, state, wager) => {
-            // Header
-            ctx.fillStyle = '#FBBF24';
-            ctx.font = 'bold 22px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(`⚔️ CARD JITSU • 💰 ${wager}`, canvas.width / 2, 35);
-            
-            // Player names
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 26px Arial';
-            const p1Name = (players[0]?.name || 'Player 1').substring(0, 10);
-            const p2Name = (players[1]?.name || 'Player 2').substring(0, 10);
-            ctx.textAlign = 'left';
-            ctx.fillText(p1Name, 30, 80);
-            ctx.textAlign = 'right';
-            ctx.fillText(p2Name, canvas.width - 30, 80);
-            
-            // VS
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-            ctx.font = 'bold 28px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('VS', canvas.width / 2, 80);
-            
-            // Win indicators
-            const p1Wins = state.player1Wins || { fire: 0, water: 0, snow: 0 };
-            const p2Wins = state.player2Wins || { fire: 0, water: 0, snow: 0 };
-            
-            const renderWins = (wins, x, align) => {
-                let icons = '';
-                if (wins.fire > 0) icons += '🔥'.repeat(Math.min(wins.fire, 3));
-                if (wins.water > 0) icons += '💧'.repeat(Math.min(wins.water, 3));
-                if (wins.snow > 0) icons += '❄️'.repeat(Math.min(wins.snow, 3));
-                ctx.font = '24px Arial';
-                ctx.textAlign = align;
-                ctx.fillText(icons || '—', x, 115);
-            };
-            
-            renderWins(p1Wins, 30, 'left');
-            renderWins(p2Wins, canvas.width - 30, 'right');
-            
-            // Round & Phase
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.font = '18px Arial';
-            ctx.textAlign = 'center';
-            let statusText = `Round ${state.round || 1}`;
-            if (state.phase === 'select') statusText += ' • Selecting...';
-            else if (state.phase === 'reveal') statusText += ' • Revealing!';
-            else if (state.status === 'complete') statusText += ' • Complete!';
-            ctx.fillText(statusText, canvas.width / 2, 155);
-        };
-        
-        // Helper: Render Tic Tac Toe match
-        const renderTicTacToeBanner = (ctx, canvas, players, state, wager) => {
-            // Header
-            ctx.fillStyle = '#FBBF24';
-            ctx.font = 'bold 22px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(`⭕ TIC TAC TOE • 💰 ${wager}`, canvas.width / 2, 35);
-            
-            // Player names
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 20px Arial';
-            const p1Name = (players[0]?.name || 'Player 1').substring(0, 8);
-            const p2Name = (players[1]?.name || 'Player 2').substring(0, 8);
-            ctx.textAlign = 'left';
-            ctx.fillText(p1Name, 20, 65);
-            ctx.fillStyle = '#22D3EE'; // Cyan for X
-            ctx.fillText('(X)', 20, 85);
-            
-            ctx.fillStyle = '#FFFFFF';
-            ctx.textAlign = 'right';
-            ctx.fillText(p2Name, canvas.width - 20, 65);
-            ctx.fillStyle = '#F472B6'; // Pink for O
-            ctx.fillText('(O)', canvas.width - 20, 85);
-            
-            // Draw mini board in center
-            const board = state.board || Array(9).fill(null);
-            const winningLine = state.winningLine || [];
-            const cellSize = 28;
-            const boardX = (canvas.width - cellSize * 3) / 2;
-            const boardY = 55;
-            
-            for (let i = 0; i < 9; i++) {
-                const row = Math.floor(i / 3);
-                const col = i % 3;
-                const x = boardX + col * cellSize;
-                const y = boardY + row * cellSize;
-                
-                // Cell background
-                const isWinning = winningLine.includes(i);
-                ctx.fillStyle = isWinning ? 'rgba(34, 197, 94, 0.5)' : 'rgba(0, 0, 0, 0.3)';
-                ctx.fillRect(x + 1, y + 1, cellSize - 2, cellSize - 2);
-                
-                // Cell border
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-                ctx.lineWidth = 1;
-                ctx.strokeRect(x, y, cellSize, cellSize);
-                
-                // X or O
-                if (board[i]) {
-                    ctx.fillStyle = board[i] === 'X' ? '#22D3EE' : '#F472B6';
-                    ctx.font = 'bold 20px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText(board[i], x + cellSize / 2, y + cellSize / 2 + 7);
-                }
-            }
-            
-            // Status
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            let statusText = '';
-            if (state.winner === 'draw') {
-                statusText = '🤝 Draw!';
-            } else if (state.winner) {
-                const winnerName = state.winner === 'X' ? players[0]?.name : players[1]?.name;
-                statusText = `🏆 ${winnerName} wins!`;
-            } else {
-                const turnName = state.currentTurn === 'player1' ? players[0]?.name : players[1]?.name;
-                statusText = `${turnName}'s turn`;
-            }
-            ctx.fillText(statusText, canvas.width / 2, 155);
-        };
-        
-        // Helper: Render Connect 4 match
-        const renderConnect4Banner = (ctx, canvas, players, state, wager) => {
-            // Header
-            ctx.fillStyle = '#FBBF24';
-            ctx.font = 'bold 22px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(`🔴 CONNECT 4 • 💰 ${wager}`, canvas.width / 2, 35);
-            
-            // Player names
-            ctx.fillStyle = '#FFFFFF';
-            ctx.font = 'bold 18px Arial';
-            const p1Name = (players[0]?.name || 'Player 1').substring(0, 6);
-            const p2Name = (players[1]?.name || 'Player 2').substring(0, 6);
-            ctx.textAlign = 'left';
-            ctx.fillText(p1Name, 15, 60);
-            // Red disc for P1
-            ctx.fillStyle = '#EF4444';
-            ctx.beginPath();
-            ctx.arc(25, 75, 8, 0, Math.PI * 2);
-            ctx.fill();
-            
-            ctx.fillStyle = '#FFFFFF';
-            ctx.textAlign = 'right';
-            ctx.fillText(p2Name, canvas.width - 15, 60);
-            // Yellow disc for P2
-            ctx.fillStyle = '#FACC15';
-            ctx.beginPath();
-            ctx.arc(canvas.width - 25, 75, 8, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Draw mini board in center (7 cols x 6 rows)
-            const board = state.board || Array(42).fill(null);
-            const winningCells = state.winningCells || [];
-            const cellSize = 12;
-            const cols = 7;
-            const rows = 6;
-            const boardX = (canvas.width - cellSize * cols) / 2;
-            const boardY = 50;
-            
-            // Board background
-            ctx.fillStyle = 'rgba(30, 64, 175, 0.8)';
-            ctx.fillRect(boardX - 2, boardY - 2, cellSize * cols + 4, cellSize * rows + 4);
-            
-            for (let row = 0; row < rows; row++) {
-                for (let col = 0; col < cols; col++) {
-                    // Board is stored bottom-to-top, display top-to-bottom
-                    const displayRow = rows - 1 - row;
-                    const index = displayRow * cols + col;
-                    const x = boardX + col * cellSize + cellSize / 2;
-                    const y = boardY + row * cellSize + cellSize / 2;
-                    
-                    const isWinning = winningCells.some(([r, c]) => r === displayRow && c === col);
-                    
-                    // Cell (disc)
-                    ctx.beginPath();
-                    ctx.arc(x, y, cellSize / 2 - 1, 0, Math.PI * 2);
-                    
-                    if (board[index] === 'R') {
-                        ctx.fillStyle = isWinning ? '#FCA5A5' : '#EF4444';
-                    } else if (board[index] === 'Y') {
-                        ctx.fillStyle = isWinning ? '#FDE68A' : '#FACC15';
-                    } else {
-                        ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-                    }
-                    ctx.fill();
-                    
-                    if (isWinning) {
-                        ctx.strokeStyle = '#FFFFFF';
-                        ctx.lineWidth = 2;
-                        ctx.stroke();
-                    }
-                }
-            }
-            
-            // Status
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.font = '16px Arial';
-            ctx.textAlign = 'center';
-            let statusText = '';
-            if (state.winner === 'draw') {
-                statusText = '🤝 Draw!';
-            } else if (state.winner) {
-                const winnerName = state.winner === 'R' ? players[0]?.name : players[1]?.name;
-                statusText = `🏆 ${winnerName} wins!`;
-            } else {
-                const turnName = state.currentTurn === 'player1' ? players[0]?.name : players[1]?.name;
-                statusText = `${turnName}'s turn`;
-            }
-            ctx.fillText(statusText, canvas.width / 2, 155);
-        };
-        
-        // Helper: Render match info to canvas (routes to game-specific renderer)
-        const renderBannerToCanvas = (ctx, matchData) => {
-            const canvas = ctx.canvas;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Draw common purple bubble background
-            drawBubbleBackground(ctx, canvas);
-            
-            const players = matchData.players || [];
-            const state = matchData.state || {};
-            const wager = (matchData.wagerAmount || 0) * 2;
-            const gameType = matchData.gameType || 'card_jitsu';
-            
-            // Route to game-specific renderer
-            switch (gameType) {
-                case 'tic_tac_toe':
-                    renderTicTacToeBanner(ctx, canvas, players, state, wager);
-                    break;
-                case 'connect4':
-                    renderConnect4Banner(ctx, canvas, players, state, wager);
-                    break;
-                case 'card_jitsu':
-                default:
-                    renderCardJitsuBanner(ctx, canvas, players, state, wager);
-                    break;
-            }
-        };
-        
-        // Get current match IDs
-        const currentMatchIds = new Set(activeMatches.map(m => m.matchId));
-        
-        // Remove banners for ended matches
-        for (const [matchId, bannerData] of banners) {
-            if (!currentMatchIds.has(matchId)) {
-                scene.remove(bannerData.sprite);
-                bannerData.sprite.material.map?.dispose();
-                bannerData.sprite.material.dispose();
-                banners.delete(matchId);
-            }
-        }
-        
-        // Create or update banners for active matches
-        for (const match of activeMatches) {
-            const matchId = match.matchId;
-            const spectateData = spectatingMatch?.[matchId];
-            const matchData = {
-                ...match,
-                state: spectateData?.state || match.state || {},
-                wagerAmount: spectateData?.wagerAmount || match.wagerAmount,
-                gameType: spectateData?.gameType || match.gameType || 'card_jitsu'
-            };
-            
-            // Find player positions
-            const p1Data = playersData.get(match.players?.[0]?.id);
-            const p2Data = playersData.get(match.players?.[1]?.id);
-            
-            if (!p1Data?.position && !p2Data?.position) continue;
-            
-            // Calculate midpoint between players
-            const p1Pos = p1Data?.position || p2Data?.position;
-            const p2Pos = p2Data?.position || p1Data?.position;
-            const midX = (p1Pos.x + p2Pos.x) / 2;
-            const midZ = (p1Pos.z + p2Pos.z) / 2;
-            
-            let bannerData = banners.get(matchId);
-            
-            if (!bannerData) {
-                // Create new banner
-                const canvas = createBannerCanvas();
-                const ctx = canvas.getContext('2d');
-                const texture = new THREE.CanvasTexture(canvas);
-                texture.needsUpdate = true;
-                
-                const material = new THREE.SpriteMaterial({ 
-                    map: texture, 
-                    transparent: true,
-                    depthTest: false
-                });
-                const sprite = new THREE.Sprite(material);
-                sprite.scale.set(8, 3.2, 1); // Banner size in world units
-                sprite.renderOrder = 999; // Render on top
-                
-                scene.add(sprite);
-                bannerData = { sprite, canvas, ctx, texture };
-                banners.set(matchId, bannerData);
-            }
-            
-            // Update banner content
-            renderBannerToCanvas(bannerData.ctx, matchData);
-            bannerData.texture.needsUpdate = true;
-            
-            // Position above players
-            bannerData.sprite.position.set(midX, 8, midZ); // 8 units above ground
-        }
-        
-    }, [activeMatches, spectatingMatch]);
-    
+
     // ==================== PLAYER CLICK DETECTION ====================
     // Handle clicking/tapping on other players to open profile menu (works on both desktop and mobile)
     useEffect(() => {
@@ -7953,7 +3025,7 @@ const VoxelWorld = ({
         
         // Use taller bubble height for Marcus
         const bubbleHeight = penguinData?.characterType === 'marcus' ? BUBBLE_HEIGHT_MARCUS : BUBBLE_HEIGHT_PENGUIN;
-        const sprite = createChatSprite(activeBubble, bubbleHeight);
+        const sprite = createChatSprite(window.THREE, activeBubble, bubbleHeight);
         playerRef.current.add(sprite);
         bubbleSpriteRef.current = sprite;
         
@@ -8071,8 +3143,8 @@ const VoxelWorld = ({
         const portals = ROOM_PORTALS[room] || [];
         
         // Town portal positions are offsets - add center coordinates
-        const centerX = (CITY_SIZE / 2) * BUILDING_SCALE;
-        const centerZ = (CITY_SIZE / 2) * BUILDING_SCALE;
+        const centerX = CENTER_X;
+        const centerZ = CENTER_Z;
         
         for (const portal of portals) {
             // Town portals use offset positions, dojo uses absolute
@@ -8204,8 +3276,8 @@ const VoxelWorld = ({
         
         // Teleport to roof (ladder climb)
         if (nearbyPortal.teleportToRoof) {
-            const centerX = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
-            const centerZ = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
+            const centerX = CENTER_X;
+            const centerZ = CENTER_Z;
             
             // Nightclub center is at (0, -75) offset, building depth is 20
             // Spawn near rear of roof: center - 25% of depth = -75 - 5 = -80
@@ -8468,8 +3540,8 @@ const VoxelWorld = ({
                 }
                 else if (nearbyInteraction.action === 'climb_roof') {
                     // Teleport to nightclub roof
-                    const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
-                    const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
+                    const townCenterX = CENTER_X;
+                    const townCenterZ = CENTER_Z;
                     
                     // Nightclub is at (CENTER, CENTER - 75), roof height is ~13 (building height 12 + 1)
                     const roofX = townCenterX;
@@ -8509,8 +3581,8 @@ const VoxelWorld = ({
             
             if (command === 'spawn') {
                 // ALWAYS teleport to town center spawn - no questions asked
-                const townCenterX = (CITY_SIZE / 2) * BUILDING_SCALE; // 80
-                const townCenterZ = (CITY_SIZE / 2) * BUILDING_SCALE; // 80
+                const townCenterX = CENTER_X;
+                const townCenterZ = CENTER_Z;
                 
                 // Clear any seated state first
                 if (seatedRef.current) {
@@ -8569,7 +3641,7 @@ const VoxelWorld = ({
                     const sprite = iglooOccupancySpritesRef.current.get(iglooId);
                     if (sprite) {
                         // Update the sprite texture with new count
-                        updateIglooOccupancySprite(sprite, count);
+                        updateIglooOccupancySprite(window.THREE, sprite, count);
                     }
                 });
             }
@@ -8579,196 +3651,7 @@ const VoxelWorld = ({
         return () => window.removeEventListener('roomCounts', handleRoomCounts);
     }, []);
     
-    // Helper to update igloo sprite texture (MapleStory-style)
-    const updateIglooOccupancySprite = (sprite, count) => {
-        const THREE = window.THREE;
-        if (!THREE) return;
-        
-        const iglooIndex = sprite.userData.iglooIndex || 0;
-        const style = IGLOO_BANNER_STYLES[iglooIndex % IGLOO_BANNER_STYLES.length];
-        const content = IGLOO_BANNER_CONTENT[iglooIndex % IGLOO_BANNER_CONTENT.length];
-        
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        
-        // Bigger banner size
-        const w = 280;
-        const h = 160;
-        const padding = 12;
-        const cornerRadius = 16;
-        
-        canvas.width = w;
-        canvas.height = h;
-        
-        // Create gradient background
-        const gradient = ctx.createLinearGradient(0, 0, 0, h);
-        gradient.addColorStop(0, style.bgGradient[0]);
-        gradient.addColorStop(0.5, style.bgGradient[1]);
-        gradient.addColorStop(1, style.bgGradient[2]);
-        
-        // Draw main banner shape with rounded corners
-        ctx.beginPath();
-        ctx.moveTo(cornerRadius, 0);
-        ctx.lineTo(w - cornerRadius, 0);
-        ctx.quadraticCurveTo(w, 0, w, cornerRadius);
-        ctx.lineTo(w, h - cornerRadius);
-        ctx.quadraticCurveTo(w, h, w - cornerRadius, h);
-        ctx.lineTo(cornerRadius, h);
-        ctx.quadraticCurveTo(0, h, 0, h - cornerRadius);
-        ctx.lineTo(0, cornerRadius);
-        ctx.quadraticCurveTo(0, 0, cornerRadius, 0);
-        ctx.closePath();
-        
-        ctx.fillStyle = gradient;
-        ctx.fill();
-        
-        // Draw border
-        ctx.strokeStyle = style.borderColor;
-        ctx.lineWidth = 4;
-        ctx.stroke();
-        
-        // Draw inner border accent
-        ctx.strokeStyle = style.accentColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(cornerRadius + 6, 6);
-        ctx.lineTo(w - cornerRadius - 6, 6);
-        ctx.quadraticCurveTo(w - 6, 6, w - 6, cornerRadius + 6);
-        ctx.lineTo(w - 6, h - cornerRadius - 6);
-        ctx.quadraticCurveTo(w - 6, h - 6, w - cornerRadius - 6, h - 6);
-        ctx.lineTo(cornerRadius + 6, h - 6);
-        ctx.quadraticCurveTo(6, h - 6, 6, h - cornerRadius - 6);
-        ctx.lineTo(6, cornerRadius + 6);
-        ctx.quadraticCurveTo(6, 6, cornerRadius + 6, 6);
-        ctx.closePath();
-        ctx.stroke();
-        
-        // Draw corner decorations (flower/leaf style like MapleStory)
-        const drawFlowerDecor = (x, y, size) => {
-            ctx.fillStyle = style.decorColor;
-            ctx.beginPath();
-            ctx.arc(x, y, size * 0.4, 0, Math.PI * 2);
-            ctx.fill();
-            for (let i = 0; i < 5; i++) {
-                const angle = (i * Math.PI * 2) / 5 - Math.PI / 2;
-                ctx.beginPath();
-                ctx.ellipse(
-                    x + Math.cos(angle) * size * 0.5,
-                    y + Math.sin(angle) * size * 0.5,
-                    size * 0.35, size * 0.2,
-                    angle, 0, Math.PI * 2
-                );
-                ctx.fill();
-            }
-            ctx.fillStyle = '#FFFFFF';
-            ctx.beginPath();
-            ctx.arc(x, y, size * 0.2, 0, Math.PI * 2);
-            ctx.fill();
-        };
-        
-        drawFlowerDecor(20, 20, 14);
-        drawFlowerDecor(w - 20, 20, 14);
-        drawFlowerDecor(20, h - 20, 12);
-        drawFlowerDecor(w - 20, h - 20, 12);
-        
-        // Title area background
-        ctx.fillStyle = style.titleBg;
-        ctx.globalAlpha = 0.7;
-        ctx.fillRect(padding + 20, padding + 8, w - padding * 2 - 40, 32);
-        ctx.globalAlpha = 1;
-        
-        // Draw title
-        ctx.font = 'bold 20px "Comic Sans MS", cursive, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = style.textColor;
-        ctx.fillText(content.title, w / 2, padding + 24);
-        
-        // Draw ticker (if not empty)
-        if (content.ticker) {
-        ctx.font = 'bold 24px "Arial Black", sans-serif';
-        ctx.fillStyle = style.borderColor;
-        ctx.fillText(content.ticker, w / 2, padding + 56);
-        }
-        
-        // Draw shill/description text (adjust position if no ticker)
-        const shillY = content.ticker ? padding + 82 : padding + 56;
-        ctx.font = '14px "Segoe UI", Arial, sans-serif';
-        ctx.fillStyle = style.textColor;
-        ctx.globalAlpha = 0.9;
-        ctx.fillText(content.shill, w / 2, shillY);
-        ctx.globalAlpha = 1;
-        
-        // Draw owner (if exists)
-        if (content.owner) {
-            ctx.font = 'italic 12px "Segoe UI", Arial, sans-serif';
-            ctx.fillStyle = style.accentColor;
-            ctx.globalAlpha = 0.8;
-            ctx.fillText(`owned by ${content.owner}`, w / 2, shillY + 18);
-            ctx.globalAlpha = 1;
-        }
-        
-        // Draw separator line
-        ctx.strokeStyle = style.borderColor;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(padding + 30, h - 40);
-        ctx.lineTo(w - padding - 30, h - 40);
-        ctx.stroke();
-        
-        // Draw penguin icon
-        const penguinX = w / 2 - 25;
-        const penguinY = h - 28;
-        
-        ctx.fillStyle = '#1a1a2e';
-        ctx.beginPath();
-        ctx.ellipse(penguinX, penguinY, 10, 12, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#FFFFFF';
-        ctx.beginPath();
-        ctx.ellipse(penguinX, penguinY + 2, 6, 8, 0, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#1a1a2e';
-        ctx.beginPath();
-        ctx.arc(penguinX - 3, penguinY - 5, 2, 0, Math.PI * 2);
-        ctx.arc(penguinX + 3, penguinY - 5, 2, 0, Math.PI * 2);
-        ctx.fill();
-        
-        ctx.fillStyle = '#FFA500';
-        ctx.beginPath();
-        ctx.moveTo(penguinX, penguinY - 2);
-        ctx.lineTo(penguinX - 4, penguinY + 2);
-        ctx.lineTo(penguinX + 4, penguinY + 2);
-        ctx.closePath();
-        ctx.fill();
-        
-        // Draw count
-        ctx.font = 'bold 22px Arial, sans-serif';
-        ctx.fillStyle = count > 0 ? style.textColor : '#888888';
-        ctx.textAlign = 'left';
-        const countText = count > 0 ? `${count}` : '0';
-        ctx.fillText(countText, penguinX + 18, penguinY + 6);
-        
-        // Status indicator
-        ctx.font = '12px Arial, sans-serif';
-        ctx.fillStyle = count > 0 ? '#22c55e' : '#888888';
-        ctx.textAlign = 'right';
-        ctx.fillText(count > 0 ? '● OPEN' : '○ EMPTY', w - padding - 15, h - 22);
-        
-        // Update sprite texture
-        if (sprite.material.map) {
-            sprite.material.map.dispose();
-        }
-        sprite.material.map = new THREE.CanvasTexture(canvas);
-        sprite.material.needsUpdate = true;
-        
-        // Bigger scale for the banner
-        const scale = 0.025;
-        sprite.scale.set(w * scale, h * scale, 1);
-    };
-    
+
     // ==================== MULTIPLAYER SYNC (OPTIMIZED) ====================
     
     // Helper to create name sprite for other players
@@ -8795,46 +3678,6 @@ const VoxelWorld = ({
         const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
         const sprite = new THREE.Sprite(material);
         sprite.scale.set(4, 1, 1);
-        return sprite;
-    }, []);
-    
-    // Helper to create chat bubble sprite
-    const createOtherPlayerChatSprite = useCallback((message) => {
-        const THREE = window.THREE;
-        if (!THREE) return null;
-        
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const fontSize = 32;
-        const padding = 15;
-        
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        const textWidth = Math.min(ctx.measureText(message).width, 300);
-        
-        canvas.width = textWidth + padding * 2;
-        canvas.height = fontSize + padding * 2;
-        
-        ctx.font = `bold ${fontSize}px sans-serif`;
-        ctx.fillStyle = 'white';
-        ctx.strokeStyle = '#222';
-        ctx.lineWidth = 3;
-        
-        const r = 12;
-        ctx.beginPath();
-        ctx.roundRect(0, 0, canvas.width, canvas.height, r);
-        ctx.fill();
-        ctx.stroke();
-        
-        ctx.fillStyle = 'black';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(message.substring(0, 50), canvas.width / 2, canvas.height / 2);
-        
-        const texture = new THREE.CanvasTexture(canvas);
-        const material = new THREE.SpriteMaterial({ map: texture, depthTest: false });
-        const sprite = new THREE.Sprite(material);
-        sprite.scale.set(canvas.width * 0.015, canvas.height * 0.015, 1);
-        sprite.position.set(0, 4.5, 0);
         return sprite;
     }, []);
     
@@ -9302,8 +4145,8 @@ const VoxelWorld = ({
              
              {/* Title & Controls - Top Left */}
              <div className="absolute top-4 left-4 retro-text text-white drop-shadow-md z-10 pointer-events-none">
-                 <h2 className={`text-xl drop-shadow-lg ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
-                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room.startsWith('igloo') ? `IGLOO ${room.slice(-1)}` : 'TOWN'}
+                 <h2 className={`text-xl drop-shadow-lg ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room === 'igloo3' ? 'text-fuchsia-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
+                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room === 'igloo3' ? '🎵 SKNY GANG $CPw3' : room.startsWith('igloo') ? `IGLOO ${room.replace('igloo', '')}` : 'TOWN'}
                  </h2>
                  {!isMobile && (
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>
@@ -9409,76 +4252,20 @@ const VoxelWorld = ({
                          <div className="text-cyan-400 font-bold mb-2 text-[10px]">❄️ SNOWFALL</div>
                          <div className="flex justify-between items-center">
                              <span className="text-white/70 text-[10px]">Intensity:</span>
-                             <span className="text-cyan-300 text-[10px]">{(snowIntensityRef.current * 100).toFixed(0)}%</span>
+                             <span className="text-cyan-300 text-[10px]">{((snowfallSystemRef.current?.getIntensity() || 0.5) * 100).toFixed(0)}%</span>
                          </div>
                      </div>
                  </div>
              )}
 
              
-            {emoteWheelOpen && (
-                <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/40">
-                    <div className="relative w-80 h-80">
-                        {/* Emote sectors arranged in a circle (top = index 0, clockwise) */}
-                        {EMOTE_WHEEL_ITEMS.map((emote, index) => {
-                            const SECTOR_SIZE = 360 / EMOTE_WHEEL_ITEMS.length;
-                            const angle = (index * SECTOR_SIZE - 90) * (Math.PI / 180); // -90 to start at top
-                            const radius = 110;
-                            const x = Math.cos(angle) * radius;
-                            const y = Math.sin(angle) * radius;
-                            const isSelected = emoteWheelSelection === index;
-                            
-                            return (
-                                <div
-                                    key={emote.id}
-                                    className="absolute flex flex-col items-center justify-center"
-                                    style={{ 
-                                        left: `calc(50% + ${x}px)`, 
-                                        top: `calc(50% + ${y}px)`,
-                                        transform: `translate(-50%, -50%) scale(${isSelected ? 1.2 : 1})`,
-                                        opacity: isSelected ? 1 : 0.6,
-                                        transition: 'transform 0.1s, opacity 0.1s'
-                                    }}
-                                    onClick={() => { triggerEmote(emote.id); setEmoteWheelOpen(false); }}
-                                    onTouchStart={() => { triggerEmote(emote.id); setEmoteWheelOpen(false); }}
-                                >
-                                    <div className={`w-16 h-16 rounded-full ${emote.color} flex items-center justify-center shadow-lg`}
-                                        style={{
-                                            border: isSelected ? '4px solid white' : '2px solid rgba(255,255,255,0.4)',
-                                            boxShadow: isSelected ? '0 0 20px rgba(255,255,255,0.5)' : 'none'
-                                        }}>
-                                        <span className="text-2xl">{emote.emoji}</span>
-                                    </div>
-                                    <span className={`text-xs mt-2 retro-text font-bold ${isSelected ? 'text-white' : 'text-white/50'}`}>
-                                        {emote.label}
-                                    </span>
-                                </div>
-                            );
-                        })}
-                        
-                        {/* Center - shows current selection */}
-                        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 
-                            w-24 h-24 rounded-full bg-black/90 border-2 border-white/30 
-                            flex flex-col items-center justify-center">
-                            {emoteWheelSelection >= 0 ? (
-                                <>
-                                    <span className="text-4xl">{EMOTE_WHEEL_ITEMS[emoteWheelSelection]?.emoji}</span>
-                                    <span className="text-white text-xs retro-text mt-1 font-bold">
-                                        {EMOTE_WHEEL_ITEMS[emoteWheelSelection]?.label}
-                                    </span>
-                                </>
-                            ) : (
-                                <span className="text-white/40 text-xs retro-text text-center">Drag to<br/>select</span>
-                            )}
-                        </div>
-                        
-                        {/* Instructions */}
-                        <div className="absolute left-1/2 -translate-x-1/2 bottom-0 text-white/50 text-xs retro-text">
-                            Release [T] to use
-                        </div>
-                     </div>
-                 </div>
-             )}
+            <EmoteWheel
+                isOpen={emoteWheelOpen}
+                selection={emoteWheelSelection}
+                items={EMOTE_WHEEL_ITEMS}
+                onSelect={triggerEmote}
+                onClose={() => setEmoteWheelOpen(false)}
+            />
              
              {/* Settings Menu Modal */}
              <SettingsMenu

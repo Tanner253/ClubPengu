@@ -206,6 +206,8 @@ export function ChallengeProvider({ children }) {
                         } else {
                             showNotification(`🏳️ You forfeited the match.`, 'info');
                         }
+                    } else if (result.reason === 'draw' || result.winner === 'draw') {
+                        showNotification(`🤝 It's a draw! Wager refunded.`, 'info');
                     } else if (result.winnerPlayerId === playerId) {
                         showNotification(`🏆 You won ${result.coinsWon} coins!`, 'success');
                     } else {
@@ -245,12 +247,39 @@ export function ChallengeProvider({ children }) {
                     break;
                     
                 case 'match_spectate_end':
-                    setActiveMatches(prev => prev.filter(m => m.matchId !== message.matchId));
+                    // Update the spectating match with final state and winner info
+                    // Keep it visible for 5 seconds so spectators can see the result
                     setSpectatingMatch(prev => {
-                        const next = { ...prev };
-                        delete next[message.matchId];
-                        return next;
+                        const existing = prev[message.matchId] || {};
+                        return {
+                            ...prev,
+                            [message.matchId]: {
+                                ...existing,
+                                state: {
+                                    ...existing.state,
+                                    ...(message.finalState || {}),
+                                    // Use the winner from finalState (preserves 'X', 'O', 'R', 'Y', 'draw')
+                                    // Only override if not present in finalState
+                                    winner: message.finalState?.winner ?? (message.isDraw ? 'draw' : existing.state?.winner),
+                                    isComplete: true
+                                },
+                                winnerId: message.winnerId,
+                                winnerName: message.winnerName,
+                                isDraw: message.isDraw,
+                                gameType: message.gameType || existing.gameType
+                            }
+                        };
                     });
+                    
+                    // Delay removal by 5 seconds so spectators can see the final result
+                    setTimeout(() => {
+                        setActiveMatches(prev => prev.filter(m => m.matchId !== message.matchId));
+                        setSpectatingMatch(prev => {
+                            const next = { ...prev };
+                            delete next[message.matchId];
+                            return next;
+                        });
+                    }, 5000);
                     break;
                     
                 case 'active_matches':

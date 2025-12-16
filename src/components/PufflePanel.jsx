@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Puffle from '../engine/Puffle';
 import GameManager from '../engine/GameManager';
+import { useClickOutside, useEscapeKey } from '../hooks';
 
 /**
  * PufflePanel - Club Penguin style puffle management
@@ -13,6 +14,11 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
     const [, forceUpdate] = useState(0);
     const [feedback, setFeedback] = useState(null);
     const [coins, setCoins] = useState(() => GameManager.getInstance().getCoins());
+    const panelRef = useRef(null);
+    
+    // Use shared hooks for click outside and escape key
+    useClickOutside(panelRef, onClose, true);
+    useEscapeKey(onClose, true);
     
     // Listen for coin changes
     useEffect(() => {
@@ -104,7 +110,11 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
 
     return (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center animate-fade-in">
-            <div className="bg-gradient-to-br from-purple-900/95 to-slate-900 rounded-2xl p-5 w-full max-w-lg border border-purple-400/30 shadow-xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div 
+                ref={panelRef}
+                className="bg-gradient-to-br from-purple-900/95 to-slate-900 rounded-2xl p-5 w-full max-w-lg border border-purple-400/30 shadow-xl max-h-[90vh] overflow-hidden flex flex-col"
+                onClick={(e) => e.stopPropagation()}
+            >
                 {/* Header */}
                 <div className="flex justify-between items-center mb-3">
                     <div className="flex items-center gap-2">

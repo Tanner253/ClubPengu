@@ -4,9 +4,10 @@
  * Responsive design for desktop, portrait mobile, and landscape mobile
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 import { useChallenge } from '../challenge';
 import GameManager from '../engine/GameManager';
+import { useDeviceDetection, useClickOutside, useEscapeKey } from '../hooks';
 
 const ProfileMenu = () => {
     const {
@@ -19,55 +20,20 @@ const ProfileMenu = () => {
     } = useChallenge();
     
     const [showGameDropdown, setShowGameDropdown] = useState(false);
-    const [isLandscape, setIsLandscape] = useState(false);
-    const [isMobile, setIsMobile] = useState(false);
     const menuRef = useRef(null);
     
-    // Detect orientation and mobile
-    useEffect(() => {
-        const checkLayout = () => {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
-            setIsLandscape(width > height);
-            setIsMobile(width < 768 || height < 500);
-        };
-        
-        checkLayout();
-        window.addEventListener('resize', checkLayout);
-        window.addEventListener('orientationchange', () => setTimeout(checkLayout, 100));
-        
-        return () => {
-            window.removeEventListener('resize', checkLayout);
-            window.removeEventListener('orientationchange', checkLayout);
-        };
-    }, []);
+    // Use shared device detection hook
+    const { isMobile, isLandscape } = useDeviceDetection();
     
-    // Close on click/touch outside (but not when wager modal is open)
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (showWagerModal) return;
-            if (menuRef.current && !menuRef.current.contains(e.target)) {
+    // Close on click outside (but not when wager modal is open)
+    const handleClose = useCallback(() => {
+        if (!showWagerModal) {
                 clearSelectedPlayer();
             }
-        };
-        
-        const handleEscape = (e) => {
-            if (showWagerModal) return;
-            if (e.key === 'Escape') {
-                clearSelectedPlayer();
-            }
-        };
-        
-        document.addEventListener('mousedown', handleClickOutside);
-        document.addEventListener('touchstart', handleClickOutside, { passive: true });
-        document.addEventListener('keydown', handleEscape);
-        
-        return () => {
-            document.removeEventListener('mousedown', handleClickOutside);
-            document.removeEventListener('touchstart', handleClickOutside);
-            document.removeEventListener('keydown', handleEscape);
-        };
     }, [clearSelectedPlayer, showWagerModal]);
+    
+    useClickOutside(menuRef, handleClose, !!selectedPlayer && !showWagerModal);
+    useEscapeKey(handleClose, !!selectedPlayer && !showWagerModal);
     
     if (!selectedPlayer) return null;
     

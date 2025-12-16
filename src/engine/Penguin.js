@@ -1,5 +1,5 @@
 import { PALETTE } from '../constants';
-import { ASSETS } from '../assets';
+import { ASSETS } from '../assets/index';
 
 /**
  * Penguin - Base class for all penguin entities (Player and AI)

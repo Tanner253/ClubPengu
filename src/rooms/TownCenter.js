@@ -1,5 +1,45 @@
-import PropsFactory from '../engine/PropsFactory';
 import CollisionSystem from '../engine/CollisionSystem';
+import { createProp, PROP_TYPES, Billboard } from '../props';
+import { createNightclubExterior } from '../props/NightclubExterior';
+import { createDojoParkour } from '../props/DojoParkour';
+
+/**
+ * Helper: Attach collision/interaction data from a prop to its mesh
+ * This bridges the new prop system with the collision system
+ */
+function attachPropData(prop, mesh) {
+    // Attach collision bounds
+    const collision = prop.getCollisionBounds && prop.getCollisionBounds();
+    if (collision) {
+        mesh.userData.collision = {
+            type: 'box',
+            size: { x: collision.maxX - collision.minX, z: collision.maxZ - collision.minZ },
+            height: collision.height
+        };
+    }
+    
+    // Attach interaction trigger
+    const trigger = prop.getTrigger && prop.getTrigger();
+    if (trigger) {
+        mesh.userData.interactionZone = {
+            type: trigger.size ? 'box' : 'circle',
+            position: { x: 0, z: 0 },
+            size: trigger.size,
+            radius: trigger.radius,
+            action: trigger.type,
+            message: trigger.message,
+            emote: trigger.emote,
+            seatHeight: trigger.seatHeight,
+            benchDepth: trigger.benchDepth,
+            platformHeight: trigger.platformHeight,  // For elevated benches
+            snapPoints: trigger.snapPoints,
+            maxOccupants: trigger.maxOccupants,
+            data: trigger.data
+        };
+    }
+    
+    return mesh;
+}
 
 /**
  * TownCenter - Room definition for the main town hub
@@ -52,7 +92,6 @@ class TownCenter {
 
     constructor(THREE) {
         this.THREE = THREE;
-        this.propsFactory = new PropsFactory(THREE);
         this.collisionSystem = new CollisionSystem(
             TownCenter.WORLD_SIZE,
             TownCenter.WORLD_SIZE,
@@ -244,21 +283,22 @@ class TownCenter {
         // ==================== IGLOOS - ALONG TOP STREET EDGES ====================
         // T-bar walkway is at z = C-29 to C-61
         // NORTH side of walkway (z < C-61, facing south toward street)
+        // 10 total igloos: igloo1-10, each unique. igloo3 = SKNY GANG nightclub igloo
         props.push(
-            { type: 'igloo', x: C - 75, z: C - 75, rotation: 0 },      // Far west
-            { type: 'igloo', x: C - 50, z: C - 78, rotation: 0 },
-            { type: 'igloo', x: C - 25, z: C - 75, rotation: 0 },
-            { type: 'igloo', x: C + 25, z: C - 75, rotation: 0 },
-            { type: 'igloo', x: C + 50, z: C - 78, rotation: 0 },
-            { type: 'igloo', x: C + 75, z: C - 75, rotation: 0 },      // Far east
+            { type: 'igloo', x: C - 75, z: C - 75, rotation: 0 },      // igloo1
+            { type: 'igloo', x: C - 50, z: C - 78, rotation: 0 },      // igloo2
+            { type: 'skny_igloo', x: C - 25, z: C - 75, rotation: 0 }, // igloo3 - SKNY GANG Nightclub
+            { type: 'igloo', x: C + 25, z: C - 75, rotation: 0 },      // igloo4
+            { type: 'igloo', x: C + 50, z: C - 78, rotation: 0 },      // igloo5
+            { type: 'igloo', x: C + 75, z: C - 75, rotation: 0 },      // igloo6
         );
         
         // SOUTH side of walkway (z > C-29, facing north toward street)
         props.push(
-            { type: 'igloo', x: C - 70, z: C - 15, rotation: Math.PI }, // West side
-            { type: 'igloo', x: C - 40, z: C - 18, rotation: Math.PI },
-            { type: 'igloo', x: C + 40, z: C - 18, rotation: Math.PI },
-            { type: 'igloo', x: C + 70, z: C - 15, rotation: Math.PI }, // East side
+            { type: 'igloo', x: C - 70, z: C - 15, rotation: Math.PI },  // igloo7
+            { type: 'igloo', x: C - 40, z: C - 18, rotation: Math.PI },  // igloo8
+            { type: 'igloo', x: C + 40, z: C - 18, rotation: Math.PI },  // igloo9
+            { type: 'igloo', x: C + 70, z: C - 15, rotation: Math.PI },  // igloo10
         );
         
         // ==================== BENCHES - OUTSIDE WALKWAYS ====================
@@ -516,18 +556,39 @@ class TownCenter {
             let mesh = null;
             
             switch (prop.type) {
-                case 'pine_tree':
-                    mesh = this.propsFactory.createPineTree(prop.size);
+                case 'pine_tree': {
+                    // Use new modular prop system with auto-attached collision
+                    const treeProp = createProp(this.THREE, null, PROP_TYPES.PINE_TREE, 0, 0, 0, { size: prop.size });
+                    mesh = attachPropData(treeProp, treeProp.group);
                     break;
-                case 'igloo':
-                    mesh = this.propsFactory.createIgloo(true);
+                }
+                case 'igloo': {
+                    // Use new modular prop system with auto-attached collision
+                    const iglooProp = createProp(this.THREE, null, PROP_TYPES.IGLOO, 0, 0, 0, { withEntrance: true });
+                    mesh = attachPropData(iglooProp, iglooProp.group);
                     break;
-                case 'lamp_post':
-                    mesh = this.propsFactory.createLampPost(prop.isOn, prop.castShadow || false);
-                    if (mesh.userData.light) {
-                        this.lights.push(mesh.userData.light);
+                }
+                case 'skny_igloo': {
+                    // SKNY GANG Nightclub Igloo - special animated nightclub-themed igloo
+                    const sknyProp = createProp(this.THREE, null, PROP_TYPES.SKNY_IGLOO, 0, 0, 0, {});
+                    mesh = attachPropData(sknyProp, sknyProp.group);
+                    // Store the prop for animation updates
+                    if (!this.sknyIgloos) this.sknyIgloos = [];
+                    this.sknyIgloos.push(sknyProp);
+                    break;
+                }
+                case 'lamp_post': {
+                    // Use new modular prop system with auto-attached collision
+                    const lampProp = createProp(this.THREE, null, PROP_TYPES.LAMP_POST, 0, 0, 0, { 
+                        isOn: prop.isOn, 
+                        castShadow: prop.castShadow || false 
+                    });
+                    mesh = attachPropData(lampProp, lampProp.group);
+                    if (lampProp.getLight && lampProp.getLight()) {
+                        this.lights.push(lampProp.getLight());
                     }
                     break;
+                }
                 case 'building_light':
                     // Skip expensive building lights on mobile GPUs
                     const isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
@@ -546,31 +607,45 @@ class TownCenter {
                         mesh = new this.THREE.Group(); // Empty group for mobile
                     }
                     break;
-                case 'bench':
-                    mesh = this.propsFactory.createBench(true);
-                    // Sitting interaction handled via furniture array in VoxelWorld.jsx
+                case 'bench': {
+                    // Use new modular prop system with auto-attached collision/interaction
+                    const benchProp = createProp(this.THREE, null, PROP_TYPES.BENCH, 0, 0, 0, { withSnow: true });
+                    mesh = attachPropData(benchProp, benchProp.group);
                     break;
-                case 'snowman':
-                    mesh = this.propsFactory.createSnowman();
+                }
+                case 'snowman': {
+                    // Use new modular prop system with auto-attached collision
+                    const snowmanProp = createProp(this.THREE, null, PROP_TYPES.SNOWMAN, 0, 0, 0);
+                    mesh = attachPropData(snowmanProp, snowmanProp.group);
                     break;
-                case 'rock':
-                    mesh = this.propsFactory.createRock(prop.size);
+                }
+                case 'rock': {
+                    // Use new modular prop system with auto-attached collision
+                    const rockProp = createProp(this.THREE, null, PROP_TYPES.ROCK, 0, 0, 0, { size: prop.size });
+                    mesh = attachPropData(rockProp, rockProp.group);
                     break;
-                case 'campfire':
-                    const campfireResult = this.propsFactory.createCampfire(true);
-                    mesh = campfireResult.mesh;
-                    if (campfireResult.light) mesh.userData.fireLight = campfireResult.light;
-                    if (campfireResult.particles) mesh.userData.particles = campfireResult.particles;
+                }
+                case 'campfire': {
+                    // Use new modular prop system with auto-attached collision/interaction
+                    const campfireProp = createProp(this.THREE, null, PROP_TYPES.CAMPFIRE, 0, 0, 0, { isLit: true });
+                    mesh = attachPropData(campfireProp, campfireProp.group);
+                    if (campfireProp.getLight) mesh.userData.fireLight = campfireProp.getLight();
+                    if (campfireProp.getParticles) mesh.userData.particles = campfireProp.getParticles();
+                    mesh.userData.campfireUpdate = (time) => campfireProp.update && campfireProp.update(time);
                     break;
-                case 'christmas_tree':
-                    const treeResult = this.propsFactory.createChristmasTree();
-                    mesh = treeResult.mesh;
-                    if (treeResult.update) mesh.userData.treeUpdate = treeResult.update;
+                }
+                case 'christmas_tree': {
+                    // Use new modular prop system with auto-attached collision
+                    const xmasTreeProp = createProp(this.THREE, null, PROP_TYPES.CHRISTMAS_TREE, 0, 0, 0);
+                    mesh = attachPropData(xmasTreeProp, xmasTreeProp.group);
+                    mesh.userData.treeUpdate = (time, delta, nightFactor) => 
+                        xmasTreeProp.update && xmasTreeProp.update(time, delta, nightFactor);
                     break;
+                }
                 case 'dojo_parkour':
                     // Parkour course is BOUND to dojo position
                     // mirrored: true rotates the course 180 degrees (goes on opposite side)
-                    const parkourResult = this.propsFactory.createDojoParkourCourse({
+                    const parkourResult = createDojoParkour(this.THREE, {
                         dojoX: C + dojoOffset.x,
                         dojoZ: C + dojoOffset.z,
                         dojoWidth: 14,
@@ -580,6 +655,7 @@ class TownCenter {
                     });
                     mesh = parkourResult.mesh;
                     
+                    // Add platform colliders
                     parkourResult.colliders.forEach((collider, idx) => {
                         this.collisionSystem.addCollider(
                             collider.x, collider.z,
@@ -589,29 +665,45 @@ class TownCenter {
                         );
                     });
                     
-                    parkourResult.roofBenches.forEach((bench, idx) => {
-                        const benchZoneData = {
-                            type: 'box',
-                            position: { x: 0, z: 0.8 },
-                            size: { x: 3, z: 2 },
-                            action: 'sit',
-                            message: '🪑 Sit (Secret VIP Spot!)',
-                            emote: 'Sit',
-                            seatHeight: bench.y + 0.8,
-                            benchDepth: 1,
-                            worldX: bench.x,
-                            worldZ: bench.z,
-                            worldRotation: bench.rotation || 0,
-                            platformHeight: bench.y,
-                            snapPoints: [{ x: -0.6, z: 0 }, { x: 0, z: 0 }, { x: 0.6, z: 0 }],
-                            data: { seatHeight: bench.y + 0.8, platformHeight: bench.y }
-                        };
-                        this.collisionSystem.addTrigger(
-                            bench.x, bench.z, benchZoneData,
-                            (event) => this._handleInteraction(event, benchZoneData),
-                            { name: `vip_bench_${idx}` },
-                            bench.rotation || 0, bench.y
+                    // Spawn ACTUAL Bench props at VIP positions - uses unified Bench class
+                    // This ensures consistent interactions across all benches in the game
+                    parkourResult.benchSpawnPositions.forEach((benchPos, idx) => {
+                        const benchProp = createProp(this.THREE, null, PROP_TYPES.BENCH, 0, 0, 0, { withSnow: true });
+                        const benchMesh = attachPropData(benchProp, benchProp.group);
+                        
+                        // Position the bench at the VIP spot
+                        benchMesh.position.set(benchPos.x, benchPos.y, benchPos.z);
+                        benchMesh.rotation.y = benchPos.rotation || 0;
+                        
+                        // Update interaction zone with correct VIP message and platform height
+                        // (attachPropData extracts trigger data at position 0,0,0 so we need to fix the heights)
+                        if (benchMesh.userData.interactionZone) {
+                            benchMesh.userData.interactionZone.message = `🪑 Sit (${benchPos.tier === 3 ? 'Ultimate VIP!' : 'Secret VIP Spot!'})`;
+                            benchMesh.userData.interactionZone.platformHeight = benchPos.y;
+                            benchMesh.userData.interactionZone.seatHeight = benchPos.y + 0.8;
+                            benchMesh.userData.interactionZone.data = {
+                                ...benchMesh.userData.interactionZone.data,
+                                platformHeight: benchPos.y,
+                                seatHeight: benchPos.y + 0.8
+                            };
+                        }
+                        
+                        scene.add(benchMesh);
+                        this.propMeshes.push(benchMesh);
+                        
+                        // Register with collision system for interactions
+                        // Y position comes from benchMesh.position.y automatically
+                        console.log(`[VIP Bench ${idx}] Registering at Y=${benchMesh.position.y}, pos=(${benchMesh.position.x.toFixed(1)}, ${benchMesh.position.z.toFixed(1)})`);
+                        console.log(`[VIP Bench ${idx}] Has interactionZone:`, !!benchMesh.userData.interactionZone);
+                        if (benchMesh.userData.interactionZone) {
+                            console.log(`[VIP Bench ${idx}] Zone size:`, benchMesh.userData.interactionZone.size);
+                            console.log(`[VIP Bench ${idx}] Zone action:`, benchMesh.userData.interactionZone.action);
+                        }
+                        const result = this.collisionSystem.registerProp(
+                            benchMesh,
+                            (event, zoneData) => this._handleInteraction(event, zoneData)
                         );
+                        console.log(`[VIP Bench ${idx}] Trigger ID: ${result.triggerId}`);
                     });
                     
                     mesh.userData.parkourData = parkourResult;
@@ -620,21 +712,33 @@ class TownCenter {
                     this.propMeshes.push(mesh);
                     mesh = null;
                     break;
-                case 'log_seat':
-                    mesh = this.propsFactory.createLogSeat(prop.rotation || 0);
+                case 'log_seat': {
+                    // Use new modular prop system with auto-attached collision/interaction
+                    const logProp = createProp(this.THREE, null, PROP_TYPES.LOG_SEAT, 0, 0, 0, { rotation: prop.rotation || 0 });
+                    mesh = attachPropData(logProp, logProp.group);
                     break;
-                case 'snow_pile':
-                    mesh = this.propsFactory.createSnowPile(prop.size);
+                }
+                case 'snow_pile': {
+                    // Use new modular prop system with auto-attached collision
+                    const snowPileProp = createProp(this.THREE, null, PROP_TYPES.SNOW_PILE, 0, 0, 0, { size: prop.size });
+                    mesh = attachPropData(snowPileProp, snowPileProp.group);
                     break;
-                case 'signpost':
-                    mesh = this.propsFactory.createSignpost(prop.signs);
+                }
+                case 'signpost': {
+                    // Use new modular prop system with auto-attached collision
+                    const signProp = createProp(this.THREE, null, PROP_TYPES.SIGNPOST, 0, 0, 0, { signs: prop.signs });
+                    mesh = attachPropData(signProp, signProp.group);
                     break;
-                case 'fence':
-                    mesh = this.propsFactory.createFence(prop.length);
+                }
+                case 'fence': {
+                    // Use new modular prop system with auto-attached collision
+                    const fenceProp = createProp(this.THREE, null, PROP_TYPES.FENCE, 0, 0, 0, { length: prop.length });
+                    mesh = attachPropData(fenceProp, fenceProp.group);
                     break;
+                }
                 case 'nightclub':
                     // Epic nightclub with animated speakers and neon lights
-                    const nightclubResult = this.propsFactory.createNightclub({
+                    const nightclubResult = createNightclubExterior(this.THREE, {
                         width: prop.width,
                         depth: prop.depth,
                         height: prop.height
@@ -690,13 +794,19 @@ class TownCenter {
                     break;
                     
                 case 'billboard':
-                    // Highway-style billboard with lit-up advertisement
-                    const billboardResult = this.propsFactory.createBillboard(
-                        prop.imagePath || '/advert.png',
-                        { width: 12, height: 4, poleHeight: 15 }
-                    );
-                    mesh = billboardResult.mesh;
+                    // Highway-style billboard with lit-up advertisement (using new Billboard prop)
+                    const billboardProp = new Billboard(this.THREE);
+                    billboardProp.spawn(scene, prop.x, prop.y ?? 0, prop.z, {
+                        imagePath: prop.imagePath || '/advert.png',
+                        width: 12,
+                        height: 4,
+                        poleHeight: 15,
+                        rotation: prop.rotation ?? 0
+                    });
+                    mesh = billboardProp.group;
                     mesh.name = 'billboard';
+                    // Store prop instance for cleanup
+                    mesh.userData.propInstance = billboardProp;
                     
                     // Add collision for billboard poles
                     this.collisionSystem.addCollider(
@@ -1091,7 +1201,7 @@ class TownCenter {
 
     update(time, delta, nightFactor = 0.5) {
         if (!this._animatedCache) {
-            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], frameCounter: 0 };
+            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], sknyIgloos: [], frameCounter: 0 };
             this.propMeshes.forEach(mesh => {
                 if (mesh.name === 'campfire') {
                     const flames = [];
@@ -1107,6 +1217,10 @@ class TownCenter {
                     this._animatedCache.nightclubs.push(mesh);
                 }
             });
+            // SKNY Igloos stored separately during spawn
+            if (this.sknyIgloos) {
+                this._animatedCache.sknyIgloos = this.sknyIgloos;
+            }
         }
         
         this._animatedCache.frameCounter++;
@@ -1117,6 +1231,13 @@ class TownCenter {
             this._animatedCache.nightclubs.forEach(mesh => {
                 if (mesh.userData.nightclubUpdate) {
                     mesh.userData.nightclubUpdate(time);
+                }
+            });
+            
+            // SKNY Igloo animations - same timing as nightclubs
+            this._animatedCache.sknyIgloos.forEach(sknyProp => {
+                if (sknyProp.update) {
+                    sknyProp.update(time);
                 }
             });
         }
@@ -1184,7 +1305,7 @@ class TownCenter {
 
     dispose() {
         this.cleanup();
-        this.propsFactory.dispose();
+        // PropsFactory dispose is handled by the singleton wrappers
     }
 
     getSpawnPosition() {

@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useChallenge } from '../challenge';
 import GameManager from '../engine/GameManager';
+import { useDeviceDetection, useEscapeKey } from '../hooks';
 
 const WagerModal = () => {
     const {
@@ -19,29 +20,11 @@ const WagerModal = () => {
     const [wagerAmount, setWagerAmount] = useState('');
     const [error, setError] = useState('');
     const [playerCoins, setPlayerCoins] = useState(0);
-    const [isLandscape, setIsLandscape] = useState(false);
-    const [isMobile, setIsMobile] = useState(false);
     const inputRef = useRef(null);
     const modalRef = useRef(null);
     
-    // Detect orientation and mobile
-    useEffect(() => {
-        const checkLayout = () => {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
-            setIsLandscape(width > height);
-            setIsMobile(width < 768 || height < 500);
-        };
-        
-        checkLayout();
-        window.addEventListener('resize', checkLayout);
-        window.addEventListener('orientationchange', () => setTimeout(checkLayout, 100));
-        
-        return () => {
-            window.removeEventListener('resize', checkLayout);
-            window.removeEventListener('orientationchange', checkLayout);
-        };
-    }, []);
+    // Use shared device detection hook
+    const { isMobile, isLandscape } = useDeviceDetection();
     
     // Refresh coin balance from localStorage/GameManager whenever modal opens
     useEffect(() => {
@@ -66,19 +49,8 @@ const WagerModal = () => {
         return () => unsubscribe();
     }, []);
     
-    // Handle escape key
-    useEffect(() => {
-        const handleEscape = (e) => {
-            if (e.key === 'Escape') {
-                closeWagerModal();
-            }
-        };
-        
-        if (showWagerModal) {
-            document.addEventListener('keydown', handleEscape);
-            return () => document.removeEventListener('keydown', handleEscape);
-        }
-    }, [showWagerModal, closeWagerModal]);
+    // Handle escape key using shared hook
+    useEscapeKey(closeWagerModal, showWagerModal);
     
     if (!showWagerModal || !selectedPlayer) return null;
     

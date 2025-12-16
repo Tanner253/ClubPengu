@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { VOXEL_SIZE, PALETTE } from './constants';
-import { ASSETS } from './assets';
+import { ASSETS } from './assets/index';
 import { generateBaseBody, generateFlippers, generateFeet, generateHead } from './generators';
 import { IconSettings, IconChevronLeft, IconChevronRight, IconCamera, IconWorld } from './Icons';
 import { useMultiplayer } from './multiplayer';

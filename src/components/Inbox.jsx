@@ -2,8 +2,9 @@
  * Inbox - Challenge requests and notifications panel
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useRef } from 'react';
 import { useChallenge } from '../challenge';
+import { useClickOutside } from '../hooks';
 import GameManager from '../engine/GameManager';
 
 const Inbox = () => {
@@ -20,26 +21,12 @@ const Inbox = () => {
     const panelRef = useRef(null);
     const playerCoins = GameManager.getInstance().getCoins();
     
-    // Close on click/touch outside
-    useEffect(() => {
-        const handleClickOutside = (e) => {
-            if (panelRef.current && !panelRef.current.contains(e.target)) {
-                // Check if click is on the inbox button
+    // Close on click/touch outside (but not when clicking inbox button)
+    useClickOutside(panelRef, (e) => {
                 if (!e.target.closest('[data-inbox-button]')) {
                     setShowInbox(false);
                 }
-            }
-        };
-        
-        if (showInbox) {
-            document.addEventListener('mousedown', handleClickOutside);
-            document.addEventListener('touchstart', handleClickOutside, { passive: true });
-            return () => {
-                document.removeEventListener('mousedown', handleClickOutside);
-                document.removeEventListener('touchstart', handleClickOutside);
-            };
-        }
-    }, [showInbox, setShowInbox]);
+    }, showInbox);
     
     if (!showInbox) return null;
     
