@@ -540,9 +540,9 @@ export function generateIglooInterior(THREE, scene) {
             exitGlow.material.opacity = 0.15 + Math.sin(time * 2) * 0.08;
         }
         // Gentle beach ball bobbing
-        if (beachBall) {
-            beachBall.rotation.y += delta * 0.2;
-            beachBall.position.y = 0.6 + Math.sin(time * 1.5) * 0.05;
+        if (beachBall && beachBall.mesh) {
+            beachBall.mesh.rotation.y += delta * 0.2;
+            beachBall.mesh.position.y = 0.6 + Math.sin(time * 1.5) * 0.05;
         }
     };
     
