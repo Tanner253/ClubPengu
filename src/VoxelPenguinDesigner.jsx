@@ -81,7 +81,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     
     // Mount promo codes (case-sensitive)
     const MOUNT_PROMO_CODES = {
-        'BOATCOIN': 'minecraftBoat'
+        'BOATCOIN': 'minecraftBoat',
+        'PENGU': 'penguMount'
     };
     
     // Cosmetic promo codes (case-sensitive) - { code: { id, category, name } } or { code: { items: [...], name } }
@@ -96,7 +97,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             ],
             skin: 'silver',  // Set feathers to soft grey/cream
             name: '🐐 Mistor Goat Set'
-        }
+        },
+        'PENGU': { id: 'penguShirt', category: 'bodyItem', name: '🐧 $PENGU Shirt' }
     };
     
     // Check if a cosmetic is unlocked (or doesn't require unlock)
@@ -125,7 +127,30 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         }
         
         // Check mount promo codes (case-sensitive)
-        const mountId = MOUNT_PROMO_CODES[promoCode.trim()];
+        const trimmedCode = promoCode.trim();
+        const mountId = MOUNT_PROMO_CODES[trimmedCode];
+        const cosmeticData = COSMETIC_PROMO_CODES[trimmedCode];
+        
+        // Handle combo promo codes (mount + cosmetic like PENGU)
+        if (mountId && cosmeticData) {
+            // Unlock mount
+            const newUnlockedMounts = [...unlockedMounts, mountId];
+            setUnlockedMounts(newUnlockedMounts);
+            localStorage.setItem('unlocked_mounts', JSON.stringify(newUnlockedMounts));
+            setMount(mountId);
+            
+            // Unlock cosmetic
+            const newUnlockedCosmetics = [...unlockedCosmetics, cosmeticData.id];
+            setUnlockedCosmetics(newUnlockedCosmetics);
+            localStorage.setItem('unlocked_cosmetics', JSON.stringify(newUnlockedCosmetics));
+            if (cosmeticData.category === 'bodyItem') setBodyItem(cosmeticData.id);
+            
+            setPromoMessage({ type: 'success', text: `🐧 Unlocked: Pengu Mount + ${cosmeticData.name}!` });
+            setPromoCode('');
+            setTimeout(() => setPromoMessage(null), 3000);
+            return;
+        }
+        
         if (mountId) {
             const newUnlocked = [...unlockedMounts, mountId];
             setUnlockedMounts(newUnlocked);
@@ -138,7 +163,6 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         }
         
         // Check cosmetic promo codes (case-sensitive)
-        const cosmeticData = COSMETIC_PROMO_CODES[promoCode.trim()];
         if (cosmeticData) {
             // Handle multi-item promo codes
             if (cosmeticData.items) {
@@ -799,10 +823,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 mountGroup.add(oarGroup);
             }
             
-            mountGroup.position.y = 0; // Mount sits at ground level
+            mountGroup.position.y = -3; // Mount sits lower on the platform
             group.add(mountGroup);
             
-            // Also lower penguin to sit in the boat
+            // Also adjust penguin position based on mount's seat offset
             if (mountData.seatOffset) {
                 group.position.y = (mountData.seatOffset.y || 0) * VOXEL_SIZE;
             }
@@ -913,8 +937,13 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                             <IconChevronRight size={20} />
                                         </button>
                                     </div>
-                                    {opt.isMount && !isMountUnlocked('minecraftBoat') && (
+                                    {opt.isMount && !isMountUnlocked('minecraftBoat') && !isMountUnlocked('penguMount') && (
                                         <p className="text-[10px] text-orange-400/80 text-center">Enter promo code to unlock mounts</p>
+                                    )}
+                                    {opt.isMount && opt.val === 'penguMount' && isMountUnlocked('penguMount') && (
+                                        <div className="flex items-center justify-center gap-1 mt-1">
+                                            <span className="text-[10px] text-green-400 font-bold">⚡ +5% SPEED</span>
+                                        </div>
                                     )}
                                 </div>
                             ))}

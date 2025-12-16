@@ -590,9 +590,9 @@ class TownCenter {
                     break;
                 }
                 case 'building_light':
-                    // Skip expensive building lights on mobile GPUs
-                    const isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
-                    if (!isMobileGPU) {
+                    // Apple (Mac + iOS) + Android: Skip expensive building lights for performance
+                    const needsLightOpt = typeof window !== 'undefined' && (window._isAppleDevice || window._isAndroidDevice);
+                    if (!needsLightOpt) {
                         const buildingLight = new this.THREE.PointLight(
                             prop.color || 0xFFE4B5,
                             prop.intensity || 2.5,
@@ -1074,10 +1074,10 @@ class TownCenter {
             group.add(bulb);
             
             // OPTIMIZED: Only add point light for 1st bulb per string (was every 3rd)
-            // Mobile: Skip point lights entirely (use emissive materials only)
+            // Apple (Mac + iOS) + Android: Skip point lights entirely (use emissive materials only)
             // The emissive bulbs provide visual glow, we only need 1 light per string for ambiance
-            const isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
-            if (!isMobileGPU && i === Math.floor(bulbCount / 2)) {
+            const skipLights = typeof window !== 'undefined' && (window._isAppleDevice || window._isAndroidDevice);
+            if (!skipLights && i === Math.floor(bulbCount / 2)) {
                 const light = new THREE.PointLight(0xFFFFAA, 0.4, 6); // Warm white, merged color
                 light.position.set(x, y, z);
                 group.add(light);

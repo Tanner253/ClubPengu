@@ -102,9 +102,9 @@ class LampPost extends BaseProp {
         globe.position.y = this.postHeight + 0.35;
         this.addMesh(globe, group);
         
-        // Point light
-        const isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
-        if (this.isOn && !isMobileGPU) {
+        // Point light - skip on Apple (Mac + iOS) + Android for performance
+        const skipPointLight = typeof window !== 'undefined' && (window._isAppleDevice || window._isAndroidDevice);
+        if (this.isOn && !skipPointLight) {
             const intensity = this.castShadow ? 3.0 : 1.8;
             const distance = this.castShadow ? 20 : 12;
             

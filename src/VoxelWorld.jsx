@@ -74,6 +74,8 @@ const VoxelWorld = ({
     const matchBannersRef = useRef(new Map()); // matchId -> { sprite, canvas, ctx }
     const wizardTrailSystemRef = useRef(null); // World-space wizard hat particle trail
     const mountEnabledRef = useRef(true); // Track if mount is equipped/enabled
+    const mpUpdateAppearanceRef = useRef(null); // Ref for appearance update function
+    const penguinDataRef = useRef(null); // Ref for current penguin data
     
     // Keep isInMatch ref up to date
     useEffect(() => {
@@ -105,6 +107,14 @@ const VoxelWorld = ({
                 // Clear cached animation parts so they reset properly
                 playerRef.current._animParts = null;
             }
+            
+            // SYNC TO SERVER: Notify other players about mount visibility change
+            if (mpUpdateAppearanceRef.current && penguinDataRef.current) {
+                mpUpdateAppearanceRef.current({
+                    ...penguinDataRef.current,
+                    mountEnabled: enabled
+                });
+            }
         };
         
         window.addEventListener('mountToggled', handleMountToggle);
@@ -127,6 +137,7 @@ const VoxelWorld = ({
         sendEmoteBubble: mpSendEmoteBubble,
         sendEmote: mpSendEmote,
         changeRoom: mpChangeRoom,
+        updateAppearance: mpUpdateAppearance,
         updatePuffle: mpUpdatePuffle,
         sendBallKick: mpSendBallKick,
         requestBallSync: mpRequestBallSync,
@@ -134,6 +145,15 @@ const VoxelWorld = ({
         chatMessages,
         worldTimeRef: serverWorldTimeRef // Server-synchronized world time
     } = useMultiplayer();
+    
+    // Keep refs updated for use in event handlers (must be after useMultiplayer destructuring)
+    useEffect(() => {
+        mpUpdateAppearanceRef.current = mpUpdateAppearance;
+    }, [mpUpdateAppearance]);
+    
+    useEffect(() => {
+        penguinDataRef.current = penguinData;
+    }, [penguinData]);
     
     // Challenge context for position updates and dance trigger
     const { updateLocalPosition, shouldDance, clearDance } = useChallenge();
@@ -392,45 +412,50 @@ const VoxelWorld = ({
         console.log('🖥️ Platform:', navigator.platform, '| isApple:', isAppleDevice, '| isIOS:', isIOSDevice, '| isAndroid:', isAndroidDevice, '| isMobileGPU:', isMobileGPU);
         
         // ==================== RENDERER SETTINGS ====================
-        // Mobile GPUs (iOS + Android) need optimizations for smooth gameplay
-        // Desktop (Windows/Linux/Mac desktop) can handle full quality
+        // Apple devices (Mac + iOS) need optimizations for WebGL-via-Metal issues on Safari
+        // Android gets mobile optimizations too
+        // Windows/Linux desktop can handle full quality
+        const needsOptimization = isAppleDevice || isAndroidDevice;
+        
         const rendererOptions = {
-            antialias: !isMobileGPU, // Mobile: false (big perf gain), Desktop: true
+            antialias: !needsOptimization, // Apple/Android: false (big perf gain), PC: true
             powerPreference: 'high-performance',
             depth: true
         };
         
-        // Mobile: lower precision for faster shader math
-        if (isMobileGPU) {
+        // Apple/Android: lower precision for faster shader math and Metal compatibility
+        if (needsOptimization) {
             rendererOptions.precision = 'mediump';
             rendererOptions.stencil = false;
         }
         
         const renderer = new THREE.WebGLRenderer(rendererOptions);
         
-        // Mobile: DPR capped at 1.0 (renders at native resolution, not 2x/3x)
-        // This is the BIGGEST performance win - high DPR renders 4-9x more pixels
-        // Desktop: allow up to 2x for crisp visuals
-        const dpr = isMobileGPU ? Math.min(window.devicePixelRatio, 1.0) : Math.min(window.devicePixelRatio, 2);
+        // Apple/Android: DPR capped at 1.0 (renders at native resolution, not 2x/3x)
+        // This is the BIGGEST performance win - Retina/high-DPR renders 4-9x more pixels
+        // PC: allow up to 2x for crisp visuals
+        const dpr = needsOptimization ? Math.min(window.devicePixelRatio, 1.0) : Math.min(window.devicePixelRatio, 2);
         renderer.setPixelRatio(dpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
         
-        // Mobile: flat rendering (faster), Desktop: full rendering
-        if (isMobileGPU) {
+        // Apple/Android: flat rendering (faster), fixes Metal rendering issues
+        if (needsOptimization) {
             renderer.toneMapping = THREE.NoToneMapping;
             renderer.outputColorSpace = THREE.SRGBColorSpace;
             if (isAndroidDevice) {
-                console.log('🤖 Android device detected - applied mobile GPU optimizations: antialias=false, dpr=1.0, mediump precision');
+                console.log('🤖 Android device detected - applied GPU optimizations: antialias=false, dpr=1.0, mediump precision');
+            } else if (isMacDesktop) {
+                console.log('🍎 Mac desktop detected - applied Metal/Safari optimizations: antialias=false, dpr=1.0, mediump precision, flat rendering');
             } else {
-                console.log('🍎 iOS device detected - applied mobile GPU optimizations: antialias=false, dpr=1.0, mediump precision');
+                console.log('🍎 iOS device detected - applied GPU optimizations: antialias=false, dpr=1.0, mediump precision');
             }
         }
         
-        // Shadows: Mobile gets BasicShadowMap (fastest), Desktop gets PCFShadowMap (better quality)
+        // Shadows: Apple/Android gets BasicShadowMap (fastest), PC gets PCFShadowMap (better quality)
         renderer.shadowMap.enabled = true;
-        if (isMobileGPU) {
+        if (needsOptimization) {
             renderer.shadowMap.type = THREE.BasicShadowMap;
-            console.log('📱 Mobile: Using BasicShadowMap for better performance');
+            console.log('📱 Apple/Android: Using BasicShadowMap for better performance');
         } else {
             renderer.shadowMap.type = THREE.PCFShadowMap;
         }
@@ -477,8 +502,8 @@ const VoxelWorld = ({
         const sunLight = new THREE.DirectionalLight(0xF8F8FF, 1.0); // Cold bright sun
         sunLight.position.set(80, 100, 60);
         sunLight.castShadow = true;
-        // Mobile: 512 shadow map (faster), Desktop: 1024 (better quality)
-        const shadowMapSize = isMobileGPU ? 512 : 1024;
+        // Apple (Mac + iOS) + Android: 512 shadow map (faster), PC: 1024 (better quality)
+        const shadowMapSize = needsOptimization ? 512 : 1024;
         sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
         sunLight.shadow.camera.left = -100;
         sunLight.shadow.camera.right = 100;
@@ -489,7 +514,8 @@ const VoxelWorld = ({
         sunLightRef.current = sunLight;
         
         // ==================== SNOWFALL PARTICLE SYSTEM ====================
-        const snowfallSystem = new SnowfallSystem(THREE, scene, { isMobileGPU });
+        // Apple (Mac + iOS) + Android: use reduced particles for performance
+        const snowfallSystem = new SnowfallSystem(THREE, scene, { isMobileGPU: needsOptimization });
         snowfallSystem.create({ x: posRef.current?.x || 50, z: posRef.current?.z || 50 });
         snowfallSystemRef.current = snowfallSystem;
         
@@ -1456,7 +1482,11 @@ const VoxelWorld = ({
             const delta = clock.getDelta();
             const time = clock.getElapsedTime(); 
             
-            const speed = 10 * delta; 
+            // Base speed with mount speed boost (pengu mount gives 5% boost)
+            let speed = 10 * delta;
+            if (playerRef.current?.userData?.mountData?.speedBoost && mountEnabledRef.current) {
+                speed *= playerRef.current.userData.mountData.speedBoost;
+            }
             // PC rotation is faster for tighter turning with A/D keys
             const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             const rotSpeed = isMobileDevice ? (2 * delta) : (4.5 * delta); // PC: 50% increase (3 -> 4.5)
@@ -2545,14 +2575,39 @@ const VoxelWorld = ({
                 }
                 
                 // --- MOUNT ANIMATION ---
-                // Animate mount oars when player is moving (only if mount is enabled)
+                // Animate mount when player is moving (only if mount is enabled)
                 if (playerRef.current.userData?.mount && playerRef.current.userData?.mountData?.animated && mountEnabledRef.current) {
                     const mountGroup = playerRef.current.getObjectByName('mount');
+                    const mountData = playerRef.current.userData.mountData;
+                    
                     if (mountGroup) {
-                        const leftOarPivot = mountGroup.getObjectByName('left_oar_pivot');
-                        const rightOarPivot = mountGroup.getObjectByName('right_oar_pivot');
+                        // Pengu mount waddle animation
+                        if (mountData.animationType === 'penguin_waddle') {
+                            if (moving) {
+                                const waddleSpeed = 12;
+                                const flapAngle = Math.sin(time * waddleSpeed) * 0.4;
+                                const feetAngle = Math.sin(time * waddleSpeed) * 0.3;
+                                
+                                // Flap flippers up and down (rotate on X axis)
+                                mountGroup.children.forEach(child => {
+                                    // The mount mesh contains all voxels - we animate the whole group slightly
+                                });
+                                
+                                // Waddle the whole mount side to side and bob up/down
+                                mountGroup.rotation.z = Math.sin(time * waddleSpeed) * 0.08;
+                                mountGroup.position.y = 0.6 + Math.abs(Math.sin(time * waddleSpeed * 0.5)) * 0.1;
+                            } else {
+                                // Return to rest position
+                                mountGroup.rotation.z *= 0.9;
+                                mountGroup.position.y = 0.6 + (mountGroup.position.y - 0.6) * 0.9;
+                            }
+                        }
+                        // Boat rowing animation
+                        else {
+                            const leftOarPivot = mountGroup.getObjectByName('left_oar_pivot');
+                            const rightOarPivot = mountGroup.getObjectByName('right_oar_pivot');
                         
-                        if (leftOarPivot && rightOarPivot) {
+                            if (leftOarPivot && rightOarPivot) {
                             // Check for turning input
                             const turningLeft = keyLeft || mobileLeft || (joystickInputRef.current.x < -0.3);
                             const turningRight = keyRight || mobileRight || (joystickInputRef.current.x > 0.3);
@@ -2613,6 +2668,7 @@ const VoxelWorld = ({
                                 rightOarPivot.rotation.y *= 0.9;
                                 leftOarPivot.rotation.z *= 0.9;
                                 rightOarPivot.rotation.z *= 0.9;
+                            }
                             }
                         }
                     }
@@ -2723,12 +2779,24 @@ const VoxelWorld = ({
                     }
                 }
                 
+                // Sync mount visibility from appearance updates
+                const appearanceMountEnabled = playerData.appearance?.mountEnabled !== false;
+                const currentMountVisible = meshData.mesh.userData?.mountVisible !== false;
+                if (appearanceMountEnabled !== currentMountVisible) {
+                    const mountGroup = meshData.mesh.getObjectByName('mount');
+                    if (mountGroup) {
+                        mountGroup.visible = appearanceMountEnabled;
+                        meshData.mesh.userData.mountVisible = appearanceMountEnabled;
+                    }
+                }
+                
                 // Animate other player mesh (walking/emotes)
                 const isMoving = playerData.position && (
                     Math.abs(playerData.position.x - meshData.mesh.position.x) > 0.1 ||
                     Math.abs(playerData.position.z - meshData.mesh.position.z) > 0.1
                 );
-                const otherPlayerMounted = !!(meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData);
+                // Consider mount only if it's visible
+                const otherPlayerMounted = !!(meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData && meshData.mesh.userData?.mountVisible !== false);
                 const otherIsAirborne = (playerData.position?.y ?? 0) > 0.1;
                 animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted, otherIsAirborne);
                 
@@ -3871,7 +3939,20 @@ const VoxelWorld = ({
                 color: playerPuffle.color,
                 name: playerPuffle.name
             } : null;
-            mpJoinRoom(room, penguinData, puffleData);
+            
+            // Include current mount enabled state from settings
+            let mountEnabled = true;
+            try {
+                const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
+                mountEnabled = settings.mountEnabled !== false;
+            } catch { /* use default true */ }
+            
+            const appearanceWithMount = {
+                ...penguinData,
+                mountEnabled
+            };
+            
+            mpJoinRoom(room, appearanceWithMount, puffleData);
         }
     }, [connected, playerId, room, penguinData]);
     
@@ -3967,6 +4048,15 @@ const VoxelWorld = ({
             );
             mesh.rotation.y = playerData.rotation || 0;
             scene.add(mesh);
+            
+            // Hide mount if player has mountEnabled set to false
+            if (playerData.appearance?.mountEnabled === false) {
+                const mountGroup = mesh.getObjectByName('mount');
+                if (mountGroup) {
+                    mountGroup.visible = false;
+                    mesh.userData.mountVisible = false;
+                }
+            }
             
             // Create name tag - adjust height for character type
             const nameSprite = createNameSprite(playerData.name || 'Player');
@@ -4461,4 +4551,5 @@ const VoxelWorld = ({
 };
 
 export default VoxelWorld;
+
 

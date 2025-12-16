@@ -697,6 +697,19 @@ export const BODY = {
         voxels: [] 
     },
     
+    // PROMO: $PENGU shirt - unlocked with PENGU promo code
+    penguShirt: { 
+        textDecal: {
+            text: '$PENGU',
+            color: '#000000',
+            font: 'bold 80px Arial Black, Arial, sans-serif',
+            y: 0,
+            z: 5.51,
+            scale: 1.4
+        },
+        voxels: [] 
+    },
+    
     joe: { hideBody: true, voxels: [] }
 };
 

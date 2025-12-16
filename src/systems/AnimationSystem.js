@@ -82,7 +82,8 @@ export function animateMesh(
 
     // Mounted animation (sitting on mount)
     if (isMounted) {
-        meshInner.position.y = 0.5;
+        // Raise player up to sit on mount
+        meshInner.position.y = 1.1;
         if(footL) {
             footL.rotation.x = -Math.PI / 2.5;
             footL.position.z = 2.5;
