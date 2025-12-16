@@ -37,7 +37,7 @@ import {
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './config';
-import { createChatSprite, updateAIAgents, updateMatchBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem } from './systems';
+import { createChatSprite, updateAIAgents, updateMatchBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, lerp, lerpRotation, calculateLerpFactor } from './systems';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 
 const VoxelWorld = ({ 
@@ -2642,6 +2642,188 @@ const VoxelWorld = ({
                 animateCosmeticsFromCache,
                 wizardTrailRef: wizardTrailSystemRef
             });
+
+            // ==================== OTHER PLAYERS UPDATE (60fps in game loop) ====================
+            const otherMeshes = otherPlayerMeshesRef.current;
+            const playersData = playersDataRef.current;
+            const lerpFactor = calculateLerpFactor(delta, 10);
+            const yLerpFactor = calculateLerpFactor(delta, 15);
+            
+            for (const [id, meshData] of otherMeshes) {
+                const playerData = playersData.get(id);
+                if (!playerData || !meshData.mesh) continue;
+                
+                // Check if player is seated - if so, DON'T interpolate position
+                const isSeated = playerData.seatedOnFurniture || 
+                                (meshData.currentEmote === 'Sit' && playerData.emote === 'Sit');
+                
+                // Position interpolation (skip if seated to prevent jitter/teleport)
+                if (playerData.position && !isSeated) {
+                    meshData.mesh.position.x = lerp(meshData.mesh.position.x, playerData.position.x, lerpFactor);
+                    meshData.mesh.position.z = lerp(meshData.mesh.position.z, playerData.position.z, lerpFactor);
+                    meshData.mesh.position.y = lerp(meshData.mesh.position.y, playerData.position.y ?? 0, yLerpFactor);
+                }
+                
+                // Rotation interpolation (also skip if seated)
+                if (playerData.rotation !== undefined && !isSeated) {
+                    meshData.mesh.rotation.y = lerpRotation(meshData.mesh.rotation.y, playerData.rotation, lerpFactor);
+                }
+                
+                // Handle puffle creation/removal dynamically
+                if (playerData.needsPuffleUpdate) {
+                    playerData.needsPuffleUpdate = false;
+                    
+                    // Remove old puffle mesh if exists
+                    if (meshData.puffleMesh) {
+                        scene.remove(meshData.puffleMesh);
+                        meshData.puffleMesh = null;
+                    }
+                    
+                    // Create new puffle if player has one
+                    if (playerData.puffle) {
+                        console.log(`🐾 Creating puffle for ${playerData.name}: ${playerData.puffle.color}`);
+                        const puffleInstance = new Puffle({
+                            color: playerData.puffle.color,
+                            name: playerData.puffle.name
+                        });
+                        meshData.puffleMesh = puffleInstance.createMesh(THREE);
+                        const pufflePos = playerData.pufflePosition || {
+                            x: (playerData.position?.x || 0) + 1.5,
+                            z: (playerData.position?.z || 0) + 1.5
+                        };
+                        meshData.puffleMesh.position.set(pufflePos.x, 0.5, pufflePos.z);
+                        scene.add(meshData.puffleMesh);
+                    }
+                }
+                
+                // Update puffle position (with fallback to player position offset)
+                if (meshData.puffleMesh) {
+                    const targetPufflePos = playerData.pufflePosition || {
+                        x: (playerData.position?.x || 0) + 1.5,
+                        z: (playerData.position?.z || 0) + 1.5
+                    };
+                    meshData.puffleMesh.position.x = lerp(meshData.puffleMesh.position.x, targetPufflePos.x, lerpFactor);
+                    meshData.puffleMesh.position.z = lerp(meshData.puffleMesh.position.z, targetPufflePos.z, lerpFactor);
+                    meshData.puffleMesh.position.y = 0.5;
+                }
+                
+                // Handle emotes - sync with playerData
+                if (playerData.emote !== meshData.currentEmote) {
+                    meshData.currentEmote = playerData.emote;
+                    meshData.emoteStartTime = playerData.emoteStartTime || Date.now();
+                }
+                
+                // Auto-end emotes after 3.5 seconds (continuous emotes don't auto-clear)
+                const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance'];
+                if (meshData.currentEmote && !continuousEmotes.includes(meshData.currentEmote)) {
+                    const emoteAge = (Date.now() - meshData.emoteStartTime) / 1000;
+                    if (emoteAge > 3.5) {
+                        meshData.currentEmote = null;
+                        playerData.emote = null;
+                    }
+                }
+                
+                // Animate other player mesh (walking/emotes)
+                const isMoving = playerData.position && (
+                    Math.abs(playerData.position.x - meshData.mesh.position.x) > 0.1 ||
+                    Math.abs(playerData.position.z - meshData.mesh.position.z) > 0.1
+                );
+                const otherPlayerMounted = !!(meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData);
+                const otherIsAirborne = (playerData.position?.y ?? 0) > 0.1;
+                animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted, otherIsAirborne);
+                
+                // Animate cosmetics for other players with animated items
+                if (meshData.hasAnimatedCosmetics) {
+                    if (!meshData.mesh.userData._animatedPartsCache) {
+                        meshData.mesh.userData._animatedPartsCache = cacheAnimatedParts(meshData.mesh);
+                    }
+                    animateCosmeticsFromCache(meshData.mesh.userData._animatedPartsCache, time, delta);
+                }
+                
+                // Mount animation for other players
+                if (meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData?.animated) {
+                    const mountGroup = meshData.mesh.getObjectByName('mount');
+                    if (mountGroup) {
+                        const leftOarPivot = mountGroup.getObjectByName('left_oar_pivot');
+                        const rightOarPivot = mountGroup.getObjectByName('right_oar_pivot');
+                        
+                        if (leftOarPivot && rightOarPivot) {
+                            if (isMoving) {
+                                const rowSpeed = 8;
+                                const rowAngle = Math.sin(time * rowSpeed) * 0.5;
+                                leftOarPivot.rotation.y = rowAngle;
+                                rightOarPivot.rotation.y = -rowAngle;
+                                leftOarPivot.rotation.z = Math.sin(time * rowSpeed + Math.PI/2) * 0.15;
+                                rightOarPivot.rotation.z = -Math.sin(time * rowSpeed + Math.PI/2) * 0.15;
+                            } else {
+                                leftOarPivot.rotation.y *= 0.9;
+                                rightOarPivot.rotation.y *= 0.9;
+                                leftOarPivot.rotation.z *= 0.9;
+                                rightOarPivot.rotation.z *= 0.9;
+                            }
+                        }
+                    }
+                }
+                
+                // Wizard hat trail for other players
+                const otherAppearance = playerData.appearance || {};
+                if (otherAppearance.hat === 'wizardHat' && wizardTrailSystemRef.current) {
+                    const poolKey = `player_${id}`;
+                    let trailGroup = wizardTrailSystemRef.current.pools.get(poolKey);
+                    
+                    // Create pool if it doesn't exist
+                    if (!trailGroup) {
+                        trailGroup = wizardTrailSystemRef.current.createPool();
+                        wizardTrailSystemRef.current.pools.set(poolKey, trailGroup);
+                        sceneRef.current.add(trailGroup);
+                    }
+                    
+                    if (isMoving) {
+                        const spawnInterval = 1 / 12;
+                        const timeSinceLastSpawn = time - trailGroup.userData.lastSpawnTime;
+                        
+                        if (timeSinceLastSpawn >= spawnInterval) {
+                            let spawned = false;
+                            for (let attempts = 0; attempts < trailGroup.children.length && !spawned; attempts++) {
+                                const idx = (trailGroup.userData.nextParticleIndex + attempts) % trailGroup.children.length;
+                                const particle = trailGroup.children[idx];
+                                
+                                if (!particle.userData.active) {
+                                    particle.position.set(
+                                        meshData.mesh.position.x + (Math.random() - 0.5) * 0.4,
+                                        meshData.mesh.position.y + 2.2 + (Math.random() - 0.5) * 0.2,
+                                        meshData.mesh.position.z + (Math.random() - 0.5) * 0.4
+                                    );
+                                    particle.userData.active = true;
+                                    particle.userData.birthTime = time;
+                                    particle.visible = true;
+                                    particle.material.opacity = 0.9;
+                                    particle.scale.setScalar(0.8 + Math.random() * 0.4);
+                                    
+                                    trailGroup.userData.nextParticleIndex = (idx + 1) % trailGroup.children.length;
+                                    trailGroup.userData.lastSpawnTime = time;
+                                    spawned = true;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Update particles
+                    for (const particle of trailGroup.children) {
+                        if (particle.userData.active) {
+                            const age = time - particle.userData.birthTime;
+                            if (age > 1.0) {
+                                particle.userData.active = false;
+                                particle.visible = false;
+                            } else {
+                                particle.position.y += delta * 0.8;
+                                particle.material.opacity = 0.9 * (1 - age);
+                                particle.scale.multiplyScalar(0.98);
+                            }
+                        }
+                    }
+                }
+            }
 
             // Animate campfire (flames, embers, light flicker) and Christmas tree
             if (townCenterRef.current && roomRef.current === 'town') {
