@@ -15,10 +15,10 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
     
     const features = [
-        { emoji: '🏠', title: 'Igloo Rentals', description: 'Rent and customize your igloo with $CPw3. Host parties and earn passive income.' },
-        { emoji: '🏗️', title: 'Building Ownership', description: 'Own exclusive buildings. Coffee shops, pizza parlors - stake $CPw3 to claim territory.' },
-        { emoji: '🎰', title: 'Casino & Slots', description: 'Spin slots, play blackjack. Win cosmetics, rare items, and $CPw3 jackpots.' },
-        { emoji: '👕', title: 'Cosmetic Marketplace', description: 'Trade hats, outfits. Limited drops and creator collaborations powered by $CPw3.' },
+        { emoji: '👑', title: 'Whale Status Nametags', description: 'Your $CPw3 balance = your clout. 6 tiers from Standard to Legendary with animated effects.' },
+        { emoji: '🎰', title: 'Casino & Slots', description: 'Spin slots with $CPw3 to win tradeable cosmetics. Common to Legendary drops.' },
+        { emoji: '🏠', title: 'Igloo Ownership', description: 'Own or rent igloos. Sell your property on the open market to other players.' },
+        { emoji: '👕', title: 'Tradeable Cosmetics', description: 'Every cosmetic is tradeable. Win rare items in slots, flip for profit.' },
         { emoji: '🎮', title: 'Universal Wagering', description: 'Wager ANY Solana token on PvP games. Tic-tac-toe, Connect 4, Card Jitsu.' },
         { emoji: '🤝', title: 'Cult Collabs', description: 'We partner with ALL Solana cults. Cross-community tournaments with massive prizes.' }
     ];
@@ -110,6 +110,32 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                             <span className="px-2 py-1 bg-red-500/30 text-red-300 rounded-lg">🔴 Connect 4</span>
                             <span className="px-2 py-1 bg-blue-500/30 text-blue-300 rounded-lg">⚔️ Card Jitsu</span>
                             <span className="px-2 py-1 bg-pink-500/30 text-pink-300 rounded-lg">🎰 Casino Games</span>
+                        </div>
+                    </div>
+                    
+                    {/* Whale Status Tiers */}
+                    <div className="bg-gradient-to-br from-yellow-900/20 to-purple-900/20 rounded-xl p-4 border border-yellow-500/20">
+                        <h3 className="text-lg font-bold text-white mb-3 flex items-center gap-2">
+                            <span className="text-2xl">👑</span>
+                            <span>Whale Status Tiers</span>
+                        </h3>
+                        <p className="text-white/60 text-sm mb-3">
+                            Your $CPw3 balance determines your in-game clout. Bigger bags = fancier nametags.
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                            {[
+                                { name: 'Standard', balance: '0-999', color: 'text-slate-400' },
+                                { name: 'Bronze', balance: '1K-10K', color: 'text-amber-600' },
+                                { name: 'Silver', balance: '10K-100K', color: 'text-slate-300' },
+                                { name: 'Gold', balance: '100K-1M', color: 'text-yellow-400' },
+                                { name: 'Diamond', balance: '1M-10M', color: 'text-cyan-300' },
+                                { name: 'Legendary', balance: '10M+', color: 'text-purple-400' }
+                            ].map((tier, idx) => (
+                                <div key={idx} className="bg-black/30 rounded-lg p-2 border border-white/5">
+                                    <div className={`font-bold text-sm ${tier.color}`}>{tier.name}</div>
+                                    <div className="text-white/40 text-[10px]">{tier.balance}</div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                     
