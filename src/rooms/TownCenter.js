@@ -112,31 +112,29 @@ class TownCenter {
         const props = [];
         
         // ==================== T-INTERSECTION CAMPFIRE ====================
-        // At the center of the T intersection (where stem meets horizontal bar)
         const campfireX = C;
-        const campfireZ = C + 10; // In the T intersection area
-        
+        const campfireZ = C + 10;
+
         props.push({ type: 'campfire', x: campfireX, z: campfireZ });
-        
+
         // Log seats in a proper circle around the campfire
-        // Logs should be TANGENT to circle (perpendicular to radius) so sitting faces fire
         const seatRadius = 5.5;
-        for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2;
+        const seatCount = 6;
+
+        for (let i = 0; i < seatCount; i++) {
+            const angle = (i / seatCount) * Math.PI * 2;
+
             const seatX = campfireX + Math.cos(angle) * seatRadius;
             const seatZ = campfireZ + Math.sin(angle) * seatRadius;
-            
-            // rotation = angle + PI/2 makes log TANGENT to circle
-            // i=1,2 (top/north) and i=4,5 (bottom/south) need 180° flip
-            const needsFlip = (i === 1 || i === 2 || i === 4 || i === 5);
-            const flipOffset = needsFlip ? Math.PI : 0;
-            
-            props.push({ 
-                type: 'log_seat', 
-                x: seatX, 
-                z: seatZ, 
-                rotation: angle + Math.PI / 2 + flipOffset,
-                // Log seats allow sitting from both sides (bidirectional)
+
+            // Tangent rotation (asset base orientation requires +90deg offset)
+            const rotation = -angle + Math.PI / 2;
+
+            props.push({
+                type: 'log_seat',
+                x: seatX,
+                z: seatZ,
+                rotation,
                 bidirectionalSit: true,
                 campfireCenter: { x: campfireX, z: campfireZ }
             });
