@@ -42,6 +42,9 @@ export { updateMatchBanners, cleanupMatchBanners, renderBannerToCanvas } from '.
 // Igloo occupancy banners
 export { createIglooOccupancySprite, updateIglooOccupancySprite } from './IglooOccupancySystem';
 
+// Casino TV banner (3D mesh with real DexScreener data)
+export { createCasinoTVSprite, updateCasinoTVSprite, cleanupCasinoTV, fetchTokenData } from './CasinoTVSystem';
+
 // Animation system
 export { animateMesh, cacheAnimParts } from './AnimationSystem';
 

@@ -1,10 +1,12 @@
 /**
  * PineTree - Snow-covered pine tree prop
+ * OPTIMIZED: Uses cached geometries to reduce GPU memory when many trees are placed
  */
 
 import BaseProp from './BaseProp';
 import { PropColors } from './PropColors';
 import { getMaterialManager } from './PropMaterials';
+import { getGeometryManager } from './PropGeometries';
 
 class PineTree extends BaseProp {
     /**
@@ -15,6 +17,7 @@ class PineTree extends BaseProp {
         super(THREE);
         this.size = size;
         this.matManager = getMaterialManager(THREE);
+        this.geoManager = getGeometryManager(THREE);
     }
     
     /**
@@ -39,15 +42,15 @@ class PineTree extends BaseProp {
     
     spawn(scene, x, y, z) {
         const THREE = this.THREE;
+        const geo = this.geoManager;
         const cfg = PineTree.SIZES[this.size] || PineTree.SIZES.medium;
         const group = this.createGroup(scene);
         group.name = `pine_tree_${this.size}`;
         group.position.set(x, y, z);
         
-        // Trunk
-        const trunkGeo = new THREE.CylinderGeometry(cfg.trunkR * 0.7, cfg.trunkR, cfg.trunkH, 8);
+        // Trunk (CACHED)
         const trunkMat = this.matManager.get(PropColors.barkMedium, { roughness: 0.95 });
-        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        const trunk = new THREE.Mesh(geo.cylinder(cfg.trunkR * 0.7, cfg.trunkR, cfg.trunkH, 8), trunkMat);
         trunk.position.y = cfg.trunkH / 2;
         trunk.castShadow = true;
         trunk.receiveShadow = true;
@@ -57,36 +60,38 @@ class PineTree extends BaseProp {
         const snowMat = this.matManager.get(PropColors.snowLight, { roughness: 0.6 });
         let currentY = cfg.trunkH * 0.6;
         
+        // Cache the snow clump geometry for reuse (OPTIMIZATION)
+        const snowClumpGeo = geo.sphere(0.18, 4, 4);
+        
         for (let i = 0; i < cfg.layers; i++) {
             const layerRatio = 1 - (i / cfg.layers) * 0.7;
             const radius = cfg.baseRadius * layerRatio;
             const height = cfg.layerH * layerRatio;
             
-            // Pine cone layer
-            const coneGeo = new THREE.ConeGeometry(radius, height, 8);
+            // Pine cone layer (CACHED - rounds to nearest 0.1 for better cache hits)
+            const roundedRadius = Math.round(radius * 10) / 10;
+            const roundedHeight = Math.round(height * 10) / 10;
             const coneMat = this.matManager.get(PineTree.LAYER_COLORS[i % PineTree.LAYER_COLORS.length], { roughness: 0.9 });
-            const cone = new THREE.Mesh(coneGeo, coneMat);
+            const cone = new THREE.Mesh(geo.cone(roundedRadius, roundedHeight, 8), coneMat);
             cone.position.y = currentY + height / 2;
             cone.castShadow = true;
             cone.receiveShadow = true;
             this.addMesh(cone, group);
             
-            // Snow cap on top of this layer
-            const snowRadius = radius * 0.85;
-            const snowGeo = new THREE.ConeGeometry(snowRadius, cfg.snowDepth, 8);
-            const snow = new THREE.Mesh(snowGeo, snowMat);
+            // Snow cap on top of this layer (CACHED)
+            const snowRadius = Math.round(radius * 0.85 * 10) / 10;
+            const snow = new THREE.Mesh(geo.cone(snowRadius, cfg.snowDepth, 8), snowMat);
             snow.position.y = currentY + height - cfg.snowDepth / 2;
             snow.castShadow = true;
             this.addMesh(snow, group);
             
-            // Snow clumps on branches (only on larger trees, bottom 2 layers)
+            // Snow clumps on branches (only on larger trees, bottom 2 layers) (CACHED)
             if (this.size !== 'small' && i < 2) {
                 const clumpCount = 2;
                 for (let j = 0; j < clumpCount; j++) {
                     const angle = (j / clumpCount) * Math.PI * 2;
                     const dist = radius * 0.6;
-                    const clumpGeo = new THREE.SphereGeometry(0.18, 4, 4);
-                    const clump = new THREE.Mesh(clumpGeo, snowMat);
+                    const clump = new THREE.Mesh(snowClumpGeo, snowMat);
                     clump.position.set(
                         Math.cos(angle) * dist,
                         currentY + height * 0.4,
@@ -100,9 +105,9 @@ class PineTree extends BaseProp {
             currentY += height * 0.65;
         }
         
-        // Top snow cap
-        const topSnowGeo = new THREE.SphereGeometry(cfg.snowDepth * 2, 6, 6);
-        const topSnow = new THREE.Mesh(topSnowGeo, this.matManager.get(PropColors.snowBright));
+        // Top snow cap (CACHED)
+        const topSnowSize = Math.round(cfg.snowDepth * 2 * 10) / 10;
+        const topSnow = new THREE.Mesh(geo.sphere(topSnowSize, 6, 6), this.matManager.get(PropColors.snowBright));
         topSnow.position.y = currentY + cfg.snowDepth;
         topSnow.scale.set(1, 0.6, 1);
         this.addMesh(topSnow, group);

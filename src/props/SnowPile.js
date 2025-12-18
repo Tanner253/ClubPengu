@@ -1,10 +1,12 @@
 /**
  * SnowPile - Decorative snow pile/drift
+ * OPTIMIZED: Uses cached geometries for all parts
  */
 
 import BaseProp from './BaseProp';
 import { PropColors } from './PropColors';
 import { getMaterialManager } from './PropMaterials';
+import { getGeometryManager } from './PropGeometries';
 
 class SnowPile extends BaseProp {
     /**
@@ -15,6 +17,7 @@ class SnowPile extends BaseProp {
         super(THREE);
         this.size = size;
         this.matManager = getMaterialManager(THREE);
+        this.geoManager = getGeometryManager(THREE);
     }
     
     static SIZES = {
@@ -25,6 +28,7 @@ class SnowPile extends BaseProp {
     
     spawn(scene, x, y, z) {
         const THREE = this.THREE;
+        const geo = this.geoManager;
         const cfg = SnowPile.SIZES[this.size] || SnowPile.SIZES.medium;
         const group = this.createGroup(scene);
         group.name = `snow_pile_${this.size}`;
@@ -33,17 +37,18 @@ class SnowPile extends BaseProp {
         const snowMat = this.matManager.get(PropColors.snowLight, { roughness: 0.65 });
         const shadowMat = this.matManager.get(PropColors.snowShadow, { roughness: 0.7 });
         
-        // Main mound
-        const mainGeo = new THREE.SphereGeometry(1 * cfg.scale, 12, 8);
-        const main = new THREE.Mesh(mainGeo, snowMat);
+        // Main mound (CACHED - rounded to nearest 0.1 for cache hits)
+        const mainRadius = Math.round(cfg.scale * 10) / 10;
+        const main = new THREE.Mesh(geo.sphere(mainRadius, 12, 8), snowMat);
         main.scale.set(1.5, 0.4, 1.2);
         main.position.y = 0.2 * cfg.scale;
         main.receiveShadow = true;
         this.addMesh(main, group);
         
-        // Additional mounds
+        // Additional mounds (CACHED - all mounds of same size share geometry)
+        const moundRadius = Math.round(0.6 * cfg.scale * 10) / 10;
+        const moundGeo = geo.sphere(moundRadius, 8, 6);
         for (let i = 0; i < cfg.mounds; i++) {
-            const moundGeo = new THREE.SphereGeometry(0.6 * cfg.scale, 8, 6);
             const mound = new THREE.Mesh(moundGeo, i % 2 === 0 ? snowMat : shadowMat);
             const angle = (i / cfg.mounds) * Math.PI * 2;
             mound.position.set(

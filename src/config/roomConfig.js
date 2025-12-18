@@ -88,7 +88,8 @@ export const ROOM_SPAWNS = {
     dojo: { x: 0, z: 12 },
     pizza: { x: 0, z: 12 },
     nightclub: { x: 20, z: 28 },
-    igloo: { x: 0, z: 10 }
+    igloo: { x: 0, z: 10 },
+    casino_game_room: { x: 10, z: 10 }  // Near entrance from casino portal room
 };
 
 // ==================== PORTAL DEFINITIONS ====================
@@ -106,6 +107,16 @@ export const ROOM_PORTALS = {
             // Dojo at (0, 70), rotated π (door faces north)
             position: { x: 0, z: 62 },
             doorRadius: 3.5
+        },
+        {
+            id: 'casino-game-room',
+            name: 'GAME ROOM',
+            emoji: '🎰',
+            description: 'Enter the Casino',
+            targetRoom: 'casino_game_room',
+            position: { x: -39.4, z: -11.4 },
+            doorRadius: 3.5,
+            exitSpawnPos: { x: -40, z: -8 }
         },
         // NORTH ROW IGLOOS (north of T-bar, rotation: 0, door faces SOUTH toward street)
         // Igloos at z ~ -75, doors at z ~ -70, exit spawn at z ~ -62 (on street)
@@ -306,6 +317,20 @@ export const ROOM_PORTALS = {
             minigame: 'card-jitsu',
             position: { x: 0, z: -10 },
             doorRadius: 3.5
+        }
+    ],
+    casino_game_room: [
+        { 
+            id: 'casino-game-room-exit', 
+            name: 'EXIT', 
+            emoji: '🎰', 
+            description: 'Return to Casino',
+            targetRoom: 'town',
+            // Exit door at center-x (40), near back wall (87+2)
+            position: { x: 40, z: 89 },
+            doorRadius: 3,
+            // Spawn at the game room portal entrance inside casino (matches casino-game-room portal position)
+            exitSpawnPos: { x: -39, z: -8 }
         }
     ]
 };

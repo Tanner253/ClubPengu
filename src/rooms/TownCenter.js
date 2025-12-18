@@ -2,6 +2,8 @@ import CollisionSystem from '../engine/CollisionSystem';
 import { createProp, PROP_TYPES, Billboard } from '../props';
 import { createNightclubExterior } from '../props/NightclubExterior';
 import { createDojoParkour } from '../props/DojoParkour';
+import { createCasino } from '../buildings';
+import { createCasinoTVSprite, updateCasinoTVSprite } from '../systems/CasinoTVSystem';
 
 /**
  * Helper: Attach collision/interaction data from a prop to its mesh
@@ -84,6 +86,14 @@ class TownCenter {
             position: { x: -45, z: 35 },  // West side of T stem
             size: { w: 12, h: 7, d: 10 },
             rotation: Math.PI / 2, // Door faces east (toward street)
+        },
+        { 
+            id: 'casino', 
+            name: 'CASINO', 
+            position: { x: -50, z: 3 },  // Near pizza parlor, facing the street
+            size: { w: 36, h: 14, d: 32 },
+            rotation: Math.PI / 2, // Door faces east (toward street like pizza)
+            walkable: true, // Interior is walkable
         }
     ];
     
@@ -186,6 +196,19 @@ class TownCenter {
             width: 25,
             depth: 20,
             height: 12
+        });
+        
+        // ==================== CASINO ====================
+        // Walkable casino building beside pizza parlor
+        // Open front entrance, interior with stairs to 2nd floor bar
+        props.push({
+            type: 'casino',
+            x: C - 50,      // Near pizza parlor
+            z: C + 3,       // Near pizza parlor
+            width: 36,
+            depth: 32,
+            height: 14,
+            rotation: Math.PI / 2  // Door faces east (toward street like pizza)
         });
         
         // Nightclub entrance trigger (in front of the building)
@@ -292,11 +315,12 @@ class TownCenter {
         );
         
         // SOUTH side of walkway (z > C-29, facing north toward street)
+        // Slightly closer to street
         props.push(
-            { type: 'igloo', x: C - 70, z: C - 15, rotation: Math.PI },  // igloo7
-            { type: 'igloo', x: C - 40, z: C - 18, rotation: Math.PI },  // igloo8
-            { type: 'igloo', x: C + 40, z: C - 18, rotation: Math.PI },  // igloo9
-            { type: 'igloo', x: C + 70, z: C - 15, rotation: Math.PI },  // igloo10
+            { type: 'igloo', x: C - 70, z: C - 18, rotation: Math.PI },  // igloo7
+            { type: 'igloo', x: C - 40, z: C - 21, rotation: Math.PI },  // igloo8
+            { type: 'igloo', x: C + 40, z: C - 21, rotation: Math.PI },  // igloo9
+            { type: 'igloo', x: C + 70, z: C - 18, rotation: Math.PI },  // igloo10
         );
         
         // ==================== BENCHES - OUTSIDE WALKWAYS ====================
@@ -383,8 +407,8 @@ class TownCenter {
             { x: C + 70, z: C + 10, size: 'medium' },   // East of gift shop
             { x: C - 25, z: C + 60, size: 'small' },    // Near dojo west
             { x: C + 25, z: C + 60, size: 'small' },    // Near dojo east
-            { x: C - 60, z: C - 15, size: 'medium' },   // T armpit areas
-            { x: C + 60, z: C - 15, size: 'medium' },
+            // Removed tree at C - 60, C - 15 (was blocking casino area)
+            { x: C + 60, z: C - 15, size: 'medium' },   // T armpit east
         ];
         
         [...northTrees, ...westTrees, ...eastTrees, ...southTrees, ...interiorTrees].forEach(tree => {
@@ -545,7 +569,7 @@ class TownCenter {
             { type: 'mailbox', x: C - 20, z: C - 70, rotation: 0, style: 'classic' },      // Near igloo3 (SKNY)
             { type: 'mailbox', x: C + 30, z: C - 70, rotation: 0, style: 'classic' },      // Near igloo4
             { type: 'mailbox', x: C + 80, z: C - 70, rotation: 0, style: 'classic' },      // Near igloo6
-            { type: 'mailbox', x: C - 65, z: C - 10, rotation: Math.PI, style: 'classic' }, // Near igloo7
+            // Removed mailbox at C - 65, C - 10 (was blocking casino area)
             { type: 'mailbox', x: C + 75, z: C - 10, rotation: Math.PI, style: 'classic' }, // Near igloo10
             { type: 'mailbox', x: C + 52, z: C + 28, rotation: -Math.PI / 2, style: 'modern' }, // Near gift shop
         );
@@ -881,6 +905,130 @@ class TownCenter {
                         });
                     }
                     break;
+                
+                case 'casino':
+                    // Walkable casino building with open front and 2nd floor bar
+                    const casinoMesh = createCasino(this.THREE, {
+                        w: prop.width,
+                        h: prop.height,
+                        d: prop.depth
+                    });
+                    mesh = casinoMesh;
+                    mesh.name = 'casino';
+                    mesh.rotation.y = prop.rotation || 0;
+                    
+                    // Get collision data from the casino building
+                    const casinoColliders = casinoMesh.userData.getCollisionData(
+                        prop.x, prop.z, prop.rotation || 0
+                    );
+                    
+                    // Add wall collisions (allows walking inside through open front)
+                    casinoColliders.forEach(collider => {
+                        this.collisionSystem.addCollider(
+                            collider.x, collider.z,
+                            { type: 'box', size: collider.size, height: collider.height },
+                            1, // SOLID
+                            { name: collider.name },
+                            collider.rotation || 0,
+                            collider.y || 0
+                        );
+                    });
+                    
+                    // Get landing surfaces for storing bounds (NOT as colliders - handled dynamically)
+                    const casinoSurfaces = casinoMesh.userData.getLandingSurfaces(
+                        prop.x, prop.z, prop.rotation || 0
+                    );
+                    
+                    // DON'T add 2nd floor as solid collider - it blocks horizontal movement!
+                    // Instead, we handle landing dynamically in checkLanding() method
+                    
+                    // Store stair data for dynamic height calculation (like Nightclub)
+                    this.casinoStairData = casinoMesh.userData.getStairData(
+                        prop.x, prop.z, prop.rotation || 0
+                    );
+                    
+                    // Store 2nd floor data for landing check (dynamic, not a collider)
+                    const floor2 = casinoSurfaces.find(s => s.name === 'casino_second_floor');
+                    if (floor2) {
+                        this.casinoSecondFloor = {
+                            minX: floor2.x - floor2.width / 2,
+                            maxX: floor2.x + floor2.width / 2,
+                            minZ: floor2.z - floor2.depth / 2,
+                            maxZ: floor2.z + floor2.depth / 2,
+                            height: floor2.height
+                        };
+                    }
+                    
+                    // Get furniture data for sitting interactions (stools, couch)
+                    this.casinoFurniture = casinoMesh.userData.getFurnitureData(
+                        prop.x, prop.z, prop.rotation || 0
+                    );
+                    
+                    // Store casino bounds for visibility checks
+                    // Casino is rotated, so width/depth swap in world space
+                    const rot = prop.rotation || 0;
+                    const isRotated90 = Math.abs(Math.abs(rot % Math.PI) - Math.PI / 2) < 0.1;
+                    const worldWidth = isRotated90 ? prop.depth : prop.width;
+                    const worldDepth = isRotated90 ? prop.width : prop.depth;
+                    this.casinoBounds = {
+                        minX: prop.x - worldWidth / 2,
+                        maxX: prop.x + worldWidth / 2,
+                        minZ: prop.z - worldDepth / 2,
+                        maxZ: prop.z + worldDepth / 2
+                    };
+                    
+                    // Store lights for day/night cycle
+                    if (casinoMesh.userData.lights) {
+                        casinoMesh.userData.lights.forEach(light => {
+                            this.lights.push(light);
+                        });
+                    }
+                    
+                    // Add casino decoration colliders (chip stacks, dice in front)
+                    if (casinoMesh.userData.getDecorationColliders) {
+                        const decorationColliders = casinoMesh.userData.getDecorationColliders(
+                            prop.x, prop.z, prop.rotation || 0
+                        );
+                        decorationColliders.forEach((collider, idx) => {
+                            if (collider.type === 'cylinder') {
+                                this.collisionSystem.addCollider(
+                                    collider.worldX, collider.worldZ,
+                                    { type: 'circle', radius: collider.radius, height: collider.height },
+                                    1, // SOLID
+                                    { name: `casino_decoration_${idx}` },
+                                    0,
+                                    0
+                                );
+                            } else if (collider.type === 'box') {
+                                this.collisionSystem.addCollider(
+                                    collider.worldX, collider.worldZ,
+                                    { type: 'box', size: { x: collider.width, z: collider.depth }, height: collider.height },
+                                    1, // SOLID
+                                    { name: `casino_decoration_${idx}` },
+                                    0,
+                                    0
+                                );
+                            }
+                        });
+                        console.log(`🎰 Added ${decorationColliders.length} casino decoration colliders`);
+                    }
+                    
+                    // Create Casino TV mesh with REAL data from DexScreener API
+                    createCasinoTVSprite(this.THREE).then(casinoTVMesh => {
+                        // Position at TV location in casino (centered on back wall)
+                        const tvLocalX = 0;  // Centered
+                        const tvLocalZ = -prop.depth / 2 + 1.2;
+                        const tvWorldX = prop.x + tvLocalZ;
+                        const tvWorldZ = prop.z - tvLocalX;
+                        const tvWorldY = 5 + 4.2;
+                        
+                        casinoTVMesh.position.set(tvWorldX, tvWorldY, tvWorldZ);
+                        casinoTVMesh.rotation.y = prop.rotation;
+                        scene.add(casinoTVMesh);
+                        this.casinoTVMesh = casinoTVMesh;
+                        console.log('📺 Casino TV created with real $CPw3 data');
+                    });
+                    break;
                     
                 case 'billboard':
                     // Highway-style billboard with lit-up advertisement (using new Billboard prop)
@@ -1028,6 +1176,11 @@ class TownCenter {
         TownCenter.BUILDINGS.forEach(building => {
             const bx = C + building.position.x;
             const bz = C + building.position.z;
+            
+            // Skip walkable buildings - their collision is handled in spawn switch cases
+            if (building.walkable) {
+                return;
+            }
             
             this.collisionSystem.addCollider(
                 bx, bz,
@@ -1323,7 +1476,93 @@ class TownCenter {
     }
     
     checkLanding(x, z, y, radius = 0.8) {
-        return this.collisionSystem.checkLanding(x, z, y, radius);
+        // First check standard collision system landing
+        let result = this.collisionSystem.checkLanding(x, z, y, radius);
+        let highestY = result.landingY;
+        
+        // Check casino 2nd floor (like Nightclub DJ booth)
+        if (this.casinoSecondFloor) {
+            const f2 = this.casinoSecondFloor;
+            if (x >= f2.minX && x <= f2.maxX && z >= f2.minZ && z <= f2.maxZ) {
+                // Player is above the 2nd floor bounds - land on it
+                if (y >= f2.height - 1 && f2.height > highestY) {
+                    highestY = f2.height;
+                    result = {
+                        canLand: true,
+                        landingY: f2.height,
+                        collider: { name: 'casino_second_floor' }
+                    };
+                }
+            }
+        }
+        
+        // Then check casino stairs (dynamic height like Nightclub)
+        if (this.casinoStairData) {
+            const st = this.casinoStairData;
+            
+            // For rotated stairs (runs along X axis in world space)
+            if (st.runsAlongX) {
+                // Check if player is within stair Z bounds (width becomes depth when rotated)
+                const stairHalfDepth = st.depth / 2;
+                const stairMinZ = st.z - stairHalfDepth;
+                const stairMaxZ = st.z + stairHalfDepth;
+                
+                if (z >= stairMinZ && z <= stairMaxZ) {
+                    // Calculate progress along stairs using X position
+                    // Stairs run from startX to endX
+                    const stairMinX = Math.min(st.startX, st.endX);
+                    const stairMaxX = Math.max(st.startX, st.endX);
+                    
+                    if (x >= stairMinX && x <= stairMaxX) {
+                        // Calculate which step we're on
+                        const distFromStart = Math.abs(x - st.startX);
+                        const stepIndex = Math.floor(distFromStart / st.stepDepth);
+                        
+                        if (stepIndex >= 0 && stepIndex < st.totalSteps) {
+                            const stepY = (stepIndex + 1) * st.stepHeight;
+                            
+                            // If this step is higher than current landing, use it
+                            if (stepY > highestY && y <= stepY + 0.5) {
+                                return {
+                                    canLand: true,
+                                    landingY: stepY,
+                                    collider: { name: `casino_stair_${stepIndex}` }
+                                };
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Standard Z-axis stairs
+                const stairHalfWidth = st.width / 2;
+                const stairMinX = st.x - stairHalfWidth;
+                const stairMaxX = st.x + stairHalfWidth;
+                
+                if (x >= stairMinX && x <= stairMaxX) {
+                    const stairMinZ = Math.min(st.startZ, st.endZ);
+                    const stairMaxZ = Math.max(st.startZ, st.endZ);
+                    
+                    if (z >= stairMinZ && z <= stairMaxZ) {
+                        const distFromStart = Math.abs(z - st.startZ);
+                        const stepIndex = Math.floor(distFromStart / st.stepDepth);
+                        
+                        if (stepIndex >= 0 && stepIndex < st.totalSteps) {
+                            const stepY = (stepIndex + 1) * st.stepHeight;
+                            
+                            if (stepY > highestY && y <= stepY + 0.5) {
+                                return {
+                                    canLand: true,
+                                    landingY: stepY,
+                                    collider: { name: `casino_stair_${stepIndex}` }
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        return result;
     }
 
     checkTriggers(playerX, playerZ, playerY = 0) {
@@ -1334,9 +1573,46 @@ class TownCenter {
         return this.collisionSystem.getActiveTriggers(playerX, playerZ);
     }
 
+    /**
+     * Get casino furniture data for sitting interactions
+     * Returns array of furniture objects with type, position, seatHeight, etc.
+     */
+    getCasinoFurniture() {
+        return this.casinoFurniture || [];
+    }
+    
+    /**
+     * Check if player is inside the casino bounds
+     * Returns true if player is within the casino walls
+     */
+    isPlayerInCasino(x, z) {
+        if (!this.casinoBounds) return false;
+        const b = this.casinoBounds;
+        return x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
+    }
+
+    /**
+     * Toggle collision debug wireframe visualization
+     * Red = ground-level solid colliders
+     * Yellow = elevated colliders (e.g. bar counter on 2nd floor)
+     * Green = triggers
+     */
+    toggleCollisionDebug(enabled) {
+        if (!this.scene) return null;
+        this._collisionDebugEnabled = enabled;
+        return this.collisionSystem.toggleDebug(this.scene, this.THREE, enabled);
+    }
+    
+    /**
+     * Check if collision debug is currently enabled
+     */
+    isCollisionDebugEnabled() {
+        return this._collisionDebugEnabled || false;
+    }
+
     update(time, delta, nightFactor = 0.5) {
         if (!this._animatedCache) {
-            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], sknyIgloos: [], frameCounter: 0 };
+            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], frameCounter: 0 };
             this.propMeshes.forEach(mesh => {
                 if (mesh.name === 'campfire') {
                     const flames = [];
@@ -1350,6 +1626,10 @@ class TownCenter {
                 }
                 if (mesh.name === 'nightclub' && mesh.userData.nightclubUpdate) {
                     this._animatedCache.nightclubs.push(mesh);
+                }
+                // Casino exterior animations (Vegas-style lights, slot machines, roulette, etc.)
+                if (mesh.name === 'casino' && mesh.userData.update) {
+                    this._animatedCache.casinos.push(mesh);
                 }
             });
             // SKNY Igloos stored separately during spawn
@@ -1366,6 +1646,13 @@ class TownCenter {
             this._animatedCache.nightclubs.forEach(mesh => {
                 if (mesh.userData.nightclubUpdate) {
                     mesh.userData.nightclubUpdate(time);
+                }
+            });
+            
+            // Casino exterior animations - Vegas marquee, slot machines, searchlights, etc.
+            this._animatedCache.casinos.forEach(mesh => {
+                if (mesh.userData.update) {
+                    mesh.userData.update(time, delta);
                 }
             });
             

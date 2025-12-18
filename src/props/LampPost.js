@@ -1,10 +1,12 @@
 /**
  * LampPost - Classic street lamp with warm glow
+ * OPTIMIZED: Uses cached geometries to reduce GPU memory when many lamps are placed
  */
 
 import BaseProp from './BaseProp';
 import { PropColors } from './PropColors';
 import { getMaterialManager } from './PropMaterials';
+import { getGeometryManager } from './PropGeometries';
 
 class LampPost extends BaseProp {
     /**
@@ -17,6 +19,7 @@ class LampPost extends BaseProp {
         this.isOn = isOn;
         this.castShadow = castShadow;
         this.matManager = getMaterialManager(THREE);
+        this.geoManager = getGeometryManager(THREE);
         this.light = null;
         this.postHeight = 5;
         this.postRadius = 0.12;
@@ -24,6 +27,7 @@ class LampPost extends BaseProp {
     
     spawn(scene, x, y, z) {
         const THREE = this.THREE;
+        const geo = this.geoManager;
         const group = this.createGroup(scene);
         group.name = 'lamp_post';
         group.position.set(x, y, z);
@@ -31,63 +35,55 @@ class LampPost extends BaseProp {
         const metalMat = this.matManager.get(PropColors.metalDark, { roughness: 0.5, metalness: 0.4 });
         const snowMat = this.matManager.get(PropColors.snowLight);
         
-        // Base plate - ornate Victorian style
-        const baseGeo = new THREE.CylinderGeometry(0.35, 0.45, 0.25, 8);
-        const base = new THREE.Mesh(baseGeo, metalMat);
+        // Base plate - ornate Victorian style (CACHED)
+        const base = new THREE.Mesh(geo.cylinder(0.35, 0.45, 0.25, 8), metalMat);
         base.position.y = 0.125;
         base.castShadow = true;
         this.addMesh(base, group);
         
-        // Base ring detail
-        const baseRingGeo = new THREE.TorusGeometry(0.4, 0.04, 6, 16);
-        const baseRing = new THREE.Mesh(baseRingGeo, metalMat);
+        // Base ring detail (CACHED)
+        const baseRing = new THREE.Mesh(geo.torus(0.4, 0.04, 6, 16), metalMat);
         baseRing.position.y = 0.25;
         baseRing.rotation.x = Math.PI / 2;
         this.addMesh(baseRing, group);
         
-        // Post - tapered
-        const postGeo = new THREE.CylinderGeometry(this.postRadius * 0.9, this.postRadius * 1.1, this.postHeight, 8);
-        const post = new THREE.Mesh(postGeo, metalMat);
+        // Post - tapered (CACHED)
+        const post = new THREE.Mesh(geo.cylinder(this.postRadius * 0.9, this.postRadius * 1.1, this.postHeight, 8), metalMat);
         post.position.y = this.postHeight / 2 + 0.25;
         post.castShadow = true;
         this.addMesh(post, group);
         
-        // Decorative rings on post
+        // Decorative rings on post (CACHED - reuses same geometry)
+        const ringGeo = geo.torus(this.postRadius * 1.4, 0.025, 6, 12);
         [0.4, 0.7].forEach(t => {
-            const ringGeo = new THREE.TorusGeometry(this.postRadius * 1.4, 0.025, 6, 12);
             const ring = new THREE.Mesh(ringGeo, metalMat);
             ring.position.y = this.postHeight * t;
             ring.rotation.x = Math.PI / 2;
             this.addMesh(ring, group);
         });
         
-        // Lamp arm bracket
-        const bracketGeo = new THREE.BoxGeometry(0.08, 0.4, 0.08);
-        const bracket = new THREE.Mesh(bracketGeo, metalMat);
+        // Lamp arm bracket (CACHED)
+        const bracket = new THREE.Mesh(geo.box(0.08, 0.4, 0.08), metalMat);
         bracket.position.y = this.postHeight + 0.2;
         this.addMesh(bracket, group);
         
-        // Lamp housing (lantern style)
-        const housingGeo = new THREE.CylinderGeometry(0.3, 0.25, 0.35, 6);
-        const housing = new THREE.Mesh(housingGeo, metalMat);
+        // Lamp housing (lantern style) (CACHED)
+        const housing = new THREE.Mesh(geo.cylinder(0.3, 0.25, 0.35, 6), metalMat);
         housing.position.y = this.postHeight + 0.55;
         housing.castShadow = true;
         this.addMesh(housing, group);
         
-        // Lamp roof (pointed)
-        const roofGeo = new THREE.ConeGeometry(0.4, 0.35, 6);
-        const roof = new THREE.Mesh(roofGeo, metalMat);
+        // Lamp roof (pointed) (CACHED)
+        const roof = new THREE.Mesh(geo.cone(0.4, 0.35, 6), metalMat);
         roof.position.y = this.postHeight + 0.9;
         this.addMesh(roof, group);
         
-        // Roof finial
-        const finialGeo = new THREE.SphereGeometry(0.06, 6, 6);
-        const finial = new THREE.Mesh(finialGeo, metalMat);
+        // Roof finial (CACHED)
+        const finial = new THREE.Mesh(geo.sphere(0.06, 6, 6), metalMat);
         finial.position.y = this.postHeight + 1.1;
         this.addMesh(finial, group);
         
-        // Glass globe
-        const globeGeo = new THREE.SphereGeometry(0.22, 16, 16);
+        // Glass globe (CACHED)
         const globeMat = this.matManager.get(
             this.isOn ? 0xFFF8E0 : PropColors.iceTranslucent,
             {
@@ -98,7 +94,7 @@ class LampPost extends BaseProp {
                 emissiveIntensity: this.isOn ? 1.2 : 0,
             }
         );
-        const globe = new THREE.Mesh(globeGeo, globeMat);
+        const globe = new THREE.Mesh(geo.sphere(0.22, 16, 16), globeMat);
         globe.position.y = this.postHeight + 0.35;
         this.addMesh(globe, group);
         
@@ -123,9 +119,8 @@ class LampPost extends BaseProp {
             this.addLight(this.light, group);
         }
         
-        // Snow on top
-        const snowCapGeo = new THREE.SphereGeometry(0.28, 8, 8);
-        const snowCap = new THREE.Mesh(snowCapGeo, snowMat);
+        // Snow on top (CACHED)
+        const snowCap = new THREE.Mesh(geo.sphere(0.28, 8, 8), snowMat);
         snowCap.position.y = this.postHeight + 1.15;
         snowCap.scale.set(1.4, 0.35, 1.4);
         this.addMesh(snowCap, group);

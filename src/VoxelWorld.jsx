@@ -16,6 +16,7 @@ import Puffle from './engine/Puffle';
 import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PenguinBuilder';
 import TownCenter from './rooms/TownCenter';
 import Nightclub from './rooms/Nightclub';
+import CasinoRoom from './rooms/CasinoRoom';
 import { generateIglooInterior } from './rooms/BaseRoom';
 import { generateSKNYIglooInterior } from './rooms/SKNYIglooInterior';
 import { useMultiplayer } from './multiplayer';
@@ -70,6 +71,7 @@ const VoxelWorld = ({
     const roomRef = useRef(room); // Track current room
     const townCenterRef = useRef(null); // TownCenter room instance
     const nightclubRef = useRef(null); // Nightclub room instance
+    const casinoRoomRef = useRef(null); // CasinoRoom room instance
     const sknyIglooInteriorRef = useRef(null); // SKNY GANG igloo interior (with update function)
     const roomDataRef = useRef(null); // Store room data (including beach ball) for multiplayer sync
     const raycasterRef = useRef(null); // For player click detection
@@ -294,6 +296,7 @@ const VoxelWorld = ({
     const [showDebugPosition, setShowDebugPosition] = useState(false);
     const showDebugPositionRef = useRef(false);
     const [debugPosition, setDebugPosition] = useState({ x: 0, y: 0, z: 0, offsetX: 0, offsetZ: 0 });
+    const [showCollisionDebug, setShowCollisionDebug] = useState(false);
     
     // Settings (persisted to localStorage)
     const [gameSettings, setGameSettings] = useState(() => {
@@ -495,7 +498,7 @@ const VoxelWorld = ({
         controls.dampingFactor = 0.08;  // Smooth damping
         controls.minDistance = 5;
         controls.maxDistance = 50;
-        controls.maxPolarAngle = Math.PI / 2 - 0.1; // Prevent going below ground
+        controls.maxPolarAngle = Math.PI / 2 - 0.1; // Initial value - dynamically updated by CameraController based on player elevation
         controls.minPolarAngle = 0.1;               // Prevent going directly overhead
         controls.enablePan = false;
         controls.rotateSpeed = 0.5;     // Slower rotation for smoother feel
@@ -624,6 +627,15 @@ const VoxelWorld = ({
             
             console.log(`Town Center spawned: ${propMeshes.length} props, ${propLights.length} lights`);
             
+            // Add casino as snow exclusion zone (snow shouldn't fall inside)
+            if (townCenter.casinoBounds && snowfallSystemRef.current) {
+                snowfallSystemRef.current.addExclusionZone({
+                    ...townCenter.casinoBounds,
+                    roofHeight: 14 // Casino roof height
+                });
+                console.log('❄️ Added casino as snow exclusion zone');
+            }
+            
             // ==================== IGLOO OCCUPANCY BUBBLES ====================
             // Create occupancy indicator sprites above each igloo
             const townCenterX = CENTER_X;
@@ -682,6 +694,7 @@ const VoxelWorld = ({
             butterflyGroup = cityResult.butterflyGroup;
             const townCenterX = CENTER_X;
             const townCenterZ = CENTER_Z;
+            
             // Park bench positions (matching TownCenter.js propPlacements)
             const C = townCenterX; // CENTER = 110
             const benchSnapPoints = [{ x: -0.6, z: 0 }, { x: 0, z: 0 }, { x: 0.6, z: 0 }];
@@ -806,6 +819,12 @@ const VoxelWorld = ({
             nightclub.spawn(scene);
             nightclubRef.current = nightclub;
             roomData = nightclub.getRoomData();
+        } else if (room === 'casino_game_room') {
+            // Generate casino game room interior
+            const casinoRoom = new CasinoRoom(THREE);
+            casinoRoom.spawn(scene);
+            casinoRoomRef.current = casinoRoom;
+            roomData = casinoRoom.getRoomData();
         } else if (room.startsWith('igloo')) {
             // igloo3 is SKNY GANG nightclub-themed igloo
             if (room === 'igloo3') {
@@ -1510,8 +1529,16 @@ const VoxelWorld = ({
             reqRef.current = requestAnimationFrame(update);
             frameCount++;
             
-            const delta = clock.getDelta();
+            let delta = clock.getDelta();
             const time = clock.getElapsedTime(); 
+            
+            // CRITICAL: Clamp delta to prevent physics issues when tab loses focus
+            // When switching tabs, browser pauses RAF and delta becomes huge on return
+            // This prevents players from falling through floors/platforms
+            const MAX_DELTA = 0.1; // Cap at 100ms (10 FPS minimum)
+            if (delta > MAX_DELTA) {
+                delta = MAX_DELTA;
+            }
             
             // Base speed with mount speed boost (pengu mount gives 5% boost)
             let speed = 10 * delta;
@@ -1590,7 +1617,8 @@ const VoxelWorld = ({
             velRef.current.y -= GRAVITY * delta;
             
             // Clamp terminal velocity to prevent falling through floors
-            if (velRef.current.y < -50) velRef.current.y = -50;
+            // Using a lower cap to ensure collision detection works properly
+            if (velRef.current.y < -25) velRef.current.y = -25;
             
             const anyMovementInput = keyForward || keyBack || keyLeft || keyRight || 
                                       mobileForward || mobileBack || mobileLeft || mobileRight ||
@@ -2145,6 +2173,19 @@ const VoxelWorld = ({
                 finalX = result.x;
                 finalZ = result.z;
                 collided = result.collided;
+            } else if (roomRef.current === 'casino_game_room' && casinoRoomRef.current) {
+                // Casino room collision - handled by CasinoRoom.js (same pattern as Nightclub)
+                const result = casinoRoomRef.current.checkPlayerMovement(
+                    posRef.current.x,
+                    posRef.current.z,
+                    nextX,
+                    nextZ,
+                    0.6, // playerRadius
+                    posRef.current.y // playerY for height-based collision
+                );
+                finalX = result.x;
+                finalZ = result.z;
+                collided = result.collided;
             } else if (townCenterRef.current) {
                 // Town uses TownCenter collision system (props + buildings + water)
                 // Pass Y position for height-based collision (so player can jump on objects)
@@ -2221,7 +2262,81 @@ const VoxelWorld = ({
                 }
             }
             
-            if (roomRef.current !== 'town' && roomRef.current !== 'pizza' && roomRef.current !== 'nightclub') {
+            // Casino room furniture interactions (bar stools, couches, chairs)
+            if (roomRef.current === 'casino_game_room' && roomDataRef.current?.furniture) {
+                const px = posRef.current.x;
+                const pz = posRef.current.z;
+                const py = posRef.current.y;
+                
+                // Only check when on ground level (not standing on furniture)
+                if (py < 1.5) {
+                    let foundSeat = null;
+                    let closestDist = 2.0; // Interaction radius
+                    
+                    for (const seat of roomDataRef.current.furniture) {
+                        const dx = px - seat.position.x;
+                        const dz = pz - seat.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        
+                        // For couches with snap points, check distance to each snap point
+                        if (seat.snapPoints && seat.snapPoints.length > 0) {
+                            const cos = Math.cos(seat.rotation || 0);
+                            const sin = Math.sin(seat.rotation || 0);
+                            for (const snap of seat.snapPoints) {
+                                // Transform snap point by couch rotation
+                                const snapWorldX = seat.position.x + snap.x * cos - snap.z * sin;
+                                const snapWorldZ = seat.position.z + snap.x * sin + snap.z * cos;
+                                const snapDx = px - snapWorldX;
+                                const snapDz = pz - snapWorldZ;
+                                const snapDist = Math.sqrt(snapDx * snapDx + snapDz * snapDz);
+                                if (snapDist < closestDist) {
+                                    closestDist = snapDist;
+                                    foundSeat = {
+                                        ...seat,
+                                        // Override position with snap point
+                                        snapPosition: { x: snapWorldX, z: snapWorldZ }
+                                    };
+                                }
+                            }
+                        } else if (dist < closestDist) {
+                            closestDist = dist;
+                            foundSeat = seat;
+                        }
+                    }
+                    
+                    if (foundSeat) {
+                        const seatType = foundSeat.type === 'stool' ? 'bar stool' : 
+                                        foundSeat.type === 'couch' ? 'couch' : 'chair';
+                        const seatX = foundSeat.snapPosition ? foundSeat.snapPosition.x : foundSeat.position.x;
+                        const seatZ = foundSeat.snapPosition ? foundSeat.snapPosition.z : foundSeat.position.z;
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: {
+                                action: 'sit',
+                                emote: 'Sit',
+                                data: {
+                                    worldX: seatX,
+                                    worldZ: seatZ,
+                                    worldRotation: foundSeat.faceAngle || foundSeat.rotation || 0,
+                                    seatHeight: foundSeat.seatHeight,
+                                    snapPoints: [{ x: 0, z: 0, rotation: 0 }]
+                                }
+                            }
+                        }));
+                    } else {
+                        // Clear interaction when not near any seat
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: { action: 'exit' }
+                        }));
+                    }
+                } else {
+                    // Clear interaction when on furniture
+                    window.dispatchEvent(new CustomEvent('townInteraction', {
+                        detail: { action: 'exit' }
+                    }));
+                }
+            }
+            
+            if (roomRef.current !== 'town' && roomRef.current !== 'pizza' && roomRef.current !== 'nightclub' && roomRef.current !== 'casino_game_room') {
                 // Fallback: Non-town rooms use different collision
                 // Town uses wall boundaries now, not water
                 // Nightclub has its own wall-clamping collision above
@@ -2415,15 +2530,18 @@ const VoxelWorld = ({
                 posRef.current.x = finalX;
                 posRef.current.z = finalZ;
                 
-                // Check town furniture proximity for interaction (roof couch)
+                // Check town furniture proximity for interaction (roof couch, park benches)
+                // Also check casino furniture (stools, couch on 2nd floor)
+                let nearFurniture = null;
+                const playerY = posRef.current.y;
+                
+                // First check regular town furniture
                 if (roomData && roomData.furniture) {
-                    let nearFurniture = null;
                     for (const furn of roomData.furniture) {
                         const dx = finalX - furn.position.x;
                         const dz = finalZ - furn.position.z;
                         const dist = Math.sqrt(dx * dx + dz * dz);
                         // Only interact if player is at the right height (on the roof)
-                        const playerY = posRef.current.y;
                         const furnY = furn.platformHeight || 0;
                         const yMatch = Math.abs(playerY - furnY) < 2; // Within 2 units height
                         if (dist < furn.interactionRadius && yMatch) {
@@ -2431,31 +2549,48 @@ const VoxelWorld = ({
                             break;
                         }
                     }
-                    
-                    // Dispatch interaction event
-                    if (nearFurniture && !seatedRef.current) {
-                        window.dispatchEvent(new CustomEvent('townInteraction', {
-                            detail: {
-                                action: 'sit',
-                                message: `Press E to sit on ${nearFurniture.type}`,
-                                emote: 'Sit',
-                                data: {
-                                    worldX: nearFurniture.position.x,
-                                    worldZ: nearFurniture.position.z,
-                                    worldRotation: nearFurniture.rotation,
-                                    snapPoints: nearFurniture.snapPoints,
-                                    seatHeight: nearFurniture.seatHeight,
-                                    platformHeight: nearFurniture.platformHeight,
-                                    bidirectionalSit: nearFurniture.bidirectionalSit || false
-                                }
-                            }
-                        }));
-                    } else if (!nearFurniture && !seatedRef.current) {
-                        // Only clear if we were showing a furniture prompt
-                        window.dispatchEvent(new CustomEvent('townInteraction', {
-                            detail: { action: 'exit' }
-                        }));
+                }
+                
+                // Then check casino furniture (elevated on 2nd floor)
+                if (!nearFurniture && townCenterRef.current) {
+                    const casinoFurniture = townCenterRef.current.getCasinoFurniture();
+                    for (const furn of casinoFurniture) {
+                        const dx = finalX - furn.position.x;
+                        const dz = finalZ - furn.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        // Casino furniture is elevated - check player is on 2nd floor
+                        const furnY = furn.seatHeight - 1.0; // Platform is ~1 below seat
+                        const yMatch = Math.abs(playerY - furnY) < 2;
+                        if (dist < furn.interactionRadius && yMatch) {
+                            nearFurniture = furn;
+                            break;
+                        }
                     }
+                }
+                
+                // Dispatch interaction event
+                if (nearFurniture && !seatedRef.current) {
+                    window.dispatchEvent(new CustomEvent('townInteraction', {
+                        detail: {
+                            action: 'sit',
+                            message: `Press E to sit on ${nearFurniture.type}`,
+                            emote: 'Sit',
+                            data: {
+                                worldX: nearFurniture.position.x,
+                                worldZ: nearFurniture.position.z,
+                                worldRotation: nearFurniture.rotation,
+                                snapPoints: nearFurniture.snapPoints,
+                                seatHeight: nearFurniture.seatHeight,
+                                platformHeight: nearFurniture.platformHeight || (nearFurniture.seatHeight - 1.0),
+                                bidirectionalSit: nearFurniture.bidirectionalSit || false
+                            }
+                        }
+                    }));
+                } else if (!nearFurniture && !seatedRef.current) {
+                    // Only clear if we were showing a furniture prompt
+                    window.dispatchEvent(new CustomEvent('townInteraction', {
+                        detail: { action: 'exit' }
+                    }));
                 }
             } else if (!collided) {
                 // Fallback: only move if no collision
@@ -2464,7 +2599,10 @@ const VoxelWorld = ({
             }
             
             // Apply Y velocity (jumping/falling)
-            posRef.current.y += velRef.current.y * delta;
+            // Clamp maximum fall distance per frame to prevent clipping through surfaces
+            const yDelta = velRef.current.y * delta;
+            const MAX_FALL_PER_FRAME = 2.0; // Maximum 2 units fall per frame
+            posRef.current.y += Math.max(yDelta, -MAX_FALL_PER_FRAME);
             
             // Track if player found ground this frame
             let foundGround = false;
@@ -2520,6 +2658,34 @@ const VoxelWorld = ({
             
             // Check for landing on pizza parlor furniture (uses room's landingSurfaces)
             if (room === 'pizza' && roomDataRef.current?.landingSurfaces && velRef.current.y <= 0) {
+                const px = posRef.current.x;
+                const pz = posRef.current.z;
+                const py = posRef.current.y;
+                
+                for (const surface of roomDataRef.current.landingSurfaces) {
+                    let isOver = false;
+                    
+                    if (surface.type === 'circle') {
+                        const dx = px - surface.x;
+                        const dz = pz - surface.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        isOver = dist <= surface.radius;
+                    } else if (surface.type === 'box') {
+                        isOver = px >= surface.minX && px <= surface.maxX &&
+                                 pz >= surface.minZ && pz <= surface.maxZ;
+                    }
+                    
+                    if (isOver && py >= surface.height - 0.5 && py <= surface.height + 1) {
+                        if (surface.height >= groundHeight) {
+                            groundHeight = surface.height;
+                            foundGround = true;
+                        }
+                    }
+                }
+            }
+            
+            // Check for landing on casino room furniture (uses room's landingSurfaces)
+            if (room === 'casino_game_room' && roomDataRef.current?.landingSurfaces && velRef.current.y <= 0) {
                 const px = posRef.current.x;
                 const pz = posRef.current.z;
                 const py = posRef.current.y;
@@ -3151,6 +3317,11 @@ const VoxelWorld = ({
                 nightclubRef.current.update(time, delta, 0.7); // Always club lighting
             }
             
+            // Animate casino room interior (slot machines, roulette wheels, etc.)
+            if (casinoRoomRef.current && roomRef.current === 'casino_game_room') {
+                casinoRoomRef.current.update(time, delta, 0.7);
+            }
+            
             // Animate SKNY GANG igloo interior (disco ball, lasers, LED floor, etc.)
             if (sknyIglooInteriorRef.current?.update && roomRef.current === 'igloo3') {
                 sknyIglooInteriorRef.current.update(time);
@@ -3166,25 +3337,40 @@ const VoxelWorld = ({
                         }
                     }
                     
-                    // Hide dojo label when player is on the roof (y > 9)
+                    // Check if player is inside casino
+                    const isInCasino = townCenterRef.current?.isPlayerInCasino(posRef.current.x, posRef.current.z);
+                    
+                    // Hide dojo label when player is on the roof (y > 9) or inside casino
                     if (building.id === 'dojo' && building.mesh) {
                         const dojoLabel = building.mesh.getObjectByName('label_dojo');
                         if (dojoLabel) {
-                            dojoLabel.visible = posRef.current.y < 9;
+                            dojoLabel.visible = posRef.current.y < 9 && !isInCasino;
+                        }
+                    }
+                    
+                    // Hide other building labels when inside casino
+                    if (building.mesh) {
+                        const label = building.mesh.getObjectByName(`label_${building.id}`);
+                        if (label && building.id !== 'dojo') {
+                            label.visible = !isInCasino;
                         }
                     }
                 });
                 
-                // Hide nightclub title sign when player is on the roof (y > 12)
+                // Check if player is inside casino for nightclub sign
+                const isInCasino = townCenterRef.current?.isPlayerInCasino(posRef.current.x, posRef.current.z);
+                
+                // Hide nightclub title sign when player is on the roof (y > 12) or inside casino
                 if (townCenterRef.current?.propMeshes) {
                     const nightclubMesh = townCenterRef.current.propMeshes.find(m => m.name === 'nightclub');
                     if (nightclubMesh) {
                         const titleSign = nightclubMesh.getObjectByName('nightclub_title_sign');
                         if (titleSign) {
-                            titleSign.visible = posRef.current.y < 12;
+                            titleSign.visible = posRef.current.y < 12 && !isInCasino;
                         }
                     }
                 }
+                
             }
             
             // Room-specific updates (self-contained in room modules)
@@ -3267,6 +3453,11 @@ const VoxelWorld = ({
             if (nightclubRef.current) {
                 nightclubRef.current.dispose();
                 nightclubRef.current = null;
+            }
+            // Cleanup CasinoRoom
+            if (casinoRoomRef.current) {
+                casinoRoomRef.current.cleanup();
+                casinoRoomRef.current = null;
             }
             // Cleanup match banners
             for (const [, bannerData] of matchBannersRef.current) {
@@ -3713,6 +3904,9 @@ const VoxelWorld = ({
         const playerPos = posRef.current;
         const VISIBILITY_DISTANCE = 25; // Show bubble when within 25 units
         
+        // Hide all banners if player is inside the casino
+        const isInCasino = townCenterRef.current?.isPlayerInCasino(playerPos.x, playerPos.z);
+        
         iglooOccupancySpritesRef.current.forEach((sprite, iglooId) => {
             if (!sprite.userData) return;
             
@@ -3720,8 +3914,8 @@ const VoxelWorld = ({
             const dz = playerPos.z - sprite.userData.iglooZ;
             const dist = Math.sqrt(dx * dx + dz * dz);
             
-            // Show sprite if player is close enough
-            const shouldShow = dist < VISIBILITY_DISTANCE;
+            // Show sprite if player is close enough AND not inside casino
+            const shouldShow = dist < VISIBILITY_DISTANCE && !isInCasino;
             
             if (sprite.visible !== shouldShow) {
                 sprite.visible = shouldShow;
@@ -3924,6 +4118,20 @@ const VoxelWorld = ({
             } else if (action === 'interact_snowman') {
                 // Show snowman message
                 setNearbyInteraction({ action, message: message || '☃️ Say hi to the snowman!', emote: 'Wave' });
+            } else if (action === 'enter_casino_game_room') {
+                // Casino game room portal
+                setNearbyInteraction({ 
+                    action, 
+                    message: message || '🎰 Enter Game Room (Press E)',
+                    targetRoom: data?.destination || 'casino_game_room'
+                });
+            } else if (action === 'enter_nightclub') {
+                // Nightclub portal
+                setNearbyInteraction({ 
+                    action, 
+                    message: message || '🎵 Enter Nightclub (Press E)',
+                    targetRoom: data?.destination || 'nightclub'
+                });
             }
             // Note: enter_igloo is handled by portal system, not interaction prompts
         };
@@ -4091,6 +4299,15 @@ const VoxelWorld = ({
                     }
                     
                     setNearbyInteraction(null);
+                }
+                else if (nearbyInteraction.action === 'enter_casino_game_room' || nearbyInteraction.action === 'enter_nightclub') {
+                    // Room transition via trigger-based portals
+                    const targetRoom = nearbyInteraction.targetRoom;
+                    if (targetRoom && onChangeRoom) {
+                        // Clear interaction and transition to room
+                        setNearbyInteraction(null);
+                        onChangeRoom(targetRoom);
+                    }
                 }
                 else if (nearbyInteraction.emote) {
                     emoteRef.current = { type: nearbyInteraction.emote, startTime: Date.now() };
@@ -4745,6 +4962,8 @@ const VoxelWorld = ({
              
              {/* Mobile Portrait Mode - No longer blocking, game works in portrait now */}
              
+             {/* Casino TV is now rendered in 3D space with real data from DexScreener API */}
+             
              {/* Mobile PUBG-style Joystick - LEFT side (or right if left-handed) */}
              {/* Supports both portrait and landscape modes */}
              {isMobile && (
@@ -5017,8 +5236,8 @@ const VoxelWorld = ({
              }`}>
                  <h2 className={`drop-shadow-lg ${
                      isMobile && !isLandscape ? 'text-sm' : 'text-xl'
-                 } ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room === 'igloo3' ? 'text-fuchsia-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
-                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room === 'igloo3' ? '🎵 SKNY GANG $CPw3' : room.startsWith('igloo') ? `IGLOO ${room.replace('igloo', '')}` : 'TOWN'}
+                 } ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room === 'casino_game_room' ? 'text-yellow-400' : room === 'igloo3' ? 'text-fuchsia-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
+                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room === 'casino_game_room' ? '🎰 CASINO' : room === 'igloo3' ? '🎵 SKNY GANG $CPw3' : room.startsWith('igloo') ? `IGLOO ${room.replace('igloo', '')}` : 'TOWN'}
                  </h2>
                  {!isMobile && (
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>
@@ -5125,6 +5344,31 @@ const VoxelWorld = ({
                          <div className="flex justify-between items-center">
                              <span className="text-white/70 text-[10px]">Intensity:</span>
                              <span className="text-cyan-300 text-[10px]">{((snowfallSystemRef.current?.getIntensity() || 0.5) * 100).toFixed(0)}%</span>
+                         </div>
+                     </div>
+                     
+                     {/* Collision Debug Controls */}
+                     <div className="border-t border-white/20 mt-3 pt-3">
+                         <div className="text-red-400 font-bold mb-2 text-[10px]">🧱 COLLISION DEBUG</div>
+                         <div className="flex justify-between items-center mb-2">
+                             <span className="text-white/70 text-[10px]">Show Wireframes:</span>
+                             <button
+                                 onClick={() => {
+                                     const newVal = !showCollisionDebug;
+                                     setShowCollisionDebug(newVal);
+                                     if (townCenterRef.current) {
+                                         townCenterRef.current.toggleCollisionDebug(newVal);
+                                     }
+                                 }}
+                                 className={`text-[10px] px-2 py-0.5 rounded ${showCollisionDebug ? 'bg-red-500 text-white' : 'bg-gray-600 text-white/70'}`}
+                             >
+                                 {showCollisionDebug ? 'ON' : 'OFF'}
+                             </button>
+                         </div>
+                         <div className="text-[8px] text-white/40 space-y-0.5">
+                             <div>🔴 Red = Ground colliders</div>
+                             <div>🟡 Yellow = Elevated colliders</div>
+                             <div>🟢 Green = Triggers</div>
                          </div>
                      </div>
                  </div>

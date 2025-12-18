@@ -8,6 +8,7 @@ export { default as BaseProp } from './BaseProp';
 // Shared utilities
 export { PropColors } from './PropColors';
 export { getMaterialManager } from './PropMaterials';
+export { getGeometryManager } from './PropGeometries';
 
 // Environmental props
 export { default as PineTree } from './PineTree';

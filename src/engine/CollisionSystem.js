@@ -731,29 +731,46 @@ class CollisionSystem {
             opacity: 0.3,
             wireframe: true
         });
+        const elevatedMat = new THREE.MeshBasicMaterial({ 
+            color: 0xffff00, 
+            transparent: true, 
+            opacity: 0.4,
+            wireframe: true
+        });
         
         // Visualize colliders
         this.colliders.forEach(collider => {
             let geo;
+            const height = collider.shape.height || 2;
+            const baseY = collider.y || 0;
+            
             if (collider.shape.type === 'cylinder') {
                 geo = new THREE.CylinderGeometry(
                     collider.shape.radius, 
                     collider.shape.radius, 
-                    collider.shape.height || 2, 
+                    height, 
                     8
                 );
             } else if (collider.shape.type === 'box') {
                 geo = new THREE.BoxGeometry(
                     collider.shape.size.x,
-                    collider.shape.size.y || 2,
+                    collider.shape.size.y || height,
                     collider.shape.size.z
                 );
             } else {
                 geo = new THREE.SphereGeometry(collider.shape.radius || 1, 8, 8);
             }
             
-            const mesh = new THREE.Mesh(geo, solidMat);
-            mesh.position.set(collider.x, (collider.shape.height || 2) / 2, collider.z);
+            // Use yellow for elevated colliders (y > 0)
+            const mat = baseY > 0 ? elevatedMat : solidMat;
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.set(collider.x, baseY + height / 2, collider.z);
+            
+            // Apply rotation if present
+            if (collider.rotation) {
+                mesh.rotation.y = collider.rotation;
+            }
+            
             group.add(mesh);
         });
         
@@ -778,6 +795,32 @@ class CollisionSystem {
         });
         
         return group;
+    }
+    
+    /**
+     * Toggle debug visualization
+     * @param {THREE.Scene} scene - Scene to add/remove debug mesh
+     * @param {THREE} THREE - Three.js reference
+     * @param {boolean} enabled - Whether to show debug
+     */
+    toggleDebug(scene, THREE, enabled) {
+        // Remove existing debug mesh
+        const existing = scene.getObjectByName('collision_debug');
+        if (existing) {
+            scene.remove(existing);
+            existing.traverse(obj => {
+                if (obj.geometry) obj.geometry.dispose();
+                if (obj.material) obj.material.dispose();
+            });
+        }
+        
+        // Add new debug mesh if enabled
+        if (enabled) {
+            const debugMesh = this.createDebugMesh(THREE);
+            scene.add(debugMesh);
+            return debugMesh;
+        }
+        return null;
     }
 }
 

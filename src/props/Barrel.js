@@ -1,10 +1,12 @@
 /**
  * Barrel - Wooden barrel with metal bands
+ * OPTIMIZED: Uses cached geometries for all parts
  */
 
 import BaseProp from './BaseProp';
 import { PropColors } from './PropColors';
 import { getMaterialManager } from './PropMaterials';
+import { getGeometryManager } from './PropGeometries';
 
 class Barrel extends BaseProp {
     /**
@@ -15,6 +17,7 @@ class Barrel extends BaseProp {
         super(THREE);
         this.size = size;
         this.matManager = getMaterialManager(THREE);
+        this.geoManager = getGeometryManager(THREE);
     }
     
     static SIZES = {
@@ -25,6 +28,7 @@ class Barrel extends BaseProp {
     
     spawn(scene, x, y, z) {
         const THREE = this.THREE;
+        const geo = this.geoManager;
         const cfg = Barrel.SIZES[this.size] || Barrel.SIZES.medium;
         const group = this.createGroup(scene);
         group.name = `barrel_${this.size}`;
@@ -38,43 +42,49 @@ class Barrel extends BaseProp {
         const s = cfg.scale;
         const h = cfg.height;
         
-        // Main barrel body (bulging cylinder effect)
-        const bodyGeo = new THREE.CylinderGeometry(0.35 * s, 0.32 * s, h, 12);
-        const body = new THREE.Mesh(bodyGeo, woodMat);
+        // Round to nearest 0.01 for better cache hits across sizes
+        const r1 = Math.round(0.35 * s * 100) / 100;
+        const r2 = Math.round(0.32 * s * 100) / 100;
+        const r3 = Math.round(0.38 * s * 100) / 100;
+        
+        // Main barrel body (bulging cylinder effect) (CACHED)
+        const body = new THREE.Mesh(geo.cylinder(r1, r2, h, 12), woodMat);
         body.position.y = h / 2;
         body.castShadow = true;
         body.receiveShadow = true;
         this.addMesh(body, group);
         
-        // Bulge in middle
-        const bulgeGeo = new THREE.CylinderGeometry(0.38 * s, 0.38 * s, h * 0.4, 12);
-        const bulge = new THREE.Mesh(bulgeGeo, woodMat);
+        // Bulge in middle (CACHED)
+        const bulge = new THREE.Mesh(geo.cylinder(r3, r3, h * 0.4, 12), woodMat);
         bulge.position.y = h / 2;
         bulge.castShadow = true;
         this.addMesh(bulge, group);
         
-        // Metal bands
+        // Metal bands (CACHED where possible)
         const bandPositions = [0.12, 0.35, 0.65, 0.88];
         bandPositions.forEach(t => {
             const bandY = h * t;
-            const radius = 0.36 * s + (Math.abs(t - 0.5) < 0.25 ? 0.03 * s : 0);
-            const bandGeo = new THREE.TorusGeometry(radius, 0.02 * s, 6, 16);
-            const band = new THREE.Mesh(bandGeo, metalMat);
+            const radius = Math.round((0.36 * s + (Math.abs(t - 0.5) < 0.25 ? 0.03 * s : 0)) * 100) / 100;
+            const tubeRadius = Math.round(0.02 * s * 100) / 100;
+            const band = new THREE.Mesh(geo.torus(radius, tubeRadius, 6, 16), metalMat);
             band.position.y = bandY;
             band.rotation.x = Math.PI / 2;
             this.addMesh(band, group);
         });
         
-        // Top lid
-        const lidGeo = new THREE.CylinderGeometry(0.33 * s, 0.33 * s, 0.04 * s, 12);
-        const lid = new THREE.Mesh(lidGeo, darkWoodMat);
+        // Top lid (CACHED)
+        const lidR = Math.round(0.33 * s * 100) / 100;
+        const lidH = Math.round(0.04 * s * 100) / 100;
+        const lid = new THREE.Mesh(geo.cylinder(lidR, lidR, lidH, 12), darkWoodMat);
         lid.position.y = h - 0.02 * s;
         this.addMesh(lid, group);
         
-        // Vertical wood grain lines (subtle)
+        // Vertical wood grain lines (subtle) (CACHED - all 8 share same geometry)
+        const lineW = Math.round(0.01 * s * 100) / 100;
+        const lineH = Math.round(h * 0.85 * 100) / 100;
+        const lineGeo = geo.box(lineW, lineH, lineW);
         for (let i = 0; i < 8; i++) {
             const angle = (i / 8) * Math.PI * 2;
-            const lineGeo = new THREE.BoxGeometry(0.01 * s, h * 0.85, 0.01 * s);
             const line = new THREE.Mesh(lineGeo, darkWoodMat);
             line.position.set(
                 Math.cos(angle) * 0.36 * s,
@@ -85,9 +95,9 @@ class Barrel extends BaseProp {
             this.addMesh(line, group);
         }
         
-        // Snow on top
-        const snowGeo = new THREE.SphereGeometry(0.28 * s, 8, 6);
-        const snow = new THREE.Mesh(snowGeo, snowMat);
+        // Snow on top (CACHED)
+        const snowR = Math.round(0.28 * s * 100) / 100;
+        const snow = new THREE.Mesh(geo.sphere(snowR, 8, 6), snowMat);
         snow.position.y = h + 0.05 * s;
         snow.scale.set(1.2, 0.35, 1.2);
         this.addMesh(snow, group);

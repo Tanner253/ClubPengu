@@ -1,10 +1,12 @@
 /**
  * TrashCan - Metal trash can with lid and snow
+ * OPTIMIZED: Uses cached geometries for all parts
  */
 
 import BaseProp from './BaseProp';
 import { PropColors } from './PropColors';
 import { getMaterialManager } from './PropMaterials';
+import { getGeometryManager } from './PropGeometries';
 
 class TrashCan extends BaseProp {
     /**
@@ -15,10 +17,12 @@ class TrashCan extends BaseProp {
         super(THREE);
         this.withLid = withLid;
         this.matManager = getMaterialManager(THREE);
+        this.geoManager = getGeometryManager(THREE);
     }
     
     spawn(scene, x, y, z) {
         const THREE = this.THREE;
+        const geo = this.geoManager;
         const group = this.createGroup(scene);
         group.name = 'trash_can';
         group.position.set(x, y, z);
@@ -27,40 +31,37 @@ class TrashCan extends BaseProp {
         const darkMat = this.matManager.get('#3A4A5A', { roughness: 0.7, metalness: 0.4 });
         const snowMat = this.matManager.get(PropColors.snowLight, { roughness: 0.6 });
         
-        // Main body (tapered cylinder)
-        const bodyGeo = new THREE.CylinderGeometry(0.35, 0.3, 0.9, 12);
-        const body = new THREE.Mesh(bodyGeo, metalMat);
+        // Main body (tapered cylinder) (CACHED)
+        const body = new THREE.Mesh(geo.cylinder(0.35, 0.3, 0.9, 12), metalMat);
         body.position.y = 0.45;
         body.castShadow = true;
         body.receiveShadow = true;
         this.addMesh(body, group);
         
-        // Rim at top
-        const rimGeo = new THREE.TorusGeometry(0.36, 0.03, 6, 16);
-        const rim = new THREE.Mesh(rimGeo, darkMat);
+        // Rim at top (CACHED)
+        const rim = new THREE.Mesh(geo.torus(0.36, 0.03, 6, 16), darkMat);
         rim.position.y = 0.9;
         rim.rotation.x = Math.PI / 2;
         this.addMesh(rim, group);
         
-        // Rim at bottom
-        const bottomRimGeo = new THREE.TorusGeometry(0.31, 0.025, 6, 16);
-        const bottomRim = new THREE.Mesh(bottomRimGeo, darkMat);
+        // Rim at bottom (CACHED)
+        const bottomRim = new THREE.Mesh(geo.torus(0.31, 0.025, 6, 16), darkMat);
         bottomRim.position.y = 0.02;
         bottomRim.rotation.x = Math.PI / 2;
         this.addMesh(bottomRim, group);
         
-        // Horizontal bands
+        // Horizontal bands (CACHED - both share same geometry)
+        const bandGeo = geo.torus(0.33, 0.015, 6, 16);
         [0.25, 0.55].forEach(yPos => {
-            const bandGeo = new THREE.TorusGeometry(0.33, 0.015, 6, 16);
             const band = new THREE.Mesh(bandGeo, darkMat);
             band.position.y = yPos;
             band.rotation.x = Math.PI / 2;
             this.addMesh(band, group);
         });
         
-        // Handles on sides
+        // Handles on sides (CACHED - both share same geometry)
+        const handleGeo = geo.torus(0.08, 0.015, 6, 8);
         [-1, 1].forEach(side => {
-            const handleGeo = new THREE.TorusGeometry(0.08, 0.015, 6, 8, Math.PI);
             const handle = new THREE.Mesh(handleGeo, darkMat);
             handle.position.set(side * 0.35, 0.7, 0);
             handle.rotation.y = side * Math.PI / 2;
@@ -69,21 +70,18 @@ class TrashCan extends BaseProp {
         
         // Lid
         if (this.withLid) {
-            const lidGeo = new THREE.CylinderGeometry(0.38, 0.36, 0.08, 12);
-            const lid = new THREE.Mesh(lidGeo, metalMat);
+            const lid = new THREE.Mesh(geo.cylinder(0.38, 0.36, 0.08, 12), metalMat);
             lid.position.y = 0.96;
             lid.castShadow = true;
             this.addMesh(lid, group);
             
-            // Lid handle
-            const lidHandleGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.08, 8);
-            const lidHandle = new THREE.Mesh(lidHandleGeo, darkMat);
+            // Lid handle (CACHED)
+            const lidHandle = new THREE.Mesh(geo.cylinder(0.05, 0.05, 0.08, 8), darkMat);
             lidHandle.position.y = 1.04;
             this.addMesh(lidHandle, group);
             
-            // Snow on lid
-            const snowGeo = new THREE.SphereGeometry(0.25, 8, 6);
-            const snow = new THREE.Mesh(snowGeo, snowMat);
+            // Snow on lid (CACHED)
+            const snow = new THREE.Mesh(geo.sphere(0.25, 8, 6), snowMat);
             snow.position.y = 1.1;
             snow.scale.set(1.3, 0.35, 1.3);
             this.addMesh(snow, group);

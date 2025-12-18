@@ -42,6 +42,35 @@ class SnowfallSystem {
         this.visible = true;
         this.intensity = 0.7; // Default intensity (0-1)
         this.centerPosition = { x: 0, z: 0 };
+        
+        // Exclusion zones (areas where snow shouldn't fall, like inside buildings)
+        this.exclusionZones = [];
+    }
+    
+    /**
+     * Add an exclusion zone where snow won't fall (e.g., inside buildings)
+     * @param {Object} zone - { minX, maxX, minZ, maxZ, roofHeight }
+     */
+    addExclusionZone(zone) {
+        this.exclusionZones.push(zone);
+    }
+    
+    /**
+     * Check if a position is inside any exclusion zone
+     * @param {number} x - X position
+     * @param {number} y - Y position  
+     * @param {number} z - Z position
+     * @returns {boolean} True if inside an exclusion zone
+     */
+    isInExclusionZone(x, y, z) {
+        for (const zone of this.exclusionZones) {
+            if (x >= zone.minX && x <= zone.maxX &&
+                z >= zone.minZ && z <= zone.maxZ &&
+                y < zone.roofHeight) {
+                return true;
+            }
+        }
+        return false;
     }
     
     /**
@@ -174,17 +203,28 @@ class SnowfallSystem {
             positions[idx + 1] += this.velocities[idx + 1] * delta;
             positions[idx + 2] += (this.velocities[idx + 2] + windZ) * delta;
             
-            // Respawn particles that fall below ground or drift too far
+            // Respawn particles that fall below ground, drift too far, or enter exclusion zones
             const dx = positions[idx] - this.centerPosition.x;
             const dz = positions[idx + 2] - this.centerPosition.z;
             
-            if (positions[idx + 1] < 0 || 
+            const shouldRespawn = positions[idx + 1] < 0 || 
                 Math.abs(dx) > halfArea || 
-                Math.abs(dz) > halfArea) {
-                // Respawn at top with random position in area
-                positions[idx] = this.centerPosition.x + (Math.random() - 0.5) * areaSize;
+                Math.abs(dz) > halfArea ||
+                this.isInExclusionZone(positions[idx], positions[idx + 1], positions[idx + 2]);
+            
+            if (shouldRespawn) {
+                // Respawn at top with random position in area (outside exclusion zones)
+                let newX, newZ;
+                let attempts = 0;
+                do {
+                    newX = this.centerPosition.x + (Math.random() - 0.5) * areaSize;
+                    newZ = this.centerPosition.z + (Math.random() - 0.5) * areaSize;
+                    attempts++;
+                } while (this.isInExclusionZone(newX, areaHeight, newZ) && attempts < 5);
+                
+                positions[idx] = newX;
                 positions[idx + 1] = areaHeight + Math.random() * 5;
-                positions[idx + 2] = this.centerPosition.z + (Math.random() - 0.5) * areaSize;
+                positions[idx + 2] = newZ;
                 
                 // Randomize velocity slightly on respawn
                 this.velocities[idx] = (Math.random() - 0.5) * driftSpeed;

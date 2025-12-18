@@ -1,10 +1,12 @@
 /**
  * Bench - Snow-covered park bench
+ * OPTIMIZED: Uses cached geometries for all bench parts
  */
 
 import BaseProp from './BaseProp';
 import { PropColors } from './PropColors';
 import { getMaterialManager } from './PropMaterials';
+import { getGeometryManager } from './PropGeometries';
 
 class Bench extends BaseProp {
     /**
@@ -15,6 +17,7 @@ class Bench extends BaseProp {
         super(THREE);
         this.withSnow = withSnow;
         this.matManager = getMaterialManager(THREE);
+        this.geoManager = getGeometryManager(THREE);
         
         this.benchWidth = 3;
         this.benchDepth = 0.8;
@@ -23,6 +26,7 @@ class Bench extends BaseProp {
     
     spawn(scene, x, y, z) {
         const THREE = this.THREE;
+        const geo = this.geoManager;
         const group = this.createGroup(scene);
         group.name = 'bench';
         group.position.set(x, y, z);
@@ -30,7 +34,7 @@ class Bench extends BaseProp {
         const woodMat = this.matManager.get(PropColors.plankMedium, { roughness: 0.9 });
         const metalMat = this.matManager.get(PropColors.metalDark, { roughness: 0.5, metalness: 0.4 });
         
-        // Metal legs
+        // Metal legs (CACHED - all 4 legs share same geometry)
         const legPositions = [
             [-this.benchWidth/2 + 0.3, 0, -this.benchDepth/2 + 0.15],
             [-this.benchWidth/2 + 0.3, 0, this.benchDepth/2 - 0.15],
@@ -38,7 +42,7 @@ class Bench extends BaseProp {
             [this.benchWidth/2 - 0.3, 0, this.benchDepth/2 - 0.15],
         ];
         
-        const legGeo = new THREE.CylinderGeometry(0.05, 0.06, this.seatHeight, 6);
+        const legGeo = geo.cylinder(0.05, 0.06, this.seatHeight, 6);
         legPositions.forEach(pos => {
             const leg = new THREE.Mesh(legGeo, metalMat);
             leg.position.set(pos[0], this.seatHeight / 2, pos[2]);
@@ -46,8 +50,8 @@ class Bench extends BaseProp {
             this.addMesh(leg, group);
         });
         
-        // Seat planks
-        const plankGeo = new THREE.BoxGeometry(this.benchWidth, 0.08, 0.14);
+        // Seat planks (CACHED - all 5 planks share same geometry)
+        const plankGeo = geo.box(this.benchWidth, 0.08, 0.14);
         for (let i = 0; i < 5; i++) {
             const plank = new THREE.Mesh(plankGeo, woodMat);
             plank.position.set(0, this.seatHeight, -this.benchDepth/2 + 0.1 + i * 0.16);
@@ -56,8 +60,8 @@ class Bench extends BaseProp {
             this.addMesh(plank, group);
         }
         
-        // Back rest planks
-        const backGeo = new THREE.BoxGeometry(this.benchWidth, 0.08, 0.12);
+        // Back rest planks (CACHED - all 3 planks share same geometry)
+        const backGeo = geo.box(this.benchWidth, 0.08, 0.12);
         for (let i = 0; i < 3; i++) {
             const back = new THREE.Mesh(backGeo, woodMat);
             back.position.set(0, this.seatHeight + 0.2 + i * 0.15, -this.benchDepth/2 - 0.05);
@@ -66,8 +70,8 @@ class Bench extends BaseProp {
             this.addMesh(back, group);
         }
         
-        // Armrests
-        const armGeo = new THREE.BoxGeometry(0.1, 0.08, this.benchDepth + 0.2);
+        // Armrests (CACHED - both share same geometry)
+        const armGeo = geo.box(0.1, 0.08, this.benchDepth + 0.2);
         [-this.benchWidth/2 + 0.15, this.benchWidth/2 - 0.15].forEach(xPos => {
             const arm = new THREE.Mesh(armGeo, woodMat);
             arm.position.set(xPos, this.seatHeight + 0.25, 0);
@@ -85,23 +89,22 @@ class Bench extends BaseProp {
     
     addSnowCover(group) {
         const THREE = this.THREE;
+        const geo = this.geoManager;
         const snowMat = this.matManager.get(PropColors.snowLight, { roughness: 0.6 });
         
-        // Snow on seat
-        const seatSnowGeo = new THREE.BoxGeometry(this.benchWidth * 0.9, 0.1, this.benchDepth * 0.8);
-        const seatSnow = new THREE.Mesh(seatSnowGeo, snowMat);
+        // Snow on seat (CACHED)
+        const seatSnow = new THREE.Mesh(geo.box(this.benchWidth * 0.9, 0.1, this.benchDepth * 0.8), snowMat);
         seatSnow.position.set(0, this.seatHeight + 0.08, 0.05);
         this.addMesh(seatSnow, group);
         
-        // Snow on back
-        const backSnowGeo = new THREE.BoxGeometry(this.benchWidth * 0.85, 0.08, 0.2);
-        const backSnow = new THREE.Mesh(backSnowGeo, snowMat);
+        // Snow on back (CACHED)
+        const backSnow = new THREE.Mesh(geo.box(this.benchWidth * 0.85, 0.08, 0.2), snowMat);
         backSnow.position.set(0, this.seatHeight + 0.55, -this.benchDepth/2 - 0.1);
         backSnow.rotation.x = 0.15;
         this.addMesh(backSnow, group);
         
-        // Snow clumps on armrests
-        const clumpGeo = new THREE.SphereGeometry(0.12, 6, 6);
+        // Snow clumps on armrests (CACHED - both share same geometry)
+        const clumpGeo = geo.sphere(0.12, 6, 6);
         [-this.benchWidth/2 + 0.15, this.benchWidth/2 - 0.15].forEach(xPos => {
             const clump = new THREE.Mesh(clumpGeo, snowMat);
             clump.position.set(xPos, this.seatHeight + 0.35, 0.1);
