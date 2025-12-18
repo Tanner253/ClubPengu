@@ -394,13 +394,13 @@ export const IGLOO_BANNER_STYLES = [
         decorColor: '#DAA520',
         titleBg: '#FFE4B5'
     },
-    { // Red/Coral
-        bgGradient: ['#FFF0F0', '#FFB6B6', '#FF6B6B'],
-        borderColor: '#DC143C',
-        accentColor: '#FF4444',
-        textColor: '#8B0000',
-        decorColor: '#DC143C',
-        titleBg: '#FFB6B6'
+    { // Pink/Magenta - REGEN style
+        bgGradient: ['#FFE4EC', '#FFB6C1', '#FF69B4'],
+        borderColor: '#FF1493',
+        accentColor: '#FF69B4',
+        textColor: '#8B0A50',
+        decorColor: '#FF1493',
+        titleBg: '#FFB6C1'
     }
 ];
 
@@ -413,7 +413,7 @@ export const IGLOO_BANNER_CONTENT = [
     { title: "🚀 Launch Pad", ticker: "$PAD", shill: "Early access • Presale alerts" },
     { title: "🎰 Whale Watchers", ticker: "$WHALE", shill: "Track big wallets • Free signals" },
     { title: "⚡ Speed Runners", ticker: "$SPEED", shill: "Snipe bots • Fast entry" },
-    { title: "Regen", ticker: "", shill: "A group of like-minded individuals", owner: "jj" },
+    { title: "REGEN", ticker: "", shill: "A group of like-minded individuals", owner: "jj" },
     { title: "🎮 Gamer Guild", ticker: "$GG", shill: "P2E alpha • Gaming NFTs" },
     { title: "🌈 Rainbow Room", ticker: "$RGB", shill: "All welcome • Good energy only" }
 ];

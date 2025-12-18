@@ -4529,26 +4529,13 @@ const VoxelWorld = ({
             const counts = event.detail;
             if (!counts) return;
             
-            // Update each igloo sprite with the count from server
-            // Map room names to igloo IDs (multiple igloos can share the same room)
-            const roomToIgloos = {
-                'igloo1': ['igloo1', 'igloo5', 'igloo9'],
-                'igloo2': ['igloo2', 'igloo6', 'igloo10'],
-                'igloo3': ['igloo3', 'igloo7'],
-                'igloo4': ['igloo4', 'igloo8']
-            };
-            
-            // Update sprites for each room's igloos
-            for (const [roomName, iglooIds] of Object.entries(roomToIgloos)) {
+            // Each igloo has its own unique room (igloo1 -> igloo1, igloo2 -> igloo2, etc.)
+            // Update each igloo sprite with the count from its corresponding room
+            iglooOccupancySpritesRef.current.forEach((sprite, iglooId) => {
+                const roomName = sprite.userData.iglooRoom || iglooId;
                 const count = counts[roomName] || 0;
-                iglooIds.forEach(iglooId => {
-                    const sprite = iglooOccupancySpritesRef.current.get(iglooId);
-                    if (sprite) {
-                        // Update the sprite texture with new count
-                        updateIglooOccupancySprite(window.THREE, sprite, count);
-                    }
-                });
-            }
+                updateIglooOccupancySprite(window.THREE, sprite, count);
+            });
         };
         
         window.addEventListener('roomCounts', handleRoomCounts);
