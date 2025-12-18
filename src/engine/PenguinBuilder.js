@@ -17,10 +17,27 @@ export function createPenguinBuilder(THREE) {
     // Material cache - reuse materials for same colors (HUGE performance gain)
     const materialCache = new Map();
     const getMaterial = (color) => {
+        // Handle undefined/null
         if (color === undefined || color === null) {
             color = 0x888888; // Default gray
         }
-        const colorKey = typeof color === 'string' ? color : color.toString();
+        
+        // Handle objects that can't be converted to primitive (prevents "Cannot convert object to primitive value" error)
+        if (typeof color === 'object') {
+            // If it's a THREE.Color, get its hex value
+            if (color.isColor && typeof color.getHex === 'function') {
+                color = color.getHex();
+            } else if (typeof color.r !== 'undefined' && typeof color.g !== 'undefined' && typeof color.b !== 'undefined') {
+                // RGB object - convert to hex
+                color = ((color.r * 255) << 16) | ((color.g * 255) << 8) | (color.b * 255);
+            } else {
+                // Unknown object - use default gray
+                console.warn('getMaterial received unknown object type:', color);
+                color = 0x888888;
+            }
+        }
+        
+        const colorKey = typeof color === 'string' ? color : String(color);
         if (!materialCache.has(colorKey)) {
             materialCache.set(colorKey, new THREE.MeshStandardMaterial({ color }));
         }
@@ -730,6 +747,24 @@ export function createPenguinBuilder(THREE) {
      * @returns {THREE.Group} The penguin wrapper mesh
      */
     const buildPenguinMesh = (data) => {
+        // Validate data to prevent "Cannot convert object to primitive value" errors
+        if (!data || typeof data !== 'object') {
+            console.warn('buildPenguinMesh received invalid data:', data);
+            data = {}; // Use empty object as fallback
+        }
+        
+        // Ensure color is a primitive value (string or number), not an object
+        if (data.color && typeof data.color === 'object') {
+            console.warn('buildPenguinMesh: color is an object, converting:', data.color);
+            if (data.color.isColor && typeof data.color.getHex === 'function') {
+                data.color = data.color.getHex();
+            } else if (typeof data.color.r !== 'undefined') {
+                data.color = ((data.color.r * 255) << 16) | ((data.color.g * 255) << 8) | (data.color.b * 255);
+            } else {
+                data.color = 'blue'; // Default color
+            }
+        }
+        
         let group;
         
         // Check for special character types
