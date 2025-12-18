@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown,
@@ -12,11 +12,9 @@ import {
   Smartphone,
   Server,
   Code,
-  Database,
   Shield,
   Cpu,
   Layers,
-  Users,
 } from "lucide-react";
 
 // Changelog entry types
@@ -42,7 +40,7 @@ interface ChangelogVersion {
 }
 
 // Icon mapping for change types
-const typeIcons: Record<ChangeType, JSX.Element> = {
+const typeIcons: Record<ChangeType, ReactNode> = {
   feature: <Sparkles className="w-3.5 h-3.5" />,
   fix: <Bug className="w-3.5 h-3.5" />,
   improvement: <Wrench className="w-3.5 h-3.5" />,
