@@ -77,6 +77,12 @@ export function MultiplayerProvider({ children }) {
     const [promoResult, setPromoResult] = useState(null);
     const promoCallbackRef = useRef(null);
     
+    // Slot machine state
+    const [slotSpinning, setSlotSpinning] = useState(false);
+    const [slotResult, setSlotResult] = useState(null);
+    const [activeSlotSpins, setActiveSlotSpins] = useState([]); // Other players spinning
+    const slotCallbackRef = useRef(null);
+    
     // Callbacks
     const callbacksRef = useRef({
         onPlayerJoined: null,
@@ -316,6 +322,90 @@ export function MultiplayerProvider({ children }) {
                 // User's redeemed promo codes
                 callbacksRef.current.onPromoHistory?.(message.codes);
                 break;
+            
+            // ==================== SLOT MACHINE MESSAGES ====================
+            case 'slot_spin_started': {
+                // Local player's spin started
+                setSlotSpinning(true);
+                setSlotResult(null);
+                callbacksRef.current.onSlotSpinStarted?.(message);
+                break;
+            }
+            
+            case 'slot_reel_reveal': {
+                // A reel was revealed (for spectators and local player)
+                callbacksRef.current.onSlotReelReveal?.(message);
+                break;
+            }
+            
+            case 'slot_result': {
+                // Local player's spin completed
+                setSlotSpinning(false);
+                setSlotResult(message);
+                
+                // Update coins
+                if (message.newBalance !== undefined) {
+                    GameManager.getInstance().setCoinsFromServer(message.newBalance);
+                    setUserData(prev => prev ? { ...prev, coins: message.newBalance } : prev);
+                }
+                
+                if (slotCallbackRef.current) {
+                    slotCallbackRef.current(message);
+                    slotCallbackRef.current = null;
+                }
+                callbacksRef.current.onSlotResult?.(message);
+                break;
+            }
+            
+            case 'slot_player_spinning': {
+                // Another player started spinning
+                setActiveSlotSpins(prev => [...prev, {
+                    playerId: message.playerId,
+                    playerName: message.playerName,
+                    machineId: message.machineId,
+                    playerPosition: message.playerPosition
+                }]);
+                callbacksRef.current.onSlotPlayerSpinning?.(message);
+                break;
+            }
+            
+            case 'slot_complete': {
+                // Another player's spin completed (spectator update)
+                setActiveSlotSpins(prev => prev.filter(s => s.playerId !== message.playerId));
+                callbacksRef.current.onSlotComplete?.(message);
+                break;
+            }
+            
+            case 'slot_interrupted': {
+                // A player's spin was interrupted (disconnect)
+                setActiveSlotSpins(prev => prev.filter(s => s.playerId !== message.playerId));
+                callbacksRef.current.onSlotInterrupted?.(message);
+                break;
+            }
+            
+            case 'slot_active_spins': {
+                // Current active spins in room (when joining)
+                setActiveSlotSpins(message.spins || []);
+                callbacksRef.current.onSlotActiveSpins?.(message.spins);
+                break;
+            }
+            
+            case 'slot_error': {
+                // Slot spin error
+                setSlotSpinning(false);
+                if (slotCallbackRef.current) {
+                    slotCallbackRef.current({ error: message.error, message: message.message });
+                    slotCallbackRef.current = null;
+                }
+                callbacksRef.current.onSlotError?.(message);
+                break;
+            }
+            
+            case 'slot_info': {
+                // Slot machine info (payouts, symbols)
+                callbacksRef.current.onSlotInfo?.(message.info);
+                break;
+            }
             
             // ==================== PUFFLE MESSAGES ====================
             case 'puffle_adopted': {
@@ -930,6 +1020,49 @@ export function MultiplayerProvider({ children }) {
         setPromoResult(null);
     }, []);
     
+    /**
+     * Spin a slot machine
+     * @param {string} machineId - The slot machine ID
+     * @returns {Promise<object>} - Result from server
+     */
+    const spinSlot = useCallback((machineId) => {
+        return new Promise((resolve) => {
+            if (!connected) {
+                resolve({ error: 'NOT_CONNECTED', message: 'Not connected to server' });
+                return;
+            }
+            
+            // Allow both authenticated and guest users to spin
+            // Server will handle coin validation
+            
+            if (!machineId) {
+                resolve({ error: 'INVALID_MACHINE', message: 'Invalid slot machine' });
+                return;
+            }
+            
+            // Store callback to resolve promise when server responds
+            slotCallbackRef.current = resolve;
+            
+            // Send to server with guest coins and demo flag
+            const guestCoins = !isAuthenticated ? GameManager.getInstance().getCoins() : 0;
+            const isDemo = !isAuthenticated; // Guests get demo mode (FOMO generator)
+            send({ type: 'slot_spin', machineId, guestCoins, isDemo });
+            
+            // Timeout after 10 seconds
+            setTimeout(() => {
+                if (slotCallbackRef.current === resolve) {
+                    setSlotSpinning(false);
+                    slotCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, isAuthenticated, send]);
+    
+    const clearSlotResult = useCallback(() => {
+        setSlotResult(null);
+    }, []);
+    
     // Connect on mount
     useEffect(() => {
         connect();
@@ -977,6 +1110,13 @@ export function MultiplayerProvider({ children }) {
         promoLoading,
         promoResult,
         clearPromoResult,
+        
+        // Slot Machine Actions
+        spinSlot,
+        slotSpinning,
+        slotResult,
+        clearSlotResult,
+        activeSlotSpins,
         
         // Puffle Actions
         adoptPuffle,

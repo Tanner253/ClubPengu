@@ -66,3 +66,9 @@ export { default as LocalizedParticleSystem, PRESETS as LOCALIZED_PARTICLE_PRESE
 // Camera controller (smooth third-person camera with trailing)
 export { default as CameraController } from './CameraController';
 
+// Slot machine system (casino slots interaction and spectator bubbles)
+export { default as SlotMachineSystem, SPIN_COST as SLOT_SPIN_COST, SYMBOLS as SLOT_SYMBOLS } from './SlotMachineSystem';
+
+// Jackpot celebration system (disco ball, confetti, lasers)
+export { default as JackpotCelebration } from './JackpotCelebration';
+

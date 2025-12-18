@@ -8,6 +8,7 @@ import BaseRoom from './BaseRoom';
 import SlotMachineDisplay from '../props/casino/SlotMachineDisplay';
 import PokerChipStack from '../props/casino/PokerChipStack';
 import NightclubCouch from '../props/nightclub/NightclubCouch';
+import { createSlotPayoutBoard } from '../props/casino/SlotPayoutBoard';
 
 class CasinoRoom extends BaseRoom {
     static ID = 'casino_game_room';
@@ -83,6 +84,9 @@ class CasinoRoom extends BaseRoom {
         
         // ==================== EXIT PORTAL ====================
         this._createExitDoor(scene, CX, D); // Against back wall
+        
+        // ==================== SLOT PAYOUT BOARD (near exit) ====================
+        this._createPayoutBoard(scene, CX, D);
         
         // ==================== LIGHTING ====================
         this._createLighting(scene, W, D, H, CX, CZ);
@@ -1293,6 +1297,35 @@ class CasinoRoom extends BaseRoom {
             targetSpawn: { x: -50, z: 3 }  // Casino exterior position
         });
     }
+    
+    _createPayoutBoard(scene, centerX, depth) {
+        const THREE = this.THREE;
+        const W = CasinoRoom.ROOM_WIDTH;
+        const D = CasinoRoom.ROOM_DEPTH;
+        const CZ = CasinoRoom.CENTER_Z;
+        
+        // Left wall board - centered on left wall, facing right (into room)
+        // Raised high (y: 15) for better visibility above slot machines
+        const leftBoard = createSlotPayoutBoard(
+            THREE,
+            { x: 0.5, y: 15, z: CZ }, // Left wall (x=0), high up on wall
+            Math.PI / 2 // Rotate to face into room (right)
+        );
+        scene.add(leftBoard.group);
+        this.meshes.push(leftBoard.group);
+        
+        // Right wall board - centered on right wall, facing left (into room)
+        const rightBoard = createSlotPayoutBoard(
+            THREE,
+            { x: W - 0.5, y: 15, z: CZ }, // Right wall (x=W), high up on wall
+            -Math.PI / 2 // Rotate to face into room (left)
+        );
+        scene.add(rightBoard.group);
+        this.meshes.push(rightBoard.group);
+        
+        // Store references for potential updates
+        this.payoutBoards = [leftBoard, rightBoard];
+    }
 
     _createLighting(scene, W, D, H, CX, CZ) {
         const THREE = this.THREE;
@@ -1563,8 +1596,46 @@ class CasinoRoom extends BaseRoom {
                 radius: 0.5 
             })),
             // Bar counter collision
-            counter: { minX: CX - 15, maxX: CX + 15, minZ: 5, maxZ: 7 }
+            counter: { minX: CX - 15, maxX: CX + 15, minZ: 5, maxZ: 7 },
+            // Slot machine positions for interaction
+            slotMachines: this.getSlotMachinePositions(),
+            // Room dimensions for slot system
+            roomWidth: W,
+            roomDepth: D
         };
+    }
+    
+    /**
+     * Get slot machine positions for interaction system
+     */
+    getSlotMachinePositions() {
+        const W = CasinoRoom.ROOM_WIDTH;
+        const slotRowZ = [15, 25, 35, 45, 55, 65];
+        const machines = [];
+        
+        // Left wall slots
+        slotRowZ.forEach((z, idx) => {
+            machines.push({
+                id: `slot_left_${idx}`,
+                x: 6,
+                z: z,
+                rotation: Math.PI / 2,
+                interactionRadius: 3
+            });
+        });
+        
+        // Right wall slots
+        slotRowZ.forEach((z, idx) => {
+            machines.push({
+                id: `slot_right_${idx}`,
+                x: W - 6,
+                z: z,
+                rotation: -Math.PI / 2,
+                interactionRadius: 3
+            });
+        });
+        
+        return machines;
     }
     
     /**

@@ -39,7 +39,7 @@ import {
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './config';
-import { createChatSprite, updateAIAgents, updateMatchBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor } from './systems';
+import { createChatSprite, updateAIAgents, updateMatchBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration } from './systems';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 
 const VoxelWorld = ({ 
@@ -84,6 +84,8 @@ const VoxelWorld = ({
     const mpUpdateAppearanceRef = useRef(null); // Ref for appearance update function
     const cameraControllerRef = useRef(null); // Smooth third-person camera controller
     const penguinDataRef = useRef(null); // Ref for current penguin data
+    const slotMachineSystemRef = useRef(null); // Slot machine interaction system
+    const jackpotCelebrationRef = useRef(null); // Jackpot celebration effects (disco ball, confetti, lasers)
     
     // Keep isInMatch ref up to date
     useEffect(() => {
@@ -153,7 +155,13 @@ const VoxelWorld = ({
         registerCallbacks,
         chatMessages,
         worldTimeRef: serverWorldTimeRef, // Server-synchronized world time
-        isAuthenticated // For determining persistence mode
+        isAuthenticated, // For determining persistence mode
+        // Slot machine
+        spinSlot,
+        slotSpinning,
+        slotResult,
+        activeSlotSpins,
+        userData
     } = useMultiplayer();
     
     // Keep refs updated for use in event handlers (must be after useMultiplayer destructuring)
@@ -282,6 +290,9 @@ const VoxelWorld = ({
     
     // Town Interaction State
     const [nearbyInteraction, setNearbyInteraction] = useState(null);
+    
+    // Slot Machine Interaction State
+    const [slotInteraction, setSlotInteraction] = useState(null); // { machine, prompt, canSpin }
     
     // Bench Sitting State
     const [seatedOnBench, setSeatedOnBench] = useState(null); // { benchId, snapPoint, worldPos }
@@ -825,6 +836,25 @@ const VoxelWorld = ({
             casinoRoom.spawn(scene);
             casinoRoomRef.current = casinoRoom;
             roomData = casinoRoom.getRoomData();
+            
+            // Initialize slot machine system
+            if (!slotMachineSystemRef.current && sceneRef.current) {
+                slotMachineSystemRef.current = new SlotMachineSystem(THREE, sceneRef.current);
+            }
+            if (slotMachineSystemRef.current) {
+                slotMachineSystemRef.current.initForCasino(roomData.roomWidth, roomData.roomDepth);
+            }
+            
+            // Initialize jackpot celebration system (disco ball, confetti, lasers)
+            if (!jackpotCelebrationRef.current && sceneRef.current) {
+                jackpotCelebrationRef.current = new JackpotCelebration(
+                    THREE, 
+                    sceneRef.current, 
+                    roomData.roomWidth, 
+                    roomData.roomDepth, 
+                    roomData.roomHeight || 20
+                );
+            }
         } else if (room.startsWith('igloo')) {
             // igloo3 is SKNY GANG nightclub-themed igloo
             if (room === 'igloo3') {
@@ -2802,6 +2832,16 @@ const VoxelWorld = ({
                     wizardTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
                 }
                 
+                // --- SLOT MACHINE SYSTEM (spectator bubbles) ---
+                if (slotMachineSystemRef.current) {
+                    slotMachineSystemRef.current.update(time, delta);
+                }
+                
+                // --- JACKPOT CELEBRATION (disco ball, confetti, lasers) ---
+                if (jackpotCelebrationRef.current) {
+                    jackpotCelebrationRef.current.update(time, delta);
+                }
+                
                 // --- MOUNT TRAIL SYSTEM (Icy trails, etc.) ---
                 if (mountTrailSystemRef.current) {
                     const isMountedWithTrail = playerRef.current.userData?.mount && 
@@ -3165,6 +3205,9 @@ const VoxelWorld = ({
                     }
                 }
                 
+                // Update slot spectator bubble position for other players
+                // Slot displays are now attached to machines, not players
+                
                 // Wizard hat trail for other players - use the same system as local player
                 // Wizard hat trail for other players - use the same system as local player
                 const otherAppearance = playerData.appearance || {};
@@ -3203,6 +3246,7 @@ const VoxelWorld = ({
                         const baseHeight = characterType === 'marcus' ? NAME_HEIGHT_MARCUS : NAME_HEIGHT_PENGUIN;
                         meshData.nameSprite.position.y = baseHeight + floatOffset;
                     }
+                    
                     
                     // Update gold rain particle system for Day 1 nametag (other players)
                     // Nametag particle rain - controlled by same setting as snow
@@ -3479,6 +3523,15 @@ const VoxelWorld = ({
             if (mountTrailSystemRef.current) {
                 mountTrailSystemRef.current.dispose();
                 mountTrailSystemRef.current = null;
+            }
+            // Cleanup slot machine system
+            if (slotMachineSystemRef.current) {
+                slotMachineSystemRef.current.cleanup();
+            }
+            // Cleanup jackpot celebration
+            if (jackpotCelebrationRef.current) {
+                jackpotCelebrationRef.current.cleanup();
+                jackpotCelebrationRef.current = null;
             }
             // Cleanup gold rain particle system
             if (playerGoldRainRef.current) {
@@ -3989,13 +4042,53 @@ const VoxelWorld = ({
     };
     
     // Portal check effect
+    // Check for nearby slot machines (casino only)
+    const checkSlotMachines = () => {
+        if (room !== 'casino_game_room') {
+            if (slotInteraction) setSlotInteraction(null);
+            return;
+        }
+        
+        // Initialize slot system if not already done
+        if (!slotMachineSystemRef.current && window.THREE && sceneRef.current) {
+            slotMachineSystemRef.current = new SlotMachineSystem(window.THREE, sceneRef.current);
+            const roomData = roomDataRef.current;
+            if (roomData?.roomWidth && roomData?.roomDepth) {
+                slotMachineSystemRef.current.initForCasino(roomData.roomWidth, roomData.roomDepth);
+            }
+        }
+        
+        if (!slotMachineSystemRef.current) {
+            return;
+        }
+        
+        const playerPos = posRef.current;
+        const playerCoins = userData?.coins || GameManager.getInstance().getCoins();
+        
+        const interaction = slotMachineSystemRef.current.checkInteraction(
+            playerPos.x,
+            playerPos.z,
+            playerCoins,
+            isAuthenticated
+        );
+        
+        if (interaction) {
+            if (!slotInteraction || slotInteraction.machine?.id !== interaction.machine?.id) {
+                setSlotInteraction(interaction);
+            }
+        } else if (slotInteraction) {
+            setSlotInteraction(null);
+        }
+    };
+    
     useEffect(() => {
         const interval = setInterval(() => {
             checkPortals();
             checkIglooProximity();
+            checkSlotMachines();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room]);
+    }, [nearbyPortal, room, slotInteraction, userData?.coins, isAuthenticated]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -4074,6 +4167,67 @@ const VoxelWorld = ({
         window.addEventListener('keydown', handleKeyPress);
         return () => window.removeEventListener('keydown', handleKeyPress);
     }, [nearbyPortal, emoteWheelOpen]);
+    
+    // Handle E key for slot machine spin - use ref to avoid stale closure
+    const slotInteractionRef = useRef(slotInteraction);
+    useEffect(() => {
+        slotInteractionRef.current = slotInteraction;
+    }, [slotInteraction]);
+    
+    const handleSlotSpin = useCallback(async () => {
+        console.log('🎰 handleSlotSpin called');
+        const currentSlotInteraction = slotInteractionRef.current;
+        
+        console.log('🎰 currentSlotInteraction:', currentSlotInteraction);
+        
+        if (!currentSlotInteraction?.canSpin || !currentSlotInteraction?.machine) {
+            console.log('🎰 Cannot spin - missing interaction or machine');
+            return;
+        }
+        
+        const machineId = currentSlotInteraction.machine.id;
+        const isDemo = currentSlotInteraction.isDemo;
+        
+        console.log('🎰 Machine:', machineId, 'isDemo:', isDemo);
+        console.log('🎰 slotMachineSystemRef.current:', !!slotMachineSystemRef.current);
+        
+        // Show spinning animation IMMEDIATELY (don't wait for server)
+        if (slotMachineSystemRef.current) {
+            if (!slotMachineSystemRef.current.scene && sceneRef.current) {
+                console.log('🎰 Restoring scene reference');
+                slotMachineSystemRef.current.scene = sceneRef.current;
+            }
+            console.log('🎰 Calling startSpin...');
+            slotMachineSystemRef.current.startSpin(machineId, playerName, isDemo);
+        } else {
+            console.error('🎰 NO SLOT MACHINE SYSTEM!');
+        }
+        
+        // Send spin request to server (don't await - result comes via onSlotResult callback)
+        console.log('🎰 Sending to server...');
+        spinSlot(machineId).then(result => {
+            console.log('🎰 Server result:', result);
+            if (result.error && slotMachineSystemRef.current) {
+                // If server rejects, hide the display
+                slotMachineSystemRef.current.handleSpinError(machineId);
+            }
+            // Success case is handled by onSlotResult callback
+        });
+    }, [spinSlot, playerId, playerName]);
+    
+    useEffect(() => {
+        const handleSlotKeyPress = (e) => {
+            if (e.code === 'KeyE') {
+                console.log('🎰 E pressed, canSpin:', slotInteractionRef.current?.canSpin, 'nearbyPortal:', nearbyPortal, 'emoteWheelOpen:', emoteWheelOpen, 'slotSpinning:', slotSpinning);
+                if (slotInteractionRef.current?.canSpin && !nearbyPortal && !emoteWheelOpen && !slotSpinning) {
+                    console.log('🎰 Calling handleSlotSpin...');
+                    handleSlotSpin();
+                }
+            }
+        };
+        window.addEventListener('keydown', handleSlotKeyPress);
+        return () => window.removeEventListener('keydown', handleSlotKeyPress);
+    }, [nearbyPortal, emoteWheelOpen, slotSpinning, handleSlotSpin]);
     
     // Handle town interactions (benches, snowmen, etc.)
     useEffect(() => {
@@ -4773,9 +4927,87 @@ const VoxelWorld = ({
                     ball.velocity.x = vx;
                     ball.velocity.z = vz;
                 }
+            },
+            // Slot machine callbacks - displays are now attached to MACHINES not players
+            onSlotSpinStarted: (data) => {
+                // Server confirmed our spin started - display already created in handleSlotSpin
+            },
+            onSlotReelReveal: (data) => {
+                // Update machine display with revealed reel
+                if (slotMachineSystemRef.current) {
+                    slotMachineSystemRef.current.revealReel(
+                        data.machineId,
+                        data.reelIndex,
+                        data.symbol
+                    );
+                }
+            },
+            onSlotResult: (data) => {
+                // Complete machine display
+                if (slotMachineSystemRef.current) {
+                    slotMachineSystemRef.current.completeSpin(
+                        data.machineId,
+                        data.reels,
+                        data.payout,
+                        data.isDemo
+                    );
+                }
+                
+                // Trigger jackpot celebration if it's a jackpot!
+                if (data.isJackpot && jackpotCelebrationRef.current) {
+                    console.log('🎰💰 JACKPOT DETECTED! Triggering celebration!');
+                    jackpotCelebrationRef.current.triggerJackpot();
+                }
+            },
+            onSlotPlayerSpinning: (data) => {
+                // Another player started spinning on a machine
+                if (slotMachineSystemRef.current && data.playerId !== playerId) {
+                    slotMachineSystemRef.current.handleRemoteSpinStart(
+                        data.machineId,
+                        data.playerName,
+                        data.isDemo
+                    );
+                }
+            },
+            onSlotComplete: (data) => {
+                // Another player completed spinning - handled by onSlotResult for their machine
+                if (slotMachineSystemRef.current && data.playerId !== playerId) {
+                    slotMachineSystemRef.current.completeSpin(
+                        data.machineId,
+                        data.reels,
+                        data.payout,
+                        data.isDemo
+                    );
+                }
+            },
+            onSlotInterrupted: (data) => {
+                // A player's spin was interrupted - hide machine display
+                if (slotMachineSystemRef.current) {
+                    slotMachineSystemRef.current.handleSpinError(data.machineId);
+                }
+            },
+            onSlotActiveSpins: (spins) => {
+                // Show displays for all active spins when joining room
+                if (slotMachineSystemRef.current) {
+                    for (const spin of spins) {
+                        slotMachineSystemRef.current.handleRemoteSpinStart(
+                            spin.machineId,
+                            spin.playerName,
+                            spin.isDemo
+                        );
+                        // Set revealed reels
+                        spin.reels?.forEach((reel, idx) => {
+                            slotMachineSystemRef.current.revealReel(
+                                spin.machineId,
+                                idx,
+                                reel
+                            );
+                        });
+                    }
+                }
             }
         });
-    }, [registerCallbacks]);
+    }, [registerCallbacks, playerId, playerName]);
     
     // Handle player list changes - CREATE/REMOVE meshes only
     useEffect(() => {
@@ -5046,8 +5278,63 @@ const VoxelWorld = ({
                 hasGame={!!(nearbyPortal?.targetRoom || nearbyPortal?.minigame || nearbyPortal?.teleportToRoof)}
              />
              
+             {/* Slot Machine Interaction Prompt */}
+             {slotInteraction && !nearbyPortal && room === 'casino_game_room' && (
+                <div 
+                    className={`absolute bg-gradient-to-b from-purple-900/95 to-black/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${
+                        slotInteraction.isDemo 
+                            ? 'border-green-500/50 shadow-green-500/20' 
+                            : 'border-yellow-500/50 shadow-yellow-500/20'
+                    } ${
+                        isMobile 
+                            ? isLandscape 
+                                ? 'bottom-[180px] right-28 p-3' 
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    }`}
+                >
+                    {/* Slot machine icon */}
+                    <div className="text-3xl mb-1">{slotInteraction.isDemo ? '🎁' : '🎰'}</div>
+                    
+                    {/* Demo badge for guests */}
+                    {slotInteraction.isDemo && (
+                        <div className="bg-green-500/20 border border-green-500/50 rounded-full px-3 py-0.5 mb-2 inline-block">
+                            <span className="text-green-400 text-xs font-bold">✨ FREE DEMO</span>
+                        </div>
+                    )}
+                    
+                    {/* Prompt text */}
+                    <p className={`retro-text mb-2 text-sm ${
+                        slotInteraction.isDemo ? 'text-green-400' : 
+                        slotInteraction.canSpin ? 'text-yellow-400' : 'text-gray-400'
+                    }`}>
+                        {slotInteraction.prompt}
+                    </p>
+                    
+                    {/* Spin Button (only if can spin) */}
+                    {slotInteraction.canSpin && (
+                        <button
+                            className={`w-full px-6 py-2 font-bold rounded-lg retro-text text-sm transition-all active:scale-95 shadow-lg ${
+                                slotInteraction.isDemo
+                                    ? 'bg-gradient-to-b from-green-400 to-green-600 hover:from-green-300 hover:to-green-500 text-black'
+                                    : 'bg-gradient-to-b from-yellow-400 to-yellow-600 hover:from-yellow-300 hover:to-yellow-500 text-black'
+                            }`}
+                            onClick={handleSlotSpin}
+                            disabled={slotSpinning}
+                        >
+                            {slotSpinning ? '🎰 SPINNING...' : slotInteraction.isDemo ? '🎁 TRY FREE!' : '🎰 SPIN!'}
+                        </button>
+                    )}
+                    
+                    {/* FOMO hint for guests */}
+                    {slotInteraction.isDemo && (
+                        <p className="text-xs text-yellow-400/80 mt-2">🔑 Login to win real gold!</p>
+                    )}
+                </div>
+             )}
+             
              {/* Town Interaction Prompt - Clickable like dojo enter */}
-             {nearbyInteraction && !nearbyPortal && (
+             {nearbyInteraction && !nearbyPortal && !slotInteraction && (
                 <div 
                     className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border border-white/20 text-center z-20 ${
                         isMobile 

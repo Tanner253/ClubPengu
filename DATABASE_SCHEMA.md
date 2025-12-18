@@ -963,11 +963,12 @@ All financial/value transactions for auditing.
   
   transactionId: String,        // Unique ID
   
-  // Type
-  type: String,                 // 'wager_payout' | 'wager_loss' | 'purchase' | 
-                                // 'sale' | 'rental_payment' | 'slot_spin' | 
-                                // 'slot_win' | 'promo_bonus' | 'stamp_bonus' | 
-                                // 'admin_adjustment'
+// Type
+ type: String,                 // 'wager_escrow' | 'wager_payout' | 'wager_refund' | 
+                               // 'purchase' | 'puffle_adopt' | 'promo_bonus' | 
+                               // 'stamp_bonus' | 'admin_adjustment' | 'starting_bonus' | 
+                               // 'migration' | 'chat_bonus' | 'minigame_reward' | 
+                               // 'slot_spin' | 'slot_payout'
   
   // Participants
   fromWallet: String,           // Source (null for system/mint operations)

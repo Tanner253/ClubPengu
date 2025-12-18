@@ -16,7 +16,8 @@ import {
     MatchService,
     AuthService,
     UserService,
-    PromoCodeService
+    PromoCodeService,
+    SlotService
 } from './services/index.js';
 
 const PORT = process.env.PORT || 3001;
@@ -126,6 +127,7 @@ sendToPlayer = (playerId, message) => {
 // Initialize services that need broadcast functions
 const challengeService = new ChallengeService(inboxService, statsService);
 const matchService = new MatchService(statsService, userService, broadcastToRoom, sendToPlayer);
+const slotService = new SlotService(userService, broadcastToRoom, sendToPlayer);
 
 // ==================== PERIODIC BROADCASTS ====================
 setInterval(() => {
@@ -434,6 +436,9 @@ wss.on('connection', (ws, req) => {
         const player = players.get(playerId);
         
         if (player) {
+            // Handle slot disconnect (cancel any active spin)
+            slotService.handleDisconnect(playerId);
+            
             // Handle match disconnect
             const voidResult = await matchService.handleDisconnect(playerId);
             if (voidResult) {
@@ -942,6 +947,12 @@ async function handleMessage(playerId, message) {
             const activeMatches = matchService.getMatchesInRoom(roomId);
             if (activeMatches.length > 0) {
                 sendToPlayer(playerId, { type: 'active_matches', matches: activeMatches });
+            }
+            
+            // Send active slot spins in room (for spectator bubbles)
+            const activeSlotSpins = slotService.getActiveSlotSpins(roomId);
+            if (activeSlotSpins.length > 0) {
+                sendToPlayer(playerId, { type: 'slot_active_spins', spins: activeSlotSpins });
             }
             
             console.log(`[${ts()}] ${player.name} joined ${roomId}${player.isAuthenticated ? ' (authenticated)' : ' (guest)'}`);
@@ -2117,6 +2128,87 @@ async function handleMessage(playerId, message) {
             break;
         }
         
+        // ==================== SLOT MACHINE ====================
+        case 'slot_spin': {
+            // Player wants to spin a slot machine
+            const { machineId, guestCoins, isDemo } = message;
+            
+            if (!machineId) {
+                sendToPlayer(playerId, {
+                    type: 'slot_error',
+                    error: 'INVALID_MACHINE',
+                    message: 'Invalid slot machine'
+                });
+                break;
+            }
+            
+            const spinResult = await slotService.spin(
+                playerId,
+                player.walletAddress,
+                player.room,
+                machineId,
+                player.name,
+                player.position,
+                guestCoins || 0,
+                isDemo || false // Demo mode for guests without coins
+            );
+            
+            if (spinResult.error) {
+                sendToPlayer(playerId, {
+                    type: 'slot_error',
+                    error: spinResult.error,
+                    message: spinResult.message
+                });
+            } else {
+                // Send spin started confirmation
+                sendToPlayer(playerId, {
+                    type: 'slot_spin_started',
+                    machineId: spinResult.machineId,
+                    newBalance: spinResult.newBalance,
+                    spinCost: spinResult.spinCost
+                });
+                
+                // Broadcast to room that player started spinning
+                broadcastToRoom(player.room, {
+                    type: 'slot_player_spinning',
+                    playerId,
+                    playerName: player.name,
+                    playerPosition: player.position,
+                    machineId,
+                    isDemo: spinResult.isDemo
+                }, playerId);
+                
+                // Send updated coins
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: spinResult.newBalance,
+                    isAuthenticated: true
+                });
+            }
+            break;
+        }
+        
+        case 'slot_info': {
+            // Get slot machine info (symbols, payouts)
+            sendToPlayer(playerId, {
+                type: 'slot_info',
+                info: SlotService.getSlotInfo()
+            });
+            break;
+        }
+        
+        case 'slot_sync': {
+            // Get active slot spins in the current room
+            if (player.room) {
+                const activeSpins = slotService.getActiveSlotSpins(player.room);
+                sendToPlayer(playerId, {
+                    type: 'slot_active_spins',
+                    spins: activeSpins
+                });
+            }
+            break;
+        }
+        
         // ==================== MINIGAME REWARDS ====================
         case 'minigame_reward': {
             // Server-authoritative single-player minigame rewards
@@ -2164,6 +2256,9 @@ setInterval(async () => {
     for (const [playerId, player] of players) {
         if (player.ws.readyState !== 1) {
             console.log(`Cleaning up stale player: ${playerId}`);
+            
+            // Handle slot disconnect
+            slotService.handleDisconnect(playerId);
             
             const voidResult = await matchService.handleDisconnect(playerId);
             if (voidResult) {

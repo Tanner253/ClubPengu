@@ -29,7 +29,9 @@ const transactionSchema = new mongoose.Schema({
             'starting_bonus',    // New player starting coins
             'migration',         // Migration from localStorage
             'chat_bonus',        // Coins earned from chatting
-            'minigame_reward'    // Coins earned from single-player minigames
+            'minigame_reward',   // Coins earned from single-player minigames
+            'slot_spin',         // Slot machine spin cost
+            'slot_payout'        // Slot machine winnings
         ],
         index: true
     },
