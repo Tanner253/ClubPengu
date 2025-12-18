@@ -52,7 +52,14 @@ const Inbox = () => {
     
     const renderMessage = (msg) => {
         if (msg.type === 'challenge') {
-            const canAfford = playerCoins >= msg.wagerAmount;
+            // Extract challenge data (may be nested in msg.data or flat on msg)
+            const challengeData = msg.data || msg;
+            const wagerAmount = challengeData.wagerAmount ?? 0;
+            const challengerName = challengeData.challengerName || msg.challengerName || 'Unknown';
+            const gameType = challengeData.gameType || msg.gameType;
+            const challengeId = challengeData.challengeId || msg.challengeId;
+            
+            const canAfford = playerCoins >= wagerAmount;
             const isExpired = msg.expiresAt && msg.expiresAt < Date.now();
             
             return (
@@ -63,10 +70,10 @@ const Inbox = () => {
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-white font-medium text-sm sm:text-base">
-                                Challenge from <span className="text-red-400 truncate">{msg.challengerName}</span>
+                                Challenge from <span className="text-red-400 truncate">{challengerName}</span>
                             </p>
                             <p className="text-white/60 text-xs sm:text-sm">
-                                {gameNames[msg.gameType] || msg.gameType} • <span className="text-yellow-400">{msg.wagerAmount} coins</span>
+                                {gameNames[gameType] || gameType} • <span className="text-yellow-400">{wagerAmount} coins</span>
                             </p>
                             {!isExpired && msg.expiresAt && (
                                 <p className="text-white/40 text-[10px] sm:text-xs mt-1">
@@ -80,7 +87,7 @@ const Inbox = () => {
                             {!isExpired && (
                                 <div className="flex gap-1.5 sm:gap-2 mt-2 sm:mt-3">
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); acceptChallenge(msg.challengeId); }}
+                                        onClick={(e) => { e.stopPropagation(); acceptChallenge(challengeId); }}
                                         disabled={!canAfford || isInMatch}
                                         className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors active:scale-95 ${
                                             canAfford && !isInMatch
@@ -92,7 +99,7 @@ const Inbox = () => {
                                         Accept
                                     </button>
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); denyChallenge(msg.challengeId); }}
+                                        onClick={(e) => { e.stopPropagation(); denyChallenge(challengeId); }}
                                         className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 active:bg-red-500/40 transition-colors active:scale-95"
                                     >
                                         Deny
@@ -108,7 +115,7 @@ const Inbox = () => {
                             
                             {!canAfford && !isExpired && (
                                 <p className="text-yellow-400 text-[10px] sm:text-xs mt-1.5 sm:mt-2">
-                                    ⚠️ You need {msg.wagerAmount - playerCoins} more coins
+                                    ⚠️ You need {wagerAmount - playerCoins} more coins
                                 </p>
                             )}
                         </div>
@@ -118,6 +125,13 @@ const Inbox = () => {
         }
         
         if (msg.type === 'challenge_response') {
+            // Extract response data (may be nested in msg.data or flat on msg)
+            const responseData = msg.data || msg;
+            const respWagerAmount = responseData.wagerAmount ?? msg.wagerAmount ?? 0;
+            const respGameType = responseData.gameType || msg.gameType;
+            const respOtherPlayer = responseData.otherPlayerName || msg.otherPlayerName || 'Unknown';
+            const respResponse = responseData.response || msg.response;
+            
             const icons = {
                 'accepted': '✅',
                 'denied': '❌',
@@ -136,15 +150,15 @@ const Inbox = () => {
                 <div key={msg.id} className="bg-white/5 border border-white/10 rounded-xl p-3 sm:p-4">
                     <div className="flex items-start gap-2 sm:gap-3">
                         <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/10 flex items-center justify-center text-base sm:text-lg shrink-0">
-                            {icons[msg.response] || '📩'}
+                            {icons[respResponse] || '📩'}
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-white text-sm sm:text-base">
-                                <span className="font-medium truncate">{msg.otherPlayerName}</span>{' '}
-                                <span className="text-white/70">{messages[msg.response]}</span>
+                                <span className="font-medium truncate">{respOtherPlayer}</span>{' '}
+                                <span className="text-white/70">{messages[respResponse]}</span>
                             </p>
                             <p className="text-white/40 text-[10px] sm:text-xs mt-1">
-                                {gameNames[msg.gameType]} • {msg.wagerAmount} coins
+                                {gameNames[respGameType]} • {respWagerAmount} coins
                             </p>
                         </div>
                         <button
