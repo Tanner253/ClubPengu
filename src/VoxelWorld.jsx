@@ -1555,6 +1555,16 @@ const VoxelWorld = ({
         
         // --- GAME LOOP ---
         let frameCount = 0;
+        
+        // OPTIMIZATION: Cache device detection outside loop (runs once, not every frame)
+        const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        const rotSpeedMultiplier = isMobileDevice ? 2 : 4.5;
+        
+        // OPTIMIZATION: Pre-calculate constants
+        const MAX_DELTA = 0.1;
+        const BASE_SPEED = 10;
+        const TERMINAL_VELOCITY = -25;
+        
         const update = () => {
             reqRef.current = requestAnimationFrame(update);
             frameCount++;
@@ -1563,25 +1573,21 @@ const VoxelWorld = ({
             const time = clock.getElapsedTime(); 
             
             // CRITICAL: Clamp delta to prevent physics issues when tab loses focus
-            // When switching tabs, browser pauses RAF and delta becomes huge on return
-            // This prevents players from falling through floors/platforms
-            const MAX_DELTA = 0.1; // Cap at 100ms (10 FPS minimum)
             if (delta > MAX_DELTA) {
                 delta = MAX_DELTA;
             }
             
             // Base speed with mount speed boost (pengu mount gives 5% boost)
-            let speed = 10 * delta;
-            if (playerRef.current?.userData?.mountData?.speedBoost && mountEnabledRef.current) {
-                speed *= playerRef.current.userData.mountData.speedBoost;
+            let speed = BASE_SPEED * delta;
+            const mountData = playerRef.current?.userData?.mountData;
+            if (mountData?.speedBoost && mountEnabledRef.current) {
+                speed *= mountData.speedBoost;
             }
             // Apply mount trail effects (icy = speed boost + slippery)
             if (mountTrailSystemRef.current) {
                 speed *= mountTrailSystemRef.current.getSpeedMultiplier();
             }
-            // PC rotation is faster for tighter turning with A/D keys
-            const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            const rotSpeed = isMobileDevice ? (2 * delta) : (4.5 * delta); // PC: 50% increase (3 -> 4.5)
+            const rotSpeed = rotSpeedMultiplier * delta;
             let moving = false;
             
             // Jump physics constants
@@ -1647,8 +1653,7 @@ const VoxelWorld = ({
             velRef.current.y -= GRAVITY * delta;
             
             // Clamp terminal velocity to prevent falling through floors
-            // Using a lower cap to ensure collision detection works properly
-            if (velRef.current.y < -25) velRef.current.y = -25;
+            if (velRef.current.y < TERMINAL_VELOCITY) velRef.current.y = TERMINAL_VELOCITY;
             
             const anyMovementInput = keyForward || keyBack || keyLeft || keyRight || 
                                       mobileForward || mobileBack || mobileLeft || mobileRight ||
@@ -2867,7 +2872,8 @@ const VoxelWorld = ({
                     }
                     
                     // Update trail system (fade trails, check effects)
-                    mountTrailSystemRef.current.update(Date.now(), { x: posRef.current.x, z: posRef.current.z });
+                    // Note: 'time' from clock.getElapsedTime() is used for consistent timing
+                    mountTrailSystemRef.current.update(time * 1000, { x: posRef.current.x, z: posRef.current.z });
                 }
                 
                 // --- MOUNT ANIMATION ---
@@ -3012,9 +3018,20 @@ const VoxelWorld = ({
             const lerpFactor = calculateLerpFactor(delta, 10);
             const yLerpFactor = calculateLerpFactor(delta, 15);
             
+            // OPTIMIZATION: Cache local player position for distance checks
+            const localPosX = posRef.current?.x || 0;
+            const localPosZ = posRef.current?.z || 0;
+            const DISTANT_PLAYER_THRESHOLD_SQ = 50 * 50; // 50 units = distant
+            
             for (const [id, meshData] of otherMeshes) {
                 const playerData = playersData.get(id);
                 if (!playerData || !meshData.mesh) continue;
+                
+                // OPTIMIZATION: Calculate distance to local player
+                const dx = (playerData.position?.x || 0) - localPosX;
+                const dz = (playerData.position?.z || 0) - localPosZ;
+                const distSq = dx * dx + dz * dz;
+                const isDistant = distSq > DISTANT_PLAYER_THRESHOLD_SQ;
                 
                 // Check if player is seated - if so, handle position differently
                 const isSeated = playerData.seatedOnFurniture || 
@@ -3111,27 +3128,32 @@ const VoxelWorld = ({
                     }
                 }
                 
-                // Animate other player mesh (walking/emotes)
-                // If seated on furniture, never consider as "moving" (prevents walk animation overriding sit)
-                const isMoving = !isSeated && playerData.position && (
-                    Math.abs(playerData.position.x - meshData.mesh.position.x) > 0.1 ||
-                    Math.abs(playerData.position.z - meshData.mesh.position.z) > 0.1
-                );
-                // Consider mount only if it's visible
-                const otherPlayerMounted = !!(meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData && meshData.mesh.userData?.mountVisible !== false);
-                const otherIsAirborne = (playerData.position?.y ?? 0) > 0.1;
-                animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted, otherIsAirborne, time);
+                // OPTIMIZATION: Distant players only animate every 3rd frame (saves ~66% CPU on animations)
+                const shouldAnimateThisFrame = !isDistant || (frameCount % 3 === 0);
                 
-                // Animate cosmetics for other players with animated items
-                if (meshData.hasAnimatedCosmetics) {
-                    if (!meshData.mesh.userData._animatedPartsCache) {
-                        meshData.mesh.userData._animatedPartsCache = cacheAnimatedParts(meshData.mesh);
+                if (shouldAnimateThisFrame) {
+                    // Animate other player mesh (walking/emotes)
+                    // If seated on furniture, never consider as "moving" (prevents walk animation overriding sit)
+                    const isMoving = !isSeated && playerData.position && (
+                        Math.abs(playerData.position.x - meshData.mesh.position.x) > 0.1 ||
+                        Math.abs(playerData.position.z - meshData.mesh.position.z) > 0.1
+                    );
+                    // Consider mount only if it's visible
+                    const otherPlayerMounted = !!(meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData && meshData.mesh.userData?.mountVisible !== false);
+                    const otherIsAirborne = (playerData.position?.y ?? 0) > 0.1;
+                    animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted, otherIsAirborne, time);
+                    
+                    // Animate cosmetics for other players with animated items
+                    if (meshData.hasAnimatedCosmetics) {
+                        if (!meshData.mesh.userData._animatedPartsCache) {
+                            meshData.mesh.userData._animatedPartsCache = cacheAnimatedParts(meshData.mesh);
+                        }
+                        animateCosmeticsFromCache(meshData.mesh.userData._animatedPartsCache, time, delta);
                     }
-                    animateCosmeticsFromCache(meshData.mesh.userData._animatedPartsCache, time, delta);
                 }
                 
-                // Mount animation for other players
-                if (meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData?.animated) {
+                // Mount animation for other players (also throttled for distant players)
+                if (shouldAnimateThisFrame && meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData?.animated) {
                     const mountGroup = meshData.mesh.getObjectByName('mount');
                     const mountData = meshData.mesh.userData.mountData;
                     

@@ -238,14 +238,20 @@ class VegasMarquee extends BaseProp {
     }
     
     update(time, delta) {
-        // Throttle updates to every 50ms for performance
-        if (time - this.lastUpdateTime < 0.05) return;
+        // Throttle updates to every 80ms for performance (was 50ms)
+        if (time - this.lastUpdateTime < 0.08) return;
         this.lastUpdateTime = time;
         
-        // Animate chasing bulb lights
-        const colorUpdateThreshold = Math.floor(time * 2) % 10 === 0;
+        // Pre-calculate values used across all bulbs
+        const colorUpdateThreshold = Math.floor(time * 2) % 15 === 0; // Less frequent color updates
         
-        this.bulbs.forEach((bulb, i) => {
+        // Animate chasing bulb lights - only process every 3rd bulb per frame for performance
+        // All bulbs still animate, but checks are distributed across frames
+        const bulbCount = this.bulbs.length;
+        const frameOffset = Math.floor(time * 20) % 3;
+        
+        for (let i = frameOffset; i < bulbCount; i += 3) {
+            const bulb = this.bulbs[i];
             const idx = bulb.userData.bulbIndex;
             const row = bulb.userData.rowIndex;
             const state = this.bulbStates[i];
@@ -269,30 +275,34 @@ class VegasMarquee extends BaseProp {
                 }
             }
             
-            // Color cycling - only for row 0 and only every few updates
+            // Color cycling - only for row 0 and only occasionally
             if (row === 0 && colorUpdateThreshold) {
                 const hue = (time * 0.3 + idx * 0.05) % 1;
                 bulb.material.emissive.setHSL(hue, 1, 0.5);
                 bulb.material.color.setHSL(hue, 1, 0.5);
             }
-        });
+        }
         
-        // Animate star centers (reduced update frequency)
-        this.starCenters.forEach((center, idx) => {
-            const pulse = Math.sin(time * 6 + idx * Math.PI / 2) * 0.5 + 0.5;
-            center.material.emissiveIntensity = 0.6 + pulse * 0.4;
-            center.scale.setScalar(1 + pulse * 0.15);
-        });
+        // Animate star centers - only every other frame
+        if (frameOffset === 0) {
+            this.starCenters.forEach((center, idx) => {
+                const pulse = Math.sin(time * 6 + idx * Math.PI / 2) * 0.5 + 0.5;
+                center.material.emissiveIntensity = 0.6 + pulse * 0.4;
+                center.scale.setScalar(1 + pulse * 0.15);
+            });
+        }
         
-        // Animate star spikes
-        this.starSpikes.forEach(spike => {
-            const sIdx = spike.userData.spikeIndex;
-            const cIdx = spike.userData.cornerIndex;
-            
-            const spikePhase = (time * 4 + sIdx * 0.3 + cIdx) % (Math.PI * 2);
-            const spikePulse = Math.sin(spikePhase) * 0.5 + 0.5;
-            spike.material.emissiveIntensity = 0.4 + spikePulse * 0.6;
-        });
+        // Animate star spikes - only every other frame (offset from centers)
+        if (frameOffset === 1) {
+            this.starSpikes.forEach(spike => {
+                const sIdx = spike.userData.spikeIndex;
+                const cIdx = spike.userData.cornerIndex;
+                
+                const spikePhase = (time * 4 + sIdx * 0.3 + cIdx) % (Math.PI * 2);
+                const spikePulse = Math.sin(spikePhase) * 0.5 + 0.5;
+                spike.material.emissiveIntensity = 0.4 + spikePulse * 0.6;
+            });
+        }
     }
 }
 

@@ -216,51 +216,46 @@ class GoldenDiceTower extends BaseProp {
     }
     
     update(time, delta) {
-        // Throttle to every 50ms
-        if (time - this.lastUpdateTime < 0.05) return;
-        this.lastUpdateTime = time;
-        
-        // Animate dice with subtle floating and rotation
+        // Dice rotation ALWAYS updates (cheap operation, needs to be smooth)
         this.dice.forEach((dice) => {
             const idx = dice.userData.diceIndex;
-            
-            // Gentle floating
-            const floatOffset = Math.sin(time * 1.5 + idx * 0.8) * 0.1;
-            dice.position.y = dice.userData.baseY + floatOffset;
-            
-            // Slow rotation
+            dice.position.y = dice.userData.baseY + Math.sin(time * 1.5 + idx * 0.8) * 0.1;
             dice.rotation.y = dice.userData.baseRotY + time * 0.3 + idx * 0.2;
-            
-            // Subtle wobble
             dice.rotation.x = Math.sin(time * 2 + idx) * 0.05;
             dice.rotation.z = Math.cos(time * 1.8 + idx * 0.5) * 0.05;
         });
         
-        // Animate glow rings
-        this.glowRings.forEach((ring) => {
-            const idx = ring.userData.ringIndex;
-            
-            // Pulse intensity
-            const pulse = Math.sin(time * 4 + idx * Math.PI / 2) * 0.5 + 0.5;
-            ring.material.emissiveIntensity = 0.5 + pulse * 0.5;
-            ring.material.opacity = 0.5 + pulse * 0.3;
-            
-            // Color shift
-            const hue = (time * 0.2 + idx * 0.15) % 1;
-            ring.material.emissive.setHSL(hue, 1, 0.5);
-            ring.material.color.setHSL(hue, 1, 0.5);
-            
-            // Scale pulse
-            ring.scale.setScalar(1 + pulse * 0.1);
-        });
-        
-        // Animate crown gem
+        // Crown gem rotation ALWAYS updates (cheap, needs smooth spin)
         if (this.gem) {
             this.gem.rotation.y = time * 2;
             this.gem.rotation.x = Math.sin(time * 3) * 0.2;
-            
-            const gemPulse = Math.sin(time * 5) * 0.5 + 0.5;
-            this.gem.material.emissiveIntensity = 0.8 + gemPulse * 0.4;
+        }
+        
+        // Throttle expensive material updates to every 80ms
+        if (time - this.lastUpdateTime < 0.08) return;
+        this.lastUpdateTime = time;
+        
+        // Animate glow rings (material updates are expensive - throttled)
+        if (this.glowRings.length > 0) {
+            this.glowRings.forEach((ring) => {
+                const idx = ring.userData.ringIndex;
+                const pulse = Math.sin(time * 4 + idx * Math.PI / 2) * 0.5 + 0.5;
+                ring.material.emissiveIntensity = 0.5 + pulse * 0.5;
+                ring.material.opacity = 0.5 + pulse * 0.3;
+                ring.scale.setScalar(1 + pulse * 0.1);
+                
+                // Color shift - less frequently (expensive HSL conversion)
+                if (Math.floor(time * 3) % 2 === 0) {
+                    const hue = (time * 0.2 + idx * 0.15) % 1;
+                    ring.material.emissive.setHSL(hue, 1, 0.5);
+                    ring.material.color.setHSL(hue, 1, 0.5);
+                }
+            });
+        }
+        
+        // Crown gem emissive pulse (throttled - material update)
+        if (this.gem) {
+            this.gem.material.emissiveIntensity = 0.8 + Math.sin(time * 5) * 0.2 + 0.2;
         }
     }
 }

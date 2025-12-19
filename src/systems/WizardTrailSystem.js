@@ -3,6 +3,11 @@
  * 
  * Creates sparkly particle trails that spawn when moving and fade out over time.
  * Each player with a wizard hat gets their own particle pool.
+ * 
+ * PERFORMANCE OPTIMIZED:
+ * - Shared geometry across ALL particles (single SphereGeometry)
+ * - Materials cached per color (only 6 materials total)
+ * - Particles reuse mesh instances from pool
  */
 
 const WIZARD_PARTICLE_COUNT = 50;
@@ -13,6 +18,19 @@ class WizardTrailSystem {
         this.THREE = THREE;
         this.scene = scene;
         this.pools = new Map(); // poolKey -> trailGroup
+        
+        // OPTIMIZATION: Create shared geometry ONCE
+        this.sharedGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+        
+        // OPTIMIZATION: Create cached materials per color (transparent, will update opacity per-particle)
+        this.materialCache = new Map();
+        WIZARD_TRAIL_COLORS.forEach(color => {
+            this.materialCache.set(color, new THREE.MeshBasicMaterial({ 
+                color: color, 
+                transparent: true, 
+                opacity: 0
+            }));
+        });
     }
     
     /**
@@ -25,14 +43,17 @@ class WizardTrailSystem {
         trailGroup.name = 'wizard_trail_pool';
         
         for (let i = 0; i < WIZARD_PARTICLE_COUNT; i++) {
-            const size = 0.08 + Math.random() * 0.06;
-            const pGeo = new THREE.SphereGeometry(size, 8, 8);
-            const pMat = new THREE.MeshBasicMaterial({ 
-                color: WIZARD_TRAIL_COLORS[Math.floor(Math.random() * WIZARD_TRAIL_COLORS.length)], 
-                transparent: true, 
-                opacity: 0
-            });
-            const pMesh = new THREE.Mesh(pGeo, pMat);
+            // OPTIMIZATION: Use shared geometry, clone material for individual opacity control
+            const colorIndex = Math.floor(Math.random() * WIZARD_TRAIL_COLORS.length);
+            const baseColor = WIZARD_TRAIL_COLORS[colorIndex];
+            // Clone material so each particle can have its own opacity
+            const pMat = this.materialCache.get(baseColor).clone();
+            pMat.opacity = 0;
+            
+            const pMesh = new THREE.Mesh(this.sharedGeometry, pMat);
+            // Random size variation via scale instead of new geometry
+            const sizeScale = 0.8 + Math.random() * 0.6;
+            pMesh.scale.setScalar(sizeScale);
             pMesh.visible = false;
             pMesh.userData.active = false;
             pMesh.userData.birthTime = 0;
@@ -145,9 +166,11 @@ class WizardTrailSystem {
         const pool = this.pools.get(poolKey);
         if (pool) {
             this.scene.remove(pool);
+            // Only dispose cloned materials, not shared geometry
             pool.children.forEach(particle => {
-                particle.geometry.dispose();
-                particle.material.dispose();
+                if (particle.material) {
+                    particle.material.dispose();
+                }
             });
             this.pools.delete(poolKey);
         }
@@ -162,13 +185,25 @@ class WizardTrailSystem {
     }
     
     /**
-     * Dispose all particle pools
+     * Dispose all particle pools and shared resources
      */
     dispose() {
         this.pools.forEach((pool, key) => {
             this.removePool(key);
         });
         this.pools.clear();
+        
+        // Dispose shared geometry
+        if (this.sharedGeometry) {
+            this.sharedGeometry.dispose();
+            this.sharedGeometry = null;
+        }
+        
+        // Dispose cached base materials
+        if (this.materialCache) {
+            this.materialCache.forEach(mat => mat.dispose());
+            this.materialCache.clear();
+        }
     }
 }
 

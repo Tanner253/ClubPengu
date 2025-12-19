@@ -6,11 +6,16 @@
  * - Confetti particles raining from ceiling
  * - Pulsing lights
  * - Sound effects ready (just add audio)
+ * 
+ * PERFORMANCE OPTIMIZED:
+ * - Shared geometry for all laser beams (single CylinderGeometry)
+ * - Cached materials per color
  */
 
 const CELEBRATION_DURATION = 10000; // 10 seconds of party!
 const CONFETTI_COUNT = 200;
 const LASER_COUNT = 12;
+const LASER_COLORS = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0xffff00, 0x00ffff];
 
 class JackpotCelebration {
     constructor(THREE, scene, roomWidth, roomDepth, roomHeight) {
@@ -21,6 +26,19 @@ class JackpotCelebration {
         this.roomHeight = roomHeight;
         this.isActive = false;
         this.startTime = 0;
+        
+        // OPTIMIZATION: Shared laser geometry (created once)
+        this.sharedLaserGeometry = new THREE.CylinderGeometry(0.05, 0.05, 40, 8);
+        
+        // OPTIMIZATION: Cached materials per color
+        this.laserMaterialCache = new Map();
+        LASER_COLORS.forEach(color => {
+            this.laserMaterialCache.set(color, new THREE.MeshBasicMaterial({
+                color: color,
+                transparent: true,
+                opacity: 0.7
+            }));
+        });
         
         // Create disco ball (always present, but hidden when not celebrating)
         this.createDiscoBall();
@@ -86,19 +104,14 @@ class JackpotCelebration {
         this.lasers = [];
         this.laserLights = [];
         
-        const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xff00ff, 0xffff00, 0x00ffff];
-        
         for (let i = 0; i < LASER_COUNT; i++) {
-            // Laser beam geometry (thin cylinder)
-            const laserGeo = new THREE.CylinderGeometry(0.05, 0.05, 40, 8);
-            const color = colors[i % colors.length];
-            const laserMat = new THREE.MeshBasicMaterial({
-                color: color,
-                transparent: true,
-                opacity: 0.7
-            });
+            // OPTIMIZATION: Use shared geometry and clone cached material
+            const color = LASER_COLORS[i % LASER_COLORS.length];
+            const baseMaterial = this.laserMaterialCache.get(color);
+            // Clone material so each laser can have independent opacity
+            const laserMat = baseMaterial.clone();
             
-            const laser = new THREE.Mesh(laserGeo, laserMat);
+            const laser = new THREE.Mesh(this.sharedLaserGeometry, laserMat);
             laser.visible = false;
             
             // Position at disco ball
@@ -317,10 +330,27 @@ class JackpotCelebration {
         }
         if (this.confetti) {
             this.scene.remove(this.confetti);
+            if (this.confetti.geometry) this.confetti.geometry.dispose();
+            if (this.confetti.material) this.confetti.material.dispose();
         }
+        
+        // Dispose laser meshes (cloned materials)
         this.lasers.forEach(l => {
             this.scene.remove(l.mesh);
+            if (l.mesh.material) l.mesh.material.dispose();
         });
+        
+        // Dispose shared laser geometry
+        if (this.sharedLaserGeometry) {
+            this.sharedLaserGeometry.dispose();
+            this.sharedLaserGeometry = null;
+        }
+        
+        // Dispose cached base materials
+        if (this.laserMaterialCache) {
+            this.laserMaterialCache.forEach(mat => mat.dispose());
+            this.laserMaterialCache.clear();
+        }
     }
 }
 

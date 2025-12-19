@@ -9,6 +9,8 @@ class NeonTubing extends BaseProp {
     constructor(THREE) {
         super(THREE);
         this.tubes = [];
+        this.lastUpdateTime = 0;
+        this.flickerSeed = Math.random() * 1000; // Per-instance seed for deterministic flicker
     }
     
     spawn(scene, x, y, z, options = {}) {
@@ -217,22 +219,28 @@ class NeonTubing extends BaseProp {
     }
     
     update(time, delta) {
+        // Throttle updates to every 100ms for performance
+        if (time - this.lastUpdateTime < 0.1) return;
+        this.lastUpdateTime = time;
+        
         // Pulsing glow effect
+        const pulse = Math.sin(time * 4) * 0.2 + 0.8;
+        const glowPulse = Math.sin(time * 4) * 0.1 + 0.25;
+        
         this.meshes.forEach(mesh => {
             if (mesh.userData.isNeonTube) {
-                const pulse = Math.sin(time * 4) * 0.2 + 0.8;
                 mesh.material.emissiveIntensity = pulse;
             }
             
             if (mesh.userData.isGlow) {
-                const glowPulse = Math.sin(time * 4) * 0.1 + 0.25;
                 mesh.material.opacity = glowPulse;
             }
         });
         
-        // Light flickering (subtle)
-        this.lights.forEach(light => {
-            const flicker = 1 + (Math.random() - 0.5) * 0.1;
+        // Deterministic light flickering (no Math.random() - much cheaper)
+        // Uses sin with instance-specific seed for unique per-light variation
+        this.lights.forEach((light, idx) => {
+            const flicker = 1 + Math.sin(time * 15 + this.flickerSeed + idx * 2.5) * 0.05;
             light.intensity = 0.5 * flicker;
         });
     }

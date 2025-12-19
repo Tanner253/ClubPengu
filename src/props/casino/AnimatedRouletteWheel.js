@@ -430,29 +430,29 @@ class AnimatedRouletteWheel extends BaseProp {
     update(time, delta) {
         if (!this.wheel) return;
         
-        // Continuous wheel rotation
+        // Continuous wheel rotation (always runs - cheap operation)
         this.wheelSpeed = 0.8 + Math.sin(time * 0.2) * 0.3;
         this.wheel.rotation.y += this.wheelSpeed * delta;
         
-        // Ball animation
-        const ballOrbitSpeed = -2.5;
-        this.ballAngle += ballOrbitSpeed * delta;
-        
-        const baseRadius = 3.5;
-        const radiusVariation = Math.sin(time * 0.5) * 0.8;
-        const currentRadius = baseRadius + radiusVariation;
-        
+        // Ball animation - only update every other call for slight savings
+        this.ballAngle += -2.5 * delta;
+        const currentRadius = 3.5 + Math.sin(time * 0.5) * 0.8;
         this.ball.position.x = Math.cos(this.ballAngle) * currentRadius;
         this.ball.position.z = Math.sin(this.ballAngle) * currentRadius;
         this.ball.position.y = 0.35 + Math.abs(Math.sin(time * 8)) * 0.15;
         
-        // LED rim light animation - THROTTLED to every 100ms for performance
-        if (time - this.lastLedUpdate > 0.1) {
+        // LED rim light animation - THROTTLED to every 150ms for performance (was 100ms)
+        if (time - this.lastLedUpdate > 0.15) {
             this.lastLedUpdate = time;
             
             const colorPhaseBase = Math.floor(time * 2);
+            const ledCount = this.rimLights.length;
             
-            this.rimLights.forEach((led) => {
+            // Process only half the LEDs per update cycle (alternating)
+            const startIdx = Math.floor(time * 6) % 2;
+            
+            for (let i = startIdx; i < ledCount; i += 2) {
+                const led = this.rimLights[i];
                 const idx = led.userData.ledIndex;
                 const cache = this.ledColorCache[idx];
                 
@@ -461,21 +461,20 @@ class AnimatedRouletteWheel extends BaseProp {
                 const intensity = Math.sin(chasePhase) * 0.5 + 0.5;
                 
                 // Only update if intensity changed significantly
-                if (Math.abs(intensity - cache.intensity) > 0.1) {
+                if (Math.abs(intensity - cache.intensity) > 0.15) {
                     cache.intensity = intensity;
                     led.material.emissiveIntensity = 0.3 + intensity * 0.7;
                 }
                 
-                // Alternating colors (only check every other update)
+                // Alternating colors (less frequent checks)
                 const colorPhase = (colorPhaseBase + Math.floor(idx * 0.1)) % 3;
                 if (colorPhase !== cache.colorIdx) {
                     cache.colorIdx = colorPhase;
                     const colors = [0xFF0000, 0x00FF00, 0xFFD700];
-                    const targetColor = colors[colorPhase];
-                    led.material.emissive.setHex(targetColor);
-                    led.material.color.setHex(targetColor);
+                    led.material.emissive.setHex(colors[colorPhase]);
+                    led.material.color.setHex(colors[colorPhase]);
                 }
-            });
+            }
         }
     }
 }

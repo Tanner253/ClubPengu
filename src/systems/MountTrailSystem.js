@@ -48,6 +48,10 @@ const TRAIL_TYPES = {
 
 /**
  * Individual trail point with position, age, and visual mesh
+ * 
+ * PERFORMANCE OPTIMIZED:
+ * - Uses shared geometry from MountTrailSystem (one per trail type)
+ * - Clones material only for individual opacity control
  */
 class TrailPoint {
     constructor(x, z, trailType, timestamp, THREE) {
@@ -61,28 +65,19 @@ class TrailPoint {
     }
     
     /**
-     * Create the visual mesh for this trail point
+     * Create the visual mesh for this trail point using shared geometry
      * @param {THREE.Scene} scene 
+     * @param {THREE.BufferGeometry} sharedGeometry - Shared geometry from MountTrailSystem
+     * @param {THREE.Material} baseMaterial - Base material to clone from MountTrailSystem
      */
-    createMesh(scene) {
+    createMesh(scene, sharedGeometry, baseMaterial) {
         const THREE = this.THREE;
-        const config = this.config;
         
-        // Create a flat circular decal on the ground
-        const geometry = new THREE.CircleGeometry(config.particleSize, 12);
-        const material = new THREE.MeshBasicMaterial({
-            color: config.color,
-            transparent: true,
-            opacity: config.opacity,
-            side: THREE.DoubleSide,
-            depthWrite: false,
-            depthTest: true,
-            polygonOffset: true,
-            polygonOffsetFactor: -1,
-            polygonOffsetUnits: -1,
-        });
+        // OPTIMIZATION: Clone only the material for individual opacity, reuse geometry
+        const material = baseMaterial.clone();
+        material.opacity = this.config.opacity;
         
-        this.mesh = new THREE.Mesh(geometry, material);
+        this.mesh = new THREE.Mesh(sharedGeometry, material);
         this.mesh.rotation.x = -Math.PI / 2; // Lay flat on ground
         this.mesh.position.set(this.x, 0.1, this.z); // Higher above ground to avoid z-fighting with textured surfaces
         this.mesh.renderOrder = 5; // Higher render order to ensure it draws on top
@@ -126,13 +121,13 @@ class TrailPoint {
     }
     
     /**
-     * Clean up mesh from scene
+     * Clean up mesh from scene (only dispose cloned material, not shared geometry)
      * @param {THREE.Scene} scene 
      */
     dispose(scene) {
         if (this.mesh) {
             scene.remove(this.mesh);
-            if (this.mesh.geometry) this.mesh.geometry.dispose();
+            // Only dispose material - geometry is shared
             if (this.mesh.material) this.mesh.material.dispose();
             this.mesh = null;
         }
@@ -141,6 +136,10 @@ class TrailPoint {
 
 /**
  * MountTrailSystem - Main system class
+ * 
+ * PERFORMANCE OPTIMIZED:
+ * - Shared geometry per trail type (instead of new geometry per point)
+ * - Base materials cached per trail type (cloned for individual opacity)
  */
 class MountTrailSystem {
     constructor(THREE, scene) {
@@ -162,6 +161,61 @@ class MountTrailSystem {
         // Configuration
         this.maxTrailPointsPerPlayer = 150; // Enough points for full 8 second trail
         this.enabled = true;
+        
+        // OPTIMIZATION: Shared geometry cache per trail type
+        this.geometryCache = new Map();
+        
+        // OPTIMIZATION: Base material cache per trail type
+        this.materialCache = new Map();
+        
+        // Pre-create shared resources for known trail types
+        this._initSharedResources();
+    }
+    
+    /**
+     * Initialize shared geometry and materials for all trail types
+     * @private
+     */
+    _initSharedResources() {
+        const THREE = this.THREE;
+        
+        for (const [typeName, config] of Object.entries(TRAIL_TYPES)) {
+            // Shared geometry per trail type
+            const geometry = new THREE.CircleGeometry(config.particleSize, 12);
+            this.geometryCache.set(typeName, geometry);
+            
+            // Base material per trail type (will be cloned per point)
+            const material = new THREE.MeshBasicMaterial({
+                color: config.color,
+                transparent: true,
+                opacity: config.opacity,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                depthTest: true,
+                polygonOffset: true,
+                polygonOffsetFactor: -1,
+                polygonOffsetUnits: -1,
+            });
+            this.materialCache.set(typeName, material);
+        }
+    }
+    
+    /**
+     * Get shared geometry for a trail type
+     * @param {string} trailType 
+     * @returns {THREE.BufferGeometry}
+     */
+    getSharedGeometry(trailType) {
+        return this.geometryCache.get(trailType);
+    }
+    
+    /**
+     * Get base material for a trail type
+     * @param {string} trailType 
+     * @returns {THREE.Material}
+     */
+    getBaseMaterial(trailType) {
+        return this.materialCache.get(trailType);
     }
     
     /**
@@ -209,9 +263,11 @@ class MountTrailSystem {
         
         this.lastSpawnTime.set(ownerId, timestamp);
         
-        // Create trail point
+        // Create trail point with SHARED geometry and base material
         const point = new TrailPoint(x, z, trailType, timestamp, this.THREE);
-        point.createMesh(this.scene);
+        const sharedGeometry = this.getSharedGeometry(trailType);
+        const baseMaterial = this.getBaseMaterial(trailType);
+        point.createMesh(this.scene, sharedGeometry, baseMaterial);
         
         // Add to trails map
         if (!this.trails.has(ownerId)) {
@@ -419,6 +475,18 @@ class MountTrailSystem {
         this.trails.clear();
         this.activeEffects.clear();
         this.pendingSync = [];
+        
+        // Dispose shared geometry cache
+        if (this.geometryCache) {
+            this.geometryCache.forEach(geo => geo.dispose());
+            this.geometryCache.clear();
+        }
+        
+        // Dispose base material cache
+        if (this.materialCache) {
+            this.materialCache.forEach(mat => mat.dispose());
+            this.materialCache.clear();
+        }
     }
 }
 
