@@ -35,5 +35,8 @@ export { default as Crate } from './Crate';
 export { default as StreetSign } from './StreetSign';
 export { default as WoodenPost } from './WoodenPost';
 
+// Ice fishing
+export { default as IceFishingHole } from './IceFishingHole';
+
 // Prop registry for factory pattern
 export { createProp, PROP_TYPES } from './PropRegistry';

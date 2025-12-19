@@ -39,8 +39,9 @@ import {
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './config';
-import { createChatSprite, updateAIAgents, updateMatchBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration } from './systems';
+import { createChatSprite, updateAIAgents, updateMatchBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem } from './systems';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
+import IceFishingGame from './games/IceFishingGame';
 
 const VoxelWorld = ({ 
     penguinData, 
@@ -86,6 +87,7 @@ const VoxelWorld = ({
     const penguinDataRef = useRef(null); // Ref for current penguin data
     const slotMachineSystemRef = useRef(null); // Slot machine interaction system
     const jackpotCelebrationRef = useRef(null); // Jackpot celebration effects (disco ball, confetti, lasers)
+    const iceFishingSystemRef = useRef(null); // Ice fishing interaction system
     
     // Keep isInMatch ref up to date
     useEffect(() => {
@@ -161,6 +163,12 @@ const VoxelWorld = ({
         slotSpinning,
         slotResult,
         activeSlotSpins,
+        // Ice fishing
+        startFishing,
+        attemptCatch,
+        cancelFishing,
+        fishingActive,
+        fishingResult,
         userData
     } = useMultiplayer();
     
@@ -293,6 +301,11 @@ const VoxelWorld = ({
     
     // Slot Machine Interaction State
     const [slotInteraction, setSlotInteraction] = useState(null); // { machine, prompt, canSpin }
+    
+    // Ice Fishing Interaction State
+    const [fishingInteraction, setFishingInteraction] = useState(null); // { spot, prompt, canFish }
+    const [fishingGameActive, setFishingGameActive] = useState(false); // True when fishing minigame is open
+    const [fishingGameSpot, setFishingGameSpot] = useState(null); // Current fishing spot for game
     
     // Bench Sitting State
     const [seatedOnBench, setSeatedOnBench] = useState(null); // { benchId, snapPoint, worldPos }
@@ -645,6 +658,15 @@ const VoxelWorld = ({
                     roofHeight: 14 // Casino roof height
                 });
                 console.log('❄️ Added casino as snow exclusion zone');
+            }
+            
+            // ==================== ICE FISHING SYSTEM ====================
+            // Initialize fishing system with spots from TownCenter
+            if (townCenter.fishingSpots && townCenter.fishingSpots.length > 0) {
+                if (!iceFishingSystemRef.current) {
+                    iceFishingSystemRef.current = new IceFishingSystem(THREE, scene);
+                }
+                iceFishingSystemRef.current.initForTown(townCenter.fishingSpots, scene);
             }
             
             // ==================== IGLOO OCCUPANCY BUBBLES ====================
@@ -4110,14 +4132,45 @@ const VoxelWorld = ({
         }
     };
     
+    // Check for nearby ice fishing spots (town only)
+    const checkFishingSpots = () => {
+        if (room !== 'town') {
+            if (fishingInteraction) setFishingInteraction(null);
+            return;
+        }
+        
+        if (!iceFishingSystemRef.current) {
+            return;
+        }
+        
+        const playerPos = posRef.current;
+        const playerCoins = userData?.coins || GameManager.getInstance().getCoins();
+        
+        const interaction = iceFishingSystemRef.current.checkInteraction(
+            playerPos.x,
+            playerPos.z,
+            playerCoins,
+            isAuthenticated
+        );
+        
+        if (interaction) {
+            if (!fishingInteraction || fishingInteraction.spot?.id !== interaction.spot?.id) {
+                setFishingInteraction(interaction);
+            }
+        } else if (fishingInteraction) {
+            setFishingInteraction(null);
+        }
+    };
+    
     useEffect(() => {
         const interval = setInterval(() => {
             checkPortals();
             checkIglooProximity();
             checkSlotMachines();
+            checkFishingSpots();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, userData?.coins, isAuthenticated]);
+    }, [nearbyPortal, room, slotInteraction, fishingInteraction, userData?.coins, isAuthenticated]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -4203,72 +4256,49 @@ const VoxelWorld = ({
         slotInteractionRef.current = slotInteraction;
     }, [slotInteraction]);
     
+    // Fishing interaction ref for E key handler
+    const fishingInteractionRef = useRef(null);
+    useEffect(() => {
+        fishingInteractionRef.current = fishingInteraction;
+    }, [fishingInteraction]);
+    
     // Ref-based lock to prevent E spam (React state updates too slowly)
     const spinLockRef = useRef(false);
+    const fishingLockRef = useRef(false);
     
     const handleSlotSpin = useCallback(async () => {
-        console.log('🎰 handleSlotSpin called');
-        
-        // Check ref-based lock first (synchronous, prevents spam)
-        if (spinLockRef.current) {
-            console.log('🎰 Spin locked - ignoring spam');
-            return;
-        }
+        if (spinLockRef.current) return;
         
         const currentSlotInteraction = slotInteractionRef.current;
-        
-        console.log('🎰 currentSlotInteraction:', currentSlotInteraction);
-        
-        if (!currentSlotInteraction?.canSpin || !currentSlotInteraction?.machine) {
-            console.log('🎰 Cannot spin - missing interaction or machine');
-            return;
-        }
+        if (!currentSlotInteraction?.canSpin || !currentSlotInteraction?.machine) return;
         
         const machineId = currentSlotInteraction.machine.id;
         const isDemo = currentSlotInteraction.isDemo;
         
-        console.log('🎰 Machine:', machineId, 'isDemo:', isDemo);
-        console.log('🎰 slotMachineSystemRef.current:', !!slotMachineSystemRef.current);
-        
-        // Lock immediately to prevent spam (synchronous)
         spinLockRef.current = true;
         
         // Show spinning animation IMMEDIATELY (don't wait for server)
         if (slotMachineSystemRef.current) {
             if (!slotMachineSystemRef.current.scene && sceneRef.current) {
-                console.log('🎰 Restoring scene reference');
                 slotMachineSystemRef.current.scene = sceneRef.current;
             }
-            console.log('🎰 Calling startSpin...');
             slotMachineSystemRef.current.startSpin(machineId, playerName, isDemo);
-        } else {
-            console.error('🎰 NO SLOT MACHINE SYSTEM!');
         }
         
-        // Send spin request to server (don't await - result comes via onSlotResult callback)
-        console.log('🎰 Sending to server...');
+        // Send spin request to server
         spinSlot(machineId).then(result => {
-            console.log('🎰 Server result:', result);
             if (result.error && slotMachineSystemRef.current) {
-                // If server rejects, hide the display
                 slotMachineSystemRef.current.handleSpinError(machineId);
             }
-            // Success case is handled by onSlotResult callback
         }).finally(() => {
-            // Unlock after a short delay to allow for UI update
-            setTimeout(() => {
-                spinLockRef.current = false;
-            }, 500); // 500ms cooldown between spins
+            setTimeout(() => { spinLockRef.current = false; }, 500);
         });
     }, [spinSlot, playerId, playerName]);
     
     useEffect(() => {
         const handleSlotKeyPress = (e) => {
             if (e.code === 'KeyE') {
-                console.log('🎰 E pressed, canSpin:', slotInteractionRef.current?.canSpin, 'nearbyPortal:', nearbyPortal, 'emoteWheelOpen:', emoteWheelOpen, 'slotSpinning:', slotSpinning, 'spinLock:', spinLockRef.current);
-                // Check both React state AND ref-based lock to prevent spam
                 if (slotInteractionRef.current?.canSpin && !nearbyPortal && !emoteWheelOpen && !slotSpinning && !spinLockRef.current) {
-                    console.log('🎰 Calling handleSlotSpin...');
                     handleSlotSpin();
                 }
             }
@@ -4276,6 +4306,129 @@ const VoxelWorld = ({
         window.addEventListener('keydown', handleSlotKeyPress);
         return () => window.removeEventListener('keydown', handleSlotKeyPress);
     }, [nearbyPortal, emoteWheelOpen, slotSpinning, handleSlotSpin]);
+    
+    // Handle fishing action - opens the fishing minigame overlay
+    const handleFishingAction = useCallback(async () => {
+        if (fishingLockRef.current || fishingGameActive) return;
+        
+        const currentFishingInteraction = fishingInteractionRef.current;
+        if (!currentFishingInteraction?.canFish || !currentFishingInteraction?.spot) return;
+        
+        const spotId = currentFishingInteraction.spot.id;
+        const isDemo = currentFishingInteraction.isDemo;
+        
+        fishingLockRef.current = true;
+        
+        // Start fishing on server (deduct bait cost)
+        const result = await startFishing(spotId);
+        if (result.error) {
+            fishingLockRef.current = false;
+            return;
+        }
+        
+        // Open the fishing minigame overlay
+        setFishingGameSpot({ 
+            id: spotId, 
+            isDemo,
+            ...currentFishingInteraction.spot 
+        });
+        setFishingGameActive(true);
+        
+        // Start spectator display for other players
+        if (iceFishingSystemRef.current) {
+            iceFishingSystemRef.current.startFishing(spotId, playerName, isDemo);
+        }
+        
+        setTimeout(() => { fishingLockRef.current = false; }, 300);
+    }, [startFishing, playerName, fishingGameActive]);
+    
+    // Track depth for fishing game result
+    const fishingDepthRef = useRef(0);
+    
+    // Handle fishing game catch result
+    const handleFishingCatch = useCallback((fish) => {
+        if (!fishingGameSpot) return;
+        
+        const catchDepth = fishingDepthRef.current;
+        
+        // Send catch to server for coin reward (with depth)
+        attemptCatch(fishingGameSpot.id, fish, catchDepth);
+        
+        // Check if it was a jellyfish (stung!) - check both type field and id
+        const isJellyfish = fish.type === 'jellyfish' || fish.id?.includes('jelly');
+        
+        // Update spectator display with depth info
+        if (iceFishingSystemRef.current) {
+            iceFishingSystemRef.current.completeFishing(
+                fishingGameSpot.id,
+                fish,
+                fish.coins,
+                playerName,
+                fishingGameSpot.isDemo,
+                isJellyfish, // Pass the isStung flag
+                catchDepth   // Pass the depth where caught
+            );
+        }
+    }, [fishingGameSpot, attemptCatch, playerName]);
+    
+    // Handle fishing game miss (hit bottom)
+    const handleFishingMiss = useCallback((reason) => {
+        if (!fishingGameSpot) return;
+        
+        // Notify server of miss (with depth)
+        cancelFishing?.(fishingGameSpot.id, fishingDepthRef.current);
+        
+        // Update spectator display
+        if (iceFishingSystemRef.current) {
+            iceFishingSystemRef.current.missFishing(fishingGameSpot.id, reason);
+        }
+    }, [fishingGameSpot, cancelFishing]);
+    
+    // Handle fishing game close
+    const handleFishingGameClose = useCallback(() => {
+        // Store spotId before clearing state
+        const spotId = fishingGameSpot?.id;
+        
+        setFishingGameActive(false);
+        setFishingGameSpot(null);
+        
+        if (!spotId) return;
+        
+        // Check if we just caught something - if so, the result is already being shown
+        // and will auto-dismiss after the timeout. Don't send cancel.
+        const display = iceFishingSystemRef.current?.spotDisplays?.get(spotId);
+        const isShowingResult = display && (display.state === 'caught' || display.state === 'stung');
+        
+        if (isShowingResult) {
+            // Result is being displayed - let the auto-dismiss handle it
+            // The completeFishing already set a timeout to dismiss
+            return;
+        }
+        
+        // Game closed without catching - send cancel to dismiss spectator displays
+        if (cancelFishing) {
+            cancelFishing(spotId, 0);
+        }
+        
+        // Dismiss local spectator display immediately
+        if (iceFishingSystemRef.current) {
+            iceFishingSystemRef.current.dismissSpectatorDisplay(spotId);
+        }
+    }, [fishingGameSpot, cancelFishing]);
+    
+    // E key handler for fishing
+    useEffect(() => {
+        const handleFishingKeyPress = (e) => {
+            if (e.code === 'KeyE' && room === 'town') {
+                const fi = fishingInteractionRef.current;
+                if (fi?.canFish && !nearbyPortal && !emoteWheelOpen && !fishingLockRef.current) {
+                    handleFishingAction();
+                }
+            }
+        };
+        window.addEventListener('keydown', handleFishingKeyPress);
+        return () => window.removeEventListener('keydown', handleFishingKeyPress);
+    }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction]);
     
     // Handle town interactions (benches, snowmen, etc.)
     useEffect(() => {
@@ -4799,7 +4952,9 @@ const VoxelWorld = ({
     // Listen for nametag style changes from settings
     useEffect(() => {
         const handleNametagChange = (e) => {
-            const newStyle = e.detail?.style || 'day1';
+            // Guests can only use 'default' style - enforce even if UI didn't block it
+            const requestedStyle = e.detail?.style || 'day1';
+            const newStyle = isAuthenticated ? requestedStyle : 'default';
             
             // Remove old nametag from player mesh
             if (playerRef.current && playerNameSpriteRef.current) {
@@ -4814,11 +4969,10 @@ const VoxelWorld = ({
             }
             
             // Create new nametag with new style
-            const savedName = localStorage.getItem('penguin_name');
-            if (playerRef.current && savedName) {
+            if (playerRef.current && playerName) {
                 const THREE = window.THREE;
                 if (THREE) {
-                    const nameSprite = createNameSprite(savedName, newStyle);
+                    const nameSprite = createNameSprite(playerName, newStyle);
                     if (nameSprite) {
                         // Determine character type for height
                         let characterType = 'penguin';
@@ -4831,8 +4985,8 @@ const VoxelWorld = ({
                         playerRef.current.add(nameSprite);
                         playerNameSpriteRef.current = nameSprite;
                         
-                        // Create world-space particle rain for Day 1 or Whale nametag
-                        if ((newStyle === 'day1' || newStyle === 'whale') && sceneRef.current) {
+                        // Create world-space particle rain for Day 1 or Whale nametag (only for authenticated)
+                        if (isAuthenticated && (newStyle === 'day1' || newStyle === 'whale') && sceneRef.current) {
                             const playerPos = playerRef.current.position;
                             const preset = newStyle === 'day1' ? 'goldRain' : 'whaleRain';
                             const particleRain = new LocalizedParticleSystem(THREE, sceneRef.current, preset);
@@ -4859,7 +5013,7 @@ const VoxelWorld = ({
         
         window.addEventListener('nametagChanged', handleNametagChange);
         return () => window.removeEventListener('nametagChanged', handleNametagChange);
-    }, [createNameSprite]);
+    }, [createNameSprite, isAuthenticated, playerName]);
     
     // Join room when connected and scene is ready
     useEffect(() => {
@@ -4871,13 +5025,15 @@ const VoxelWorld = ({
             } : null;
             
             // Include current mount enabled state and nametag style from settings
+            // Guests always get 'default' nametag style - only authenticated users get special styles
             let mountEnabled = true;
-            let nametagStyle = 'day1';
+            let nametagStyle = 'default';
             try {
                 const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
                 mountEnabled = settings.mountEnabled !== false;
-                nametagStyle = settings.nametagStyle || 'day1';
-            } catch { /* use default true */ }
+                // Only authenticated users can use non-default nametag styles
+                nametagStyle = isAuthenticated ? (settings.nametagStyle || 'day1') : 'default';
+            } catch { /* use default */ }
             
             const appearanceWithMount = {
                 ...penguinData,
@@ -4990,7 +5146,6 @@ const VoxelWorld = ({
                 
                 // Trigger jackpot celebration if it's a jackpot!
                 if (data.isJackpot && jackpotCelebrationRef.current) {
-                    console.log('🎰💰 JACKPOT DETECTED! Triggering celebration!');
                     jackpotCelebrationRef.current.triggerJackpot();
                 }
             },
@@ -5038,6 +5193,66 @@ const VoxelWorld = ({
                                 reel
                             );
                         });
+                    }
+                }
+            },
+            // Ice Fishing Minigame callbacks
+            onFishingStarted: () => {
+                // Fishing started - minigame overlay handles display
+            },
+            onFishingStart: (data) => {
+                // Another player started fishing minigame
+                if (iceFishingSystemRef.current && data.playerId !== playerId) {
+                    iceFishingSystemRef.current.handleRemoteFishingStart(
+                        data.spotId,
+                        data.playerName,
+                        data.isDemo
+                    );
+                }
+            },
+            onFishingCatch: (data) => {
+                // Another player caught a fish - show result to spectators
+                if (iceFishingSystemRef.current && data.playerId !== playerId) {
+                    const isJellyfish = data.fish?.type === 'jellyfish' || data.fish?.id?.includes('jelly');
+                    iceFishingSystemRef.current.completeFishing(
+                        data.spotId,
+                        data.fish,
+                        data.coins,
+                        data.playerName,
+                        data.isDemo,
+                        isJellyfish,
+                        data.depth || 0
+                    );
+                }
+            },
+            onFishingCancel: (data) => {
+                // Fishing ended/cancelled - dismiss spectator display
+                if (iceFishingSystemRef.current) {
+                    iceFishingSystemRef.current.dismissSpectatorDisplay(data.spotId);
+                }
+            },
+            onFishingEnd: (data) => {
+                // Server signal to dismiss display (safety net - client also has timeout)
+                if (iceFishingSystemRef.current) {
+                    iceFishingSystemRef.current.dismissSpectatorDisplay(data.spotId);
+                }
+            },
+            onFishingActiveSessions: (sessions) => {
+                // Show displays for all active fishing when joining room
+                if (iceFishingSystemRef.current) {
+                    for (const session of sessions) {
+                        iceFishingSystemRef.current.handleRemoteFishingStart(
+                            session.spotId,
+                            session.playerName,
+                            session.isDemo
+                        );
+                        if (session.state !== 'casting') {
+                            iceFishingSystemRef.current.updateFishingState(
+                                session.spotId,
+                                session.state,
+                                session
+                            );
+                        }
                     }
                 }
             }
@@ -5229,6 +5444,18 @@ const VoxelWorld = ({
              
              {/* Mobile Portrait Mode - No longer blocking, game works in portrait now */}
              
+             {/* Ice Fishing Minigame Overlay */}
+             {fishingGameActive && fishingGameSpot && (
+                <IceFishingGame
+                    spotId={fishingGameSpot.id}
+                    playerName={playerName}
+                    isDemo={fishingGameSpot.isDemo}
+                    onCatch={handleFishingCatch}
+                    onMiss={handleFishingMiss}
+                    onClose={handleFishingGameClose}
+                />
+             )}
+             
              {/* Casino TV is now rendered in 3D space with real data from DexScreener API */}
              
              {/* Mobile PUBG-style Joystick - LEFT side (or right if left-handed) */}
@@ -5364,6 +5591,83 @@ const VoxelWorld = ({
                     {/* FOMO hint for guests */}
                     {slotInteraction.isDemo && (
                         <p className="text-xs text-yellow-400/80 mt-2">🔑 Login to win real gold!</p>
+                    )}
+                </div>
+             )}
+             
+             {/* Ice Fishing Interaction UI */}
+             {fishingInteraction && room === 'town' && (
+                <div 
+                    className={`absolute bg-gradient-to-b from-blue-900/95 to-cyan-900/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${
+                        fishingInteraction.isDemo 
+                            ? 'border-green-500/50 shadow-green-500/20' 
+                            : 'border-cyan-500/50 shadow-cyan-500/20'
+                    } ${
+                        isMobile 
+                            ? isLandscape 
+                                ? 'bottom-[180px] right-28 p-3' 
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    }`}
+                >
+                    <div className="text-3xl mb-1">{fishingInteraction.isDemo ? '🎁' : '🎣'}</div>
+                    
+                    {/* Demo badge for guests */}
+                    {fishingInteraction.isDemo && (
+                        <div className="bg-green-500/20 border border-green-500/50 rounded-full px-3 py-0.5 mb-2 inline-block">
+                            <span className="text-green-400 text-xs font-bold">✨ FREE DEMO</span>
+                        </div>
+                    )}
+                    
+                    {/* Current state indicator */}
+                    {fishingInteraction.isLocalFishing && (
+                        <div className={`rounded-full px-3 py-0.5 mb-2 inline-block ${
+                            fishingInteraction.currentState === 'bite' 
+                                ? 'bg-red-500/30 border border-red-500/50 animate-pulse' 
+                                : 'bg-blue-500/20 border border-blue-500/50'
+                        }`}>
+                            <span className={`text-xs font-bold ${
+                                fishingInteraction.currentState === 'bite' ? 'text-red-400' : 'text-blue-400'
+                            }`}>
+                                {fishingInteraction.currentState === 'waiting' && '🎣 Waiting...'}
+                                {fishingInteraction.currentState === 'bite' && '🐟 FISH ON!'}
+                                {fishingInteraction.currentState === 'reeling' && '🎣 Reeling...'}
+                                {fishingInteraction.currentState === 'casting' && '🎣 Casting...'}
+                            </span>
+                        </div>
+                    )}
+                    
+                    {/* Prompt text */}
+                    <p className={`retro-text mb-2 text-sm ${
+                        fishingInteraction.currentState === 'bite' ? 'text-red-400 font-bold animate-bounce' :
+                        fishingInteraction.isDemo ? 'text-green-400' : 
+                        fishingInteraction.canFish ? 'text-cyan-400' : 'text-gray-400'
+                    }`}>
+                        {fishingInteraction.prompt}
+                    </p>
+                    
+                    {/* Fish/Catch Button */}
+                    {fishingInteraction.canFish && (
+                        <button
+                            className={`w-full px-6 py-2 font-bold rounded-lg retro-text text-sm transition-all active:scale-95 shadow-lg ${
+                                fishingInteraction.currentState === 'bite'
+                                    ? 'bg-gradient-to-b from-red-400 to-red-600 hover:from-red-300 hover:to-red-500 text-white animate-pulse'
+                                    : fishingInteraction.isDemo
+                                        ? 'bg-gradient-to-b from-green-400 to-green-600 hover:from-green-300 hover:to-green-500 text-black'
+                                        : 'bg-gradient-to-b from-cyan-400 to-cyan-600 hover:from-cyan-300 hover:to-cyan-500 text-black'
+                            }`}
+                            onClick={handleFishingAction}
+                        >
+                            {fishingInteraction.isLocalFishing 
+                                ? (fishingInteraction.currentState === 'bite' ? '🐟 CATCH!' : '🎣 Fishing...')
+                                : (fishingInteraction.isDemo ? '🎁 TRY FREE!' : '🎣 FISH!')
+                            }
+                        </button>
+                    )}
+                    
+                    {/* FOMO hint for guests */}
+                    {fishingInteraction.isDemo && (
+                        <p className="text-xs text-cyan-400/80 mt-2">🔑 Login to earn coins!</p>
                     )}
                 </div>
              )}
@@ -5712,6 +6016,7 @@ const VoxelWorld = ({
                 settings={gameSettings}
                 onSettingsChange={setGameSettings}
                 onOpenChangelog={() => setShowChangelog(true)}
+                isAuthenticated={isAuthenticated}
              />
              
              {/* Changelog Modal */}

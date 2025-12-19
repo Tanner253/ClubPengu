@@ -31,10 +31,8 @@ export function MultiplayerProvider({ children }) {
     const [connected, setConnected] = useState(false);
     const [playerId, setPlayerId] = useState(null);
     const playerIdRef = useRef(null);
+    // Always generate a fresh guest name - authenticated users will get their name from server
     const [playerName, setPlayerName] = useState(() => {
-        const saved = localStorage.getItem('penguin_name');
-        if (saved && saved !== 'Player1' && saved.length > 0) return saved;
-        // Generate simple guest name: Penguin + random 4 digits
         return `Penguin${Math.floor(1000 + Math.random() * 9000)}`;
     });
     const playerNameRef = useRef(playerName);
@@ -83,6 +81,11 @@ export function MultiplayerProvider({ children }) {
     const [activeSlotSpins, setActiveSlotSpins] = useState([]); // Other players spinning
     const slotCallbackRef = useRef(null);
     
+    // Ice fishing state
+    const [fishingActive, setFishingActive] = useState(false);
+    const [fishingResult, setFishingResult] = useState(null);
+    const fishingCallbackRef = useRef(null);
+    
     // Callbacks
     const callbacksRef = useRef({
         onPlayerJoined: null,
@@ -97,7 +100,18 @@ export function MultiplayerProvider({ children }) {
     
     // ==================== CONNECT ====================
     const connect = useCallback(() => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) return;
+        // Prevent duplicate connections (CONNECTING = 0, OPEN = 1)
+        if (wsRef.current && (wsRef.current.readyState === WebSocket.CONNECTING || wsRef.current.readyState === WebSocket.OPEN)) {
+            return;
+        }
+        
+        // Close any existing connection that's closing/closed
+        if (wsRef.current) {
+            try {
+                wsRef.current.close();
+            } catch (e) { /* ignore */ }
+            wsRef.current = null;
+        }
         
         const serverUrl = getServerUrl();
         console.log(`🔌 Connecting to ${serverUrl}...`);
@@ -404,6 +418,64 @@ export function MultiplayerProvider({ children }) {
             case 'slot_info': {
                 // Slot machine info (payouts, symbols)
                 callbacksRef.current.onSlotInfo?.(message.info);
+                break;
+            }
+            
+            // ==================== ICE FISHING MESSAGES ====================
+            case 'fishing_started': {
+                // Local player's fishing session started
+                setFishingActive(true);
+                setFishingResult(null);
+                callbacksRef.current.onFishingStarted?.(message);
+                if (fishingCallbackRef.current) {
+                    fishingCallbackRef.current({ success: true, ...message });
+                    fishingCallbackRef.current = null;
+                }
+                break;
+            }
+            
+            case 'fishing_catch': {
+                // Player caught a fish - show to spectators
+                callbacksRef.current.onFishingCatch?.(message);
+                break;
+            }
+            
+            case 'fishing_start': {
+                // Player started fishing minigame
+                callbacksRef.current.onFishingStart?.(message);
+                break;
+            }
+            
+            case 'fishing_cancel': {
+                // Fishing session ended/cancelled
+                if (message.playerId === playerIdRef.current) {
+                    setFishingActive(false);
+                }
+                callbacksRef.current.onFishingCancel?.(message);
+                break;
+            }
+            
+            case 'fishing_active_sessions': {
+                // Active fishing sessions in room (when joining)
+                callbacksRef.current.onFishingActiveSessions?.(message.sessions);
+                break;
+            }
+            
+            case 'fishing_end': {
+                // Server-authoritative signal to dismiss spectator displays
+                // This ensures all clients clean up even if other messages were missed
+                callbacksRef.current.onFishingEnd?.(message);
+                break;
+            }
+            
+            case 'fishing_error': {
+                // Fishing error
+                setFishingActive(false);
+                if (fishingCallbackRef.current) {
+                    fishingCallbackRef.current({ error: message.error, message: message.message });
+                    fishingCallbackRef.current = null;
+                }
+                callbacksRef.current.onFishingError?.(message);
                 break;
             }
             
@@ -836,6 +908,7 @@ export function MultiplayerProvider({ children }) {
         localStorage.removeItem('auth_token');
         localStorage.removeItem('wallet_address');
         localStorage.removeItem('session_timestamp');
+        localStorage.removeItem('penguin_name');
         
         // Clear GameManager state including appearance
         GameManager.getInstance().clearServerData();
@@ -966,7 +1039,7 @@ export function MultiplayerProvider({ children }) {
     const setName = useCallback((name) => {
         setPlayerName(name);
         playerNameRef.current = name;
-        localStorage.setItem('penguin_name', name);
+        // Note: Don't persist to localStorage here - only auth handlers should persist names
     }, []);
     
     const registerCallbacks = useCallback((callbacks) => {
@@ -1063,6 +1136,87 @@ export function MultiplayerProvider({ children }) {
         setSlotResult(null);
     }, []);
     
+    /**
+     * Start fishing at a spot
+     * @param {string} spotId - The fishing spot ID
+     * @returns {Promise<object>} - Result from server
+     */
+    const startFishing = useCallback((spotId) => {
+        return new Promise((resolve) => {
+            if (!connected) {
+                resolve({ error: 'NOT_CONNECTED', message: 'Not connected to server' });
+                return;
+            }
+            
+            if (!spotId) {
+                resolve({ error: 'INVALID_SPOT', message: 'Invalid fishing spot' });
+                return;
+            }
+            
+            fishingCallbackRef.current = resolve;
+            
+            const guestCoins = !isAuthenticated ? GameManager.getInstance().getCoins() : 0;
+            const isDemo = !isAuthenticated;
+            send({ type: 'fishing_start', spotId, guestCoins, isDemo });
+            
+            setTimeout(() => {
+                if (fishingCallbackRef.current === resolve) {
+                    setFishingActive(false);
+                    fishingCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, isAuthenticated, send]);
+    
+    /**
+     * Attempt to catch a fish (during bite phase - legacy method)
+     * @param {string} spotId - The fishing spot ID
+     */
+    const attemptCatch = useCallback((spotId, fishData = null, depth = 0) => {
+        if (!connected || !spotId) return;
+        
+        // If fish data is provided, this is from the minigame
+        if (fishData) {
+            send({ 
+                type: 'fishing_game_result', 
+                spotId, 
+                fish: fishData,
+                depth,
+                success: true
+            });
+        } else {
+            // Legacy timing-based catch
+            send({ type: 'fishing_catch', spotId });
+        }
+    }, [connected, send]);
+    
+    /**
+     * Cancel fishing session or report miss
+     * @param {string} spotId - The fishing spot ID
+     * @param {number} depth - Optional depth where player missed
+     */
+    const cancelFishing = useCallback((spotId, depth = 0) => {
+        if (!connected || !spotId) return;
+        setFishingActive(false);
+        
+        // If depth is provided, it's a minigame miss (hit bottom)
+        if (depth > 0) {
+            send({ 
+                type: 'fishing_game_result', 
+                spotId, 
+                success: false,
+                depth 
+            });
+        } else {
+            send({ type: 'fishing_cancel', spotId });
+        }
+    }, [connected, send]);
+    
+    const clearFishingResult = useCallback(() => {
+        setFishingResult(null);
+    }, []);
+    
     // Connect on mount
     useEffect(() => {
         connect();
@@ -1071,8 +1225,12 @@ export function MultiplayerProvider({ children }) {
             clearTimeout(reconnectTimeoutRef.current);
             clearInterval(pingIntervalRef.current);
             if (wsRef.current) {
-                wsRef.current.close();
+                try {
+                    wsRef.current.close();
+                } catch (e) { /* ignore */ }
+                wsRef.current = null;
             }
+            setConnected(false);
         };
     }, [connect]);
     
@@ -1117,6 +1275,14 @@ export function MultiplayerProvider({ children }) {
         slotResult,
         clearSlotResult,
         activeSlotSpins,
+        
+        // Ice Fishing Actions
+        startFishing,
+        attemptCatch,
+        cancelFishing,
+        fishingActive,
+        fishingResult,
+        clearFishingResult,
         
         // Puffle Actions
         adoptPuffle,

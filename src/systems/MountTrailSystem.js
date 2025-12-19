@@ -62,6 +62,7 @@ class TrailPoint {
         this.config = TRAIL_TYPES[trailType];
         this.mesh = null;
         this.THREE = THREE;
+        this.tailFadeMultiplier = 1.0; // For end-of-trail fade effect
     }
     
     /**
@@ -95,16 +96,25 @@ class TrailPoint {
         const age = currentTime - this.createdAt;
         const fadeProgress = age / this.config.fadeTime;
         
-        if (fadeProgress >= 1) {
+        // Check if fully faded (either from age or tail fade)
+        if (fadeProgress >= 1 || this.tailFadeMultiplier <= 0) {
             return true; // Should be removed
         }
         
-        // Fade out opacity
+        // Fade out opacity (combine age fade with tail fade)
         if (this.mesh && this.mesh.material) {
-            this.mesh.material.opacity = this.config.opacity * (1 - fadeProgress);
+            this.mesh.material.opacity = this.config.opacity * (1 - fadeProgress) * this.tailFadeMultiplier;
         }
         
         return false;
+    }
+    
+    /**
+     * Apply tail fade effect (for smooth end-of-trail cleanup)
+     * @param {number} fadeAmount - Amount to reduce tailFadeMultiplier
+     */
+    applyTailFade(fadeAmount) {
+        this.tailFadeMultiplier = Math.max(0, this.tailFadeMultiplier - fadeAmount);
     }
     
     /**
@@ -151,6 +161,10 @@ class MountTrailSystem {
         
         // Last spawn time per owner (for spawn interval)
         this.lastSpawnTime = new Map();
+        
+        // Tail fade tracking - when spawning stops, we fade the end of the trail
+        this.tailFadeDelay = 200; // ms after last spawn before tail fade starts
+        this.tailFadeSpeed = 0.08; // How fast the tail fades per frame
         
         // Active status effects on local player
         this.activeEffects = new Map(); // Map<effectType, { expiresAt, config }>
@@ -314,6 +328,24 @@ class MountTrailSystem {
     update(currentTime, playerPos) {
         // Update all trail points (fade and remove expired)
         for (const [ownerId, points] of this.trails) {
+            const lastSpawn = this.lastSpawnTime.get(ownerId) || 0;
+            const timeSinceLastSpawn = currentTime - lastSpawn;
+            
+            // Check if we should start tail fade (spawning has stopped)
+            if (timeSinceLastSpawn > this.tailFadeDelay && points.length > 0) {
+                // Apply tail fade to the newest points (end of trail)
+                // Fade from the end backwards, creating a smooth disappearing tail
+                const fadeCount = Math.min(points.length, 20); // Fade last 20 points max
+                for (let i = 0; i < fadeCount; i++) {
+                    const pointIndex = points.length - 1 - i;
+                    if (pointIndex >= 0) {
+                        // Points closer to the end fade faster
+                        const fadeIntensity = this.tailFadeSpeed * (1 - (i / fadeCount) * 0.7);
+                        points[pointIndex].applyTailFade(fadeIntensity);
+                    }
+                }
+            }
+            
             for (let i = points.length - 1; i >= 0; i--) {
                 const point = points[i];
                 const shouldRemove = point.update(currentTime);
@@ -327,6 +359,7 @@ class MountTrailSystem {
             // Clean up empty trail arrays
             if (points.length === 0) {
                 this.trails.delete(ownerId);
+                this.lastSpawnTime.delete(ownerId);
             }
         }
         

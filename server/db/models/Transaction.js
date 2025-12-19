@@ -31,7 +31,9 @@ const transactionSchema = new mongoose.Schema({
             'chat_bonus',        // Coins earned from chatting
             'minigame_reward',   // Coins earned from single-player minigames
             'slot_spin',         // Slot machine spin cost
-            'slot_payout'        // Slot machine winnings
+            'slot_payout',       // Slot machine winnings
+            'fishing_bait',      // Bait cost for fishing
+            'fishing_catch'      // Coins earned from fishing
         ],
         index: true
     },
@@ -69,7 +71,9 @@ const transactionSchema = new mongoose.Schema({
         challengeId: String,
         puffleId: String,
         cosmeticId: String,
-        promoCode: String
+        promoCode: String,
+        fishId: String,
+        spotId: String
     },
     
     // ========== STATUS ==========

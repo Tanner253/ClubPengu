@@ -6,7 +6,7 @@
 import React, { useRef } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 
-const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChangelog }) => {
+const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChangelog, isAuthenticated }) => {
     const menuRef = useRef(null);
     
     // Use shared hooks for click outside and escape key
@@ -202,75 +202,82 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                         </p>
                     </div>
                     
-                    {/* Nametag Style Selection */}
+                    {/* Nametag Style Selection - Only show options for authenticated users */}
                     <div className="bg-black/30 rounded-xl p-3">
                         <h3 className="text-white font-medium text-sm mb-2">🏷️ Nametag Style</h3>
                         <p className="text-white/50 text-[11px] mb-3">
-                            Choose how your name appears to others
+                            {isAuthenticated 
+                                ? 'Choose how your name appears to others'
+                                : 'Connect wallet to unlock nametag styles'
+                            }
                         </p>
                         
                         <div className="space-y-2">
-                            {/* Day 1 Supporter */}
-                            <button
-                                onClick={() => {
-                                    const newSettings = { ...settings, nametagStyle: 'day1' };
-                                    onSettingsChange(newSettings);
-                                    window.dispatchEvent(new CustomEvent('nametagChanged', { 
-                                        detail: { style: 'day1' } 
-                                    }));
-                                }}
-                                className={`w-full p-2.5 rounded-lg border-2 transition-all touch-manipulation select-none text-left ${
-                                    (settings.nametagStyle || 'day1') === 'day1'
-                                        ? 'border-amber-500 bg-amber-500/10'
-                                        : 'border-white/10 bg-black/20 hover:border-white/20'
-                                }`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg">⭐</span>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-amber-400 font-bold text-sm">DAY 1</span>
-                                            <span className="text-white/70 text-xs">Supporter</span>
+                            {/* Day 1 Supporter - Only for authenticated users */}
+                            {isAuthenticated && (
+                                <button
+                                    onClick={() => {
+                                        const newSettings = { ...settings, nametagStyle: 'day1' };
+                                        onSettingsChange(newSettings);
+                                        window.dispatchEvent(new CustomEvent('nametagChanged', { 
+                                            detail: { style: 'day1' } 
+                                        }));
+                                    }}
+                                    className={`w-full p-2.5 rounded-lg border-2 transition-all touch-manipulation select-none text-left ${
+                                        (settings.nametagStyle || 'day1') === 'day1'
+                                            ? 'border-amber-500 bg-amber-500/10'
+                                            : 'border-white/10 bg-black/20 hover:border-white/20'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg">⭐</span>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-amber-400 font-bold text-sm">DAY 1</span>
+                                                <span className="text-white/70 text-xs">Supporter</span>
+                                            </div>
+                                            <p className="text-white/40 text-[10px]">Golden badge with floating animation</p>
                                         </div>
-                                        <p className="text-white/40 text-[10px]">Golden badge with floating animation</p>
+                                        {(settings.nametagStyle || 'day1') === 'day1' && (
+                                            <span className="text-amber-400 text-sm">✓</span>
+                                        )}
                                     </div>
-                                    {(settings.nametagStyle || 'day1') === 'day1' && (
-                                        <span className="text-amber-400 text-sm">✓</span>
-                                    )}
-                                </div>
-                            </button>
+                                </button>
+                            )}
                             
-                            {/* Whale Status */}
-                            <button
-                                onClick={() => {
-                                    const newSettings = { ...settings, nametagStyle: 'whale' };
-                                    onSettingsChange(newSettings);
-                                    window.dispatchEvent(new CustomEvent('nametagChanged', { 
-                                        detail: { style: 'whale' } 
-                                    }));
-                                }}
-                                className={`w-full p-2.5 rounded-lg border-2 transition-all touch-manipulation select-none text-left ${
-                                    settings.nametagStyle === 'whale'
-                                        ? 'border-cyan-500 bg-cyan-500/10'
-                                        : 'border-white/10 bg-black/20 hover:border-white/20'
-                                }`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg">🐳</span>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 font-bold text-sm">WHALE</span>
-                                            <span className="text-white/70 text-xs">Status</span>
+                            {/* Whale Status - Only for authenticated users */}
+                            {isAuthenticated && (
+                                <button
+                                    onClick={() => {
+                                        const newSettings = { ...settings, nametagStyle: 'whale' };
+                                        onSettingsChange(newSettings);
+                                        window.dispatchEvent(new CustomEvent('nametagChanged', { 
+                                            detail: { style: 'whale' } 
+                                        }));
+                                    }}
+                                    className={`w-full p-2.5 rounded-lg border-2 transition-all touch-manipulation select-none text-left ${
+                                        settings.nametagStyle === 'whale'
+                                            ? 'border-cyan-500 bg-cyan-500/10'
+                                            : 'border-white/10 bg-black/20 hover:border-white/20'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg">🐳</span>
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 font-bold text-sm">WHALE</span>
+                                                <span className="text-white/70 text-xs">Status</span>
+                                            </div>
+                                            <p className="text-white/40 text-[10px]">Premium gradient with cyan/purple glow</p>
                                         </div>
-                                        <p className="text-white/40 text-[10px]">Premium gradient with cyan/purple glow</p>
+                                        {settings.nametagStyle === 'whale' && (
+                                            <span className="text-cyan-400 text-sm">✓</span>
+                                        )}
                                     </div>
-                                    {settings.nametagStyle === 'whale' && (
-                                        <span className="text-cyan-400 text-sm">✓</span>
-                                    )}
-                                </div>
-                            </button>
+                                </button>
+                            )}
                             
-                            {/* Default */}
+                            {/* Default - Always available */}
                             <button
                                 onClick={() => {
                                     const newSettings = { ...settings, nametagStyle: 'default' };
@@ -280,7 +287,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                     }));
                                 }}
                                 className={`w-full p-2.5 rounded-lg border-2 transition-all touch-manipulation select-none text-left ${
-                                    settings.nametagStyle === 'default'
+                                    settings.nametagStyle === 'default' || !isAuthenticated
                                         ? 'border-white/50 bg-white/10'
                                         : 'border-white/10 bg-black/20 hover:border-white/20'
                                 }`}
@@ -294,7 +301,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                         </div>
                                         <p className="text-white/40 text-[10px]">Simple clean nametag</p>
                                     </div>
-                                    {settings.nametagStyle === 'default' && (
+                                    {(settings.nametagStyle === 'default' || !isAuthenticated) && (
                                         <span className="text-white text-sm">✓</span>
                                     )}
                                 </div>
@@ -302,7 +309,10 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                         </div>
                         
                         <p className="text-[10px] text-cyan-400/70 mt-2">
-                            ✨ Your nametag style is visible to all players
+                            {isAuthenticated 
+                                ? '✨ Your nametag style is visible to all players'
+                                : '🔒 Connect wallet to unlock premium styles'
+                            }
                         </p>
                     </div>
                     

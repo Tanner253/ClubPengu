@@ -10,3 +10,4 @@ export { default as AuthService } from './AuthService.js';
 export { default as UserService } from './UserService.js';
 export { default as PromoCodeService } from './PromoCodeService.js';
 export { default as SlotService, SPIN_COST as SLOT_SPIN_COST } from './SlotService.js';
+export { default as FishingService, FISHING_COST } from './FishingService.js';

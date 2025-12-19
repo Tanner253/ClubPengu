@@ -17,7 +17,8 @@ import {
     AuthService,
     UserService,
     PromoCodeService,
-    SlotService
+    SlotService,
+    FishingService
 } from './services/index.js';
 
 const PORT = process.env.PORT || 3001;
@@ -128,6 +129,7 @@ sendToPlayer = (playerId, message) => {
 const challengeService = new ChallengeService(inboxService, statsService);
 const matchService = new MatchService(statsService, userService, broadcastToRoom, sendToPlayer);
 const slotService = new SlotService(userService, broadcastToRoom, sendToPlayer);
+const fishingService = new FishingService(userService, broadcastToRoom, sendToPlayer);
 
 // ==================== PERIODIC BROADCASTS ====================
 setInterval(() => {
@@ -271,6 +273,7 @@ function cleanupStaleWalletConnection(walletAddress, excludePlayerId = null) {
             playerTrailPoints.delete(existingPlayerId);
             playerChatTimestamps.delete(existingPlayerId);
             slotService.handleDisconnect(existingPlayerId);
+            fishingService.handleDisconnect(existingPlayerId);
             
             // Remove from players map
             players.delete(existingPlayerId);
@@ -298,6 +301,11 @@ function joinRoom(playerId, roomId) {
         // Track room change stats if authenticated
         if (player.walletAddress) {
             statsService.recordRoomChange(player.walletAddress, roomId);
+        }
+        // Clear idle timeout - player joined a room successfully
+        if (player.ws?._roomJoinTimeout) {
+            clearTimeout(player.ws._roomJoinTimeout);
+            player.ws._roomJoinTimeout = null;
         }
     }
 }
@@ -457,7 +465,8 @@ wss.on('connection', (ws, req) => {
         walletAddress: null,
         authToken: null,
         guestCoins: 0,  // Guests can't earn/spend coins
-        isAlive: true   // For heartbeat detection
+        isAlive: true,   // For heartbeat detection
+        connectedAt: Date.now()
     });
     
     // Handle WebSocket pong (heartbeat response)
@@ -465,6 +474,19 @@ wss.on('connection', (ws, req) => {
         const player = players.get(playerId);
         if (player) player.isAlive = true;
     });
+    
+    // Auto-disconnect if player doesn't join a room within 30 seconds
+    // This cleans up stale HMR connections
+    const roomJoinTimeout = setTimeout(() => {
+        const player = players.get(playerId);
+        if (player && !player.room) {
+            console.log(`[${ts()}] Auto-disconnecting idle player: ${playerId} (no room join)`);
+            ws.close(1000, 'Idle timeout');
+        }
+    }, 30000);
+    
+    // Store timeout ref for cleanup
+    ws._roomJoinTimeout = roomJoinTimeout;
     
     // Send connection confirmation
     ws.send(JSON.stringify({
@@ -474,12 +496,12 @@ wss.on('connection', (ws, req) => {
         message: 'Connect your Phantom wallet to save progress and earn coins!'
     }));
     
-    ws.on('message', (data) => {
+    ws.on('message', async (data) => {
         try {
             const message = JSON.parse(data.toString());
-            handleMessage(playerId, message);
+            await handleMessage(playerId, message);
         } catch (e) {
-            console.error('Invalid message:', e);
+            console.error('Error handling message:', e);
         }
     });
     
@@ -490,6 +512,7 @@ wss.on('connection', (ws, req) => {
         if (player) {
             // Handle slot disconnect (cancel any active spin)
             slotService.handleDisconnect(playerId);
+            fishingService.handleDisconnect(playerId);
             
             // Handle match disconnect
             const voidResult = await matchService.handleDisconnect(playerId);
@@ -2267,6 +2290,196 @@ async function handleMessage(playerId, message) {
             break;
         }
         
+        // ==================== ICE FISHING ====================
+        case 'fishing_start': {
+            // Player wants to start fishing at a spot
+            try {
+                const { spotId, guestCoins, isDemo } = message;
+                
+                if (!spotId) {
+                    sendToPlayer(playerId, {
+                        type: 'fishing_error',
+                        error: 'INVALID_SPOT',
+                        message: 'Invalid fishing spot'
+                    });
+                    break;
+                }
+                
+                const fishResult = await fishingService.startFishing(
+                    playerId,
+                    player.walletAddress,
+                    player.room,
+                    spotId,
+                    player.name,
+                    player.position,
+                    guestCoins || 0,
+                    isDemo || false
+                );
+                
+                if (fishResult.error) {
+                    sendToPlayer(playerId, {
+                        type: 'fishing_error',
+                        error: fishResult.error,
+                        message: fishResult.message
+                    });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'fishing_started',
+                        spotId: fishResult.spotId,
+                        newBalance: fishResult.newBalance,
+                        baitCost: fishResult.baitCost,
+                        isDemo: fishResult.isDemo
+                    });
+                    
+                    // Send updated coins
+                    if (fishResult.newBalance !== undefined) {
+                        sendToPlayer(playerId, {
+                            type: 'coins_update',
+                            coins: fishResult.newBalance,
+                            isAuthenticated: player.isAuthenticated
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('🎣 Error in fishing_start:', error);
+                sendToPlayer(playerId, {
+                    type: 'fishing_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to start fishing'
+                });
+            }
+            break;
+        }
+        
+        case 'fishing_catch': {
+            // Player attempting to catch a fish (timing-based method)
+            try {
+                const { spotId } = message;
+                
+                if (!spotId) {
+                    sendToPlayer(playerId, {
+                        type: 'fishing_error',
+                        error: 'INVALID_SPOT',
+                        message: 'Invalid fishing spot'
+                    });
+                    break;
+                }
+                
+                const catchResult = await fishingService.attemptCatch(playerId, spotId, player.room);
+                
+                if (catchResult.error) {
+                    sendToPlayer(playerId, {
+                        type: 'fishing_error',
+                        error: catchResult.error,
+                        message: catchResult.message
+                    });
+                }
+                // Success handled by FishingService's completeCatch which sends fishing_result
+            } catch (error) {
+                console.error('🎣 Error in fishing_catch:', error);
+                sendToPlayer(playerId, {
+                    type: 'fishing_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to catch fish'
+                });
+            }
+            break;
+        }
+        
+        case 'fishing_game_result': {
+            // Minigame result - player caught a fish or hit bottom
+            try {
+                const { spotId, fish, depth, success } = message;
+                
+                if (!spotId) {
+                    sendToPlayer(playerId, {
+                        type: 'fishing_error',
+                        error: 'INVALID_SPOT',
+                        message: 'Invalid fishing spot'
+                    });
+                    break;
+                }
+                
+                if (success && fish) {
+                    // Player caught a fish
+                    const result = await fishingService.handleMinigameCatch(
+                        playerId, 
+                        spotId, 
+                        fish,
+                        depth || 0
+                    );
+                    
+                    if (result.error) {
+                        sendToPlayer(playerId, {
+                            type: 'fishing_error',
+                            error: result.error,
+                            message: result.message
+                        });
+                    } else if (result.newBalance !== undefined) {
+                        // Update coin balance
+                        sendToPlayer(playerId, {
+                            type: 'coins_update',
+                            coins: result.newBalance,
+                            isAuthenticated: player.isAuthenticated
+                        });
+                    }
+                } else {
+                    // Player hit bottom / missed
+                    await fishingService.handleMinigameMiss(playerId, spotId, depth || 0);
+                }
+            } catch (error) {
+                console.error('🎣 Error in fishing_game_result:', error);
+                sendToPlayer(playerId, {
+                    type: 'fishing_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to process game result'
+                });
+            }
+            break;
+        }
+        
+        case 'fishing_cancel': {
+            // Player canceling fishing session
+            try {
+                const { spotId } = message;
+                if (spotId) {
+                    fishingService.cancelFishing(playerId, spotId, player.room);
+                }
+            } catch (error) {
+                console.error('🎣 Error in fishing_cancel:', error);
+            }
+            break;
+        }
+        
+        case 'fishing_sync': {
+            // Get active fishing sessions in current room
+            try {
+                if (player.room) {
+                    const activeFishing = fishingService.getActiveFishing(player.room);
+                    sendToPlayer(playerId, {
+                        type: 'fishing_active_sessions',
+                        sessions: activeFishing
+                    });
+                }
+            } catch (error) {
+                console.error('🎣 Error in fishing_sync:', error);
+            }
+            break;
+        }
+        
+        case 'fishing_info': {
+            // Get fishing info (fish types, costs)
+            try {
+                sendToPlayer(playerId, {
+                    type: 'fishing_info',
+                    info: FishingService.getFishingInfo()
+                });
+            } catch (error) {
+                console.error('🎣 Error in fishing_info:', error);
+            }
+            break;
+        }
+        
         // ==================== MINIGAME REWARDS ====================
         case 'minigame_reward': {
             // Server-authoritative single-player minigame rewards
@@ -2317,6 +2530,7 @@ setInterval(async () => {
             
             // Handle slot disconnect
             slotService.handleDisconnect(playerId);
+            fishingService.handleDisconnect(playerId);
             
             const voidResult = await matchService.handleDisconnect(playerId);
             if (voidResult) {

@@ -146,45 +146,47 @@ const ProfileMenu = () => {
                             </span>
                         </div>
                         
-                        {/* Right: Challenge buttons */}
-                        <div className="flex flex-col gap-1.5 min-w-[100px]">
-                            {!showGameDropdown ? (
-                                <button
-                                    onClick={handleChallengeClick}
-                                    disabled={isInMatch}
-                                    className={`px-3 py-2 rounded-lg font-bold text-white text-xs flex items-center justify-center gap-1.5 transition-all ${
-                                        isInMatch 
-                                            ? 'bg-gray-600 cursor-not-allowed'
-                                            : 'bg-gradient-to-r from-red-500 to-orange-500 active:scale-95'
-                                    }`}
-                                >
-                                    <span>⚔️</span>
-                                    <span>Challenge</span>
-                                </button>
-                            ) : (
-                                <>
-                                    {availableGames.map(game => (
-                                        <button
-                                            key={game.id}
-                                            onClick={() => handleGameSelect(game.id)}
-                                            className="px-2 py-1.5 flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 active:bg-gray-500 rounded-lg text-white text-[11px] transition-colors"
-                                        >
-                                            <span>{game.emoji}</span>
-                                            <span className="flex-1 text-left">{game.name}</span>
-                                        </button>
-                                    ))}
+                        {/* Right: Challenge buttons - Only for authenticated users */}
+                        {isAuthenticated && (
+                            <div className="flex flex-col gap-1.5 min-w-[100px]">
+                                {!showGameDropdown ? (
                                     <button
-                                        onClick={() => setShowGameDropdown(false)}
-                                        className="px-2 py-1 text-white/50 text-[10px] hover:text-white"
+                                        onClick={handleChallengeClick}
+                                        disabled={isInMatch}
+                                        className={`px-3 py-2 rounded-lg font-bold text-white text-xs flex items-center justify-center gap-1.5 transition-all ${
+                                            isInMatch 
+                                                ? 'bg-gray-600 cursor-not-allowed'
+                                                : 'bg-gradient-to-r from-red-500 to-orange-500 active:scale-95'
+                                        }`}
                                     >
-                                        Cancel
+                                        <span>⚔️</span>
+                                        <span>Challenge</span>
                                     </button>
-                                </>
-                            )}
-                            {isInMatch && (
-                                <p className="text-white/40 text-[9px] text-center">In match</p>
-                            )}
-                        </div>
+                                ) : (
+                                    <>
+                                        {availableGames.map(game => (
+                                            <button
+                                                key={game.id}
+                                                onClick={() => handleGameSelect(game.id)}
+                                                className="px-2 py-1.5 flex items-center gap-1.5 bg-gray-700 hover:bg-gray-600 active:bg-gray-500 rounded-lg text-white text-[11px] transition-colors"
+                                            >
+                                                <span>{game.emoji}</span>
+                                                <span className="flex-1 text-left">{game.name}</span>
+                                            </button>
+                                        ))}
+                                        <button
+                                            onClick={() => setShowGameDropdown(false)}
+                                            className="px-2 py-1 text-white/50 text-[10px] hover:text-white"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </>
+                                )}
+                                {isInMatch && (
+                                    <p className="text-white/40 text-[9px] text-center">In match</p>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </div>{/* Close modal wrapper */}
                 </div>
@@ -281,46 +283,50 @@ const ProfileMenu = () => {
                         </div>
                     </div>
                     
-                    {/* Challenge Button */}
-                    <div className="relative">
-                        <button
-                            onClick={handleChallengeClick}
-                            disabled={isInMatch}
-                            className={`w-full py-2 sm:py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all ${
-                                isInMatch 
-                                    ? 'bg-gray-600 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 active:from-red-600 active:to-orange-600 active:scale-95'
-                            }`}
-                        >
-                            <span>⚔️</span>
-                            <span>Challenge</span>
-                            <span className={`transition-transform ${showGameDropdown ? 'rotate-180' : ''}`}>▼</span>
-                        </button>
-                        
-                        {/* Game Selection */}
-                        {showGameDropdown && (
-                            <div className="mt-2 bg-gray-800 rounded-xl border border-white/10 shadow-xl animate-fade-in">
-                                <div className="p-1">
-                                    {availableGames.map(game => (
-                                        <button
-                                            key={game.id}
-                                            onClick={() => handleGameSelect(game.id)}
-                                            className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/10 active:bg-white/20 text-white rounded-lg my-0.5 transition-colors"
-                                        >
-                                            <span className="text-lg">{game.emoji}</span>
-                                            <span className="flex-1 text-left text-sm font-medium">{game.name}</span>
-                                            <span className="text-green-400 text-sm">▶</span>
-                                        </button>
-                                    ))}
-                                </div>
+                    {/* Challenge Button - Only for authenticated users */}
+                    {isAuthenticated && (
+                        <>
+                            <div className="relative">
+                                <button
+                                    onClick={handleChallengeClick}
+                                    disabled={isInMatch}
+                                    className={`w-full py-2 sm:py-2.5 rounded-xl font-bold text-white text-sm flex items-center justify-center gap-2 transition-all ${
+                                        isInMatch 
+                                            ? 'bg-gray-600 cursor-not-allowed'
+                                            : 'bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 active:from-red-600 active:to-orange-600 active:scale-95'
+                                    }`}
+                                >
+                                    <span>⚔️</span>
+                                    <span>Challenge</span>
+                                    <span className={`transition-transform ${showGameDropdown ? 'rotate-180' : ''}`}>▼</span>
+                                </button>
+                                
+                                {/* Game Selection */}
+                                {showGameDropdown && (
+                                    <div className="mt-2 bg-gray-800 rounded-xl border border-white/10 shadow-xl animate-fade-in">
+                                        <div className="p-1">
+                                            {availableGames.map(game => (
+                                                <button
+                                                    key={game.id}
+                                                    onClick={() => handleGameSelect(game.id)}
+                                                    className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/10 active:bg-white/20 text-white rounded-lg my-0.5 transition-colors"
+                                                >
+                                                    <span className="text-lg">{game.emoji}</span>
+                                                    <span className="flex-1 text-left text-sm font-medium">{game.name}</span>
+                                                    <span className="text-green-400 text-sm">▶</span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
-                    
-                    {isInMatch && (
-                        <p className="text-center text-white/50 text-[10px] mt-2">
-                            You're currently in a match
-                        </p>
+                            
+                            {isInMatch && (
+                                <p className="text-center text-white/50 text-[10px] mt-2">
+                                    You're currently in a match
+                                </p>
+                            )}
+                        </>
                     )}
                     
                     {/* Your coins indicator */}

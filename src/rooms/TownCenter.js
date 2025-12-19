@@ -1,5 +1,5 @@
 import CollisionSystem from '../engine/CollisionSystem';
-import { createProp, PROP_TYPES, Billboard } from '../props';
+import { createProp, PROP_TYPES, Billboard, IceFishingHole } from '../props';
 import { createNightclubExterior } from '../props/NightclubExterior';
 import { createDojoParkour } from '../props/DojoParkour';
 import { createCasino } from '../buildings';
@@ -661,6 +661,43 @@ class TownCenter {
             { type: 'wooden_post', x: C + 48, z: C + 28, style: 'topped' },  // Outside gift shop path
         );
         
+        // ==================== ICE FISHING POND ====================
+        // Frozen pond area southwest of the dojo with multiple fishing spots
+        // Main fishing hole at user-specified coordinates
+        const fishingPondX = C - 70.4;
+        const fishingPondZ = C + 78.5;
+        
+        props.push(
+            // Primary fishing hole (main spot)
+            { type: 'ice_fishing_hole', id: 'fishing_1', x: fishingPondX, z: fishingPondZ, rotation: 0 },
+            // Secondary holes around the pond
+            { type: 'ice_fishing_hole', id: 'fishing_2', x: fishingPondX + 8, z: fishingPondZ - 3, rotation: Math.PI / 6 },
+            { type: 'ice_fishing_hole', id: 'fishing_3', x: fishingPondX - 6, z: fishingPondZ + 5, rotation: -Math.PI / 4 },
+            { type: 'ice_fishing_hole', id: 'fishing_4', x: fishingPondX + 3, z: fishingPondZ + 9, rotation: Math.PI / 3 },
+        );
+        
+        // Pond area decorations - snowy surroundings
+        props.push(
+            // FLOATING TITLE SIGN - draws attention to the fishing area (raised high for visibility)
+            { type: 'floating_title', x: fishingPondX, z: fishingPondZ, text: '🎣 ICE FISHING', height: 12 },
+            // Snow piles around pond edge
+            { type: 'snow_pile', x: fishingPondX - 10, z: fishingPondZ - 8, size: 'medium' },
+            { type: 'snow_pile', x: fishingPondX + 12, z: fishingPondZ + 12, size: 'small' },
+            // Lamp posts for nighttime fishing
+            { type: 'lamp_post', x: fishingPondX - 8, z: fishingPondZ - 5, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: fishingPondX + 10, z: fishingPondZ + 8, isOn: true, castShadow: false },
+            // Rocks around the frozen pond
+            { type: 'rock', x: fishingPondX - 14, z: fishingPondZ + 10, size: 'medium' },
+            { type: 'rock', x: fishingPondX + 15, z: fishingPondZ - 5, size: 'small' },
+            // Barrel with fishing supplies/bait
+            { type: 'barrel', x: fishingPondX - 5, z: fishingPondZ - 7, size: 'medium' },
+            // Signpost pointing to the fishing area
+            { type: 'signpost', x: fishingPondX + 18, z: fishingPondZ - 8, signs: [
+                { text: 'FISHING', direction: 180 },
+                { text: 'DOJO', direction: 45 },
+            ]},
+        );
+        
         return props;
     }
 
@@ -1158,6 +1195,108 @@ class TownCenter {
                     mesh = attachPropData(postProp, postProp.group);
                     break;
                 }
+                
+                case 'floating_title': {
+                    // Animated floating 3D text sign
+                    const THREE = this.THREE;
+                    mesh = new THREE.Group();
+                    
+                    // Create canvas for text
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = 512;
+                    canvas.height = 128;
+                    
+                    // Draw background with gradient
+                    const gradient = ctx.createLinearGradient(0, 0, canvas.width, 0);
+                    gradient.addColorStop(0, 'rgba(0, 100, 200, 0.9)');
+                    gradient.addColorStop(0.5, 'rgba(0, 150, 255, 0.95)');
+                    gradient.addColorStop(1, 'rgba(0, 100, 200, 0.9)');
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.beginPath();
+                    ctx.roundRect(10, 10, canvas.width - 20, canvas.height - 20, 20);
+                    ctx.fill();
+                    
+                    // Border
+                    ctx.strokeStyle = '#88DDFF';
+                    ctx.lineWidth = 4;
+                    ctx.stroke();
+                    
+                    // Text
+                    ctx.fillStyle = '#FFFFFF';
+                    ctx.font = 'bold 48px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.shadowColor = '#000000';
+                    ctx.shadowBlur = 8;
+                    ctx.fillText(prop.text || '🎣 ICE FISHING', canvas.width / 2, canvas.height / 2);
+                    
+                    const texture = new THREE.CanvasTexture(canvas);
+                    const material = new THREE.SpriteMaterial({ 
+                        map: texture, 
+                        transparent: true,
+                        depthTest: true,
+                        depthWrite: false
+                    });
+                    const sprite = new THREE.Sprite(material);
+                    sprite.scale.set(10, 2.5, 1);
+                    sprite.position.y = prop.height || 6;
+                    mesh.add(sprite);
+                    
+                    // Store for animation
+                    mesh.userData.floatingSign = sprite;
+                    mesh.userData.floatingSignBaseY = prop.height || 6;
+                    mesh.name = 'floating_title';
+                    break;
+                }
+                
+                case 'ice_fishing_hole': {
+                    // Ice fishing spot - multiplayer visible activity
+                    const fishingProp = new IceFishingHole(this.THREE);
+                    fishingProp.spawn(scene, prop.x, 0, prop.z, { rotation: prop.rotation || 0 });
+                    mesh = fishingProp.mesh;
+                    mesh.name = prop.id || 'fishing_hole';
+                    mesh.userData.fishingSpotId = prop.id;
+                    mesh.userData.propInstance = fishingProp;
+                    
+                    // Store fishing spots for system initialization
+                    if (!this.fishingSpots) this.fishingSpots = [];
+                    this.fishingSpots.push({
+                        id: prop.id,
+                        x: prop.x,
+                        z: prop.z,
+                        rotation: prop.rotation || 0,
+                        prop: fishingProp
+                    });
+                    
+                    // Add collision (ice platform is solid)
+                    this.collisionSystem.addCollider(
+                        prop.x, prop.z,
+                        { type: 'circle', radius: 2.5, height: 0.5 },
+                        1, // SOLID but low
+                        { name: prop.id || 'fishing_hole' }
+                    );
+                    
+                    // Add interaction trigger zone
+                    this.collisionSystem.addTrigger(
+                        prop.x, prop.z,
+                        {
+                            type: 'circle',
+                            radius: 3.0,
+                            action: 'fishing',
+                            message: '🎣 Press E to Fish',
+                            fishingSpotId: prop.id
+                        },
+                        (event) => this._handleInteraction(event, { 
+                            action: 'fishing',
+                            message: '🎣 Press E to Fish',
+                            fishingSpotId: prop.id
+                        }),
+                        { name: `${prop.id}_trigger` }
+                    );
+                    break;
+                }
             }
             
             if (mesh) {
@@ -1612,7 +1751,7 @@ class TownCenter {
 
     update(time, delta, nightFactor = 0.5) {
         if (!this._animatedCache) {
-            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], frameCounter: 0 };
+            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], frameCounter: 0 };
             this.propMeshes.forEach(mesh => {
                 if (mesh.name === 'campfire') {
                     const flames = [];
@@ -1630,6 +1769,13 @@ class TownCenter {
                 // Casino exterior animations (Vegas-style lights, slot machines, roulette, etc.)
                 if (mesh.name === 'casino' && mesh.userData.update) {
                     this._animatedCache.casinos.push(mesh);
+                }
+                // Floating title signs
+                if (mesh.name === 'floating_title' && mesh.userData.floatingSign) {
+                    this._animatedCache.floatingSigns.push({
+                        sprite: mesh.userData.floatingSign,
+                        baseY: mesh.userData.floatingSignBaseY
+                    });
                 }
             });
             // SKNY Igloos stored separately during spawn
@@ -1704,6 +1850,17 @@ class TownCenter {
         if (frame % 12 === 0) {
             this._animatedCache.christmasTrees.forEach(mesh => {
                 if (mesh.userData.treeUpdate) mesh.userData.treeUpdate(time, nightFactor);
+            });
+        }
+        
+        // Floating signs - gentle bobbing animation every 2nd frame
+        if (frame % 2 === 0) {
+            this._animatedCache.floatingSigns.forEach(({ sprite, baseY }) => {
+                // Gentle floating bob
+                sprite.position.y = baseY + Math.sin(time * 1.5) * 0.3;
+                // Subtle scale pulse
+                const pulse = 1 + Math.sin(time * 2) * 0.02;
+                sprite.scale.set(10 * pulse, 2.5 * pulse, 1);
             });
         }
     }

@@ -72,3 +72,6 @@ export { default as SlotMachineSystem, SPIN_COST as SLOT_SPIN_COST, SYMBOLS as S
 // Jackpot celebration system (disco ball, confetti, lasers)
 export { default as JackpotCelebration } from './JackpotCelebration';
 
+// Ice fishing system (multiplayer fishing spots)
+export { default as IceFishingSystem, FISH_TYPES, FISHING_COST } from './IceFishingSystem';
+
