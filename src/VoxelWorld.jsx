@@ -667,6 +667,8 @@ const VoxelWorld = ({
                     iceFishingSystemRef.current = new IceFishingSystem(THREE, scene);
                 }
                 iceFishingSystemRef.current.initForTown(townCenter.fishingSpots, scene);
+                // Set players ref for positioning catch bubbles above players
+                iceFishingSystemRef.current.setPlayersRef(() => playersDataRef.current);
             }
             
             // ==================== IGLOO OCCUPANCY BUBBLES ====================
@@ -4334,9 +4336,9 @@ const VoxelWorld = ({
         });
         setFishingGameActive(true);
         
-        // Start spectator display for other players
+        // Mark local player as fishing (for interaction prompt)
         if (iceFishingSystemRef.current) {
-            iceFishingSystemRef.current.startFishing(spotId, playerName, isDemo);
+            iceFishingSystemRef.current.startLocalFishing(spotId);
         }
         
         setTimeout(() => { fishingLockRef.current = false; }, 300);
@@ -4352,69 +4354,28 @@ const VoxelWorld = ({
         const catchDepth = fishingDepthRef.current;
         
         // Send catch to server for coin reward (with depth)
+        // Server will broadcast to room for catch bubble display
         attemptCatch(fishingGameSpot.id, fish, catchDepth);
-        
-        // Check if it was a jellyfish (stung!) - check both type field and id
-        const isJellyfish = fish.type === 'jellyfish' || fish.id?.includes('jelly');
-        
-        // Update spectator display with depth info
-        if (iceFishingSystemRef.current) {
-            iceFishingSystemRef.current.completeFishing(
-                fishingGameSpot.id,
-                fish,
-                fish.coins,
-                playerName,
-                fishingGameSpot.isDemo,
-                isJellyfish, // Pass the isStung flag
-                catchDepth   // Pass the depth where caught
-            );
-        }
-    }, [fishingGameSpot, attemptCatch, playerName]);
+    }, [fishingGameSpot, attemptCatch]);
     
     // Handle fishing game miss (hit bottom)
     const handleFishingMiss = useCallback((reason) => {
         if (!fishingGameSpot) return;
         
-        // Notify server of miss (with depth)
+        // Notify server of miss (no catch bubble shown for misses)
         cancelFishing?.(fishingGameSpot.id, fishingDepthRef.current);
-        
-        // Update spectator display
-        if (iceFishingSystemRef.current) {
-            iceFishingSystemRef.current.missFishing(fishingGameSpot.id, reason);
-        }
     }, [fishingGameSpot, cancelFishing]);
     
     // Handle fishing game close
     const handleFishingGameClose = useCallback(() => {
-        // Store spotId before clearing state
-        const spotId = fishingGameSpot?.id;
-        
         setFishingGameActive(false);
         setFishingGameSpot(null);
         
-        if (!spotId) return;
-        
-        // Check if we just caught something - if so, the result is already being shown
-        // and will auto-dismiss after the timeout. Don't send cancel.
-        const display = iceFishingSystemRef.current?.spotDisplays?.get(spotId);
-        const isShowingResult = display && (display.state === 'caught' || display.state === 'stung');
-        
-        if (isShowingResult) {
-            // Result is being displayed - let the auto-dismiss handle it
-            // The completeFishing already set a timeout to dismiss
-            return;
-        }
-        
-        // Game closed without catching - send cancel to dismiss spectator displays
-        if (cancelFishing) {
-            cancelFishing(spotId, 0);
-        }
-        
-        // Dismiss local spectator display immediately
+        // Clear local fishing state so player can fish again immediately
         if (iceFishingSystemRef.current) {
-            iceFishingSystemRef.current.dismissSpectatorDisplay(spotId);
+            iceFishingSystemRef.current.stopLocalFishing();
         }
-    }, [fishingGameSpot, cancelFishing]);
+    }, []);
     
     // E key handler for fishing
     useEffect(() => {
@@ -5196,64 +5157,22 @@ const VoxelWorld = ({
                     }
                 }
             },
-            // Ice Fishing Minigame callbacks
+            // Ice Fishing callbacks - simple catch bubble display
             onFishingStarted: () => {
                 // Fishing started - minigame overlay handles display
             },
-            onFishingStart: (data) => {
-                // Another player started fishing minigame
-                if (iceFishingSystemRef.current && data.playerId !== playerId) {
-                    iceFishingSystemRef.current.handleRemoteFishingStart(
-                        data.spotId,
-                        data.playerName,
-                        data.isDemo
-                    );
-                }
-            },
-            onFishingCatch: (data) => {
-                // Another player caught a fish - show result to spectators
-                if (iceFishingSystemRef.current && data.playerId !== playerId) {
+            onPlayerCaughtFish: (data) => {
+                // A player caught a fish - show bubble above them
+                if (iceFishingSystemRef.current) {
                     const isJellyfish = data.fish?.type === 'jellyfish' || data.fish?.id?.includes('jelly');
-                    iceFishingSystemRef.current.completeFishing(
-                        data.spotId,
+                    iceFishingSystemRef.current.showCatchBubble(
+                        data.playerId,
+                        data.playerName,
                         data.fish,
                         data.coins,
-                        data.playerName,
                         data.isDemo,
-                        isJellyfish,
-                        data.depth || 0
+                        isJellyfish
                     );
-                }
-            },
-            onFishingCancel: (data) => {
-                // Fishing ended/cancelled - dismiss spectator display
-                if (iceFishingSystemRef.current) {
-                    iceFishingSystemRef.current.dismissSpectatorDisplay(data.spotId);
-                }
-            },
-            onFishingEnd: (data) => {
-                // Server signal to dismiss display (safety net - client also has timeout)
-                if (iceFishingSystemRef.current) {
-                    iceFishingSystemRef.current.dismissSpectatorDisplay(data.spotId);
-                }
-            },
-            onFishingActiveSessions: (sessions) => {
-                // Show displays for all active fishing when joining room
-                if (iceFishingSystemRef.current) {
-                    for (const session of sessions) {
-                        iceFishingSystemRef.current.handleRemoteFishingStart(
-                            session.spotId,
-                            session.playerName,
-                            session.isDemo
-                        );
-                        if (session.state !== 'casting') {
-                            iceFishingSystemRef.current.updateFishingState(
-                                session.spotId,
-                                session.state,
-                                session
-                            );
-                        }
-                    }
                 }
             }
         });

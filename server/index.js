@@ -2292,7 +2292,7 @@ async function handleMessage(playerId, message) {
         
         // ==================== ICE FISHING ====================
         case 'fishing_start': {
-            // Player wants to start fishing at a spot
+            // Player wants to start fishing - deduct bait cost
             try {
                 const { spotId, guestCoins, isDemo } = message;
                 
@@ -2311,9 +2311,8 @@ async function handleMessage(playerId, message) {
                     player.room,
                     spotId,
                     player.name,
-                    player.position,
                     guestCoins || 0,
-                    isDemo || false
+                    isDemo || !player.isAuthenticated
                 );
                 
                 if (fishResult.error) {
@@ -2351,62 +2350,25 @@ async function handleMessage(playerId, message) {
             break;
         }
         
-        case 'fishing_catch': {
-            // Player attempting to catch a fish (timing-based method)
-            try {
-                const { spotId } = message;
-                
-                if (!spotId) {
-                    sendToPlayer(playerId, {
-                        type: 'fishing_error',
-                        error: 'INVALID_SPOT',
-                        message: 'Invalid fishing spot'
-                    });
-                    break;
-                }
-                
-                const catchResult = await fishingService.attemptCatch(playerId, spotId, player.room);
-                
-                if (catchResult.error) {
-                    sendToPlayer(playerId, {
-                        type: 'fishing_error',
-                        error: catchResult.error,
-                        message: catchResult.message
-                    });
-                }
-                // Success handled by FishingService's completeCatch which sends fishing_result
-            } catch (error) {
-                console.error('🎣 Error in fishing_catch:', error);
-                sendToPlayer(playerId, {
-                    type: 'fishing_error',
-                    error: 'SERVER_ERROR',
-                    message: 'Failed to catch fish'
-                });
-            }
-            break;
-        }
-        
         case 'fishing_game_result': {
-            // Minigame result - player caught a fish or hit bottom
+            // Minigame result - player caught a fish or missed
             try {
-                const { spotId, fish, depth, success } = message;
-                
-                if (!spotId) {
-                    sendToPlayer(playerId, {
-                        type: 'fishing_error',
-                        error: 'INVALID_SPOT',
-                        message: 'Invalid fishing spot'
-                    });
-                    break;
-                }
+                const { fish, depth, success } = message;
                 
                 if (success && fish) {
-                    // Player caught a fish
-                    const result = await fishingService.handleMinigameCatch(
-                        playerId, 
-                        spotId, 
+                    // Player caught a fish - award coins and broadcast to room
+                    const isDemo = !player.isAuthenticated;
+                    const guestBalance = !player.isAuthenticated ? (message.guestCoins || 0) : 0;
+                    
+                    const result = await fishingService.handleCatch(
+                        playerId,
+                        player.walletAddress,
+                        player.room,
+                        player.name,
                         fish,
-                        depth || 0
+                        depth || 0,
+                        isDemo,
+                        guestBalance
                     );
                     
                     if (result.error) {
@@ -2423,10 +2385,8 @@ async function handleMessage(playerId, message) {
                             isAuthenticated: player.isAuthenticated
                         });
                     }
-                } else {
-                    // Player hit bottom / missed
-                    await fishingService.handleMinigameMiss(playerId, spotId, depth || 0);
                 }
+                // Misses are silently ignored - no broadcast needed
             } catch (error) {
                 console.error('🎣 Error in fishing_game_result:', error);
                 sendToPlayer(playerId, {
@@ -2434,35 +2394,6 @@ async function handleMessage(playerId, message) {
                     error: 'SERVER_ERROR',
                     message: 'Failed to process game result'
                 });
-            }
-            break;
-        }
-        
-        case 'fishing_cancel': {
-            // Player canceling fishing session
-            try {
-                const { spotId } = message;
-                if (spotId) {
-                    fishingService.cancelFishing(playerId, spotId, player.room);
-                }
-            } catch (error) {
-                console.error('🎣 Error in fishing_cancel:', error);
-            }
-            break;
-        }
-        
-        case 'fishing_sync': {
-            // Get active fishing sessions in current room
-            try {
-                if (player.room) {
-                    const activeFishing = fishingService.getActiveFishing(player.room);
-                    sendToPlayer(playerId, {
-                        type: 'fishing_active_sessions',
-                        sessions: activeFishing
-                    });
-                }
-            } catch (error) {
-                console.error('🎣 Error in fishing_sync:', error);
             }
             break;
         }

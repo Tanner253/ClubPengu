@@ -423,7 +423,7 @@ export function MultiplayerProvider({ children }) {
             
             // ==================== ICE FISHING MESSAGES ====================
             case 'fishing_started': {
-                // Local player's fishing session started
+                // Local player's fishing session started (bait cost deducted)
                 setFishingActive(true);
                 setFishingResult(null);
                 callbacksRef.current.onFishingStarted?.(message);
@@ -434,37 +434,16 @@ export function MultiplayerProvider({ children }) {
                 break;
             }
             
-            case 'fishing_catch': {
-                // Player caught a fish - show to spectators
-                callbacksRef.current.onFishingCatch?.(message);
+            case 'player_caught_fish': {
+                // A player caught a fish - show catch bubble above them
+                callbacksRef.current.onPlayerCaughtFish?.(message);
                 break;
             }
             
-            case 'fishing_start': {
-                // Player started fishing minigame
-                callbacksRef.current.onFishingStart?.(message);
-                break;
-            }
-            
-            case 'fishing_cancel': {
-                // Fishing session ended/cancelled
-                if (message.playerId === playerIdRef.current) {
-                    setFishingActive(false);
-                }
-                callbacksRef.current.onFishingCancel?.(message);
-                break;
-            }
-            
-            case 'fishing_active_sessions': {
-                // Active fishing sessions in room (when joining)
-                callbacksRef.current.onFishingActiveSessions?.(message.sessions);
-                break;
-            }
-            
-            case 'fishing_end': {
-                // Server-authoritative signal to dismiss spectator displays
-                // This ensures all clients clean up even if other messages were missed
-                callbacksRef.current.onFishingEnd?.(message);
+            case 'fishing_result': {
+                // Local player's catch result (for coin display)
+                setFishingResult(message);
+                setFishingActive(false);
                 break;
             }
             
@@ -475,7 +454,6 @@ export function MultiplayerProvider({ children }) {
                     fishingCallbackRef.current({ error: message.error, message: message.message });
                     fishingCallbackRef.current = null;
                 }
-                callbacksRef.current.onFishingError?.(message);
                 break;
             }
             
