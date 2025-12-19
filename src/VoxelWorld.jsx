@@ -3131,13 +3131,15 @@ const VoxelWorld = ({
                 // OPTIMIZATION: Distant players only animate every 3rd frame (saves ~66% CPU on animations)
                 const shouldAnimateThisFrame = !isDistant || (frameCount % 3 === 0);
                 
+                // Calculate isMoving OUTSIDE the animation block so it's available for mount trails and wizard trails
+                // If seated on furniture, never consider as "moving" (prevents walk animation overriding sit)
+                const isMoving = !isSeated && playerData.position && (
+                    Math.abs(playerData.position.x - meshData.mesh.position.x) > 0.1 ||
+                    Math.abs(playerData.position.z - meshData.mesh.position.z) > 0.1
+                );
+                
                 if (shouldAnimateThisFrame) {
                     // Animate other player mesh (walking/emotes)
-                    // If seated on furniture, never consider as "moving" (prevents walk animation overriding sit)
-                    const isMoving = !isSeated && playerData.position && (
-                        Math.abs(playerData.position.x - meshData.mesh.position.x) > 0.1 ||
-                        Math.abs(playerData.position.z - meshData.mesh.position.z) > 0.1
-                    );
                     // Consider mount only if it's visible
                     const otherPlayerMounted = !!(meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData && meshData.mesh.userData?.mountVisible !== false);
                     const otherIsAirborne = (playerData.position?.y ?? 0) > 0.1;
