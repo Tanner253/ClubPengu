@@ -58,6 +58,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const [username, setUsername] = useState('');
     const [usernameStatus, setUsernameStatus] = useState(null); // 'available', 'taken', 'checking', null
     const usernameCheckTimeout = useRef(null);
+    const hasInitializedUsername = useRef(false);
     
     // Is this a NEW user who needs to pick a username? (authenticated but never entered world)
     // Use isEstablishedUser flag from server - handles migration cases
@@ -100,10 +101,15 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     // Sync username from server when authenticated
     useEffect(() => {
         if (isAuthenticated && userData?.username) {
-            setUsername(userData.username);
-            localStorage.setItem('penguin_name', userData.username);
+            // Returning users: always sync from server
+            // New users: only sync once on first load (prevents overwriting during promo redemption)
+            if (userData.isEstablishedUser || !hasInitializedUsername.current) {
+                setUsername(userData.username);
+                localStorage.setItem('penguin_name', userData.username);
+                hasInitializedUsername.current = true;
+            }
         }
-    }, [isAuthenticated, userData]);
+    }, [isAuthenticated, userData?.username, userData?.isEstablishedUser]);
     
     // Register callback for username status
     useEffect(() => {
@@ -1287,4 +1293,3 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
 }
 
 export default VoxelPenguinDesigner;
-
