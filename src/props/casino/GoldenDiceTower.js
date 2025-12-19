@@ -110,10 +110,13 @@ class GoldenDiceTower extends BaseProp {
         // Top crown decoration
         this.createCrown(group, currentY, goldMat);
         
-        // Add point light at top
-        const topLight = new THREE.PointLight(0xFFD700, 1.5, 10);
-        topLight.position.y = currentY + 1;
-        this.addLight(topLight, group);
+        // Add point light at top - skip on Apple/Mobile for performance
+        const needsOptimization = typeof window !== 'undefined' && (window._isAppleDevice || window._isMobileGPU);
+        if (!needsOptimization) {
+            const topLight = new THREE.PointLight(0xFFD700, 1.5, 10);
+            topLight.position.y = currentY + 1;
+            this.addLight(topLight, group);
+        }
         
         this.setPosition(x, y, z);
         return this;

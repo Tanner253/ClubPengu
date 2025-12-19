@@ -107,6 +107,16 @@ class CasinoExterior {
         // ==================== DOLLAR SIGNS (z = depth/2 + 2.5) ====================
         this.createDollarSigns(this.group, width, height, depth);
         
+        // ==================== APPLE/MOBILE SHADOW OPTIMIZATION ====================
+        if (this.needsOptimization) {
+            this.group.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = false;
+                    child.receiveShadow = false;
+                }
+            });
+        }
+        
         return this.group;
     }
     

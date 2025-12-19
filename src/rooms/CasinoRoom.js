@@ -44,6 +44,17 @@ class CasinoRoom extends BaseRoom {
         this.isAppleDevice = typeof window !== 'undefined' && window._isAppleDevice;
         this.needsOptimization = this.isMobileGPU || this.isAppleDevice;
     }
+    
+    /**
+     * Helper to set shadow properties with optimization check
+     * On Apple/Mobile: disable shadows for better performance
+     */
+    setShadow(mesh, cast = true, receive = false) {
+        if (!this.needsOptimization) {
+            mesh.castShadow = cast;
+            mesh.receiveShadow = receive;
+        }
+    }
 
     spawn(scene) {
         const THREE = this.THREE;
@@ -90,6 +101,23 @@ class CasinoRoom extends BaseRoom {
         
         // ==================== LIGHTING ====================
         this._createLighting(scene, W, D, H, CX, CZ);
+        
+        // ==================== APPLE/MOBILE SHADOW OPTIMIZATION ====================
+        // Disable all shadows on Apple/Mobile for significant performance boost
+        if (this.needsOptimization) {
+            this.meshes.forEach(mesh => {
+                mesh.castShadow = false;
+                mesh.receiveShadow = false;
+                // Also disable for children
+                mesh.traverse?.(child => {
+                    if (child.isMesh) {
+                        child.castShadow = false;
+                        child.receiveShadow = false;
+                    }
+                });
+            });
+            console.log('🍎 CasinoRoom: Disabled shadows for Apple/Mobile optimization');
+        }
         
         return { 
             meshes: this.meshes, 

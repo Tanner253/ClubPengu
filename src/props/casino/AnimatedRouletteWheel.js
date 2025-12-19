@@ -128,10 +128,13 @@ class AnimatedRouletteWheel extends BaseProp {
         // LED rim lights - shared geometry, pooled materials
         this.createOptimizedLEDs(wheelContainer, wheelRadius);
         
-        // Central light
-        const centerLight = new THREE.PointLight(0xFFD700, 2, 15);
-        centerLight.position.y = 2;
-        this.addLight(centerLight, wheelContainer);
+        // Central light - skip on Apple/Mobile for performance
+        const needsOptimization = typeof window !== 'undefined' && (window._isAppleDevice || window._isMobileGPU);
+        if (!needsOptimization) {
+            const centerLight = new THREE.PointLight(0xFFD700, 2, 15);
+            centerLight.position.y = 2;
+            this.addLight(centerLight, wheelContainer);
+        }
         
         this.wheelSpeed = 1.5;
         

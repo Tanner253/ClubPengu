@@ -955,6 +955,18 @@ class Casino extends BaseBuilding {
             console.warn('Casino exterior decorations failed to load:', e);
         }
 
+        // ==================== APPLE/MOBILE SHADOW OPTIMIZATION ====================
+        // Disable all shadows on Apple/Mobile for significant performance boost
+        if (this.needsOptimization) {
+            group.traverse(child => {
+                if (child.isMesh) {
+                    child.castShadow = false;
+                    child.receiveShadow = false;
+                }
+            });
+            console.log('🍎 Casino: Disabled shadows for Apple/Mobile optimization');
+        }
+
         return group;
     }
     

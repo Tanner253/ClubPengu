@@ -120,10 +120,13 @@ class PokerChipStack extends BaseProp {
         this.glowRing.position.y = 0.05;
         this.addMesh(this.glowRing, group);
         
-        // Point light above stack
-        const stackLight = new THREE.PointLight(0xFFD700, 0.5, 5);
-        stackLight.position.y = currentY + 1;
-        this.addLight(stackLight, group);
+        // Point light above stack - skip on Apple/Mobile for performance
+        const needsOptimization = typeof window !== 'undefined' && (window._isAppleDevice || window._isMobileGPU);
+        if (!needsOptimization) {
+            const stackLight = new THREE.PointLight(0xFFD700, 0.5, 5);
+            stackLight.position.y = currentY + 1;
+            this.addLight(stackLight, group);
+        }
         
         this.setPosition(x, y, z);
         return this;

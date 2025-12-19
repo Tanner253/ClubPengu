@@ -2834,6 +2834,11 @@ const VoxelWorld = ({
                 
                 // --- SLOT MACHINE SYSTEM (spectator bubbles) ---
                 if (slotMachineSystemRef.current) {
+                    // Pass player position for distance-based culling optimization
+                    slotMachineSystemRef.current.setPlayerPosition(
+                        playerRef.current.position.x,
+                        playerRef.current.position.z
+                    );
                     slotMachineSystemRef.current.update(time, delta);
                 }
                 

@@ -63,9 +63,12 @@ class NeonTubing extends BaseProp {
         this.meshes.push(glow);
         this.geometries.push(glowGeo);
         
-        // Add point light for local illumination
-        const neonLight = new THREE.PointLight(color, glowIntensity * 0.5, size * 2);
-        this.addLight(neonLight, group);
+        // Add point light for local illumination - skip on Apple/Mobile for performance
+        const needsOptimization = typeof window !== 'undefined' && (window._isAppleDevice || window._isMobileGPU);
+        if (!needsOptimization) {
+            const neonLight = new THREE.PointLight(color, glowIntensity * 0.5, size * 2);
+            this.addLight(neonLight, group);
+        }
         
         this.setPosition(x, y, z);
         return this;

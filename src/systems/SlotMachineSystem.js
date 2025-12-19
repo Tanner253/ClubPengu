@@ -17,6 +17,11 @@ const MAX_CONCURRENT_SPINS = 2;
 // Symbols for display
 const SYMBOLS = ['🍒', '🍋', '🍊', '🍇', '🔔', '⭐', '💎', '7️⃣'];
 
+// Performance optimization settings
+const UPDATE_THROTTLE_MS = 50; // Only update every 50ms (20fps for animations)
+const PARTICLE_COUNT = 25; // Reduced from 50
+const CULL_DISTANCE = 60; // Don't animate machines further than this
+
 class SlotMachineSystem {
     constructor(THREE, scene) {
         this.THREE = THREE;
@@ -25,6 +30,19 @@ class SlotMachineSystem {
         this.machineDisplays = new Map();
         this.nearbyMachine = null;
         this.localSpinningMachines = new Set();
+        
+        // Performance tracking
+        this.lastUpdateTime = 0;
+        this.playerPosition = { x: 0, z: 0 };
+        this.frameCount = 0;
+    }
+    
+    /**
+     * Update player position for distance-based culling
+     */
+    setPlayerPosition(x, z) {
+        this.playerPosition.x = x;
+        this.playerPosition.z = z;
     }
     
     initForCasino(roomWidth, roomDepth) {
@@ -305,19 +323,20 @@ class SlotMachineSystem {
         const display = this.machineDisplays.get(machineId);
         if (!display) return;
         
-        // Create particle data for canvas animation
+        // Create particle data for canvas animation (reduced count for performance)
         display.jackpotParticles = [];
-        for (let i = 0; i < 50; i++) {
+        const colors = ['#FFD700', '#FF6B6B', '#4ECDC4', '#FFE66D', '#FF9F1C'];
+        for (let i = 0; i < PARTICLE_COUNT; i++) {
             display.jackpotParticles.push({
                 x: Math.random() * display.canvas.width,
                 y: -20 - Math.random() * 100,
                 vx: (Math.random() - 0.5) * 3,
                 vy: 2 + Math.random() * 3,
                 size: 4 + Math.random() * 8,
-                color: ['#FFD700', '#FF6B6B', '#4ECDC4', '#FFE66D', '#FF9F1C'][Math.floor(Math.random() * 5)],
+                color: colors[i % colors.length],
                 rotation: Math.random() * Math.PI * 2,
                 rotationSpeed: (Math.random() - 0.5) * 0.2,
-                type: Math.random() > 0.5 ? 'star' : 'coin'
+                type: i % 2 === 0 ? 'star' : 'coin'
             });
         }
     }
@@ -432,21 +451,22 @@ class SlotMachineSystem {
                 ctx.fillText(reels[r].emoji, centerX, centerY);
                 ctx.shadowBlur = 0;
             } else if (state === 'spinning') {
-                // FAST spinning animation
-                const t = Date.now();
-                const speed = 30 - r * 5; // Very fast
-                const offset = (t / speed) % SYMBOLS.length;
+                // OPTIMIZED spinning animation - fewer symbols, simpler math
+                const t = this.frameCount; // Use frame count instead of Date.now() for consistency
+                const speed = 3 - r; // Stagger speed per reel
+                const offset = (t * speed) % SYMBOLS.length;
                 
                 ctx.save();
                 ctx.beginPath();
                 this.roundRect(ctx, rx + 2, reelY + 2, reelW - 4, reelH - 4, 8);
                 ctx.clip();
                 
-                for (let s = -2; s <= 2; s++) {
+                // Only draw 3 symbols instead of 5 for better performance
+                for (let s = -1; s <= 1; s++) {
                     const idx = Math.floor((offset + s + SYMBOLS.length * 10) % SYMBOLS.length);
-                    const yPos = centerY + s * 45 + ((t / speed * 45) % 45);
-                    const alpha = 1 - Math.abs(s) * 0.25;
-                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
+                    const yPos = centerY + s * 50 + ((t * speed * 12) % 50);
+                    const alpha = s === 0 ? 0.9 : 0.5;
+                    ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
                     ctx.fillText(SYMBOLS[idx], centerX, yPos);
                 }
                 ctx.restore();
@@ -581,7 +601,37 @@ class SlotMachineSystem {
     }
     
     update(time, delta) {
+        // Throttle updates for performance (20fps for slot animations is plenty smooth)
+        const now = Date.now();
+        if (now - this.lastUpdateTime < UPDATE_THROTTLE_MS) {
+            return;
+        }
+        this.lastUpdateTime = now;
+        this.frameCount++;
+        
+        const px = this.playerPosition.x;
+        const pz = this.playerPosition.z;
+        
         for (const [machineId, display] of this.machineDisplays) {
+            // Skip idle displays
+            if (display.state === 'idle') continue;
+            
+            // Distance-based culling - skip distant machines (except for local player spins)
+            const isLocalSpin = this.localSpinningMachines.has(machineId);
+            if (!isLocalSpin) {
+                const dx = display.machineX - px;
+                const dz = display.machineZ - pz;
+                const distSq = dx * dx + dz * dz;
+                if (distSq > CULL_DISTANCE * CULL_DISTANCE) {
+                    // Too far - hide and skip update
+                    display.sprite.visible = false;
+                    continue;
+                } else {
+                    display.sprite.visible = true;
+                }
+            }
+            
+            // Only update spinning or jackpot result displays
             if (display.state === 'spinning' || (display.state === 'result' && display.isJackpot)) {
                 this.drawMachineDisplay(machineId);
             }

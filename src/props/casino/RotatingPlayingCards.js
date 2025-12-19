@@ -131,9 +131,12 @@ class RotatingPlayingCards extends BaseProp {
         // Add sparkle particles around the cards
         this.createSparkles(group, orbitRadius);
         
-        // Add point light
-        const cardLight = new THREE.PointLight(0xFFD700, 1.5, 15);
-        this.addLight(cardLight, group);
+        // Add point light - skip on Apple/Mobile for performance
+        const needsOptimization = typeof window !== 'undefined' && (window._isAppleDevice || window._isMobileGPU);
+        if (!needsOptimization) {
+            const cardLight = new THREE.PointLight(0xFFD700, 1.5, 15);
+            this.addLight(cardLight, group);
+        }
         
         this.setPosition(x, y, z);
         return this;

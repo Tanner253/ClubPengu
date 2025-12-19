@@ -24,8 +24,12 @@ export function createSlotPayoutBoard(THREE, position = { x: 0, y: 0, z: 0 }, ro
     const backingGeo = new THREE.BoxGeometry(boardWidth + 0.75, boardHeight + 0.75, boardDepth);
     const backing = new THREE.Mesh(backingGeo, frameMaterial);
     backing.position.z = -boardDepth / 2;
-    backing.castShadow = true;
-    backing.receiveShadow = true;
+    // Skip shadows on Apple/Mobile for performance
+    const skipShadows = typeof window !== 'undefined' && (window._isAppleDevice || window._isMobileGPU);
+    if (!skipShadows) {
+        backing.castShadow = true;
+        backing.receiveShadow = true;
+    }
     group.add(backing);
     
     // Create canvas for the payout info - +25%
@@ -76,10 +80,13 @@ export function createSlotPayoutBoard(THREE, position = { x: 0, y: 0, z: 0 }, ro
         group.add(corner);
     });
     
-    // Add point light to illuminate the board - stronger
-    const boardLight = new THREE.PointLight(0xffffcc, 1.2, 18);
-    boardLight.position.set(0, 0, 5);
-    group.add(boardLight);
+    // Add point light to illuminate the board - skip on Apple/Mobile for performance
+    const needsOptimization = typeof window !== 'undefined' && (window._isAppleDevice || window._isMobileGPU);
+    if (!needsOptimization) {
+        const boardLight = new THREE.PointLight(0xffffcc, 1.2, 18);
+        boardLight.position.set(0, 0, 5);
+        group.add(boardLight);
+    }
     
     // Position and rotate the group
     group.position.set(position.x, position.y, position.z);
