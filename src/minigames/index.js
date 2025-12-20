@@ -6,3 +6,5 @@ export { default as TicTacToeGame } from './TicTacToeGame';
 export { default as P2PTicTacToe } from './P2PTicTacToe';
 export { default as Connect4Game } from './Connect4Game';
 export { default as P2PConnect4 } from './P2PConnect4';
+export { default as MonopolyGame } from './MonopolyGame';
+export { default as P2PMonopoly } from './P2PMonopoly';

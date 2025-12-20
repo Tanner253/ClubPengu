@@ -258,6 +258,121 @@ const Connect4Spectator = ({ players, state, totalPot }) => {
 };
 
 /**
+ * Monopoly spectator display - Shows live game state including positions, money, properties
+ */
+const MonopolySpectator = ({ players, state, totalPot }) => {
+    const currentTurn = state?.currentTurn || 'player1';
+    const winner = state?.winner;
+    const isComplete = state?.status === 'complete';
+    const lastDice = state?.lastDice || [0, 0];
+    const phase = state?.phase;
+    
+    // Space names for position display
+    const SPACE_NAMES = [
+        'GO', 'Mediterranean', 'Chest', 'Baltic', 'Income Tax', 'Reading RR', 'Oriental', 'Chance',
+        'Vermont', 'Connecticut', 'Jail', 'St. Charles', 'Electric Co', 'States', 'Virginia',
+        'Penn RR', 'St. James', 'Chest', 'Tennessee', 'NY Ave', 'Free Parking', 'Kentucky',
+        'Chance', 'Indiana', 'Illinois', 'B&O RR', 'Atlantic', 'Ventnor', 'Water Works',
+        'Marvin Gdns', 'Go To Jail', 'Pacific', 'NC Ave', 'Chest', 'Penn Ave', 'Short Line',
+        'Chance', 'Park Place', 'Luxury Tax', 'Boardwalk'
+    ];
+    
+    const p1Pos = state?.player1Position ?? 0;
+    const p2Pos = state?.player2Position ?? 0;
+    const p1InJail = state?.player1InJail;
+    const p2InJail = state?.player2InJail;
+    
+    return (
+        <div className="bg-gradient-to-br from-emerald-900/95 to-green-900/95 backdrop-blur-xl rounded-2xl border-2 border-emerald-400/50 shadow-2xl px-4 py-3 min-w-[280px] animate-fade-in">
+            {/* Header */}
+            <div className="flex items-center justify-center gap-2 mb-2">
+                <span className="text-yellow-400 text-xs font-bold">🎩 MONOPOLY</span>
+                <span className="text-emerald-300 text-xs">•</span>
+                <span className="text-yellow-400 text-xs font-bold">💰 {totalPot}</span>
+                {phase && !isComplete && (
+                    <>
+                        <span className="text-emerald-300 text-xs">•</span>
+                        <span className="text-emerald-300 text-[10px] animate-pulse">
+                            {phase === 'roll' ? '🎲' : phase === 'moving' ? '🚶' : phase === 'action' ? '💵' : '⏳'}
+                        </span>
+                    </>
+                )}
+            </div>
+            
+            {/* Players and Money */}
+            <div className="flex items-center justify-between gap-2">
+                <div className="text-center flex-1">
+                    <p className={`font-bold text-xs truncate max-w-[85px] ${currentTurn === 'player1' && !isComplete ? 'text-yellow-300' : 'text-white'}`}>
+                        {currentTurn === 'player1' && !isComplete && '▶ '}{players[0]?.name || 'Player 1'}
+                    </p>
+                    <p className="text-green-400 text-sm font-bold">${state?.player1Money ?? 1500}</p>
+                    <p className="text-white/50 text-[10px]">
+                        {state?.player1Properties?.length || 0} props
+                        {p1InJail && <span className="text-red-400 ml-1">🔒</span>}
+                    </p>
+                    <p className="text-cyan-300 text-[9px] truncate max-w-[85px]">
+                        📍 {SPACE_NAMES[p1Pos]}
+                    </p>
+                </div>
+                
+                {/* Dice display */}
+                <div className="flex flex-col items-center gap-1">
+                    <div className="flex gap-1">
+                        <div className="w-6 h-6 bg-white rounded text-xs font-bold flex items-center justify-center text-gray-800 shadow">
+                            {lastDice[0] || '?'}
+                        </div>
+                        <div className="w-6 h-6 bg-white rounded text-xs font-bold flex items-center justify-center text-gray-800 shadow">
+                            {lastDice[1] || '?'}
+                        </div>
+                    </div>
+                    {lastDice[0] > 0 && (
+                        <span className="text-white/60 text-[9px] font-bold">= {lastDice[0] + lastDice[1]}</span>
+                    )}
+                    {lastDice[0] === lastDice[1] && lastDice[0] > 0 && (
+                        <span className="text-yellow-400 text-[8px]">DOUBLES!</span>
+                    )}
+                </div>
+                
+                <div className="text-center flex-1">
+                    <p className={`font-bold text-xs truncate max-w-[85px] ${currentTurn === 'player2' && !isComplete ? 'text-yellow-300' : 'text-white'}`}>
+                        {currentTurn === 'player2' && !isComplete && '▶ '}{players[1]?.name || 'Player 2'}
+                    </p>
+                    <p className="text-green-400 text-sm font-bold">${state?.player2Money ?? 1500}</p>
+                    <p className="text-white/50 text-[10px]">
+                        {state?.player2Properties?.length || 0} props
+                        {p2InJail && <span className="text-red-400 ml-1">🔒</span>}
+                    </p>
+                    <p className="text-pink-300 text-[9px] truncate max-w-[85px]">
+                        📍 {SPACE_NAMES[p2Pos]}
+                    </p>
+                </div>
+            </div>
+            
+            {/* Current event */}
+            {state?.currentEvent && !isComplete && (
+                <div className="text-center mt-2 pt-2 border-t border-white/10">
+                    <span className="text-yellow-300 text-[10px] font-medium">
+                        {state.currentEvent.title}
+                    </span>
+                    <span className="text-white/70 text-[10px] ml-1">
+                        {state.currentEvent.description}
+                    </span>
+                </div>
+            )}
+            
+            {/* Winner */}
+            {isComplete && winner && (
+                <div className="text-center mt-2 pt-2 border-t border-white/10">
+                    <span className="text-green-400 text-sm font-bold">
+                        🏆 {winner === 'player1' ? players[0]?.name : players[1]?.name} wins!
+                    </span>
+                </div>
+            )}
+        </div>
+    );
+};
+
+/**
  * Single match spectator display - routes to appropriate game view
  */
 const MatchSpectatorBubble = ({ matchData }) => {
@@ -276,6 +391,10 @@ const MatchSpectatorBubble = ({ matchData }) => {
     
     if (gameType === 'connect4') {
         return <Connect4Spectator players={players} state={state} totalPot={totalPot} />;
+    }
+    
+    if (gameType === 'monopoly') {
+        return <MonopolySpectator players={players} state={state} totalPot={totalPot} />;
     }
     
     // Default: Card Jitsu

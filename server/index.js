@@ -1810,6 +1810,24 @@ async function handleMessage(playerId, message) {
                         lastMove: match.state.lastMove,
                         status: match.status
                     };
+                } else if (match.gameType === 'monopoly') {
+                    spectateState = {
+                        player1Position: match.state.player1?.position ?? 0,
+                        player1Money: match.state.player1?.money ?? 1500,
+                        player1Properties: match.state.player1?.properties || [],
+                        player1InJail: match.state.player1?.inJail || false,
+                        player2Position: match.state.player2?.position ?? 0,
+                        player2Money: match.state.player2?.money ?? 1500,
+                        player2Properties: match.state.player2?.properties || [],
+                        player2InJail: match.state.player2?.inJail || false,
+                        currentTurn: match.state.currentTurn,
+                        phase: match.state.phase,
+                        lastDice: match.state.lastDice || [0, 0],
+                        currentEvent: match.state.currentEvent,
+                        propertyOwners: match.state.propertyOwners,
+                        winner: match.state.winner,
+                        status: match.status
+                    };
                 } else {
                     spectateState = {
                         round: match.state.round,
@@ -1907,8 +1925,23 @@ async function handleMessage(playerId, message) {
                     finalState = { board: [...match.state.board], winner: match.state.winner, winningLine: match.state.winningLine };
                 } else if (match.gameType === 'connect4') {
                     finalState = { board: [...match.state.board], winner: match.state.winner, winningCells: match.state.winningCells };
+                } else if (match.gameType === 'monopoly') {
+                    finalState = { 
+                        winner: match.state.winner,
+                        player1Money: match.state.player1?.money ?? 0,
+                        player2Money: match.state.player2?.money ?? 0,
+                        player1Position: match.state.player1?.position ?? 0,
+                        player2Position: match.state.player2?.position ?? 0
+                    };
                 } else {
                     finalState = { player1Wins: match.state.player1Wins, player2Wins: match.state.player2Wins, winner: match.state.winner };
+                }
+                
+                // Determine reason for match end
+                let endReason = 'win';
+                if (isDraw) endReason = 'draw';
+                else if (match.gameType === 'monopoly' && (match.state.player1?.money < 0 || match.state.player2?.money < 0)) {
+                    endReason = 'bankruptcy';
                 }
                 
                 broadcastToRoom(match.room, {
@@ -1918,7 +1951,8 @@ async function handleMessage(playerId, message) {
                     winnerName: winnerId ? (winnerId === match.player1.id ? match.player1.name : match.player2.name) : null,
                     isDraw,
                     finalState,
-                    gameType: match.gameType
+                    gameType: match.gameType,
+                    reason: endReason
                 }, match.player1.id, match.player2.id);
                 
                 // Send updated stats
@@ -1969,6 +2003,17 @@ async function handleMessage(playerId, message) {
                     reason: 'forfeit'
                 }
             });
+            
+            // Notify spectators that match has ended (so banners are cleaned up)
+            broadcastToRoom(match.room, {
+                type: 'match_spectate_end',
+                matchId: match.id,
+                winnerId,
+                winnerName: winnerId ? (winnerId === match.player1.id ? match.player1.name : match.player2.name) : null,
+                isDraw: false,
+                reason: 'forfeit',
+                gameType: match.gameType
+            }, match.player1.id, match.player2.id);
             
             await matchService.voidMatch(match.id, 'forfeit');
             

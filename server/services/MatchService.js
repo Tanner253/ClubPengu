@@ -29,12 +29,101 @@ const C4_ROWS = 6;
 const C4_COLS = 7;
 const C4_WIN_LENGTH = 4;
 
+// Monopoly constants
+const MONOPOLY_SPACES = [
+    { name: "GO", type: "go", price: 0, group: "NONE" },
+    { name: "Mediterranean", type: "property", price: 60, rent: 2, group: "BROWN" },
+    { name: "Comm. Chest", type: "chest", price: 0, group: "NONE" },
+    { name: "Baltic Ave", type: "property", price: 60, rent: 4, group: "BROWN" },
+    { name: "Income Tax", type: "tax", price: 200, group: "NONE" },
+    { name: "Reading RR", type: "station", price: 200, rent: 25, group: "STATION" },
+    { name: "Oriental Ave", type: "property", price: 100, rent: 6, group: "LIGHTBLUE" },
+    { name: "Chance", type: "chance", price: 0, group: "NONE" },
+    { name: "Vermont Ave", type: "property", price: 100, rent: 6, group: "LIGHTBLUE" },
+    { name: "Conn. Ave", type: "property", price: 120, rent: 8, group: "LIGHTBLUE" },
+    { name: "Jail", type: "jail", price: 0, group: "NONE" },
+    { name: "St. Charles", type: "property", price: 140, rent: 10, group: "PINK" },
+    { name: "Electric Co", type: "utility", price: 150, rent: 0, group: "UTILITY" },
+    { name: "States Ave", type: "property", price: 140, rent: 10, group: "PINK" },
+    { name: "Virginia Ave", type: "property", price: 160, rent: 12, group: "PINK" },
+    { name: "Penn. RR", type: "station", price: 200, rent: 25, group: "STATION" },
+    { name: "St. James", type: "property", price: 180, rent: 14, group: "ORANGE" },
+    { name: "Comm. Chest", type: "chest", price: 0, group: "NONE" },
+    { name: "Tenn. Ave", type: "property", price: 180, rent: 14, group: "ORANGE" },
+    { name: "NY Ave", type: "property", price: 200, rent: 16, group: "ORANGE" },
+    { name: "Free Parking", type: "parking", price: 0, group: "NONE" },
+    { name: "Kentucky Ave", type: "property", price: 220, rent: 18, group: "RED" },
+    { name: "Chance", type: "chance", price: 0, group: "NONE" },
+    { name: "Indiana Ave", type: "property", price: 220, rent: 18, group: "RED" },
+    { name: "Illinois Ave", type: "property", price: 240, rent: 20, group: "RED" },
+    { name: "B&O RR", type: "station", price: 200, rent: 25, group: "STATION" },
+    { name: "Atlantic Ave", type: "property", price: 260, rent: 22, group: "YELLOW" },
+    { name: "Ventnor Ave", type: "property", price: 260, rent: 22, group: "YELLOW" },
+    { name: "Water Works", type: "utility", price: 150, rent: 0, group: "UTILITY" },
+    { name: "Marvin Gdns", type: "property", price: 280, rent: 24, group: "YELLOW" },
+    { name: "Go To Jail", type: "gotojail", price: 0, group: "NONE" },
+    { name: "Pacific Ave", type: "property", price: 300, rent: 26, group: "GREEN" },
+    { name: "NC Ave", type: "property", price: 300, rent: 26, group: "GREEN" },
+    { name: "Comm. Chest", type: "chest", price: 0, group: "NONE" },
+    { name: "Penn. Ave", type: "property", price: 320, rent: 28, group: "GREEN" },
+    { name: "Short Line", type: "station", price: 200, rent: 25, group: "STATION" },
+    { name: "Chance", type: "chance", price: 0, group: "NONE" },
+    { name: "Park Place", type: "property", price: 350, rent: 35, group: "DARKBLUE" },
+    { name: "Luxury Tax", type: "tax", price: 100, group: "NONE" },
+    { name: "Boardwalk", type: "property", price: 400, rent: 50, group: "DARKBLUE" }
+];
+
+const MONOPOLY_GROUP_SIZES = {
+    BROWN: 2, LIGHTBLUE: 3, PINK: 3, ORANGE: 3,
+    RED: 3, YELLOW: 3, GREEN: 3, DARKBLUE: 2,
+    STATION: 4, UTILITY: 2
+};
+
+// Official Monopoly Chance Cards (expanded set)
+const MONOPOLY_CHANCE_CARDS = [
+    { text: "Advance to GO! Collect $200", action: "go" },
+    { text: "Advance to Illinois Ave.", action: "moveTo", position: 24 },
+    { text: "Advance to St. Charles Place", action: "moveTo", position: 11 },
+    { text: "Advance to Boardwalk", action: "moveTo", position: 39 },
+    { text: "Advance to Reading Railroad", action: "moveTo", position: 5 },
+    { text: "Bank pays you dividend of $50", action: "collect", amount: 50 },
+    { text: "Bank error in your favor. Collect $200", action: "collect", amount: 200 },
+    { text: "Doctor's fees. Pay $50", action: "pay", amount: 50 },
+    { text: "Go to Jail!", action: "jail" },
+    { text: "Speeding fine $15", action: "pay", amount: 15 },
+    { text: "Take a trip to Reading Railroad", action: "moveTo", position: 5 },
+    { text: "Your building loan matures. Collect $150", action: "collect", amount: 150 },
+    { text: "You have won a crossword competition. Collect $100", action: "collect", amount: 100 }
+];
+
+// Official Monopoly Community Chest Cards (expanded set)
+const MONOPOLY_CHEST_CARDS = [
+    { text: "Advance to GO! Collect $200", action: "go" },
+    { text: "Bank error in your favor. Collect $200", action: "collect", amount: 200 },
+    { text: "Doctor's fees. Pay $50", action: "pay", amount: 50 },
+    { text: "From sale of stock you get $50", action: "collect", amount: 50 },
+    { text: "Go to Jail!", action: "jail" },
+    { text: "Grand Opera Night. Collect $50", action: "collect", amount: 50 },
+    { text: "Holiday Fund matures. Collect $100", action: "collect", amount: 100 },
+    { text: "Income tax refund. Collect $20", action: "collect", amount: 20 },
+    { text: "It is your birthday. Collect $10", action: "collect", amount: 10 },
+    { text: "Life insurance matures. Collect $100", action: "collect", amount: 100 },
+    { text: "Pay Hospital Fees of $100", action: "pay", amount: 100 },
+    { text: "Pay school fees of $50", action: "pay", amount: 50 },
+    { text: "Receive $25 consultancy fee", action: "collect", amount: 25 },
+    { text: "You inherit $100", action: "collect", amount: 100 },
+    { text: "You have won second prize in a beauty contest. Collect $10", action: "collect", amount: 10 }
+];
+
+const MONOPOLY_STARTING_MONEY = 1500;
+
 // Normalize game type
 const normalizeGameType = (gameType) => {
     const mapping = {
         'card_jitsu': 'cardJitsu',
         'tic_tac_toe': 'ticTacToe',
         'connect4': 'connect4',
+        'monopoly': 'monopoly',
         'pong': 'pong'
     };
     return mapping[gameType] || gameType;
@@ -45,7 +134,8 @@ const denormalizeGameType = (gameType) => {
     const mapping = {
         'cardJitsu': 'card_jitsu',
         'ticTacToe': 'tic_tac_toe',
-        'connect4': 'connect4'
+        'connect4': 'connect4',
+        'monopoly': 'monopoly'
     };
     return mapping[gameType] || gameType;
 };
@@ -175,6 +265,38 @@ class MatchService {
                     turnStartedAt: Date.now()
                 };
             
+            case 'monopoly':
+                return {
+                    player1: {
+                        position: 0,
+                        money: MONOPOLY_STARTING_MONEY,
+                        properties: [],
+                        inJail: false,
+                        jailTurns: 0
+                    },
+                    player2: {
+                        position: 0,
+                        money: MONOPOLY_STARTING_MONEY,
+                        properties: [],
+                        inJail: false,
+                        jailTurns: 0
+                    },
+                    propertyOwners: Array(40).fill(null),
+                    currentTurn: 'player1',
+                    phase: 'roll', // 'roll' | 'moving' | 'action' | 'end' | 'complete'
+                    lastDice: [0, 0],
+                    doublesCount: 0,
+                    currentEvent: null,
+                    canBuy: false,
+                    buyPrice: 0,
+                    winner: null,
+                    turnStartedAt: Date.now(),
+                    animatingMove: false,
+                    moveFrom: 0,
+                    moveTo: 0,
+                    pendingPropertyLanding: false // For card-based movement
+                };
+            
             case 'card_jitsu':
             default:
                 return {
@@ -227,6 +349,7 @@ class MatchService {
 
     /**
      * Play a card/make a move
+     * For Monopoly: cardIndex is an action object { action: 'roll' | 'buy' | 'endTurn' | 'completMove' }
      */
     playCard(matchId, playerId, cardIndex) {
         const match = this.matches.get(matchId);
@@ -238,6 +361,9 @@ class MatchService {
         }
         if (match.gameType === 'connect4') {
             return this._playConnect4(match, playerId, cardIndex);
+        }
+        if (match.gameType === 'monopoly') {
+            return this._playMonopoly(match, playerId, cardIndex);
         }
         return this._playCardJitsu(match, playerId, cardIndex);
     }
@@ -387,6 +513,363 @@ class MatchService {
         return cells;
     }
 
+    // ==================== MONOPOLY ====================
+    
+    _playMonopoly(match, playerId, actionData) {
+        const state = match.state;
+        const isPlayer1 = playerId === match.player1.id;
+        const isPlayer2 = playerId === match.player2.id;
+        if (!isPlayer1 && !isPlayer2) return { error: 'NOT_IN_MATCH' };
+        
+        const currentPlayer = isPlayer1 ? 'player1' : 'player2';
+        const isMyTurn = state.currentTurn === currentPlayer;
+        
+        // Parse action
+        const action = typeof actionData === 'object' ? actionData.action : actionData;
+        
+        switch (action) {
+            case 'roll':
+                return this._monopolyRoll(match, state, currentPlayer, isMyTurn);
+            case 'completeMove':
+                return this._monopolyCompleteMove(match, state, currentPlayer, isMyTurn);
+            case 'buy':
+                return this._monopolyBuy(match, state, currentPlayer, isMyTurn);
+            case 'endTurn':
+                return this._monopolyEndTurn(match, state, currentPlayer, isMyTurn);
+            default:
+                return { error: 'INVALID_ACTION' };
+        }
+    }
+    
+    _monopolyRoll(match, state, currentPlayer, isMyTurn) {
+        if (!isMyTurn) return { error: 'NOT_YOUR_TURN' };
+        if (state.phase !== 'roll') return { error: 'NOT_ROLL_PHASE' };
+        
+        const d1 = Math.floor(Math.random() * 6) + 1;
+        const d2 = Math.floor(Math.random() * 6) + 1;
+        const total = d1 + d2;
+        const isDoubles = d1 === d2;
+        
+        state.lastDice = [d1, d2];
+        const player = state[currentPlayer];
+        
+        // Handle jail (per official rules: roll doubles OR pay $50 after 3 failed attempts)
+        if (player.inJail) {
+            if (isDoubles) {
+                player.inJail = false;
+                player.jailTurns = 0;
+                state.doublesCount = 0; // Reset doubles after escaping jail
+                state.currentEvent = { type: 'jail', title: 'DOUBLES!', description: 'You escaped jail!' };
+                // Continue to move with this roll
+            } else {
+                player.jailTurns++;
+                if (player.jailTurns >= 3) {
+                    // Must pay $50 bail after 3 attempts
+                    player.money -= 50;
+                    player.inJail = false;
+                    player.jailTurns = 0;
+                    state.currentEvent = { type: 'jail', title: 'PAID BAIL', description: 'Paid $50 to leave jail' };
+                    
+                    // Check bankruptcy from bail payment
+                    if (player.money < 0) {
+                        state.phase = 'complete';
+                        state.winner = currentPlayer === 'player1' ? 'player2' : 'player1';
+                        match.status = 'complete';
+                        match.winnerId = state.winner === 'player1' ? match.player1.id : match.player2.id;
+                        match.winnerWallet = state.winner === 'player1' ? match.player1.wallet : match.player2.wallet;
+                        match.endedAt = Date.now();
+                        return { success: true, gameComplete: true, bankruptcy: true };
+                    }
+                    // Continue to move with this roll after paying bail
+                } else {
+                    state.currentEvent = { type: 'jail', title: 'STILL IN JAIL', description: `${3 - player.jailTurns} tries left` };
+                    state.phase = 'end';
+                    return { success: true, stayInJail: true };
+                }
+            }
+        }
+        
+        // Check 3 doubles = jail
+        if (isDoubles && !player.inJail) {
+            state.doublesCount++;
+            if (state.doublesCount >= 3) {
+                this._monopolySendToJail(state, currentPlayer);
+                state.currentEvent = { type: 'jail', title: 'ARRESTED!', description: 'Three doubles - go to jail!' };
+                state.phase = 'end';
+                return { success: true, goToJail: true };
+            }
+        } else if (!isDoubles) {
+            state.doublesCount = 0;
+        }
+        
+        // Calculate new position
+        const oldPos = player.position;
+        const newPos = (oldPos + total) % 40;
+        const passedGo = newPos < oldPos && oldPos !== 0;
+        
+        if (passedGo) {
+            player.money += 200;
+        }
+        
+        // Set animation state
+        state.animatingMove = true;
+        state.moveFrom = oldPos;
+        state.moveTo = newPos;
+        state.phase = 'moving';
+        
+        return { success: true, dice: [d1, d2], total, isDoubles, passedGo, from: oldPos, to: newPos };
+    }
+    
+    _monopolyCompleteMove(match, state, currentPlayer, isMyTurn) {
+        if (!isMyTurn) return { error: 'NOT_YOUR_TURN' };
+        if (state.phase !== 'moving') return { error: 'NOT_MOVING_PHASE' };
+        
+        const player = state[currentPlayer];
+        player.position = state.moveTo;
+        state.animatingMove = false;
+        
+        const space = MONOPOLY_SPACES[player.position];
+        state.canBuy = false;
+        state.buyPrice = 0;
+        
+        // Handle landing
+        switch (space.type) {
+            case 'property':
+            case 'station':
+            case 'utility':
+                this._monopolyHandlePropertyLanding(match, state, currentPlayer, player.position);
+                break;
+            case 'tax':
+                player.money -= space.price;
+                state.currentEvent = { type: 'tax', title: 'TAX', description: `Paid $${space.price}` };
+                state.phase = 'end';
+                break;
+            case 'chance':
+                this._monopolyHandleCard(match, state, currentPlayer, MONOPOLY_CHANCE_CARDS, 'CHANCE');
+                break;
+            case 'chest':
+                this._monopolyHandleCard(match, state, currentPlayer, MONOPOLY_CHEST_CARDS, 'COMMUNITY CHEST');
+                break;
+            case 'gotojail':
+                this._monopolySendToJail(state, currentPlayer);
+                state.currentEvent = { type: 'jail', title: 'GO TO JAIL', description: 'Do not pass GO' };
+                state.phase = 'end';
+                break;
+            default:
+                state.phase = 'end';
+                break;
+        }
+        
+        // Check bankruptcy
+        if (player.money < 0) {
+            state.phase = 'complete';
+            state.winner = currentPlayer === 'player1' ? 'player2' : 'player1';
+            match.status = 'complete';
+            match.winnerId = state.winner === 'player1' ? match.player1.id : match.player2.id;
+            match.winnerWallet = state.winner === 'player1' ? match.player1.wallet : match.player2.wallet;
+            match.endedAt = Date.now();
+            return { success: true, gameComplete: true };
+        }
+        
+        return { success: true };
+    }
+    
+    _monopolyHandlePropertyLanding(match, state, currentPlayer, position) {
+        const owner = state.propertyOwners[position];
+        const space = MONOPOLY_SPACES[position];
+        const player = state[currentPlayer];
+        
+        if (owner === null) {
+            if (player.money >= space.price) {
+                state.canBuy = true;
+                state.buyPrice = space.price;
+                state.currentEvent = { type: 'buy', title: space.name, description: `Available for $${space.price}` };
+                state.phase = 'action';
+            } else {
+                state.currentEvent = { type: 'buy', title: space.name, description: `Can't afford $${space.price}` };
+                state.phase = 'end';
+            }
+        } else if (owner === currentPlayer) {
+            state.currentEvent = { type: 'own', title: space.name, description: 'You own this' };
+            state.phase = 'end';
+        } else {
+            const rent = this._monopolyCalculateRent(state, position, owner);
+            player.money -= rent;
+            state[owner].money += rent;
+            state.currentEvent = { type: 'rent', title: 'RENT DUE', description: `Paid $${rent}` };
+            state.phase = 'end';
+        }
+    }
+    
+    _monopolyCalculateRent(state, position, owner) {
+        const space = MONOPOLY_SPACES[position];
+        let rent = space.rent || 0;
+        const ownerProps = state[owner].properties;
+        const group = space.group;
+        
+        if (group !== 'NONE' && group !== 'UTILITY' && group !== 'STATION') {
+            const groupCount = ownerProps.filter(i => MONOPOLY_SPACES[i].group === group).length;
+            if (groupCount === MONOPOLY_GROUP_SIZES[group]) {
+                rent *= 2;
+            }
+        }
+        
+        if (space.type === 'station') {
+            const count = ownerProps.filter(i => MONOPOLY_SPACES[i].type === 'station').length;
+            rent = 25 * Math.pow(2, count - 1);
+        }
+        
+        if (space.type === 'utility') {
+            const count = ownerProps.filter(i => MONOPOLY_SPACES[i].type === 'utility').length;
+            const multiplier = count === 2 ? 10 : 4;
+            rent = (state.lastDice[0] + state.lastDice[1]) * multiplier;
+        }
+        
+        return rent;
+    }
+    
+    _monopolyHandleCard(match, state, currentPlayer, deck, title) {
+        const card = deck[Math.floor(Math.random() * deck.length)];
+        const player = state[currentPlayer];
+        
+        state.currentEvent = { type: title.toLowerCase().replace(' ', ''), title, description: card.text };
+        
+        let needsLandingCheck = false;
+        
+        switch (card.action) {
+            case 'go':
+                player.position = 0;
+                player.money += 200;
+                break;
+            case 'moveTo':
+                // Check if passing GO when moving to new position
+                if (card.position < player.position && player.position !== 0) {
+                    player.money += 200; // Passed GO
+                    state.currentEvent.description += ' (Collected $200 for passing GO!)';
+                }
+                player.position = card.position;
+                needsLandingCheck = true; // Need to handle landing on new position
+                break;
+            case 'collect':
+                player.money += card.amount;
+                break;
+            case 'pay':
+                player.money -= card.amount;
+                break;
+            case 'jail':
+                this._monopolySendToJail(state, currentPlayer);
+                break;
+        }
+        
+        // If the card moved the player, handle landing on the new space
+        if (needsLandingCheck) {
+            const newSpace = MONOPOLY_SPACES[player.position];
+            if (newSpace.type === 'property' || newSpace.type === 'station' || newSpace.type === 'utility') {
+                // Delay the property handling - first show the card, then handle landing
+                // Set a flag that we need to handle property landing after card dismissal
+                state.pendingPropertyLanding = true;
+                state.phase = 'end'; // End turn first to show card, then player can click end turn to trigger landing
+            } else if (newSpace.type === 'gotojail') {
+                this._monopolySendToJail(state, currentPlayer);
+                state.phase = 'end';
+            } else if (newSpace.type === 'tax') {
+                player.money -= newSpace.price;
+                state.currentEvent.description += ` Then paid $${newSpace.price} tax.`;
+                state.phase = 'end';
+            } else {
+                state.phase = 'end';
+            }
+        } else {
+            state.phase = 'end';
+        }
+    }
+    
+    _monopolySendToJail(state, currentPlayer) {
+        const player = state[currentPlayer];
+        player.position = 10;
+        player.inJail = true;
+        player.jailTurns = 0;
+        state.doublesCount = 0;
+    }
+    
+    _monopolyBuy(match, state, currentPlayer, isMyTurn) {
+        if (!isMyTurn) return { error: 'NOT_YOUR_TURN' };
+        if (state.phase !== 'action' || !state.canBuy) return { error: 'CANNOT_BUY' };
+        
+        const player = state[currentPlayer];
+        const position = player.position;
+        const space = MONOPOLY_SPACES[position];
+        
+        if (player.money < space.price) return { error: 'NOT_ENOUGH_MONEY' };
+        
+        player.money -= space.price;
+        player.properties.push(position);
+        state.propertyOwners[position] = currentPlayer;
+        state.canBuy = false;
+        
+        // Check monopoly
+        const group = space.group;
+        let isMonopoly = false;
+        if (group !== 'NONE' && group !== 'UTILITY' && group !== 'STATION') {
+            const groupCount = player.properties.filter(i => MONOPOLY_SPACES[i].group === group).length;
+            isMonopoly = groupCount === MONOPOLY_GROUP_SIZES[group];
+        }
+        
+        state.currentEvent = { 
+            type: 'bought', 
+            title: 'PURCHASED!', 
+            description: `Bought ${space.name}${isMonopoly ? ' - MONOPOLY!' : ''}` 
+        };
+        state.phase = 'end';
+        
+        return { success: true, property: position, price: space.price, isMonopoly };
+    }
+    
+    _monopolyEndTurn(match, state, currentPlayer, isMyTurn) {
+        if (!isMyTurn) return { error: 'NOT_YOUR_TURN' };
+        if (state.phase !== 'action' && state.phase !== 'end') return { error: 'CANNOT_END_TURN' };
+        
+        // Handle pending property landing from card movement
+        if (state.pendingPropertyLanding) {
+            state.pendingPropertyLanding = false;
+            const player = state[currentPlayer];
+            this._monopolyHandlePropertyLanding(match, state, currentPlayer, player.position);
+            
+            // Check bankruptcy after landing
+            if (player.money < 0) {
+                state.phase = 'complete';
+                state.winner = currentPlayer === 'player1' ? 'player2' : 'player1';
+                match.status = 'complete';
+                match.winnerId = state.winner === 'player1' ? match.player1.id : match.player2.id;
+                match.winnerWallet = state.winner === 'player1' ? match.player1.wallet : match.player2.wallet;
+                match.endedAt = Date.now();
+                return { success: true, gameComplete: true };
+            }
+            
+            // If landing gave them an action (buy property), don't end turn yet
+            if (state.phase === 'action') {
+                return { success: true, canBuy: true };
+            }
+        }
+        
+        // Check doubles (roll again)
+        if (state.doublesCount > 0 && !state[currentPlayer].inJail) {
+            state.phase = 'roll';
+            state.currentEvent = { type: 'doubles', title: 'DOUBLES!', description: 'Roll again!' };
+            return { success: true, rollAgain: true };
+        }
+        
+        // Switch turn
+        state.currentTurn = state.currentTurn === 'player1' ? 'player2' : 'player1';
+        state.phase = 'roll';
+        state.doublesCount = 0;
+        state.currentEvent = null;
+        state.pendingPropertyLanding = false;
+        state.turnStartedAt = Date.now();
+        
+        return { success: true };
+    }
+
     _playCardJitsu(match, playerId, cardIndex) {
         if (match.state.phase !== 'select') return { error: 'NOT_SELECT_PHASE' };
 
@@ -501,6 +984,8 @@ class MatchService {
                 this._handleTicTacToeTimeout(match);
             } else if (match.gameType === 'connect4') {
                 this._handleConnect4Timeout(match);
+            } else if (match.gameType === 'monopoly') {
+                this._handleMonopolyTimeout(match);
             } else {
                 this._handleCardJitsuTimeout(match);
             }
@@ -554,6 +1039,27 @@ class MatchService {
         
         this._resolveRound(match);
     }
+    
+    _handleMonopolyTimeout(match) {
+        const state = match.state;
+        const currentPlayerId = state.currentTurn === 'player1' ? match.player1.id : match.player2.id;
+        const playerName = state.currentTurn === 'player1' ? match.player1.name : match.player2.name;
+        
+        console.log(`⏰ Monopoly auto-play for ${playerName}, phase: ${state.phase}`);
+        
+        // Auto-actions based on phase
+        if (state.phase === 'roll') {
+            this._monopolyRoll(match, state, state.currentTurn, true);
+            this._notifyMatchState(match);
+        } else if (state.phase === 'moving') {
+            this._monopolyCompleteMove(match, state, state.currentTurn, true);
+            this._notifyMatchState(match);
+        } else if (state.phase === 'action' || state.phase === 'end') {
+            // Skip buying, just end turn
+            this._monopolyEndTurn(match, state, state.currentTurn, true);
+            this._notifyMatchState(match);
+        }
+    }
 
     _notifyMatchState(match) {
         const state1 = this.getMatchState(match.id, match.player1.id);
@@ -587,6 +1093,25 @@ class MatchService {
                 winner: match.state.winner,
                 winningCells: match.state.winningCells,
                 lastMove: match.state.lastMove,
+                status: match.status,
+                winnerId: match.winnerId
+            };
+        } else if (match.gameType === 'monopoly') {
+            spectatorState = {
+                player1Position: match.state.player1.position,
+                player1Money: match.state.player1.money,
+                player1Properties: match.state.player1.properties,
+                player1InJail: match.state.player1.inJail,
+                player2Position: match.state.player2.position,
+                player2Money: match.state.player2.money,
+                player2Properties: match.state.player2.properties,
+                player2InJail: match.state.player2.inJail,
+                currentTurn: match.state.currentTurn,
+                phase: match.state.phase,
+                lastDice: match.state.lastDice,
+                currentEvent: match.state.currentEvent,
+                propertyOwners: match.state.propertyOwners,
+                winner: match.state.winner,
                 status: match.status,
                 winnerId: match.winnerId
             };
@@ -634,7 +1159,63 @@ class MatchService {
         if (match.gameType === 'connect4') {
             return this._getConnect4State(match, playerId, isPlayer1, timeRemaining);
         }
+        if (match.gameType === 'monopoly') {
+            return this._getMonopolyState(match, playerId, isPlayer1, timeRemaining);
+        }
         return this._getCardJitsuState(match, playerId, isPlayer1, timeRemaining);
+    }
+    
+    _getMonopolyState(match, playerId, isPlayer1, timeRemaining) {
+        const state = match.state;
+        const currentPlayer = isPlayer1 ? 'player1' : 'player2';
+        const opponent = isPlayer1 ? 'player2' : 'player1';
+        const isMyTurn = state.currentTurn === currentPlayer;
+        
+        return {
+            // My info
+            myPosition: state[currentPlayer].position,
+            myMoney: state[currentPlayer].money,
+            myProperties: state[currentPlayer].properties,
+            myInJail: state[currentPlayer].inJail,
+            
+            // Opponent info
+            opponentPosition: state[opponent].position,
+            opponentMoney: state[opponent].money,
+            opponentProperties: state[opponent].properties,
+            opponentInJail: state[opponent].inJail,
+            
+            // Turn state
+            isMyTurn,
+            currentTurn: state.currentTurn,
+            phase: state.phase,
+            
+            // Dice and events
+            lastDice: state.lastDice,
+            currentEvent: state.currentEvent,
+            
+            // Actions available
+            canBuy: state.canBuy && isMyTurn,
+            buyPrice: state.buyPrice,
+            canRoll: state.phase === 'roll' && isMyTurn,
+            canEndTurn: (state.phase === 'action' || state.phase === 'end') && isMyTurn,
+            
+            // Animation
+            animatingMove: state.animatingMove,
+            moveFrom: state.moveFrom,
+            moveTo: state.moveTo,
+            
+            // Game end
+            winner: state.winner,
+            status: state.winner ? 'complete' : 'playing',
+            
+            // Board state
+            propertyOwners: state.propertyOwners,
+            
+            // Metadata
+            isPlayer1,
+            turnTimeRemaining: timeRemaining,
+            winnerId: match.winnerId
+        };
     }
 
     _getTicTacToeState(match, playerId, isPlayer1, timeRemaining) {
@@ -821,6 +1402,21 @@ class MatchService {
                         winner: match.state.winner,
                         winningCells: match.state.winningCells,
                         lastMove: match.state.lastMove,
+                        status: match.status
+                    };
+                } else if (match.gameType === 'monopoly') {
+                    spectatorState = {
+                        player1Position: match.state.player1.position,
+                        player1Money: match.state.player1.money,
+                        player1Properties: match.state.player1.properties,
+                        player2Position: match.state.player2.position,
+                        player2Money: match.state.player2.money,
+                        player2Properties: match.state.player2.properties,
+                        currentTurn: match.state.currentTurn,
+                        phase: match.state.phase,
+                        lastDice: match.state.lastDice,
+                        propertyOwners: match.state.propertyOwners,
+                        winner: match.state.winner,
                         status: match.status
                     };
                 } else {

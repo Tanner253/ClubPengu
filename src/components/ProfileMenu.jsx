@@ -42,7 +42,12 @@ const ProfileMenu = () => {
     
     const stats = selectedPlayerStats?.[selectedPlayer.id];
     // Use server-authoritative coins from userData for authenticated users
-    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : 0;
+    // In dev mode, give guests coins for testing
+    const isDev = import.meta.env.DEV;
+    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : (isDev ? 1000 : 0);
+    
+    // Allow challenging in dev mode even as guest
+    const canChallenge = isAuthenticated || isDev;
     
     // Get penguin color for preview
     const penguinColor = selectedPlayer.appearance?.skin || 'blue';
@@ -66,6 +71,7 @@ const ProfileMenu = () => {
         { id: 'card_jitsu', name: 'Card Jitsu', emoji: '⚔️', available: true },
         { id: 'tic_tac_toe', name: 'Tic Tac Toe', emoji: '⭕', available: true },
         { id: 'connect4', name: 'Connect 4', emoji: '🔴', available: true },
+        { id: 'monopoly', name: 'Monopoly', emoji: '🎩', available: true },
     ];
     
     const handleMenuInteraction = (e) => {
@@ -146,8 +152,8 @@ const ProfileMenu = () => {
                             </span>
                         </div>
                         
-                        {/* Right: Challenge buttons - Only for authenticated users */}
-                        {isAuthenticated && (
+                        {/* Right: Challenge buttons - Auth users or dev mode */}
+                        {canChallenge && (
                             <div className="flex flex-col gap-1.5 min-w-[100px]">
                                 {!showGameDropdown ? (
                                     <button
@@ -283,8 +289,8 @@ const ProfileMenu = () => {
                         </div>
                     </div>
                     
-                    {/* Challenge Button - Only for authenticated users */}
-                    {isAuthenticated && (
+                    {/* Challenge Button - Auth users or dev mode */}
+                    {canChallenge && (
                         <>
                             <div className="relative">
                                 <button

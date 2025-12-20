@@ -23,7 +23,9 @@ const Inbox = () => {
     
     const panelRef = useRef(null);
     // Server-authoritative coins from userData
-    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : 0;
+    // In dev mode, give guests coins for testing
+    const isDev = import.meta.env.DEV;
+    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : (isDev ? 1000 : 0);
     
     // Close on click/touch outside (but not when clicking inbox button)
     useClickOutside(panelRef, (e) => {
@@ -47,7 +49,8 @@ const Inbox = () => {
         'card_jitsu': 'Card Jitsu',
         'connect4': 'Connect 4',
         'pong': 'Pong',
-        'tic_tac_toe': 'Tic Tac Toe'
+        'tic_tac_toe': 'Tic Tac Toe',
+        'monopoly': 'Monopoly'
     };
     
     const renderMessage = (msg) => {

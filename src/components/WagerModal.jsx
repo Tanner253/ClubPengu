@@ -29,7 +29,12 @@ const WagerModal = () => {
     const { isMobile, isLandscape } = useDeviceDetection();
     
     // Server-authoritative coins from userData
-    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : 0;
+    // In development, give guests coins for testing
+    const isDev = import.meta.env.DEV;
+    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : (isDev ? 1000 : 0);
+    
+    // Allow free play (0 wager) for monopoly in development mode
+    const allowFreePlay = isDev && wagerGameType === 'monopoly';
     
     // Reset form when modal opens
     useEffect(() => {
@@ -52,14 +57,16 @@ const WagerModal = () => {
         'card_jitsu': 'Card Jitsu',
         'connect4': 'Connect 4',
         'pong': 'Pong',
-        'tic_tac_toe': 'Tic Tac Toe'
+        'tic_tac_toe': 'Tic Tac Toe',
+        'monopoly': 'Monopoly'
     };
     
     const gameEmojis = {
         'card_jitsu': '⚔️',
         'connect4': '🔴',
         'pong': '🏓',
-        'tic_tac_toe': '⭕'
+        'tic_tac_toe': '⭕',
+        'monopoly': '🎩'
     };
     
     const handleWagerChange = (e) => {
@@ -72,7 +79,13 @@ const WagerModal = () => {
         e.preventDefault();
         e.stopPropagation();
         
-        const amount = parseInt(wagerAmount, 10);
+        const amount = parseInt(wagerAmount, 10) || 0;
+        
+        // Allow free play for monopoly in dev mode
+        if (allowFreePlay && amount === 0) {
+            sendChallenge(selectedPlayer.id, wagerGameType, 0);
+            return;
+        }
         
         if (!amount || amount <= 0) {
             setError('Enter a valid wager amount');
@@ -192,6 +205,16 @@ const WagerModal = () => {
                                     >
                                         ALL
                                     </button>
+                                    {/* Free Play - DEV MONOPOLY ONLY */}
+                                    {allowFreePlay && (
+                                        <button
+                                            type="button"
+                                            onClick={() => sendChallenge(selectedPlayer.id, wagerGameType, 0)}
+                                            className="flex-1 py-1.5 rounded text-[11px] font-medium bg-purple-500/20 text-purple-400 active:bg-purple-500/30"
+                                        >
+                                            FREE
+                                        </button>
+                                    )}
                                 </div>
                                 
                                 {/* Action buttons */}
@@ -323,6 +346,17 @@ const WagerModal = () => {
                             >
                                 ALL IN ({playerCoins} coins)
                             </button>
+                            
+                            {/* Free Play button - DEV MODE MONOPOLY ONLY */}
+                            {allowFreePlay && (
+                                <button
+                                    type="button"
+                                    onClick={() => sendChallenge(selectedPlayer.id, wagerGameType, 0)}
+                                    className="w-full py-2 rounded-lg text-xs font-medium bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 active:bg-purple-500/40 transition-colors mb-3 active:scale-[0.98] border border-purple-500/30"
+                                >
+                                    🎮 FREE PLAY (Dev Mode)
+                                </button>
+                            )}
                             
                             {/* Action Buttons */}
                             <div className="flex gap-2">

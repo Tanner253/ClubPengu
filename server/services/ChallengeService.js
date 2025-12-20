@@ -15,6 +15,7 @@ const normalizeGameType = (gameType) => {
         'card_jitsu': 'cardJitsu',
         'tic_tac_toe': 'ticTacToe',
         'connect4': 'connect4',
+        'monopoly': 'monopoly',
         'pong': 'pong'
     };
     return mapping[gameType] || gameType;
@@ -58,6 +59,15 @@ class ChallengeService {
                 target.walletAddress
             );
             if (existing) {
+                return { error: 'CHALLENGE_EXISTS', message: 'There is already a pending challenge between you' };
+            }
+        }
+        
+        // Also check in-memory for guest challenges (by playerId)
+        for (const [id, existingChallenge] of this.challenges) {
+            if (existingChallenge.status === 'pending' &&
+                ((existingChallenge.challengerId === challenger.id && existingChallenge.targetId === target.id) ||
+                 (existingChallenge.challengerId === target.id && existingChallenge.targetId === challenger.id))) {
                 return { error: 'CHALLENGE_EXISTS', message: 'There is already a pending challenge between you' };
             }
         }

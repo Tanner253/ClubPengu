@@ -252,7 +252,9 @@ export function ChallengeProvider({ children }) {
                                     // Use the winner from finalState (preserves 'X', 'O', 'R', 'Y', 'draw')
                                     // Only override if not present in finalState
                                     winner: message.finalState?.winner ?? (message.isDraw ? 'draw' : existing.state?.winner),
-                                    isComplete: true
+                                    isComplete: true,
+                                    status: 'complete',
+                                    reason: message.reason // 'forfeit', 'bankruptcy', 'win', 'draw'
                                 },
                                 winnerId: message.winnerId,
                                 winnerName: message.winnerName,
@@ -393,13 +395,16 @@ export function ChallengeProvider({ children }) {
     
     // Send a challenge
     const sendChallenge = useCallback((targetPlayerId, gameType, wagerAmount) => {
-        if (!targetPlayerId || !gameType || wagerAmount <= 0) return;
+        if (!targetPlayerId || !gameType) return;
+        // Allow 0 wager in development mode for testing
+        const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+        if (wagerAmount < 0 || (wagerAmount === 0 && !isDev)) return;
         
         send({
             type: 'challenge_send',
             targetPlayerId,
             gameType,
-            wagerAmount
+            wagerAmount: wagerAmount || 0
         });
         
         closeWagerModal();

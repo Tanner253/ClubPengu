@@ -5,12 +5,14 @@
 
 /**
  * Create a canvas for rendering match banners
+ * @param {string} gameType - The type of game (monopoly needs taller canvas)
  * @returns {HTMLCanvasElement}
  */
-export function createBannerCanvas() {
+export function createBannerCanvas(gameType = 'default') {
     const canvas = document.createElement('canvas');
     canvas.width = 512;
-    canvas.height = 200;
+    // Monopoly needs taller canvas for the mini board
+    canvas.height = gameType === 'monopoly' ? 280 : 200;
     return canvas;
 }
 
@@ -271,6 +273,212 @@ export function renderConnect4Banner(ctx, canvas, players, state, wager) {
 }
 
 /**
+ * Render Monopoly match banner (taller 280px canvas)
+ */
+export function renderMonopolyBanner(ctx, canvas, players, state, wager) {
+    // Property colors for mini board display
+    const PROPERTY_COLORS = {
+        1: '#8B4513', 3: '#8B4513',  // Brown
+        6: '#87CEEB', 8: '#87CEEB', 9: '#87CEEB',  // Light Blue
+        11: '#FF69B4', 13: '#FF69B4', 14: '#FF69B4',  // Pink
+        16: '#FFA500', 18: '#FFA500', 19: '#FFA500',  // Orange
+        21: '#FF4757', 23: '#FF4757', 24: '#FF4757',  // Red
+        26: '#FFD32A', 27: '#FFD32A', 29: '#FFD32A',  // Yellow
+        31: '#2ED573', 32: '#2ED573', 34: '#2ED573',  // Green
+        37: '#3742FA', 39: '#3742FA',  // Dark Blue
+        5: '#2f3542', 15: '#2f3542', 25: '#2f3542', 35: '#2f3542',  // Railroads
+        12: '#747d8c', 28: '#747d8c'  // Utilities
+    };
+    
+    // Check if game is complete
+    const isComplete = state.winner || state.status === 'complete';
+    
+    // Header - emerald green theme for Monopoly (or gold if winner)
+    ctx.fillStyle = isComplete ? '#FBBF24' : '#10B981';
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    
+    if (isComplete && state.winner) {
+        const winnerName = state.winner === 'player1' ? players[0]?.name : players[1]?.name;
+        ctx.fillText(`🏆 ${winnerName} WINS! 🏆`, canvas.width / 2, 35);
+    } else {
+        ctx.fillText(`🎩 MONOPOLY • 💰 ${wager}`, canvas.width / 2, 35);
+    }
+    
+    // Player names and money (row below header)
+    const p1Name = (players[0]?.name || 'Player 1').substring(0, 10);
+    const p2Name = (players[1]?.name || 'Player 2').substring(0, 10);
+    const p1Props = state.player1Properties || [];
+    const p2Props = state.player2Properties || [];
+    
+    // Player 1 (left side)
+    ctx.textAlign = 'left';
+    const isP1Turn = state.currentTurn === 'player1' && !isComplete;
+    const isP1Winner = state.winner === 'player1';
+    ctx.fillStyle = isP1Winner ? '#4ADE80' : (isP1Turn ? '#FBBF24' : '#FFFFFF');
+    ctx.font = 'bold 18px Arial';
+    ctx.fillText((isP1Turn ? '▶ ' : (isP1Winner ? '👑 ' : '')) + p1Name, 20, 60);
+    
+    // P1 Money & Props
+    ctx.fillStyle = state.player1Money < 100 ? '#F87171' : '#4ADE80';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText(`$${state.player1Money ?? 1500}`, 20, 80);
+    ctx.fillStyle = '#67E8F9';
+    ctx.font = '12px Arial';
+    ctx.fillText(`${p1Props.length} properties${state.player1InJail ? ' 🔒' : ''}`, 20, 95);
+    
+    // Player 2 (right side)
+    ctx.textAlign = 'right';
+    const isP2Turn = state.currentTurn === 'player2' && !isComplete;
+    const isP2Winner = state.winner === 'player2';
+    ctx.fillStyle = isP2Winner ? '#4ADE80' : (isP2Turn ? '#FBBF24' : '#FFFFFF');
+    ctx.font = 'bold 18px Arial';
+    ctx.fillText((isP2Winner ? '👑 ' : '') + (isP2Turn ? '▶ ' : '') + p2Name, canvas.width - 20, 60);
+    
+    // P2 Money & Props
+    ctx.fillStyle = state.player2Money < 100 ? '#F87171' : '#4ADE80';
+    ctx.font = 'bold 16px Arial';
+    ctx.fillText(`$${state.player2Money ?? 1500}`, canvas.width - 20, 80);
+    ctx.fillStyle = '#F9A8D4';
+    ctx.font = '12px Arial';
+    ctx.fillText(`${p2Props.length} properties${state.player2InJail ? ' 🔒' : ''}`, canvas.width - 20, 95);
+    
+    // === MINI PROPERTY BOARD (center, larger) ===
+    const boardSize = 120; // Larger board
+    const boardX = canvas.width / 2 - boardSize / 2;
+    const boardY = 105;
+    const cellSize = 10;
+    const propOwners = state.propertyOwners || {};
+    
+    // Draw board background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.fillRect(boardX - 4, boardY - 4, boardSize + 8, boardSize + 8);
+    
+    // Draw board outline
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boardX - 4, boardY - 4, boardSize + 8, boardSize + 8);
+    
+    // Helper to draw property cell with owner
+    const drawCell = (x, y, propIndex) => {
+        const color = PROPERTY_COLORS[propIndex];
+        if (color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, cellSize, cellSize);
+            // Owner indicator (larger dot)
+            if (propOwners[propIndex] === 'player1') {
+                ctx.fillStyle = '#22D3EE';
+                ctx.beginPath();
+                ctx.arc(x + cellSize/2, y + cellSize/2, 3, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (propOwners[propIndex] === 'player2') {
+                ctx.fillStyle = '#F472B6';
+                ctx.beginPath();
+                ctx.arc(x + cellSize/2, y + cellSize/2, 3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        } else {
+            // Non-property space (GO, Jail, etc)
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.fillRect(x, y, cellSize, cellSize);
+        }
+    };
+    
+    // Bottom row (0-10): GO to Jail (right to left)
+    for (let i = 0; i <= 10; i++) {
+        const x = boardX + boardSize - cellSize - i * (cellSize + 1);
+        const y = boardY + boardSize - cellSize;
+        drawCell(x, y, i);
+    }
+    
+    // Left column (11-20): Jail to Free Parking (bottom to top)
+    for (let i = 11; i <= 20; i++) {
+        const x = boardX;
+        const y = boardY + boardSize - cellSize - (i - 10) * (cellSize + 1);
+        drawCell(x, y, i);
+    }
+    
+    // Top row (21-30): Free Parking to Go To Jail (left to right)
+    for (let i = 21; i <= 30; i++) {
+        const x = boardX + (i - 20) * (cellSize + 1);
+        const y = boardY;
+        drawCell(x, y, i);
+    }
+    
+    // Right column (31-39): Go To Jail to Boardwalk (top to bottom)
+    for (let i = 31; i <= 39; i++) {
+        const x = boardX + boardSize - cellSize;
+        const y = boardY + (i - 30) * (cellSize + 1);
+        drawCell(x, y, i);
+    }
+    
+    // Center of board - show dice or status
+    const lastDice = state.lastDice || [0, 0];
+    ctx.textAlign = 'center';
+    
+    if (lastDice[0] > 0) {
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = 'bold 14px Arial';
+        ctx.fillText(`🎲 ${lastDice[0]}+${lastDice[1]}`, canvas.width / 2, boardY + 50);
+        ctx.fillText(`= ${lastDice[0] + lastDice[1]}`, canvas.width / 2, boardY + 66);
+        if (lastDice[0] === lastDice[1]) {
+            ctx.fillStyle = '#FBBF24';
+            ctx.font = 'bold 10px Arial';
+            ctx.fillText('DOUBLES!', canvas.width / 2, boardY + 80);
+        }
+    }
+    
+    // === STATUS BAR (bottom) ===
+    const statusY = boardY + boardSize + 20;
+    
+    if (isComplete) {
+        // Show final result
+        ctx.fillStyle = '#4ADE80';
+        ctx.font = 'bold 16px Arial';
+        const winnerName = state.winner === 'player1' ? players[0]?.name : players[1]?.name;
+        const winnerMoney = state.winner === 'player1' ? state.player1Money : state.player2Money;
+        ctx.fillText(`${winnerName} won with $${winnerMoney}!`, canvas.width / 2, statusY);
+        
+        // Show reason
+        if (state.reason === 'forfeit') {
+            ctx.fillStyle = '#F87171';
+            ctx.font = '12px Arial';
+            ctx.fillText('(Opponent forfeited)', canvas.width / 2, statusY + 18);
+        } else if (state.reason === 'bankruptcy') {
+            ctx.fillStyle = '#F87171';
+            ctx.font = '12px Arial';
+            ctx.fillText('(Opponent went bankrupt)', canvas.width / 2, statusY + 18);
+        }
+    } else {
+        // Status / Current Event
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = '13px Arial';
+        
+        let statusText = '';
+        if (state.currentEvent?.title) {
+            statusText = state.currentEvent.title;
+            if (state.currentEvent.description) {
+                statusText += ': ' + state.currentEvent.description.substring(0, 35);
+            }
+        } else {
+            const turnName = state.currentTurn === 'player1' ? players[0]?.name : players[1]?.name;
+            const phase = state.phase || 'roll';
+            const phaseText = phase === 'roll' ? 'rolling dice' : phase === 'moving' ? 'moving' : phase === 'action' ? 'deciding' : 'waiting';
+            statusText = `${turnName} is ${phaseText}...`;
+        }
+        ctx.fillText(statusText.substring(0, 45), canvas.width / 2, statusY);
+    }
+    
+    // Property legend at very bottom
+    ctx.font = '11px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#22D3EE';
+    ctx.fillText(`● P1: ${p1Props.length}`, canvas.width / 2 - 50, statusY + 20);
+    ctx.fillStyle = '#F472B6';
+    ctx.fillText(`● P2: ${p2Props.length}`, canvas.width / 2 + 50, statusY + 20);
+}
+
+/**
  * Render banner content to canvas based on game type
  */
 export function renderBannerToCanvas(ctx, matchData) {
@@ -291,6 +499,9 @@ export function renderBannerToCanvas(ctx, matchData) {
             break;
         case 'connect4':
             renderConnect4Banner(ctx, canvas, players, state, wager);
+            break;
+        case 'monopoly':
+            renderMonopolyBanner(ctx, canvas, players, state, wager);
             break;
         case 'card_jitsu':
         case 'cardJitsu':
@@ -349,8 +560,8 @@ export function updateMatchBanners(params) {
         let bannerData = banners.get(matchId);
         
         if (!bannerData) {
-            // Create new banner
-            const canvas = createBannerCanvas();
+            // Create new banner - Monopoly needs taller canvas
+            const canvas = createBannerCanvas(matchData.gameType);
             const ctx = canvas.getContext('2d');
             const texture = new THREE.CanvasTexture(canvas);
             texture.needsUpdate = true;
@@ -361,11 +572,13 @@ export function updateMatchBanners(params) {
                 depthTest: false
             });
             const sprite = new THREE.Sprite(material);
-            sprite.scale.set(8, 3.2, 1); // Banner size in world units
+            // Monopoly banner is taller (280px vs 200px)
+            const isMonopoly = matchData.gameType === 'monopoly';
+            sprite.scale.set(8, isMonopoly ? 4.4 : 3.2, 1); // Banner size in world units
             sprite.renderOrder = 999; // Render on top
             
             scene.add(sprite);
-            bannerData = { sprite, canvas, ctx, texture };
+            bannerData = { sprite, canvas, ctx, texture, gameType: matchData.gameType };
             banners.set(matchId, bannerData);
         }
         
@@ -396,6 +609,7 @@ export default {
     renderCardJitsuBanner,
     renderTicTacToeBanner,
     renderConnect4Banner,
+    renderMonopolyBanner,
     renderBannerToCanvas,
     updateMatchBanners,
     cleanupMatchBanners
