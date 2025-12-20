@@ -27,7 +27,7 @@ class CameraController {
         // Auto-align settings
         this.autoAlignEnabled = true;
         this.autoAlignDelay = 0.8;      // Seconds of no manual input before auto-align
-        this.autoAlignSpeed = 0.025;    // How fast camera aligns behind player (0-1)
+        this.autoAlignSpeed = 0.0375;   // How fast camera aligns behind player (0-1) - 50% faster than before
         this.lastManualInput = 0;       // Timestamp of last manual camera control
         
         // Input accumulators (applied smoothly each frame)

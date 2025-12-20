@@ -12,11 +12,13 @@ class IceSculpture extends BaseProp {
      * @param {THREE} THREE - Three.js library
      * @param {string} type - 'penguin' | 'fish' | 'heart' | 'star'
      * @param {number} rotation - Y-axis rotation in radians
+     * @param {boolean} isLordFishnu - Special holy fish sculpture
      */
-    constructor(THREE, type = 'penguin', rotation = 0) {
+    constructor(THREE, type = 'penguin', rotation = 0, isLordFishnu = false) {
         super(THREE);
         this.type = type;
         this.rotation = rotation;
+        this.isLordFishnu = isLordFishnu;
         this.matManager = getMaterialManager(THREE);
     }
     
@@ -28,6 +30,7 @@ class IceSculpture extends BaseProp {
         group.rotation.y = this.rotation;
         
         // Premium ice material - crystal-like with frosted edges
+        // depthWrite: true prevents transparency sorting issues
         const iceMat = new THREE.MeshStandardMaterial({
             color: 0xC5E8F7,
             roughness: 0.05,
@@ -35,6 +38,8 @@ class IceSculpture extends BaseProp {
             transparent: true,
             opacity: 0.88,
             envMapIntensity: 1.5,
+            depthWrite: true,
+            side: THREE.FrontSide,
         });
         this.materials.push(iceMat);
         
@@ -45,6 +50,8 @@ class IceSculpture extends BaseProp {
             metalness: 0.05,
             transparent: true,
             opacity: 0.95,
+            depthWrite: true,
+            side: THREE.FrontSide,
         });
         this.materials.push(frostedMat);
         
@@ -68,7 +75,7 @@ class IceSculpture extends BaseProp {
         // Create sculpture based on type
         switch (this.type) {
             case 'fish':
-                this.createFish(group, iceMat, frostedMat);
+                this.createFish(group, iceMat, frostedMat, this.isLordFishnu);
                 break;
             case 'heart':
                 this.createHeart(group, iceMat, frostedMat);
@@ -193,17 +200,37 @@ class IceSculpture extends BaseProp {
         this.addMesh(tail, group);
     }
     
-    createFish(group, iceMat, frostedMat) {
+    createFish(group, iceMat, frostedMat, isLordFishnu = false) {
         const THREE = this.THREE;
-        const scale = 2.2;
+        // Higher scale for Lord Fishnu
+        const scale = isLordFishnu ? 2.8 : 2.2;
+        // Higher geometry segments for better quality
+        const segments = isLordFishnu ? 48 : 24;
+        const halfSegments = isLordFishnu ? 32 : 20;
         
         // Create fish container and rotate it to face forward (along Z axis)
         const fishGroup = new THREE.Group();
         fishGroup.rotation.y = Math.PI / 2; // Rotate 90 degrees to face forward
         group.add(fishGroup);
         
-        // Body - main fish shape
-        const bodyGeo = new THREE.SphereGeometry(0.5 * scale, 24, 20);
+        // Divine halo ring for Lord Fishnu (subtle golden ring above head)
+        if (isLordFishnu) {
+            const haloMat = new THREE.MeshBasicMaterial({
+                color: 0xFFE066,
+                transparent: true,
+                opacity: 0.6,
+            });
+            const haloGeo = new THREE.TorusGeometry(0.6 * scale, 0.04 * scale, 16, 48);
+            const halo = new THREE.Mesh(haloGeo, haloMat);
+            halo.position.set(0.3 * scale, 0.5 + 1.85 * scale, 0);
+            halo.rotation.x = Math.PI / 2;
+            halo.rotation.y = 0.2;
+            fishGroup.add(halo);
+            this.meshes.push(halo);
+        }
+        
+        // Body - main fish shape (higher detail)
+        const bodyGeo = new THREE.SphereGeometry(0.5 * scale, segments, halfSegments);
         const body = new THREE.Mesh(bodyGeo, iceMat);
         body.position.y = 0.5 + 1.0 * scale;
         body.scale.set(2.0, 0.9, 0.65);
@@ -211,16 +238,16 @@ class IceSculpture extends BaseProp {
         fishGroup.add(body);
         this.meshes.push(body);
         
-        // Belly stripe
-        const stripeGeo = new THREE.SphereGeometry(0.35 * scale, 16, 12);
+        // Belly stripe (higher detail)
+        const stripeGeo = new THREE.SphereGeometry(0.35 * scale, halfSegments, halfSegments / 2);
         const stripe = new THREE.Mesh(stripeGeo, frostedMat);
         stripe.position.set(0.1 * scale, 0.5 + 0.9 * scale, 0);
         stripe.scale.set(1.8, 0.5, 0.4);
         fishGroup.add(stripe);
         this.meshes.push(stripe);
         
-        // Tail fin - more elaborate
-        const tailMainGeo = new THREE.ConeGeometry(0.35 * scale, 0.6 * scale, 6);
+        // Tail fin - more elaborate (higher detail)
+        const tailMainGeo = new THREE.ConeGeometry(0.35 * scale, 0.6 * scale, isLordFishnu ? 12 : 6);
         const tailMain = new THREE.Mesh(tailMainGeo, iceMat);
         tailMain.position.set(-0.85 * scale, 0.5 + 1.0 * scale, 0);
         tailMain.rotation.z = Math.PI / 2;
@@ -229,7 +256,7 @@ class IceSculpture extends BaseProp {
         this.meshes.push(tailMain);
         
         // Upper tail lobe
-        const tailUpGeo = new THREE.ConeGeometry(0.18 * scale, 0.45 * scale, 5);
+        const tailUpGeo = new THREE.ConeGeometry(0.18 * scale, 0.45 * scale, isLordFishnu ? 10 : 5);
         const tailUp = new THREE.Mesh(tailUpGeo, iceMat);
         tailUp.position.set(-1.1 * scale, 0.5 + 1.25 * scale, 0);
         tailUp.rotation.z = Math.PI / 4;
@@ -237,15 +264,15 @@ class IceSculpture extends BaseProp {
         this.meshes.push(tailUp);
         
         // Lower tail lobe
-        const tailDownGeo = new THREE.ConeGeometry(0.18 * scale, 0.45 * scale, 5);
+        const tailDownGeo = new THREE.ConeGeometry(0.18 * scale, 0.45 * scale, isLordFishnu ? 10 : 5);
         const tailDown = new THREE.Mesh(tailDownGeo, iceMat);
         tailDown.position.set(-1.1 * scale, 0.5 + 0.75 * scale, 0);
         tailDown.rotation.z = -Math.PI / 4;
         fishGroup.add(tailDown);
         this.meshes.push(tailDown);
         
-        // Dorsal fin - large and detailed
-        const dorsalGeo = new THREE.ConeGeometry(0.22 * scale, 0.55 * scale, 5);
+        // Dorsal fin - large and detailed (higher segment count)
+        const dorsalGeo = new THREE.ConeGeometry(0.22 * scale, 0.55 * scale, isLordFishnu ? 10 : 5);
         const dorsal = new THREE.Mesh(dorsalGeo, iceMat);
         dorsal.position.set(0.15 * scale, 0.5 + 1.6 * scale, 0);
         dorsal.scale.z = 0.3;
@@ -253,18 +280,19 @@ class IceSculpture extends BaseProp {
         this.meshes.push(dorsal);
         
         // Dorsal fin support ridges
-        for (let i = 0; i < 3; i++) {
+        const ridgeCount = isLordFishnu ? 5 : 3;
+        for (let i = 0; i < ridgeCount; i++) {
             const ridgeGeo = new THREE.BoxGeometry(0.02 * scale, 0.4 * scale, 0.05 * scale);
             const ridge = new THREE.Mesh(ridgeGeo, frostedMat);
-            ridge.position.set((0.05 + i * 0.08) * scale, 0.5 + 1.45 * scale, 0);
+            ridge.position.set((0.05 + i * 0.06) * scale, 0.5 + 1.45 * scale, 0);
             ridge.rotation.z = -0.2;
             fishGroup.add(ridge);
             this.meshes.push(ridge);
         }
         
-        // Side fins (pectoral)
+        // Side fins (pectoral) - higher detail
         [-1, 1].forEach(side => {
-            const sideFinGeo = new THREE.ConeGeometry(0.15 * scale, 0.35 * scale, 5);
+            const sideFinGeo = new THREE.ConeGeometry(0.15 * scale, 0.35 * scale, isLordFishnu ? 10 : 5);
             const sideFin = new THREE.Mesh(sideFinGeo, iceMat);
             sideFin.position.set(0.3 * scale, 0.5 + 0.75 * scale, side * 0.3 * scale);
             sideFin.rotation.x = side * 0.7;
@@ -275,15 +303,15 @@ class IceSculpture extends BaseProp {
         });
         
         // Ventral fin
-        const ventralGeo = new THREE.ConeGeometry(0.1 * scale, 0.25 * scale, 4);
+        const ventralGeo = new THREE.ConeGeometry(0.1 * scale, 0.25 * scale, isLordFishnu ? 8 : 4);
         const ventral = new THREE.Mesh(ventralGeo, iceMat);
         ventral.position.set(-0.1 * scale, 0.5 + 0.55 * scale, 0);
         ventral.rotation.z = Math.PI;
         fishGroup.add(ventral);
         this.meshes.push(ventral);
         
-        // Head shape
-        const headGeo = new THREE.SphereGeometry(0.3 * scale, 16, 14);
+        // Head shape (higher detail)
+        const headGeo = new THREE.SphereGeometry(0.3 * scale, halfSegments, halfSegments / 2);
         const head = new THREE.Mesh(headGeo, iceMat);
         head.position.set(0.75 * scale, 0.5 + 1.0 * scale, 0);
         head.scale.set(1.4, 0.9, 0.7);
@@ -292,22 +320,24 @@ class IceSculpture extends BaseProp {
         
         // Eyes - larger and more detailed
         [-1, 1].forEach(side => {
-            const eyeGeo = new THREE.SphereGeometry(0.1 * scale, 12, 12);
+            const eyeGeo = new THREE.SphereGeometry(0.1 * scale, isLordFishnu ? 24 : 12, isLordFishnu ? 24 : 12);
             const eye = new THREE.Mesh(eyeGeo, frostedMat);
             eye.position.set(0.85 * scale, 0.5 + 1.1 * scale, side * 0.22 * scale);
             fishGroup.add(eye);
             this.meshes.push(eye);
             
-            // Pupil
-            const pupilGeo = new THREE.SphereGeometry(0.04 * scale, 8, 8);
-            const pupil = new THREE.Mesh(pupilGeo, iceMat);
+            // Pupil - divine golden for Lord Fishnu
+            const pupilMat = isLordFishnu ? new THREE.MeshBasicMaterial({ color: 0xFFD700 }) : iceMat;
+            if (isLordFishnu) this.materials.push(pupilMat);
+            const pupilGeo = new THREE.SphereGeometry(0.04 * scale, isLordFishnu ? 16 : 8, isLordFishnu ? 16 : 8);
+            const pupil = new THREE.Mesh(pupilGeo, pupilMat);
             pupil.position.set(0.92 * scale, 0.5 + 1.12 * scale, side * 0.25 * scale);
             fishGroup.add(pupil);
             this.meshes.push(pupil);
         });
         
-        // Mouth
-        const mouthGeo = new THREE.TorusGeometry(0.08 * scale, 0.02 * scale, 6, 12, Math.PI);
+        // Mouth (higher detail)
+        const mouthGeo = new THREE.TorusGeometry(0.08 * scale, 0.02 * scale, isLordFishnu ? 12 : 6, isLordFishnu ? 24 : 12, Math.PI);
         const mouth = new THREE.Mesh(mouthGeo, frostedMat);
         mouth.position.set(1.05 * scale, 0.5 + 0.95 * scale, 0);
         mouth.rotation.y = Math.PI / 2;
@@ -315,14 +345,21 @@ class IceSculpture extends BaseProp {
         fishGroup.add(mouth);
         this.meshes.push(mouth);
         
-        // Scale details (subtle ridges)
-        for (let i = 0; i < 5; i++) {
-            const scaleGeo = new THREE.TorusGeometry(0.3 * scale - i * 0.04 * scale, 0.015 * scale, 4, 16, Math.PI);
+        // Scale details (subtle ridges) - more scales for Lord Fishnu
+        const scaleCount = isLordFishnu ? 8 : 5;
+        for (let i = 0; i < scaleCount; i++) {
+            const scaleGeo = new THREE.TorusGeometry(0.3 * scale - i * 0.03 * scale, 0.015 * scale, isLordFishnu ? 8 : 4, isLordFishnu ? 32 : 16, Math.PI);
             const scaleMesh = new THREE.Mesh(scaleGeo, frostedMat);
-            scaleMesh.position.set(-0.1 * scale - i * 0.12 * scale, 0.5 + 1.0 * scale, 0);
+            scaleMesh.position.set(-0.1 * scale - i * 0.1 * scale, 0.5 + 1.0 * scale, 0);
             scaleMesh.rotation.y = Math.PI / 2;
             fishGroup.add(scaleMesh);
             this.meshes.push(scaleMesh);
+        }
+        
+        // Mark the group for Lord Fishnu interaction
+        if (isLordFishnu) {
+            group.userData.isLordFishnu = true;
+            group.userData.interactionType = 'lord_fishnu';
         }
     }
     
@@ -509,6 +546,17 @@ class IceSculpture extends BaseProp {
     
     getTrigger() {
         if (!this.group) return null;
+        
+        // Special trigger for Lord Fishnu
+        if (this.isLordFishnu) {
+            return {
+                type: 'lord_fishnu',
+                x: this.group.position.x,
+                z: this.group.position.z,
+                radius: 4,
+                message: '🐟 Press E to pay respects to Lord Fishnu'
+            };
+        }
         
         const typeEmojis = {
             penguin: '🐧',

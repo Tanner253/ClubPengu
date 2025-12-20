@@ -7,12 +7,26 @@
  * - Reduced LED count and simplified animations
  * - Fixed z-positions to prevent overlapping/z-fighting
  * - Removed redundant decorations
+ * 
+ * PERFORMANCE DEBUGGING FLAGS:
+ * - DISABLE_ROULETTE_WHEEL: Set to true to disable the animated roulette wheel
+ * - DISABLE_DICE_TOWERS: Set to true to disable the golden dice towers
+ * - DISABLE_NEON_SUITS: Set to true to disable the neon card suit shapes
  */
 
 import VegasMarquee from './casino/VegasMarquee';
 import GoldenDiceTower from './casino/GoldenDiceTower';
 import AnimatedRouletteWheel from './casino/AnimatedRouletteWheel';
 import NeonTubing from './casino/NeonTubing';
+
+// ==================== PERFORMANCE DEBUG FLAGS ====================
+// Set these to true to disable specific casino decorations for performance testing
+const DISABLE_ROULETTE_WHEEL = false;   // Spinning roulette wheel on roof
+const DISABLE_DICE_TOWERS = false;      // Golden dice tower pillars at entrance
+const DISABLE_NEON_SUITS = false;       // Neon heart/diamond/spade/club shapes
+const DISABLE_DOLLAR_SIGNS = false;     // Neon dollar signs on sides
+const DISABLE_MARQUEE_BULBS = false;    // U-shape marquee with chasing lights
+// ==================================================================
 
 class CasinoExterior {
     constructor(THREE) {
@@ -55,48 +69,58 @@ class CasinoExterior {
         this.depth = depth;
         
         // ==================== VEGAS MARQUEE (U-shape: top + sides, NO bottom) ====================
-        this.createUShapeMarquee(this.group, width, height, depth);
+        if (!DISABLE_MARQUEE_BULBS) {
+            this.createUShapeMarquee(this.group, width, height, depth);
+        }
         
         // ==================== CASINO TITLE SIGN (z = depth/2 + 4) ====================
         this.createCasinoTitleSign(this.group, width, height, depth);
         
         // ==================== GOLDEN DICE TOWERS (z = depth/2 + 3) ====================
-        [-1, 1].forEach((side) => {
-            const diceTower = new GoldenDiceTower(THREE);
-            diceTower.spawn(scene || this.group, side * 6, 0, depth / 2 + 3, {
-                diceCount: 3,     // Reduced from 4
-                diceSize: 1.0,
-                baseRadius: 1.5
+        if (!DISABLE_DICE_TOWERS) {
+            [-1, 1].forEach((side) => {
+                const diceTower = new GoldenDiceTower(THREE);
+                diceTower.spawn(scene || this.group, side * 6, 0, depth / 2 + 3, {
+                    diceCount: 3,     // Reduced from 4
+                    diceSize: 1.0,
+                    baseRadius: 1.5
+                });
+                this.props.push(diceTower);
+                if (diceTower.group) this.group.add(diceTower.group);
             });
-            this.props.push(diceTower);
-            if (diceTower.group) this.group.add(diceTower.group);
-        });
+        }
         
         // ==================== ANIMATED ROULETTE WHEEL (z = depth/2 + 1) ====================
-        const rouletteWheel = new AnimatedRouletteWheel(THREE);
-        rouletteWheel.spawn(scene || this.group, 0, height + 2, depth / 2 + 1, {
-            wheelRadius: 4,
-            tiltAngle: Math.PI / 4
-        });
-        this.props.push(rouletteWheel);
-        if (rouletteWheel.group) this.group.add(rouletteWheel.group);
+        if (!DISABLE_ROULETTE_WHEEL) {
+            const rouletteWheel = new AnimatedRouletteWheel(THREE);
+            rouletteWheel.spawn(scene || this.group, 0, height + 2, depth / 2 + 1, {
+                wheelRadius: 4,
+                tiltAngle: Math.PI / 4
+            });
+            this.props.push(rouletteWheel);
+            if (rouletteWheel.group) this.group.add(rouletteWheel.group);
+        } else {
+            console.log('🎰 Casino: Roulette wheel DISABLED for performance testing');
+        }
         
         // ==================== NEON CARD SUITS (z = depth/2 + 2) ====================
-        const suits = ['heart', 'diamond', 'spade', 'club'];
-        const suitColors = [0xFF0000, 0xFF0066, 0x00FFFF, 0x00FF00];
-        
-        suits.forEach((suit, idx) => {
-            const suitNeon = new NeonTubing(THREE);
-            const xPos = -width / 3 + (idx * (width / 4.5));
-            suitNeon.spawn(scene || this.group, xPos, height - 3, depth / 2 + 2, {
-                shape: suit,
-                size: 0.9,
-                color: suitColors[idx],
-                glowIntensity: 0.7
+        if (!DISABLE_NEON_SUITS) {
+            const suits = ['heart', 'diamond', 'spade', 'club'];
+            const suitColors = [0xFF0000, 0xFF0066, 0x00FFFF, 0x00FF00];
+            
+            suits.forEach((suit, idx) => {
+                const suitNeon = new NeonTubing(THREE);
+                const xPos = -width / 3 + (idx * (width / 4.5));
+                suitNeon.spawn(scene || this.group, xPos, height - 3, depth / 2 + 2, {
+                    shape: suit,
+                    size: 0.9,
+                    color: suitColors[idx],
+                    glowIntensity: 0.7
+                });
+                this.props.push(suitNeon);
+                if (suitNeon.group) this.group.add(suitNeon.group);
             });
-            this.props.push(suitNeon);
-            if (suitNeon.group) this.group.add(suitNeon.group);
-        });
+        }
         
         // ==================== NEON FRAME AROUND ENTRANCE ====================
         this.createNeonFrame(this.group, width, height, depth);
@@ -105,7 +129,9 @@ class CasinoExterior {
         this.createEntranceCarpet(this.group, depth);
         
         // ==================== DOLLAR SIGNS (z = depth/2 + 2.5) ====================
-        this.createDollarSigns(this.group, width, height, depth);
+        if (!DISABLE_DOLLAR_SIGNS) {
+            this.createDollarSigns(this.group, width, height, depth);
+        }
         
         // ==================== APPLE/MOBILE SHADOW OPTIMIZATION ====================
         if (this.needsOptimization) {
@@ -116,6 +142,23 @@ class CasinoExterior {
                 }
             });
         }
+        
+        // ==================== STATIC MESH OPTIMIZATION ====================
+        // For non-animated meshes, disable matrixAutoUpdate
+        // Only bulbs/animated elements need matrix updates
+        const animatedMeshes = new Set();
+        this.animatedElements.forEach(elem => {
+            if (elem.bulbs) elem.bulbs.forEach(b => animatedMeshes.add(b));
+            if (elem.mesh) animatedMeshes.add(elem.mesh);
+        });
+        
+        this.group.traverse(child => {
+            if (child.isMesh && !animatedMeshes.has(child)) {
+                child.updateMatrix();
+                child.matrixAutoUpdate = false;
+            }
+        });
+        this.group.updateMatrixWorld(true);
         
         return this.group;
     }
@@ -400,17 +443,18 @@ class CasinoExterior {
     
     /**
      * Create U-shaped marquee: across top + down both sides to ground (NO bottom)
+     * OPTIMIZED: Much larger bulb spacing, simplified frame
      */
     createUShapeMarquee(group, width, height, depth) {
         const THREE = this.THREE;
         
         const parapetTop = height + 1.65;
-        const bulbSpacing = 1.5;
-        const bulbSize = 0.2;
+        const bulbSpacing = 4; // OPTIMIZED: was 1.5 (much fewer bulbs)
+        const bulbSize = 0.25;
         const frameZ = depth / 2 + 0.6;
         
-        // Bulb materials - alternating colors
-        const colors = [0xFF1493, 0x00FFFF, 0xFFD700, 0x00FF00, 0xFF4500];
+        // Bulb materials - fewer colors
+        const colors = [0xFF1493, 0x00FFFF, 0xFFD700];
         const bulbMats = colors.map(color => new THREE.MeshStandardMaterial({
             color: color,
             emissive: color,
@@ -418,7 +462,7 @@ class CasinoExterior {
             roughness: 0.3
         }));
         
-        const bulbGeo = new THREE.SphereGeometry(bulbSize, 8, 6);
+        const bulbGeo = new THREE.SphereGeometry(bulbSize, 4, 4);
         const bulbs = [];
         let bulbIndex = 0;
         
@@ -435,22 +479,19 @@ class CasinoExterior {
             metalness: 0.7
         });
         
-        // === TOP HORIZONTAL STRIP ===
-        const topFrameGeo = new THREE.BoxGeometry(width + 2, 0.8, 0.3);
+        // === TOP HORIZONTAL STRIP (frame + single trim) ===
+        const topFrameGeo = new THREE.BoxGeometry(width + 2, 1, 0.3);
         const topFrame = new THREE.Mesh(topFrameGeo, frameMat);
         topFrame.position.set(0, parapetTop, frameZ);
         group.add(topFrame);
         
-        // Gold trim on top frame
-        const topTrimGeo = new THREE.BoxGeometry(width + 2.2, 0.15, 0.35);
-        const topTrimTop = new THREE.Mesh(topTrimGeo, goldMat);
-        topTrimTop.position.set(0, parapetTop + 0.45, frameZ);
-        group.add(topTrimTop);
-        const topTrimBottom = new THREE.Mesh(topTrimGeo, goldMat);
-        topTrimBottom.position.set(0, parapetTop - 0.45, frameZ);
-        group.add(topTrimBottom);
+        // OPTIMIZED: Single trim instead of two
+        const topTrimGeo = new THREE.BoxGeometry(width + 2.2, 0.2, 0.35);
+        const topTrim = new THREE.Mesh(topTrimGeo, goldMat);
+        topTrim.position.set(0, parapetTop + 0.5, frameZ);
+        group.add(topTrim);
         
-        // Top bulbs
+        // OPTIMIZED: Fewer top bulbs
         for (let x = -width / 2; x <= width / 2; x += bulbSpacing) {
             const bulb = new THREE.Mesh(bulbGeo, bulbMats[bulbIndex % colors.length]);
             bulb.position.set(x, parapetTop, frameZ + 0.2);
@@ -459,7 +500,7 @@ class CasinoExterior {
             bulbIndex++;
         }
         
-        // === LEFT VERTICAL STRIP (top to ground) ===
+        // === VERTICAL STRIPS (simplified - no trims) ===
         const sideHeight = parapetTop;
         const sideFrameGeo = new THREE.BoxGeometry(0.8, sideHeight, 0.3);
         
@@ -467,43 +508,25 @@ class CasinoExterior {
         leftFrame.position.set(-width / 2 - 0.5, sideHeight / 2, frameZ);
         group.add(leftFrame);
         
-        // Gold trim on left frame
-        const sideTrimGeo = new THREE.BoxGeometry(0.15, sideHeight + 0.2, 0.35);
-        const leftTrimLeft = new THREE.Mesh(sideTrimGeo, goldMat);
-        leftTrimLeft.position.set(-width / 2 - 0.95, sideHeight / 2, frameZ);
-        group.add(leftTrimLeft);
-        const leftTrimRight = new THREE.Mesh(sideTrimGeo, goldMat);
-        leftTrimRight.position.set(-width / 2 - 0.05, sideHeight / 2, frameZ);
-        group.add(leftTrimRight);
-        
-        // Left side bulbs (top to bottom)
-        for (let y = parapetTop - bulbSpacing; y >= 0.5; y -= bulbSpacing) {
-            const bulb = new THREE.Mesh(bulbGeo, bulbMats[bulbIndex % colors.length]);
-            bulb.position.set(-width / 2 - 0.5, y, frameZ + 0.2);
-            group.add(bulb);
-            bulbs.push(bulb);
-            bulbIndex++;
-        }
-        
-        // === RIGHT VERTICAL STRIP (top to ground) ===
         const rightFrame = new THREE.Mesh(sideFrameGeo, frameMat);
         rightFrame.position.set(width / 2 + 0.5, sideHeight / 2, frameZ);
         group.add(rightFrame);
         
-        // Gold trim on right frame
-        const rightTrimLeft = new THREE.Mesh(sideTrimGeo, goldMat);
-        rightTrimLeft.position.set(width / 2 + 0.05, sideHeight / 2, frameZ);
-        group.add(rightTrimLeft);
-        const rightTrimRight = new THREE.Mesh(sideTrimGeo, goldMat);
-        rightTrimRight.position.set(width / 2 + 0.95, sideHeight / 2, frameZ);
-        group.add(rightTrimRight);
-        
-        // Right side bulbs (top to bottom)
-        for (let y = parapetTop - bulbSpacing; y >= 0.5; y -= bulbSpacing) {
-            const bulb = new THREE.Mesh(bulbGeo, bulbMats[bulbIndex % colors.length]);
-            bulb.position.set(width / 2 + 0.5, y, frameZ + 0.2);
-            group.add(bulb);
-            bulbs.push(bulb);
+        // OPTIMIZED: Fewer side bulbs (just 3 per side)
+        for (let i = 0; i < 3; i++) {
+            const y = parapetTop - 4 - i * 4;
+            if (y < 1) continue;
+            
+            const leftBulb = new THREE.Mesh(bulbGeo, bulbMats[bulbIndex % colors.length]);
+            leftBulb.position.set(-width / 2 - 0.5, y, frameZ + 0.2);
+            group.add(leftBulb);
+            bulbs.push(leftBulb);
+            bulbIndex++;
+            
+            const rightBulb = new THREE.Mesh(bulbGeo, bulbMats[bulbIndex % colors.length]);
+            rightBulb.position.set(width / 2 + 0.5, y, frameZ + 0.2);
+            group.add(rightBulb);
+            bulbs.push(rightBulb);
             bulbIndex++;
         }
         
@@ -513,19 +536,6 @@ class CasinoExterior {
             bulbs: bulbs,
             colors: colors
         });
-        
-        // Add accent lights at corners - Apple/Mobile: skip
-        if (!this.needsOptimization) {
-            const cornerLight1 = new THREE.PointLight(0xFF1493, 0.8, 10);
-            cornerLight1.position.set(-width / 2 - 0.5, parapetTop, frameZ + 2);
-            group.add(cornerLight1);
-            this.lights.push(cornerLight1);
-            
-            const cornerLight2 = new THREE.PointLight(0x00FFFF, 0.8, 10);
-            cornerLight2.position.set(width / 2 + 0.5, parapetTop, frameZ + 2);
-            group.add(cornerLight2);
-            this.lights.push(cornerLight2);
-        }
     }
     
     getDecorationColliders() {

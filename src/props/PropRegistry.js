@@ -171,7 +171,7 @@ export const createProp = (THREE, scene, type, x, y, z, options = {}) => {
             break;
             
         case PROP_TYPES.ICE_SCULPTURE:
-            prop = new PropClass(THREE, options.sculptureType || 'penguin', options.rotation || 0);
+            prop = new PropClass(THREE, options.sculptureType || 'penguin', options.rotation || 0, options.isLordFishnu || false);
             break;
             
         case PROP_TYPES.CRATE:

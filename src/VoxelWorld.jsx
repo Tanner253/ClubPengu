@@ -85,6 +85,8 @@ const VoxelWorld = ({
     const mpUpdateAppearanceRef = useRef(null); // Ref for appearance update function
     const cameraControllerRef = useRef(null); // Smooth third-person camera controller
     const penguinDataRef = useRef(null); // Ref for current penguin data
+    const wasInCasinoRef = useRef(false); // Track if player was inside casino (for one-time zoom)
+    const casinoZoomTransitionRef = useRef({ active: false, targetDistance: 20, progress: 0 }); // Casino zoom state
     const slotMachineSystemRef = useRef(null); // Slot machine interaction system
     const jackpotCelebrationRef = useRef(null); // Jackpot celebration effects (disco ball, confetti, lasers)
     const iceFishingSystemRef = useRef(null); // Ice fishing interaction system
@@ -209,10 +211,15 @@ const VoxelWorld = ({
     const bubbleSpriteRef = useRef(null);
     const isAfkRef = useRef(false);
     const afkMessageRef = useRef(null);
+    const isFishnuRespectRef = useRef(false); // True when showing Fishnu respect message
+    const fishnuRespectMessageRef = useRef(null);
     
     // Igloo Occupancy Bubbles
     const iglooOccupancySpritesRef = useRef(new Map()); // Map of igloo id -> sprite
     const [iglooOccupancy, setIglooOccupancy] = useState({}); // { igloo1: 2, igloo2: 0, ... }
+    
+    // Lord Fishnu Lore Sprite
+    const lordFishnuSpriteRef = useRef(null);
     
     // AI State
     const aiAgentsRef = useRef([]);
@@ -306,6 +313,10 @@ const VoxelWorld = ({
     const [fishingInteraction, setFishingInteraction] = useState(null); // { spot, prompt, canFish }
     const [fishingGameActive, setFishingGameActive] = useState(false); // True when fishing minigame is open
     const [fishingGameSpot, setFishingGameSpot] = useState(null); // Current fishing spot for game
+    
+    // Lord Fishnu Interaction State
+    const [lordFishnuInteraction, setLordFishnuInteraction] = useState(null); // { canPayRespects, prompt }
+    const lordFishnuCooldownRef = useRef(false); // Prevent spam
     
     // Bench Sitting State
     const [seatedOnBench, setSeatedOnBench] = useState(null); // { benchId, snapPoint, worldPos }
@@ -716,6 +727,148 @@ const VoxelWorld = ({
             });
             
             console.log(`Created ${iglooOccupancySpritesRef.current.size} igloo occupancy sprites`);
+            
+            // ==================== LORD FISHNU LORE SPRITE ====================
+            // Create lore banner above the holy fish sculpture
+            if (lordFishnuSpriteRef.current) {
+                scene.remove(lordFishnuSpriteRef.current);
+            }
+            
+            const fishnuCanvas = document.createElement('canvas');
+            const fw = 400;
+            const fh = 280;
+            fishnuCanvas.width = fw;
+            fishnuCanvas.height = fh;
+            const fctx = fishnuCanvas.getContext('2d');
+            
+            // Clear
+            fctx.clearRect(0, 0, fw, fh);
+            
+            // Draw fish-styled banner background
+            const cornerRadius = 20;
+            const gradient = fctx.createLinearGradient(0, 0, 0, fh);
+            gradient.addColorStop(0, 'rgba(0, 60, 100, 0.95)');
+            gradient.addColorStop(0.5, 'rgba(0, 40, 80, 0.95)');
+            gradient.addColorStop(1, 'rgba(0, 20, 60, 0.95)');
+            
+            fctx.beginPath();
+            fctx.moveTo(cornerRadius, 0);
+            fctx.lineTo(fw - cornerRadius, 0);
+            fctx.quadraticCurveTo(fw, 0, fw, cornerRadius);
+            fctx.lineTo(fw, fh - cornerRadius);
+            fctx.quadraticCurveTo(fw, fh, fw - cornerRadius, fh);
+            fctx.lineTo(cornerRadius, fh);
+            fctx.quadraticCurveTo(0, fh, 0, fh - cornerRadius);
+            fctx.lineTo(0, cornerRadius);
+            fctx.quadraticCurveTo(0, 0, cornerRadius, 0);
+            fctx.closePath();
+            fctx.fillStyle = gradient;
+            fctx.fill();
+            
+            // Golden border
+            fctx.strokeStyle = '#FFD700';
+            fctx.lineWidth = 4;
+            fctx.stroke();
+            
+            // Inner glow border
+            fctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
+            fctx.lineWidth = 2;
+            fctx.beginPath();
+            fctx.moveTo(cornerRadius + 8, 8);
+            fctx.lineTo(fw - cornerRadius - 8, 8);
+            fctx.quadraticCurveTo(fw - 8, 8, fw - 8, cornerRadius + 8);
+            fctx.lineTo(fw - 8, fh - cornerRadius - 8);
+            fctx.quadraticCurveTo(fw - 8, fh - 8, fw - cornerRadius - 8, fh - 8);
+            fctx.lineTo(cornerRadius + 8, fh - 8);
+            fctx.quadraticCurveTo(8, fh - 8, 8, fh - cornerRadius - 8);
+            fctx.lineTo(8, cornerRadius + 8);
+            fctx.quadraticCurveTo(8, 8, cornerRadius + 8, 8);
+            fctx.closePath();
+            fctx.stroke();
+            
+            // Fish emoji decorations
+            fctx.font = '20px Arial';
+            fctx.textAlign = 'center';
+            fctx.fillText('🐟', 25, 28);
+            fctx.fillText('🐟', fw - 25, 28);
+            fctx.fillText('🐠', 25, fh - 18);
+            fctx.fillText('🐠', fw - 25, fh - 18);
+            
+            // Title
+            fctx.font = 'bold 28px Georgia, serif';
+            fctx.textAlign = 'center';
+            fctx.textBaseline = 'middle';
+            fctx.fillStyle = '#FFD700';
+            fctx.shadowColor = '#000';
+            fctx.shadowBlur = 4;
+            fctx.shadowOffsetX = 2;
+            fctx.shadowOffsetY = 2;
+            fctx.fillText('⚜️ LORD FISHNU ⚜️', fw / 2, 38);
+            
+            // Subtitle
+            fctx.font = 'italic 14px Georgia, serif';
+            fctx.fillStyle = '#87CEEB';
+            fctx.shadowBlur = 2;
+            fctx.fillText('Guardian of the Frozen Seas', fw / 2, 62);
+            
+            // Lore text
+            fctx.shadowBlur = 0;
+            fctx.shadowOffsetX = 0;
+            fctx.shadowOffsetY = 0;
+            fctx.font = '12px Arial';
+            fctx.fillStyle = '#E0E0E0';
+            fctx.textAlign = 'left';
+            
+            const loreLines = [
+                'In the Great Thaw of Year 42, when the',
+                'Shark Armies besieged Club Penguin,',
+                'Lord Fishnu rose from the depths to',
+                'defend our beloved island.',
+                '',
+                'With his Divine Tail Slap, he scattered',
+                'a thousand predators. His golden eyes',
+                'see all who trade with pure hearts.',
+                '',
+                '🌊 "May your bags pump eternal" 🌊',
+            ];
+            
+            loreLines.forEach((line, i) => {
+                if (line.includes('🌊')) {
+                    fctx.font = 'italic 13px Georgia, serif';
+                    fctx.fillStyle = '#FFD700';
+                    fctx.textAlign = 'center';
+                    fctx.fillText(line, fw / 2, 90 + i * 17);
+                } else {
+                    fctx.font = '12px Arial';
+                    fctx.fillStyle = '#E0E0E0';
+                    fctx.textAlign = 'left';
+                    fctx.fillText(line, 25, 90 + i * 17);
+                }
+            });
+            
+            const fishnuTexture = new THREE.CanvasTexture(fishnuCanvas);
+            const fishnuMaterial = new THREE.SpriteMaterial({ 
+                map: fishnuTexture, 
+                depthTest: false, 
+                depthWrite: false,
+                transparent: true
+            });
+            const fishnuSprite = new THREE.Sprite(fishnuMaterial);
+            
+            // Position above Lord Fishnu statue
+            const fishnuStatueX = townCenterX - 52.5;
+            const fishnuStatueZ = townCenterZ + 54.7;
+            fishnuSprite.position.set(fishnuStatueX, 12, fishnuStatueZ);
+            
+            // Scale the sprite
+            const fscale = 0.03;
+            fishnuSprite.scale.set(fw * fscale, fh * fscale, 1);
+            fishnuSprite.renderOrder = 998;
+            fishnuSprite.visible = false; // Start hidden, show when player is close
+            
+            scene.add(fishnuSprite);
+            lordFishnuSpriteRef.current = fishnuSprite;
+            console.log('🐟 Created Lord Fishnu lore sprite');
             
             return { butterflyGroup: null, townCenter }; // No butterflies in arctic
         };
@@ -1688,6 +1841,18 @@ const VoxelWorld = ({
                 isAfkRef.current = false;
                 afkMessageRef.current = null;
                 // Remove the AFK bubble
+                if (playerRef.current && bubbleSpriteRef.current) {
+                    playerRef.current.remove(bubbleSpriteRef.current);
+                    bubbleSpriteRef.current = null;
+                }
+                setActiveBubble(null);
+            }
+            
+            // Clear Fishnu respect message when movement is detected
+            if (anyMovementInput && isFishnuRespectRef.current) {
+                isFishnuRespectRef.current = false;
+                fishnuRespectMessageRef.current = null;
+                // Remove the bubble
                 if (playerRef.current && bubbleSpriteRef.current) {
                     playerRef.current.remove(bubbleSpriteRef.current);
                     bubbleSpriteRef.current = null;
@@ -3406,7 +3571,9 @@ const VoxelWorld = ({
             if (townCenterRef.current && roomRef.current === 'town') {
                 const worldTime = serverWorldTimeRef?.current ?? 0.35;
                 const nightFactor = calculateNightFactor(worldTime);
-                townCenterRef.current.update(time, delta, nightFactor);
+                // Pass player position for distance-based animation culling
+                const playerPos = posRef.current;
+                townCenterRef.current.update(time, delta, nightFactor, playerPos);
             }
             
             // Animate nightclub interior (dance floor, stage lights, speakers, disco ball)
@@ -3464,6 +3631,41 @@ const VoxelWorld = ({
                         const titleSign = nightclubMesh.getObjectByName('nightclub_title_sign');
                         if (titleSign) {
                             titleSign.visible = posRef.current.y < 12 && !isInCasino;
+                        }
+                    }
+                }
+                
+                // ==================== CASINO INTERIOR CAMERA ZOOM ====================
+                // Auto-zoom camera ONCE when entering/exiting casino (allows free zoom otherwise)
+                if (controls && camera) {
+                    // Track state change (only zoom on transition, not continuously)
+                    const wasInCasino = wasInCasinoRef.current;
+                    
+                    if (isInCasino !== wasInCasino) {
+                        // State changed - trigger one-time zoom adjustment
+                        wasInCasinoRef.current = isInCasino;
+                        casinoZoomTransitionRef.current = {
+                            active: true,
+                            targetDistance: isInCasino ? 10 : 20, // Zoom in for casino, normal for outside
+                            progress: 0
+                        };
+                    }
+                    
+                    // Smooth zoom transition (only while transition is active)
+                    const transition = casinoZoomTransitionRef.current;
+                    if (transition?.active) {
+                        const offset = camera.position.clone().sub(controls.target);
+                        const currentDistance = offset.length();
+                        const targetDistance = transition.targetDistance;
+                        
+                        // Smooth lerp toward target
+                        if (Math.abs(currentDistance - targetDistance) > 0.3) {
+                            const newDistance = currentDistance + (targetDistance - currentDistance) * 0.08;
+                            const direction = offset.normalize();
+                            camera.position.copy(controls.target).add(direction.multiplyScalar(newDistance));
+                        } else {
+                            // Transition complete - stop adjusting, allow free zoom
+                            transition.active = false;
                         }
                     }
                 }
@@ -3860,9 +4062,9 @@ const VoxelWorld = ({
         playerRef.current.add(sprite);
         bubbleSpriteRef.current = sprite;
         
-        // Don't auto-clear if AFK - bubble stays until movement
-        if (isAfkRef.current) {
-            return; // No timeout for AFK messages
+        // Don't auto-clear if AFK or Fishnu respect - bubble stays until movement
+        if (isAfkRef.current || isFishnuRespectRef.current) {
+            return; // No timeout for AFK/Fishnu messages
         }
         
         const timeout = setTimeout(() => {
@@ -4032,6 +4234,27 @@ const VoxelWorld = ({
                 sprite.quaternion.copy(cameraRef.current.quaternion);
             }
         });
+        
+        // ==================== LORD FISHNU LORE SPRITE VISIBILITY ====================
+        if (lordFishnuSpriteRef.current) {
+            const fishnuX = CENTER_X - 52.5;
+            const fishnuZ = CENTER_Z + 54.7;
+            const dx = playerPos.x - fishnuX;
+            const dz = playerPos.z - fishnuZ;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            
+            const FISHNU_VISIBILITY_DISTANCE = 18; // Show lore when within 18 units
+            const shouldShowFishnu = dist < FISHNU_VISIBILITY_DISTANCE && !isInCasino;
+            
+            if (lordFishnuSpriteRef.current.visible !== shouldShowFishnu) {
+                lordFishnuSpriteRef.current.visible = shouldShowFishnu;
+            }
+            
+            // Make sprite face camera (billboard effect)
+            if (shouldShowFishnu && cameraRef.current) {
+                lordFishnuSpriteRef.current.quaternion.copy(cameraRef.current.quaternion);
+            }
+        }
     };
     
     // Update igloo occupancy sprite with new count
@@ -4164,15 +4387,47 @@ const VoxelWorld = ({
         }
     };
     
+    // Check for Lord Fishnu proximity (town only)
+    const checkLordFishnu = () => {
+        if (room !== 'town') {
+            if (lordFishnuInteraction) setLordFishnuInteraction(null);
+            return;
+        }
+        
+        const playerPos = posRef.current;
+        // Lord Fishnu position (from TownCenter.js: C - 52.5, C + 54.7)
+        // TownCenter.CENTER = 110 (same as CENTER_X/CENTER_Z)
+        const fishnuX = CENTER_X - 52.5;
+        const fishnuZ = CENTER_Z + 54.7;
+        
+        const dx = playerPos.x - fishnuX;
+        const dz = playerPos.z - fishnuZ;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+        
+        const INTERACTION_RADIUS = 6;
+        
+        if (dist < INTERACTION_RADIUS) {
+            if (!lordFishnuInteraction) {
+                setLordFishnuInteraction({
+                    canPayRespects: true,
+                    prompt: '🐟 Press E to pay respects to Lord Fishnu'
+                });
+            }
+        } else if (lordFishnuInteraction) {
+            setLordFishnuInteraction(null);
+        }
+    };
+    
     useEffect(() => {
         const interval = setInterval(() => {
             checkPortals();
             checkIglooProximity();
             checkSlotMachines();
             checkFishingSpots();
+            checkLordFishnu();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, fishingInteraction, userData?.coins, isAuthenticated]);
+    }, [nearbyPortal, room, slotInteraction, fishingInteraction, lordFishnuInteraction, userData?.coins, isAuthenticated]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -4263,6 +4518,34 @@ const VoxelWorld = ({
     useEffect(() => {
         fishingInteractionRef.current = fishingInteraction;
     }, [fishingInteraction]);
+    
+    // Lord Fishnu interaction ref for E key handler
+    const lordFishnuInteractionRef = useRef(null);
+    useEffect(() => {
+        lordFishnuInteractionRef.current = lordFishnuInteraction;
+    }, [lordFishnuInteraction]);
+    
+    // Holy messages for Lord Fishnu
+    const LORD_FISHNU_MESSAGES = [
+        "🐟 Praise be to Lord Fishnu!",
+        "🙏 Pls pump my bags, Lord Fishnu",
+        "🦈 Please keep the sharks away!",
+        "💎 Lord Fishnu, grant me diamond fins",
+        "🎣 May your catches be plentiful",
+        "🌊 Protect me from the deep, O Holy One",
+        "✨ Fishnu is love, Fishnu is life",
+        "🐠 Swim with me through these troubled waters",
+        "💰 Bless my wallet, mighty Fishnu",
+        "🔱 All hail the Aquatic One!",
+        "🐡 May I never get rugged, Lord Fishnu",
+        "🌟 In Fishnu we trust",
+        "🎰 Let the slots be ever in my favor",
+        "🐋 The whale smiles upon me today",
+        "🏊 Guide my trades, O Scaly Savior",
+        "💫 Fishnu sees all, knows all",
+        "🌈 From the depths, prosperity rises",
+        "🐚 Grant me pearls of wisdom",
+    ];
     
     // Ref-based lock to prevent E spam (React state updates too slowly)
     const spinLockRef = useRef(false);
@@ -4390,6 +4673,48 @@ const VoxelWorld = ({
         window.addEventListener('keydown', handleFishingKeyPress);
         return () => window.removeEventListener('keydown', handleFishingKeyPress);
     }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction]);
+    
+    // Handle paying respects to Lord Fishnu (works like AFK - dismisses on movement)
+    const handlePayRespects = useCallback(() => {
+        if (lordFishnuCooldownRef.current) return;
+        
+        const lfInteraction = lordFishnuInteractionRef.current;
+        if (!lfInteraction?.canPayRespects) return;
+        
+        // Set cooldown to prevent spam
+        lordFishnuCooldownRef.current = true;
+        setTimeout(() => {
+            lordFishnuCooldownRef.current = false;
+        }, 3000); // 3 second cooldown
+        
+        // Pick random holy message
+        const message = LORD_FISHNU_MESSAGES[Math.floor(Math.random() * LORD_FISHNU_MESSAGES.length)];
+        
+        // Set Fishnu respect state (like AFK - stays until movement)
+        isFishnuRespectRef.current = true;
+        fishnuRespectMessageRef.current = message;
+        
+        // Show chat bubble above player (stays until movement, like AFK)
+        setActiveBubble(message);
+        
+        // Send to other players so they can see it (like AFK bubble)
+        mpSendEmoteBubble(message);
+    }, [mpSendEmoteBubble]);
+    
+    // E key handler for Lord Fishnu
+    useEffect(() => {
+        const handleFishnuKeyPress = (e) => {
+            if (e.code === 'KeyE' && room === 'town') {
+                const lf = lordFishnuInteractionRef.current;
+                // Only trigger if near Fishnu and NOT near a portal or fishing spot
+                if (lf?.canPayRespects && !nearbyPortal && !fishingInteraction && !emoteWheelOpen && !lordFishnuCooldownRef.current) {
+                    handlePayRespects();
+                }
+            }
+        };
+        window.addEventListener('keydown', handleFishnuKeyPress);
+        return () => window.removeEventListener('keydown', handleFishnuKeyPress);
+    }, [nearbyPortal, fishingInteraction, emoteWheelOpen, room, handlePayRespects]);
     
     // Handle town interactions (benches, snowmen, etc.)
     useEffect(() => {
@@ -5316,6 +5641,38 @@ const VoxelWorld = ({
         }
     }, [room, connected, playerId]);
     
+    // Reset casino zoom state when changing rooms (so zoom triggers properly on re-entry)
+    useEffect(() => {
+        // When room changes, reset the casino tracking so zoom can trigger fresh
+        wasInCasinoRef.current = false;
+        casinoZoomTransitionRef.current = { active: false, targetDistance: 20, progress: 0 };
+        
+        // If entering town and spawning inside the casino, immediately trigger zoom
+        if (room === 'town') {
+            // Small delay to let position settle after room change
+            setTimeout(() => {
+                const pos = posRef.current;
+                if (pos) {
+                    // Check if player spawned inside casino building bounds
+                    const casinoX = CENTER_X - 42;
+                    const casinoZ = CENTER_Z + 15;
+                    const dx = pos.x - casinoX;
+                    const dz = pos.z - casinoZ;
+                    const isInCasino = Math.abs(dx) < 20 && Math.abs(dz) < 20 && pos.y < 15;
+                    
+                    if (isInCasino) {
+                        wasInCasinoRef.current = true;
+                        casinoZoomTransitionRef.current = {
+                            active: true,
+                            targetDistance: 10,
+                            progress: 0
+                        };
+                    }
+                }
+            }, 100);
+        }
+    }, [room]);
+    
     // Update puffle on server when changed
     useEffect(() => {
         if (connected && playerId) {
@@ -5588,6 +5945,38 @@ const VoxelWorld = ({
                     {fishingInteraction.isDemo && (
                         <p className="text-xs text-cyan-400/80 mt-2">🔑 Login to earn coins!</p>
                     )}
+                </div>
+             )}
+             
+             {/* Lord Fishnu Interaction UI */}
+             {lordFishnuInteraction && room === 'town' && !fishingInteraction && !nearbyPortal && (
+                <div 
+                    className={`absolute bg-gradient-to-b from-amber-900/95 to-yellow-900/95 backdrop-blur-sm rounded-xl border border-yellow-500/50 text-center z-20 shadow-lg shadow-yellow-500/20 ${
+                        isMobile 
+                            ? isLandscape 
+                                ? 'bottom-[180px] right-28 p-3' 
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    }`}
+                >
+                    <p className="text-yellow-300 retro-text text-sm mb-2">
+                        {isMobile 
+                            ? '🐟 Tap to pay respects to Lord Fishnu'
+                            : lordFishnuInteraction.prompt
+                        }
+                    </p>
+                    
+                    <button
+                        className={`w-full px-6 py-2 font-bold rounded-lg retro-text text-sm transition-all active:scale-95 shadow-lg ${
+                            lordFishnuCooldownRef.current
+                                ? 'bg-gradient-to-b from-gray-400 to-gray-600 text-gray-200 cursor-not-allowed'
+                                : 'bg-gradient-to-b from-yellow-400 to-amber-600 hover:from-yellow-300 hover:to-amber-500 text-black'
+                        }`}
+                        onClick={handlePayRespects}
+                        disabled={lordFishnuCooldownRef.current}
+                    >
+                        🙏 Pay Respects
+                    </button>
                 </div>
              )}
              

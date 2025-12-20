@@ -617,9 +617,10 @@ class TownCenter {
         
         // ==================== ICE SCULPTURES - DECORATIVE CENTERPIECES ====================
         // Large premium sculptures positioned in open areas away from paths and furniture
+        // Lord Fishnu (the holy fish) is in the northwest, penguin in the northeast
         props.push(
-            { type: 'ice_sculpture', x: C - 55, z: C + 55, sculptureType: 'penguin' }, // Northwest open area
-            { type: 'ice_sculpture', x: C + 55, z: C + 55, sculptureType: 'fish' },    // Northeast open area (near gift shop)
+            { type: 'ice_sculpture', x: C - 52.5, z: C + 54.7, sculptureType: 'fish', isLordFishnu: true, rotation: Math.PI }, // Northwest - LORD FISHNU (rotated 180°)
+            { type: 'ice_sculpture', x: C + 52.7, z: C + 56.6, sculptureType: 'penguin' }, // Northeast open area (near gift shop)
             { type: 'ice_sculpture', x: C - 85, z: C - 45, sculptureType: 'heart', rotation: Math.PI / 2 },   // Far west - rotated 90°
             { type: 'ice_sculpture', x: C + 85, z: C - 45, sculptureType: 'star', rotation: Math.PI / 2 },    // Far east - rotated 90°
         );
@@ -1175,9 +1176,15 @@ class TownCenter {
                 case 'ice_sculpture': {
                     const sculptureProp = createProp(this.THREE, null, PROP_TYPES.ICE_SCULPTURE, 0, 0, 0, { 
                         sculptureType: prop.sculptureType || 'penguin',
-                        rotation: prop.rotation || 0
+                        rotation: prop.rotation || 0,
+                        isLordFishnu: prop.isLordFishnu || false
                     });
                     mesh = attachPropData(sculptureProp, sculptureProp.group);
+                    // Store Lord Fishnu reference for interaction
+                    if (prop.isLordFishnu) {
+                        mesh.userData.isLordFishnu = true;
+                        mesh.userData.interactionType = 'lord_fishnu';
+                    }
                     break;
                 }
                 case 'crate': {
@@ -1382,6 +1389,20 @@ class TownCenter {
         });
         
         this._addWallBoundary(scene);
+        
+        // ==================== STATIC MESH OPTIMIZATION ====================
+        // CRITICAL: Disable matrixAutoUpdate for all static meshes
+        // This prevents Three.js from recalculating world matrices every frame
+        this.propMeshes.forEach(propMesh => {
+            propMesh.traverse(child => {
+                if (child.isMesh) {
+                    child.updateMatrix();
+                    child.matrixAutoUpdate = false;
+                }
+            });
+            propMesh.updateMatrixWorld(true);
+        });
+        console.log('🏘️ TownCenter: Applied static mesh optimization (matrixAutoUpdate=false)');
         
         return { meshes: this.propMeshes, lights: this.lights, collisionSystem: this.collisionSystem };
     }
@@ -1749,7 +1770,7 @@ class TownCenter {
         return this._collisionDebugEnabled || false;
     }
 
-    update(time, delta, nightFactor = 0.5) {
+    update(time, delta, nightFactor = 0.5, playerPos = null) {
         if (!this._animatedCache) {
             this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], frameCounter: 0 };
             this.propMeshes.forEach(mesh => {
@@ -1757,7 +1778,8 @@ class TownCenter {
                     const flames = [];
                     mesh.traverse(child => { if (child.userData.isFlame) flames.push(child); });
                     this._animatedCache.campfires.push({
-                        flames, particles: mesh.userData.particles, light: mesh.userData.fireLight
+                        flames, particles: mesh.userData.particles, light: mesh.userData.fireLight,
+                        position: { x: mesh.position.x, z: mesh.position.z }
                     });
                 }
                 if (mesh.name === 'christmas_tree' && mesh.userData.treeUpdate) {
@@ -1787,18 +1809,33 @@ class TownCenter {
         this._animatedCache.frameCounter++;
         const frame = this._animatedCache.frameCounter;
         
+        // Distance-based animation culling thresholds (squared for performance)
+        const ANIMATION_DISTANCE_SQ = 80 * 80; // Skip detailed animations beyond 80 units
+        const px = playerPos?.x || 0;
+        const pz = playerPos?.z || 0;
+        
         // OPTIMIZED: Nightclub speakers and neon - every 2nd frame (still smooth for bass pulse)
         if (frame % 2 === 0) {
             this._animatedCache.nightclubs.forEach(mesh => {
                 if (mesh.userData.nightclubUpdate) {
-                    mesh.userData.nightclubUpdate(time);
+                    // Distance check for nightclub (positioned at center-north)
+                    const dx = px - mesh.position.x;
+                    const dz = pz - mesh.position.z;
+                    if (dx * dx + dz * dz < ANIMATION_DISTANCE_SQ) {
+                        mesh.userData.nightclubUpdate(time);
+                    }
                 }
             });
             
             // Casino exterior animations - Vegas marquee, slot machines, searchlights, etc.
             this._animatedCache.casinos.forEach(mesh => {
                 if (mesh.userData.update) {
-                    mesh.userData.update(time, delta);
+                    // Distance check for casino
+                    const dx = px - mesh.position.x;
+                    const dz = pz - mesh.position.z;
+                    if (dx * dx + dz * dz < ANIMATION_DISTANCE_SQ) {
+                        mesh.userData.update(time, delta);
+                    }
                 }
             });
             
@@ -1810,9 +1847,17 @@ class TownCenter {
             });
         }
         
-        // OPTIMIZED: Campfire flames - every 2nd frame (still looks fluid)
+        // OPTIMIZED: Campfire flames - every 2nd frame, with distance culling
         if (frame % 2 === 0) {
-            this._animatedCache.campfires.forEach(({ flames, particles, light }) => {
+            const CAMPFIRE_ANIM_DIST_SQ = 60 * 60; // Campfire animations within 60 units
+            
+            this._animatedCache.campfires.forEach(({ flames, particles, light, position }) => {
+                // Distance check for campfire
+                const cpos = position || { x: TownCenter.CENTER, z: TownCenter.CENTER };
+                const cdx = px - cpos.x;
+                const cdz = pz - cpos.z;
+                if (cdx * cdx + cdz * cdz > CAMPFIRE_ANIM_DIST_SQ) return;
+                
                 flames.forEach(flame => {
                     const offset = flame.userData.offset || 0;
                     flame.position.y = flame.userData.baseY + Math.sin(time * 8 + offset) * 0.1;

@@ -126,34 +126,89 @@ class IceFishingHole extends BaseProp {
             group.add(mound);
         }
         
-        // Fishing sign/marker
-        const postGeometry = new THREE.CylinderGeometry(0.08, 0.08, 1.5, 6);
+        // Fishing sign/marker - thinner post (75% reduction)
+        const postGeometry = new THREE.CylinderGeometry(0.02, 0.025, 1.8, 6);
         const postMaterial = new THREE.MeshStandardMaterial({ color: 0x4A3728 });
         const post = new THREE.Mesh(postGeometry, postMaterial);
-        post.position.set(-1.8, 0.75, 0);
+        post.position.set(-1.8, 0.9, 0);
         group.add(post);
         
-        // Sign board
-        const signGeometry = new THREE.BoxGeometry(1.2, 0.6, 0.08);
+        // Sign board - 20% bigger with arrow shape
+        const boardWidth = 1.44;   // 1.2 * 1.2
+        const boardHeight = 0.72; // 0.6 * 1.2
+        const arrowPoint = 0.25;
+        
+        const signShape = new THREE.Shape();
+        signShape.moveTo(-boardWidth/2, -boardHeight/2);
+        signShape.lineTo(boardWidth/2 - arrowPoint, -boardHeight/2);
+        signShape.lineTo(boardWidth/2, 0);
+        signShape.lineTo(boardWidth/2 - arrowPoint, boardHeight/2);
+        signShape.lineTo(-boardWidth/2, boardHeight/2);
+        signShape.lineTo(-boardWidth/2, -boardHeight/2);
+        
+        const extrudeSettings = { depth: 0.1, bevelEnabled: false };
+        const signGeometry = new THREE.ExtrudeGeometry(signShape, extrudeSettings);
         const signMaterial = new THREE.MeshStandardMaterial({ color: 0x5D4E37 });
         const sign = new THREE.Mesh(signGeometry, signMaterial);
-        sign.position.set(-1.8, 1.4, 0);
+        sign.position.set(-1.8, 1.55, -0.05);
         group.add(sign);
         
-        // Fish icon on sign (simple triangle fish)
+        // Neon "FISHING" text using canvas texture
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        
+        // Clear with transparent background
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // Neon glow effect
+        ctx.shadowColor = '#00FFFF';
+        ctx.shadowBlur = 20;
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = 0;
+        
+        // Bright cyan neon text
+        ctx.fillStyle = '#00FFFF';
+        ctx.font = 'bold 56px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('FISHING', canvas.width / 2, canvas.height / 2);
+        
+        // Second pass for stronger glow
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillText('FISHING', canvas.width / 2, canvas.height / 2);
+        
+        const textTexture = new THREE.CanvasTexture(canvas);
+        textTexture.needsUpdate = true;
+        
+        const textMaterial = new THREE.MeshBasicMaterial({
+            map: textTexture,
+            transparent: true,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+        
+        const textGeometry = new THREE.PlaneGeometry(boardWidth - 0.2, boardHeight - 0.15);
+        const textMesh = new THREE.Mesh(textGeometry, textMaterial);
+        textMesh.position.set(-1.85, 1.55, 0.06);
+        group.add(textMesh);
+        
+        // Fish icon on sign (neon glowing fish)
         const fishShape = new THREE.Shape();
         fishShape.moveTo(0, 0);
-        fishShape.lineTo(0.3, 0.15);
-        fishShape.lineTo(0.3, -0.15);
+        fishShape.lineTo(0.35, 0.18);
+        fishShape.lineTo(0.35, -0.18);
         fishShape.lineTo(0, 0);
         
         const fishIconGeometry = new THREE.ShapeGeometry(fishShape);
         const fishIconMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x88CCFF,
+            color: 0x00FFFF, // Bright cyan to match text
             side: THREE.DoubleSide
         });
         const fishIcon = new THREE.Mesh(fishIconGeometry, fishIconMaterial);
-        fishIcon.position.set(-1.95, 1.4, 0.05);
+        fishIcon.position.set(-2.4, 1.55, 0.06);
         group.add(fishIcon);
         
         // Bucket prop (for caught fish)

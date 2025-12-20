@@ -217,8 +217,49 @@ const COIN_PICKUP = {
     accentColor: 0xFFAA00
 };
 
-// Max coins per game
-const MAX_COINS_PER_GAME = 3;
+// ==================== FUN POWER-UPS & RARE PICKUPS ====================
+// Treasure chest - rare, high value
+const TREASURE_CHEST = {
+    id: 'treasure_chest', emoji: '🎁', name: 'Treasure Chest', coins: 25, color: 0x8B4513,
+    size: 1.2, speed: 0.0, glow: true, type: CREATURE_TYPES.COIN, isPickup: true,
+    accentColor: 0xFFD700, isTreasure: true
+};
+
+// Speed bubble - gives temporary speed boost
+const SPEED_BUBBLE = {
+    id: 'speed_bubble', emoji: '💨', name: 'Speed Bubble', coins: 0, color: 0x00FFFF,
+    size: 0.7, speed: 0.0, glow: true, type: CREATURE_TYPES.COIN, isPickup: true,
+    accentColor: 0x88FFFF, isSpeedBoost: true
+};
+
+// Pearl - medium rare, decent value
+const PEARL_PICKUP = {
+    id: 'pearl', emoji: '🦪', name: 'Pearl', coins: 15, color: 0xFFFAFA,
+    size: 0.9, speed: 0.0, glow: true, type: CREATURE_TYPES.COIN, isPickup: true,
+    accentColor: 0xFFE4E1, isPearl: true
+};
+
+// All pickup types with spawn weights (higher = more common)
+const PICKUP_TYPES = [
+    { pickup: COIN_PICKUP, weight: 60 },      // Common gold coin
+    { pickup: PEARL_PICKUP, weight: 25 },     // Uncommon pearl
+    { pickup: SPEED_BUBBLE, weight: 10 },     // Rare speed boost
+    { pickup: TREASURE_CHEST, weight: 5 }     // Very rare treasure
+];
+
+// Get weighted random pickup
+const getRandomPickup = () => {
+    const totalWeight = PICKUP_TYPES.reduce((sum, p) => sum + p.weight, 0);
+    let random = Math.random() * totalWeight;
+    for (const { pickup, weight } of PICKUP_TYPES) {
+        random -= weight;
+        if (random <= 0) return pickup;
+    }
+    return COIN_PICKUP;
+};
+
+// Max pickups per game (total of all types)
+const MAX_COINS_PER_GAME = 5;
 
 // ==================== GAME COMPONENT ====================
 export default function IceFishingGame({ 
@@ -255,6 +296,12 @@ export default function IceFishingGame({
     const [countdown, setCountdown] = useState(3);
     const [collectedCoins, setCollectedCoins] = useState(0); // Bonus coins from pickups!
     const collectedCoinsRef = useRef(0); // Ref for game loop access
+    
+    // Power-up states
+    const [hasSpeedBoost, setHasSpeedBoost] = useState(false);
+    const [treasureFound, setTreasureFound] = useState(false);
+    const [pearlFound, setPearlFound] = useState(false);
+    const speedBoostRef = useRef(0); // Timestamp when speed boost expires
     
     const inputRef = useRef({ left: false, right: false });
     
@@ -648,22 +695,25 @@ export default function IceFishingGame({
         }
         // ========== SQUID ==========
         else if (creatureType === CREATURE_TYPES.SQUID) {
-            // Elongated mantle with fin details
+            // Squid swims mantle-first (jet propulsion), tentacles trail behind
+            // Mantle at FRONT (+X, swimming direction), head and tentacles at BACK (-X)
+            
+            // Elongated mantle (front/propulsion end) - cone tip points forward
             const mantleGeom = new THREE.ConeGeometry(size * 0.45, size * 1.6, 10);
             const mantle = new THREE.Mesh(mantleGeom, mat);
-            mantle.rotation.z = -Math.PI / 2;
-            mantle.position.x = -size * 0.4;
+            mantle.rotation.z = Math.PI / 2; // Tip points toward +X (swimming direction)
+            mantle.position.x = size * 0.5;
             group.add(mantle);
             
-            // Side fins (triangular)
+            // Side fins on mantle (triangular)
             const finShape = new THREE.Shape();
             finShape.moveTo(0, 0);
-            finShape.lineTo(size * 0.4, size * 0.15);
-            finShape.lineTo(size * 0.5, -size * 0.15);
+            finShape.lineTo(-size * 0.4, size * 0.15);
+            finShape.lineTo(-size * 0.5, -size * 0.15);
             finShape.lineTo(0, 0);
             const finGeom = new THREE.ExtrudeGeometry(finShape, { depth: size * 0.02, bevelEnabled: false });
             const finL = new THREE.Mesh(finGeom, mat);
-            finL.position.set(-size * 0.3, 0, size * 0.35);
+            finL.position.set(size * 0.4, 0, size * 0.35);
             finL.rotation.y = Math.PI / 2;
             group.add(finL);
             const finR = finL.clone();
@@ -671,42 +721,44 @@ export default function IceFishingGame({
             finR.rotation.y = -Math.PI / 2;
             group.add(finR);
             
-            // Head
+            // Head (behind mantle, where tentacles attach)
             const headGeom = new THREE.SphereGeometry(size * 0.42, 14, 12);
             const head = new THREE.Mesh(headGeom, mat);
-            head.position.x = size * 0.35;
+            head.position.x = -size * 0.25;
             group.add(head);
             
-            // Big expressive eyes
+            // Big expressive eyes (on sides of head)
             const eyeWhiteGeom = new THREE.SphereGeometry(size * 0.18, 10, 10);
             const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xFFFFFF });
             const eyeWhiteL = new THREE.Mesh(eyeWhiteGeom, eyeWhiteMat);
-            eyeWhiteL.position.set(size * 0.5, size * 0.12, size * 0.28);
+            eyeWhiteL.position.set(-size * 0.15, size * 0.12, size * 0.32);
             group.add(eyeWhiteL);
             const eyeWhiteR = eyeWhiteL.clone();
-            eyeWhiteR.position.z = -size * 0.28;
+            eyeWhiteR.position.z = -size * 0.32;
             group.add(eyeWhiteR);
             
             // Pupils
             const pupilGeom = new THREE.SphereGeometry(size * 0.1, 8, 8);
             const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
             const pupilL = new THREE.Mesh(pupilGeom, pupilMat);
-            pupilL.position.set(size * 0.58, size * 0.12, size * 0.28);
+            pupilL.position.set(-size * 0.08, size * 0.12, size * 0.35);
             group.add(pupilL);
             const pupilR = pupilL.clone();
-            pupilR.position.z = -size * 0.28;
+            pupilR.position.z = -size * 0.35;
             group.add(pupilR);
             
-            // Arms (8 short + 2 long feeding tentacles)
+            // Tentacles trailing BEHIND (negative X direction)
+            // 8 short arms + 2 long feeding tentacles
             for (let i = 0; i < 10; i++) {
                 const isLong = i >= 8;
                 const len = isLong ? size * 1.5 : size * 0.9;
                 const armGeom = new THREE.CylinderGeometry(size * 0.06, size * 0.02, len, 6);
                 const arm = new THREE.Mesh(armGeom, mat);
                 const spread = ((i % 8) / 8) * Math.PI * 1.5 - Math.PI * 0.75;
-                arm.rotation.z = Math.PI / 2 + spread * 0.35;
+                // Tentacles extend backward (negative X)
+                arm.rotation.z = -Math.PI / 2 + spread * 0.35;
                 arm.position.set(
-                    size * 0.65 + (len / 2) * Math.cos(Math.PI / 2 + spread * 0.35),
+                    -size * 0.55 - (len / 2) * Math.cos(Math.PI / 2 - spread * 0.35),
                     spread * size * 0.15,
                     isLong ? (i === 8 ? size * 0.1 : -size * 0.1) : 0
                 );
@@ -978,13 +1030,14 @@ export default function IceFishingGame({
         }
         // ========== TURTLE ==========
         else if (creatureType === CREATURE_TYPES.TURTLE) {
-            // Domed shell
+            // Domed shell (top half of sphere, pointing UP)
             const shellGeom = new THREE.SphereGeometry(size * 0.5, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2);
             const shell = new THREE.Mesh(shellGeom, mat);
-            shell.rotation.x = Math.PI;
+            // Shell dome should point UP (positive Y), no rotation needed for hemisphere
+            shell.position.y = size * 0.05;
             group.add(shell);
             
-            // Shell pattern (hexagonal plates)
+            // Shell pattern (hexagonal plates on top of shell)
             for (let i = 0; i < 6; i++) {
                 const plateGeom = new THREE.CircleGeometry(size * 0.12, 6);
                 const plateMat = new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.8 });
@@ -992,15 +1045,23 @@ export default function IceFishingGame({
                 const angle = (i / 6) * Math.PI * 2;
                 plate.position.set(
                     Math.cos(angle) * size * 0.25,
-                    size * 0.35,
+                    size * 0.38, // On top of shell
                     Math.sin(angle) * size * 0.25
                 );
-                plate.rotation.x = -Math.PI / 2 - 0.3;
+                plate.rotation.x = -Math.PI / 2; // Face up
                 group.add(plate);
             }
             
-            // Plastron (underbelly)
-            const plastronGeom = new THREE.SphereGeometry(size * 0.45, 14, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2);
+            // Center plate on shell
+            const centerPlateGeom = new THREE.CircleGeometry(size * 0.15, 6);
+            const centerPlateMat = new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.8 });
+            const centerPlate = new THREE.Mesh(centerPlateGeom, centerPlateMat);
+            centerPlate.position.y = size * 0.5;
+            centerPlate.rotation.x = -Math.PI / 2;
+            group.add(centerPlate);
+            
+            // Plastron (underbelly - flat bottom)
+            const plastronGeom = new THREE.CylinderGeometry(size * 0.45, size * 0.42, size * 0.1, 14);
             const plastron = new THREE.Mesh(plastronGeom, accentMat);
             plastron.position.y = -size * 0.05;
             group.add(plastron);
@@ -1381,14 +1442,17 @@ export default function IceFishingGame({
             const gapEnd = fishPositions[gapIndex + 1]?.pos || gapStart + 5;
             const coinPos = gapStart + (gapEnd - gapStart) / 2;
             
-            const coinGroup = createFishMesh(COIN_PICKUP, fromLeft);
+            // Random pickup type (coin, pearl, treasure chest, or speed bubble)
+            const selectedPickup = getRandomPickup();
+            
+            const coinGroup = createFishMesh(selectedPickup, fromLeft);
             const coinX = fromLeft 
                 ? -GAME_CONFIG.HOOK_MAX_X - 25 - coinPos 
                 : GAME_CONFIG.HOOK_MAX_X + 25 + coinPos;
             
             coinGroup.position.set(coinX, -actualDepth, 0);
             coinGroup.userData = {
-                type: COIN_PICKUP,
+                type: selectedPickup,
                 speed: fromLeft ? laneSpeed : -laneSpeed,
                 fromLeft,
                 laneDepth: actualDepth,
@@ -1396,10 +1460,13 @@ export default function IceFishingGame({
                 bodyScale: GAME_CONFIG.BODY_HITBOX_SCALES.coin,
                 isGameFish: true,
                 isPickup: true,
+                isTreasure: selectedPickup.isTreasure,
+                isSpeedBoost: selectedPickup.isSpeedBoost,
+                isPearl: selectedPickup.isPearl,
                 swimPhase: 0,
                 bobOffset: Math.random() * Math.PI * 2,
-                bobSpeed: 1.5,
-                spinSpeed: 2.0 // Coins spin!
+                bobSpeed: selectedPickup.isTreasure ? 1.0 : 1.5,
+                spinSpeed: selectedPickup.isTreasure ? 1.5 : 2.0
             };
             
             sceneRef.current.add(coinGroup);
@@ -1507,12 +1574,16 @@ export default function IceFishingGame({
         // ========== SMOOTH PLAYER MOVEMENT ==========
         const moveDir = (inputRef.current.left ? -1 : 0) + (inputRef.current.right ? 1 : 0);
         
+        // Speed boost multiplier (1.75x when active)
+        const speedMultiplier = (speedBoostRef.current > Date.now()) ? 1.75 : 1.0;
+        const maxSpeed = GAME_CONFIG.HOOK_MAX_SPEED * speedMultiplier;
+        const acceleration = GAME_CONFIG.HOOK_ACCELERATION * speedMultiplier;
+        
         if (moveDir !== 0) {
-            // Accelerate in input direction
-            velocityRef.current += moveDir * GAME_CONFIG.HOOK_ACCELERATION * deltaTime;
+            // Accelerate in input direction (faster with speed boost!)
+            velocityRef.current += moveDir * acceleration * deltaTime;
             // Clamp to max speed
-            velocityRef.current = Math.max(-GAME_CONFIG.HOOK_MAX_SPEED, 
-                Math.min(GAME_CONFIG.HOOK_MAX_SPEED, velocityRef.current));
+            velocityRef.current = Math.max(-maxSpeed, Math.min(maxSpeed, velocityRef.current));
         } else {
             // Apply friction when no input
             velocityRef.current *= GAME_CONFIG.HOOK_FRICTION;
@@ -1832,14 +1903,33 @@ export default function IceFishingGame({
         // Check collision
         const hitFish = checkCollision(state.hookX, state.depth);
         if (hitFish && !gameEndingRef.current) {
-            // ========== COIN PICKUP - Add coins and continue! ==========
+            // ========== PICKUP COLLECTION - Add coins/effects and continue! ==========
             if (hitFish.userData.isPickup) {
-                // Collect the coin
+                // Collect the pickup
                 const coinValue = hitFish.userData.type.coins;
                 collectedCoinsRef.current += coinValue;
                 setCollectedCoins(collectedCoinsRef.current);
                 
-                // Remove the coin from the game
+                // Speed boost effect!
+                if (hitFish.userData.isSpeedBoost) {
+                    speedBoostRef.current = Date.now() + 5000; // 5 second speed boost
+                    setHasSpeedBoost(true);
+                    setTimeout(() => setHasSpeedBoost(false), 5000);
+                }
+                
+                // Treasure chest celebration!
+                if (hitFish.userData.isTreasure) {
+                    setTreasureFound(true);
+                    setTimeout(() => setTreasureFound(false), 1500);
+                }
+                
+                // Pearl found!
+                if (hitFish.userData.isPearl) {
+                    setPearlFound(true);
+                    setTimeout(() => setPearlFound(false), 1000);
+                }
+                
+                // Remove the pickup from the game
                 sceneRef.current.remove(hitFish);
                 hitFish.traverse(child => {
                     if (child.geometry) child.geometry.dispose();
@@ -2099,6 +2189,31 @@ export default function IceFishingGame({
                             <span className="text-2xl">🪙</span>
                             <span>+{collectedCoins}</span>
                         </div>
+                    </div>
+                )}
+                
+                {/* Speed Boost Active Indicator */}
+                {hasSpeedBoost && gamePhase === 'playing' && (
+                    <div className="absolute top-36 left-1/2 -translate-x-1/2 bg-gradient-to-r from-cyan-500/90 to-blue-500/90 backdrop-blur-sm rounded-full px-5 py-2 border-2 border-cyan-300/50 animate-bounce">
+                        <div className="text-white text-sm font-bold flex items-center gap-2">
+                            <span className="text-xl">💨</span>
+                            <span>SPEED BOOST!</span>
+                        </div>
+                    </div>
+                )}
+                
+                {/* Treasure Found Flash */}
+                {treasureFound && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
+                        <div className="text-8xl animate-ping">🎁</div>
+                        <div className="absolute text-4xl font-bold text-yellow-300 animate-bounce mt-32">+25 TREASURE!</div>
+                    </div>
+                )}
+                
+                {/* Pearl Found Flash */}
+                {pearlFound && (
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
+                        <div className="text-6xl animate-ping">🦪</div>
                     </div>
                 )}
                 

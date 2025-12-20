@@ -133,14 +133,12 @@ class Casino extends BaseBuilding {
             capital.position.set(pos.x, h - 0.3, pos.z);
             group.add(capital);
             
-            // Gold rings along pillar
-            for (let ringY = 2; ringY < h - 2; ringY += 3) {
-                const ringGeo = new THREE.TorusGeometry(0.85, 0.08, 6, 16);
-                const ring = new THREE.Mesh(ringGeo, pillarGoldMat);
-                ring.position.set(pos.x, ringY, pos.z);
-                ring.rotation.x = Math.PI / 2;
-                group.add(ring);
-            }
+            // OPTIMIZED: Single gold ring at center of pillar instead of multiple
+            const ringGeo = new THREE.TorusGeometry(0.85, 0.08, 6, 16);
+            const ring = new THREE.Mesh(ringGeo, pillarGoldMat);
+            ring.position.set(pos.x, h / 2, pos.z);
+            ring.rotation.x = Math.PI / 2;
+            group.add(ring);
         });
         
         // Entrance archway frame - pushed forward to avoid z-fighting with walls
@@ -211,9 +209,10 @@ class Casino extends BaseBuilding {
         secondFloor.castShadow = true;
         group.add(secondFloor);
 
-        // ==================== STAIRS ====================
+        // ==================== STAIRS (Proper individual steps for visual quality) ====================
         const stairWidth = 4;
         const stairMat = this.getMaterial(0x2a2a3a, { roughness: 0.7 });
+        const stairTrimMat = this.getMaterial(goldAccent, { metalness: 0.7, roughness: 0.3 });
         
         const stairStartZ = d / 2 - 3;
         const stairEndZ = -d / 2 + secondFloorDepth + 0.5;
@@ -222,17 +221,30 @@ class Casino extends BaseBuilding {
         const numStairs = Math.ceil(secondFloorHeight / stairHeight);
         const stairDepth = totalStairRun / numStairs;
 
+        // Create proper individual stairs for visual quality
         for (let i = 0; i < numStairs; i++) {
-            const stairGeo = new THREE.BoxGeometry(stairWidth, stairHeight, stairDepth);
-            const stair = new THREE.Mesh(stairGeo, stairMat);
-            stair.position.set(
+            const stepGeo = new THREE.BoxGeometry(stairWidth, stairHeight, stairDepth);
+            const step = new THREE.Mesh(stepGeo, stairMat);
+            step.position.set(
                 -w / 2 + stairWidth / 2 + 1,
                 i * stairHeight + stairHeight / 2,
                 stairStartZ - i * stairDepth - stairDepth / 2
             );
-            stair.receiveShadow = true;
-            stair.castShadow = true;
-            group.add(stair);
+            step.receiveShadow = true;
+            step.castShadow = true;
+            group.add(step);
+            
+            // Gold trim on front of each step (every 2nd step for performance)
+            if (i % 2 === 0) {
+                const trimGeo = new THREE.BoxGeometry(stairWidth - 0.1, 0.08, 0.08);
+                const trim = new THREE.Mesh(trimGeo, stairTrimMat);
+                trim.position.set(
+                    -w / 2 + stairWidth / 2 + 1,
+                    (i + 1) * stairHeight,
+                    stairStartZ - i * stairDepth - stairDepth
+                );
+                group.add(trim);
+            }
         }
 
         // Railing for 2nd floor - with gap for stairs
@@ -245,14 +257,12 @@ class Casino extends BaseBuilding {
         railing.position.set((stairWidth + 2) / 2, secondFloorHeight + 1.2, -d / 2 + secondFloorDepth + 0.5);
         group.add(railing);
 
-        // Railing posts
-        const postGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 8);
+        // OPTIMIZED: Only 3 railing posts instead of ~7
+        const postGeo = new THREE.CylinderGeometry(0.05, 0.05, 1.2, 6);
         const postStartX = -w / 2 + stairWidth + 3;
-        const postSpacing = 2.3;
-        const numPosts = Math.floor((w / 2 - postStartX) / postSpacing);
-        for (let i = 0; i <= numPosts; i++) {
+        for (let i = 0; i < 3; i++) {
             const post = new THREE.Mesh(postGeo, railingMat);
-            post.position.set(postStartX + i * postSpacing, secondFloorHeight + 0.6, -d / 2 + secondFloorDepth + 0.5);
+            post.position.set(postStartX + i * 8, secondFloorHeight + 0.6, -d / 2 + secondFloorDepth + 0.5);
             group.add(post);
         }
 
@@ -271,67 +281,86 @@ class Casino extends BaseBuilding {
         barTop.position.set(0, secondFloorHeight + 1.28, -d / 2 + 2);
         group.add(barTop);
 
-        // ==================== BAR STOOLS (Reusing Pizza Parlor Style) ====================
-        const stoolMat = this.getMaterial(0x333333, { metalness: 0.6, roughness: 0.4 });
-        const seatMat = this.getMaterial(carpetRed, { roughness: 0.7 });
+        // ==================== BAR STOOLS (8 proper stools with base, pole, and seat) ====================
+        const stoolMetalMat = this.getMaterial(0x333333, { metalness: 0.7, roughness: 0.3 });
+        const stoolSeatMat = this.getMaterial(carpetRed, { roughness: 0.7 });
         
-        // Stools along bar counter
+        // Store stool positions for furniture data
+        const stoolPositions = [];
+        
         for (let i = 0; i < 8; i++) {
-            const stoolGroup = new THREE.Group();
+            const stoolX = -w / 2 + 4 + i * 4;
+            const stoolZ = -d / 2 + 3.8;
             
-            const baseGeo = new THREE.CylinderGeometry(0.3, 0.35, 0.1, 12);
-            const base = new THREE.Mesh(baseGeo, stoolMat);
-            base.position.y = 0.05;
-            stoolGroup.add(base);
-
-            const poleGeo = new THREE.CylinderGeometry(0.06, 0.08, 1.5, 8);
-            const pole = new THREE.Mesh(poleGeo, stoolMat);
-            pole.position.y = 0.8;
-            stoolGroup.add(pole);
-
-            const seatGeo = new THREE.CylinderGeometry(0.35, 0.3, 0.2, 12);
-            const seat = new THREE.Mesh(seatGeo, seatMat);
-            seat.position.y = 1.6;
-            stoolGroup.add(seat);
-
-            stoolGroup.position.set(-w / 2 + 4 + i * 3.5, secondFloorHeight + 0.2, -d / 2 + 3.8);
-            group.add(stoolGroup);
+            // Stool base (circular)
+            const baseGeo = new THREE.CylinderGeometry(0.4, 0.45, 0.15, 12);
+            const base = new THREE.Mesh(baseGeo, stoolMetalMat);
+            base.position.set(stoolX, secondFloorHeight + 0.08, stoolZ);
+            group.add(base);
+            
+            // Stool pole
+            const poleGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.1, 8);
+            const pole = new THREE.Mesh(poleGeo, stoolMetalMat);
+            pole.position.set(stoolX, secondFloorHeight + 0.65, stoolZ);
+            group.add(pole);
+            
+            // Cushioned seat
+            const seatGeo = new THREE.CylinderGeometry(0.38, 0.35, 0.18, 12);
+            const seat = new THREE.Mesh(seatGeo, stoolSeatMat);
+            seat.position.set(stoolX, secondFloorHeight + 1.3, stoolZ);
+            group.add(seat);
+            
+            // Store for furniture data
+            stoolPositions.push({
+                localX: stoolX,
+                localZ: stoolZ
+            });
         }
+        
+        // Store stool positions for external access
+        group.userData.stoolPositions = stoolPositions;
 
-        // ==================== COUCH (2nd Floor Lounge Area) ====================
+        // ==================== COUCH (Proper velvet couch with cushions and armrests) ====================
         const couchGroup = new THREE.Group();
         const couchMat = this.getMaterial(0x2a1a3a, { roughness: 0.8 });
         const cushionMat = this.getMaterial(0x4a2a5a, { roughness: 0.9 });
+        const couchGoldMat = this.getMaterial(goldAccent, { metalness: 0.7, roughness: 0.3 });
         
         // Couch base
-        const couchBaseGeo = new THREE.BoxGeometry(6, 0.8, 2);
+        const couchBaseGeo = new THREE.BoxGeometry(6, 0.6, 2.2);
         const couchBase = new THREE.Mesh(couchBaseGeo, couchMat);
-        couchBase.position.y = 0.4;
+        couchBase.position.y = 0.3;
         couchGroup.add(couchBase);
         
         // Couch back
-        const couchBackGeo = new THREE.BoxGeometry(6, 1.2, 0.4);
+        const couchBackGeo = new THREE.BoxGeometry(6, 1.8, 0.5);
         const couchBack = new THREE.Mesh(couchBackGeo, couchMat);
-        couchBack.position.set(0, 1.0, -0.8);
+        couchBack.position.set(0, 1.0, -0.85);
         couchGroup.add(couchBack);
         
-        // Cushions
+        // Armrests
+        const armrestGeo = new THREE.BoxGeometry(0.5, 0.9, 2.2);
+        [-1, 1].forEach(side => {
+            const armrest = new THREE.Mesh(armrestGeo, couchMat);
+            armrest.position.set(side * 2.75, 0.75, 0);
+            couchGroup.add(armrest);
+        });
+        
+        // Seat cushions (3 cushions)
+        const cushionGeo = new THREE.BoxGeometry(1.8, 0.25, 1.6);
         for (let i = 0; i < 3; i++) {
-            const cushionGeo = new THREE.BoxGeometry(1.8, 0.3, 1.6);
             const cushion = new THREE.Mesh(cushionGeo, cushionMat);
-            cushion.position.set(-2 + i * 2, 0.95, 0.1);
+            cushion.position.set(-2 + i * 2, 0.75, 0.1);
             couchGroup.add(cushion);
         }
         
-        // Armrests
-        const armrestGeo = new THREE.BoxGeometry(0.4, 0.6, 2);
-        const leftArmrest = new THREE.Mesh(armrestGeo, couchMat);
-        leftArmrest.position.set(-3.2, 0.7, 0);
-        couchGroup.add(leftArmrest);
-        
-        const rightArmrest = new THREE.Mesh(armrestGeo, couchMat);
-        rightArmrest.position.set(3.2, 0.7, 0);
-        couchGroup.add(rightArmrest);
+        // Gold feet (decorative)
+        const footGeo = new THREE.BoxGeometry(0.25, 0.15, 0.25);
+        [[-2.7, -0.8], [2.7, -0.8], [-2.7, 0.8], [2.7, 0.8]].forEach(([x, z]) => {
+            const foot = new THREE.Mesh(footGeo, couchGoldMat);
+            foot.position.set(x, 0.08, z);
+            couchGroup.add(foot);
+        });
         
         couchGroup.position.set(w / 2 - 5, secondFloorHeight + 0.2, -d / 2 + secondFloorDepth / 2);
         couchGroup.rotation.y = -Math.PI / 2;
@@ -514,54 +543,78 @@ class Casino extends BaseBuilding {
         tvGroup.position.set(0, secondFloorHeight + 4.2, -d / 2 + 1);
         group.add(tvGroup);
 
-        // ==================== DRINKS SHELF (Behind Bar) ====================
+        // ==================== DRINKS SHELF (3 shelves with bottles for visual richness) ====================
         const shelfMat = this.getMaterial(0x2a1a0a, { roughness: 0.7 });
+        const shelfGoldTrim = this.getMaterial(goldAccent, { metalness: 0.6, roughness: 0.3 });
+        
         for (let shelf = 0; shelf < 3; shelf++) {
-            const shelfGeo = new THREE.BoxGeometry(w - 5, 0.15, 0.5);
+            // Shelf board
+            const shelfGeo = new THREE.BoxGeometry(w - 5, 0.12, 0.5);
             const shelfMesh = new THREE.Mesh(shelfGeo, shelfMat);
             shelfMesh.position.set(0, secondFloorHeight + 2 + shelf * 1.2, -d / 2 + 0.5);
             group.add(shelfMesh);
+            
+            // Gold trim on shelf front
+            const trimGeo = new THREE.BoxGeometry(w - 5, 0.05, 0.08);
+            const trim = new THREE.Mesh(trimGeo, shelfGoldTrim);
+            trim.position.set(0, secondFloorHeight + 2 + shelf * 1.2 + 0.08, -d / 2 + 0.25);
+            group.add(trim);
 
-            const bottleColors = [0x8B0000, 0x228B22, 0xFFD700, 0x4169E1, 0xFF6347];
-            for (let b = 0; b < 10; b++) {
-                const bottleGeo = new THREE.CylinderGeometry(0.1, 0.12, 0.6, 8);
+            // 8 bottles per shelf with varied colors
+            const bottleColors = [0x8B0000, 0x228B22, 0xFFD700, 0x4169E1, 0x8B4513, 0x006400, 0xDC143C, 0x00CED1];
+            for (let b = 0; b < 8; b++) {
+                // Vary bottle heights
+                const bottleHeight = 0.6 + Math.random() * 0.3;
+                const bottleGeo = new THREE.CylinderGeometry(0.12, 0.15, bottleHeight, 8);
                 const bottleMat = this.getMaterial(bottleColors[b % bottleColors.length], { 
-                    roughness: 0.3, 
+                    roughness: 0.2, 
                     transparent: true, 
-                    opacity: 0.8 
+                    opacity: 0.85,
+                    metalness: 0.1
                 });
                 const bottle = new THREE.Mesh(bottleGeo, bottleMat);
-                bottle.position.set(-w / 2 + 3 + b * 1.2, secondFloorHeight + 2.4 + shelf * 1.2, -d / 2 + 0.5);
+                bottle.position.set(
+                    -w / 2 + 4 + b * 3.5,
+                    secondFloorHeight + 2.4 + shelf * 1.2,
+                    -d / 2 + 0.5
+                );
                 group.add(bottle);
             }
         }
 
-        // ==================== COFFEE TABLE (Near Couch) ====================
-        const tableGroup = new THREE.Group();
+        // ==================== COFFEE TABLE (Proper table with top and legs) ====================
         const tableMat = this.getMaterial(0x2a1a0a, { roughness: 0.5 });
+        const tableGoldMat = this.getMaterial(goldAccent, { metalness: 0.7, roughness: 0.3 });
+        const tableX = w / 2 - 9;
+        const tableZ = -d / 2 + secondFloorDepth / 2;
         
-        const tableTopGeo = new THREE.BoxGeometry(2.5, 0.15, 1.2);
+        // Table top
+        const tableTopGeo = new THREE.BoxGeometry(2.5, 0.15, 1.4);
         const tableTop = new THREE.Mesh(tableTopGeo, tableMat);
-        tableTop.position.y = 0.6;
-        tableGroup.add(tableTop);
+        tableTop.position.set(tableX, secondFloorHeight + 0.7, tableZ);
+        group.add(tableTop);
         
-        const tableLegGeo = new THREE.BoxGeometry(0.15, 0.6, 0.15);
-        [[-1, -0.4], [1, -0.4], [-1, 0.4], [1, 0.4]].forEach(([x, z]) => {
-            const leg = new THREE.Mesh(tableLegGeo, tableMat);
-            leg.position.set(x, 0.3, z);
-            tableGroup.add(leg);
+        // Gold trim around table top
+        const tableTrimGeo = new THREE.BoxGeometry(2.6, 0.06, 0.06);
+        [-1, 1].forEach(side => {
+            const trim = new THREE.Mesh(tableTrimGeo, tableGoldMat);
+            trim.position.set(tableX, secondFloorHeight + 0.72, tableZ + side * 0.7);
+            group.add(trim);
         });
         
-        // Position table in front of couch (couch faces toward -X after rotation)
-        tableGroup.position.set(w / 2 - 9, secondFloorHeight + 0.2, -d / 2 + secondFloorDepth / 2);
-        tableGroup.rotation.y = Math.PI / 2; // Rotate 90 degrees
-        group.add(tableGroup);
+        // Table legs (4 corners)
+        const legGeo = new THREE.CylinderGeometry(0.08, 0.1, 0.5, 8);
+        [[-1, -0.55], [1, -0.55], [-1, 0.55], [1, 0.55]].forEach(([xOff, zOff]) => {
+            const leg = new THREE.Mesh(legGeo, tableGoldMat);
+            leg.position.set(tableX + xOff, secondFloorHeight + 0.45, tableZ + zOff);
+            group.add(leg);
+        });
 
         // ==================== GAME ROOM FLOOR TRIGGER ZONE ====================
-        // Floor glow at trigger location (local coords: 14.4, 10.6)
+        // Floor glow at CENTER of main casino floor for easy visibility
         // This creates a visible floor area where players can enter the game room
-        const gameRoomTriggerX = 14.4;
-        const gameRoomTriggerZ = 10.6;
+        const gameRoomTriggerX = 0;      // Center of casino width
+        const gameRoomTriggerZ = d / 4;  // Center of main floor area (d/4 = 8 for d=32)
         
         // Floor glow circle
         const floorGlowMat = this.getMaterial(neonCyan, {
@@ -659,94 +712,88 @@ class Casino extends BaseBuilding {
             this.lights.push(barLight);
         }
 
-        // ==================== GRAND CHANDELIER (Main Floor Ceiling) ====================
+        // ==================== GRAND CHANDELIER (Elegant multi-tier design) ====================
         const chandelierGroup = new THREE.Group();
         
-        // Chandelier chain
+        // Chain links
         const chainMat = this.getMaterial(0xFFD700, { metalness: 0.9, roughness: 0.2 });
-        const chainGeo = new THREE.CylinderGeometry(0.08, 0.08, 2, 8);
+        const chainGeo = new THREE.CylinderGeometry(0.06, 0.06, 1.5, 8);
         const chain = new THREE.Mesh(chainGeo, chainMat);
-        chain.position.y = h - 1;
+        chain.position.y = h - 0.75;
         chandelierGroup.add(chain);
         
-        // Main chandelier body (ornate golden frame)
-        const chandelierBodyMat = this.getMaterial(0xFFD700, { metalness: 0.9, roughness: 0.15 });
-        const chandelierBasePlateMat = this.getMaterial(0x1a1a2e, { metalness: 0.3, roughness: 0.4 });
-        
-        // Central hub
-        const hubGeo = new THREE.SphereGeometry(0.5, 16, 12);
-        const hub = new THREE.Mesh(hubGeo, chandelierBodyMat);
-        hub.position.y = h - 2.2;
+        // Central hub (ornate sphere)
+        const hubGeo = new THREE.SphereGeometry(0.4, 12, 8);
+        const hub = new THREE.Mesh(hubGeo, chainMat);
+        hub.position.y = h - 1.7;
         chandelierGroup.add(hub);
         
-        // Main ring
-        const ringGeo = new THREE.TorusGeometry(2.5, 0.12, 8, 24);
-        const ring = new THREE.Mesh(ringGeo, chandelierBodyMat);
-        ring.position.y = h - 2.5;
-        ring.rotation.x = Math.PI / 2;
-        chandelierGroup.add(ring);
+        // Chandelier body (concentric rings)
+        const chandelierBodyMat = this.getMaterial(0xFFD700, { metalness: 0.9, roughness: 0.15 });
         
-        // Secondary inner ring
-        const innerRingGeo = new THREE.TorusGeometry(1.5, 0.08, 8, 20);
+        // Outer ring
+        const outerRingGeo = new THREE.TorusGeometry(2.5, 0.12, 8, 24);
+        const outerRing = new THREE.Mesh(outerRingGeo, chandelierBodyMat);
+        outerRing.position.y = h - 2.5;
+        outerRing.rotation.x = Math.PI / 2;
+        chandelierGroup.add(outerRing);
+        
+        // Inner ring
+        const innerRingGeo = new THREE.TorusGeometry(1.5, 0.1, 8, 20);
         const innerRing = new THREE.Mesh(innerRingGeo, chandelierBodyMat);
-        innerRing.position.y = h - 2.8;
+        innerRing.position.y = h - 2.3;
         innerRing.rotation.x = Math.PI / 2;
         chandelierGroup.add(innerRing);
         
-        // Chandelier crystals/lights hanging from main ring
-        const crystalMat = this.getMaterial(0xFFEEDD, { 
-            emissive: 0xFFAA66, 
-            emissiveIntensity: 0.6, 
-            transparent: true, 
-            opacity: 0.9,
-            roughness: 0.1 
-        });
-        const crystalGeo = new THREE.ConeGeometry(0.15, 0.5, 6);
-        const crystalSphereGeo = new THREE.SphereGeometry(0.12, 8, 6);
-        
-        // Main ring crystals (8 around the outer ring)
-        for (let i = 0; i < 8; i++) {
-            const angle = (i / 8) * Math.PI * 2;
-            const crystalX = Math.cos(angle) * 2.5;
-            const crystalZ = Math.sin(angle) * 2.5;
-            
-            // Crystal cone
-            const crystal = new THREE.Mesh(crystalGeo, crystalMat);
-            crystal.position.set(crystalX, h - 3.0, crystalZ);
-            crystal.rotation.x = Math.PI;
-            chandelierGroup.add(crystal);
-            
-            // Small sphere at tip
-            const tip = new THREE.Mesh(crystalSphereGeo, crystalMat);
-            tip.position.set(crystalX, h - 3.5, crystalZ);
-            chandelierGroup.add(tip);
-            
-            // Support arm from hub
-            const armGeo = new THREE.CylinderGeometry(0.04, 0.04, 2.6, 6);
+        // Support arms connecting rings
+        const armGeo = new THREE.BoxGeometry(0.08, 0.08, 1.2);
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2;
             const arm = new THREE.Mesh(armGeo, chandelierBodyMat);
-            arm.position.set(crystalX * 0.5, h - 2.35, crystalZ * 0.5);
-            arm.rotation.z = Math.atan2(crystalZ, crystalX) + Math.PI / 2;
-            arm.rotation.x = Math.PI / 2 - 0.3;
+            arm.position.set(Math.cos(angle) * 2, h - 2.4, Math.sin(angle) * 2);
+            arm.rotation.y = angle;
             chandelierGroup.add(arm);
         }
         
-        // Inner ring crystals (6 around inner ring)
-        for (let i = 0; i < 6; i++) {
-            const angle = (i / 6) * Math.PI * 2 + Math.PI / 6;
-            const crystalX = Math.cos(angle) * 1.5;
-            const crystalZ = Math.sin(angle) * 1.5;
-            
+        // Crystal droplets on outer ring (8 crystals)
+        const crystalMat = this.getMaterial(0xFFEEDD, { 
+            emissive: 0xFFAA66, 
+            emissiveIntensity: 0.9, 
+            transparent: true, 
+            opacity: 0.9,
+            roughness: 0.05 
+        });
+        const crystalGeo = new THREE.ConeGeometry(0.15, 0.6, 6);
+        
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
             const crystal = new THREE.Mesh(crystalGeo, crystalMat);
-            crystal.position.set(crystalX, h - 3.2, crystalZ);
+            crystal.position.set(Math.cos(angle) * 2.5, h - 3.1, Math.sin(angle) * 2.5);
             crystal.rotation.x = Math.PI;
-            crystal.scale.set(0.8, 0.8, 0.8);
             chandelierGroup.add(crystal);
         }
         
+        // Inner crystals (smaller, 6 crystals)
+        const smallCrystalGeo = new THREE.ConeGeometry(0.1, 0.4, 6);
+        for (let i = 0; i < 6; i++) {
+            const angle = (i / 6) * Math.PI * 2 + 0.3;
+            const crystal = new THREE.Mesh(smallCrystalGeo, crystalMat);
+            crystal.position.set(Math.cos(angle) * 1.5, h - 2.8, Math.sin(angle) * 1.5);
+            crystal.rotation.x = Math.PI;
+            chandelierGroup.add(crystal);
+        }
+        
+        // Central pendant
+        const pendantGeo = new THREE.ConeGeometry(0.25, 1.0, 8);
+        const pendant = new THREE.Mesh(pendantGeo, crystalMat);
+        pendant.position.y = h - 3.2;
+        pendant.rotation.x = Math.PI;
+        chandelierGroup.add(pendant);
+        
         // Chandelier center light - Apple/Mobile: skip
         if (!this.needsOptimization) {
-            const chandelierLight = new THREE.PointLight(0xFFDD99, 1.2, 25);
-            chandelierLight.position.set(0, h - 3, 0);
+            const chandelierLight = new THREE.PointLight(0xFFDD99, 1.5, 30);
+            chandelierLight.position.set(0, h - 2.8, 0);
             chandelierGroup.add(chandelierLight);
             this.lights.push(chandelierLight);
         }
@@ -755,126 +802,92 @@ class Casino extends BaseBuilding {
         chandelierGroup.position.set(0, 0, d / 4);
         group.add(chandelierGroup);
         
-        // ==================== STRING LIGHTS (From Ceiling) ====================
+        // ==================== STRING LIGHTS (Festive Edison-style bulbs) ====================
         const stringLightMat = this.getMaterial(0xFFEE88, { 
             emissive: 0xFFDD66, 
-            emissiveIntensity: 0.8,
+            emissiveIntensity: 0.9,
             transparent: true,
             opacity: 0.95
         });
-        const bulbGeo = new THREE.SphereGeometry(0.12, 8, 6);
         const wireMat = this.getMaterial(0x222222, { roughness: 0.8 });
+        const stringWidth = w - 6;
         
-        // Create multiple string light rows across the ceiling
-        const stringRows = [
-            { z: d / 4 - 4, sag: 1.2 },     // Front
-            { z: d / 4 + 4, sag: 1.0 },     // Back of main floor
-            { z: -d / 4, sag: 0.8 }         // Over bar area
-        ];
-        
-        stringRows.forEach(row => {
-            // Create catenary curve for wire
-            const curvePoints = [];
-            const numSegments = 12;
-            const stringWidth = w - 6;
-            
-            for (let i = 0; i <= numSegments; i++) {
-                const t = i / numSegments;
-                const x = -stringWidth / 2 + t * stringWidth;
-                // Catenary curve approximation: y = a * cosh(x/a) - a
-                const normalizedX = (t - 0.5) * 2;
-                const sagAmount = row.sag * (normalizedX * normalizedX);
-                const y = h - 1 - sagAmount;
-                curvePoints.push(new THREE.Vector3(x, y, row.z));
-            }
-            
-            // Create wire using tube geometry
-            const curve = new THREE.CatmullRomCurve3(curvePoints);
-            const wireGeo = new THREE.TubeGeometry(curve, 20, 0.03, 6, false);
+        // Create 2 rows of string lights for ambiance
+        [-1, 1].forEach((side, rowIdx) => {
+            const wireGeo = new THREE.BoxGeometry(stringWidth, 0.03, 0.03);
             const wire = new THREE.Mesh(wireGeo, wireMat);
+            wire.position.set(0, h - 1.2, d / 4 + side * 4);
             group.add(wire);
             
-            // Add bulbs along the string
-            const numBulbs = 8;
-            for (let i = 1; i < numBulbs; i++) {
-                const t = i / numBulbs;
-                const bulbPos = curve.getPointAt(t);
-                
-                // Bulb
-                const bulb = new THREE.Mesh(bulbGeo, stringLightMat);
-                bulb.position.copy(bulbPos);
-                bulb.position.y -= 0.15;
-                group.add(bulb);
-                
-                // Small cap
-                const capGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.08, 6);
-                const cap = new THREE.Mesh(capGeo, wireMat);
-                cap.position.copy(bulbPos);
-                cap.position.y -= 0.04;
-                group.add(cap);
-            }
+            // 8 bulbs per row
+            const bulbGeo = new THREE.SphereGeometry(0.12, 8, 6);
+            const capGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.08, 8);
             
-            // Add a dim point light for each string - Apple/Mobile: skip
-            if (!this.needsOptimization) {
-                const stringLight = new THREE.PointLight(0xFFDD66, 0.3, 10);
-                stringLight.position.set(0, h - 1.5 - row.sag / 2, row.z);
-                group.add(stringLight);
-                this.lights.push(stringLight);
+            for (let i = 0; i < 8; i++) {
+                const x = -stringWidth / 2 + (i + 0.5) * (stringWidth / 8);
+                
+                // Bulb cap
+                const cap = new THREE.Mesh(capGeo, wireMat);
+                cap.position.set(x, h - 1.3, d / 4 + side * 4);
+                group.add(cap);
+                
+                // Glowing bulb
+                const bulb = new THREE.Mesh(bulbGeo, stringLightMat);
+                bulb.position.set(x, h - 1.45, d / 4 + side * 4);
+                group.add(bulb);
             }
         });
         
-        // ==================== WALL SCONCES ====================
-        const sconceMat = this.getMaterial(0xFFD700, { metalness: 0.8, roughness: 0.2 });
-        const sconceLightMat = this.getMaterial(0xFFEECC, { 
+        // Single point light for the strings - Apple/Mobile: skip
+        if (!this.needsOptimization) {
+            const stringLight = new THREE.PointLight(0xFFDD66, 0.5, 18);
+            stringLight.position.set(0, h - 1.5, d / 4);
+            group.add(stringLight);
+            this.lights.push(stringLight);
+        }
+        
+        // ==================== WALL SCONCES (Elegant torch-style sconces) ====================
+        const sconceBracketMat = this.getMaterial(goldAccent, { metalness: 0.8, roughness: 0.3 });
+        const sconceGlassMat = this.getMaterial(0xFFEEDD, { 
             emissive: 0xFFAA44, 
-            emissiveIntensity: 0.7 
+            emissiveIntensity: 1.0,
+            transparent: true,
+            opacity: 0.9
         });
         
-        // Sconces on side walls
+        // 4 wall sconces - 2 on each side wall
         const sconcePositions = [
-            { x: -w / 2 + 0.3, z: d / 4, rotY: Math.PI / 2 },
-            { x: -w / 2 + 0.3, z: -d / 4 + 2, rotY: Math.PI / 2 },
-            { x: w / 2 - 0.3, z: d / 4, rotY: -Math.PI / 2 },
-            { x: w / 2 - 0.3, z: -d / 4 + 2, rotY: -Math.PI / 2 }
+            { x: -w / 2 + 0.3, z: -d / 6 },
+            { x: -w / 2 + 0.3, z: d / 3 },
+            { x: w / 2 - 0.3, z: -d / 6 },
+            { x: w / 2 - 0.3, z: d / 3 }
         ];
         
-        sconcePositions.forEach(pos => {
-            const sconceGroup = new THREE.Group();
+        sconcePositions.forEach((pos, idx) => {
+            // Bracket backplate
+            const backplateGeo = new THREE.BoxGeometry(0.15, 0.4, 0.3);
+            const backplate = new THREE.Mesh(backplateGeo, sconceBracketMat);
+            backplate.position.set(pos.x, 5, pos.z);
+            group.add(backplate);
             
-            // Backplate
-            const backplateGeo = new THREE.BoxGeometry(0.15, 0.4, 0.25);
-            const backplate = new THREE.Mesh(backplateGeo, sconceMat);
-            sconceGroup.add(backplate);
-            
-            // Arm
+            // Support arm
+            const armDir = pos.x < 0 ? 1 : -1;
             const armGeo = new THREE.BoxGeometry(0.4, 0.08, 0.08);
-            const arm = new THREE.Mesh(armGeo, sconceMat);
-            arm.position.set(0.25, 0, 0);
-            sconceGroup.add(arm);
+            const arm = new THREE.Mesh(armGeo, sconceBracketMat);
+            arm.position.set(pos.x + armDir * 0.25, 5, pos.z);
+            group.add(arm);
             
-            // Light holder
-            const holderGeo = new THREE.CylinderGeometry(0.12, 0.15, 0.2, 8);
-            const holder = new THREE.Mesh(holderGeo, sconceMat);
-            holder.position.set(0.45, 0.15, 0);
-            sconceGroup.add(holder);
+            // Bulb holder cup
+            const holderGeo = new THREE.CylinderGeometry(0.12, 0.15, 0.15, 8);
+            const holder = new THREE.Mesh(holderGeo, sconceBracketMat);
+            holder.position.set(pos.x + armDir * 0.45, 4.95, pos.z);
+            group.add(holder);
             
-            // Light bulb
-            const sconceBulbGeo = new THREE.SphereGeometry(0.1, 8, 6);
-            const sconceBulb = new THREE.Mesh(sconceBulbGeo, sconceLightMat);
-            sconceBulb.position.set(0.45, 0.3, 0);
-            sconceGroup.add(sconceBulb);
-            
-            sconceGroup.position.set(pos.x, 5, pos.z);
-            sconceGroup.rotation.y = pos.rotY;
-            group.add(sconceGroup);
-            
-            // Sconce light - Apple/Mobile: skip
-            if (!this.needsOptimization) {
-                const sconceLight = new THREE.PointLight(0xFFAA44, 0.4, 8);
-                sconceLight.position.set(pos.x + (pos.x > 0 ? -0.5 : 0.5), 5.3, pos.z);
-                group.add(sconceLight);
-                this.lights.push(sconceLight);
-            }
+            // Glowing glass bulb
+            const bulbGeo = new THREE.SphereGeometry(0.18, 10, 8);
+            const bulb = new THREE.Mesh(bulbGeo, sconceGlassMat);
+            bulb.position.set(pos.x + armDir * 0.45, 5.15, pos.z);
+            group.add(bulb);
         });
 
         // Entrance light - keep ONE for Apple/Mobile (important for visibility)
@@ -899,22 +912,13 @@ class Casino extends BaseBuilding {
         };
         // Store game room floor trigger location (used by getPortalTrigger)
         group.userData.portalRoom = {
-            x: 14.4,  // Local X for floor trigger (maps to world C - 60.6)
-            z: 10.6,  // Local Z for floor trigger (maps to world C + 17.4)
+            x: 0,     // Local X for floor trigger (center of casino)
+            z: d / 4, // Local Z for floor trigger (center of main floor)
             radius: 3.5
         };
         group.userData.entranceWidth = 12;
         
-        // Store furniture positions for interaction system
-        // Stools along bar counter (same format as Pizza Parlor)
-        const stoolPositions = [];
-        for (let i = 0; i < 8; i++) {
-            stoolPositions.push({
-                localX: -w / 2 + 4 + i * 3.5,
-                localZ: -d / 2 + 3.8
-            });
-        }
-        group.userData.stoolPositions = stoolPositions;
+        // stoolPositions already stored in group.userData by bar stools section above
         
         // Couch position
         group.userData.couchPosition = {
@@ -966,6 +970,25 @@ class Casino extends BaseBuilding {
             });
             console.log('🍎 Casino: Disabled shadows for Apple/Mobile optimization');
         }
+
+        // ==================== STATIC MESH OPTIMIZATION ====================
+        // CRITICAL PERFORMANCE: Disable matrixAutoUpdate for static meshes
+        // This prevents Three.js from recalculating world matrices every frame
+        // The casino interior is static - only the exterior has animations
+        group.traverse(child => {
+            if (child.isMesh) {
+                // Update matrix once, then disable auto-update
+                child.updateMatrix();
+                child.matrixAutoUpdate = false;
+                
+                // Frustum culling should stay enabled (default is true)
+                // child.frustumCulled = true; // Already default
+            }
+        });
+        
+        // Update the group's matrix as well
+        group.updateMatrixWorld(true);
+        console.log('🎰 Casino: Applied static mesh optimizations (matrixAutoUpdate=false)');
 
         return group;
     }
