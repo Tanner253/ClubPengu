@@ -125,11 +125,16 @@ export function MultiplayerProvider({ children }) {
                 setConnected(true);
                 window.__multiplayerWs = ws;
                 
+                // Ping to keep connection alive
+                // Mobile browsers suspend WebSockets more aggressively, so ping faster
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                const pingInterval = isMobile ? 15000 : 25000; // 15s mobile, 25s desktop
+                
                 pingIntervalRef.current = setInterval(() => {
                     if (ws.readyState === WebSocket.OPEN) {
                         ws.send(JSON.stringify({ type: 'ping' }));
                     }
-                }, 25000);
+                }, pingInterval);
                 
                 // Attempt to restore session from stored token
                 const storedToken = localStorage.getItem('auth_token');
@@ -1209,6 +1214,85 @@ export function MultiplayerProvider({ children }) {
                 wsRef.current = null;
             }
             setConnected(false);
+        };
+    }, [connect]);
+    
+    // Handle visibility change (mobile background/foreground)
+    // When app goes to background, WebSocket may disconnect
+    // When it comes back, we need to check and reconnect
+    useEffect(() => {
+        let wasHidden = false;
+        let hiddenAt = 0;
+        
+        const handleVisibilityChange = () => {
+            if (document.hidden) {
+                // Page went to background
+                wasHidden = true;
+                hiddenAt = Date.now();
+                console.log('📱 Page hidden - WebSocket may be suspended');
+            } else if (wasHidden) {
+                // Page came back from background
+                wasHidden = false;
+                const hiddenDuration = Date.now() - hiddenAt;
+                console.log(`📱 Page visible after ${Math.round(hiddenDuration/1000)}s`);
+                
+                // If hidden for more than 5 seconds, check WebSocket health
+                if (hiddenDuration > 5000) {
+                    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+                        console.log('📱 WebSocket disconnected while hidden, reconnecting...');
+                        connect();
+                    } else {
+                        // Send immediate ping to verify connection
+                        try {
+                            wsRef.current.send(JSON.stringify({ type: 'ping' }));
+                        } catch (e) {
+                            console.log('📱 Ping failed, reconnecting...');
+                            connect();
+                        }
+                    }
+                }
+            }
+        };
+        
+        // Also handle page hide (iOS Safari doesn't always fire visibilitychange)
+        const handlePageHide = () => {
+            wasHidden = true;
+            hiddenAt = Date.now();
+        };
+        
+        const handlePageShow = (e) => {
+            if (e.persisted || wasHidden) {
+                wasHidden = false;
+                const hiddenDuration = Date.now() - hiddenAt;
+                if (hiddenDuration > 5000 && wsRef.current?.readyState !== WebSocket.OPEN) {
+                    console.log('📱 Reconnecting after pageshow...');
+                    connect();
+                }
+            }
+        };
+        
+        // Handle focus for Phantom wallet popups on mobile
+        const handleFocus = () => {
+            if (wasHidden && wsRef.current?.readyState !== WebSocket.OPEN) {
+                console.log('📱 Window focused, checking connection...');
+                setTimeout(() => {
+                    if (wsRef.current?.readyState !== WebSocket.OPEN) {
+                        connect();
+                    }
+                }, 500);
+            }
+        };
+        
+        document.addEventListener('visibilitychange', handleVisibilityChange);
+        window.addEventListener('pagehide', handlePageHide);
+        window.addEventListener('pageshow', handlePageShow);
+        window.addEventListener('focus', handleFocus);
+        
+        return () => {
+            document.removeEventListener('visibilitychange', handleVisibilityChange);
+            window.removeEventListener('pagehide', handlePageHide);
+            window.removeEventListener('pageshow', handlePageShow);
+            window.removeEventListener('focus', handleFocus);
         };
     }, [connect]);
     

@@ -10,6 +10,7 @@
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useChallenge } from '../challenge';
+import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import gsap from 'gsap';
@@ -72,15 +73,18 @@ class MonopolyEngine {
         this.container = container;
         
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x050510);
-        this.scene.fog = new THREE.FogExp2(0x050510, 0.012);
+        this.scene.background = new THREE.Color(0x1a1a2e); // Brighter dark blue
+        // No fog - cleaner look
 
         this.camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
         this.camera.position.set(0, 85, 95); // Pulled back to see full board
         
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        // Limit pixel ratio on mobile to prevent memory issues
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        this.renderer.setPixelRatio(isMobile ? Math.min(window.devicePixelRatio, 2) : window.devicePixelRatio);
         this.renderer.setSize(container.clientWidth, container.clientHeight);
-        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.enabled = !isMobile; // Disable shadows on mobile for performance
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         container.appendChild(this.renderer.domElement);
 
@@ -96,11 +100,13 @@ class MonopolyEngine {
         this.controls.target.set(0, 0, 0);
 
         // Lighting
-        this.ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+        // Bright ambient light for good visibility
+        this.ambientLight = new THREE.AmbientLight(0xffffff, 1.2);
         this.scene.add(this.ambientLight);
         
-        this.moonLight = new THREE.DirectionalLight(0xaaccff, 0.8);
-        this.moonLight.position.set(-20, 50, -20);
+        // Main directional light - brighter and warmer
+        this.moonLight = new THREE.DirectionalLight(0xffffff, 1.0);
+        this.moonLight.position.set(30, 60, 30);
         this.moonLight.castShadow = true;
         this.moonLight.shadow.mapSize.width = 2048;
         this.moonLight.shadow.mapSize.height = 2048;
@@ -111,9 +117,15 @@ class MonopolyEngine {
         this.moonLight.shadow.camera.top = 50;
         this.moonLight.shadow.camera.bottom = -50;
         this.scene.add(this.moonLight);
+        
+        // Secondary fill light from opposite side
+        const fillLight = new THREE.DirectionalLight(0xffeedd, 0.5);
+        fillLight.position.set(-30, 40, -30);
+        this.scene.add(fillLight);
 
-        const streetLight = new THREE.PointLight(0xffaa00, 0.8, 60);
-        streetLight.position.set(0, 20, 0);
+        // Bright center light
+        const streetLight = new THREE.PointLight(0xffffff, 1.0, 80);
+        streetLight.position.set(0, 25, 0);
         this.scene.add(streetLight);
         
         this.windowTexture = this.createWindowTexture();
@@ -676,7 +688,8 @@ class MonopolyEngine {
     }
 
     setPlayerLight(playerIdx) {
-        const color = playerIdx === 0 ? new THREE.Color(0x00bcd4) : new THREE.Color(0xe91e63);
+        // Subtle tint based on player, but keep it bright
+        const color = playerIdx === 0 ? new THREE.Color(0xddeeff) : new THREE.Color(0xffeedd);
         gsap.to(this.moonLight.color, { r: color.r, g: color.g, b: color.b, duration: 0.8 });
     }
 
@@ -891,12 +904,16 @@ const P2PMonopoly = ({ onMatchEnd }) => {
     const containerRef = useRef(null);
     const engineRef = useRef(null);
     
+    // Get connection status for mobile handling
+    const { connected } = useMultiplayer();
+    
     // UI State
     const [showDice, setShowDice] = useState(false);
     const [diceValues, setDiceValues] = useState([1, 1]);
     const [isRolling, setIsRolling] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
     const [currentEvent, setCurrentEvent] = useState(null);
+    const [showDisconnected, setShowDisconnected] = useState(false);
     
     // Refs for tracking state changes
     const initedRef = useRef(false);
@@ -904,6 +921,17 @@ const P2PMonopoly = ({ onMatchEnd }) => {
     const lastTurnRef = useRef(null);
     const lastEventKeyRef = useRef(null);
     const lastPropsCountRef = useRef({ p1: 0, p2: 0 });
+    
+    // Track connection status for mobile
+    useEffect(() => {
+        if (!connected) {
+            // Show disconnection warning after brief delay (avoid flicker)
+            const timeout = setTimeout(() => setShowDisconnected(true), 1000);
+            return () => clearTimeout(timeout);
+        } else {
+            setShowDisconnected(false);
+        }
+    }, [connected]);
 
     // Initialize engine
     useEffect(() => {
@@ -1244,13 +1272,23 @@ const P2PMonopoly = ({ onMatchEnd }) => {
                 </div>
             )}
 
+            {/* === DISCONNECTION WARNING === */}
+            {showDisconnected && (
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50">
+                    <div className="bg-red-900/95 border-2 border-red-500 rounded-xl px-6 py-4 text-center animate-pulse">
+                        <div className="text-red-400 text-lg font-bold mb-1">⚠️ Connection Lost</div>
+                        <div className="text-white text-sm">Reconnecting...</div>
+                    </div>
+                </div>
+            )}
+
             {/* === ACTION BAR (only interactive for active player) === */}
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex gap-2 sm:gap-4">
                 <button
                     onClick={handleRoll}
-                    disabled={!isMyTurn || !matchState.canRoll || isRolling}
+                    disabled={!isMyTurn || !matchState.canRoll || isRolling || !connected}
                     className={`px-4 sm:px-8 py-2.5 sm:py-3 rounded-xl font-bold text-sm sm:text-base flex items-center gap-2 transition-all ${
-                        isMyTurn && matchState.canRoll && !isRolling
+                        isMyTurn && matchState.canRoll && !isRolling && connected
                             ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg hover:scale-105 active:scale-95'
                             : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                     }`}
