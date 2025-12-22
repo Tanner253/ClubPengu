@@ -1678,13 +1678,8 @@ const VoxelWorld = ({
                 }
             }
 
-            if(e.code === 'KeyE') {
-                // E key is for portal interactions only
-                if (nearbyPortal && (nearbyPortal.targetRoom || nearbyPortal.minigame)) {
-                    handlePortalEnter();
-                    return;
-                }
-            }
+            // NOTE: E key for portal entry is handled in a separate useEffect (search: "Handle E key for portal entry")
+            // This ensures proper dependency tracking and avoids duplicate handlers
             if(e.code === 'KeyT') {
                 // Only open once when T is first pressed (not on repeat)
                 if (!emoteWheelKeyHeld.current) {
@@ -4518,12 +4513,19 @@ const VoxelWorld = ({
                     console.log('🏠 Owner entering igloo directly');
                     // Continue to room transition below
                 } else {
-                    // Check if igloo has requirements (token gate or entry fee)
+                    // Check if igloo has requirements (token gate, entry fee, or private)
                     const hasTokenGate = iglooData.tokenGate?.enabled || iglooData.hasTokenGate;
                     const hasEntryFee = iglooData.entryFee?.enabled || iglooData.hasEntryFee;
                     const accessType = iglooData.accessType;
                     
-                    // Determine if entry is restricted
+                    // Private igloos - only owner can enter (handled above), show requirements panel for others
+                    if (accessType === 'private') {
+                        console.log('🔒 Private igloo - showing requirements panel');
+                        openRequirementsPanel(nearbyPortal.targetRoom);
+                        return;
+                    }
+                    
+                    // Determine if entry is restricted (token gate, entry fee, or access type)
                     const isRestricted = hasTokenGate || hasEntryFee || 
                         accessType === 'token' || accessType === 'fee' || accessType === 'both';
                     
@@ -5950,10 +5952,11 @@ const VoxelWorld = ({
              />
              
              {/* Door/Portal Prompt - Use IglooPortal for igloos, regular Portal otherwise */}
+             {/* Always get fresh iglooData from context to ensure real-time updates */}
              {nearbyPortal?.isIgloo ? (
                 <IglooPortal
                     portal={nearbyPortal}
-                    iglooData={nearbyPortal.iglooData}
+                    iglooData={getIgloo(nearbyPortal.targetRoom)}
                     isNearby={!!nearbyPortal}
                     onEnter={handlePortalEnter}
                     onViewDetails={() => openDetailsPanel(nearbyPortal.targetRoom)}

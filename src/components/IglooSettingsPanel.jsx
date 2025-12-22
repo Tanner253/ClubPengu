@@ -176,6 +176,9 @@ const IglooSettingsPanel = ({
     
     if (!isOpen) return null;
     
+    // Check if we have full igloo data (not just the ID)
+    const isDataLoading = !iglooData?.accessType && !iglooData?.ownerWallet;
+    
     const tabs = [
         { id: 'access', label: '🔐 Access', icon: '🔐' },
         { id: 'banner', label: '🎨 Banner', icon: '🎨' },
@@ -199,6 +202,7 @@ const IglooSettingsPanel = ({
                     </h2>
                     <p className="text-sm text-slate-400 mt-1">
                         {iglooData?.iglooId?.replace('igloo', 'Igloo ')}
+                        {isDataLoading && <span className="ml-2 animate-pulse">Loading...</span>}
                     </p>
                     <button 
                         onClick={onClose}
@@ -278,7 +282,7 @@ const IglooSettingsPanel = ({
                                             value={settings.tokenGate.tokenAddress ?? ''}
                                             onChange={(e) => setSettings({
                                                 ...settings, 
-                                                tokenGate: {...settings.tokenGate, tokenAddress: e.target.value}
+                                                tokenGate: {...settings.tokenGate, tokenAddress: e.target.value.replace(/\s/g, '')}
                                             })}
                                             placeholder="Token contract address..."
                                             className="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
@@ -347,7 +351,7 @@ const IglooSettingsPanel = ({
                                             value={settings.entryFee.tokenAddress ?? ''}
                                             onChange={(e) => setSettings({
                                                 ...settings, 
-                                                entryFee: {...settings.entryFee, tokenAddress: e.target.value, enabled: true}
+                                                entryFee: {...settings.entryFee, tokenAddress: e.target.value.replace(/\s/g, ''), enabled: true}
                                             })}
                                             placeholder="Token contract address..."
                                             className="w-full bg-slate-600 border border-slate-500 rounded px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
@@ -528,8 +532,8 @@ const IglooSettingsPanel = ({
                                         {iglooData?.isReserved 
                                             ? '✨ Pre-Paid' 
                                             : iglooData?.rentDueDate 
-                                                ? new Date(iglooData.rentDueDate).toLocaleString()
-                                                : 'N/A'}
+                                            ? new Date(iglooData.rentDueDate).toLocaleString()
+                                            : 'N/A'}
                                     </span>
                                 </div>
                                 

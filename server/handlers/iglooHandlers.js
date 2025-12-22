@@ -14,9 +14,10 @@ import rateLimiter from '../utils/RateLimiter.js';
  * @param {Object} message - The message
  * @param {Function} sendToPlayer - Send message to specific player
  * @param {Function} broadcastToAll - Broadcast to all connected players
+ * @param {Function} getPlayersInRoom - Get all players in a specific room
  * @returns {Object|null} - Response or null if message not handled
  */
-export async function handleIglooMessage(playerId, player, message, sendToPlayer, broadcastToAll) {
+export async function handleIglooMessage(playerId, player, message, sendToPlayer, broadcastToAll, getPlayersInRoom) {
     switch (message.type) {
         // ==================== GET ALL IGLOOS INFO ====================
         case 'igloo_list': {
@@ -124,6 +125,16 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     ...result
                 });
                 
+                // If successful, broadcast updated igloo to ALL players
+                if (result.success && broadcastToAll) {
+                    const publicIgloo = await iglooService.getIgloo(iglooId);
+                    broadcastToAll({
+                        type: 'igloo_updated',
+                        igloo: publicIgloo
+                    });
+                    console.log(`📢 Broadcast igloo rental: ${iglooId} now owned by ${player.name}`);
+                }
+                
             } catch (error) {
                 console.error('🏠 Error in igloo_rent:', error);
                 sendToPlayer(playerId, {
@@ -169,6 +180,15 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     type: 'igloo_pay_rent_result',
                     ...result
                 });
+                
+                // Broadcast rent payment to all (updates rent status display)
+                if (result.success && broadcastToAll) {
+                    const publicIgloo = await iglooService.getIgloo(iglooId);
+                    broadcastToAll({
+                        type: 'igloo_updated',
+                        igloo: publicIgloo
+                    });
+                }
                 
             } catch (error) {
                 console.error('🏠 Error in igloo_pay_rent:', error);
@@ -560,6 +580,16 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     ...result
                 });
                 
+                // Broadcast to owner so they see updated fees collected
+                // (Only broadcast stats update, not full igloo info)
+                if (result.success && broadcastToAll && igloo?.ownerWallet) {
+                    const updatedIgloo = await iglooService.getIgloo(iglooId);
+                    broadcastToAll({
+                        type: 'igloo_updated',
+                        igloo: updatedIgloo
+                    });
+                }
+                
             } catch (error) {
                 console.error('🏠 Error in igloo_pay_entry:', error);
                 console.error('═══════════════════════════════════════════════════════════');
@@ -646,6 +676,64 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                         type: 'igloo_updated',
                         igloo: publicIgloo
                     });
+                    
+                    // Check all players in the igloo and kick those who no longer meet requirements
+                    if (getPlayersInRoom) {
+                        const playersInIgloo = getPlayersInRoom(iglooId);
+                        const igloo = await iglooService.getIglooRaw(iglooId);
+                        
+                        for (const p of playersInIgloo) {
+                            // Skip the owner - they can always stay
+                            if (p.walletAddress === igloo.ownerWallet) continue;
+                            
+                            // Check if player can still enter with new settings
+                            let canStay = true;
+                            let kickReason = null;
+                            
+                            // Check access type
+                            if (igloo.accessType === 'private') {
+                                canStay = false;
+                                kickReason = 'IGLOO_NOW_PRIVATE';
+                            }
+                            // Check token gate
+                            else if (igloo.tokenGate?.enabled && p.walletAddress) {
+                                const balanceCheck = await solanaPaymentService.checkMinimumBalance(
+                                    p.walletAddress,
+                                    igloo.tokenGate.tokenAddress,
+                                    igloo.tokenGate.minimumBalance || 0
+                                );
+                                if (!balanceCheck.hasBalance) {
+                                    canStay = false;
+                                    kickReason = 'TOKEN_GATE_NOT_MET';
+                                }
+                            }
+                            // Check entry fee (if newly enabled)
+                            else if (igloo.entryFee?.enabled && igloo.entryFee.amount > 0 && p.walletAddress) {
+                                const hasPaid = igloo.paidEntryFees?.some(
+                                    fee => fee.walletAddress === p.walletAddress
+                                );
+                                if (!hasPaid) {
+                                    canStay = false;
+                                    kickReason = 'ENTRY_FEE_NOW_REQUIRED';
+                                }
+                            }
+                            
+                            // Kick the player if they can't stay
+                            if (!canStay) {
+                                console.log(`🚪 Kicking ${p.name || p.id} from ${iglooId}: ${kickReason}`);
+                                sendToPlayer(p.id, {
+                                    type: 'igloo_kicked',
+                                    iglooId,
+                                    reason: kickReason,
+                                    message: kickReason === 'IGLOO_NOW_PRIVATE' 
+                                        ? 'The igloo owner has made this igloo private'
+                                        : kickReason === 'TOKEN_GATE_NOT_MET'
+                                        ? 'You no longer meet the token requirement'
+                                        : 'Entry fee is now required to stay'
+                                });
+                            }
+                        }
+                    }
                 }
                 
             } catch (error) {
@@ -702,6 +790,16 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     type: 'igloo_leave_result',
                     ...result
                 });
+                
+                // Broadcast igloo vacancy to all players
+                if (result.success && broadcastToAll) {
+                    const publicIgloo = await iglooService.getIgloo(iglooId);
+                    broadcastToAll({
+                        type: 'igloo_updated',
+                        igloo: publicIgloo
+                    });
+                    console.log(`📢 Broadcast igloo vacancy: ${iglooId} is now available`);
+                }
                 
             } catch (error) {
                 console.error('🏠 Error in igloo_leave:', error);

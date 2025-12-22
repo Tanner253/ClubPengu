@@ -88,9 +88,25 @@ export const IglooProvider = ({ children }) => {
                     // Broadcast update - another player changed their igloo settings
                     console.log('🏠 Igloo updated (broadcast):', msg.igloo?.iglooId);
                     if (msg.igloo) {
+                        const updatedIglooId = msg.igloo.iglooId;
+                        
+                        // Update igloo data
                         setIgloos(prev => prev.map(i => 
-                            i.iglooId === msg.igloo.iglooId ? { ...i, ...msg.igloo } : i
+                            i.iglooId === updatedIglooId ? { ...i, ...msg.igloo } : i
                         ));
+                        
+                        // IMPORTANT: Invalidate user clearance for this igloo
+                        // This forces re-checking requirements when user tries to enter
+                        // Without this, users would see stale "requirements met" status
+                        setUserClearance(prev => {
+                            if (prev[updatedIglooId]) {
+                                console.log('🔄 Invalidating user clearance for updated igloo:', updatedIglooId);
+                                const newClearance = { ...prev };
+                                delete newClearance[updatedIglooId];
+                                return newClearance;
+                            }
+                            return prev;
+                        });
                     }
                     break;
                     
@@ -157,6 +173,22 @@ export const IglooProvider = ({ children }) => {
                 case 'igloo_error':
                     console.error('🏠 Igloo error:', msg.error, msg.message);
                     setIsLoading(false);
+                    break;
+                
+                case 'igloo_kicked':
+                    // Owner changed settings and we no longer meet requirements
+                    console.log('🚪 Kicked from igloo by owner:', msg.reason, msg.message);
+                    // Use the same kick handler as eligibility check
+                    if (onKickFromIglooRef.current) {
+                        onKickFromIglooRef.current(msg.reason || 'SETTINGS_CHANGED');
+                    }
+                    setCurrentIglooRoom(null);
+                    // Clear user clearance for this igloo
+                    setUserClearance(prev => {
+                        const newClearance = { ...prev };
+                        delete newClearance[msg.iglooId];
+                        return newClearance;
+                    });
                     break;
                     
                 case 'igloo_eligibility_check':
@@ -417,14 +449,26 @@ export const IglooProvider = ({ children }) => {
     
     /**
      * Open settings panel for owned igloo
+     * @param {string|Object} iglooIdOrData - Either an igloo ID string or full igloo data object
      */
-    const openSettingsPanel = useCallback((iglooId) => {
-        const igloo = myRentals.find(i => i.iglooId === iglooId);
-        setSelectedIgloo(igloo);
+    const openSettingsPanel = useCallback((iglooIdOrData) => {
+        let igloo;
+        let iglooId;
+        
+        // Accept either an ID string or a full igloo object
+        if (typeof iglooIdOrData === 'string') {
+            iglooId = iglooIdOrData;
+            igloo = myRentals.find(i => i.iglooId === iglooId);
+        } else if (iglooIdOrData && typeof iglooIdOrData === 'object') {
+            igloo = iglooIdOrData;
+            iglooId = igloo.iglooId;
+        }
+        
+        setSelectedIgloo(igloo || { iglooId });  // Set what we have
         setShowSettingsPanel(true);
         
-        // Request full owner info
-        if (send) {
+        // Request full owner info (will update selectedIgloo when received)
+        if (send && iglooId) {
             send({ type: 'igloo_owner_info', iglooId });
         }
     }, [myRentals, send]);

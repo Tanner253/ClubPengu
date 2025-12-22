@@ -597,7 +597,16 @@ async function handleMessage(playerId, message) {
     
     // Handle igloo messages first (returns true if handled)
     if (message.type?.startsWith('igloo_')) {
-        const handled = await handleIglooMessage(playerId, player, message, sendToPlayer, broadcastToAll);
+        // Helper to get all players in a specific room with their wallet addresses
+        const getPlayersInRoom = (roomId) => {
+            const roomPlayers = rooms.get(roomId);
+            if (!roomPlayers) return [];
+            return Array.from(roomPlayers).map(pid => {
+                const p = players.get(pid);
+                return p ? { id: pid, walletAddress: p.walletAddress, name: p.name } : null;
+            }).filter(Boolean);
+        };
+        const handled = await handleIglooMessage(playerId, player, message, sendToPlayer, broadcastToAll, getPlayersInRoom);
         if (handled) return;
     }
     

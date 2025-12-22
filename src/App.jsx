@@ -6,6 +6,7 @@ import P2PCardJitsu from './minigames/P2PCardJitsu';
 import P2PTicTacToe from './minigames/P2PTicTacToe';
 import P2PConnect4 from './minigames/P2PConnect4';
 import P2PMonopoly from './minigames/P2PMonopoly';
+import P2PUno from './minigames/P2PUno';
 import GameManager from './engine/GameManager';
 import { MultiplayerProvider, useMultiplayer } from './multiplayer';
 import { ChallengeProvider, useChallenge } from './challenge';
@@ -322,6 +323,13 @@ const AppContent = () => {
                 </div>
             )}
             
+            {/* P2P UNO - overlay on top of game world */}
+            {isInMatch && activeMatch && activeMatch.gameType === 'uno' && (
+                <div className="absolute inset-0 z-40">
+                    <P2PUno onMatchEnd={handleP2PMatchEnd} />
+                </div>
+            )}
+            
             {/* Challenge UI Overlays - show when in game world */}
             {inGameWorld && (
                 <>
@@ -395,6 +403,15 @@ const IglooUI = ({ currentRoom, onEnterRoom }) => {
         // Refresh data
         send({ type: 'igloo_list' });
         send({ type: 'igloo_my_rentals' });
+        
+        // Auto-open settings panel for new owner to customize their igloo
+        if (result.igloo) {
+            // Use the igloo data from the rental result directly
+            openSettingsPanel(result.igloo);
+        } else if (result.iglooId) {
+            // Fallback: just open by ID (will fetch from server)
+            openSettingsPanel(result.iglooId);
+        }
     };
     
     // Handle entry success

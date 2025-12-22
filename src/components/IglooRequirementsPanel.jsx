@@ -242,34 +242,24 @@ const IglooRequirementsPanel = ({
     }, [walletAddress, needsPayment, allRequirementsMet, iglooId, feeAmount, ownerWallet, feeTokenAddress, send, onEnterSuccess, onClose]);
     
     // Reset state when panel opens/closes or igloo changes
+    // ALWAYS fetch fresh status from server when panel opens (token balance may have changed)
     useEffect(() => {
-        if (isOpen && iglooId) {
+        if (isOpen && iglooId && send) {
             setError(null);
-            
-            // Check if we have pre-fetched status from the entry check
-            const prefetched = iglooData?._entryStatus;
-            if (prefetched) {
-                console.log('🏠 Using pre-fetched entry status:', prefetched);
-                setStatusChecked(true);
-                setCheckingStatus(false);
-                setUserTokenBalance(prefetched.userTokenBalance ?? null);
-                setHasTokenGateMet(prefetched.tokenGateMet ?? false);
-                setHasEntryFeePaid(prefetched.entryFeePaid ?? false);
-            } else if (send) {
-                // No pre-fetched status - request from server
             setStatusChecked(false);
             setUserTokenBalance(null);
             setHasTokenGateMet(false);
             setHasEntryFeePaid(false);
             setCheckingStatus(true);
             
+            // Always request fresh status from server to get current token balance
+            console.log('🏠 Requesting fresh requirements status for:', iglooId);
             send({
                 type: 'igloo_check_requirements',
                 iglooId
             });
         }
-        }
-    }, [isOpen, iglooId, iglooData?._entryStatus, send]);
+    }, [isOpen, iglooId, send]);
     
     // Listen for server responses
     useEffect(() => {

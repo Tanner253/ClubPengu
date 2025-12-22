@@ -316,10 +316,12 @@ const IglooPortal = ({
                     <button 
                         onClick={() => {
                             if (status.showRentInfo && onViewDetails) {
+                                // Not rented - show details/marketing panel
                                 onViewDetails();
-                            } else if (status.showRequirements && onViewRequirements) {
-                                onViewRequirements();
                             } else {
+                                // For all other cases (can enter, or has requirements):
+                                // Use handlePortalEnter which does server-side check
+                                // This ensures consistent behavior between click and E key
                                 onEnter();
                             }
                         }}

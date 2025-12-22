@@ -142,11 +142,11 @@ const IglooRentalModal = ({
             console.log('✅ Rent payment successful:', paymentResult.signature);
             
             // Step 3: Send rental request with transaction signature as proof
-            send({
-                type: 'igloo_rent',
-                iglooId: iglooData.iglooId,
+        send({
+            type: 'igloo_rent',
+            iglooId: iglooData.iglooId,
                 transactionSignature: paymentResult.signature // Transaction signature as proof of payment
-            });
+        });
             
         } catch (error) {
             console.error('❌ Rent payment error:', error);

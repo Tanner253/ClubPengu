@@ -273,12 +273,16 @@ class IglooService {
         console.log(`   Solscan:      https://solscan.io/tx/${settlement.transactionHash}`);
         console.log(`═══════════════════════════════════════════════════════════`);
         
+        // Get owner info (full settings) for immediate UI display
+        const ownerInfo = igloo.getOwnerInfo();
+        
         return {
             success: true,
             iglooId,
             transactionHash: settlement.transactionHash,
             rentDueDate: igloo.rentDueDate,
-            message: 'Welcome to your new igloo!'
+            message: 'Welcome to your new igloo!',
+            igloo: ownerInfo  // Include full igloo data for settings panel
         };
     }
     
