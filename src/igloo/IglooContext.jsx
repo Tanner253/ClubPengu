@@ -235,10 +235,56 @@ export const IglooProvider = ({ children }) => {
                         // Store the entry status for the requirements panel
                         setEntryCheckResult(msg);
                         
-                        // Find the igloo and add the status info
-                        const igloo = igloos.find(i => i.iglooId === msg.iglooId) || { iglooId: msg.iglooId };
+                        // Find the igloo from local cache
+                        const cachedIgloo = igloos.find(i => i.iglooId === msg.iglooId);
+                        
+                        // Build igloo data - use cached data if available, otherwise construct from server response
+                        // This ensures the requirements panel has the data it needs even if igloo list is stale
+                        const iglooData = cachedIgloo ? {
+                            ...cachedIgloo,
+                            // Always update owner info from server response (more reliable)
+                            ownerWallet: msg.ownerWallet || cachedIgloo.ownerWallet,
+                            ownerUsername: msg.ownerUsername || cachedIgloo.ownerUsername,
+                        } : {
+                            // Fallback: build from server response data
+                            iglooId: msg.iglooId,
+                            ownerWallet: msg.ownerWallet,
+                            ownerUsername: msg.ownerUsername,
+                            // Determine access type from what requirements exist
+                            accessType: (msg.tokenGateRequired > 0 && msg.entryFeeAmount > 0) ? 'both' :
+                                       msg.tokenGateRequired > 0 ? 'token' : 
+                                       msg.entryFeeAmount > 0 ? 'fee' : 'public',
+                            // Token gate info (if required)
+                            hasTokenGate: msg.tokenGateRequired > 0,
+                            tokenGateInfo: msg.tokenGateRequired > 0 ? {
+                                minimumBalance: msg.tokenGateRequired,
+                                tokenSymbol: msg.tokenGateSymbol || 'TOKEN',
+                                tokenAddress: msg.tokenGateAddress,
+                                minimum: msg.tokenGateRequired
+                            } : null,
+                            tokenGate: msg.tokenGateRequired > 0 ? {
+                                enabled: true,
+                                minimumBalance: msg.tokenGateRequired,
+                                tokenSymbol: msg.tokenGateSymbol || 'TOKEN',
+                                tokenAddress: msg.tokenGateAddress
+                            } : null,
+                            // Entry fee info (if required)
+                            hasEntryFee: msg.entryFeeAmount > 0,
+                            entryFeeAmount: msg.entryFeeAmount || 0,
+                            entryFeeToken: msg.entryFeeAmount > 0 ? {
+                                tokenSymbol: msg.entryFeeSymbol || 'TOKEN',
+                                tokenAddress: msg.entryFeeTokenAddress
+                            } : null,
+                            entryFee: msg.entryFeeAmount > 0 ? {
+                                enabled: true,
+                                amount: msg.entryFeeAmount,
+                                tokenSymbol: msg.entryFeeSymbol || 'TOKEN',
+                                tokenAddress: msg.entryFeeTokenAddress
+                            } : null
+                        };
+                        
                         setSelectedIgloo({
-                            ...igloo,
+                            ...iglooData,
                             // Pre-populate with server status
                             _entryStatus: {
                                 tokenGateMet: msg.tokenGateMet,

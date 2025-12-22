@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import VoxelPenguinDesigner from './VoxelPenguinDesigner';
 import VoxelWorld from './VoxelWorld';
 import CardJitsu from './minigames/CardJitsu';
@@ -212,11 +212,12 @@ const AppContent = () => {
     };
     
     // Change room/layer (town -> dojo, dojo -> town, etc.)
-    const handleChangeRoom = (newRoom, exitSpawnPos = null) => {
+    // Memoized to prevent useEffect re-runs in VoxelWorld igloo tracking
+    const handleChangeRoom = useCallback((newRoom, exitSpawnPos = null) => {
         GameManager.getInstance().setRoom(newRoom);
         setSpawnPosition(exitSpawnPos); // Will be used by VoxelWorld for spawn location
         setCurrentRoom(newRoom);
-    };
+    }, []);
     
     // Start a minigame (overlays the current room)
     const handleStartMinigame = (gameId) => {

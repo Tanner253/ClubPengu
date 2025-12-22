@@ -286,8 +286,13 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     // Requirements info
                     tokenGateRequired: igloo.tokenGate?.enabled ? igloo.tokenGate.minimumBalance : 0,
                     tokenGateSymbol: igloo.tokenGate?.tokenSymbol || 'TOKEN',
+                    tokenGateAddress: igloo.tokenGate?.tokenAddress || null,
                     entryFeeAmount: igloo.entryFee?.amount || 0,
                     entryFeeSymbol: igloo.entryFee?.tokenSymbol || 'TOKEN',
+                    entryFeeTokenAddress: igloo.entryFee?.tokenAddress || null,
+                    // Owner info (needed for payments)
+                    ownerWallet: igloo.ownerWallet,
+                    ownerUsername: igloo.ownerUsername || igloo.reservedOwnerName,
                     // What's blocking entry (if anything)
                     blockingReason: !tokenGateMet ? 'TOKEN_REQUIRED' : !entryFeePaid ? 'FEE_REQUIRED' : null
                 });
