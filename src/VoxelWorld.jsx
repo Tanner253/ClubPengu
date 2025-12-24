@@ -12,6 +12,7 @@ import TouchCameraControl from './components/TouchCameraControl';
 import SettingsMenu from './components/SettingsMenu';
 import ChangelogModal from './components/ChangelogModal';
 import EmoteWheel from './components/EmoteWheel';
+import TeleportWheel from './components/TeleportWheel';
 import GameManager from './engine/GameManager';
 import Puffle from './engine/Puffle';
 import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PenguinBuilder';
@@ -253,6 +254,55 @@ const VoxelWorld = ({
     const emoteSelectionRef = useRef(-1); // Sticky selection - persists until changed
     const emoteWheelKeyHeld = useRef(false); // Track if T is currently held
     const emoteRef = useRef({ type: null, startTime: 0 });
+    
+    // Teleport Wheel State
+    const [teleportWheelOpen, setTeleportWheelOpen] = useState(false);
+    const [teleportWheelSelection, setTeleportWheelSelection] = useState(-1);
+    const teleportSelectionRef = useRef(-1); // Sticky selection - persists until changed
+    const teleportWheelKeyHeld = useRef(false); // Track if M is currently held
+    
+    // Teleport Locations - Maps room IDs to their destinations
+    const TELEPORT_LOCATIONS = [
+        { 
+            id: 'fishing', 
+            emoji: '🎣', 
+            label: 'Ice Fishing', 
+            color: 'bg-blue-500',
+            position: { x: CENTER_X - 70, z: CENTER_Z + 78 }, // Near fishing holes
+            disabledInRooms: [] // Always available (fishing is outdoors in town)
+        },
+        { 
+            id: 'casino', 
+            emoji: '🎰', 
+            label: 'Casino', 
+            color: 'bg-purple-500',
+            position: { x: CENTER_X - 42, z: CENTER_Z + 3 }, // Casino entrance
+            disabledInRooms: ['casino_game_room'] // Disabled when inside casino
+        },
+        { 
+            id: 'nightclub', 
+            emoji: '🎵', 
+            label: 'Nightclub', 
+            color: 'bg-pink-500',
+            position: { x: CENTER_X, z: CENTER_Z - 60 }, // Nightclub entrance
+            disabledInRooms: ['nightclub'] // Disabled when inside nightclub
+        },
+        { 
+            id: 'pizza', 
+            emoji: '🍕', 
+            label: 'Pizza Parlor', 
+            color: 'bg-orange-500',
+            position: { x: CENTER_X - 38, z: CENTER_Z + 35 }, // Pizza parlor entrance
+            disabledInRooms: ['pizza'] // Disabled when inside pizza parlor
+        }
+    ];
+    
+    // Filter locations based on current room (disable if you're already there)
+    const availableTeleportLocations = TELEPORT_LOCATIONS.map(loc => ({
+        ...loc,
+        disabled: loc.disabledInRooms.includes(room)
+    }));
+    
     const [showPufflePanel, setShowPufflePanel] = useState(false);
     const playerPuffleRef = useRef(null);
     const aiPufflesRef = useRef([]); // { id, puffle }
@@ -1693,6 +1743,16 @@ const VoxelWorld = ({
                     emoteSelectionRef.current = -1;
                 }
             }
+            if(e.code === 'KeyM') {
+                // DEV ONLY: Teleport wheel for debugging/testing
+                // Only open once when M is first pressed (not on repeat)
+                if (!teleportWheelKeyHeld.current && import.meta.env.MODE !== 'production') {
+                    teleportWheelKeyHeld.current = true;
+                    setTeleportWheelOpen(true);
+                    setTeleportWheelSelection(-1);
+                    teleportSelectionRef.current = -1;
+                }
+            }
             if(e.code === 'F3') {
                 // F3 toggles debug position panel (like Minecraft) - DEV ONLY
                 e.preventDefault();
@@ -1725,6 +1785,23 @@ const VoxelWorld = ({
                 setEmoteWheelOpen(false);
                 setEmoteWheelSelection(-1);
                 emoteSelectionRef.current = -1;
+            }
+            if(e.code === 'KeyM') {
+                // M released - close wheel and teleport to selection if any
+                teleportWheelKeyHeld.current = false;
+                
+                const idx = teleportSelectionRef.current;
+                if (idx >= 0 && idx < availableTeleportLocations.length) {
+                    const location = availableTeleportLocations[idx];
+                    if (!location.disabled) {
+                        triggerTeleport(location);
+                    }
+                }
+                
+                // Always close the wheel on M release
+                setTeleportWheelOpen(false);
+                setTeleportWheelSelection(-1);
+                teleportSelectionRef.current = -1;
             }
         };
         window.addEventListener('keydown', handleDown);
@@ -3856,6 +3933,56 @@ const VoxelWorld = ({
         }
     };
     
+    // ==================== TELEPORT FUNCTION ====================
+    const triggerTeleport = (location) => {
+        if (!location.position || location.disabled) return;
+        
+        // If not in town, save target position to localStorage, then transition to town
+        // The spawn logic will load from localStorage automatically
+        if (roomRef.current !== 'town' && onChangeRoom) {
+            // Save target position to localStorage so room change spawns us there
+            try {
+                localStorage.setItem('player_position', JSON.stringify({
+                    x: location.position.x,
+                    y: 1,
+                    z: location.position.z,
+                    room: 'town',
+                    savedAt: Date.now()
+                }));
+            } catch (e) {
+                console.warn('Failed to save teleport position:', e);
+            }
+            
+            // Change to town (will spawn at saved position)
+            onChangeRoom('town', null);
+            setActiveBubble(`✨ Teleported to ${location.label}!`);
+            return;
+        }
+        
+        // Already in town - just update position directly
+        posRef.current.x = location.position.x;
+        posRef.current.z = location.position.z;
+        posRef.current.y = 1; // Ground level
+        
+        // Update velocity to 0 (stop any movement)
+        velRef.current.x = 0;
+        velRef.current.z = 0;
+        velRef.current.y = 0;
+        
+        // Update the visual mesh position immediately
+        if (playerRef.current) {
+            playerRef.current.position.set(location.position.x, 1, location.position.z);
+        }
+        
+        // Send updated position to server
+        if (sendPosition) {
+            sendPosition(location.position.x, location.position.z);
+        }
+        
+        // Show a chat bubble notification
+        setActiveBubble(`✨ Teleported to ${location.label}!`);
+    };
+    
     // ==================== EMOTE WHEEL - STICKY SELECTION ====================
     // Selection stays on last hovered sector until a DIFFERENT sector is entered
     useEffect(() => {
@@ -3894,6 +4021,45 @@ const VoxelWorld = ({
         document.addEventListener('mousemove', handleMouseMove);
         return () => document.removeEventListener('mousemove', handleMouseMove);
     }, [emoteWheelOpen]);
+    
+    // ==================== TELEPORT WHEEL - STICKY SELECTION ====================
+    // Selection stays on last hovered sector until a DIFFERENT sector is entered
+    useEffect(() => {
+        if (!teleportWheelOpen) return;
+        
+        const centerX = window.innerWidth / 2;
+        const centerY = window.innerHeight / 2;
+        const DEAD_ZONE = 50; // pixels from center
+        const NUM_SECTORS = availableTeleportLocations.length;
+        const SECTOR_SIZE = 360 / NUM_SECTORS;
+        
+        const handleMouseMove = (e) => {
+            const dx = e.clientX - centerX;
+            const dy = e.clientY - centerY;
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            
+            // DEAD ZONE: Don't change selection, keep the sticky value
+            if (distance < DEAD_ZONE) {
+                return; // Keep current selection
+            }
+            
+            // Calculate angle (0° at top, clockwise)
+            let angle = Math.atan2(dx, -dy) * (180 / Math.PI);
+            if (angle < 0) angle += 360;
+            
+            // Determine sector index
+            const newIndex = Math.floor(angle / SECTOR_SIZE) % NUM_SECTORS;
+            
+            // STICKY: Only update if entering a DIFFERENT sector
+            if (newIndex !== teleportSelectionRef.current) {
+                teleportSelectionRef.current = newIndex;
+                setTeleportWheelSelection(newIndex);
+            }
+        };
+        
+        document.addEventListener('mousemove', handleMouseMove);
+        return () => document.removeEventListener('mousemove', handleMouseMove);
+    }, [teleportWheelOpen, availableTeleportLocations]);
     
     // ==================== VICTORY DANCE ====================
     // Auto-trigger dance animation when player wins a match
@@ -6493,6 +6659,17 @@ const VoxelWorld = ({
                 onSelect={triggerEmote}
                 onClose={() => setEmoteWheelOpen(false)}
             />
+            
+            {/* Teleport Wheel (M key) - DEV/STAGING ONLY debugging tool */}
+            {import.meta.env.MODE !== 'production' && (
+                <TeleportWheel
+                    isOpen={teleportWheelOpen}
+                    selection={teleportWheelSelection}
+                    items={availableTeleportLocations}
+                    onSelect={triggerTeleport}
+                    onClose={() => setTeleportWheelOpen(false)}
+                />
+            )}
              
              {/* Settings Menu Modal */}
              <SettingsMenu
