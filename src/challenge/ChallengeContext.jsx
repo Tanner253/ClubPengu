@@ -6,6 +6,11 @@
 import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import GameManager from '../engine/GameManager';
+import { sendSPLToken } from '../wallet/SolanaPayment';
+
+// Server custodial wallet for holding wager deposits
+// Uses dedicated custodial wallet, falls back to rent wallet for backwards compatibility
+const WAGER_CUSTODIAL_WALLET = import.meta.env.VITE_CUSTODIAL_WALLET_ADDRESS || import.meta.env.VITE_RENT_WALLET_ADDRESS;
 
 const ChallengeContext = createContext(null);
 
@@ -32,6 +37,7 @@ export function ChallengeProvider({ children }) {
     // Match state
     const [activeMatch, setActiveMatch] = useState(null);
     const [matchState, setMatchState] = useState(null);
+    const [matchResult, setMatchResult] = useState(null); // Match end result with token settlement info
     const [isInMatch, setIsInMatch] = useState(false);
     const [shouldDance, setShouldDance] = useState(false); // Winner should dance after match
     
@@ -177,6 +183,9 @@ export function ChallengeProvider({ children }) {
                     const result = message.result;
                     setIsInMatch(false);
                     
+                    // Store the match result for UI to display (with token settlement info)
+                    setMatchResult(result);
+                    
                     // Update local coins from server (both GameManager and userData)
                     if (result.yourCoins !== undefined) {
                         updateUserCoins(result.yourCoins);
@@ -200,16 +209,16 @@ export function ChallengeProvider({ children }) {
                     } else if (result.reason === 'draw' || result.winner === 'draw') {
                         showNotification(`🤝 It's a draw! Wager refunded.`, 'info');
                     } else if (result.winnerPlayerId === playerId) {
-                        showNotification(`🏆 You won ${result.coinsWon} coins!`, 'success');
+                        // Build token won message if applicable
+                        const tokenMsg = result.tokenSettlement ? 
+                            ` + ${result.tokenSettlement.amount} ${result.tokenSettlement.tokenSymbol}` : '';
+                        showNotification(`🏆 You won ${result.coinsWon} coins${tokenMsg}!`, 'success');
                     } else {
                         showNotification(`😔 You lost the match.`, 'info');
                     }
                     
-                    // Keep match info for a moment to show result
-                    setTimeout(() => {
-                        setActiveMatch(null);
-                        setMatchState(null);
-                    }, 3000);
+                    // DON'T auto-close - let user close manually to view results
+                    // Match will be cleared when user clicks "Continue"
                     break;
                     
                 case 'match_error':
@@ -393,32 +402,155 @@ export function ChallengeProvider({ children }) {
         setWagerGameType(null);
     }, []);
     
+    // Signing state for UI feedback
+    const [isSigningWager, setIsSigningWager] = useState(false);
+    
     // Send a challenge
-    const sendChallenge = useCallback((targetPlayerId, gameType, wagerAmount) => {
+    // tokenWager is optional: { tokenAddress, tokenSymbol, tokenDecimals, tokenAmount, amountRaw }
+    const sendChallenge = useCallback(async (targetPlayerId, gameType, wagerAmount, tokenWager = null) => {
         if (!targetPlayerId || !gameType) return;
         // Allow 0 wager in development mode for testing
         const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
-        if (wagerAmount < 0 || (wagerAmount === 0 && !isDev)) return;
+        const hasTokenWager = tokenWager?.tokenAddress && tokenWager?.tokenAmount > 0;
         
-        send({
+        // Must have either coin or token wager (or both) unless in dev mode
+        if (!hasTokenWager && (wagerAmount < 0 || (wagerAmount === 0 && !isDev))) return;
+        
+        const message = {
             type: 'challenge_send',
             targetPlayerId,
             gameType,
             wagerAmount: wagerAmount || 0
-        });
+        };
+        
+        // Add token wager if present
+        if (hasTokenWager) {
+            message.wagerToken = {
+                tokenAddress: tokenWager.tokenAddress,
+                tokenSymbol: tokenWager.tokenSymbol,
+                tokenDecimals: tokenWager.tokenDecimals,
+                tokenAmount: tokenWager.tokenAmount,
+                amountRaw: tokenWager.amountRaw
+            };
+            console.log('🪙 Challenge includes token wager:', message.wagerToken);
+            
+            // CUSTODIAL APPROACH: Send tokens to server wallet NOW
+            // This ensures challenger is committed before challenge is created
+            if (!WAGER_CUSTODIAL_WALLET) {
+                console.error('❌ Custodial wallet not configured');
+                showNotification('Wager system not configured', 'error');
+                return;
+            }
+            
+            setIsSigningWager(true);
+            showNotification(`Sending ${tokenWager.tokenAmount} ${tokenWager.tokenSymbol} wager deposit...`, 'info');
+            
+            try {
+                console.log('💰 Sending wager deposit to custodial wallet...');
+                console.log(`   Amount: ${tokenWager.tokenAmount} ${tokenWager.tokenSymbol}`);
+                console.log(`   Custodial: ${WAGER_CUSTODIAL_WALLET.slice(0, 8)}...`);
+                
+                const paymentResult = await sendSPLToken({
+                    recipientAddress: WAGER_CUSTODIAL_WALLET,
+                    tokenMintAddress: tokenWager.tokenAddress,
+                    amount: tokenWager.tokenAmount,
+                    memo: `wager_deposit:challenger:${Date.now()}`
+                });
+                
+                if (!paymentResult.success) {
+                    console.error('❌ Wager deposit failed:', paymentResult.error);
+                    showNotification(`Wager deposit failed: ${paymentResult.message}`, 'error');
+                    setIsSigningWager(false);
+                    return;
+                }
+                
+                // Include transaction signature as proof of deposit
+                message.wagerDepositTx = paymentResult.signature;
+                console.log('✅ Wager deposited! Tx:', paymentResult.signature);
+                showNotification('Wager deposited! Creating challenge...', 'success');
+                
+            } catch (err) {
+                console.error('❌ Wager deposit error:', err);
+                showNotification('Failed to send wager deposit', 'error');
+                setIsSigningWager(false);
+                return;
+            }
+            setIsSigningWager(false);
+        }
+        
+        send(message);
         
         closeWagerModal();
         clearSelectedPlayer();
-    }, [send, closeWagerModal, clearSelectedPlayer]);
+    }, [send, closeWagerModal, clearSelectedPlayer, playersDataRef, showNotification]);
     
     // Accept a challenge
-    const acceptChallenge = useCallback((challengeId) => {
-        send({
+    // If the challenge has a token wager, we need to sign our payment authorization first
+    const acceptChallenge = useCallback(async (challengeId, challengeData = null) => {
+        // Check if this challenge has a token wager
+        const hasTokenWager = challengeData?.wagerToken?.tokenAddress && 
+                              (challengeData?.wagerToken?.tokenAmount > 0 || challengeData?.wagerToken?.amountRaw);
+        
+        let wagerDepositTx = null;
+        
+        if (hasTokenWager) {
+            // CUSTODIAL APPROACH: Send tokens to server wallet NOW
+            // This ensures acceptor is committed before match starts
+            if (!WAGER_CUSTODIAL_WALLET) {
+                console.error('❌ Custodial wallet not configured');
+                showNotification('Wager system not configured', 'error');
+                return;
+            }
+            
+            const wagerToken = challengeData.wagerToken;
+            
+            setIsSigningWager(true);
+            showNotification(`Sending ${wagerToken.tokenAmount} ${wagerToken.tokenSymbol} wager deposit...`, 'info');
+            
+            try {
+                console.log('💰 Sending wager deposit to custodial wallet (accepting)...');
+                console.log(`   Amount: ${wagerToken.tokenAmount} ${wagerToken.tokenSymbol}`);
+                console.log(`   Challenge: ${challengeId}`);
+                
+                const paymentResult = await sendSPLToken({
+                    recipientAddress: WAGER_CUSTODIAL_WALLET,
+                    tokenMintAddress: wagerToken.tokenAddress,
+                    amount: wagerToken.tokenAmount,
+                    memo: `wager_deposit:acceptor:${challengeId}`
+                });
+                
+                if (!paymentResult.success) {
+                    console.error('❌ Wager deposit failed:', paymentResult.error);
+                    showNotification(`Wager deposit failed: ${paymentResult.message}`, 'error');
+                    setIsSigningWager(false);
+                    return;
+                }
+                
+                wagerDepositTx = paymentResult.signature;
+                console.log('✅ Wager deposited! Tx:', paymentResult.signature);
+                showNotification('Wager deposited! Starting match...', 'success');
+                
+            } catch (err) {
+                console.error('❌ Wager deposit error on accept:', err);
+                showNotification('Failed to send wager deposit', 'error');
+                setIsSigningWager(false);
+                return;
+            }
+            setIsSigningWager(false);
+        }
+        
+        const message = {
             type: 'challenge_respond',
             challengeId,
             response: 'accept'
-        });
-    }, [send]);
+        };
+        
+        if (wagerDepositTx) {
+            message.wagerDepositTx = wagerDepositTx;
+        }
+        
+        send(message);
+    }, [send, showNotification]);
     
     // Deny a challenge
     const denyChallenge = useCallback((challengeId) => {
@@ -473,6 +605,7 @@ export function ChallengeProvider({ children }) {
         setIsInMatch(false);
         setActiveMatch(null);
         setMatchState(null);
+        setMatchResult(null);
     }, []);
     
     // Sync coins with server
@@ -501,6 +634,7 @@ export function ChallengeProvider({ children }) {
         selectedPlayerStats,
         activeMatch,
         matchState,
+        matchResult, // Match end result with token settlement info (tx signature, etc.)
         isInMatch,
         activeMatches,
         spectatingMatch,
@@ -510,6 +644,7 @@ export function ChallengeProvider({ children }) {
         notification,
         pendingChallenges,
         shouldDance,
+        isSigningWager, // True while waiting for wallet signature
         
         // Actions
         selectPlayer,

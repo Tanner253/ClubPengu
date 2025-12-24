@@ -40,11 +40,15 @@ class ChallengeService {
      * @param {object} target - Target player data (with wallet)
      * @param {string} gameType - Game type
      * @param {number} wagerAmount - Coins wagered
+     * @param {object} wagerToken - Optional SPL token wager config (x402)
+     * @param {string} challengerSignedPayload - Challenger's signed wager payment (x402)
      * @returns {object} Result with challenge or error
      */
-    async createChallenge(challenger, target, gameType, wagerAmount) {
-        // Validate both players have wallets if wager > 0
-        if (wagerAmount > 0) {
+    async createChallenge(challenger, target, gameType, wagerAmount, wagerToken = null, challengerSignedPayload = null) {
+        const hasTokenWager = wagerToken?.tokenAddress && wagerToken?.tokenAmount > 0;
+        
+        // Validate both players have wallets if any wager > 0
+        if (wagerAmount > 0 || hasTokenWager) {
             if (!challenger.walletAddress) {
                 return { error: 'CHALLENGER_NO_WALLET', message: 'You must be logged in to wager' };
             }
@@ -89,9 +93,23 @@ class ChallengeService {
             targetAppearance: target.appearance,
             gameType: normalizedGameType,
             wagerAmount,
+            // SPL Token wager (x402 protocol enhancement)
+            wagerToken: hasTokenWager ? {
+                tokenAddress: wagerToken.tokenAddress,
+                tokenSymbol: wagerToken.tokenSymbol,
+                tokenDecimals: wagerToken.tokenDecimals || 6,
+                tokenAmount: wagerToken.tokenAmount,
+                amountRaw: wagerToken.amountRaw || String(Math.floor(wagerToken.tokenAmount * Math.pow(10, wagerToken.tokenDecimals || 6)))
+            } : null,
+            // Signed wager payment from challenger (x402)
+            challengerSignedPayload: challengerSignedPayload || null,
             room: challenger.room,
             expiresAt
         };
+        
+        if (hasTokenWager) {
+            console.log(`🪙 Challenge includes token wager: ${wagerToken.tokenAmount} ${wagerToken.tokenSymbol}`);
+        }
 
         // Save to database if connected
         if (isDBConnected()) {
@@ -111,14 +129,15 @@ class ChallengeService {
             createdAt: Date.now()
         });
 
-        // Add to target's inbox
+        // Add to target's inbox (include token wager info)
         this.inboxService.addChallengeMessage(
             target.id,
             target.walletAddress,
             challengeId,
             challenger.name,
             normalizedGameType,
-            wagerAmount
+            wagerAmount,
+            hasTokenWager ? challengeData.wagerToken : null  // Pass token wager (x402)
         );
 
         // Record stats
@@ -129,7 +148,9 @@ class ChallengeService {
             this.statsService.recordChallengeReceived(target.walletAddress);
         }
 
-        console.log(`⚔️ Challenge created: ${challenger.name} → ${target.name} (${normalizedGameType}, ${wagerAmount} coins)`);
+        // Log with token wager info if present
+        const tokenWagerText = hasTokenWager ? ` + ${wagerToken.tokenAmount} ${wagerToken.tokenSymbol}` : '';
+        console.log(`⚔️ Challenge created: ${challenger.name} → ${target.name} (${normalizedGameType}, ${wagerAmount} coins${tokenWagerText})`);
 
         return { challenge: this.challenges.get(challengeId) };
     }

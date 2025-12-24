@@ -79,6 +79,7 @@ const VoxelWorld = ({
     const roomDataRef = useRef(null); // Store room data (including beach ball) for multiplayer sync
     const raycasterRef = useRef(null); // For player click detection
     const mouseRef = useRef({ x: 0, y: 0 }); // Mouse position for raycasting
+    const wagerBotMeshRef = useRef(null); // WagerBot NPC mesh (dev mode only)
     const isInMatchRef = useRef(isInMatch); // Track match state for game loop
     const matchBannersRef = useRef(new Map()); // matchId -> { sprite, canvas, ctx }
     const wizardTrailSystemRef = useRef(null); // World-space wizard hat particle trail
@@ -1656,6 +1657,53 @@ const VoxelWorld = ({
             senseiMesh.position.set(0, 0.4, -12);
             senseiMesh.name = 'sensei_penguin';
             scene.add(senseiMesh);
+        }
+
+        // --- WAGERBOT NPC (Town only, Development mode) ---
+        // Static NPC for testing token wagering - challenge this bot to test wagers
+        const isDev = import.meta.env.DEV || window.location.hostname === 'localhost';
+        if (room === 'town' && isDev) {
+            const wagerBotData = {
+                skin: 'purple',
+                hat: 'tophat',
+                eyes: 'normal',
+                mouth: 'beak',
+                bodyItem: 'suit'
+            };
+            const wagerBotMesh = buildPenguinMesh(wagerBotData);
+            // Slightly bigger than normal penguins to stand out
+            wagerBotMesh.scale.set(1.15, 1.15, 1.15);
+            // Position near spawn (visible when entering town)
+            wagerBotMesh.position.set(105, 0, 100);
+            wagerBotMesh.name = 'wagerbot_npc';
+            wagerBotMesh.userData.isWagerBot = true; // Mark for click detection
+            scene.add(wagerBotMesh);
+            wagerBotMeshRef.current = wagerBotMesh; // Store ref for click detection
+            
+            // Add floating name tag above bot
+            const canvas = document.createElement('canvas');
+            canvas.width = 256;
+            canvas.height = 64;
+            const ctx = canvas.getContext('2d');
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.roundRect(0, 0, 256, 64, 8);
+            ctx.fill();
+            ctx.fillStyle = '#00FF88';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('🤖 WagerBot', 128, 40);
+            
+            const texture = new THREE.CanvasTexture(canvas);
+            const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
+            const sprite = new THREE.Sprite(spriteMat);
+            sprite.scale.set(4, 1, 1);
+            sprite.position.set(105, 5, 100); // Above the bot
+            sprite.name = 'wagerbot_label';
+            scene.add(sprite);
+            
+            console.log('🤖 WagerBot NPC spawned at (105, 0, 100) in town - DEV MODE');
+        } else {
+            wagerBotMeshRef.current = null; // Clear ref if not in town/dev
         }
 
         // --- INPUT HANDLING ---
@@ -3979,6 +4027,18 @@ const VoxelWorld = ({
                 }
             }
             
+            // Add WagerBot NPC to clickable meshes (dev mode)
+            if (wagerBotMeshRef.current) {
+                const botMesh = wagerBotMeshRef.current;
+                playerMeshes.push(botMesh);
+                botMesh.traverse(child => {
+                    if (child.isMesh) {
+                        meshToPlayerMap.set(child, 'dev_bot_wager');
+                    }
+                });
+                meshToPlayerMap.set(botMesh, 'dev_bot_wager');
+            }
+            
             // Check for intersections
             const allMeshes = [];
             playerMeshes.forEach(m => m.traverse(child => { if (child.isMesh) allMeshes.push(child); }));
@@ -4003,6 +4063,26 @@ const VoxelWorld = ({
                 }
                 
                 if (clickedPlayerId) {
+                    // Handle WagerBot NPC click (dev mode)
+                    if (clickedPlayerId === 'dev_bot_wager') {
+                        console.log('🖱️ Clicked on WagerBot NPC');
+                        onPlayerClick({
+                            id: 'dev_bot_wager',
+                            name: '🤖 WagerBot',
+                            appearance: {
+                                skin: 'purple',
+                                hat: 'tophat',
+                                eyes: 'normal',
+                                mouth: 'beak',
+                                bodyItem: 'suit'
+                            },
+                            position: { x: 105, y: 0, z: 100 },
+                            isAuthenticated: true, // Bot is "authenticated" so can accept wagers
+                            isBot: true // Mark as bot for UI
+                        });
+                        return;
+                    }
+                    
                     const playerData = playersDataRef.current.get(clickedPlayerId);
                     if (playerData) {
                         console.log('🖱️ Clicked/tapped on player:', playerData.name);

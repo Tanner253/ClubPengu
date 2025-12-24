@@ -1242,13 +1242,13 @@ export function MultiplayerProvider({ children }) {
                 // ALWAYS send a ping when becoming visible to keep connection alive
                 // This is critical for wallet popup interactions
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
-                    try {
-                        wsRef.current.send(JSON.stringify({ type: 'ping' }));
+                        try {
+                            wsRef.current.send(JSON.stringify({ type: 'ping' }));
                         console.log('📱 Sent keepalive ping on visibility change');
-                    } catch (e) {
-                        console.log('📱 Ping failed, reconnecting...');
-                        connect();
-                    }
+                        } catch (e) {
+                            console.log('📱 Ping failed, reconnecting...');
+                            connect();
+                        }
                 } else if (hiddenDuration > 2000) {
                     // Only reconnect if we were actually hidden for a while
                     console.log('📱 WebSocket disconnected while hidden, reconnecting...');

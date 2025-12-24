@@ -24,6 +24,9 @@ import {
 import { handleIglooMessage } from './handlers/iglooHandlers.js';
 import { handleTippingMessage } from './handlers/tippingHandlers.js';
 import rentScheduler from './schedulers/RentScheduler.js';
+import solanaPaymentService from './services/SolanaPaymentService.js';
+import devBotService, { BOT_CONFIG } from './services/DevBotService.js';
+import wagerSettlementService from './services/WagerSettlementService.js';
 
 const PORT = process.env.PORT || 3001;
 const MAX_CONNECTIONS_PER_IP = 2;
@@ -75,6 +78,17 @@ let broadcastToRoom, sendToPlayer;
 
 // ==================== HTTP SERVER ====================
 const server = http.createServer((req, res) => {
+    // CORS headers for admin endpoints
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Admin-Key');
+    
+    if (req.method === 'OPTIONS') {
+        res.writeHead(200);
+        res.end();
+        return;
+    }
+    
     // Health check endpoint
     if (req.url === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -86,6 +100,72 @@ const server = http.createServer((req, res) => {
         }));
         return;
     }
+    
+    // Admin: Custodial wallet status (requires admin key)
+    if (req.url === '/admin/custodial/status') {
+        const adminKey = req.headers['x-admin-key'];
+        if (adminKey !== process.env.CUSTODIAL_ADMIN_KEY) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unauthorized' }));
+            return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(wagerSettlementService.getStatus()));
+        return;
+    }
+    
+    // Admin: Custodial wallet audit log (requires admin key)
+    if (req.url === '/admin/custodial/audit') {
+        const adminKey = req.headers['x-admin-key'];
+        if (adminKey !== process.env.CUSTODIAL_ADMIN_KEY) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unauthorized' }));
+            return;
+        }
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(wagerSettlementService.getAuditLog(500)));
+        return;
+    }
+    
+    // Admin: Unlock custodial wallet (requires admin key, POST)
+    if (req.url === '/admin/custodial/unlock' && req.method === 'POST') {
+        const adminKey = req.headers['x-admin-key'];
+        if (!adminKey) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Unauthorized' }));
+            return;
+        }
+        
+        // Import and call adminUnlock on the custodial wallet service
+        import('./services/CustodialWalletService.js').then(mod => {
+            const result = mod.default.adminUnlock(adminKey);
+            if (result.success) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, message: 'Custodial wallet unlocked' }));
+            } else {
+                res.writeHead(403, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: result.error }));
+            }
+        }).catch(err => {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Internal error' }));
+        });
+        return;
+    }
+    
+    // Get custodial wallet public address (public endpoint - just the address)
+    if (req.url === '/api/custodial-address') {
+        const address = wagerSettlementService.getCustodialWalletAddress();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ 
+            address: address || null,
+            available: !!address 
+        }));
+        return;
+    }
+    
     res.writeHead(404);
     res.end();
 });
@@ -144,6 +224,225 @@ const challengeService = new ChallengeService(inboxService, statsService);
 const matchService = new MatchService(statsService, userService, broadcastToRoom, sendToPlayer);
 const slotService = new SlotService(userService, broadcastToRoom, sendToPlayer);
 const fishingService = new FishingService(userService, broadcastToRoom, sendToPlayer);
+
+// Initialize DevBot for development testing
+if (IS_DEV) {
+    /**
+     * Callback for when bot accepts a challenge
+     * This goes through the proper match creation flow
+     */
+    const onBotAcceptChallenge = async (challengeId, botId) => {
+        try {
+            const challenge = challengeService.getChallenge(challengeId);
+            if (!challenge) {
+                return { success: false, error: 'Challenge not found' };
+            }
+            
+            // Accept the challenge
+            const acceptResult = await challengeService.acceptChallenge(challengeId, botId);
+            if (acceptResult.error) {
+                return { success: false, error: acceptResult.error };
+            }
+            
+            // Get both players
+            const challenger = players.get(challenge.challengerId);
+            const bot = players.get(botId);
+            
+            if (!challenger) {
+                return { success: false, error: 'Challenger disconnected' };
+            }
+            
+            // Create the match (bot doesn't provide deposit tx)
+            const match = await matchService.createMatch(
+                challenge,
+                challenger,
+                bot,
+                {
+                    challengerSignedPayload: challenge.wagerSignedPayload || null,
+                    targetSignedPayload: null // Bot doesn't sign
+                }
+            );
+            
+            if (!match) {
+                return { success: false, error: 'Failed to create match' };
+            }
+            
+            // Build match start message (same format as regular challenge_respond handler)
+            const matchStartMsg = {
+                type: 'match_start',
+                match: {
+                    id: match.id,
+                    gameType: match.gameType,
+                    player1: { id: match.player1.id, name: match.player1.name, appearance: match.player1.appearance },
+                    player2: { id: match.player2.id, name: match.player2.name, appearance: match.player2.appearance },
+                    wagerAmount: challenge.wagerAmount || 0,
+                    wagerToken: challenge.wagerToken || null,
+                    yourRole: 'player1'
+                },
+                initialState: matchService.getMatchState(match.id, challenge.challengerId),
+                coins: challenger.walletAddress ? 
+                    (await userService.getUser(challenger.walletAddress))?.coins || 0 : 0
+            };
+            
+            // Send to challenger
+            sendToPlayer(challenge.challengerId, matchStartMsg);
+            
+            // Bot gets the message via handleMatchStart
+            devBotService.handleMatchStart(match);
+            
+            // Notify room
+            broadcastToRoom(match.room, {
+                type: 'match_started',
+                player1: match.player1.name,
+                player2: match.player2.name,
+                gameType: match.gameType
+            }, challenge.challengerId, botId);
+            
+            console.log(`🎮 Match started: ${match.player1.name} vs ${match.player2.name} (${match.gameType})`);
+            
+            return { success: true, matchId: match.id };
+            
+        } catch (error) {
+            console.error('🤖 DevBot accept challenge error:', error);
+            return { success: false, error: error.message };
+        }
+    };
+    
+    // Callback for bot to notify match state after making a move
+    const onBotMakeMove = async (matchId, moveResult) => {
+        const match = matchService.getMatch(matchId);
+        if (!match) return;
+        
+        // Send state to both players
+        const state1 = matchService.getMatchState(match.id, match.player1.id);
+        const state2 = matchService.getMatchState(match.id, match.player2.id);
+        
+        sendToPlayer(match.player1.id, { type: 'match_state', matchId: match.id, state: state1 });
+        sendToPlayer(match.player2.id, { type: 'match_state', matchId: match.id, state: state2 });
+        
+        // Broadcast to spectators
+        if (match.room) {
+            let spectateState;
+            if (match.gameType === 'tic_tac_toe') {
+                spectateState = {
+                    board: [...match.state.board],
+                    currentTurn: match.state.currentTurn,
+                    phase: match.state.phase,
+                    winner: match.state.winner,
+                    winningLine: match.state.winningLine,
+                    status: match.status
+                };
+            }
+            if (spectateState) {
+                broadcastToRoom(match.room, {
+                    type: 'match_spectate_update',
+                    matchId: match.id,
+                    state: spectateState
+                }, match.player1.id, match.player2.id);
+            }
+        }
+        
+        // Handle match completion ONLY if the bot's move completed the game
+        // (If human completed the game, match_move handler already called handleMatchPayout)
+        if (moveResult.gameComplete && match.status === 'complete') {
+            const winnerId = match.winnerId;
+            const isDraw = moveResult.isDraw || match.state.winner === 'draw';
+            
+            const payoutResult = await handleMatchPayout(match, winnerId, isDraw);
+            
+            // Get updated balances
+            const p1Coins = match.player1.wallet ? 
+                (await userService.getUser(match.player1.wallet))?.coins || 0 : 0;
+            const p2Coins = match.player2.wallet ? 
+                (await userService.getUser(match.player2.wallet))?.coins || 0 : 0;
+            
+            // Build token settlement info for UI
+            const tokenSettlementInfo = payoutResult.tokenSettlement?.success ? {
+                txSignature: payoutResult.tokenSettlement.txSignature,
+                amount: payoutResult.tokenSettlement.amount,
+                tokenSymbol: payoutResult.tokenSettlement.tokenSymbol,
+                tokenAddress: payoutResult.tokenSettlement.tokenAddress,
+                isSimulated: payoutResult.tokenSettlement.isSimulated
+            } : null;
+            
+            if (isDraw) {
+                sendToPlayer(match.player1.id, {
+                    type: 'match_end',
+                    matchId: match.id,
+                    result: {
+                        winner: 'draw',
+                        winnerPlayerId: null,
+                        coinsWon: 0,
+                        yourCoins: p1Coins,
+                        reason: 'draw',
+                        refunded: payoutResult.refunded,
+                        tokenSettlement: tokenSettlementInfo,
+                        wagerToken: match.wagerToken
+                    }
+                });
+                sendToPlayer(match.player2.id, {
+                    type: 'match_end',
+                    matchId: match.id,
+                    result: {
+                        winner: 'draw',
+                        winnerPlayerId: null,
+                        coinsWon: 0,
+                        yourCoins: p2Coins,
+                        reason: 'draw',
+                        refunded: payoutResult.refunded,
+                        tokenSettlement: tokenSettlementInfo,
+                        wagerToken: match.wagerToken
+                    }
+                });
+            } else {
+                sendToPlayer(match.player1.id, {
+                    type: 'match_end',
+                    matchId: match.id,
+                    result: {
+                        winner: winnerId === match.player1.id ? 'player1' : 'player2',
+                        winnerPlayerId: winnerId,
+                        coinsWon: winnerId === match.player1.id ? payoutResult.coinsWon : 0,
+                        yourCoins: p1Coins,
+                        reason: 'win',
+                        tokenSettlement: winnerId === match.player1.id ? tokenSettlementInfo : null,
+                        tokenLost: winnerId !== match.player1.id && match.wagerToken ? match.wagerToken : null,
+                        wagerToken: match.wagerToken
+                    }
+                });
+                sendToPlayer(match.player2.id, {
+                    type: 'match_end',
+                    matchId: match.id,
+                    result: {
+                        winner: winnerId === match.player2.id ? 'player2' : 'player1',
+                        winnerPlayerId: winnerId,
+                        coinsWon: winnerId === match.player2.id ? payoutResult.coinsWon : 0,
+                        yourCoins: p2Coins,
+                        reason: 'win',
+                        tokenSettlement: winnerId === match.player2.id ? tokenSettlementInfo : null,
+                        tokenLost: winnerId !== match.player2.id && match.wagerToken ? match.wagerToken : null,
+                        wagerToken: match.wagerToken
+                    }
+                });
+            }
+            
+            devBotService.handleMatchEnd(match.id);
+            matchService.cleanup(match.id);
+        }
+    };
+    
+    devBotService.init({ challengeService, matchService, sendToPlayer, onBotAcceptChallenge, onBotMakeMove });
+    // Add bot to players map
+    const bot = devBotService.getBotPlayer();
+    if (bot) {
+        players.set(bot.id, bot);
+        // Add bot to town room
+        if (!rooms.has('town')) {
+            rooms.set('town', new Set());
+        }
+        rooms.get('town').add(bot.id);
+        console.log(`🤖 DevBot added to town at position (${bot.position.x}, ${bot.position.z})`);
+    }
+}
 
 // ==================== PERIODIC BROADCASTS ====================
 setInterval(() => {
@@ -398,50 +697,90 @@ async function handleWagerEscrow(player1, player2, wagerAmount, matchId) {
     return { success: true };
 }
 
+// Track matches being processed for payout to prevent double-processing
+const _payoutInProgress = new Set();
+
 async function handleMatchPayout(match, winnerId, isDraw = false) {
-    const totalPot = match.wagerAmount * 2;
+    // Guard against double-processing
+    if (_payoutInProgress.has(match.id)) {
+        console.log(`⚠️ Payout already in progress for match ${match.id}, skipping`);
+        return { skipped: true, reason: 'already_processing' };
+    }
+    _payoutInProgress.add(match.id);
     
-    if (isDraw) {
-        // Refund both players
+    try {
+        const totalPot = match.wagerAmount * 2;
+        let settlementResult = null;
+        
+        // Determine winner/loser info
+        const winnerWallet = winnerId === match.player1.id ? match.player1.wallet : match.player2.wallet;
+        const loserWallet = winnerId === match.player1.id ? match.player2.wallet : match.player1.wallet;
+        const loserId = winnerId === match.player1.id ? match.player2.id : match.player1.id;
+    
+        if (isDraw) {
+            // Refund both players - coins
+            if (match.player1.wallet) {
+                await userService.refundWager(match.player1.wallet, match.wagerAmount, match.id, 'draw');
+            }
+            if (match.player2.wallet) {
+                await userService.refundWager(match.player2.wallet, match.wagerAmount, match.id, 'draw');
+            }
+            
+            // Refund token wagers via custodial wallet
+            if (match.wagerToken?.tokenAddress) {
+                settlementResult = await wagerSettlementService.handleDraw(match);
+                console.log(`🤝 Token wager draw refund:`, settlementResult.success ? 'Success' : settlementResult.error);
+            }
+            
+            return { refunded: match.wagerAmount, tokenSettlement: settlementResult };
+        }
+        
+        // Pay winner - coins
+        if (winnerWallet && match.wagerAmount > 0) {
+            await userService.payoutWager(winnerWallet, loserWallet, totalPot, match.id);
+        }
+        
+        // Pay winner - token wager via custodial wallet
+        if (match.wagerToken?.tokenAddress && winnerWallet) {
+            settlementResult = await wagerSettlementService.settleTokenWager(
+                match,
+                winnerId,
+                winnerWallet,
+                loserId,
+                loserWallet
+            );
+            console.log(`💰 Token wager settlement:`, settlementResult.success ? `Success - ${settlementResult.txSignature}` : settlementResult.error);
+        }
+        
+        // Record stats
+        const gameType = match.gameType === 'tic_tac_toe' ? 'ticTacToe' : 
+                         match.gameType === 'connect4' ? 'connect4' : 'cardJitsu';
+        
         if (match.player1.wallet) {
-            await userService.refundWager(match.player1.wallet, match.wagerAmount, match.id, 'draw');
+            await statsService.recordResult(
+                match.player1.wallet, 
+                gameType, 
+                winnerId === match.player1.id, 
+                match.wagerAmount
+            );
         }
         if (match.player2.wallet) {
-            await userService.refundWager(match.player2.wallet, match.wagerAmount, match.id, 'draw');
+            await statsService.recordResult(
+                match.player2.wallet, 
+                gameType, 
+                winnerId === match.player2.id, 
+                match.wagerAmount
+            );
         }
-        return { refunded: match.wagerAmount };
+        
+        return { 
+            coinsWon: totalPot, 
+            tokenSettlement: settlementResult 
+        };
+    } finally {
+        // Always clear the in-progress flag
+        _payoutInProgress.delete(match.id);
     }
-    
-    // Pay winner
-    const winnerWallet = winnerId === match.player1.id ? match.player1.wallet : match.player2.wallet;
-    const loserWallet = winnerId === match.player1.id ? match.player2.wallet : match.player1.wallet;
-    
-    if (winnerWallet && match.wagerAmount > 0) {
-        await userService.payoutWager(winnerWallet, loserWallet, totalPot, match.id);
-    }
-    
-    // Record stats
-    const gameType = match.gameType === 'tic_tac_toe' ? 'ticTacToe' : 
-                     match.gameType === 'connect4' ? 'connect4' : 'cardJitsu';
-    
-    if (match.player1.wallet) {
-        await statsService.recordResult(
-            match.player1.wallet, 
-            gameType, 
-            winnerId === match.player1.id, 
-            match.wagerAmount
-        );
-    }
-    if (match.player2.wallet) {
-        await statsService.recordResult(
-            match.player2.wallet, 
-            gameType, 
-            winnerId === match.player2.id, 
-            match.wagerAmount
-        );
-    }
-    
-    return { coinsWon: totalPot };
 }
 
 // ==================== CONNECTION HANDLER ====================
@@ -1533,7 +1872,32 @@ async function handleMessage(playerId, message) {
         }
         
         case 'inbox_delete': {
-            inboxService.deleteMessage(playerId, message.messageId);
+            // Get the message before deleting to check if it's a challenge
+            const msgToDelete = inboxService.getMessage(playerId, message.messageId);
+            
+            // If it's a challenge message, decline it first
+            if (msgToDelete?.type === 'challenge' && msgToDelete.data?.challengeId) {
+                const challengeId = msgToDelete.data.challengeId;
+                const denyResult = await challengeService.denyChallenge(challengeId, playerId);
+                
+                if (denyResult.success) {
+                    // Notify the challenger that their challenge was declined
+                    const challenge = challengeService.getChallenge(challengeId);
+                    if (challenge) {
+                        sendToPlayer(challenge.challengerId, {
+                            type: 'challenge_declined',
+                            challengeId,
+                            message: `${player.name} declined your challenge`
+                        });
+                    }
+                    console.log(`🗑️ Challenge ${challengeId} declined via inbox delete by ${player.name}`);
+                }
+                // Message already deleted by denyChallenge via deleteByChallengeId
+            } else {
+                // Not a challenge message, just delete it
+                inboxService.deleteMessage(playerId, message.messageId);
+            }
+            
             sendToPlayer(playerId, {
                 type: 'inbox_update',
                 messages: inboxService.getMessages(playerId),
@@ -1553,6 +1917,76 @@ async function handleMessage(playerId, message) {
             break;
         }
         
+        case 'my_full_stats': {
+            // Authenticated users only
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'my_full_stats_error',
+                    error: 'NOT_AUTHENTICATED'
+                });
+                break;
+            }
+            
+            try {
+                // Get base stats
+                const stats = await statsService.getPublicStats(player.walletAddress, true);
+                
+                // Get match history (last 50 matches)
+                const MatchModel = (await import('./db/models/Match.js')).default;
+                const matchHistory = await MatchModel.findHistoryForPlayer(player.walletAddress, 50);
+                
+                // Get transaction history (last 50 transactions)
+                const TransactionModel = (await import('./db/models/Transaction.js')).default;
+                const transactions = await TransactionModel.getHistoryForWallet(player.walletAddress, 50);
+                
+                // Format match history for client
+                const formattedMatches = matchHistory.map(m => ({
+                    matchId: m.matchId,
+                    gameType: m.gameType,
+                    opponent: m.player1.wallet === player.walletAddress ? m.player2.name : m.player1.name,
+                    opponentWallet: m.player1.wallet === player.walletAddress ? m.player2.wallet : m.player1.wallet,
+                    won: m.winnerWallet === player.walletAddress,
+                    isDraw: m.status === 'draw',
+                    wagerAmount: m.wagerAmount,
+                    wagerToken: m.wagerToken?.tokenAddress ? {
+                        symbol: m.wagerToken.tokenSymbol,
+                        amount: m.wagerToken.tokenAmount,
+                        address: m.wagerToken.tokenAddress
+                    } : null,
+                    settlementTx: m.settlementTx,
+                    endedAt: m.endedAt,
+                    duration: m.duration
+                }));
+                
+                // Format transactions for client
+                const formattedTransactions = transactions.map(t => ({
+                    id: t.transactionId,
+                    type: t.type,
+                    amount: t.amount,
+                    currency: t.currency,
+                    direction: t.toWallet === player.walletAddress ? 'in' : 'out',
+                    otherParty: t.toWallet === player.walletAddress ? t.fromWallet : t.toWallet,
+                    reason: t.reason,
+                    matchId: t.relatedData?.matchId,
+                    timestamp: t.createdAt
+                }));
+                
+                sendToPlayer(playerId, {
+                    type: 'my_full_stats',
+                    stats,
+                    matchHistory: formattedMatches,
+                    transactions: formattedTransactions
+                });
+            } catch (err) {
+                console.error('Error fetching full stats:', err);
+                sendToPlayer(playerId, {
+                    type: 'my_full_stats_error',
+                    error: 'FETCH_FAILED'
+                });
+            }
+            break;
+        }
+        
         // ==================== CHALLENGES ====================
         case 'challenge_send': {
             const targetPlayer = players.get(message.targetPlayerId);
@@ -1565,7 +1999,10 @@ async function handleMessage(playerId, message) {
                 break;
             }
             
-            // Validate wager requirements
+            // Check for SPL token wager (x402 protocol enhancement)
+            const hasTokenWager = message.wagerToken?.tokenAddress && message.wagerToken?.tokenAmount > 0;
+            
+            // Validate wager requirements (coin wager)
             if (message.wagerAmount > 0) {
                 if (!player.isAuthenticated) {
                     sendToPlayer(playerId, {
@@ -1596,6 +2033,112 @@ async function handleMessage(playerId, message) {
                 }
             }
             
+            // Validate SPL token wager requirements (x402)
+            if (hasTokenWager) {
+                if (!player.isAuthenticated || !player.walletAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'challenge_error',
+                        error: 'AUTH_REQUIRED',
+                        message: 'You must be logged in with a wallet to wager tokens'
+                    });
+                    break;
+                }
+                
+                // Skip wallet check for bot targets - bot uses rent wallet
+                if (!targetPlayer.isBot && (!targetPlayer.isAuthenticated || !targetPlayer.walletAddress)) {
+                    sendToPlayer(playerId, {
+                        type: 'challenge_error',
+                        error: 'TARGET_NO_WALLET',
+                        message: 'Target player must have a wallet connected to receive token wagers'
+                    });
+                    break;
+                }
+                
+                // CUSTODIAL APPROACH: Require deposit transaction from challenger
+                if (!message.wagerDepositTx) {
+                    sendToPlayer(playerId, {
+                        type: 'challenge_error',
+                        error: 'DEPOSIT_REQUIRED',
+                        message: 'Token wager requires a deposit to the custodial wallet'
+                    });
+                    break;
+                }
+                
+                // Verify the deposit transaction on-chain
+                const custodialAddress = wagerSettlementService.getCustodialWalletAddress();
+                if (!custodialAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'challenge_error',
+                        error: 'CUSTODIAL_NOT_READY',
+                        message: 'Wager system not available. Please try again later.'
+                    });
+                    break;
+                }
+                
+                console.log(`🔍 Verifying challenger deposit tx: ${message.wagerDepositTx}`);
+                try {
+                    const depositVerified = await solanaPaymentService.verifyTransaction(
+                        message.wagerDepositTx,
+                        player.walletAddress,
+                        custodialAddress, // Use actual custodial wallet address
+                        message.wagerToken.tokenAddress,
+                        message.wagerToken.tokenAmount
+                    );
+                    
+                    if (!depositVerified.success) {
+                        sendToPlayer(playerId, {
+                            type: 'challenge_error',
+                            error: 'DEPOSIT_VERIFICATION_FAILED',
+                            message: 'Could not verify your wager deposit. Please try again.'
+                        });
+                        break;
+                    }
+                    console.log('✅ Challenger deposit verified on-chain');
+                } catch (verifyError) {
+                    console.error('Deposit verification error:', verifyError);
+                    // In dev mode, allow to proceed even if verification fails
+                    if (process.env.NODE_ENV === 'production') {
+                        sendToPlayer(playerId, {
+                            type: 'challenge_error',
+                            error: 'DEPOSIT_VERIFICATION_ERROR',
+                            message: 'Deposit verification failed. Please try again.'
+                        });
+                        break;
+                    }
+                    console.log('⚠️ Dev mode: Proceeding without deposit verification');
+                }
+                
+                // Verify challenger has sufficient token balance on-chain
+                try {
+                    const balance = await solanaPaymentService.getTokenBalance(
+                        player.walletAddress,
+                        message.wagerToken.tokenAddress
+                    );
+                    if (balance < message.wagerToken.tokenAmount) {
+                        sendToPlayer(playerId, {
+                            type: 'challenge_error',
+                            error: 'INSUFFICIENT_TOKEN_BALANCE',
+                            message: `You need ${message.wagerToken.tokenAmount} ${message.wagerToken.tokenSymbol} to wager`
+                        });
+                        break;
+                    }
+                    console.log(`✅ Token balance verified: ${balance} ${message.wagerToken.tokenSymbol}`);
+                } catch (balanceError) {
+                    console.error('Token balance check failed:', balanceError);
+                    // Don't block in development - allow challenges to proceed
+                    if (process.env.NODE_ENV === 'production') {
+                        sendToPlayer(playerId, {
+                            type: 'challenge_error',
+                            error: 'BALANCE_CHECK_FAILED',
+                            message: 'Could not verify token balance. Please try again.'
+                        });
+                        break;
+                    }
+                }
+                
+                console.log('✅ Challenger signed wager payload received');
+            }
+            
             if (matchService.isPlayerInMatch(playerId)) {
                 sendToPlayer(playerId, {
                     type: 'challenge_error',
@@ -1613,10 +2156,12 @@ async function handleMessage(playerId, message) {
                 { 
                     ...targetPlayer, 
                     id: message.targetPlayerId,
-                    walletAddress: targetPlayer.walletAddress 
+                    walletAddress: targetPlayer.walletAddress || (targetPlayer.isBot ? process.env.RENT_WALLET_ADDRESS : null)
                 },
                 message.gameType,
-                message.wagerAmount
+                message.wagerAmount,
+                message.wagerToken || null,  // Pass token wager config
+                message.signedWagerPayload || null  // Challenger's signed payment
             );
             
             if (result.error) {
@@ -1638,9 +2183,11 @@ async function handleMessage(playerId, message) {
                         id: result.challenge.id,
                         challengerId: player.id,
                         challengerName: player.name,
+                        challengerWallet: player.walletAddress, // For token wager signing
                         challengerAppearance: player.appearance,
                         gameType: result.challenge.gameType,
                         wagerAmount: result.challenge.wagerAmount,
+                        wagerToken: result.challenge.wagerToken || null, // Token wager info
                         expiresAt: result.challenge.expiresAt,
                         createdAt: result.challenge.createdAt
                     }
@@ -1651,6 +2198,11 @@ async function handleMessage(playerId, message) {
                     messages: inboxService.getMessages(message.targetPlayerId),
                     unreadCount: inboxService.getUnreadCount(message.targetPlayerId)
                 });
+                
+                // Handle DevBot challenge (auto-accept in dev mode)
+                if (IS_DEV && devBotService.isBot(message.targetPlayerId)) {
+                    devBotService.handleChallenge(result.challenge);
+                }
             }
             break;
         }
@@ -1706,6 +2258,76 @@ async function handleMessage(playerId, message) {
                     }
                 }
                 
+                // Validate SPL token wager - acceptor must also deposit their tokens
+                const hasTokenWager = challenge.wagerToken?.tokenAddress && challenge.wagerToken?.tokenAmount > 0;
+                if (hasTokenWager) {
+                    if (!player.isAuthenticated || !player.walletAddress) {
+                        sendToPlayer(playerId, {
+                            type: 'challenge_error',
+                            error: 'AUTH_REQUIRED',
+                            message: 'You must be logged in with a wallet to accept token wagers'
+                        });
+                        break;
+                    }
+                    
+                    // CUSTODIAL APPROACH: Require deposit transaction from acceptor (unless bot)
+                    if (!player.isBot && !message.wagerDepositTx) {
+                        sendToPlayer(playerId, {
+                            type: 'challenge_error',
+                            error: 'DEPOSIT_REQUIRED',
+                            message: 'You must deposit your wager to accept this challenge'
+                        });
+                        break;
+                    }
+                    
+                    // Verify the acceptor's deposit transaction on-chain (unless bot)
+                    if (!player.isBot && message.wagerDepositTx) {
+                        const custodialAddress = wagerSettlementService.getCustodialWalletAddress();
+                        if (!custodialAddress) {
+                            sendToPlayer(playerId, {
+                                type: 'challenge_error',
+                                error: 'CUSTODIAL_NOT_READY',
+                                message: 'Wager system not available. Please try again later.'
+                            });
+                            break;
+                        }
+                        
+                        console.log(`🔍 Verifying acceptor deposit tx: ${message.wagerDepositTx}`);
+                        try {
+                            const depositVerified = await solanaPaymentService.verifyTransaction(
+                                message.wagerDepositTx,
+                                player.walletAddress,
+                                custodialAddress, // Use actual custodial wallet address
+                                challenge.wagerToken.tokenAddress,
+                                challenge.wagerToken.tokenAmount
+                            );
+                            
+                            if (!depositVerified.success) {
+                                sendToPlayer(playerId, {
+                                    type: 'challenge_error',
+                                    error: 'DEPOSIT_VERIFICATION_FAILED',
+                                    message: 'Could not verify your wager deposit. Please try again.'
+                                });
+                                break;
+                            }
+                            console.log('✅ Acceptor deposit verified on-chain');
+                        } catch (verifyError) {
+                            console.error('Acceptor deposit verification error:', verifyError);
+                            if (process.env.NODE_ENV === 'production') {
+                                sendToPlayer(playerId, {
+                                    type: 'challenge_error',
+                                    error: 'DEPOSIT_VERIFICATION_ERROR',
+                                    message: 'Deposit verification failed. Please try again.'
+                                });
+                                break;
+                            }
+                            console.log('⚠️ Dev mode: Proceeding without acceptor deposit verification');
+                        }
+                    }
+                    
+                    console.log('✅ Both players have deposited wagers - ready to start match');
+                }
+                
                 if (matchService.isPlayerInMatch(playerId) || matchService.isPlayerInMatch(challenge.challengerId)) {
                     sendToPlayer(playerId, {
                         type: 'challenge_error',
@@ -1746,8 +2368,17 @@ async function handleMessage(playerId, message) {
                         }
                     }
                     
-                    // Create match
-                    const match = await matchService.createMatch(challenge, challenger, target);
+                    // Create match with signed wager payloads for settlement
+                    const match = await matchService.createMatch(
+                        challenge, 
+                        challenger, 
+                        target,
+                        {
+                            // Include both players' signed payloads for token wager settlement
+                            challengerSignedPayload: challenge.challengerSignedPayload || null,
+                            targetSignedPayload: message.signedWagerPayload || null
+                        }
+                    );
                     
                     // Get updated coin balances
                     const p1Coins = challenge.challengerWallet ? 
@@ -1786,6 +2417,11 @@ async function handleMessage(playerId, message) {
                     
                     sendToPlayer(challenge.challengerId, matchStartMsg1);
                     sendToPlayer(challenge.targetId, matchStartMsg2);
+                    
+                    // Handle DevBot match start
+                    if (IS_DEV && (devBotService.isBot(challenge.challengerId) || devBotService.isBot(challenge.targetId))) {
+                        devBotService.handleMatchStart(match);
+                    }
                     
                     // Notify spectators
                     broadcastToRoom(match.room, {
@@ -1844,6 +2480,15 @@ async function handleMessage(playerId, message) {
             
             sendToPlayer(match.player1.id, { type: 'match_state', matchId: match.id, state: state1 });
             sendToPlayer(match.player2.id, { type: 'match_state', matchId: match.id, state: state2 });
+            
+            // Handle DevBot state update (bot doesn't have real WebSocket)
+            if (IS_DEV) {
+                if (devBotService.isBot(match.player1.id)) {
+                    devBotService.handleMatchState(match.id, state1);
+                } else if (devBotService.isBot(match.player2.id)) {
+                    devBotService.handleMatchState(match.id, state2);
+                }
+            }
             
             // Broadcast to spectators
             if (match.room) {
@@ -1926,6 +2571,15 @@ async function handleMessage(playerId, message) {
                 const p2Coins = match.player2.wallet ? 
                     (await userService.getUser(match.player2.wallet))?.coins || 0 : 0;
                 
+                // Build token settlement info for UI
+                const tokenSettlementInfo = payoutResult.tokenSettlement?.success ? {
+                    txSignature: payoutResult.tokenSettlement.txSignature,
+                    amount: payoutResult.tokenSettlement.amount,
+                    tokenSymbol: payoutResult.tokenSettlement.tokenSymbol,
+                    tokenAddress: payoutResult.tokenSettlement.tokenAddress,
+                    isSimulated: payoutResult.tokenSettlement.isSimulated
+                } : null;
+                
                 if (isDraw) {
                     sendToPlayer(match.player1.id, {
                         type: 'match_end',
@@ -1936,7 +2590,9 @@ async function handleMessage(playerId, message) {
                             coinsWon: 0,
                             yourCoins: p1Coins,
                             reason: 'draw',
-                            refunded: payoutResult.refunded
+                            refunded: payoutResult.refunded,
+                            tokenSettlement: tokenSettlementInfo,
+                            wagerToken: match.wagerToken
                         }
                     });
                     sendToPlayer(match.player2.id, {
@@ -1948,7 +2604,9 @@ async function handleMessage(playerId, message) {
                             coinsWon: 0,
                             yourCoins: p2Coins,
                             reason: 'draw',
-                            refunded: payoutResult.refunded
+                            refunded: payoutResult.refunded,
+                            tokenSettlement: tokenSettlementInfo,
+                            wagerToken: match.wagerToken
                         }
                     });
                 } else {
@@ -1960,7 +2618,10 @@ async function handleMessage(playerId, message) {
                             winnerPlayerId: winnerId,
                             coinsWon: winnerId === match.player1.id ? payoutResult.coinsWon : 0,
                             yourCoins: p1Coins,
-                            reason: 'win'
+                            reason: 'win',
+                            tokenSettlement: winnerId === match.player1.id ? tokenSettlementInfo : null,
+                            tokenLost: winnerId !== match.player1.id && match.wagerToken ? match.wagerToken : null,
+                            wagerToken: match.wagerToken
                         }
                     });
                     sendToPlayer(match.player2.id, {
@@ -1971,7 +2632,10 @@ async function handleMessage(playerId, message) {
                             winnerPlayerId: winnerId,
                             coinsWon: winnerId === match.player2.id ? payoutResult.coinsWon : 0,
                             yourCoins: p2Coins,
-                            reason: 'win'
+                            reason: 'win',
+                            tokenSettlement: winnerId === match.player2.id ? tokenSettlementInfo : null,
+                            tokenLost: winnerId !== match.player2.id && match.wagerToken ? match.wagerToken : null,
+                            wagerToken: match.wagerToken
                         }
                     });
                 }
@@ -2019,6 +2683,11 @@ async function handleMessage(playerId, message) {
                 sendToPlayer(match.player2.id, { type: 'stats_update', stats: stats2 });
                 
                 await matchService.endMatch(match.id);
+                
+                // Handle DevBot match end
+                if (IS_DEV && (devBotService.isBot(match.player1.id) || devBotService.isBot(match.player2.id))) {
+                    devBotService.handleMatchEnd(match.id);
+                }
             }
             break;
         }
@@ -2073,6 +2742,11 @@ async function handleMessage(playerId, message) {
             }, match.player1.id, match.player2.id);
             
             await matchService.voidMatch(match.id, 'forfeit');
+            
+            // Handle DevBot forfeit end
+            if (IS_DEV && (devBotService.isBot(match.player1.id) || devBotService.isBot(match.player2.id))) {
+                devBotService.handleMatchEnd(match.id);
+            }
             
             console.log(`🏳️ ${players.get(forfeiterId)?.name} forfeited to ${players.get(winnerId)?.name}`);
             break;
@@ -2599,7 +3273,11 @@ async function handleMessage(playerId, message) {
 // ==================== PERIODIC CLEANUP ====================
 setInterval(async () => {
     for (const [playerId, player] of players) {
-        if (player.ws.readyState !== 1) {
+        // Skip bots (they don't have WebSockets)
+        if (player.isBot) continue;
+        
+        // Skip players without WebSocket (safety check)
+        if (!player.ws || player.ws.readyState !== 1) {
             console.log(`Cleaning up stale player: ${playerId}`);
             
             // Handle slot disconnect
@@ -2659,6 +3337,9 @@ setInterval(() => {
     const now = Date.now();
     
     for (const [playerId, player] of players) {
+        // Skip bots - they don't have WebSocket connections
+        if (player.isBot) continue;
+        
         // Check WebSocket pong first
         if (player.isAlive === false) {
             // WebSocket pong wasn't received, but check message fallback for mobile
@@ -2717,6 +3398,24 @@ async function start() {
         console.log('⚠️ Running without database - guest mode only');
     }
     
+    // Initialize wager settlement service (includes custodial wallet)
+    const settlementInit = await wagerSettlementService.initialize();
+    if (settlementInit.success) {
+        console.log('💰 Wager settlement service ready');
+        console.log(`   Custodial wallet: ${wagerSettlementService.getCustodialWalletAddress()?.slice(0, 4)}...`);
+        
+        // Recover orphaned matches from previous server crash (if any)
+        if (isDBConnected()) {
+            const recoveryResult = await wagerSettlementService.recoverOrphanedMatches();
+            if (recoveryResult.total > 0) {
+                console.log(`🔄 Orphan recovery: ${recoveryResult.recovered}/${recoveryResult.total} matches recovered`);
+            }
+        }
+    } else {
+        console.warn('⚠️ Wager settlement service not available:', settlementInit.error);
+        console.warn('   Token wagers will require manual settlement');
+    }
+    
     // Start HTTP server
     server.listen(PORT, () => {
         console.log(`🌐 Server listening on port ${PORT}${IS_DEV ? ' (DEV MODE)' : ''}`);
@@ -2729,6 +3428,7 @@ process.on('SIGTERM', async () => {
     console.log('Shutting down...');
     rentScheduler.stop();
     await statsService.shutdown();
+    // Custodial wallet shutdown is handled by CustodialWalletService's own process listeners
     await disconnectDB();
     process.exit(0);
 });
@@ -2737,6 +3437,7 @@ process.on('SIGINT', async () => {
     console.log('Shutting down...');
     rentScheduler.stop();
     await statsService.shutdown();
+    // Custodial wallet shutdown is handled by CustodialWalletService's own process listeners
     await disconnectDB();
     process.exit(0);
 });

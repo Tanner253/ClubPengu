@@ -322,7 +322,17 @@ class SolanaPaymentService {
                 
                 const info = parsed.info;
                 const transferAmount = info.tokenAmount?.amount || info.amount;
-                const transferMint = info.mint || info.tokenAmount?.mint;
+                
+                // Get mint from instruction data (transferChecked) or from postBalances (regular transfer)
+                let transferMint = info.mint || info.tokenAmount?.mint;
+                if (!transferMint && info.destination) {
+                    // For regular 'transfer', mint is in postTokenBalances
+                    const destBalance = postBalances.find(b => {
+                        const accountKey = tx.transaction.message.accountKeys[b.accountIndex];
+                        return accountKey?.pubkey?.toBase58() === info.destination;
+                    });
+                    transferMint = destBalance?.mint;
+                }
                 
                 console.log(`   Found ${parsed.type}: ${transferAmount} tokens`);
                 console.log(`   Authority: ${info.authority?.slice(0, 8) || 'N/A'}`);

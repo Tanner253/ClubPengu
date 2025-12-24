@@ -88,6 +88,15 @@ class X402Service {
             const validUntil = Date.now() + (validityMinutes * 60 * 1000);
             const nonce = this._generateNonce();
             
+            // Parse memo for display (format: "type:reference:symbol")
+            const memoParts = memo.split(':');
+            const wagerType = memoParts[0] || 'payment';
+            const tokenSymbol = memoParts[2] || 'tokens';
+            
+            // Format amount for display (assume 6 decimals if not specified)
+            const decimals = 6;
+            const displayAmount = (Number(amount) / Math.pow(10, decimals)).toFixed(2);
+            
             // Create the payment intent message
             const paymentIntent = {
                 version: '1.0',
@@ -101,9 +110,29 @@ class X402Service {
                 memo
             };
             
-            // Serialize and sign
-            const message = JSON.stringify(paymentIntent);
-            const signResult = await this.wallet.signMessage(message);
+            // Create a human-readable message for signing
+            // This is what the user sees in their wallet
+            const humanReadableMessage = [
+                '🎮 Club Penguin Web3 - Wager Authorization',
+                '─'.repeat(40),
+                '',
+                `Action: ${wagerType === 'wager' ? 'Game Wager' : 'Payment'}`,
+                `Amount: ${displayAmount} ${tokenSymbol}`,
+                `Recipient: ${recipient.slice(0, 8)}...${recipient.slice(-4)}`,
+                '',
+                'By signing, you authorize this payment to be',
+                'transferred if you lose the match.',
+                '',
+                `Valid for: ${validityMinutes} minutes`,
+                `Nonce: ${nonce.slice(0, 8)}...`,
+                '',
+                '─'.repeat(40),
+                'This signature does NOT move funds immediately.',
+                'Funds transfer only if you lose the game.',
+            ].join('\n');
+            
+            // Sign the human-readable message (includes all data for verification)
+            const signResult = await this.wallet.signMessage(humanReadableMessage);
             
             if (!signResult.success) {
                 return {
@@ -178,22 +207,36 @@ class X402Service {
     
     /**
      * Create wager payment authorization (for P2P matches)
+     * Supports any SPL token for wagering
      * 
      * @param {Object} wagerDetails - Wager information
-     * @param {number} wagerDetails.amount - Wager amount
-     * @param {string} wagerDetails.matchId - Match identifier
+     * @param {string} wagerDetails.amount - Wager amount (raw, full precision)
+     * @param {string} wagerDetails.challengeId - Challenge identifier (for pre-match)
+     * @param {string} wagerDetails.matchId - Match identifier (optional, set after accept)
      * @param {string} wagerDetails.opponentWallet - Opponent's wallet
+     * @param {string} wagerDetails.tokenAddress - SPL token mint address (defaults to CPw3)
+     * @param {string} wagerDetails.tokenSymbol - Token symbol for display
      * @returns {Promise<Object>}
      */
     async createWagerPayment(wagerDetails) {
-        const { amount, matchId, opponentWallet } = wagerDetails;
+        const { 
+            amount, 
+            challengeId,
+            matchId, 
+            opponentWallet,
+            tokenAddress = CPW3_TOKEN_ADDRESS,
+            tokenSymbol = '$CPw3'
+        } = wagerDetails;
+        
+        // Use challengeId for pre-match, matchId once match starts
+        const reference = matchId || challengeId || `wager_${Date.now()}`;
         
         return this.createPaymentPayload({
             amount,
-            token: CPW3_TOKEN_ADDRESS,
+            token: tokenAddress,
             recipient: opponentWallet, // Winner gets paid directly
-            memo: `wager:${matchId}`,
-            validityMinutes: 30 // Wagers valid for 30 minutes
+            memo: `wager:${reference}:${tokenSymbol}`,
+            validityMinutes: 30 // Wagers valid for 30 minutes (covers match duration)
         });
     }
     

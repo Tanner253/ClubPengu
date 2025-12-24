@@ -367,10 +367,160 @@ export async function getTokenBalance(walletAddress, tokenMintAddress) {
     }
 }
 
+/**
+ * Create a pre-signed wager transaction (for P2P matches)
+ * 
+ * This builds and signs a REAL Solana transaction but does NOT broadcast it.
+ * The signed transaction is returned for the server to hold.
+ * After the game, the server broadcasts ONLY the loser's transaction.
+ * 
+ * KEY SECURITY: Transactions include a recent blockhash and expire in ~2 minutes.
+ * This is why we get the signature RIGHT BEFORE the game starts, not when challenging.
+ * 
+ * @param {Object} options
+ * @param {string} options.recipientAddress - Winner's wallet (opponent)
+ * @param {string} options.tokenMintAddress - SPL token mint address  
+ * @param {number} options.amount - Amount in human readable units
+ * @param {string} options.matchId - Match identifier for memo
+ * @returns {Promise<{success: boolean, signedTransaction?: string, error?: string}>}
+ */
+export async function createSignedWagerTransaction(options) {
+    const {
+        recipientAddress,
+        tokenMintAddress,
+        amount,
+        matchId
+    } = options;
+    
+    const wallet = PhantomWallet.getInstance();
+    
+    if (!wallet.isConnected()) {
+        return {
+            success: false,
+            error: 'WALLET_NOT_CONNECTED',
+            message: 'Please connect your wallet first'
+        };
+    }
+    
+    try {
+        const senderAddress = wallet.getPublicKey();
+        
+        console.log('🎲 Building wager transaction...');
+        console.log(`   Match: ${matchId}`);
+        console.log(`   From: ${senderAddress.slice(0, 8)}...`);
+        console.log(`   To: ${recipientAddress.slice(0, 8)}...`);
+        console.log(`   Amount: ${amount}`);
+        
+        const connection = new Connection(SOLANA_RPC_URL, { commitment: 'confirmed' });
+        
+        const senderPubkey = new PublicKey(senderAddress);
+        const recipientPubkey = new PublicKey(recipientAddress);
+        const mintPubkey = new PublicKey(tokenMintAddress);
+        
+        // Get token info
+        let tokenProgramId = TOKEN_PROGRAM_ID;
+        let decimals = 6;
+        
+        try {
+            const mintInfo = await getMint(connection, mintPubkey, 'confirmed', TOKEN_PROGRAM_ID);
+            decimals = mintInfo.decimals;
+        } catch {
+            try {
+                const mintInfo = await getMint(connection, mintPubkey, 'confirmed', TOKEN_2022_PROGRAM_ID);
+                decimals = mintInfo.decimals;
+                tokenProgramId = TOKEN_2022_PROGRAM_ID;
+            } catch {
+                console.warn('Could not fetch mint info, using defaults');
+            }
+        }
+        
+        // Get token accounts
+        const senderTokenAccount = await getAssociatedTokenAddress(
+            mintPubkey, senderPubkey, false, tokenProgramId, ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+        const recipientTokenAccount = await getAssociatedTokenAddress(
+            mintPubkey, recipientPubkey, false, tokenProgramId, ASSOCIATED_TOKEN_PROGRAM_ID
+        );
+        
+        // Calculate transfer amount
+        const transferAmount = BigInt(Math.floor(amount * Math.pow(10, decimals)));
+        
+        // Get fresh blockhash (transaction will expire in ~2 minutes)
+        const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+        
+        // Build transaction
+        const transaction = new Transaction({
+            recentBlockhash: blockhash,
+            feePayer: senderPubkey
+        });
+        
+        // Create recipient ATA if needed (idempotent)
+        transaction.add(
+            createAssociatedTokenAccountIdempotentInstruction(
+                senderPubkey, recipientTokenAccount, recipientPubkey, mintPubkey, 
+                tokenProgramId, ASSOCIATED_TOKEN_PROGRAM_ID
+            )
+        );
+        
+        // Add transfer
+        transaction.add(
+            createTransferInstruction(
+                senderTokenAccount, recipientTokenAccount, senderPubkey,
+                transferAmount, [], tokenProgramId
+            )
+        );
+        
+        console.log('✍️ Requesting wager signature...');
+        console.log('⚠️ This authorizes payment IF you lose the match');
+        
+        // Sign (but don't broadcast)
+        const signResult = await wallet.signTransaction(transaction);
+        
+        if (!signResult.success) {
+            return {
+                success: false,
+                error: signResult.error,
+                message: signResult.message || 'Failed to sign wager transaction'
+            };
+        }
+        
+        // Serialize the signed transaction for server storage
+        const serializedTx = signResult.signedTransaction.serialize().toString('base64');
+        
+        console.log('✅ Wager transaction signed (not broadcast)');
+        console.log(`   Expires at block: ${lastValidBlockHeight}`);
+        
+        return {
+            success: true,
+            signedTransaction: serializedTx,
+            blockhash,
+            lastValidBlockHeight,
+            expiresInSeconds: 120 // ~2 minutes
+        };
+        
+    } catch (error) {
+        console.error('❌ Wager transaction creation failed:', error);
+        
+        let userMessage = error.message || 'Failed to create wager';
+        if (error.message?.includes('User rejected')) {
+            userMessage = 'Transaction cancelled by user';
+        } else if (error.message?.includes('insufficient')) {
+            userMessage = 'Insufficient balance for wager';
+        }
+        
+        return {
+            success: false,
+            error: 'WAGER_FAILED',
+            message: userMessage
+        };
+    }
+}
+
 export default {
     sendSPLToken,
     payIglooEntryFee,
     payIglooRent,
-    getTokenBalance
+    getTokenBalance,
+    createSignedWagerTransaction
 };
 

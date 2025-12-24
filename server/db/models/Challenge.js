@@ -46,6 +46,22 @@ const challengeSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    
+    // ========== SPL TOKEN WAGER (optional, enhancement to coin wager) ==========
+    wagerToken: {
+        tokenAddress: { type: String, default: null },      // SPL token mint (null = no token wager)
+        tokenSymbol: { type: String, default: null },       // Display symbol (e.g., "$CPw3")
+        tokenDecimals: { type: Number, default: 6 },        // For amount conversion
+        tokenAmount: { type: Number, default: 0 },          // Human-readable amount
+        amountRaw: { type: String, default: null }          // BigInt as string (full precision)
+    },
+    
+    // ========== x402 SIGNED PAYLOADS ==========
+    // Pre-signed payment authorization from challenger -> target (executed if challenger loses)
+    challengerSignedPayload: { type: String, default: null },
+    // Pre-signed payment authorization from target -> challenger (filled on accept, executed if target loses)
+    targetSignedPayload: { type: String, default: null },
+    
     room: String,
     
     // ========== STATUS ==========

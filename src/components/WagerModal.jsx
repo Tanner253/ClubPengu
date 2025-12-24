@@ -1,12 +1,15 @@
 /**
  * WagerModal - Modal for setting wager amount when challenging
  * Mobile-friendly with proper touch handling and landscape support
+ * 
+ * Enhanced with SPL token wagering support (x402 protocol)
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useChallenge } from '../challenge';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import { useDeviceDetection, useEscapeKey } from '../hooks';
+import WagerTokenSelector from './WagerTokenSelector';
 
 const WagerModal = () => {
     const {
@@ -18,12 +21,21 @@ const WagerModal = () => {
     } = useChallenge();
     
     // Get user data from multiplayer context for server-authoritative coin balance
-    const { userData, isAuthenticated } = useMultiplayer();
+    const { userData, isAuthenticated, walletAddress } = useMultiplayer();
     
     const [wagerAmount, setWagerAmount] = useState('');
     const [error, setError] = useState('');
     const inputRef = useRef(null);
     const modalRef = useRef(null);
+    
+    // SPL Token Wager State (optional enhancement to coin wager)
+    const [tokenWager, setTokenWager] = useState({
+        tokenAddress: null,
+        tokenSymbol: null,
+        tokenDecimals: 6,
+        tokenAmount: 0,
+        amountRaw: null
+    });
     
     // Use shared device detection hook
     const { isMobile, isLandscape } = useDeviceDetection();
@@ -41,12 +53,25 @@ const WagerModal = () => {
         if (showWagerModal) {
             setWagerAmount('');
             setError('');
+            setTokenWager({
+                tokenAddress: null,
+                tokenSymbol: null,
+                tokenDecimals: 6,
+                tokenAmount: 0,
+                amountRaw: null
+            });
             // Only auto-focus on desktop
             if (!isMobile && inputRef.current) {
                 inputRef.current.focus();
             }
         }
     }, [showWagerModal, isMobile]);
+    
+    // Handle token wager change
+    const handleTokenWagerChange = useCallback((tokenConfig) => {
+        setTokenWager(tokenConfig);
+        setError(''); // Clear any previous errors
+    }, []);
     
     // Handle escape key using shared hook
     useEscapeKey(closeWagerModal, showWagerModal);
@@ -82,15 +107,17 @@ const WagerModal = () => {
         e.stopPropagation();
         
         const amount = parseInt(wagerAmount, 10) || 0;
+        const hasTokenWager = tokenWager.tokenAddress && tokenWager.tokenAmount > 0;
         
         // Allow free play for monopoly in dev mode
-        if (allowFreePlay && amount === 0) {
-            sendChallenge(selectedPlayer.id, wagerGameType, 0);
+        if (allowFreePlay && amount === 0 && !hasTokenWager) {
+            sendChallenge(selectedPlayer.id, wagerGameType, 0, null);
             return;
         }
         
-        if (!amount || amount <= 0) {
-            setError('Enter a valid wager amount');
+        // Must have either coin wager or token wager (or both)
+        if (!amount && !hasTokenWager) {
+            setError('Enter a coin amount or add a token wager');
             return;
         }
         
@@ -99,7 +126,8 @@ const WagerModal = () => {
             return;
         }
         
-        sendChallenge(selectedPlayer.id, wagerGameType, amount);
+        // Send challenge with optional token wager
+        sendChallenge(selectedPlayer.id, wagerGameType, amount, hasTokenWager ? tokenWager : null);
     };
     
     const quickAmounts = [10, 50, 100, 250];
@@ -211,13 +239,24 @@ const WagerModal = () => {
                                     {allowFreePlay && (
                                         <button
                                             type="button"
-                                            onClick={() => sendChallenge(selectedPlayer.id, wagerGameType, 0)}
+                                            onClick={() => sendChallenge(selectedPlayer.id, wagerGameType, 0, null)}
                                             className="flex-1 py-1.5 rounded text-[11px] font-medium bg-purple-500/20 text-purple-400 active:bg-purple-500/30"
                                         >
                                             FREE
                                         </button>
                                     )}
                                 </div>
+                                
+                                {/* SPL Token Wager (x402) - Optional enhancement */}
+                                {isAuthenticated && walletAddress && (
+                                    <div className="mb-2">
+                                        <WagerTokenSelector
+                                            selectedToken={tokenWager}
+                                            onTokenSelect={handleTokenWagerChange}
+                                            walletAddress={walletAddress}
+                                        />
+                                    </div>
+                                )}
                                 
                                 {/* Action buttons */}
                                 <div className="flex gap-2">
@@ -349,11 +388,22 @@ const WagerModal = () => {
                                 ALL IN ({playerCoins} coins)
                             </button>
                             
+                            {/* SPL Token Wager (x402) - Optional enhancement */}
+                            {isAuthenticated && walletAddress && (
+                                <div className="mb-3">
+                                    <WagerTokenSelector
+                                        selectedToken={tokenWager}
+                                        onTokenSelect={handleTokenWagerChange}
+                                        walletAddress={walletAddress}
+                                    />
+                                </div>
+                            )}
+                            
                             {/* Free Play button - DEV MODE MONOPOLY ONLY */}
                             {allowFreePlay && (
                                 <button
                                     type="button"
-                                    onClick={() => sendChallenge(selectedPlayer.id, wagerGameType, 0)}
+                                    onClick={() => sendChallenge(selectedPlayer.id, wagerGameType, 0, null)}
                                     className="w-full py-2 rounded-lg text-xs font-medium bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 active:bg-purple-500/40 transition-colors mb-3 active:scale-[0.98] border border-purple-500/30"
                                 >
                                     🎮 FREE PLAY (Dev Mode)

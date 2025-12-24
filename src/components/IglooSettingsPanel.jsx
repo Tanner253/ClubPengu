@@ -175,25 +175,25 @@ const IglooSettingsPanel = ({
                 console.log('🏠 [SettingsPanel] Loading iglooData:', iglooData);
                 console.log('🏠 [SettingsPanel] Banner from server:', iglooData.banner);
                 
-                setSettings({
+            setSettings({
                     iglooId: iglooData.iglooId, // Track which igloo we loaded
-                    accessType: iglooData.accessType || 'private',
-                    tokenGate: {
-                        enabled: iglooData.tokenGate?.enabled || false,
-                        tokenAddress: iglooData.tokenGate?.tokenAddress || '',
-                        tokenSymbol: iglooData.tokenGate?.tokenSymbol || '',
-                        minimumBalance: iglooData.tokenGate?.minimumBalance || 1
-                    },
-                    entryFee: {
-                        enabled: iglooData.entryFee?.enabled || false,
-                        amount: iglooData.entryFee?.amount || 0,
-                        tokenAddress: iglooData.entryFee?.tokenAddress || '',
-                        tokenSymbol: iglooData.entryFee?.tokenSymbol || ''
-                    },
-                    banner: {
-                        title: iglooData.banner?.title || '',
-                        ticker: iglooData.banner?.ticker || '',
-                        shill: iglooData.banner?.shill || '',
+                accessType: iglooData.accessType || 'private',
+                tokenGate: {
+                    enabled: iglooData.tokenGate?.enabled || false,
+                    tokenAddress: iglooData.tokenGate?.tokenAddress || '',
+                    tokenSymbol: iglooData.tokenGate?.tokenSymbol || '',
+                    minimumBalance: iglooData.tokenGate?.minimumBalance || 1
+                },
+                entryFee: {
+                    enabled: iglooData.entryFee?.enabled || false,
+                    amount: iglooData.entryFee?.amount || 0,
+                    tokenAddress: iglooData.entryFee?.tokenAddress || '',
+                    tokenSymbol: iglooData.entryFee?.tokenSymbol || ''
+                },
+                banner: {
+                    title: iglooData.banner?.title || '',
+                    ticker: iglooData.banner?.ticker || '',
+                    shill: iglooData.banner?.shill || '',
                         styleIndex: iglooData.banner?.styleIndex ?? 0,
                         // Use explicit checks for boolean/array fields
                         useCustomColors: iglooData.banner?.useCustomColors === true,
@@ -204,8 +204,8 @@ const IglooSettingsPanel = ({
                         accentColor: iglooData.banner?.accentColor || '#00FFFF',
                         font: iglooData.banner?.font || 'Inter, system-ui, sans-serif',
                         textAlign: iglooData.banner?.textAlign || 'center'
-                    }
-                });
+                }
+            });
                 setHasLoadedInitial(true);
             }
         }
@@ -277,7 +277,7 @@ const IglooSettingsPanel = ({
             
             if (!paymentResult.success) {
                 throw new Error(paymentResult.message || 'Payment failed');
-            }
+        }
             
             console.log('✅ Rent payment transaction sent:', paymentResult.signature);
             
@@ -529,37 +529,37 @@ const IglooSettingsPanel = ({
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="col-span-2">
                                     <label className="block text-sm font-medium text-slate-300 mb-1">
-                                        Banner Title
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={settings.banner.title ?? ''}
-                                        onChange={(e) => setSettings({
-                                            ...settings, 
-                                            banner: {...settings.banner, title: e.target.value}
-                                        })}
-                                        placeholder="My Cool Igloo"
+                                    Banner Title
+                                </label>
+                                <input
+                                    type="text"
+                                    value={settings.banner.title ?? ''}
+                                    onChange={(e) => setSettings({
+                                        ...settings, 
+                                        banner: {...settings.banner, title: e.target.value}
+                                    })}
+                                    placeholder="My Cool Igloo"
                                         maxLength={20}
                                         className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                                    />
+                                />
                                     <p className="text-xs text-slate-500 mt-1">{settings.banner.title?.length || 0}/20</p>
-                                </div>
-                                
-                                <div>
+                            </div>
+                            
+                            <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-1">
-                                        Ticker Symbol
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={settings.banner.ticker ?? ''}
-                                        onChange={(e) => setSettings({
-                                            ...settings, 
-                                            banner: {...settings.banner, ticker: e.target.value}
-                                        })}
-                                        placeholder="$TOKEN"
-                                        maxLength={10}
+                                    Ticker Symbol
+                                </label>
+                                <input
+                                    type="text"
+                                    value={settings.banner.ticker ?? ''}
+                                    onChange={(e) => setSettings({
+                                        ...settings, 
+                                        banner: {...settings.banner, ticker: e.target.value}
+                                    })}
+                                    placeholder="$TOKEN"
+                                    maxLength={10}
                                         className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-purple-500"
-                                    />
+                                />
                                     <p className="text-xs text-slate-500 mt-1">{settings.banner.ticker?.length || 0}/10</p>
                                 </div>
                                 
@@ -660,25 +660,25 @@ const IglooSettingsPanel = ({
                                 <div>
                                     <label className="block text-sm font-medium text-slate-300 mb-2">
                                         Preset Styles
-                                    </label>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {IGLOO_BANNER_STYLES.slice(0, 8).map((style, idx) => (
-                                            <button
-                                                key={idx}
-                                                onClick={() => setSettings({
-                                                    ...settings,
-                                                    banner: {...settings.banner, styleIndex: idx}
-                                                })}
+                                </label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {IGLOO_BANNER_STYLES.slice(0, 8).map((style, idx) => (
+                                        <button
+                                            key={idx}
+                                            onClick={() => setSettings({
+                                                ...settings,
+                                                banner: {...settings.banner, styleIndex: idx}
+                                            })}
                                                 className={`h-10 rounded-lg border-2 transition-all ${
                                                     settings.banner.styleIndex === idx && !settings.banner.useCustomColors
                                                         ? 'border-white scale-105 ring-2 ring-purple-400'
-                                                        : 'border-transparent hover:border-white/50'
-                                                }`}
-                                                style={{
-                                                    background: `linear-gradient(180deg, ${style.bgGradient[0]}, ${style.bgGradient[2]})`
-                                                }}
-                                            />
-                                        ))}
+                                                    : 'border-transparent hover:border-white/50'
+                                            }`}
+                                            style={{
+                                                background: `linear-gradient(180deg, ${style.bgGradient[0]}, ${style.bgGradient[2]})`
+                                            }}
+                                        />
+                                    ))}
                                     </div>
                                 </div>
                             )}

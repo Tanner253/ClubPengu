@@ -47,7 +47,6 @@ function getEffectiveFont(iglooData) {
     const banner = iglooData?.banner;
     // Font is independent of useCustomColors - always use if set
     if (banner?.font) {
-        console.log('🎨 [Banner] Using custom font:', banner.font);
         return banner.font;
     }
     return '"Comic Sans MS", cursive, sans-serif';
@@ -410,8 +409,8 @@ function drawBannerContent(ctx, style, content, w, h, iglooData = null) {
     if (hasShill && wrappedShillLines.length > 0) {
         ctx.font = `${actualShillSize}px ${fontFamily}`;
         ctx.fillStyle = effectiveStyle.textColor;
-        ctx.globalAlpha = 0.9;
-        
+    ctx.globalAlpha = 0.9;
+    
         for (let i = 0; i < wrappedShillLines.length; i++) {
             const line = wrappedShillLines[i];
             currentY += actualShillSize / 2;
@@ -558,17 +557,6 @@ export function renderIglooBanner(ctx, count, iglooIndex = 0, iglooData = null) 
     const canvas = ctx.canvas;
     const w = canvas.width;
     const h = canvas.height;
-    
-    // Debug: log banner data being rendered
-    if (iglooData?.banner) {
-        console.log('🎨 [Banner] Rendering for igloo:', iglooData.iglooId, {
-            styleIndex: iglooData.banner.styleIndex,
-            font: iglooData.banner.font,
-            useCustomColors: iglooData.banner.useCustomColors,
-            customGradient: iglooData.banner.customGradient,
-            title: iglooData.banner.title
-        });
-    }
     
     // Use style from igloo data if available, otherwise use index
     const styleIndex = iglooData?.banner?.styleIndex ?? iglooIndex;

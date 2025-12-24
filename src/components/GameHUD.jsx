@@ -3,6 +3,7 @@ import GameManager from '../engine/GameManager';
 import InboxButton from './InboxButton';
 import TokenomicsModal from './TokenomicsModal';
 import WalletButton from './WalletButton';
+import StatsModal from './StatsModal';
 
 /**
  * GameHUD - Heads Up Display showing coins, stats, and quick actions
@@ -10,7 +11,7 @@ import WalletButton from './WalletButton';
  */
 const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenSettings, isMobile = false, playerCount = 0, totalPlayerCount = 0, onRequestAuth, currentRoom, isInsideOwnedIgloo = false, onOpenIglooSettings }) => {
     const [coins, setCoins] = useState(0);
-    const [showStats, setShowStats] = useState(false);
+    const [showStatsModal, setShowStatsModal] = useState(false);  // Full stats modal
     const [recentReward, setRecentReward] = useState(null);
     const [showTokenomics, setShowTokenomics] = useState(false);
     
@@ -48,8 +49,6 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
         
         return () => unsubscribe();
     }, []);
-    
-    const stats = GameManager.getInstance().stats;
     
     // Compact button style for portrait mode
     const compactBtn = "w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-90";
@@ -148,9 +147,9 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     
                     {/* Stats */}
                     <button 
-                        onClick={() => setShowStats(!showStats)}
+                        onClick={() => setShowStatsModal(true)}
                         className={`${compactBtn} bg-black/50`}
-                        title="Stats"
+                        title="Full Statistics"
                     >
                         📊
                     </button>
@@ -165,39 +164,16 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     </div>
                 )}
                 
-                {/* Stats Panel - Portrait */}
-                {showStats && (
-                    <div className="absolute top-12 right-12 z-20 bg-black/85 backdrop-blur-md rounded-xl p-3 min-w-[150px] border border-white/10">
-                        <h3 className="text-white font-bold mb-2 retro-text text-[10px] border-b border-white/10 pb-1">📊 STATS</h3>
-                        <div className="space-y-1 text-[10px]">
-                            <div className="flex justify-between text-white/80">
-                                <span>Played</span>
-                                <span className="text-yellow-400 font-bold">{stats.gamesPlayed}</span>
-                            </div>
-                            <div className="flex justify-between text-white/80">
-                                <span>Won</span>
-                                <span className="text-green-400 font-bold">{stats.gamesWon}</span>
-                            </div>
-                            <div className="flex justify-between text-white/80">
-                                <span>Win %</span>
-                                <span className="text-cyan-400 font-bold">
-                                    {stats.gamesPlayed > 0 ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) : 0}%
-                                </span>
-                            </div>
-                        </div>
-                        <button 
-                            onClick={() => setShowStats(false)}
-                            className="mt-2 w-full bg-white/10 hover:bg-white/20 text-white py-0.5 rounded text-[10px]"
-                        >
-                            Close
-                        </button>
-                    </div>
-                )}
-                
                 {/* Tokenomics Modal */}
                 <TokenomicsModal 
                     isOpen={showTokenomics} 
                     onClose={() => setShowTokenomics(false)} 
+                />
+                
+                {/* Full Stats Modal */}
+                <StatsModal
+                    isOpen={showStatsModal}
+                    onClose={() => setShowStatsModal(false)}
                 />
             </>
         );
@@ -281,9 +257,9 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 
                 {/* Stats Button */}
                 <button 
-                    onClick={() => setShowStats(!showStats)}
+                    onClick={() => setShowStatsModal(true)}
                     className="bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-lg p-2 transition-all"
-                    title="View Stats"
+                    title="Full Statistics"
                 >
                     <span className="text-sm">📊</span>
                 </button>
@@ -312,46 +288,16 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 </div>
             )}
             
-            {/* Stats Panel */}
-            {showStats && (
-                <div className="absolute top-16 right-4 z-20 bg-black/85 backdrop-blur-md rounded-xl p-4 min-w-[180px] border border-white/10">
-                    <h3 className="text-white font-bold mb-3 retro-text text-xs border-b border-white/10 pb-2">📊 STATS</h3>
-                    <div className="space-y-2 text-xs">
-                        <div className="flex justify-between text-white/80">
-                            <span>Games Played</span>
-                            <span className="text-yellow-400 font-bold">{stats.gamesPlayed}</span>
-                        </div>
-                        <div className="flex justify-between text-white/80">
-                            <span>Games Won</span>
-                            <span className="text-green-400 font-bold">{stats.gamesWon}</span>
-                        </div>
-                        <div className="flex justify-between text-white/80">
-                            <span>Win Rate</span>
-                            <span className="text-cyan-400 font-bold">
-                                {stats.gamesPlayed > 0 
-                                    ? Math.round((stats.gamesWon / stats.gamesPlayed) * 100) 
-                                    : 0}%
-                            </span>
-                        </div>
-                        <div className="flex justify-between text-white/80">
-                            <span>Chats Sent</span>
-                            <span className="text-purple-400 font-bold">{stats.chatsSent}</span>
-                        </div>
-                    </div>
-                    
-                    <button 
-                        onClick={() => setShowStats(false)}
-                        className="mt-3 w-full bg-white/10 hover:bg-white/20 text-white py-1 rounded text-xs transition-colors"
-                    >
-                        Close
-                    </button>
-                </div>
-            )}
-            
             {/* Tokenomics Modal */}
             <TokenomicsModal 
                 isOpen={showTokenomics} 
                 onClose={() => setShowTokenomics(false)} 
+            />
+            
+            {/* Full Stats Modal */}
+            <StatsModal
+                isOpen={showStatsModal}
+                onClose={() => setShowStatsModal(false)}
             />
         </>
     );

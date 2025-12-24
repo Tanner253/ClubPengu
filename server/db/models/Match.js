@@ -41,6 +41,31 @@ const matchSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    
+    // ========== SPL TOKEN WAGER (optional, enhancement to coin wager) ==========
+    wagerToken: {
+        tokenAddress: { type: String, default: null },      // SPL token mint (null = no token wager)
+        tokenSymbol: { type: String, default: null },       // Display symbol (e.g., "$CPw3")
+        tokenDecimals: { type: Number, default: 6 },        // For amount conversion
+        tokenAmount: { type: Number, default: 0 },          // Human-readable amount
+        amountRaw: { type: String, default: null }          // BigInt as string (full precision)
+    },
+    
+    // ========== x402 SIGNED PAYLOADS ==========
+    // Pre-signed payment: Player1 -> Player2 (executed if Player1 loses)
+    player1SignedPayload: { type: String, default: null },
+    // Pre-signed payment: Player2 -> Player1 (executed if Player2 loses)
+    player2SignedPayload: { type: String, default: null },
+    
+    // ========== x402 SETTLEMENT ==========
+    settlementTx: { type: String, default: null },           // Transaction signature after settlement
+    settlementStatus: {
+        type: String,
+        enum: ['none', 'pending', 'processing', 'completed', 'failed', 'manual_review'],
+        default: 'none'
+    },
+    settlementError: { type: String, default: null },        // Error message if settlement failed
+    
     room: {
         type: String,
         index: true

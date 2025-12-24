@@ -1,10 +1,13 @@
 /**
  * MatchService - Manages active P2P matches with MongoDB persistence
  * Server-authoritative match state and wager handling
+ * 
+ * Enhanced with SPL token wagering support (x402 protocol)
  */
 
 import { Match as MatchModel } from '../db/models/index.js';
 import { isDBConnected } from '../db/connection.js';
+import wagerSettlementService from './WagerSettlementService.js';
 
 // Turn time limit (30 seconds)
 const TURN_TIME_LIMIT_MS = 30 * 1000;
@@ -204,10 +207,13 @@ class MatchService {
 
     /**
      * Create a match from an accepted challenge
+     * Includes wagerToken (x402) if present
+     * @param {object} signedPayloads - { challengerSignedPayload, targetSignedPayload } for token wager settlement
      */
-    async createMatch(challenge, player1Data, player2Data) {
+    async createMatch(challenge, player1Data, player2Data, signedPayloads = {}) {
         const matchId = `match_${Date.now()}_${this.nextMatchId++}`;
         const gameType = denormalizeGameType(challenge.gameType);
+        const hasTokenWager = challenge.wagerToken?.tokenAddress && challenge.wagerToken?.tokenAmount > 0;
         
         const match = {
             id: matchId,
@@ -217,23 +223,27 @@ class MatchService {
                 wallet: challenge.challengerWallet,
                 name: challenge.challengerName,
                 appearance: challenge.challengerAppearance,
-                position: player1Data?.position || { x: 0, y: 0, z: 0 }
+                position: player1Data?.position || { x: 0, y: 0, z: 0 },
+                signedPayload: signedPayloads.challengerSignedPayload || null  // x402 signed payment
             },
             player2: {
                 id: challenge.targetId,
                 wallet: challenge.targetWallet,
                 name: challenge.targetName,
                 appearance: challenge.targetAppearance,
-                position: player2Data?.position || { x: 0, y: 0, z: 0 }
+                position: player2Data?.position || { x: 0, y: 0, z: 0 },
+                signedPayload: signedPayloads.targetSignedPayload || null  // x402 signed payment
             },
             wagerAmount: challenge.wagerAmount,
+            wagerToken: hasTokenWager ? challenge.wagerToken : null,  // x402 token wager
             room: challenge.room,
             status: 'active',
             state: this._createInitialState(gameType),
             createdAt: Date.now(),
             endedAt: null,
             winnerId: null,
-            winnerWallet: null
+            winnerWallet: null,
+            settlementStatus: hasTokenWager ? 'pending' : 'none'  // Track token settlement
         };
         
         // Store in memory
@@ -251,7 +261,7 @@ class MatchService {
         // Save to database
         if (isDBConnected()) {
             try {
-                const dbMatch = new MatchModel({
+                const dbMatchData = {
                     matchId,
                     challengeId: challenge.id || challenge.challengeId,
                     player1: {
@@ -269,14 +279,26 @@ class MatchService {
                     room: challenge.room,
                     status: 'active',
                     gameState: match.state
-                });
+                };
+                
+                // Add wagerToken and signed payloads if present (x402)
+                if (hasTokenWager) {
+                    dbMatchData.wagerToken = challenge.wagerToken;
+                    dbMatchData.settlementStatus = 'pending';
+                    dbMatchData.player1SignedPayload = signedPayloads.challengerSignedPayload || null;
+                    dbMatchData.player2SignedPayload = signedPayloads.targetSignedPayload || null;
+                }
+                
+                const dbMatch = new MatchModel(dbMatchData);
                 await dbMatch.save();
             } catch (error) {
                 console.error('Error saving match to DB:', error);
             }
         }
         
-        console.log(`🎮 Match started: ${match.player1.name} vs ${match.player2.name} (${gameType}, ${challenge.wagerAmount} coins)`);
+        // Log with token wager info if present
+        const tokenWagerText = hasTokenWager ? ` + ${challenge.wagerToken.tokenAmount} ${challenge.wagerToken.tokenSymbol}` : '';
+        console.log(`🎮 Match started: ${match.player1.name} vs ${match.player2.name} (${gameType}, ${challenge.wagerAmount} coins${tokenWagerText})`);
         
         return match;
     }
@@ -1713,6 +1735,7 @@ class MatchService {
 
     /**
      * End a match and persist to DB
+     * Includes SPL token wager settlement (x402)
      */
     async endMatch(matchId) {
         const match = this.matches.get(matchId);
@@ -1723,14 +1746,38 @@ class MatchService {
         this.playerMatches.delete(match.player2.id);
         if (match.player1.wallet) this.walletMatches.delete(match.player1.wallet);
         if (match.player2.wallet) this.walletMatches.delete(match.player2.wallet);
+        
+        // Determine winner and loser info
+        const isPlayer1Winner = match.winnerId === match.player1.id;
+        const winnerName = isPlayer1Winner ? match.player1.name : match.player2.name;
+        const winnerWallet = isPlayer1Winner ? match.player1.wallet : match.player2.wallet;
+        const loserId = isPlayer1Winner ? match.player2.id : match.player1.id;
+        const loserWallet = isPlayer1Winner ? match.player2.wallet : match.player1.wallet;
+        const loserName = isPlayer1Winner ? match.player2.name : match.player1.name;
+        
+        // Handle SPL token wager settlement (x402)
+        if (match.wagerToken?.tokenAddress && match.wagerToken?.tokenAmount > 0) {
+            if (match.status === 'complete' && match.winnerId) {
+                // Winner receives loser's token wager
+                await wagerSettlementService.settleTokenWager(
+                    match,
+                    match.winnerId,
+                    winnerWallet,
+                    loserId,
+                    loserWallet
+                );
+            } else if (match.status === 'draw') {
+                // Draw - no token transfer needed
+                await wagerSettlementService.handleDraw(match);
+            } else if (match.status === 'void') {
+                // Voided match - no token transfer
+                await wagerSettlementService.handleVoid(match, 'void');
+            }
+        }
 
         // Update in database
         if (isDBConnected()) {
             try {
-                const winnerName = match.winnerId === match.player1.id ? match.player1.name : match.player2.name;
-                const loserWallet = match.winnerId === match.player1.id ? match.player2.wallet : match.player1.wallet;
-                const loserName = match.winnerId === match.player1.id ? match.player2.name : match.player1.name;
-
                 await MatchModel.updateOne(
                     { matchId },
                     { 

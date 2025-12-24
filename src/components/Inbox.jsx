@@ -62,6 +62,7 @@ const Inbox = () => {
             const challengerName = challengeData.challengerName || msg.challengerName || 'Unknown';
             const gameType = challengeData.gameType || msg.gameType;
             const challengeId = challengeData.challengeId || msg.challengeId;
+            const wagerToken = challengeData.wagerToken; // Token wager info if present
             
             const canAfford = playerCoins >= wagerAmount;
             const isExpired = msg.expiresAt && msg.expiresAt < Date.now();
@@ -78,6 +79,9 @@ const Inbox = () => {
                             </p>
                             <p className="text-white/60 text-xs sm:text-sm">
                                 {gameNames[gameType] || gameType} • <span className="text-yellow-400">{wagerAmount} coins</span>
+                                {wagerToken && (
+                                    <span className="text-purple-400"> + {wagerToken.tokenAmount} {wagerToken.tokenSymbol}</span>
+                                )}
                             </p>
                             {!isExpired && msg.expiresAt && (
                                 <p className="text-white/40 text-[10px] sm:text-xs mt-1">
@@ -91,7 +95,11 @@ const Inbox = () => {
                             {!isExpired && (
                                 <div className="flex gap-1.5 sm:gap-2 mt-2 sm:mt-3">
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); acceptChallenge(challengeId); }}
+                                        onClick={(e) => { 
+                                            e.stopPropagation(); 
+                                            // Pass full challenge data for token wager signing
+                                            acceptChallenge(challengeId, challengeData); 
+                                        }}
                                         disabled={!canAfford || isInMatch}
                                         className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors active:scale-95 ${
                                             canAfford && !isInMatch

@@ -109,8 +109,7 @@ const solanaTransactionSchema = new mongoose.Schema({
 });
 
 // ==================== INDEXES ====================
-// For replay attack prevention - fast signature lookup
-solanaTransactionSchema.index({ signature: 1 }, { unique: true });
+// Note: signature index is already defined in schema with unique: true
 
 // For audit queries
 solanaTransactionSchema.index({ senderWallet: 1, createdAt: -1 });

@@ -78,17 +78,37 @@ class InboxService {
 
     /**
      * Add a challenge notification
+     * @param {string} targetId - Target player ID
+     * @param {string} targetWallet - Target wallet address
+     * @param {string} challengeId - Challenge ID
+     * @param {string} challengerName - Challenger name
+     * @param {string} gameType - Game type
+     * @param {number} wagerAmount - Coin wager amount
+     * @param {object} wagerToken - Optional SPL token wager (x402)
      */
-    addChallengeMessage(targetId, targetWallet, challengeId, challengerName, gameType, wagerAmount) {
+    addChallengeMessage(targetId, targetWallet, challengeId, challengerName, gameType, wagerAmount, wagerToken = null) {
         const gameNames = {
             'cardJitsu': 'Card Jitsu',
             'ticTacToe': 'Tic Tac Toe',
             'connect4': 'Connect 4',
-            'pong': 'Pong'
+            'pong': 'Pong',
+            'monopoly': 'Monopoly',
+            'uno': 'UNO'
         };
 
         const gameName = gameNames[gameType] || gameType;
-        const wagerText = wagerAmount > 0 ? ` for ${wagerAmount} coins` : ' (friendly match)';
+        
+        // Build wager text including token wager if present
+        let wagerText = '';
+        if (wagerAmount > 0 && wagerToken?.tokenAmount > 0) {
+            wagerText = ` for ${wagerAmount} coins + ${wagerToken.tokenAmount} ${wagerToken.tokenSymbol}`;
+        } else if (wagerAmount > 0) {
+            wagerText = ` for ${wagerAmount} coins`;
+        } else if (wagerToken?.tokenAmount > 0) {
+            wagerText = ` for ${wagerToken.tokenAmount} ${wagerToken.tokenSymbol}`;
+        } else {
+            wagerText = ' (friendly match)';
+        }
 
         return this.addMessage(
             targetId,
@@ -101,6 +121,7 @@ class InboxService {
                 challengerName, 
                 gameType, 
                 wagerAmount,
+                wagerToken,  // Include token wager info (x402)
                 canAccept: true,
                 canDecline: true
             }
@@ -138,14 +159,24 @@ class InboxService {
     }
 
     /**
-     * Delete a message
+     * Get a single message by ID
+     */
+    getMessage(playerId, messageId) {
+        const inbox = this.getInbox(playerId);
+        return inbox.find(m => m.id === messageId) || null;
+    }
+
+    /**
+     * Delete a message (returns the deleted message or null)
      */
     deleteMessage(playerId, messageId) {
         const inbox = this.getInbox(playerId);
         const index = inbox.findIndex(m => m.id === messageId);
         if (index !== -1) {
-            inbox.splice(index, 1);
+            const [deleted] = inbox.splice(index, 1);
+            return deleted;
         }
+        return null;
     }
 
     /**

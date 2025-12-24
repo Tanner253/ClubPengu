@@ -10,10 +10,9 @@ const promoCodeSchema = new mongoose.Schema({
     code: {
         type: String,
         required: true,
-        unique: true,
         uppercase: true,  // Store all codes uppercase
-        trim: true,
-        index: true
+        trim: true
+        // Note: unique + case-insensitive index defined below with collation
     },
     
     // Display info
