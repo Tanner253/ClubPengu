@@ -38,5 +38,8 @@ export { default as WoodenPost } from './WoodenPost';
 // Ice fishing
 export { default as IceFishingHole } from './IceFishingHole';
 
+// Arcade/Gaming
+export { default as ArcadeMachine } from './ArcadeMachine';
+
 // Prop registry for factory pattern
 export { createProp, PROP_TYPES } from './PropRegistry';

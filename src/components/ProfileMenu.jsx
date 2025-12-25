@@ -76,6 +76,7 @@ const ProfileMenu = () => {
         { id: 'monopoly', name: 'Monopoly', emoji: '🎩', available: true },
         { id: 'uno', name: 'UNO', emoji: '🃏', available: true },
         { id: 'blackjack', name: 'Blackjack', emoji: '🂡', available: true },
+        { id: 'battleship', name: 'Battleship', emoji: '🚢', available: true },
     ];
     
     const handleMenuInteraction = (e) => {
@@ -308,6 +309,12 @@ const ProfileMenu = () => {
                             <span className="text-white/60">🔴 Connect 4</span>
                             <span className="text-red-400 font-bold">
                                 {stats?.connect4Wins ?? 0}W / {stats?.connect4Losses ?? 0}L
+                            </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] sm:text-xs">
+                            <span className="text-white/60">🚢 Battleship</span>
+                            <span className="text-blue-400 font-bold">
+                                {stats?.battleshipWins ?? 0}W / {stats?.battleshipLosses ?? 0}L
                             </span>
                         </div>
                     </div>

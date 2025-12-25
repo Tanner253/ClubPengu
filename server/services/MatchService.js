@@ -210,7 +210,8 @@ const normalizeGameType = (gameType) => {
         'monopoly': 'monopoly',
         'pong': 'pong',
         'uno': 'uno',
-        'blackjack': 'blackjack'
+        'blackjack': 'blackjack',
+        'battleship': 'battleship'
     };
     return mapping[gameType] || gameType;
 };
@@ -223,10 +224,72 @@ const denormalizeGameType = (gameType) => {
         'connect4': 'connect4',
         'monopoly': 'monopoly',
         'uno': 'uno',
-        'blackjack': 'blackjack'
+        'blackjack': 'blackjack',
+        'battleship': 'battleship'
     };
     return mapping[gameType] || gameType;
 };
+
+// ========== BATTLESHIP CONSTANTS ==========
+const BATTLESHIP_GRID_SIZE = 10;
+const BATTLESHIP_SHIPS = [
+    { name: 'Carrier', size: 5 },
+    { name: 'Battleship', size: 4 },
+    { name: 'Cruiser', size: 3 },
+    { name: 'Submarine', size: 3 },
+    { name: 'Destroyer', size: 2 }
+];
+
+// Helper to place ships randomly on a grid
+function placeShipsRandomly() {
+    const grid = Array(BATTLESHIP_GRID_SIZE * BATTLESHIP_GRID_SIZE).fill(null);
+    const ships = [];
+    
+    for (const shipTemplate of BATTLESHIP_SHIPS) {
+        let placed = false;
+        let attempts = 0;
+        while (!placed && attempts < 100) {
+            attempts++;
+            const horizontal = Math.random() > 0.5;
+            const x = Math.floor(Math.random() * BATTLESHIP_GRID_SIZE);
+            const y = Math.floor(Math.random() * BATTLESHIP_GRID_SIZE);
+            
+            // Check bounds
+            if (horizontal && x + shipTemplate.size > BATTLESHIP_GRID_SIZE) continue;
+            if (!horizontal && y + shipTemplate.size > BATTLESHIP_GRID_SIZE) continue;
+            
+            // Check overlap
+            let canPlace = true;
+            const positions = [];
+            for (let i = 0; i < shipTemplate.size; i++) {
+                const px = horizontal ? x + i : x;
+                const py = horizontal ? y : y + i;
+                const idx = py * BATTLESHIP_GRID_SIZE + px;
+                if (grid[idx] !== null) {
+                    canPlace = false;
+                    break;
+                }
+                positions.push(idx);
+            }
+            
+            if (canPlace) {
+                const shipId = `ship_${ships.length}`;
+                positions.forEach(idx => grid[idx] = shipId);
+                ships.push({
+                    id: shipId,
+                    name: shipTemplate.name,
+                    size: shipTemplate.size,
+                    positions,
+                    hits: 0,
+                    sunk: false
+                });
+                placed = true;
+            }
+        }
+    }
+    
+    return { grid, ships };
+}
 
 class MatchService {
     constructor(statsService, userService, broadcastToRoom, sendToPlayer) {
@@ -409,6 +472,9 @@ class MatchService {
             
             case 'blackjack':
                 return this._createBlackjackState();
+            
+            case 'battleship':
+                return this._createBattleshipInitialState();
             
             case 'card_jitsu':
             default:
@@ -1043,6 +1109,293 @@ class MatchService {
         };
     }
 
+    // ========== BATTLESHIP METHODS ==========
+    
+    _createBattleshipInitialState() {
+        // Each player gets their own grid with ships placed randomly
+        const player1Board = placeShipsRandomly();
+        const player2Board = placeShipsRandomly();
+        
+        return {
+            // Player 1's board (their ships and hits received)
+            player1Grid: player1Board.grid,
+            player1Ships: player1Board.ships,
+            player1Shots: Array(BATTLESHIP_GRID_SIZE * BATTLESHIP_GRID_SIZE).fill(null), // Shots player1 fired at player2
+            
+            // Player 2's board (their ships and hits received)
+            player2Grid: player2Board.grid,
+            player2Ships: player2Board.ships,
+            player2Shots: Array(BATTLESHIP_GRID_SIZE * BATTLESHIP_GRID_SIZE).fill(null), // Shots player2 fired at player1
+            
+            // Game state
+            currentTurn: 'player1',
+            phase: 'setup', // 'setup' | 'playing' | 'complete'
+            winner: null,
+            setupStartedAt: Date.now(),
+            setupTimeout: 60000, // 60 seconds for setup phase
+            player1Ready: false,
+            player2Ready: false,
+            turnStartedAt: null,
+            lastAction: null
+        };
+    }
+    
+    _playBattleship(match, playerId, action) {
+        const state = match.state;
+        if (state.phase === 'complete') return { error: 'GAME_OVER' };
+        
+        const isPlayer1 = playerId === match.player1.id;
+        const isPlayer2 = playerId === match.player2.id;
+        if (!isPlayer1 && !isPlayer2) return { error: 'NOT_IN_MATCH' };
+        
+        const playerKey = isPlayer1 ? 'player1' : 'player2';
+        
+        // ===== SETUP PHASE ACTIONS =====
+        if (state.phase === 'setup') {
+            // Handle randomize fleet action
+            if (action?.action === 'randomizeFleet') {
+                const newBoard = placeShipsRandomly();
+                state[`${playerKey}Grid`] = newBoard.grid;
+                state[`${playerKey}Ships`] = newBoard.ships;
+                console.log(`[BATTLESHIP] ${playerKey} randomized their fleet`);
+                return { success: true, action: 'randomized' };
+            }
+            
+            // Handle ready action
+            if (action?.action === 'ready') {
+                state[`${playerKey}Ready`] = true;
+                console.log(`[BATTLESHIP] ${playerKey} is ready`);
+                
+                // Check if both players are ready
+                if (state.player1Ready && state.player2Ready) {
+                    state.phase = 'playing';
+                    state.turnStartedAt = Date.now();
+                    console.log('[BATTLESHIP] Both players ready! Game starting...');
+                    return { success: true, action: 'ready', gameStarting: true };
+                }
+                
+                return { success: true, action: 'ready' };
+            }
+            
+            return { error: 'SETUP_PHASE', message: 'Game is in setup phase. Use randomizeFleet or ready actions.' };
+        }
+        
+        // ===== PLAYING PHASE ACTIONS =====
+        const isMyTurn = state.currentTurn === playerKey;
+        if (!isMyTurn) return { error: 'NOT_YOUR_TURN' };
+        
+        // Action should be { cellIndex: number }
+        const cellIndex = typeof action === 'number' ? action : action?.cellIndex;
+        if (cellIndex === undefined || cellIndex < 0 || cellIndex >= BATTLESHIP_GRID_SIZE * BATTLESHIP_GRID_SIZE) {
+            return { error: 'INVALID_CELL' };
+        }
+        
+        // Get the opponent's board we're firing at
+        const opponentKey = isPlayer1 ? 'player2' : 'player1';
+        const myShotsKey = `${playerKey}Shots`;
+        const opponentGridKey = `${opponentKey}Grid`;
+        const opponentShipsKey = `${opponentKey}Ships`;
+        
+        // Check if already fired at this cell
+        if (state[myShotsKey][cellIndex] !== null) {
+            return { error: 'ALREADY_FIRED' };
+        }
+        
+        // Fire at the cell
+        const targetShipId = state[opponentGridKey][cellIndex];
+        const isHit = targetShipId !== null;
+        state[myShotsKey][cellIndex] = isHit ? 'hit' : 'miss';
+        
+        let sunkShip = null;
+        
+        if (isHit) {
+            // Find the ship and record the hit
+            const ship = state[opponentShipsKey].find(s => s.id === targetShipId);
+            if (ship) {
+                ship.hits++;
+                if (ship.hits >= ship.size) {
+                    ship.sunk = true;
+                    sunkShip = ship.name;
+                }
+            }
+            
+            // Check if all ships are sunk (win condition)
+            const allSunk = state[opponentShipsKey].every(s => s.sunk);
+            if (allSunk) {
+                state.phase = 'complete';
+                state.winner = playerKey;
+                match.winnerId = playerId;
+                match.winnerWallet = isPlayer1 ? match.player1.wallet : match.player2.wallet;
+                match.status = 'complete';
+                match.endedAt = Date.now();
+                
+                state.lastAction = {
+                    type: 'hit',
+                    player: playerKey,
+                    cellIndex,
+                    sunkShip,
+                    gameWon: true
+                };
+                
+                this._settleBattleshipMatch(match);
+                return { success: true, gameComplete: true, winner: playerKey };
+            }
+        }
+        
+        state.lastAction = {
+            type: isHit ? 'hit' : 'miss',
+            player: playerKey,
+            cellIndex,
+            sunkShip
+        };
+        
+        // Switch turns
+        state.currentTurn = opponentKey;
+        state.turnStartedAt = Date.now();
+        
+        return { success: true };
+    }
+    
+    async _settleBattleshipMatch(match) {
+        // Use the existing settlement logic
+        const winner = match.winnerId === match.player1.id ? match.player1 : match.player2;
+        const loser = match.winnerId === match.player1.id ? match.player2 : match.player1;
+        
+        console.log(`🚢 Battleship match complete: ${winner.name} defeated ${loser.name}`);
+        
+        // Award coins
+        if (match.wagerAmount > 0) {
+            const totalPot = match.wagerAmount * 2;
+            if (winner.wallet) {
+                await this.userService.addCoins(winner.wallet, totalPot, 'battleship_win', {
+                    matchId: match.id,
+                    opponent: loser.name
+                }, `Battleship win vs ${loser.name}`);
+            }
+        }
+        
+        // Record stats
+        if (winner.wallet) {
+            await this.statsService.recordGameResult(winner.wallet, 'battleship', true, match.wagerAmount * 2);
+        }
+        if (loser.wallet) {
+            await this.statsService.recordGameResult(loser.wallet, 'battleship', false, match.wagerAmount);
+        }
+    }
+    
+    _getBattleshipState(match, playerId, isPlayer1, timeRemaining) {
+        const state = match.state;
+        const playerKey = isPlayer1 ? 'player1' : 'player2';
+        const opponentKey = isPlayer1 ? 'player2' : 'player1';
+        const isMyTurn = state.currentTurn === playerKey;
+        
+        // My grid shows my ships and where opponent has hit me
+        const myGrid = isPlayer1 ? state.player1Grid : state.player2Grid;
+        const myShips = isPlayer1 ? state.player1Ships : state.player2Ships;
+        const opponentShotsAtMe = isPlayer1 ? state.player2Shots : state.player1Shots;
+        
+        // My shots at opponent (what I've fired)
+        const myShotsAtOpponent = isPlayer1 ? state.player1Shots : state.player2Shots;
+        
+        // Opponent's ships (only show sunk ships, not positions)
+        const opponentShips = isPlayer1 ? state.player2Ships : state.player1Ships;
+        const visibleOpponentShips = opponentShips.map(s => ({
+            name: s.name,
+            size: s.size,
+            sunk: s.sunk
+        }));
+        
+        // Calculate setup time remaining if in setup phase
+        let setupTimeRemaining = 0;
+        if (state.phase === 'setup') {
+            const elapsed = Date.now() - state.setupStartedAt;
+            setupTimeRemaining = Math.max(0, Math.ceil((state.setupTimeout - elapsed) / 1000));
+        }
+        
+        return {
+            // My board (shows my ships and opponent's shots)
+            myGrid: [...myGrid],
+            myShips: myShips.map(s => ({ ...s })),
+            opponentShotsAtMe: [...opponentShotsAtMe],
+            
+            // My attacks on opponent (shows hits/misses, not ship positions)
+            myShotsAtOpponent: [...myShotsAtOpponent],
+            opponentShipStatus: visibleOpponentShips,
+            
+            // Raw state for DevBot (player1Shots, player2Shots, etc)
+            player1Shots: [...state.player1Shots],
+            player2Shots: [...state.player2Shots],
+            player1Ready: state.player1Ready,
+            player2Ready: state.player2Ready,
+            
+            // Game state
+            currentTurn: state.currentTurn,
+            phase: state.phase,
+            isMyTurn,
+            
+            // Setup phase state
+            isSetupPhase: state.phase === 'setup',
+            myReady: state[`${playerKey}Ready`],
+            opponentReady: state[`${opponentKey}Ready`],
+            setupTimeRemaining,
+            
+            // Last action for animations
+            lastAction: state.lastAction,
+            
+            // Result
+            winner: state.winner,
+            gameComplete: state.phase === 'complete',
+            
+            // Timer
+            timeRemaining,
+            
+            // Metadata
+            gridSize: BATTLESHIP_GRID_SIZE,
+            isPlayer1,
+            status: match.status,
+            matchId: match.id
+        };
+    }
+    
+    _handleBattleshipTimeout(match) {
+        const state = match.state;
+        
+        // Handle setup phase timeout
+        if (state.phase === 'setup') {
+            const elapsed = Date.now() - state.setupStartedAt;
+            if (elapsed >= state.setupTimeout) {
+                // Auto-ready both players after setup timeout
+                state.player1Ready = true;
+                state.player2Ready = true;
+                state.phase = 'playing';
+                state.turnStartedAt = Date.now();
+                console.log('[BATTLESHIP] Setup timeout - auto-starting game');
+                return;
+            }
+            return; // Still in setup, not timed out yet
+        }
+        
+        if (state.phase !== 'playing') return;
+        
+        // Auto-fire at a random unfired cell
+        const currentPlayerId = state.currentTurn === 'player1' ? match.player1.id : match.player2.id;
+        const myShotsKey = state.currentTurn === 'player1' ? 'player1Shots' : 'player2Shots';
+        
+        // Find all unfired cells
+        const unfiredCells = [];
+        for (let i = 0; i < BATTLESHIP_GRID_SIZE * BATTLESHIP_GRID_SIZE; i++) {
+            if (state[myShotsKey][i] === null) {
+                unfiredCells.push(i);
+            }
+        }
+        
+        if (unfiredCells.length === 0) return;
+        
+        const randomCell = unfiredCells[Math.floor(Math.random() * unfiredCells.length)];
+        console.log(`⏰ Battleship auto-fire for ${state.currentTurn} at cell ${randomCell}`);
+        this._playBattleship(match, currentPlayerId, randomCell);
+    }
+
     getMatch(matchId) {
         return this.matches.get(matchId);
     }
@@ -1084,6 +1437,9 @@ class MatchService {
         }
         if (match.gameType === 'blackjack') {
             return this._playBlackjack(match, playerId, cardIndex);
+        }
+        if (match.gameType === 'battleship') {
+            return this._playBattleship(match, playerId, cardIndex);
         }
         return this._playCardJitsu(match, playerId, cardIndex);
     }
@@ -1710,6 +2066,8 @@ class MatchService {
                 this._handleUnoTimeout(match);
             } else if (match.gameType === 'blackjack') {
                 this._handleBlackjackTimeout(match);
+            } else if (match.gameType === 'battleship') {
+                this._handleBattleshipTimeout(match);
             } else {
                 this._handleCardJitsuTimeout(match);
             }
@@ -1879,6 +2237,23 @@ class MatchService {
                 status: match.status,
                 winnerId: match.winnerId
             };
+        } else if (match.gameType === 'battleship') {
+            // Battleship spectator state - show game progress without revealing ship positions
+            spectatorState = {
+                player1ShotsCount: match.state.player1Shots.filter(s => s !== null).length,
+                player1HitsCount: match.state.player1Shots.filter(s => s === 'hit').length,
+                player1ShipsSunk: match.state.player2Ships.filter(s => s.sunk).length,
+                player2ShotsCount: match.state.player2Shots.filter(s => s !== null).length,
+                player2HitsCount: match.state.player2Shots.filter(s => s === 'hit').length,
+                player2ShipsSunk: match.state.player1Ships.filter(s => s.sunk).length,
+                totalShips: BATTLESHIP_SHIPS.length,
+                currentTurn: match.state.currentTurn,
+                phase: match.state.phase,
+                lastAction: match.state.lastAction,
+                winner: match.state.winner,
+                status: match.status,
+                winnerId: match.winnerId
+            };
         } else {
             spectatorState = {
                 round: match.state.round,
@@ -1931,6 +2306,9 @@ class MatchService {
         }
         if (match.gameType === 'blackjack') {
             return this._getBlackjackState(match, playerId, isPlayer1, timeRemaining);
+        }
+        if (match.gameType === 'battleship') {
+            return this._getBattleshipState(match, playerId, isPlayer1, timeRemaining);
         }
         return this._getCardJitsuState(match, playerId, isPlayer1, timeRemaining);
     }

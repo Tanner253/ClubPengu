@@ -189,6 +189,20 @@ class DevBotService {
             }
         }
         
+        // For battleship, bot should immediately ready during setup phase
+        if (match.gameType === 'battleship') {
+            // Send ready action after a short delay
+            setTimeout(() => {
+                if (this.activeMatch && this.matchService) {
+                    console.log('🤖 DevBot sending ready for battleship');
+                    this.matchService.playCard(match.id, BOT_CONFIG.id, { action: 'ready' });
+                    if (this.onBotMakeMove) {
+                        this.onBotMakeMove(match.id, { success: true, action: 'ready' });
+                    }
+                }
+            }, 1000);
+        }
+        
         return true;
     }
     
@@ -230,6 +244,34 @@ class DevBotService {
                 // It's bot's turn, make a move after delay
                 console.log(`🤖 DevBot: Blackjack - my turn (${botPlayerTurn}), phase: ${state.phase}, scheduling move...`);
                 setTimeout(() => this.makeBlackjackMove(matchId, state), 1000 + Math.random() * 1500);
+            }
+        }
+        
+        // For Battleship, handle both setup and playing phases
+        if (this.activeMatch.gameType === 'battleship') {
+            const botPlayerKey = this.activeMatch.isBotPlayer1 ? 'player1' : 'player2';
+            
+            // During setup phase, ensure bot is ready
+            if (state.phase === 'setup' || state.isSetupPhase) {
+                const botReady = state.myReady ?? state[`${botPlayerKey}Ready`];
+                if (!botReady) {
+                    console.log('🤖 DevBot: Still need to ready for battleship');
+                    setTimeout(() => {
+                        if (this.activeMatch && this.matchService) {
+                            this.matchService.playCard(matchId, BOT_CONFIG.id, { action: 'ready' });
+                            if (this.onBotMakeMove) {
+                                this.onBotMakeMove(matchId, { success: true, action: 'ready' });
+                            }
+                        }
+                    }, 500);
+                }
+                return true;
+            }
+            
+            // During playing phase, make moves
+            if (state.currentTurn === botPlayerKey && state.phase === 'playing') {
+                console.log(`🤖 DevBot: Battleship - my turn (${botPlayerKey}), scheduling shot...`);
+                setTimeout(() => this.makeBattleshipMove(matchId, state), 1000 + Math.random() * 1500);
             }
         }
         
@@ -335,6 +377,79 @@ class DevBotService {
         const match = this.matchService.matches.get(matchId);
         if (match?.state?.phase === 'complete') {
             console.log(`🤖 DevBot blackjack game complete`);
+            this.activeMatch = null;
+        }
+    }
+    
+    /**
+     * Make a Battleship move (Simple AI - hunt/target mode)
+     * @param {string} matchId - Match ID
+     * @param {object} state - Current game state
+     */
+    makeBattleshipMove(matchId, state) {
+        if (!this.isActive || !this.matchService) return;
+        if (!this.activeMatch || this.activeMatch.id !== matchId) return;
+        
+        const isPlayer1 = this.activeMatch.isBotPlayer1;
+        const myShotsKey = isPlayer1 ? 'player1Shots' : 'player2Shots';
+        const shots = state[myShotsKey] || [];
+        
+        // Find unfired cells
+        const unfiredCells = [];
+        for (let i = 0; i < 100; i++) {
+            if (shots[i] === null) {
+                unfiredCells.push(i);
+            }
+        }
+        
+        if (unfiredCells.length === 0) return;
+        
+        // Simple AI: Look for adjacent cells to hits (hunt mode)
+        let targetCell = null;
+        
+        // Find hits that might have adjacent unfired cells
+        for (let i = 0; i < 100; i++) {
+            if (shots[i] === 'hit') {
+                const x = i % 10;
+                const y = Math.floor(i / 10);
+                
+                // Check adjacent cells
+                const adjacent = [
+                    y > 0 ? i - 10 : -1,  // up
+                    y < 9 ? i + 10 : -1,  // down
+                    x > 0 ? i - 1 : -1,   // left
+                    x < 9 ? i + 1 : -1    // right
+                ].filter(c => c !== -1 && shots[c] === null);
+                
+                if (adjacent.length > 0) {
+                    targetCell = adjacent[Math.floor(Math.random() * adjacent.length)];
+                    break;
+                }
+            }
+        }
+        
+        // If no hunt target found, pick random unfired cell
+        if (targetCell === null) {
+            targetCell = unfiredCells[Math.floor(Math.random() * unfiredCells.length)];
+        }
+        
+        console.log(`🤖 DevBot making Battleship shot: cell ${targetCell}`);
+        
+        // Make the move through match service
+        const result = this.matchService.playCard(matchId, BOT_CONFIG.id, targetCell);
+        
+        if (result.error) {
+            console.error(`🤖 DevBot battleship shot failed:`, result.error);
+            return;
+        }
+        
+        // Notify server to broadcast the new state
+        if (this.onBotMakeMove) {
+            this.onBotMakeMove(matchId, result);
+        }
+        
+        if (result.gameComplete) {
+            console.log(`🤖 DevBot battleship game complete`);
             this.activeMatch = null;
         }
     }

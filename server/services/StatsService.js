@@ -15,7 +15,8 @@ const normalizeGameType = (gameType) => {
         'pong': 'pong',
         'blackjack': 'blackjack',
         'uno': 'uno',
-        'monopoly': 'monopoly'
+        'monopoly': 'monopoly',
+        'battleship': 'battleship'
     };
     return mapping[gameType] || gameType;
 };
@@ -104,6 +105,8 @@ class StatsService {
                     unoLosses: 0,
                     monopolyWins: 0,
                     monopolyLosses: 0,
+                    battleshipWins: 0,
+                    battleshipLosses: 0,
                     totalWins: 0,
                     totalLosses: 0,
                     isGuest: true
@@ -139,6 +142,9 @@ class StatsService {
                 // Monopoly
                 monopolyWins: user.gameStats.monopoly?.wins || 0,
                 monopolyLosses: user.gameStats.monopoly?.losses || 0,
+                // Battleship
+                battleshipWins: user.gameStats.battleship?.wins || 0,
+                battleshipLosses: user.gameStats.battleship?.losses || 0,
                 // Totals
                 totalWins: user.gameStats.overall.totalGamesWon,
                 totalLosses: user.gameStats.overall.totalGamesLost,

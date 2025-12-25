@@ -48,6 +48,7 @@ const gameEmojis = {
     blackjack: '🎰',
     monopoly: '🎩',
     uno: '🃏',
+    battleship: '🚢',
     pong: '🏓'
 };
 
@@ -59,6 +60,7 @@ const gameNames = {
     blackjack: 'Blackjack',
     monopoly: 'Monopoly',
     uno: 'UNO',
+    battleship: 'Battleship',
     pong: 'Pong'
 };
 

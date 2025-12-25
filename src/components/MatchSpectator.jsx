@@ -598,6 +598,100 @@ const BlackjackSpectator = ({ players, state, totalPot }) => {
 };
 
 /**
+ * Battleship spectator display - Shows shot counts and ships sunk
+ */
+const BattleshipSpectator = ({ players, state, totalPot }) => {
+    const currentTurn = state?.currentTurn || 'player1';
+    const winner = state?.winner;
+    const isComplete = state?.status === 'complete' || state?.phase === 'complete';
+    
+    const p1ShotsCount = state?.player1ShotsCount ?? 0;
+    const p1HitsCount = state?.player1HitsCount ?? 0;
+    const p1ShipsSunk = state?.player1ShipsSunk ?? 0;
+    const p2ShotsCount = state?.player2ShotsCount ?? 0;
+    const p2HitsCount = state?.player2HitsCount ?? 0;
+    const p2ShipsSunk = state?.player2ShipsSunk ?? 0;
+    const totalShips = state?.totalShips ?? 5;
+    
+    const lastAction = state?.lastAction;
+    
+    return (
+        <div className="bg-gradient-to-br from-blue-900/95 to-indigo-900/95 backdrop-blur-xl rounded-2xl border-2 border-cyan-400/50 shadow-2xl px-4 py-3 min-w-[280px] animate-fade-in">
+            {/* Header */}
+            <div className="flex items-center justify-center gap-2 mb-2">
+                <span className="text-cyan-400 text-xs font-bold">🚢 BATTLESHIP</span>
+                <span className="text-blue-300 text-xs">•</span>
+                <span className="text-yellow-400 text-xs font-bold">💰 {totalPot}</span>
+            </div>
+            
+            {/* Players and Stats */}
+            <div className="flex items-center justify-between gap-3">
+                <div className="text-center flex-1">
+                    <p className={`font-bold text-xs truncate max-w-[85px] ${currentTurn === 'player1' && !isComplete ? 'text-cyan-400' : 'text-white'}`}>
+                        {currentTurn === 'player1' && !isComplete && '🎯 '}{players[0]?.name || 'Player 1'}
+                    </p>
+                    <p className="text-white text-lg font-bold">{p1ShipsSunk}/{totalShips}</p>
+                    <p className="text-white/50 text-[10px]">
+                        Ships sunk
+                    </p>
+                    <p className="text-green-400 text-[9px]">
+                        {p1HitsCount}/{p1ShotsCount} hits
+                    </p>
+                </div>
+                
+                <div className="flex flex-col items-center gap-1">
+                    {/* Mini ship status display */}
+                    <div className="flex gap-0.5">
+                        {[...Array(totalShips)].map((_, i) => (
+                            <div key={i} className={`w-2 h-4 rounded-sm ${i < (totalShips - p2ShipsSunk) ? 'bg-cyan-500' : 'bg-gray-600'}`} />
+                        ))}
+                    </div>
+                    <span className="text-white/30 text-[8px]">vs</span>
+                    <div className="flex gap-0.5">
+                        {[...Array(totalShips)].map((_, i) => (
+                            <div key={i} className={`w-2 h-4 rounded-sm ${i < (totalShips - p1ShipsSunk) ? 'bg-pink-500' : 'bg-gray-600'}`} />
+                        ))}
+                    </div>
+                </div>
+                
+                <div className="text-center flex-1">
+                    <p className={`font-bold text-xs truncate max-w-[85px] ${currentTurn === 'player2' && !isComplete ? 'text-pink-400' : 'text-white'}`}>
+                        {currentTurn === 'player2' && !isComplete && '🎯 '}{players[1]?.name || 'Player 2'}
+                    </p>
+                    <p className="text-white text-lg font-bold">{p2ShipsSunk}/{totalShips}</p>
+                    <p className="text-white/50 text-[10px]">
+                        Ships sunk
+                    </p>
+                    <p className="text-green-400 text-[9px]">
+                        {p2HitsCount}/{p2ShotsCount} hits
+                    </p>
+                </div>
+            </div>
+            
+            {/* Status */}
+            <div className="text-center mt-2 pt-2 border-t border-white/10">
+                {!isComplete && (
+                    <span className="text-white/50 text-[10px]">
+                        {currentTurn === 'player1' ? players[0]?.name : players[1]?.name}'s turn to fire
+                    </span>
+                )}
+                {lastAction && !isComplete && (
+                    <span className={`ml-2 text-[10px] ${lastAction.type === 'hit' ? 'text-red-400' : 'text-blue-300'}`}>
+                        {lastAction.type === 'hit' ? '💥 HIT!' : '💨 MISS'}
+                        {lastAction.sunkShip && ` - ${lastAction.sunkShip} SUNK!`}
+                    </span>
+                )}
+                {isComplete && winner && (
+                    <span className="text-green-400 text-[10px] font-bold">
+                        🏆 {winner === 'player1' ? players[0]?.name : players[1]?.name} wins! Fleet neutralized!
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+};
+
+/**
  * Single match spectator display - routes to appropriate game view
  */
 const MatchSpectatorBubble = ({ matchData }) => {
@@ -628,6 +722,10 @@ const MatchSpectatorBubble = ({ matchData }) => {
     
     if (gameType === 'blackjack') {
         return <BlackjackSpectator players={players} state={state} totalPot={totalPot} />;
+    }
+    
+    if (gameType === 'battleship') {
+        return <BattleshipSpectator players={players} state={state} totalPot={totalPot} />;
     }
     
     // Default: Card Jitsu

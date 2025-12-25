@@ -2658,6 +2658,7 @@ async function handleMessage(playerId, message) {
                             player1: { id: match.player1.id, name: match.player1.name, appearance: match.player1.appearance },
                             player2: { id: match.player2.id, name: match.player2.name, appearance: match.player2.appearance },
                             wagerAmount: match.wagerAmount,
+                            wagerToken: match.wagerToken || null,
                             yourRole: 'player1'
                         },
                         initialState: matchService.getMatchState(match.id, challenge.challengerId),
@@ -2672,6 +2673,7 @@ async function handleMessage(playerId, message) {
                             player1: { id: match.player1.id, name: match.player1.name, appearance: match.player1.appearance },
                             player2: { id: match.player2.id, name: match.player2.name, appearance: match.player2.appearance },
                             wagerAmount: match.wagerAmount,
+                            wagerToken: match.wagerToken || null,
                             yourRole: 'player2'
                         },
                         initialState: matchService.getMatchState(match.id, challenge.targetId),

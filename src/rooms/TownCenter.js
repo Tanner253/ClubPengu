@@ -1,5 +1,5 @@
 import CollisionSystem from '../engine/CollisionSystem';
-import { createProp, PROP_TYPES, Billboard, IceFishingHole } from '../props';
+import { createProp, PROP_TYPES, Billboard, IceFishingHole, ArcadeMachine } from '../props';
 import { createNightclubExterior } from '../props/NightclubExterior';
 import { createDojoParkour } from '../props/DojoParkour';
 import { createCasino } from '../buildings';
@@ -677,6 +677,12 @@ class TownCenter {
             { type: 'ice_fishing_hole', id: 'fishing_4', x: fishingPondX + 3, z: fishingPondZ + 9, rotation: Math.PI / 3 },
         );
         
+        // ==================== BATTLESHIP ARCADE MACHINE ====================
+        // Arcade machine near the center of town for playing Battleship vs AI
+        props.push(
+            { type: 'arcade_machine', id: 'battleship_arcade', x: C + 21.5, z: C - 5.2, game: 'battleship' }
+        );
+        
         // Pond area decorations - snowy surroundings
         props.push(
             // FLOATING TITLE SIGN - draws attention to the fishing area (raised high for visibility)
@@ -1299,6 +1305,43 @@ class TownCenter {
                             action: 'fishing',
                             message: '🎣 Press E to Fish',
                             fishingSpotId: prop.id
+                        }),
+                        { name: `${prop.id}_trigger` }
+                    );
+                    break;
+                }
+                
+                case 'arcade_machine': {
+                    // Arcade machine for playing minigames vs AI
+                    const arcadeProp = new ArcadeMachine(this.THREE);
+                    arcadeProp.spawn(scene, prop.x, 0, prop.z, { gameType: prop.game || 'battleship' });
+                    mesh = arcadeProp.mesh;
+                    mesh.name = prop.id || 'arcade_machine';
+                    mesh.userData.gameType = prop.game || 'battleship';
+                    mesh.userData.propInstance = arcadeProp;
+                    
+                    // Add collision (arcade machine is solid)
+                    this.collisionSystem.addCollider(
+                        prop.x, prop.z,
+                        { type: 'box', size: { x: 2, y: 3, z: 2 } },
+                        CollisionSystem.TYPES.SOLID,
+                        { name: prop.id || 'arcade_machine' }
+                    );
+                    
+                    // Add interaction trigger zone
+                    this.collisionSystem.addTrigger(
+                        prop.x, prop.z,
+                        {
+                            type: 'circle',
+                            radius: 3.5,
+                            action: 'play_arcade',
+                            message: '🎮 Press E to play Battleship',
+                            gameType: prop.game || 'battleship'
+                        },
+                        (event) => this._handleInteraction(event, { 
+                            action: 'play_arcade',
+                            message: '🎮 Press E to play Battleship',
+                            gameType: prop.game || 'battleship'
                         }),
                         { name: `${prop.id}_trigger` }
                     );

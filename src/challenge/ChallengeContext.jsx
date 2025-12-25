@@ -164,7 +164,8 @@ export function ChallengeProvider({ children }) {
                     break;
                     
                 case 'match_start':
-                    setActiveMatch(message.match);
+                    // Add matchId alias for consistency (server sends 'id')
+                    setActiveMatch({ ...message.match, matchId: message.match.id });
                     setMatchState(message.initialState);
                     setIsInMatch(true);
                     setShowInbox(false);

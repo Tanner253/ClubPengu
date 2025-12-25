@@ -8,6 +8,7 @@ import P2PConnect4 from './minigames/P2PConnect4';
 import P2PMonopoly from './minigames/P2PMonopoly';
 import P2PUno from './minigames/P2PUno';
 import P2PBlackjack from './minigames/P2PBlackjack';
+import P2PBattleship from './minigames/P2PBattleship';
 import GameManager from './engine/GameManager';
 import { MultiplayerProvider, useMultiplayer } from './multiplayer';
 import { ChallengeProvider, useChallenge } from './challenge';
@@ -337,6 +338,13 @@ const AppContent = () => {
             {isInMatch && activeMatch && activeMatch.gameType === 'blackjack' && (
                 <div className="absolute inset-0 z-40">
                     <P2PBlackjack onMatchEnd={handleP2PMatchEnd} />
+                </div>
+            )}
+            
+            {/* P2P Battleship - overlay on top of game world */}
+            {isInMatch && activeMatch && activeMatch.gameType === 'battleship' && (
+                <div className="absolute inset-0 z-40">
+                    <P2PBattleship onMatchEnd={handleP2PMatchEnd} />
                 </div>
             )}
             

@@ -45,8 +45,8 @@ const WagerModal = () => {
     const isDev = import.meta.env.DEV;
     const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : (isDev ? 1000 : 0);
     
-    // Allow free play (0 wager) for monopoly and uno in development mode
-    const allowFreePlay = isDev && (wagerGameType === 'monopoly' || wagerGameType === 'uno');
+    // Allow free play (0 wager) for all games - betting is optional
+    const allowFreePlay = true;
     
     // Reset form when modal opens
     useEffect(() => {
@@ -84,7 +84,8 @@ const WagerModal = () => {
         'pong': 'Pong',
         'tic_tac_toe': 'Tic Tac Toe',
         'monopoly': 'Monopoly',
-        'uno': 'UNO'
+        'uno': 'UNO',
+        'battleship': 'Battleship'
     };
     
     const gameEmojis = {
@@ -93,7 +94,8 @@ const WagerModal = () => {
         'pong': '🏓',
         'tic_tac_toe': '⭕',
         'monopoly': '🎩',
-        'uno': '🃏'
+        'uno': '🃏',
+        'battleship': '🚢'
     };
     
     const handleWagerChange = (e) => {
@@ -235,7 +237,7 @@ const WagerModal = () => {
                                     >
                                         ALL
                                     </button>
-                                    {/* Free Play - DEV MONOPOLY ONLY */}
+                                    {/* Free Play - No wager option */}
                                     {allowFreePlay && (
                                         <button
                                             type="button"
@@ -399,7 +401,7 @@ const WagerModal = () => {
                                 </div>
                             )}
                             
-                            {/* Free Play button - DEV MODE MONOPOLY ONLY */}
+                            {/* Free Play button - No wager option */}
                             {allowFreePlay && (
                                 <button
                                     type="button"

@@ -11,3 +11,5 @@ export { default as MonopolyGame } from './MonopolyGame';
 export { default as P2PMonopoly } from './P2PMonopoly';
 export { default as P2PUno } from './P2PUno';
 export { default as P2PBlackjack } from './P2PBlackjack';
+export { default as BattleshipGame } from './BattleshipGame';
+export { default as P2PBattleship } from './P2PBattleship';

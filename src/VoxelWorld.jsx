@@ -45,6 +45,7 @@ import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners,
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
 import CasinoBlackjack from './components/CasinoBlackjack';
+import BattleshipGame from './minigames/BattleshipGame';
 
 const VoxelWorld = ({ 
     penguinData, 
@@ -346,6 +347,11 @@ const VoxelWorld = ({
     const [fishingInteraction, setFishingInteraction] = useState(null); // { spot, prompt, canFish }
     const [fishingGameActive, setFishingGameActive] = useState(false); // True when fishing minigame is open
     const [fishingGameSpot, setFishingGameSpot] = useState(null); // Current fishing spot for game
+    
+    // Arcade Game State (PvE Battleship etc)
+    const [arcadeGameActive, setArcadeGameActive] = useState(false); // True when arcade minigame is open
+    const [arcadeGameType, setArcadeGameType] = useState(null); // 'battleship' etc
+    const [arcadeInteraction, setArcadeInteraction] = useState(null); // { machine, prompt, gameType }
     
     // Lord Fishnu Interaction State
     const [lordFishnuInteraction, setLordFishnuInteraction] = useState(null); // { canPayRespects, prompt }
@@ -4615,6 +4621,35 @@ const VoxelWorld = ({
         }
     };
     
+    // Check for nearby arcade machines (town only) - PvE Battleship
+    const checkArcadeMachines = () => {
+        if (room !== 'town') {
+            if (arcadeInteraction) setArcadeInteraction(null);
+            return;
+        }
+        
+        const playerPos = posRef.current;
+        // Arcade machine position from TownCenter.js: C + 21.5, C - 5.2 (where C = 110)
+        const arcadeX = 110 + 21.5;
+        const arcadeZ = 110 - 5.2;
+        const interactionRadius = 4; // Slightly larger than the collision radius
+        
+        const dx = playerPos.x - arcadeX;
+        const dz = playerPos.z - arcadeZ;
+        const distance = Math.sqrt(dx * dx + dz * dz);
+        
+        if (distance < interactionRadius) {
+            if (!arcadeInteraction) {
+                setArcadeInteraction({
+                    prompt: '🎮 Press E to play Battleship',
+                    gameType: 'battleship'
+                });
+            }
+        } else if (arcadeInteraction) {
+            setArcadeInteraction(null);
+        }
+    };
+    
     // Check for Lord Fishnu proximity (town only)
     const checkLordFishnu = () => {
         if (room !== 'town') {
@@ -4654,9 +4689,10 @@ const VoxelWorld = ({
             checkBlackjackTables();
             checkFishingSpots();
             checkLordFishnu();
+            checkArcadeMachines();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, userData?.coins, isAuthenticated]);
+    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, userData?.coins, isAuthenticated]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -4994,6 +5030,12 @@ const VoxelWorld = ({
         mpSend?.({ type: 'fishing_end' });
     }, [mpSend]);
     
+    // Handle arcade game close (PvE Battleship)
+    const handleArcadeGameClose = useCallback(() => {
+        setArcadeGameActive(false);
+        setArcadeGameType(null);
+    }, []);
+    
     // E key handler for fishing
     useEffect(() => {
         const handleFishingKeyPress = (e) => {
@@ -5007,6 +5049,21 @@ const VoxelWorld = ({
         window.addEventListener('keydown', handleFishingKeyPress);
         return () => window.removeEventListener('keydown', handleFishingKeyPress);
     }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction]);
+    
+    // E key handler for arcade machines (Battleship PvE)
+    useEffect(() => {
+        const handleArcadeKeyPress = (e) => {
+            if (e.code === 'KeyE' && room === 'town') {
+                if (arcadeInteraction && !nearbyPortal && !emoteWheelOpen && !arcadeGameActive) {
+                    setArcadeGameType(arcadeInteraction.gameType || 'battleship');
+                    setArcadeGameActive(true);
+                    setArcadeInteraction(null);
+                }
+            }
+        };
+        window.addEventListener('keydown', handleArcadeKeyPress);
+        return () => window.removeEventListener('keydown', handleArcadeKeyPress);
+    }, [nearbyPortal, emoteWheelOpen, room, arcadeInteraction, arcadeGameActive]);
     
     // Handle paying respects to Lord Fishnu (works like AFK - dismisses on movement)
     const handlePayRespects = useCallback(() => {
@@ -5106,6 +5163,13 @@ const VoxelWorld = ({
                     action, 
                     message: message || '🎵 Enter Nightclub (Press E)',
                     targetRoom: data?.destination || 'nightclub'
+                });
+            } else if (action === 'play_arcade') {
+                // Arcade machine interaction
+                setNearbyInteraction({ 
+                    action, 
+                    message: message || '🎮 Press E to play',
+                    gameType: data?.gameType || 'battleship'
                 });
             }
             // Note: enter_igloo is handled by portal system, not interaction prompts
@@ -5283,6 +5347,13 @@ const VoxelWorld = ({
                         setNearbyInteraction(null);
                         onChangeRoom(targetRoom);
                     }
+                }
+                else if (nearbyInteraction.action === 'play_arcade') {
+                    // Open arcade minigame (PvE Battleship)
+                    const gameType = nearbyInteraction.gameType || 'battleship';
+                    setArcadeGameType(gameType);
+                    setArcadeGameActive(true);
+                    setNearbyInteraction(null);
                 }
                 else if (nearbyInteraction.emote) {
                     emoteRef.current = { type: nearbyInteraction.emote, startTime: Date.now() };
@@ -6138,6 +6209,13 @@ const VoxelWorld = ({
                 />
              )}
              
+             {/* Arcade Battleship PvE Game Overlay */}
+             {arcadeGameActive && arcadeGameType === 'battleship' && (
+                <BattleshipGame
+                    onClose={handleArcadeGameClose}
+                />
+             )}
+             
              {/* Casino TV is now rendered in 3D space with real data from DexScreener API */}
              
              {/* Mobile PUBG-style Joystick - LEFT side (or right if left-handed) */}
@@ -6453,6 +6531,43 @@ const VoxelWorld = ({
                 </div>
              )}
              
+             {/* Arcade Machine Interaction UI (Battleship PvE) */}
+             {arcadeInteraction && room === 'town' && !fishingInteraction && !nearbyPortal && !arcadeGameActive && (
+                <div 
+                    className={`absolute bg-gradient-to-b from-indigo-900/95 to-purple-900/95 backdrop-blur-sm rounded-xl border border-cyan-500/50 text-center z-20 shadow-lg shadow-cyan-500/20 ${
+                        isMobile 
+                            ? isLandscape 
+                                ? 'bottom-[180px] right-28 p-3' 
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    }`}
+                >
+                    <div className="text-3xl mb-1">🚢</div>
+                    <p className="text-cyan-300 retro-text text-sm mb-2">
+                        {isMobile 
+                            ? '🎮 Tap to play Battleship'
+                            : arcadeInteraction.prompt
+                        }
+                    </p>
+                    
+                    <button
+                        className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm transition-all active:scale-95 shadow-lg bg-gradient-to-b from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-white"
+                        onClick={() => {
+                            setArcadeGameType(arcadeInteraction.gameType || 'battleship');
+                            setArcadeGameActive(true);
+                            setArcadeInteraction(null);
+                        }}
+                    >
+                        🎮 PLAY
+                    </button>
+                    
+                    {/* Desktop hint */}
+                    {!isMobile && (
+                        <p className="text-white/50 text-[10px] mt-1 retro-text">or press E</p>
+                    )}
+                </div>
+             )}
+
              {/* Town Interaction Prompt - Clickable like dojo enter */}
              {/* Hide when blackjack interaction is showing to prevent overlap */}
              {nearbyInteraction && !nearbyPortal && !slotInteraction && !blackjackInteraction && (
@@ -6603,6 +6718,13 @@ const VoxelWorld = ({
                                 
                                 setNearbyInteraction(null);
                             }
+                            else if (nearbyInteraction.action === 'play_arcade') {
+                                // Open arcade minigame (PvE Battleship)
+                                const gameType = nearbyInteraction.gameType || 'battleship';
+                                setArcadeGameType(gameType);
+                                setArcadeGameActive(true);
+                                setNearbyInteraction(null);
+                            }
                             else if (nearbyInteraction.emote) {
                                 emoteRef.current = { type: nearbyInteraction.emote, startTime: Date.now() };
                                 mpSendEmote(nearbyInteraction.emote, false);
@@ -6615,6 +6737,7 @@ const VoxelWorld = ({
                         {nearbyInteraction.action === 'sit' ? '🪑 SIT' : 
                          nearbyInteraction.action === 'dj' ? '🎧 DJ' :
                          nearbyInteraction.action === 'climb_roof' ? '🪜 CLIMB' :
+                         nearbyInteraction.action === 'play_arcade' ? '🎮 PLAY' :
                          '✓ OK'}
                     </button>
                     

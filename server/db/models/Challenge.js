@@ -38,7 +38,7 @@ const challengeSchema = new mongoose.Schema({
     gameType: {
         type: String,
         required: true,
-        enum: ['cardJitsu', 'connect4', 'ticTacToe', 'pong', 'monopoly', 'uno', 'blackjack']
+        enum: ['cardJitsu', 'connect4', 'ticTacToe', 'pong', 'monopoly', 'uno', 'blackjack', 'battleship']
     },
     wagerAmount: {
         type: Number,

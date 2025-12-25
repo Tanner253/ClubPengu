@@ -231,6 +231,18 @@ const userSchema = new mongoose.Schema({
             winStreak: { type: Number, default: 0 },
             bestWinStreak: { type: Number, default: 0 }
         },
+        battleship: {
+            played: { type: Number, default: 0 },
+            wins: { type: Number, default: 0 },
+            losses: { type: Number, default: 0 },
+            coinsWon: { type: Number, default: 0 },
+            coinsLost: { type: Number, default: 0 },
+            winStreak: { type: Number, default: 0 },
+            bestWinStreak: { type: Number, default: 0 },
+            totalShotsFired: { type: Number, default: 0 },
+            totalHits: { type: Number, default: 0 },
+            totalShipsSunk: { type: Number, default: 0 }
+        },
         overall: {
             totalGamesPlayed: { type: Number, default: 0 },
             totalGamesWon: { type: Number, default: 0 },
