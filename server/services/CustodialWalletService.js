@@ -297,6 +297,64 @@ class CustodialWalletService {
     }
 
     /**
+     * Process a rake payment to the platform wallet
+     * 
+     * @param {Object} params
+     * @param {string} params.matchId - The match ID (for logging/audit)
+     * @param {string} params.rakeWallet - Platform rake wallet address
+     * @param {string} params.tokenAddress - SPL token mint address
+     * @param {string} params.amountRaw - Rake amount in base units (as string for BigInt)
+     * @param {number} params.decimals - Token decimals
+     * @returns {Promise<{success: boolean, txId?: string, error?: string}>}
+     */
+    async processRakePayout(params) {
+        const { matchId, rakeWallet, tokenAddress, amountRaw, decimals } = params;
+        
+        if (!this.isReady()) {
+            return { success: false, error: 'SERVICE_NOT_READY' };
+        }
+        
+        if (!rakeWallet) {
+            return { success: false, error: 'NO_RAKE_WALLET' };
+        }
+        
+        const amount = BigInt(amountRaw);
+        if (amount <= 0n) {
+            return { success: false, error: 'INVALID_RAKE_AMOUNT' };
+        }
+        
+        try {
+            console.log(`   🏦 [Rake] Sending rake for match ${matchId}`);
+            console.log(`      Amount: ${amountRaw} raw tokens`);
+            console.log(`      To: ${rakeWallet.slice(0, 8)}...`);
+            
+            const txResult = await this._sendPayoutTransaction(
+                rakeWallet,
+                tokenAddress,
+                amount,
+                `rake_${matchId}`
+            );
+            
+            if (txResult.success) {
+                this._audit('RAKE_PAYOUT_SUCCESS', { 
+                    matchId, 
+                    amount: amountRaw,
+                    txId: txResult.txId 
+                });
+                return { success: true, txId: txResult.txId };
+            } else {
+                this._audit('RAKE_PAYOUT_FAILED', { matchId, error: txResult.error });
+                return { success: false, error: txResult.error };
+            }
+            
+        } catch (error) {
+            console.error(`🚨 [Rake] Exception for match ${matchId}:`, error.message);
+            this._audit('RAKE_PAYOUT_EXCEPTION', { matchId, error: error.message });
+            return { success: false, error: 'RAKE_PAYOUT_FAILED' };
+        }
+    }
+
+    /**
      * Refund a single player's deposit for an expired/cancelled challenge
      * (When only the challenger deposited, not both players)
      */
@@ -551,10 +609,17 @@ class CustodialWalletService {
                 if (match.wagerToken.tokenAddress !== tokenAddress) {
                     return { success: false, error: 'TOKEN_MISMATCH' };
                 }
-                // Winner gets both deposits (2x the wager amount)
-                const expectedPayout = BigInt(match.wagerToken.amountRaw) * 2n;
-                if (BigInt(amountRaw) !== expectedPayout) {
-                    return { success: false, error: 'AMOUNT_MISMATCH' };
+                // Winner gets both deposits (2x wager) minus rake
+                // Allow for rake deduction (up to 10% max rake)
+                const totalPot = BigInt(match.wagerToken.amountRaw) * 2n;
+                const minPayout = (totalPot * 90n) / 100n; // At least 90% of pot (max 10% rake)
+                const payoutAmount = BigInt(amountRaw);
+                
+                if (payoutAmount > totalPot) {
+                    return { success: false, error: 'PAYOUT_EXCEEDS_POT' };
+                }
+                if (payoutAmount < minPayout) {
+                    return { success: false, error: 'PAYOUT_TOO_LOW' };
                 }
             }
 

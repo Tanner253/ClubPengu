@@ -49,3 +49,17 @@ GRACE_PERIOD_HOURS
 # CUSTODIAL_FAILURE_THRESHOLD=5               # Failures before lockdown
 # CUSTODIAL_LOCKDOWN_MINUTES=30               # Lockdown duration
 # CUSTODIAL_MIN_INTERVAL=10                   # Min seconds between payouts to same wallet
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# P2P RAKE CONFIGURATION
+# ═══════════════════════════════════════════════════════════════════════════════
+# 
+# 5% rake is taken from all P2P wager matches and sent to the rake wallet.
+# This generates revenue for the platform from player-vs-player games.
+#
+# RAKE_WALLET - The wallet address that receives rake payments (SOL address)
+RAKE_WALLET=
+
+# RAKE_PERCENT - Percentage of pot taken as rake (default: 5%)
+# Value is in percent (5 = 5%)
+RAKE_PERCENT=5

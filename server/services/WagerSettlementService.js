@@ -5,7 +5,8 @@
  * 1. Both players deposit wager to custodial wallet before game starts
  * 2. Match plays out
  * 3. Match ends with winner determined
- * 4. Custodial wallet sends total pot (2x wager) to winner
+ * 4. Calculate 5% rake (sent to RAKE_WALLET)
+ * 5. Send remaining 95% to winner
  * 
  * Security: Uses CustodialWalletService which has rate limits, amount caps,
  * match verification, and lockdown capabilities.
@@ -14,6 +15,20 @@
 import { Match } from '../db/models/index.js';
 import { isDBConnected } from '../db/connection.js';
 import custodialWalletService from './CustodialWalletService.js';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// RAKE CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════════
+const RAKE_CONFIG = {
+    // Wallet that receives rake payments
+    RAKE_WALLET: process.env.RAKE_WALLET || null,
+    
+    // Rake percentage (5 = 5%)
+    RAKE_PERCENT: parseFloat(process.env.RAKE_PERCENT || '5'),
+    
+    // Minimum pot size to take rake (avoid dust amounts)
+    MIN_POT_FOR_RAKE: BigInt(1000), // Minimum 1000 raw units
+};
 
 class WagerSettlementService {
     constructor() {
@@ -32,6 +47,13 @@ class WagerSettlementService {
         const result = await custodialWalletService.initialize();
         if (result.success) {
             console.log('💰 WagerSettlementService ready - custodial wallet initialized');
+            
+            // Log rake configuration
+            if (RAKE_CONFIG.RAKE_WALLET) {
+                console.log(`   🏦 Rake enabled: ${RAKE_CONFIG.RAKE_PERCENT}% to ${RAKE_CONFIG.RAKE_WALLET.slice(0, 8)}...`);
+            } else {
+                console.log('   ℹ️ Rake disabled: No RAKE_WALLET configured');
+            }
         } else {
             console.warn('⚠️ WagerSettlementService: Custodial wallet not available -', result.error);
         }
@@ -192,6 +214,8 @@ class WagerSettlementService {
     
     /**
      * Settle a token wager after match completion
+     * Takes 5% rake to RAKE_WALLET, sends 95% to winner
+     * 
      * @param {object} match - Completed match object
      * @param {string} winnerId - Player ID of the winner
      * @param {string} winnerWallet - Wallet address of the winner
@@ -208,15 +232,13 @@ class WagerSettlementService {
         const { wagerToken } = match;
         
         console.log(`💰 [Settlement] Starting token wager settlement for match ${matchId}`);
-        console.log(`   Winner: ${winnerWallet?.slice(0, 8)}... receives ${wagerToken.tokenAmount} ${wagerToken.tokenSymbol}`);
-        console.log(`   Loser: ${loserWallet?.slice(0, 8)}... pays ${wagerToken.tokenAmount} ${wagerToken.tokenSymbol}`);
+        console.log(`   Winner: ${winnerWallet?.slice(0, 8)}...`);
+        console.log(`   Loser: ${loserWallet?.slice(0, 8)}...`);
         
         // Update match settlement status to processing
         await this._updateSettlementStatus(matchId, 'processing');
         
         try {
-            // REAL PAYOUTS - Use custodial wallet to pay winner
-            // Winner receives 2x the wager (both deposits)
             if (!custodialWalletService.isReady()) {
                 console.log(`   ⚠️ Custodial wallet not ready - CANNOT process payout!`);
                 await this._updateSettlementStatus(matchId, 'manual_review', null, 
@@ -229,17 +251,75 @@ class WagerSettlementService {
                 };
             }
             
-            // Calculate payout (winner gets both deposits = 2x wager)
-            const payoutAmountRaw = (BigInt(wagerToken.amountRaw) * 2n).toString();
+            // Calculate total pot (2x wager = both players' deposits)
+            const totalPotRaw = BigInt(wagerToken.amountRaw) * 2n;
             
-            console.log(`   💸 Executing custodial payout: ${payoutAmountRaw} raw (${wagerToken.tokenAmount * 2} ${wagerToken.tokenSymbol})`);
+            // ═══════════════════════════════════════════════════════════════════
+            // RAKE CALCULATION
+            // ═══════════════════════════════════════════════════════════════════
+            const rakeEnabled = RAKE_CONFIG.RAKE_WALLET && totalPotRaw >= RAKE_CONFIG.MIN_POT_FOR_RAKE;
+            let rakeAmountRaw = 0n;
+            let winnerPayoutRaw = totalPotRaw;
+            let rakeTxId = null;
+            
+            if (rakeEnabled) {
+                // Calculate rake: (totalPot * rakePercent) / 100
+                rakeAmountRaw = (totalPotRaw * BigInt(Math.floor(RAKE_CONFIG.RAKE_PERCENT * 100))) / 10000n;
+                winnerPayoutRaw = totalPotRaw - rakeAmountRaw;
+                
+                const rakeAmount = Number(rakeAmountRaw) / Math.pow(10, wagerToken.decimals || 6);
+                const winnerAmount = Number(winnerPayoutRaw) / Math.pow(10, wagerToken.decimals || 6);
+                
+                console.log(`   📊 Rake Breakdown:`);
+                console.log(`      Total Pot: ${wagerToken.tokenAmount * 2} ${wagerToken.tokenSymbol}`);
+                console.log(`      Rake (${RAKE_CONFIG.RAKE_PERCENT}%): ${rakeAmount.toFixed(4)} ${wagerToken.tokenSymbol}`);
+                console.log(`      Winner Gets: ${winnerAmount.toFixed(4)} ${wagerToken.tokenSymbol}`);
+                console.log(`      Rake Wallet: ${RAKE_CONFIG.RAKE_WALLET.slice(0, 8)}...`);
+                
+                // ═══════════════════════════════════════════════════════════════
+                // STEP 1: Send rake to RAKE_WALLET
+                // ═══════════════════════════════════════════════════════════════
+                console.log(`   💸 [1/2] Sending rake to platform wallet...`);
+                
+                const rakeResult = await custodialWalletService.processRakePayout({
+                    matchId,
+                    rakeWallet: RAKE_CONFIG.RAKE_WALLET,
+                    tokenAddress: wagerToken.tokenAddress,
+                    amountRaw: rakeAmountRaw.toString(),
+                    decimals: wagerToken.decimals
+                });
+                
+                if (rakeResult.success) {
+                    rakeTxId = rakeResult.txId;
+                    console.log(`   ✅ Rake sent! Tx: ${rakeTxId}`);
+                } else {
+                    // Rake failed - but we still pay winner the full amount
+                    // Log for manual recovery but don't block winner payout
+                    console.error(`   ⚠️ Rake payment failed: ${rakeResult.error}`);
+                    console.error(`      Will pay winner full amount and log for manual rake recovery`);
+                    winnerPayoutRaw = totalPotRaw; // Winner gets full pot if rake fails
+                    rakeAmountRaw = 0n;
+                }
+            } else {
+                if (!RAKE_CONFIG.RAKE_WALLET) {
+                    console.log(`   ℹ️ Rake disabled: No RAKE_WALLET configured`);
+                } else {
+                    console.log(`   ℹ️ Rake skipped: Pot below minimum threshold`);
+                }
+                console.log(`   💸 Full pot to winner: ${wagerToken.tokenAmount * 2} ${wagerToken.tokenSymbol}`);
+            }
+            
+            // ═══════════════════════════════════════════════════════════════════
+            // STEP 2: Send winner payout (after rake deduction)
+            // ═══════════════════════════════════════════════════════════════════
+            console.log(`   💸 [${rakeEnabled ? '2/2' : '1/1'}] Sending payout to winner...`);
             
             const payoutResult = await custodialWalletService.processPayout({
                 matchId,
                 winnerWallet,
                 loserWallet,
                 tokenAddress: wagerToken.tokenAddress,
-                amountRaw: payoutAmountRaw,
+                amountRaw: winnerPayoutRaw.toString(),
                 decimals: wagerToken.decimals
             });
             
@@ -247,27 +327,41 @@ class WagerSettlementService {
                 const result = {
                     success: true,
                     txSignature: payoutResult.txId,
-                    amount: wagerToken.tokenAmount * 2,
-                    amountRaw: payoutAmountRaw,
+                    amount: Number(winnerPayoutRaw) / Math.pow(10, wagerToken.decimals || 6),
+                    amountRaw: winnerPayoutRaw.toString(),
                     tokenSymbol: wagerToken.tokenSymbol,
                     tokenAddress: wagerToken.tokenAddress,
                     from: 'custodial_wallet',
                     to: winnerWallet,
+                    // Rake info
+                    rakeAmount: Number(rakeAmountRaw) / Math.pow(10, wagerToken.decimals || 6),
+                    rakeAmountRaw: rakeAmountRaw.toString(),
+                    rakePercent: RAKE_CONFIG.RAKE_PERCENT,
+                    rakeTxSignature: rakeTxId,
                     timestamp: Date.now()
                 };
                 
-                await this._updateSettlementStatus(matchId, 'completed', result.txSignature);
+                await this._updateSettlementStatusWithRake(matchId, 'completed', payoutResult.txId, {
+                    rakeAmountRaw: rakeAmountRaw.toString(),
+                    rakePercent: RAKE_CONFIG.RAKE_PERCENT,
+                    rakeTx: rakeTxId,
+                    winnerPayoutRaw: winnerPayoutRaw.toString()
+                });
+                
                 this.settlementHistory.set(matchId, result);
                 
-                console.log(`   ✅ Settlement complete! Tx: ${payoutResult.txId}`);
+                console.log(`   ✅ Settlement complete!`);
+                console.log(`      Winner Tx: ${payoutResult.txId}`);
+                if (rakeTxId) console.log(`      Rake Tx: ${rakeTxId}`);
+                
                 return result;
             } else {
-                console.error(`   ❌ Custodial payout failed: ${payoutResult.error}`);
+                console.error(`   ❌ Winner payout failed: ${payoutResult.error}`);
                 await this._updateSettlementStatus(matchId, 'failed', null, payoutResult.error);
                 return {
                     success: false,
                     error: payoutResult.error,
-                    message: 'Custodial payout failed'
+                    message: 'Winner payout failed'
                 };
             }
             
@@ -447,6 +541,35 @@ class WagerSettlementService {
     }
     
     /**
+     * Update settlement status with rake information
+     * @private
+     */
+    async _updateSettlementStatusWithRake(matchId, status, txSignature, rakeInfo) {
+        if (!isDBConnected()) {
+            console.log(`   ⚠️ Database not connected - settlement status not persisted`);
+            return;
+        }
+        
+        try {
+            const update = {
+                settlementStatus: status,
+                settlementTx: txSignature,
+                // Rake fields
+                rakeAmountRaw: rakeInfo.rakeAmountRaw,
+                rakePercent: rakeInfo.rakePercent,
+                rakeTx: rakeInfo.rakeTx,
+                winnerPayoutRaw: rakeInfo.winnerPayoutRaw
+            };
+            
+            await Match.updateOne({ matchId }, update);
+            console.log(`   📝 Settlement status updated to: ${status} (with rake info)`);
+            
+        } catch (dbError) {
+            console.error(`   ⚠️ Failed to update settlement status with rake:`, dbError.message);
+        }
+    }
+    
+    /**
      * Get settlement status for a match
      * @param {string} matchId - Match ID
      * @returns {object|null}
@@ -463,7 +586,14 @@ class WagerSettlementService {
             ready: this.isReady(),
             custodialWallet: custodialWalletService.getStatus(),
             pendingSettlements: this.pendingSettlements.size,
-            historySize: this.settlementHistory.size
+            historySize: this.settlementHistory.size,
+            rake: {
+                enabled: !!RAKE_CONFIG.RAKE_WALLET,
+                percent: RAKE_CONFIG.RAKE_PERCENT,
+                wallet: RAKE_CONFIG.RAKE_WALLET ? 
+                    RAKE_CONFIG.RAKE_WALLET.slice(0, 4) + '...' + RAKE_CONFIG.RAKE_WALLET.slice(-4) : 
+                    null
+            }
         };
     }
     

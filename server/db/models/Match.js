@@ -115,7 +115,14 @@ const matchSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    payoutAmount: Number  // Total pot transferred to winner
+    payoutAmount: Number,  // Total pot transferred to winner
+    
+    // ========== RAKE (Platform Fee) ==========
+    rakeAmount: { type: Number, default: 0 },         // Rake amount taken (in tokens)
+    rakeAmountRaw: { type: String, default: null },   // Rake in raw units (BigInt as string)
+    rakeTx: { type: String, default: null },          // Transaction signature for rake payment
+    rakePercent: { type: Number, default: 5 },        // Rake percentage at time of match
+    winnerPayoutRaw: { type: String, default: null }  // Winner's actual payout after rake (BigInt as string)
 
 }, {
     timestamps: true
