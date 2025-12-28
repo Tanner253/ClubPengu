@@ -271,14 +271,19 @@ class ChallengeService {
 
     /**
      * Cancel a challenge (by challenger)
+     * Supports both session ID and wallet address for verification
      */
-    async deleteChallenge(challengeId, cancellerId) {
+    async deleteChallenge(challengeId, cancellerId, cancellerWallet = null) {
         const challenge = this.getChallenge(challengeId);
         if (!challenge) {
             return { error: 'NOT_FOUND', message: 'Challenge not found' };
         }
 
-        if (challenge.challengerId !== cancellerId) {
+        // Verify canceller is the original challenger (by session ID OR wallet)
+        const isChallenger = challenge.challengerId === cancellerId || 
+                            (cancellerWallet && challenge.challengerWallet === cancellerWallet);
+        
+        if (!isChallenger) {
             return { error: 'NOT_CHALLENGER', message: 'Only the challenger can cancel' };
         }
 
@@ -306,7 +311,7 @@ class ChallengeService {
     }
 
     /**
-     * Get pending challenges for a player
+     * Get pending challenges where player is the TARGET (incoming)
      */
     getPendingChallengesFor(playerId) {
         const result = [];
@@ -314,6 +319,36 @@ class ChallengeService {
             if (challenge.targetId === playerId && challenge.status === 'pending') {
                 if (challenge.expiresAt > new Date()) {
                     result.push(challenge);
+                }
+            }
+        }
+        return result;
+    }
+    
+    /**
+     * Get pending challenges where player is the CHALLENGER (outgoing)
+     * Checks both playerId (session) and walletAddress (persistent)
+     */
+    getOutgoingChallengesFor(playerId, walletAddress = null) {
+        const result = [];
+        for (const [id, challenge] of this.challenges) {
+            // Match by session ID OR wallet address
+            const isChallenger = challenge.challengerId === playerId || 
+                                 (walletAddress && challenge.challengerWallet === walletAddress);
+            
+            if (isChallenger && challenge.status === 'pending') {
+                if (challenge.expiresAt > new Date()) {
+                    result.push({
+                        id: challenge.id,
+                        challengeId: challenge.id,
+                        targetId: challenge.targetId,
+                        targetName: challenge.targetName,
+                        gameType: challenge.gameType,
+                        wagerAmount: challenge.wagerAmount,
+                        wagerToken: challenge.wagerToken,
+                        createdAt: challenge.createdAt,
+                        expiresAt: challenge.expiresAt
+                    });
                 }
             }
         }

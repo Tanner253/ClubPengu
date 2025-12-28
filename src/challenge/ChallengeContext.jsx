@@ -165,6 +165,21 @@ export function ChallengeProvider({ children }) {
                     showNotification(`${message.message || 'Challenge declined'}`, 'info');
                     break;
                     
+                case 'pending_challenges_sync':
+                    // Sync pending outgoing challenges from server (on connect/refresh)
+                    if (message.challenges && Array.isArray(message.challenges)) {
+                        setPendingChallenges(message.challenges.map(c => ({
+                            id: c.id || c.challengeId,
+                            targetId: c.targetId,
+                            targetName: c.targetName,
+                            gameType: c.gameType,
+                            wagerAmount: c.wagerAmount,
+                            wagerToken: c.wagerToken,
+                            createdAt: c.createdAt
+                        })));
+                    }
+                    break;
+                    
                 case 'player_stats':
                     setSelectedPlayerStats(prev => ({
                         ...prev,

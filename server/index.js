@@ -2172,11 +2172,23 @@ async function handleMessage(playerId, message) {
         // ==================== INBOX ====================
         case 'inbox_sync': {
             const messages = inboxService.getMessages(playerId);
+            // Pass both playerId and walletAddress to find challenges from previous sessions
+            const outgoingChallenges = challengeService.getOutgoingChallengesFor(playerId, player.walletAddress);
+            
             sendToPlayer(playerId, {
                 type: 'inbox_update',
                 messages,
                 unreadCount: inboxService.getUnreadCount(playerId)
             });
+            
+            // Also send pending outgoing challenges
+            if (outgoingChallenges.length > 0) {
+                sendToPlayer(playerId, {
+                    type: 'pending_challenges_sync',
+                    challenges: outgoingChallenges
+                });
+                console.log(`📤 Synced ${outgoingChallenges.length} outgoing challenges to ${player.name}`);
+            }
             break;
         }
         
@@ -2834,8 +2846,10 @@ async function handleMessage(playerId, message) {
                 break;
             }
             
-            // Only the challenger can cancel
-            if (challenge.challengerId !== playerId) {
+            // Only the challenger can cancel (check both session ID and wallet)
+            const isChallenger = challenge.challengerId === playerId || 
+                                (player.walletAddress && challenge.challengerWallet === player.walletAddress);
+            if (!isChallenger) {
                 sendToPlayer(playerId, {
                     type: 'challenge_error',
                     error: 'NOT_CHALLENGER',
@@ -2844,7 +2858,7 @@ async function handleMessage(playerId, message) {
                 break;
             }
             
-            const result = await challengeService.deleteChallenge(challengeId, playerId);
+            const result = await challengeService.deleteChallenge(challengeId, playerId, player.walletAddress);
             
             if (result.error) {
                 sendToPlayer(playerId, {
