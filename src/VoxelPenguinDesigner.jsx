@@ -1065,8 +1065,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     
     // Show cosmetics - filter by owned if toggle is on
     const options = useMemo(() => {
+        // ALL skin colors available (base + all premium)
+        const allSkinColors = [...BASE_SKIN_COLORS, ...PREMIUM_SKIN_COLORS];
+        
         const allOptions = {
-            skin: BASE_SKIN_COLORS,
+            skin: allSkinColors,
             head: Object.keys(ASSETS.HATS),
             eyes: Object.keys(ASSETS.EYES),
             mouth: Object.keys(ASSETS.MOUTH),
@@ -1078,15 +1081,15 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             return allOptions;
         }
         
-        // Filter to only owned items (always include defaults)
+        // Filter to only owned/unlocked items
         // For skins, include base colors + any gacha-won skin colors
         const ownedSkinColors = gachaOwnedCosmetics
             .filter(id => id.startsWith('skin_'))
             .map(id => id.replace('skin_', ''));
-        const allSkinOptions = [...new Set([...BASE_SKIN_COLORS, ...ownedSkinColors])];
+        const unlockedSkinOptions = [...new Set([...BASE_SKIN_COLORS, ...ownedSkinColors])];
         
         return {
-            skin: allSkinOptions,
+            skin: unlockedSkinOptions,
             head: allOptions.head.filter(k => k === 'none' || isCosmeticUnlocked(k, 'hat')),
             eyes: allOptions.eyes.filter(k => k === 'none' || k === 'normal' || isCosmeticUnlocked(k, 'eyes')),
             mouth: allOptions.mouth.filter(k => k === 'none' || k === 'beak' || isCosmeticUnlocked(k, 'mouth')),
@@ -1177,17 +1180,32 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     {characterType === 'penguin' ? (
                         <>
                             <div className="flex flex-col gap-1 text-white">
-                                <span className={`font-semibold text-gray-300 uppercase tracking-wider ${isPortrait && isMobileView ? 'text-[10px]' : 'text-xs'}`}>Feathers ({options.skin.length})</span>
+                                <span className={`font-semibold text-gray-300 uppercase tracking-wider ${isPortrait && isMobileView ? 'text-[10px]' : 'text-xs'}`}>
+                                    Feathers ({options.skin.filter(c => isSkinColorUnlocked(c)).length}/{options.skin.length})
+                                </span>
                                 <div className={`grid gap-1.5 ${isPortrait && isMobileView ? 'grid-cols-8' : 'grid-cols-6 gap-2'}`}>
-                                    {options.skin.map(c => (
-                                        <button 
-                                            key={c}
-                                            onClick={() => setSkinColor(c)}
-                                            title={c}
-                                            className={`rounded-full border-2 ${skinColor === c ? 'border-white scale-110 shadow-lg' : 'border-transparent opacity-70'} transition-all hover:scale-105 ${isPortrait && isMobileView ? 'w-6 h-6' : 'w-8 h-8'}`}
-                                            style={{backgroundColor: PALETTE[c] || c}}
-                                        />
-                                    ))}
+                                    {options.skin.map(c => {
+                                        const isUnlocked = isSkinColorUnlocked(c);
+                                        const isSelected = skinColor === c;
+                                        return (
+                                            <button 
+                                                key={c}
+                                                onClick={() => isUnlocked && setSkinColor(c)}
+                                                title={isUnlocked ? c : `${c} (🔒 Gacha)`}
+                                                disabled={!isUnlocked}
+                                                className={`rounded-full border-2 relative ${
+                                                    isSelected ? 'border-white scale-110 shadow-lg' : 'border-transparent'
+                                                } ${
+                                                    isUnlocked ? 'opacity-100 hover:scale-105 cursor-pointer' : 'opacity-30 cursor-not-allowed'
+                                                } transition-all ${isPortrait && isMobileView ? 'w-6 h-6' : 'w-8 h-8'}`}
+                                                style={{backgroundColor: PALETTE[c] || c}}
+                                            >
+                                                {!isUnlocked && (
+                                                    <span className="absolute inset-0 flex items-center justify-center text-white text-[8px]">🔒</span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
 
