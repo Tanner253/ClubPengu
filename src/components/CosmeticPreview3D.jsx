@@ -1,8 +1,11 @@
 /**
- * CosmeticPreview3D - Lightweight 3D preview of a single cosmetic item
+ * CosmeticPreview3D - Interactive 3D preview of a single cosmetic item
  * 
- * Renders voxel cosmetics in a small canvas with rotation
- * Optimized for inventory grid - no penguin model, just the item
+ * Renders voxel cosmetics in a canvas with live rotation and interaction.
+ * 
+ * NOTE: Each instance creates its own WebGL context (browsers limit to ~8-16).
+ * Use CosmeticThumbnail for grid views with many items!
+ * This component should only be used for single detail views (e.g., selected item panel).
  */
 
 import React, { useRef, useEffect, useMemo, useCallback } from 'react';
@@ -289,14 +292,15 @@ const CosmeticPreview3D = ({
         };
         animate();
         
-        // Cleanup
+        // Cleanup - CRITICAL: Must forcefully release WebGL context
         return () => {
+            // Stop animation loop first
             if (animationRef.current) {
                 cancelAnimationFrame(animationRef.current);
+                animationRef.current = null;
             }
-            if (rendererRef.current) {
-                rendererRef.current.dispose();
-            }
+            
+            // Dispose all scene objects
             if (sceneRef.current) {
                 sceneRef.current.traverse(obj => {
                     if (obj.geometry) obj.geometry.dispose();
@@ -308,7 +312,33 @@ const CosmeticPreview3D = ({
                         }
                     }
                 });
+                sceneRef.current = null;
             }
+            
+            // Dispose renderer and FORCE context loss
+            if (rendererRef.current) {
+                rendererRef.current.dispose();
+                
+                // Forcefully lose the WebGL context to free it immediately
+                const gl = rendererRef.current.getContext();
+                if (gl) {
+                    const loseContext = gl.getExtension('WEBGL_lose_context');
+                    if (loseContext) {
+                        loseContext.loseContext();
+                    }
+                }
+                
+                // Remove canvas from DOM
+                if (rendererRef.current.domElement && rendererRef.current.domElement.parentNode) {
+                    rendererRef.current.domElement.parentNode.removeChild(rendererRef.current.domElement);
+                }
+                
+                rendererRef.current = null;
+            }
+            
+            canvasRef.current = null;
+            meshRef.current = null;
+            cameraRef.current = null;
         };
     }, [voxels, size, rarity, isHolographic, autoRotate]);
     

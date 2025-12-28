@@ -13,6 +13,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useMultiplayer } from '../multiplayer';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import CosmeticPreview3D from './CosmeticPreview3D';
+import CosmeticThumbnail from './CosmeticThumbnail';
+import { thumbnailCache } from './CosmeticThumbnailCache';
 import PhantomWallet from '../wallet/PhantomWallet';
 
 // Inventory upgrade costs SOL (paid to rake wallet like pebbles)
@@ -92,12 +94,18 @@ const InventoryModal = ({ isOpen, onClose }) => {
     useEffect(() => {
         const callbacks = {
             onInventoryData: (data) => {
-                setItems(data.items || []);
+                const newItems = data.items || [];
+                setItems(newItems);
                 setTotal(data.total || 0);
                 setMaxSlots(data.maxSlots || 150);
                 setUpgradeInfo(data.upgradeInfo || null);
                 setHasMore(data.hasMore || false);
                 setLoading(false);
+                
+                // Preload thumbnails in background (uses single shared WebGL context)
+                if (newItems.length > 0) {
+                    thumbnailCache.preloadThumbnails(newItems, 72).catch(console.error);
+                }
             },
             onInventoryBurned: (data) => {
                 setBurning(false);
@@ -471,15 +479,13 @@ const InventoryModal = ({ isOpen, onClose }) => {
                                                         : `${rarity.border} hover:border-white/50`
                                                 } bg-gradient-to-br ${rarity.bg}`}
                                             >
-                                                {/* 3D Preview - fills the button */}
-                                                <CosmeticPreview3D
+                                                {/* Cached thumbnail - no WebGL context per item! */}
+                                                <CosmeticThumbnail
                                                     templateId={item.templateId}
                                                     category={item.category}
                                                     rarity={item.rarity}
                                                     isHolographic={item.isHolographic}
                                                     size={72}
-                                                    autoRotate={false}
-                                                    interactive={false}
                                                     className="w-full h-full"
                                                 />
                                                 
