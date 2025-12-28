@@ -120,41 +120,41 @@ class PromoCodeService {
 
             // 8-10: Only track redemption if this is a first-time redemption
             if (!isReRedemption) {
-                // 8. Track redeemed code on user
-                if (!user.redeemedPromoCodes) {
-                    user.redeemedPromoCodes = [];
-                }
-                user.redeemedPromoCodes.push({
-                    code: normalizedCode,
-                    promoCodeId: promoCode._id,
-                    redeemedAt: new Date()
-                });
-                user.stats.unlocks.totalPromoCodesRedeemed++;
-                await user.save();
+            // 8. Track redeemed code on user
+            if (!user.redeemedPromoCodes) {
+                user.redeemedPromoCodes = [];
+            }
+            user.redeemedPromoCodes.push({
+                code: normalizedCode,
+                promoCodeId: promoCode._id,
+                redeemedAt: new Date()
+            });
+            user.stats.unlocks.totalPromoCodesRedeemed++;
+            await user.save();
 
-                // 9. Increment redemption count on promo code
-                promoCode.redemptionCount++;
-                await promoCode.save();
+            // 9. Increment redemption count on promo code
+            promoCode.redemptionCount++;
+            await promoCode.save();
 
-                // 10. Record successful redemption
-                await PromoRedemption.recordRedemption({
-                    walletAddress,
-                    username: user.username,
-                    promoCodeId: promoCode._id,
-                    code: normalizedCode,
-                    codeName: promoCode.name,
-                    unlockedItems: {
-                        mounts: promoCode.unlocks.mounts,
-                        cosmetics: promoCode.unlocks.cosmetics,
-                        characters: promoCode.unlocks.characters,
-                        coins: promoCode.unlocks.coins
-                    },
-                    ipAddress: context.ipAddress,
-                    sessionId: context.sessionId,
-                    playerId: context.playerId,
-                    status: 'success',
-                    transactionId
-                });
+            // 10. Record successful redemption
+            await PromoRedemption.recordRedemption({
+                walletAddress,
+                username: user.username,
+                promoCodeId: promoCode._id,
+                code: normalizedCode,
+                codeName: promoCode.name,
+                unlockedItems: {
+                    mounts: promoCode.unlocks.mounts,
+                    cosmetics: promoCode.unlocks.cosmetics,
+                    characters: promoCode.unlocks.characters,
+                    coins: promoCode.unlocks.coins
+                },
+                ipAddress: context.ipAddress,
+                sessionId: context.sessionId,
+                playerId: context.playerId,
+                status: 'success',
+                transactionId
+            });
             }
 
             // Build appropriate message
@@ -169,7 +169,7 @@ class PromoCodeService {
                 }
             } else {
                 message = `Successfully redeemed "${promoCode.name}"!`;
-                console.log(`🎟️ Promo code redeemed: ${user.username} used ${normalizedCode} - ${promoCode.getUnlocksSummary()}`);
+            console.log(`🎟️ Promo code redeemed: ${user.username} used ${normalizedCode} - ${promoCode.getUnlocksSummary()}`);
             }
 
             return {

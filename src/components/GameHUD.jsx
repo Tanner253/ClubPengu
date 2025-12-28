@@ -112,7 +112,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 <div className="absolute top-12 right-1 z-20 flex flex-col gap-1 bg-black/50 backdrop-blur-sm rounded-lg p-1">
                     {/* Whitepaper - NEW */}
                     <a
-                        href="https://club-pengu.vercel.app/"
+                        href="https://whitepaper.waddle.bet"
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`${compactBtn} bg-gradient-to-r from-cyan-600/80 to-blue-600/80`}
@@ -125,7 +125,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button
                         onClick={() => setShowTokenomics(true)}
                         className={`${compactBtn} bg-gradient-to-r from-purple-600/80 to-pink-600/80 relative`}
-                        title="$CPw3 Tokenomics"
+                        title="$WADDLE Tokenomics"
                     >
                         ❗
                         <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-yellow-400 rounded-full animate-ping" />
@@ -229,7 +229,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
             <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 sm:gap-2">
                 {/* Whitepaper - NEW */}
                 <a
-                    href="https://club-pengu.vercel.app/"
+                    href="https://whitepaper.waddle.bet"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bg-gradient-to-r from-cyan-600/80 to-blue-600/80 hover:from-cyan-500 hover:to-blue-500 active:from-cyan-700 active:to-blue-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center hover:scale-105 active:scale-95"
@@ -242,7 +242,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 <button
                     onClick={() => setShowTokenomics(true)}
                     className="relative bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500 hover:to-pink-500 active:from-purple-700 active:to-pink-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center animate-bounce-hud group"
-                    title="$CPw3 Tokenomics"
+                    title="$WADDLE Tokenomics"
                 >
                     <span className="group-hover:scale-125 transition-transform">❗</span>
                     <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full animate-ping" />

@@ -393,13 +393,13 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                     <span className="text-lg">📋</span>
                                     <div className="flex-1">
                                         <div className="text-green-400 font-bold text-sm">Changelog</div>
-                                        <p className="text-white/40 text-[10px]">See what's new in Club Pengu</p>
+                                        <p className="text-white/40 text-[10px]">See what's new in WaddleBet</p>
                                     </div>
                                     <span className="text-white/30">→</span>
                                 </div>
                             </button>
                             <a
-                                href="https://clubpengu.xyz"
+                                href="https://whitepaper.waddle.bet"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="block w-full p-2.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 transition-all text-left touch-manipulation select-none"

@@ -6797,7 +6797,7 @@ const VoxelWorld = ({
                  <h2 className={`drop-shadow-lg ${
                      isMobile && !isLandscape ? 'text-sm' : 'text-xl'
                  } ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room === 'casino_game_room' ? 'text-yellow-400' : room === 'igloo3' ? 'text-fuchsia-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
-                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room === 'casino_game_room' ? '🎰 CASINO' : room === 'igloo3' ? '🎵 SKNY GANG $CPw3' : room.startsWith('igloo') ? `IGLOO ${room.replace('igloo', '')}` : 'TOWN'}
+                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room === 'casino_game_room' ? '🎰 CASINO' : room === 'igloo3' ? '🎵 SKNY GANG' : room.startsWith('igloo') ? `IGLOO ${room.replace('igloo', '')}` : 'TOWN'}
                  </h2>
                  {!isMobile && (
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>

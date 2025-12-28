@@ -1188,8 +1188,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                         const isUnlocked = isSkinColorUnlocked(c);
                                         const isSelected = skinColor === c;
                                         return (
-                                            <button 
-                                                key={c}
+                                        <button 
+                                            key={c}
                                                 onClick={() => isUnlocked && setSkinColor(c)}
                                                 title={isUnlocked ? c : `${c} (🔒 Gacha)`}
                                                 disabled={!isUnlocked}
@@ -1198,7 +1198,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                                 } ${
                                                     isUnlocked ? 'opacity-100 hover:scale-105 cursor-pointer' : 'opacity-30 cursor-not-allowed'
                                                 } transition-all ${isPortrait && isMobileView ? 'w-6 h-6' : 'w-8 h-8'}`}
-                                                style={{backgroundColor: PALETTE[c] || c}}
+                                            style={{backgroundColor: PALETTE[c] || c}}
                                             >
                                                 {!isUnlocked && (
                                                     <span className="absolute inset-0 flex items-center justify-center text-white text-[8px]">🔒</span>

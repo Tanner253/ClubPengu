@@ -53,7 +53,7 @@ const SOCIAL_LINKS = {
   pumpfun: "#", // Coming soon
 };
 
-const CONTRACT_ADDRESS = "Coming Soon...";
+const CONTRACT_ADDRESS = "Coming Soon... $WADDLE";
 
 // Snow effect component
 function Snowfall() {
@@ -140,11 +140,11 @@ function Navigation() {
           <a href="#" className="flex items-center gap-2 sm:gap-3">
             <img 
               src="/character.png" 
-              alt="Coming Soon" 
+              alt="WaddleBet" 
               className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover"
             />
             <span className="font-bold text-lg sm:text-xl tracking-tight">
-              Coming <span className="gradient-text-blue">Soon</span>
+              Waddle<span className="gradient-text-blue">Bet</span>
             </span>
           </a>
 
@@ -207,14 +207,14 @@ function Navigation() {
             <div className="w-px h-6 bg-white/10" />
             
             <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-sm font-medium">
-              Token Soon
+              $WADDLE
             </span>
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex md:hidden items-center gap-3">
             <span className="px-2 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-medium">
-              Soon
+              $WADDLE
             </span>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -337,8 +337,8 @@ function HeroSection() {
           transition={{ delay: 0.3 }}
           className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-6"
         >
-          <span className="block">Coming</span>
-          <span className="gradient-text">Soon</span>
+          <span className="block">Waddle</span>
+          <span className="gradient-text">Bet</span>
         </motion.h1>
 
         {/* Tagline */}
@@ -422,7 +422,7 @@ function HeroSection() {
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </a>
           <a
-            href="https://clubpengu.fun"
+            href="https://waddle.bet"
             target="_blank"
             rel="noopener noreferrer"
             className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white/10 border border-white/20 text-white font-semibold flex items-center gap-2 hover:bg-white/20 hover:border-white/30 transition-all text-sm sm:text-base"
@@ -440,7 +440,7 @@ function HeroSection() {
           className="mt-16 inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20"
         >
           <Coins className="w-5 h-5 text-yellow-500" />
-          <span className="text-yellow-500 font-bold">$TOKEN</span>
+          <span className="text-yellow-500 font-bold">$WADDLE</span>
           <span className="text-slate-400">•</span>
           <span className="text-slate-400 text-sm">Solana Native</span>
         </motion.div>
@@ -499,6 +499,7 @@ function BundleSection() {
     { wallet: "6jHTTtiUUWG82rDotrFEciH1CeKEdzXcuiEfYW41uzz7", percent: 0.24 },
     { wallet: "7wQNpuGnzG3WJiReAfV5fRQh8ZxjQ3F42Vr6XQM7xQnm", percent: 1.97 },
     { wallet: "9XdbPLGDfAvYHexgvR8jX9x5jxX2YEqW1TNXueZNq9EC", percent: 1.0 },
+    { wallet: "J9D969CzcZ9rQaaa5PQgfXyaWqPHiAdRwHVvpZFuUYNd", percent: 1.5 },
   ];
 
   const devWallet = { wallet: "AXrG4FUNPeasXynafgwZNa7MVhfmjS3ibX9Q1iqR49zb", percent: 4.5, label: "Dev Wallet" };
@@ -532,7 +533,7 @@ function BundleSection() {
             Demystifying the <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400">Bundle</span>
           </h2>
           <p className="text-slate-400 text-lg max-w-3xl mx-auto">
-            We&apos;re migrating our community and holders from CPw3 to a new token. 
+            We&apos;re migrating our community and holders to $WADDLE. 
             The dev wallet will purchase ~40% of supply and distribute it to proven, battle-tested holders.
           </p>
         </motion.div>
@@ -748,7 +749,7 @@ function BundleSection() {
             <h3 className="text-2xl font-bold mb-4">These Holders Have Been Tested</h3>
             <p className="text-slate-400 mb-6 leading-relaxed">
               Every wallet in this bundle belongs to a day 1 supporter and deep-pocketed round tripper. 
-              They watched CPw3 hit <span className="text-green-400 font-bold">$700,000 market cap</span> and 
+              They watched our previous token hit <span className="text-green-400 font-bold">$700,000 market cap</span> and 
               rode it all the way down to <span className="text-red-400 font-bold">$0</span> without selling.
             </p>
             <p className="text-slate-400 mb-8 leading-relaxed">
@@ -896,7 +897,7 @@ function AboutSection() {
             Waddle Into <span className="gradient-text-blue">Web3</span>
           </h2>
           <p className="text-slate-400 text-lg max-w-3xl mx-auto">
-            Coming Soon brings the nostalgia of classic penguin social gaming into the future—combining 
+            WaddleBet brings the nostalgia of classic penguin social gaming into the future—combining 
             beloved mechanics with Solana&apos;s speed and the thrill of crypto-native wagering.
           </p>
         </motion.div>
@@ -905,7 +906,7 @@ function AboutSection() {
           {[
             {
               icon: <Users className="w-8 h-8" />,
-              title: "Coming Soon Vibes",
+              title: "WaddleBet Vibes",
               description: "Classic 3D voxel world, penguin customization, puffles, emotes, and the social experience you remember—rebuilt for Web3.",
               color: "from-cyan-500 to-blue-500",
             },
@@ -1213,7 +1214,7 @@ function EconomySection() {
             The <span className="text-yellow-400">Native</span> Token
           </h2>
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            The native platform token that powers the Coming Soon ecosystem.
+            The native platform token that powers the WaddleBet ecosystem.
           </p>
         </motion.div>
 
@@ -1234,11 +1235,11 @@ function EconomySection() {
                 <div className="text-center">
                   <img 
                     src="/character.png" 
-                    alt="Coming Soon" 
+                    alt="WaddleBet" 
                     className="w-20 h-20 md:w-28 md:h-28 rounded-2xl object-cover mx-auto shadow-lg"
                   />
-                  <p className="text-2xl font-bold text-white mt-4">Coming Soon</p>
-                  <p className="text-sm text-yellow-100/80">New Token Launch</p>
+                  <p className="text-2xl font-bold text-white mt-4">$WADDLE</p>
+                  <p className="text-sm text-yellow-100/80">Solana Native Token</p>
                 </div>
               </div>
               
@@ -1810,7 +1811,7 @@ function PlatformEconomicsSection() {
               </thead>
               <tbody className="divide-y divide-white/5">
                 <tr className="bg-green-500/5">
-                  <td className="py-3 px-4 font-semibold text-green-400">Coming Soon</td>
+                  <td className="py-3 px-4 font-semibold text-green-400">WaddleBet</td>
                   <td className="py-3 px-4 text-center font-mono text-green-400">5%</td>
                   <td className="py-3 px-4 text-center text-slate-300">P2P Rake</td>
                 </tr>
@@ -2314,7 +2315,7 @@ function Footer() {
             <div>
               <h4 className="font-semibold text-yellow-500 mb-2 text-sm sm:text-base">Development Notice</h4>
               <p className="text-slate-400 text-xs sm:text-sm">
-                Coming Soon is currently in active development. Features, tokenomics, and gameplay mechanics 
+                WaddleBet is currently in active development. Features, tokenomics, and gameplay mechanics 
                 described in this whitepaper are subject to change. Join our community to stay updated on progress.
               </p>
             </div>
@@ -2328,11 +2329,11 @@ function Footer() {
             <div className="flex items-center gap-3">
               <img 
                 src="/character.png" 
-                alt="Coming Soon" 
+                alt="WaddleBet" 
                 className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl object-cover"
               />
               <div className="text-center sm:text-left">
-                <span className="font-bold text-base sm:text-lg">Coming Soon</span>
+                <span className="font-bold text-base sm:text-lg">WaddleBet</span>
                 <p className="text-slate-500 text-xs sm:text-sm">Permissionless Social Wagering</p>
               </div>
             </div>
@@ -2357,8 +2358,8 @@ function Footer() {
           {/* Bottom row: Links and Copyright */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-white/5">
             <div className="flex flex-wrap items-center justify-center gap-4 text-slate-500 text-xs sm:text-sm">
-              <span className="text-slate-600 cursor-not-allowed">
-                Token Coming Soon
+              <span className="text-cyan-400 font-semibold">
+                $WADDLE
               </span>
               <span className="text-slate-700">•</span>
               <a href={SOCIAL_LINKS.github} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
@@ -2374,7 +2375,7 @@ function Footer() {
               <span>Built on</span>
               <span className="text-purple-400 font-semibold">Solana</span>
               <span className="text-slate-700">•</span>
-              <span>© 2025 Coming Soon</span>
+              <span>© 2025 WaddleBet</span>
             </div>
           </div>
         </div>

@@ -15,22 +15,22 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Coming Soon | Permissionless Social Wagering on Solana",
+  title: "WaddleBet | Permissionless Social Wagering on Solana",
   description: "No KYC. No accounts. Wager any SPL token P2P with instant on-chain settlement. x402 payment protocol, x403 wallet auth. First of its kind.",
-  keywords: ["Solana", "Web3", "P2P Wagering", "No KYC", "x402", "SPL Token", "Crypto Gaming", "DeFi"],
+  keywords: ["Solana", "Web3", "P2P Wagering", "No KYC", "x402", "SPL Token", "Crypto Gaming", "DeFi", "WaddleBet", "WADDLE"],
   icons: {
     icon: "/character.png",
     apple: "/character.png",
   },
   openGraph: {
-    title: "Coming Soon | Permissionless Social Wagering on Solana",
+    title: "WaddleBet | Permissionless Social Wagering on Solana",
     description: "No KYC. No accounts. Wager any SPL token P2P with instant on-chain settlement.",
     type: "website",
     images: ["/character.png"],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Coming Soon | Permissionless Social Wagering on Solana",
+    title: "WaddleBet | Permissionless Social Wagering on Solana",
     description: "No KYC. Wager any SPL token. x402 protocol. First permissionless social wagering platform.",
     images: ["/character.png"],
   },

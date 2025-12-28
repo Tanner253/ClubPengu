@@ -40,9 +40,9 @@ const BANNER_FONTS = [
 // Tokens for Token Gate (community/meme tokens that make sense for holder gating)
 const TOKEN_GATE_TOKENS = [
     { 
-        symbol: '$CPw3', 
-        name: 'Club Pengu',
-        address: '63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump'
+        symbol: '$WADDLE', 
+        name: 'WaddleBet',
+        address: '' // Token address TBD
     },
     { 
         symbol: 'BONK', 
@@ -50,28 +50,23 @@ const TOKEN_GATE_TOKENS = [
         address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'
     },
     { 
-        symbol: '$MARCUS', 
-        name: 'Marcus',
-        address: 'qsh1EJb3naDChaCS49nSNyMiTpXcCus8KcKAE17pump'
+        symbol: 'WIF', 
+        name: 'dogwifhat',
+        address: 'EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm'
     }
 ];
 
 // Tokens for Entry Fee (includes stables and SOL for payments)
 const ENTRY_FEE_TOKENS = [
     { 
-        symbol: '$CPw3', 
-        name: 'Club Pengu',
-        address: '63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump'
+        symbol: '$WADDLE', 
+        name: 'WaddleBet',
+        address: '' // Token address TBD
     },
     { 
         symbol: 'BONK', 
         name: 'Bonk',
         address: 'DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263'
-    },
-    { 
-        symbol: '$MARCUS', 
-        name: 'Marcus',
-        address: 'qsh1EJb3naDChaCS49nSNyMiTpXcCus8KcKAE17pump'
     },
     { 
         symbol: 'SOL', 
@@ -918,7 +913,7 @@ const IglooSettingsPanel = ({
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-400">Total Rent Paid:</span>
                                     <span className="text-yellow-400 font-mono">
-                                        {iglooData?.stats?.totalRentPaid?.toLocaleString() || 0} CPw3
+                                        {iglooData?.stats?.totalRentPaid?.toLocaleString() || 0} $WADDLE
                                     </span>
                                 </div>
                                 
@@ -978,7 +973,7 @@ const IglooSettingsPanel = ({
                                             ? '⏳ Processing Payment...' 
                                             : rentPaymentSuccess 
                                                 ? '✅ Payment Sent!'
-                                                : `💰 Pay Rent (${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} CPw3)`}
+                                                : `💰 Pay Rent (${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $WADDLE)`}
                                     </button>
                                 </div>
                             )}

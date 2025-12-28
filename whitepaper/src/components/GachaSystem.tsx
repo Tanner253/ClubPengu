@@ -647,7 +647,7 @@ export default function GachaSystemSection() {
           <CollapsibleSection
             title="Duplicates & Future Trading"
             icon={<Gift className="w-5 h-5" />}
-            badgeText="Coming Soon"
+            badgeText="Trading Soon"
             badgeColor="bg-orange-500/20 text-orange-400"
           >
             <div className="grid md:grid-cols-2 gap-6">
@@ -720,7 +720,7 @@ export default function GachaSystemSection() {
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <a
-                href="https://clubpengu.fun"
+                href="https://waddle.bet"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="px-6 py-3 rounded-xl bg-gradient-to-r from-pink-500 to-yellow-500 text-white font-bold hover:opacity-90 transition-all"

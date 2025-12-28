@@ -9,11 +9,11 @@
 // Tokens available for quick-select when creating a wager
 export const WAGER_TOKENS = [
     { 
-        symbol: '$CPw3', 
-        name: 'Club Pengu',
-        address: '63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump',
+        symbol: '$WADDLE', 
+        name: 'WaddleBet',
+        address: '', // Token address TBD
         decimals: 6,
-        logoURI: '/tokens/cpw3.png',
+        logoURI: '/tokens/waddle.png',
         isDefault: true  // Default token for wagers
     },
     { 
@@ -42,7 +42,7 @@ export const WAGER_TOKENS = [
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Get default wager token (CPw3)
+ * Get default wager token ($WADDLE)
  */
 export const getDefaultWagerToken = () => {
     return WAGER_TOKENS.find(t => t.isDefault) || WAGER_TOKENS[0];

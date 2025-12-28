@@ -74,7 +74,7 @@ export const AI_EMOTES = ['Wave', 'Dance', 'Laugh', 'Sit', 'Breakdance'];
 // AI Conversation dialogues
 export const AI_CONVERSATIONS = [
     ["Did you see SOL today?", "SOLANA is skyrocketing! 🚀", "To the moon we go!", "HODL your flippers!"],
-    ["Club Pengu is back!", "I missed this place.", "Let's go dance!", "Wait for me!"],
+    ["WaddleBet is back!", "I missed this place.", "Let's go dance!", "Wait for me!"],
     ["Nice outfit.", "Thanks, it's custom.", "Very stylish.", "You look cool too."],
     ["Is it cold?", "Ideally freezing.", "Perfect weather.", "Let's slide on the ice."],
     ["Waddle on!", "Waddle on!", "See you around.", "Bye for now!"],
@@ -408,7 +408,7 @@ export const IGLOO_BANNER_STYLES = [
 export const IGLOO_BANNER_CONTENT = [
     { title: "🌙 Moon Crew HQ", ticker: "$MOON", shill: "Private Alpha • DM for invite" },
     { title: "🔥 Degen's Den", ticker: "$DEGEN", shill: "100x gems daily • VIP access" },
-    { title: "🎧 SKNY GANG", ticker: "$CPw3", shill: "VIP Access • The Rave Never Stops • Rent igloos for 100k $CPw3/day" },
+    { title: "🎧 SKNY GANG", ticker: "$WADDLE", shill: "VIP Access • The Rave Never Stops • Rent igloos for 100k $WADDLE/day" },
     { title: "💎 Diamond Flippers", ticker: "$FLIP", shill: "We don't sell • Join the cult" },
     { title: "🚀 Launch Pad", ticker: "$PAD", shill: "Early access • Presale alerts" },
     { title: "🎰 Whale Watchers", ticker: "$WHALE", shill: "Track big wallets • Free signals" },

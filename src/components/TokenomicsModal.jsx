@@ -1,5 +1,5 @@
 /**
- * TokenomicsModal - $CPw3 Token Utility & Tokenomics Information
+ * TokenomicsModal - $WADDLE Token Utility & Tokenomics Information
  */
 
 import React, { useRef } from 'react';
@@ -15,8 +15,8 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
     
     const features = [
-        { emoji: '👑', title: 'Whale Status Nametags', description: 'Your $CPw3 balance = your clout. 6 tiers from Standard to Legendary with animated effects.' },
-        { emoji: '🎰', title: 'Casino & Slots', description: 'Spin slots with $CPw3 to win tradeable cosmetics. Common to Legendary drops.' },
+        { emoji: '👑', title: 'Whale Status Nametags', description: 'Your $WADDLE balance = your clout. 6 tiers from Standard to Legendary with animated effects.' },
+        { emoji: '🎰', title: 'Casino & Slots', description: 'Spin slots with $WADDLE to win tradeable cosmetics. Common to Legendary drops.' },
         { emoji: '🏠', title: 'Igloo Ownership', description: 'Own or rent igloos. Sell your property on the open market to other players.' },
         { emoji: '👕', title: 'Tradeable Cosmetics', description: 'Every cosmetic is tradeable. Win rare items in slots, flip for profit.' },
         { emoji: '🎮', title: 'Universal Wagering', description: 'Wager ANY Solana token on PvP games. Tic-tac-toe, Connect 4, Card Jitsu.' },
@@ -44,9 +44,9 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                         <div className="text-3xl sm:text-4xl animate-bounce-slow">🐧</div>
                         <div>
                             <h2 className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400">
-                                $CPw3 TOKENOMICS
+                                $WADDLE TOKENOMICS
                             </h2>
-                            <p className="text-white/50 text-xs sm:text-sm">The Future of Club Pengu on Solana</p>
+                            <p className="text-white/50 text-xs sm:text-sm">The Future of WaddleBet on Solana</p>
                         </div>
                     </div>
                     <button 
@@ -64,7 +64,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                     <div className="relative bg-gradient-to-r from-cyan-600/30 via-blue-600/30 to-purple-600/30 rounded-xl p-4 sm:p-6 border border-white/10">
                         <h3 className="text-lg sm:text-xl font-bold text-white mb-2">🚀 Web3 Meets Nostalgia</h3>
                         <p className="text-white/70 text-sm sm:text-base leading-relaxed">
-                            Remember the OG Club Pengu? We're bringing it back, but this time <span className="text-cyan-400 font-bold">YOU</span> own everything. 
+                            Remember the OG Club Penguin? We're bringing it back, but this time <span className="text-cyan-400 font-bold">YOU</span> own everything. 
                             Powered by <span className="text-purple-400 font-bold">Solana</span>, secured by <span className="text-green-400 font-bold">x402</span>.
                         </p>
                         <div className="mt-4 flex flex-wrap gap-2">
@@ -78,7 +78,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                     <div>
                         <h3 className="text-white font-bold text-base sm:text-lg mb-3 flex items-center gap-2">
                             <span className="text-2xl">💎</span>
-                            <span>$CPw3 Utility</span>
+                            <span>$WADDLE Utility</span>
                         </h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {features.map((feature, idx) => (
@@ -120,7 +120,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                             <span>Whale Status Tiers</span>
                         </h3>
                         <p className="text-white/60 text-sm mb-3">
-                            Your $CPw3 balance determines your in-game clout. Bigger bags = fancier nametags.
+                            Your $WADDLE balance determines your in-game clout. Bigger bags = fancier nametags.
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {[

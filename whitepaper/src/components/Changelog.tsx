@@ -82,13 +82,13 @@ const CHANGELOG_DATA: ChangelogVersion[] = [
   {
     version: "1.0.0",
     date: "December 27, 2025",
-    title: "🚀 Rebranding - New Token Coming Soon!",
-    description: "Major rebranding with new token launch. Airdrop for OG holders who helped invest and get the game developed!",
+    title: "🚀 WaddleBet Rebrand & $WADDLE Token Launch",
+    description: "Major rebranding to WaddleBet with $WADDLE token launch. Airdrop for OG holders who helped invest and get the game developed!",
     highlight: true,
     changes: [
-      { type: "feature", text: "New token launching - airdrop for early supporters and investors" },
+      { type: "feature", text: "$WADDLE token launching on Solana - airdrop for early supporters and investors" },
       { type: "feature", text: "OG holder rewards program for those who helped develop the game" },
-      { type: "content", text: "Complete brand refresh and identity update" },
+      { type: "content", text: "Complete rebrand from Club Pengu to WaddleBet" },
     ],
   },
   {
@@ -226,12 +226,12 @@ const CHANGELOG_DATA: ChangelogVersion[] = [
     version: "0.9.0",
     date: "December 16, 2025",
     title: "✨ Whale Status & Nametag System",
-    description: "Tiered status system based on $CPw3 holdings with particle effects",
+    description: "Tiered status system based on $WADDLE holdings with particle effects",
     stats: { filesChanged: 6, additions: 795, deletions: 657 },
     changes: [
       { type: "feature", text: "Whale Status nametag tiers: Standard → Bronze → Silver → Gold → Diamond → Legendary" },
       { type: "feature", text: "LocalizedParticleSystem for gold rain effects on high-tier nametags (275 lines)" },
-      { type: "feature", text: "Real-time $CPw3 balance checking via Solana RPC" },
+      { type: "feature", text: "Real-time $WADDLE balance checking via Solana RPC" },
       { type: "content", text: "BONK cosmetic set: orange skin + hat + eyes + shirt (154 lines of voxel art)" },
       { type: "content", text: "MISTOR GOAT cosmetic set with silver skin theme" },
       { type: "improvement", text: "Chat bubbles repositioned with correct offset above players" },

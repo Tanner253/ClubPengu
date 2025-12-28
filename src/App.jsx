@@ -197,7 +197,7 @@ const AppContent = () => {
     // Initialize GameManager on mount
     useEffect(() => {
         const gm = GameManager.getInstance();
-        console.log('🐧 Club Pengu Loaded!');
+        console.log('🐧 WaddleBet Loaded!');
         console.log('💰 Coins:', gm.getCoins());
     }, []);
     
