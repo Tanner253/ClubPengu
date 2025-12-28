@@ -104,6 +104,7 @@ function Navigation() {
   const [featuresOpen, setFeaturesOpen] = useState(false);
 
   const navItems = [
+    { label: "Bundle", href: "#bundle" },
     { label: "Product", href: "#about" },
     { label: "Wagering", href: "#wagering" },
     { label: "Economics", href: "#economics" },
@@ -461,6 +462,418 @@ function HeroSection() {
           <ChevronDown className="w-5 h-5" />
         </motion.div>
       </motion.div>
+    </section>
+  );
+}
+
+// Bundle Section - Demystifying the Bundle
+function BundleSection() {
+  const bundleHolders = [
+    { wallet: "99ZYDvYeNw9DYG3SvFk13bjRkpXdx9bHUuQnVhy84jYS", percent: 2.5 },
+    { wallet: "GAsvAHPPoxQsEAkrTshHE8u8MAdQCKzMXSLv3HDPk7xb", percent: 0.1 },
+    { wallet: "3hK5mVFAGT1yzN9QgZaamjmeb5mzK5GQAXBBHVoiE96T", percent: 3.5 },
+    { wallet: "7MfcoH6vdCsWBo8NBE5ezZQfzhqAxdYQxnicsbqYuj2X", percent: 2.6 },
+    { wallet: "89LwG48p52RnB6X8T1C4RDYq4LP1nCN965REZfcUjWDf", percent: 2.0 },
+    { wallet: "5qzFRgjj8cfMjB9W5PVDVtgn8vpSMvTktVDZMmV7Z5x1", percent: 1.8 },
+    { wallet: "6dhrG4ixKsqHByajE4Ur38by3g3P2GZKMqaZXytSt7ij", percent: 1.57 },
+    { wallet: "FmMFMUjBLNChWKmysAemswPVYtjX9d9y9S9a7EtNVm9N", percent: 0.25 },
+    { wallet: "ABeccsRgujcPqm3dQRpNdvzt3ZrH6mmbozVFis4rG9zA", percent: 1.6 },
+    { wallet: "EPh3Bjk65HxJ4p4gz8mByRaQDgJdtjtdcpaYqB2oYYBf", percent: 2.0 },
+    { wallet: "FJb7LHdi47GygdUWbj5DLo3xnQJZrRdvZrqsuQMqtsrN", percent: 0.5 },
+    { wallet: "CzkSccmfqpF7z9Yrcsw1AESRNJJ6rNkgWWLCBn2X2tCD", percent: 0.5 },
+    { wallet: "Hc16fvevERV3RNJNziG2YJk3sRnuCa5N6EhC8jaEKAm3", percent: 1.4 },
+    { wallet: "AG2c7nWPmVe1uGTkrLqdqgNCMxCSXbpVFs6UUemw1tLz", percent: 2.0 },
+    { wallet: "GpdLQGzLsyicF2EBfXw2PgPM5aei2ThmNtk7vVHEFgbm", percent: 1.0 },
+    { wallet: "9qYjY2TZhk2WJC7BUx2aeZp1s26n6y4yugmDArWchEBb", percent: 2.2 },
+    { wallet: "7vHisWaDfFkoPFWixfncGpN6SrbfvakkxcK2BaJtRzeG", percent: 1.8 },
+    { wallet: "A6wuU52PNhSV8saUApeXkdpvtRLbagNThNoxVK7xYrdk", percent: 0.1 },
+    { wallet: "6Y72yX9Ekx17HPh6W6EooAuBmTfhDpv2W6RkBLyJxzDz", percent: 2.1 },
+    { wallet: "Dk7VbRhg6FZEkbtuGtGKrvan3PdHwEY5JEXnr3Rsmebx", percent: 2.5 },
+    { wallet: "8RuuaYZjHoEyHxziWH2CRoy6PizMKNyfwcfxvACarcQx", percent: 2.8 },
+    { wallet: "FnvFri9W5pRN2B7UZ7ZwWTjMME7qGR9coRs4r7nBETBq", percent: 2.0 },
+    { wallet: "8smF4FAirYoe39dCNnfrtwiQnTwTXPfYLi1ywmjZMppk", percent: 0.7 },
+    { wallet: "228StDYgyBA6R5zsKYynnnazh6V93Yq1QEEUDyy23Tc8", percent: 0.1 },
+    { wallet: "7nxkZ5phHSwQP7m4QvCigzJXQz1ZRjeRxeSnnCNSCPhm", percent: 0.6 },
+    { wallet: "FUoHjRgxwKJwfQEMwcpMRQYhV8TscEoxZKee1wEzo1o7", percent: 0.5 },
+    { wallet: "FDf6KmG6ZQ6d6RgsueGRJeSFVEwHMHbySF1CjXeEKxcL", percent: 0.3, note: "3 SOL bonus" },
+    { wallet: "6jHTTtiUUWG82rDotrFEciH1CeKEdzXcuiEfYW41uzz7", percent: 0.3 },
+  ];
+
+  const devWallet = { wallet: "AXrG4FUNPeasXynafgwZNa7MVhfmjS3ibX9Q1iqR49zb", percent: 4.0, label: "Dev Wallet" };
+
+  const totalHolderPercent = bundleHolders.reduce((acc, h) => acc + h.percent, 0);
+  const avgHolding = totalHolderPercent / bundleHolders.length;
+  const maxHolding = Math.max(...bundleHolders.map(h => h.percent));
+  const minHolding = Math.min(...bundleHolders.map(h => h.percent));
+
+  // Sort by percent descending for visualization
+  const sortedHolders = [...bundleHolders].sort((a, b) => b.percent - a.percent);
+
+  return (
+    <section id="bundle" className="py-32 px-6 relative overflow-hidden">
+      {/* Dramatic background */}
+      <div className="absolute inset-0">
+        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-emerald-500/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-3xl" />
+      </div>
+
+      <div className="max-w-6xl mx-auto relative">
+        {/* Header */}
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-16"
+        >
+          <span className="text-emerald-400 text-sm font-semibold uppercase tracking-widest">Transparency</span>
+          <h2 className="text-4xl md:text-6xl font-bold mt-4 mb-6">
+            Demystifying the <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400">Bundle</span>
+          </h2>
+          <p className="text-slate-400 text-lg max-w-3xl mx-auto">
+            We&apos;re migrating our community and holders from CPw3 to a new token. 
+            The dev wallet will purchase ~40% of supply and distribute it to proven, battle-tested holders.
+          </p>
+        </motion.div>
+
+        {/* Airdrop Distribution Timeline */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="glass-card rounded-2xl p-8 mb-16 border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-emerald-500/5"
+        >
+          <div className="flex items-center gap-3 justify-center mb-6">
+            <div className="w-12 h-12 rounded-xl bg-cyan-500/20 flex items-center justify-center text-2xl">
+              ⏰
+            </div>
+            <h3 className="text-2xl font-bold text-cyan-400">Airdrop Distribution Schedule</h3>
+          </div>
+          
+          <div className="max-w-3xl mx-auto">
+            <p className="text-slate-300 text-center mb-8 leading-relaxed">
+              To ensure a <span className="text-emerald-400 font-semibold">fair and stable launch</span>, the dev wallet will purchase approximately 
+              <span className="text-white font-bold"> 40% of supply</span> and distribute airdrops in a controlled, transparent manner.
+            </p>
+
+            <div className="grid md:grid-cols-3 gap-6 mb-8">
+              <div className="text-center p-5 rounded-xl bg-white/5 border border-cyan-500/20">
+                <div className="text-3xl mb-3">🚀</div>
+                <div className="text-lg font-bold text-white mb-1">Launch</div>
+                <div className="text-sm text-slate-400">Token goes live</div>
+              </div>
+              <div className="text-center p-5 rounded-xl bg-white/5 border border-emerald-500/20">
+                <div className="text-3xl mb-3">⏳</div>
+                <div className="text-lg font-bold text-emerald-400 mb-1">+1 Hour</div>
+                <div className="text-sm text-slate-400">Airdrops begin</div>
+              </div>
+              <div className="text-center p-5 rounded-xl bg-white/5 border border-purple-500/20">
+                <div className="text-3xl mb-3">🔄</div>
+                <div className="text-lg font-bold text-purple-400 mb-1">Every 10 Min</div>
+                <div className="text-sm text-slate-400">Next recipient receives</div>
+              </div>
+            </div>
+
+            <div className="p-5 rounded-xl bg-gradient-to-r from-emerald-500/10 to-cyan-500/10 border border-emerald-500/20">
+              <h4 className="font-bold text-emerald-400 mb-3 flex items-center gap-2">
+                <span>📋</span> Distribution Order: Smallest → Largest
+              </h4>
+              <p className="text-slate-400 text-sm leading-relaxed">
+                Airdrops will be distributed starting with the <span className="text-white font-semibold">smallest allocation recipients first</span>, 
+                working up to the largest holders. This ensures early price stability and gives smaller holders their tokens 
+                before larger amounts hit wallets. The entire distribution will complete over approximately <span className="text-cyan-400 font-semibold">4.5 hours</span> after launch.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              {[
+                { icon: "🛡️", label: "Prevents instant dumps" },
+                { icon: "📈", label: "Allows organic price discovery" },
+                { icon: "⚖️", label: "Fair to all holders" },
+                { icon: "👀", label: "Fully transparent" },
+              ].map((item, i) => (
+                <span
+                  key={i}
+                  className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-slate-300 text-sm flex items-center gap-2"
+                >
+                  <span>{item.icon}</span>
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Why Bundles Are Scary vs Why Ours Is Different */}
+        <div className="grid lg:grid-cols-2 gap-8 mb-16">
+          {/* Why Bundles Are Scary */}
+          <motion.div
+            initial={{ opacity: 0, x: -40 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            className="glass-card rounded-2xl p-8 border-red-500/20 bg-gradient-to-br from-red-500/5 to-transparent"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-red-500/20 flex items-center justify-center text-2xl">
+                ⚠️
+              </div>
+              <h3 className="text-2xl font-bold text-red-400">Why Bundles Are Scary</h3>
+            </div>
+            <ul className="space-y-4">
+              {[
+                { icon: "💀", text: "Can be \"1-clipped\" — dumped all at once by a single holder" },
+                { icon: "🎯", text: "Often concentrated in few wallets with 10-20%+ each" },
+                { icon: "🏃", text: "Holders have no history — could be snipers or bots" },
+                { icon: "📉", text: "No proven loyalty — will sell at first pump" },
+                { icon: "❓", text: "Unknown intentions — could be coordinated dump" },
+              ].map((item, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="text-xl shrink-0">{item.icon}</span>
+                  <span className="text-slate-400">{item.text}</span>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+
+          {/* Why Our Bundle Is Different */}
+          <motion.div
+            initial={{ opacity: 0, x: 40 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            className="glass-card rounded-2xl p-8 border-emerald-500/30 bg-gradient-to-br from-emerald-500/10 to-transparent"
+          >
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-emerald-500/20 flex items-center justify-center text-2xl">
+                💎
+              </div>
+              <h3 className="text-2xl font-bold text-emerald-400">Why Ours Is Different</h3>
+            </div>
+            <ul className="space-y-4">
+              {[
+                { icon: "✅", text: "Fair distribution — avg holding of only ~1.3% per wallet" },
+                { icon: "🛡️", text: "28 individual holders — no single wallet dominates" },
+                { icon: "🔥", text: "Battle-tested — held from $700K to $0 without selling" },
+                { icon: "💰", text: "Dev making holders whole — using personal funds" },
+                { icon: "🤝", text: "Day 1 supporters only — proven community members" },
+              ].map((item, i) => (
+                <li key={i} className="flex items-start gap-3">
+                  <span className="text-xl shrink-0">{item.icon}</span>
+                  <span className="text-slate-300">{item.text}</span>
+                </li>
+              ))}
+            </ul>
+          </motion.div>
+        </div>
+
+        {/* Key Statistics */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="glass-card rounded-2xl p-8 mb-16 border-emerald-500/20"
+        >
+          <h3 className="text-xl font-bold text-center mb-8 text-emerald-400">📊 Bundle Statistics</h3>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-center">
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="text-3xl font-bold text-emerald-400">{bundleHolders.length}</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mt-1">Holders</div>
+            </div>
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="text-3xl font-bold text-cyan-400">{avgHolding.toFixed(2)}%</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mt-1">Avg. Holding</div>
+            </div>
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="text-3xl font-bold text-yellow-400">{maxHolding}%</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mt-1">Max Holding</div>
+            </div>
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="text-3xl font-bold text-purple-400">{minHolding}%</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mt-1">Min Holding</div>
+            </div>
+            <div className="p-4 rounded-xl bg-white/5">
+              <div className="text-3xl font-bold text-pink-400">{(totalHolderPercent + devWallet.percent).toFixed(1)}%</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider mt-1">Total Bundle</div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Visual Distribution */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mb-16"
+        >
+          <h3 className="text-xl font-bold text-center mb-6">Distribution Visualization</h3>
+          <p className="text-slate-500 text-center text-sm mb-8">Each bar represents one wallet&apos;s share. Hover for details.</p>
+          
+          {/* Bar Chart */}
+          <div className="glass-card rounded-2xl p-6 pt-16 overflow-visible">
+            <div className="flex items-end gap-1.5 justify-center min-w-[600px] h-64 overflow-visible">
+              {sortedHolders.map((holder, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ height: 0 }}
+                  whileInView={{ height: `${(holder.percent / maxHolding) * 100}%` }}
+                  viewport={{ once: true }}
+                  transition={{ delay: i * 0.02, duration: 0.5 }}
+                  className="group relative w-7 bg-gradient-to-t from-emerald-600 to-cyan-500 rounded-t-sm cursor-pointer hover:from-emerald-500 hover:to-cyan-400 transition-colors"
+                >
+                  {/* Tooltip */}
+                  <div className={`absolute bottom-full mb-3 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 ${i < 3 ? 'left-0' : i > sortedHolders.length - 4 ? 'right-0' : 'left-1/2 -translate-x-1/2'}`}>
+                    <div className="bg-black/95 rounded-lg px-4 py-3 text-sm whitespace-nowrap shadow-xl border border-white/10">
+                      <div className="font-mono text-cyan-400 text-xs mb-1">{holder.wallet}</div>
+                      <div className="text-white font-bold text-lg">{holder.percent}%</div>
+                    </div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+            <div className="flex justify-center mt-6 text-sm text-slate-500">
+              <span>Community Holders ({bundleHolders.length} wallets) — Hover bars for wallet details</span>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* The Story */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="glass-card rounded-2xl p-8 mb-16 border-cyan-500/20 bg-gradient-to-br from-cyan-500/5 to-purple-500/5"
+        >
+          <div className="max-w-3xl mx-auto text-center">
+            <div className="text-5xl mb-6">🛡️</div>
+            <h3 className="text-2xl font-bold mb-4">These Holders Have Been Tested</h3>
+            <p className="text-slate-400 mb-6 leading-relaxed">
+              Every wallet in this bundle belongs to a day 1 supporter and deep-pocketed round tripper. 
+              They watched CPw3 hit <span className="text-green-400 font-bold">$700,000 market cap</span> and 
+              rode it all the way down to <span className="text-red-400 font-bold">$0</span> without selling.
+            </p>
+            <p className="text-slate-400 mb-8 leading-relaxed">
+              This isn&apos;t a bundle of snipers or bots — it&apos;s a community of believers. 
+              The dev is making these holders whole out of his own pocket because 
+              <span className="text-cyan-400 font-semibold"> loyalty deserves to be rewarded.</span>
+            </p>
+            
+            <div className="grid grid-cols-3 gap-4">
+              <div className="p-4 rounded-xl bg-white/5 border border-green-500/20">
+                <div className="text-2xl font-bold text-green-400">$700K</div>
+                <div className="text-xs text-slate-500">Peak MC Held</div>
+              </div>
+              <div className="p-4 rounded-xl bg-white/5 border border-red-500/20">
+                <div className="text-2xl font-bold text-red-400">$0</div>
+                <div className="text-xs text-slate-500">Rode To Zero</div>
+              </div>
+              <div className="p-4 rounded-xl bg-white/5 border border-cyan-500/20">
+                <div className="text-2xl font-bold text-cyan-400">100%</div>
+                <div className="text-xs text-slate-500">Made Whole</div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Dev Commitment */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="glass-card rounded-2xl p-8 border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-pink-500/5"
+        >
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-5xl shrink-0">
+              ⚡
+            </div>
+            <div className="text-center md:text-left">
+              <h3 className="text-2xl font-bold mb-3">Dev Commitment</h3>
+              <p className="text-slate-400 mb-4">
+                <span className="text-white font-bold">300+ hours</span> of development in just 
+                <span className="text-white font-bold"> 16 days</span>. This project is built with 
+                obsession, not speculation. The dev is all-in financially and personally.
+              </p>
+              <div className="flex flex-wrap justify-center md:justify-start gap-3">
+                {[
+                  { label: "300+ Hours", icon: "⏰" },
+                  { label: "16 Days", icon: "📅" },
+                  { label: "Self-Funded Airdrop", icon: "💸" },
+                  { label: "Will Not Let It Die", icon: "🔥" },
+                ].map((item, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1.5 rounded-full bg-white/5 border border-purple-500/30 text-purple-300 text-sm flex items-center gap-2"
+                  >
+                    <span>{item.icon}</span>
+                    {item.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Full Wallet List (Collapsible) */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mt-16"
+        >
+          <details className="glass-card rounded-2xl overflow-hidden">
+            <summary className="p-6 cursor-pointer hover:bg-white/5 transition-colors flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <ScrollText className="w-5 h-5 text-emerald-400" />
+                <span className="font-bold">View Full Distribution List</span>
+              </div>
+              <ChevronDown className="w-5 h-5 text-slate-400" />
+            </summary>
+            <div className="p-6 pt-0 border-t border-white/5">
+              <div className="grid gap-2 max-h-96 overflow-y-auto pr-2">
+                {sortedHolders.map((holder, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between py-2 px-4 rounded-lg bg-white/5 hover:bg-white/10 transition-colors"
+                  >
+                    <code className="text-xs text-cyan-400 font-mono">
+                      {holder.wallet}
+                    </code>
+                    <span className="text-emerald-400 font-bold text-sm ml-4">
+                      {holder.percent}%
+                    </span>
+                  </div>
+                ))}
+                {/* Dev wallet highlighted */}
+                <div className="flex items-center justify-between py-2 px-4 rounded-lg bg-purple-500/10 border border-purple-500/30">
+                  <div className="flex items-center gap-2">
+                    <code className="text-xs text-purple-400 font-mono">
+                      {devWallet.wallet}
+                    </code>
+                    <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-400 text-xs">DEV</span>
+                  </div>
+                  <span className="text-purple-400 font-bold text-sm ml-4">
+                    {devWallet.percent}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          </details>
+        </motion.div>
+
+        {/* Bottom CTA */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="mt-12 text-center"
+        >
+          <p className="text-slate-500 mb-4">This bundle is a pillar of strength, not a red flag.</p>
+          <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30">
+            <span className="text-emerald-400 font-semibold">🏆 Community Strength</span>
+            <span className="text-slate-500">•</span>
+            <span className="text-cyan-400 font-semibold">💎 Diamond Hands Only</span>
+            <span className="text-slate-500">•</span>
+            <span className="text-purple-400 font-semibold">🚀 To Millions Together</span>
+          </div>
+        </motion.div>
+      </div>
     </section>
   );
 }
@@ -1098,12 +1511,12 @@ function WageringSection() {
         </motion.div>
 
         {/* Token showcase */}
-        <motion.div
+          <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+            viewport={{ once: true }}
           className="flex flex-wrap justify-center gap-3 mb-16"
-        >
+          >
           {["$SOL", "$BONK", "$WIF", "$PENGU", "Any SPL Token"].map((token, i) => (
             <span
               key={i}
@@ -1121,8 +1534,8 @@ function WageringSection() {
         {/* Games grid */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
           {games.map((game, i) => (
-            <motion.div
-              key={i}
+                    <motion.div
+                      key={i}
               initial={{ opacity: 0, y: 40 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
@@ -1132,17 +1545,17 @@ function WageringSection() {
               <span className="text-4xl md:text-5xl mb-3 md:mb-4 block">{game.emoji}</span>
               <h3 className="text-base md:text-lg font-bold mb-1 md:mb-2">{game.name}</h3>
               <p className="text-slate-400 text-xs md:text-sm">{game.description}</p>
-            </motion.div>
-          ))}
-        </div>
-
+                    </motion.div>
+                  ))}
+              </div>
+              
         {/* How it works */}
-        <motion.div
+          <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
+            viewport={{ once: true }}
           className="mt-16 glass-card rounded-2xl p-8 md:p-12"
-        >
+          >
           <h3 className="text-2xl font-bold mb-8 text-center">How P2P Wagering Works</h3>
           <div className="grid md:grid-cols-4 gap-8">
             {[
@@ -1155,24 +1568,24 @@ function WageringSection() {
                 <div className="text-4xl font-bold text-cyan-500/30 mb-4">{item.step}</div>
                 <h4 className="font-semibold mb-2">{item.title}</h4>
                 <p className="text-slate-400 text-sm">{item.desc}</p>
-              </div>
-            ))}
-          </div>
-          
+                </div>
+              ))}
+            </div>
+            
           {/* Rake disclosure */}
           <div className="mt-8 p-4 rounded-xl bg-gradient-to-r from-green-500/10 to-cyan-500/10 border border-green-500/20">
             <div className="flex items-center gap-3">
               <div className="text-2xl">💰</div>
-              <div>
+                <div>
                 <h4 className="font-semibold text-green-400">Platform Rake: 5%</h4>
                 <p className="text-slate-400 text-sm">
                   A 5% rake is taken from all P2P wager pots to support platform development. 
                   Winner receives 95% of the total pot instantly on-chain.
-                </p>
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
       </div>
     </section>
   );
@@ -1263,21 +1676,21 @@ function PlatformEconomicsSection() {
           <h3 className="text-2xl font-bold mb-6 text-center">Revenue Streams</h3>
           <div className="grid md:grid-cols-3 gap-4">
             {revenueStreams.map((stream, i) => (
-              <motion.div
-                key={i}
+            <motion.div
+              key={i}
                 initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: i * 0.1 }}
                 className="glass-card rounded-xl p-6 text-center"
-              >
+            >
                 <div className="text-4xl mb-4">{stream.icon}</div>
                 <h4 className="font-bold text-lg mb-2">{stream.name}</h4>
                 <div className="text-2xl font-bold text-cyan-400 mb-2">{stream.rate}</div>
                 <p className="text-slate-400 text-sm">{stream.description}</p>
-              </motion.div>
-            ))}
-          </div>
+            </motion.div>
+          ))}
+        </div>
         </motion.div>
 
         {/* P2P Rake Deep Dive */}
@@ -1373,7 +1786,7 @@ function PlatformEconomicsSection() {
                 <p className="text-slate-400 text-sm">{item.desc}</p>
               </motion.div>
             ))}
-          </div>
+              </div>
         </motion.div>
 
         {/* Industry Comparison */}
@@ -1975,6 +2388,7 @@ export default function WhitepaperPage() {
       <Snowfall />
       <Navigation />
       <HeroSection />
+      <BundleSection />
       <AboutSection />
       <FeaturesSection />
       <CustomizationSection />
