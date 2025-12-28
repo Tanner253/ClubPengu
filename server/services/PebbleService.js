@@ -25,22 +25,35 @@ class PebbleService {
         this.sendToPlayer = sendToPlayer;
         this.getPlayerByWallet = null; // Set later via setPlayerLookup
         
-        this.rakeWallet = process.env.RAKE_WALLET || process.env.VITE_RAKE_WALLET;
+        // These are set lazily in _ensureConfigured() after dotenv loads
+        this.rakeWallet = null;
+        this.connection = null;
+        this._configured = false;
         
-        // Get connection from solanaPaymentService
-        this.connection = solanaPaymentService?.connection || new Connection(
-            process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com',
+        console.log('🪨 PebbleService created (config loaded on first use)');
+    }
+    
+    /**
+     * Ensure env vars are loaded (call this at start of any public method)
+     */
+    _ensureConfigured() {
+        if (this._configured) return;
+        
+        this.rakeWallet = process.env.RAKE_WALLET;
+        this.connection = this.solanaPaymentService?.connection || new Connection(
+            process.env.SOLANA_RPC_URL,
             { commitment: 'confirmed' }
         );
+        this._configured = true;
+        
+        console.log('🪨 PebbleService configured');
+        console.log(`   Rate: ${PEBBLES_PER_SOL} Pebbles per SOL`);
+        console.log(`   Withdrawal Rake: ${WITHDRAWAL_RAKE_PERCENT}%`);
+        console.log(`   Rake Wallet: ${this.rakeWallet?.slice(0, 8) || 'NOT SET'}...`);
         
         if (!this.rakeWallet) {
             console.warn('⚠️ PebbleService: RAKE_WALLET not configured! Deposits will fail.');
         }
-        
-        console.log('🪨 PebbleService initialized');
-        console.log(`   Rate: ${PEBBLES_PER_SOL} Pebbles per SOL`);
-        console.log(`   Withdrawal Rake: ${WITHDRAWAL_RAKE_PERCENT}%`);
-        console.log(`   Rake Wallet: ${this.rakeWallet?.slice(0, 8) || 'NOT SET'}...`);
     }
     
     /**
@@ -56,6 +69,8 @@ class PebbleService {
      * Process a pebble deposit - verify native SOL transfer and credit pebbles
      */
     async depositPebbles(walletAddress, txSignature, expectedSolAmount, playerId = null) {
+        this._ensureConfigured();
+        
         console.log(`🪨 Pebble deposit requested: ${walletAddress.slice(0, 8)}...`);
         console.log(`   Tx: ${txSignature.slice(0, 16)}...`);
         console.log(`   Expected: ${expectedSolAmount} SOL`);
@@ -185,6 +200,8 @@ class PebbleService {
      * - Attempts instant payout OR queues if custodial wallet low
      */
     async withdrawPebbles(walletAddress, pebbleAmount, playerId = null) {
+        this._ensureConfigured();
+        
         console.log(`🪨 Pebble withdrawal request: ${walletAddress.slice(0, 8)}... - ${pebbleAmount} Pebbles`);
         
         // Validate minimum
@@ -411,6 +428,8 @@ class PebbleService {
      * Process pending withdrawals from queue (called periodically or when funds arrive)
      */
     async processWithdrawalQueue(maxToProcess = 5) {
+        this._ensureConfigured();
+        
         if (!this.custodialWalletService?.isReady()) {
             console.log('🪨 Queue: Custodial service not ready');
             return { processed: 0, failed: 0 };

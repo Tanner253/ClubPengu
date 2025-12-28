@@ -29,19 +29,29 @@ import SolanaTransaction from '../db/models/SolanaTransaction.js';
 import rateLimiter from '../utils/RateLimiter.js';
 
 // ==================== CONFIGURATION ====================
-const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
-const SOLANA_NETWORK_ID = process.env.SOLANA_NETWORK || 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+// These are loaded lazily in _initConnection() after dotenv
+let SOLANA_RPC_URL = null;
+let SOLANA_NETWORK_ID = null;
 
 class SolanaPaymentService {
     constructor() {
-        this.networkId = SOLANA_NETWORK_ID;
+        this.networkId = null;
         this.connection = null;
         // In-memory cache for recent signatures (fast lookup, DB is source of truth)
         this.recentSignatures = new Set();
-        this._initConnection();
+        // Connection is initialized lazily on first use
+        this._connectionInitialized = false;
+    }
+    
+    /**
+     * Initialize on first use (after dotenv has loaded)
+     */
+    async ensureInitialized() {
+        if (this._connectionInitialized) return;
         
-        // Load recent signatures from DB into cache on startup
-        this._loadRecentSignatures();
+        this._initConnection();
+        await this._loadRecentSignatures();
+        this._connectionInitialized = true;
     }
     
     /**
@@ -67,14 +77,25 @@ class SolanaPaymentService {
     }
     
     /**
-     * Initialize Solana RPC connection
+     * Initialize Solana RPC connection (called after dotenv loads)
      */
     _initConnection() {
+        // Read env vars NOW (after dotenv has loaded)
+        SOLANA_RPC_URL = process.env.SOLANA_RPC_URL;
+        SOLANA_NETWORK_ID = process.env.SOLANA_NETWORK || 'solana:5eykt4UsFv8P8NJdTREpY1vzqKqZKvdp';
+        this.networkId = SOLANA_NETWORK_ID;
+        
+        if (!SOLANA_RPC_URL) {
+            console.error('🚨 SOLANA_RPC_URL not set in environment!');
+            return;
+        }
+        
         try {
             this.connection = new Connection(SOLANA_RPC_URL, {
                 commitment: 'confirmed',
                 confirmTransactionInitialTimeout: 60000
             });
+            console.log(`🌐 SolanaPaymentService connected to RPC: ${SOLANA_RPC_URL.slice(0, 40)}...`);
             console.log(`🔗 SolanaPaymentService: Connected to ${SOLANA_RPC_URL.includes('mainnet') ? 'mainnet' : 'devnet'}`);
         } catch (error) {
             console.error('🔗 SolanaPaymentService: Failed to initialize:', error);
@@ -217,6 +238,8 @@ class SolanaPaymentService {
      * @param {string} options.ipAddress - Client IP for audit
      */
     async verifyTransaction(signature, expectedSender, expectedRecipient, expectedToken, expectedAmount, options = {}) {
+        await this.ensureInitialized();
+        
         if (!this.connection) {
             console.error('SolanaPayment: Connection not initialized');
             return { success: false, error: 'RPC_NOT_INITIALIZED', message: 'Solana connection not ready' };
@@ -553,6 +576,8 @@ class SolanaPaymentService {
      * @param {number} expectedAmount - Expected rent amount
      */
     async verifyRentPayment(signature, expectedSender, expectedRecipient, expectedAmount, options = {}) {
+        await this.ensureInitialized();
+        
         if (!signature || typeof signature !== 'string' || signature.length < 80) {
             return { 
                 success: false, 
@@ -613,6 +638,8 @@ class SolanaPaymentService {
      * @param {object} options - Additional options for logging
      */
     async verifyNativeSOLTransfer(signature, expectedSender, expectedRecipient, expectedLamports, options = {}) {
+        await this.ensureInitialized();
+        
         if (!this.connection) {
             return { success: false, error: 'RPC_NOT_INITIALIZED', message: 'Solana connection not ready' };
         }

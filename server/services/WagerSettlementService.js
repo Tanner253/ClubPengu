@@ -17,18 +17,22 @@ import { isDBConnected } from '../db/connection.js';
 import custodialWalletService from './CustodialWalletService.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// RAKE CONFIGURATION
+// RAKE CONFIGURATION (loaded lazily after dotenv)
 // ═══════════════════════════════════════════════════════════════════════════════
 const RAKE_CONFIG = {
-    // Wallet that receives rake payments
-    RAKE_WALLET: process.env.RAKE_WALLET || null,
-    
-    // Rake percentage (5 = 5%)
-    RAKE_PERCENT: parseFloat(process.env.RAKE_PERCENT || '5'),
-    
-    // Minimum pot size to take rake (avoid dust amounts)
-    MIN_POT_FOR_RAKE: BigInt(1000), // Minimum 1000 raw units
+    // These are set in initialize() after dotenv loads
+    RAKE_WALLET: null,
+    RAKE_PERCENT: 5,
+    MIN_POT_FOR_RAKE: BigInt(1000),
+    _initialized: false
 };
+
+function initRakeConfig() {
+    if (RAKE_CONFIG._initialized) return;
+    RAKE_CONFIG.RAKE_WALLET = process.env.RAKE_WALLET || null;
+    RAKE_CONFIG.RAKE_PERCENT = parseFloat(process.env.RAKE_PERCENT || '5');
+    RAKE_CONFIG._initialized = true;
+}
 
 class WagerSettlementService {
     constructor() {
@@ -44,6 +48,9 @@ class WagerSettlementService {
      * Call this at server startup
      */
     async initialize() {
+        // Load rake config NOW (after dotenv has loaded)
+        initRakeConfig();
+        
         const result = await custodialWalletService.initialize();
         if (result.success) {
             console.log('💰 WagerSettlementService ready - custodial wallet initialized');
