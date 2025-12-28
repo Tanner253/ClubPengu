@@ -138,6 +138,8 @@ const Inbox = () => {
         acceptChallenge,
         denyChallenge,
         deleteInboxMessage,
+        cancelChallenge,
+        pendingChallenges,
         isInMatch
     } = useChallenge();
     
@@ -356,9 +358,9 @@ const Inbox = () => {
                 <div className="flex items-center justify-between p-3 sm:p-4 border-b border-white/10">
                     <h3 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
                         📥 Inbox
-                        {inbox.length > 0 && (
+                        {(inbox.length > 0 || (pendingChallenges && pendingChallenges.length > 0)) && (
                             <span className="px-1.5 sm:px-2 py-0.5 rounded-full bg-red-500 text-white text-[10px] sm:text-xs">
-                                {inbox.length}
+                                {inbox.length + (pendingChallenges?.length || 0)}
                             </span>
                         )}
                     </h3>
@@ -372,7 +374,53 @@ const Inbox = () => {
                 
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 sm:space-y-3">
-                    {inbox.length === 0 ? (
+                    {/* Pending Outgoing Challenges (sent by you) */}
+                    {pendingChallenges && pendingChallenges.length > 0 && (
+                        <div className="space-y-2">
+                            <p className="text-white/40 text-xs uppercase tracking-wider font-medium">
+                                Sent Challenges
+                            </p>
+                            {pendingChallenges.map(challenge => (
+                                <div 
+                                    key={challenge.id} 
+                                    className="bg-gradient-to-r from-blue-500/10 to-cyan-500/10 border border-blue-500/20 rounded-xl p-3"
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2 min-w-0">
+                                            <div className="w-7 h-7 rounded-full bg-blue-500/20 flex items-center justify-center text-sm shrink-0">
+                                                ⏳
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-white text-sm truncate">
+                                                    → <span className="text-blue-400">{challenge.targetName}</span>
+                                                </p>
+                                                <p className="text-white/50 text-xs">
+                                                    {gameNames[challenge.gameType] || challenge.gameType}
+                                                    {challenge.wagerAmount > 0 && (
+                                                        <span className="text-yellow-400"> • {challenge.wagerAmount} coins</span>
+                                                    )}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); cancelChallenge(challenge.id); }}
+                                            className="px-2.5 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 active:bg-red-500/40 transition-colors shrink-0"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                    
+                    {/* Divider if both sections have content */}
+                    {pendingChallenges && pendingChallenges.length > 0 && inbox.length > 0 && (
+                        <hr className="border-white/10" />
+                    )}
+                    
+                    {/* Incoming messages */}
+                    {inbox.length === 0 && (!pendingChallenges || pendingChallenges.length === 0) ? (
                         <div className="text-center py-6 sm:py-8">
                             <div className="text-3xl sm:text-4xl mb-2 sm:mb-3">📭</div>
                             <p className="text-white/50 text-sm sm:text-base">No messages yet</p>

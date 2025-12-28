@@ -342,23 +342,23 @@ class SlotMachineDisplay extends BaseProp {
         }
         
         // Update LED border animation
-        // Throttle LED updates to every 100ms
-        if (time - this.lastLEDUpdate > 0.1) {
-            this.lastLEDUpdate = time;
-            this.meshes.forEach(mesh => {
-                if (mesh.userData.ledIndex !== undefined) {
-                    const idx = mesh.userData.ledIndex;
-                    const chasePhase = (time * 10 + idx) % 20;
-                    const isLit = chasePhase < 3;
-                    
-                    mesh.material.emissiveIntensity = isLit ? 1.0 : 0.2;
-                    
-                    // Color cycling
-                    const hue = (time * 0.3 + idx * 0.02) % 1;
-                    mesh.material.emissive.setHSL(hue, 1, 0.5);
-                    mesh.material.color.setHSL(hue, 1, 0.5);
-                }
-            });
+            // Throttle LED updates to every 100ms
+            if (time - this.lastLEDUpdate > 0.1) {
+                this.lastLEDUpdate = time;
+                this.meshes.forEach(mesh => {
+                    if (mesh.userData.ledIndex !== undefined) {
+                        const idx = mesh.userData.ledIndex;
+                        const chasePhase = (time * 10 + idx) % 20;
+                        const isLit = chasePhase < 3;
+                        
+                        mesh.material.emissiveIntensity = isLit ? 1.0 : 0.2;
+                        
+                        // Color cycling
+                        const hue = (time * 0.3 + idx * 0.02) % 1;
+                        mesh.material.emissive.setHSL(hue, 1, 0.5);
+                        mesh.material.color.setHSL(hue, 1, 0.5);
+                    }
+                });
         }
         
         // Jackpot sign animation (lightweight)

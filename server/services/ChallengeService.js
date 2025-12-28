@@ -212,16 +212,9 @@ class ChallengeService {
             }
         }
 
-        // Update inbox
+        // Update inbox - remove challenge from target's inbox
+        // NOTE: Don't add "accepted" message to inbox - match_start notification is enough
         this.inboxService.deleteByChallengeId(challenge.targetId, challengeId);
-        this.inboxService.addMessage(
-            challenge.challengerId,
-            challenge.challengerWallet,
-            'challenge_response',
-            'Challenge Accepted',
-            `${challenge.targetName} accepted your ${challenge.gameType} challenge!`,
-            { challengeId, response: 'accepted' }
-        );
 
         console.log(`✅ Challenge accepted: ${challenge.challengerName} vs ${challenge.targetName}`);
 

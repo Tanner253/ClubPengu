@@ -2520,7 +2520,11 @@ async function handleMessage(playerId, message) {
                 sendToPlayer(playerId, {
                     type: 'challenge_sent',
                     challengeId: result.challenge.id,
-                    targetName: targetPlayer.name
+                    targetPlayerId: message.targetPlayerId,
+                    targetName: targetPlayer.name,
+                    gameType: result.challenge.gameType,
+                    wagerAmount: result.challenge.wagerAmount,
+                    wagerToken: result.challenge.wagerToken || null
                 });
                 
                 sendToPlayer(message.targetPlayerId, {
@@ -2804,6 +2808,67 @@ async function handleMessage(playerId, message) {
                 messages: inboxService.getMessages(playerId),
                 unreadCount: inboxService.getUnreadCount(playerId)
             });
+            break;
+        }
+        
+        // Cancel a challenge (by the challenger)
+        case 'challenge_cancel': {
+            const { challengeId } = message;
+            
+            if (!challengeId) {
+                sendToPlayer(playerId, {
+                    type: 'challenge_error',
+                    error: 'INVALID_REQUEST',
+                    message: 'Missing challengeId'
+                });
+                break;
+            }
+            
+            const challenge = challengeService.getChallenge(challengeId);
+            if (!challenge) {
+                sendToPlayer(playerId, {
+                    type: 'challenge_error',
+                    error: 'NOT_FOUND',
+                    message: 'Challenge not found or expired'
+                });
+                break;
+            }
+            
+            // Only the challenger can cancel
+            if (challenge.challengerId !== playerId) {
+                sendToPlayer(playerId, {
+                    type: 'challenge_error',
+                    error: 'NOT_CHALLENGER',
+                    message: 'Only the challenger can cancel this challenge'
+                });
+                break;
+            }
+            
+            const result = await challengeService.deleteChallenge(challengeId, playerId);
+            
+            if (result.error) {
+                sendToPlayer(playerId, {
+                    type: 'challenge_error',
+                    error: result.error,
+                    message: result.message
+                });
+            } else {
+                // Notify challenger that cancellation was successful
+                sendToPlayer(playerId, {
+                    type: 'challenge_cancelled',
+                    challengeId,
+                    message: 'Challenge cancelled successfully'
+                });
+                
+                // Update target's inbox (challenge removed)
+                sendToPlayer(challenge.targetId, {
+                    type: 'inbox_update',
+                    messages: inboxService.getMessages(challenge.targetId),
+                    unreadCount: inboxService.getUnreadCount(challenge.targetId)
+                });
+                
+                console.log(`🚫 Challenge ${challengeId} cancelled by ${player.name}`);
+            }
             break;
         }
         

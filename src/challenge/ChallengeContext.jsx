@@ -138,11 +138,31 @@ export function ChallengeProvider({ children }) {
                     
                 case 'challenge_sent':
                     showNotification(`Challenge sent to ${message.targetName}!`, 'success');
-                    setPendingChallenges(prev => [...prev, { id: message.challengeId, targetName: message.targetName }]);
+                    setPendingChallenges(prev => [...prev, { 
+                        id: message.challengeId, 
+                        targetId: message.targetPlayerId,
+                        targetName: message.targetName,
+                        gameType: message.gameType,
+                        wagerAmount: message.wagerAmount,
+                        wagerToken: message.wagerToken,
+                        createdAt: Date.now()
+                    }]);
                     break;
                     
                 case 'challenge_error':
                     showNotification(`❌ ${message.message}`, 'error');
+                    break;
+                    
+                case 'challenge_cancelled':
+                    // Our challenge was successfully cancelled
+                    setPendingChallenges(prev => prev.filter(c => c.id !== message.challengeId));
+                    showNotification('Challenge cancelled', 'info');
+                    break;
+                    
+                case 'challenge_declined':
+                    // Someone declined our challenge
+                    setPendingChallenges(prev => prev.filter(c => c.id !== message.challengeId));
+                    showNotification(`${message.message || 'Challenge declined'}`, 'info');
                     break;
                     
                 case 'player_stats':
@@ -630,6 +650,14 @@ export function ChallengeProvider({ children }) {
         });
     }, [send]);
     
+    // Cancel a pending challenge (as the challenger)
+    const cancelChallenge = useCallback((challengeId) => {
+        send({
+            type: 'challenge_cancel',
+            challengeId
+        });
+    }, [send]);
+    
     // Delete a challenge/message
     const deleteInboxMessage = useCallback((messageId) => {
         // Find the message to check if it's a challenge
@@ -724,6 +752,7 @@ export function ChallengeProvider({ children }) {
         sendChallenge,
         acceptChallenge,
         denyChallenge,
+        cancelChallenge,
         deleteInboxMessage,
         playCard,
         forfeitMatch,
