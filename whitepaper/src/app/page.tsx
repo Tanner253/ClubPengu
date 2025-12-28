@@ -497,6 +497,7 @@ function BundleSection() {
     { wallet: "FUoHjRgxwKJwfQEMwcpMRQYhV8TscEoxZKee1wEzo1o7", percent: 0.5 },
     { wallet: "FDf6KmG6ZQ6d6RgsueGRJeSFVEwHMHbySF1CjXeEKxcL", percent: 0.3, note: "3 SOL bonus" },
     { wallet: "6jHTTtiUUWG82rDotrFEciH1CeKEdzXcuiEfYW41uzz7", percent: 0.3 },
+    { wallet: "7wQNpuGnzG3WJiReAfV5fRQh8ZxjQ3F42Vr6XQM7xQnm", percent: 2.5 },
   ];
 
   const devWallet = { wallet: "AXrG4FUNPeasXynafgwZNa7MVhfmjS3ibX9Q1iqR49zb", percent: 4.0, label: "Dev Wallet" };
