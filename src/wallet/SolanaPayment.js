@@ -313,17 +313,17 @@ export async function payIglooEntryFee(iglooId, amount, ownerWallet, tokenAddres
 
 /**
  * Pay igloo rent
- * Sends CPw3 tokens to the rent treasury wallet
+ * Sends $WADDLE tokens to the rent treasury wallet
  * 
  * @param {string} iglooId - ID of the igloo being rented
- * @param {number} amount - Rent amount in CPw3 (human readable, e.g., 10000)
+ * @param {number} amount - Rent amount in $WADDLE (human readable, e.g., 10000)
  * @param {string} rentWalletAddress - Treasury wallet that receives rent
- * @param {string} tokenAddress - CPw3 token address
+ * @param {string} tokenAddress - $WADDLE token address
  */
 export async function payIglooRent(iglooId, amount, rentWalletAddress, tokenAddress) {
     console.log('🏠 Paying igloo rent...');
     console.log(`   Igloo: ${iglooId}`);
-    console.log(`   Amount: ${amount} CPw3`);
+    console.log(`   Amount: ${amount} $WADDLE`);
     console.log(`   To Treasury: ${rentWalletAddress.slice(0, 8)}...`);
     
     return sendSPLToken({

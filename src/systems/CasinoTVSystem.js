@@ -1,5 +1,5 @@
 /**
- * CasinoTVSystem - Renders $CPw3 token info as a 3D mesh with REAL data from DexScreener API
+ * CasinoTVSystem - Renders $WADDLE token info as a 3D mesh with REAL data from DexScreener API
  * Positioned at the TV location in the casino
  */
 
@@ -50,12 +50,12 @@ export async function fetchTokenData() {
                 volume24h: parseFloat(pair.volume?.h24) || 0,
                 liquidity: parseFloat(pair.liquidity?.usd) || 0,
                 marketCap: parseFloat(pair.marketCap) || parseFloat(pair.fdv) || 0,
-                symbol: pair.baseToken?.symbol || 'CPw3',
-                name: pair.baseToken?.name || 'CPw3',
+                symbol: pair.baseToken?.symbol || 'WADDLE',
+                name: pair.baseToken?.name || 'WaddleBet',
                 lastUpdated: now
             };
             lastFetchTime = now;
-            console.log('📊 Casino TV: Updated $CPw3 data - Price:', cachedTokenData.price);
+            console.log('📊 Casino TV: Updated $WADDLE data - Price:', cachedTokenData.price);
         }
     } catch (error) {
         console.warn('Casino TV: API fetch failed, using cached data');
@@ -102,7 +102,7 @@ function renderCasinoTVBanner(ctx, tokenData = null) {
     ctx.fill();
     
     // Title
-    const symbol = tokenData?.symbol || 'CPw3';
+    const symbol = tokenData?.symbol || 'WADDLE';
     ctx.fillStyle = '#00ffff';
     ctx.font = 'bold 22px Arial, sans-serif';
     ctx.textAlign = 'left';
@@ -126,7 +126,7 @@ function renderCasinoTVBanner(ctx, tokenData = null) {
         ctx.fillStyle = '#00ffff';
         ctx.font = 'bold 18px Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Loading $CPw3 data...', w / 2, h / 2);
+        ctx.fillText('Loading $WADDLE data...', w / 2, h / 2);
         return;
     }
     

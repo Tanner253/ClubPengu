@@ -3,15 +3,15 @@
  * Central config for all blockchain-related constants
  * 
  * Environment variables (set in .env):
- *   VITE_CPW3_TOKEN_ADDRESS - CPw3 token mint address
+ *   VITE_CPW3_TOKEN_ADDRESS - $WADDLE token mint address
  *   VITE_RENT_WALLET_ADDRESS - Treasury wallet for rent
  *   VITE_SOLANA_NETWORK - 'mainnet' or 'devnet'
  *   VITE_X402_FACILITATOR_URL - x402 facilitator endpoint
  */
 
 // ==================== TOKEN ADDRESSES ====================
-// CPw3 Token - Native game currency
-export const CPW3_TOKEN_ADDRESS = import.meta.env.VITE_CPW3_TOKEN_ADDRESS || 'CPw3XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX';
+// $WADDLE Token - Native game currency
+export const CPW3_TOKEN_ADDRESS = import.meta.env.VITE_CPW3_TOKEN_ADDRESS || 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump';
 
 // USDC on Solana (for x402 payments)
 export const USDC_TOKEN_ADDRESS = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
@@ -38,10 +38,10 @@ export const X402_FACILITATOR_URL = import.meta.env.VITE_X402_FACILITATOR_URL ||
 
 // ==================== IGLOO RENTAL CONFIG ====================
 export const IGLOO_CONFIG = {
-    // Daily rent cost in CPw3 tokens
+    // Daily rent cost in $WADDLE tokens
     DAILY_RENT_CPW3: 10000,
     
-    // Minimum balance required to rent (7 days worth)
+    // Minimum balance required to rent (7 days worth of $WADDLE)
     MINIMUM_BALANCE_CPW3: 70000,
     
     // Grace period before eviction (in hours)

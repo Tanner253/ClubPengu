@@ -61,7 +61,7 @@ const solanaTransactionSchema = new mongoose.Schema({
     },
     tokenSymbol: {
         type: String,
-        default: 'CPw3'
+        default: '$WADDLE'
     },
     
     // ========== RELATED ENTITIES ==========

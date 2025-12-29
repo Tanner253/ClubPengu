@@ -69,7 +69,7 @@ const transactionSchema = new mongoose.Schema({
     currency: {
         type: String,
         default: 'coins',
-        enum: ['coins', 'pebbles', 'SOL', 'CPw3']  // Added pebbles and SOL
+        enum: ['coins', 'pebbles', 'SOL', 'WADDLE', 'CPw3']  // Added WADDLE (formerly CPw3)
     },
     
     // ========== BALANCE SNAPSHOTS ==========

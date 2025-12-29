@@ -44,8 +44,8 @@ class SKNYIgloo extends BaseProp {
         // SKNY GANG ticker sign
         this._createTickerSign(group, neonPink, neonCyan, goldMat);
         
-        // $CPw3 logo
-        this._createCPW3Logo(group, neonGreen, goldMat);
+        // $WADDLE logo
+        this._createWADDLELogo(group, neonGreen, goldMat);
         
         // Entrance with VIP rope and lights
         this._createVIPEntrance(group, chromeMat, neonPurple, neonPink);
@@ -213,24 +213,24 @@ class SKNYIgloo extends BaseProp {
         }
     }
     
-    _createCPW3Logo(group, neonGreen, goldMat) {
+    _createWADDLELogo(group, neonGreen, goldMat) {
         const THREE = this.THREE;
         
-        // $CPw3 sign on side
+        // $WADDLE sign on side
         const signGroup = new THREE.Group();
         
         // Dollar sign
         const dollarGeo = new THREE.BoxGeometry(0.15, 0.5, 0.05);
         const dollar = new THREE.Mesh(dollarGeo, neonGreen);
-        dollar.position.set(-0.5, 0, 0);
+        dollar.position.set(-0.7, 0, 0);
         signGroup.add(dollar);
         
-        // CPw3 letters
-        const cpw3Letters = ['C', 'P', 'w', '3'];
-        cpw3Letters.forEach((letter, i) => {
-            const lGeo = new THREE.BoxGeometry(0.18, 0.35, 0.05);
+        // WADDLE letters
+        const waddleLetters = ['W', 'A', 'D', 'D', 'L', 'E'];
+        waddleLetters.forEach((letter, i) => {
+            const lGeo = new THREE.BoxGeometry(0.16, 0.35, 0.05);
             const lMesh = new THREE.Mesh(lGeo, goldMat);
-            lMesh.position.set(-0.25 + i * 0.28, 0, 0);
+            lMesh.position.set(-0.45 + i * 0.22, 0, 0);
             signGroup.add(lMesh);
         });
         
@@ -239,7 +239,7 @@ class SKNYIgloo extends BaseProp {
         this.addMesh(signGroup, group);
         
         this.animatedElements.push({
-            type: 'cpw3Sign',
+            type: 'waddleSign',
             mesh: signGroup,
             baseY: 1.5
         });
@@ -520,7 +520,7 @@ class SKNYIgloo extends BaseProp {
                     }
                     break;
                     
-                case 'cpw3Sign':
+                case 'waddleSign':
                     el.mesh.position.y = el.baseY + Math.sin(time * 2) * 0.05;
                     break;
                     

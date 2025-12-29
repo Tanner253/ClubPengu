@@ -381,7 +381,7 @@ class Casino extends BaseBuilding {
         tvCanvas.height = 256;
         const tvCtx = tvCanvas.getContext('2d');
         
-        // Draw $CPw3 chart display
+        // Draw $WADDLE chart display
         const drawTVScreen = () => {
             const W = 512, H = 256;
             
@@ -480,7 +480,7 @@ class Casino extends BaseBuilding {
             // Token ticker
             tvCtx.fillStyle = '#00ffff';
             tvCtx.font = 'bold 22px monospace';
-            tvCtx.fillText('$CPw3 / SOL', 15, 25);
+            tvCtx.fillText('$WADDLE / SOL', 15, 25);
             
             // Current price
             const currentPrice = candleData[candleData.length - 1].close;
@@ -935,7 +935,7 @@ class Casino extends BaseBuilding {
             height: 5
         };
         
-        // DexScreener iframe URL for the TV ($CPw3, candles, market cap, 1hr)
+        // DexScreener iframe URL for the TV ($WADDLE, candles, market cap, 1hr)
         group.userData.tvIframeUrl = 'https://dexscreener.com/solana/63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump?embed=1&theme=dark&chartStyle=1&chartType=mc&interval=60';
 
         // ==================== EXTRAVAGANT EXTERIOR DECORATIONS ====================

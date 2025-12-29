@@ -2,7 +2,7 @@
  * WagerTokenSelector - Collapsible dropdown for selecting SPL tokens for wagering
  * 
  * Features:
- * - Quick-select buttons for popular tokens (CPw3, SOL, USDC, BONK)
+ * - Quick-select buttons for popular tokens ($WADDLE, SOL, USDC, BONK)
  * - Custom CA input with live validation
  * - User's balance display
  * - Validation status indicator (like username availability check)

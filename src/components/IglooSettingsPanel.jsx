@@ -260,7 +260,7 @@ const IglooSettingsPanel = ({
         try {
             console.log('💰 Starting rent payment...');
             console.log(`   Igloo: ${iglooData.iglooId}`);
-            console.log(`   Amount: ${IGLOO_CONFIG.DAILY_RENT_CPW3} CPw3`);
+            console.log(`   Amount: ${IGLOO_CONFIG.DAILY_RENT_CPW3} $WADDLE`);
             
             // Step 1: Send the Solana transaction
             const paymentResult = await payIglooRent(

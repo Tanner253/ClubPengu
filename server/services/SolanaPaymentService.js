@@ -462,7 +462,7 @@ class SolanaPaymentService {
                     amount: expectedAmount,
                     amountRaw: String(expectedAmount * Math.pow(10, 6)), // Assume 6 decimals
                     tokenMint: expectedToken,
-                    tokenSymbol: options?.tokenSymbol || 'CPw3',
+                    tokenSymbol: options?.tokenSymbol || '$WADDLE',
                     iglooId: options?.iglooId,
                     matchId: options?.matchId,
                     status: 'verified',
@@ -606,7 +606,7 @@ class SolanaPaymentService {
             expectedAmount,
             {
                 transactionType: options.isRenewal ? 'igloo_rent_renewal' : 'igloo_rent',
-                tokenSymbol: 'CPw3',
+                tokenSymbol: '$WADDLE',
                 iglooId: options.iglooId,
                 ipAddress: options.ipAddress
             }
