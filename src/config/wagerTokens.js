@@ -11,7 +11,7 @@ export const WAGER_TOKENS = [
     { 
         symbol: '$WADDLE', 
         name: 'WaddleBet',
-        address: '', // Token address TBD
+        address: 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump',
         decimals: 6,
         logoURI: '/tokens/waddle.png',
         isDefault: true  // Default token for wagers

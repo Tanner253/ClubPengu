@@ -42,7 +42,7 @@ const TOKEN_GATE_TOKENS = [
     { 
         symbol: '$WADDLE', 
         name: 'WaddleBet',
-        address: '' // Token address TBD
+        address: 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump'
     },
     { 
         symbol: 'BONK', 
@@ -61,7 +61,7 @@ const ENTRY_FEE_TOKENS = [
     { 
         symbol: '$WADDLE', 
         name: 'WaddleBet',
-        address: '' // Token address TBD
+        address: 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump'
     },
     { 
         symbol: 'BONK', 
