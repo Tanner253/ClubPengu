@@ -54,7 +54,7 @@ export function animateMesh(
     const meshInner = meshWrapper.children[0];
     // Marcus has different body proportions, whale uses penguin body
     const isMarcus = characterType === 'marcus';
-    const isWhale = characterType === 'whiteWhale';
+    const isWhale = characterType?.includes('Whale');
     
     // Use cached parts if available, otherwise look up and cache
     if (!meshWrapper._animParts) {

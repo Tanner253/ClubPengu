@@ -154,9 +154,9 @@ class MultiplayerSync {
                 const charType = playerData.appearance?.characterType;
                 const height = charType === 'marcus' 
                     ? this.nameHeight.marcus 
-                    : charType === 'whiteWhale'
+                    : charType?.includes('Whale')
                         ? this.nameHeight.whiteWhale
-                        : this.nameHeight.penguin;
+                    : this.nameHeight.penguin;
                 nameSprite.position.set(0, height, 0);
                 mesh.add(nameSprite);
             }

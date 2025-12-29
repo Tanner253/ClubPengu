@@ -151,23 +151,23 @@ export function createChatSprite(THREE, message, height = BUBBLE_HEIGHT_PENGUIN)
 
 /**
  * Get bubble height for a character type
- * @param {string} characterType - 'penguin', 'marcus', or 'whiteWhale'
+ * @param {string} characterType - 'penguin', 'marcus', or whale variants
  * @returns {number}
  */
 export function getBubbleHeight(characterType) {
     if (characterType === 'marcus') return BUBBLE_HEIGHT_MARCUS;
-    if (characterType === 'whiteWhale') return BUBBLE_HEIGHT_WHALE;
+    if (characterType?.includes('Whale')) return BUBBLE_HEIGHT_WHALE;
     return BUBBLE_HEIGHT_PENGUIN;
 }
 
 /**
  * Get name height for a character type
- * @param {string} characterType - 'penguin', 'marcus', or 'whiteWhale'
+ * @param {string} characterType - 'penguin', 'marcus', or whale variants
  * @returns {number}
  */
 export function getNameHeight(characterType) {
     if (characterType === 'marcus') return NAME_HEIGHT_MARCUS;
-    if (characterType === 'whiteWhale') return NAME_HEIGHT_WHALE;
+    if (characterType?.includes('Whale')) return NAME_HEIGHT_WHALE;
     return NAME_HEIGHT_PENGUIN;
 }
 

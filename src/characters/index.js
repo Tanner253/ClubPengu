@@ -15,7 +15,15 @@
 
 import characterRegistry from './CharacterRegistry';
 import MarcusGenerators, { MARCUS_PALETTE } from './MarcusCharacter';
-import WhiteWhaleGenerators, { WHITE_WHALE_PALETTE } from './WhiteWhaleCharacter';
+import WhiteWhaleGenerators, { 
+    WHITE_WHALE_PALETTE,
+    BlackWhaleGenerators,
+    BLACK_WHALE_PALETTE,
+    SilverWhaleGenerators,
+    SILVER_WHALE_PALETTE,
+    GoldWhaleGenerators,
+    GOLD_WHALE_PALETTE
+} from './WhiteWhaleCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -57,6 +65,66 @@ characterRegistry.registerCharacter('whiteWhale', {
     }
 });
 
+characterRegistry.registerCharacter('blackWhale', {
+    name: 'Black Whale',
+    description: 'A sleek dark whale from the abyss',
+    generators: BlackWhaleGenerators,
+    palette: BLACK_WHALE_PALETTE,
+    isSecret: true,
+    previewScale: 0.85,
+    customizationOptions: {
+        disableSkinColor: true,
+        disableHats: true,
+        disableEyes: true,
+        disableMouth: true,
+        disableBodyItems: false,
+    }
+});
+
+characterRegistry.registerCharacter('silverWhale', {
+    name: 'Silver Whale',
+    description: 'A shimmering whale with metallic scales',
+    generators: SilverWhaleGenerators,
+    palette: SILVER_WHALE_PALETTE,
+    isSecret: true,
+    previewScale: 0.85,
+    customizationOptions: {
+        disableSkinColor: true,
+        disableHats: true,
+        disableEyes: true,
+        disableMouth: true,
+        disableBodyItems: false,
+    }
+});
+
+characterRegistry.registerCharacter('goldWhale', {
+    name: 'Gold Whale',
+    description: 'A legendary golden whale of immense wealth',
+    generators: GoldWhaleGenerators,
+    palette: GOLD_WHALE_PALETTE,
+    isSecret: true,
+    previewScale: 0.85,
+    customizationOptions: {
+        disableSkinColor: true,
+        disableHats: true,
+        disableEyes: true,
+        disableMouth: true,
+        disableBodyItems: false,
+    }
+});
+
 // Export everything
-export { characterRegistry, MarcusGenerators, MARCUS_PALETTE, WhiteWhaleGenerators, WHITE_WHALE_PALETTE };
+export { 
+    characterRegistry, 
+    MarcusGenerators, 
+    MARCUS_PALETTE, 
+    WhiteWhaleGenerators, 
+    WHITE_WHALE_PALETTE,
+    BlackWhaleGenerators,
+    BLACK_WHALE_PALETTE,
+    SilverWhaleGenerators,
+    SILVER_WHALE_PALETTE,
+    GoldWhaleGenerators,
+    GOLD_WHALE_PALETTE
+};
 export default characterRegistry;

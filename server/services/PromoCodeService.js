@@ -391,13 +391,18 @@ class PromoCodeService {
             // Find promo code ID if it exists
             const promoCode = await PromoCode.findByCode(code);
             
+            // Skip recording if promo code doesn't exist - can't associate with anything
+            if (!promoCode) {
+                console.log(`[Promo] Invalid code attempted: "${code}" by ${walletAddress.slice(0, 8)}...`);
+                return;
+            }
+            
             await PromoRedemption.recordRedemption({
                 walletAddress,
-                promoCodeId: promoCode?._id,
+                promoCodeId: promoCode._id,
                 code,
-                codeName: promoCode?.name || 'Unknown',
-                status: error === 'CODE_NOT_FOUND' ? 'invalid' : 
-                        error === 'ALREADY_REDEEMED' ? 'already_redeemed' :
+                codeName: promoCode.name || 'Unknown',
+                status: error === 'ALREADY_REDEEMED' ? 'already_redeemed' :
                         error === 'CODE_EXPIRED' || error === 'CODE_NOT_YET_VALID' ? 'expired' :
                         error === 'CODE_MAX_REDEMPTIONS' ? 'max_reached' : 'invalid',
                 ipAddress: context.ipAddress,

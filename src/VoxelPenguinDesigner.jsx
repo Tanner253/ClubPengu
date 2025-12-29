@@ -4,7 +4,19 @@ import { ASSETS } from './assets/index';
 import { generateBaseBody, generateFlippers, generateFeet, generateHead } from './generators';
 import { IconSettings, IconChevronLeft, IconChevronRight, IconCamera, IconWorld } from './Icons';
 import { useMultiplayer } from './multiplayer';
-import { characterRegistry, MarcusGenerators, MARCUS_PALETTE, WhiteWhaleGenerators, WHITE_WHALE_PALETTE } from './characters';
+import { 
+    characterRegistry, 
+    MarcusGenerators, 
+    MARCUS_PALETTE, 
+    WhiteWhaleGenerators, 
+    WHITE_WHALE_PALETTE,
+    BlackWhaleGenerators,
+    BLACK_WHALE_PALETTE,
+    SilverWhaleGenerators,
+    SILVER_WHALE_PALETTE,
+    GoldWhaleGenerators,
+    GOLD_WHALE_PALETTE
+} from './characters';
 import WalletAuth from './components/WalletAuth';
 
 function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
@@ -720,13 +732,21 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             addPart(MarcusGenerators.armRight(), 'flipper_r', MARCUS_PALETTE);
             addPart(MarcusGenerators.legLeft(), 'foot_l', MARCUS_PALETTE);
             addPart(MarcusGenerators.legRight(), 'foot_r', MARCUS_PALETTE);
-        } else if (characterType === 'whiteWhale') {
-            // Build White Whale - whale head on penguin body
-            addPart(WhiteWhaleGenerators.head(), 'head', WHITE_WHALE_PALETTE);
-            addPart(WhiteWhaleGenerators.body(), 'body', { ...PALETTE, ...WHITE_WHALE_PALETTE });
-            addPart(WhiteWhaleGenerators.flipperLeft(), 'flipper_l', { ...PALETTE, ...WHITE_WHALE_PALETTE });
-            addPart(WhiteWhaleGenerators.flipperRight(), 'flipper_r', { ...PALETTE, ...WHITE_WHALE_PALETTE });
-            addPart(WhiteWhaleGenerators.feet(), 'feet', PALETTE);
+        } else if (characterType?.includes('Whale')) {
+            // Build Whale variant - whale head on penguin body
+            const WHALE_CONFIGS = {
+                whiteWhale: { generators: WhiteWhaleGenerators, palette: WHITE_WHALE_PALETTE },
+                blackWhale: { generators: BlackWhaleGenerators, palette: BLACK_WHALE_PALETTE },
+                silverWhale: { generators: SilverWhaleGenerators, palette: SILVER_WHALE_PALETTE },
+                goldWhale: { generators: GoldWhaleGenerators, palette: GOLD_WHALE_PALETTE },
+            };
+            const config = WHALE_CONFIGS[characterType] || WHALE_CONFIGS.whiteWhale;
+            const { generators, palette } = config;
+            addPart(generators.head(), 'head', palette);
+            addPart(generators.body(), 'body', { ...PALETTE, ...palette });
+            addPart(generators.flipperLeft(), 'flipper_l', { ...PALETTE, ...palette });
+            addPart(generators.flipperRight(), 'flipper_r', { ...PALETTE, ...palette });
+            addPart(generators.feet(), 'feet', PALETTE);
         } else {
             // Build standard Penguin character
             const bodyVoxels = generateBaseBody(PALETTE[skinColor] || skinColor);
@@ -1458,7 +1478,24 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     {unlockedCharacters.length > 1 && (
                         <div className="mt-4">
                             <label className="block text-xs text-cyan-400 mb-2 retro-text">CHARACTER</label>
-                            <div className="flex gap-2">
+                            <div 
+                                className="flex gap-2 overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing select-none"
+                                onMouseDown={(e) => {
+                                    const el = e.currentTarget;
+                                    el.dataset.dragging = 'true';
+                                    el.dataset.startX = e.pageX;
+                                    el.dataset.scrollLeft = el.scrollLeft;
+                                }}
+                                onMouseMove={(e) => {
+                                    const el = e.currentTarget;
+                                    if (el.dataset.dragging !== 'true') return;
+                                    e.preventDefault();
+                                    const walk = (e.pageX - Number(el.dataset.startX)) * 1.5;
+                                    el.scrollLeft = Number(el.dataset.scrollLeft) - walk;
+                                }}
+                                onMouseUp={(e) => e.currentTarget.dataset.dragging = 'false'}
+                                onMouseLeave={(e) => e.currentTarget.dataset.dragging = 'false'}
+                            >
                                 {unlockedCharacters.map(charId => {
                                     const char = characterRegistry.getCharacter(charId);
                                     if (!char) return null;
@@ -1466,7 +1503,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                         <button
                                             key={charId}
                                             onClick={() => handleCharacterTypeChange(charId)}
-                                            className={`flex-1 px-3 py-2 rounded-lg text-xs font-bold transition-all ${
+                                            className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
                                                 characterType === charId
                                                     ? 'bg-cyan-500 text-black border-2 border-cyan-300'
                                                     : 'bg-black/50 text-white border-2 border-cyan-500/30 hover:border-cyan-400'

@@ -6,7 +6,18 @@
 import { VOXEL_SIZE, PALETTE } from '../constants';
 import { ASSETS } from '../assets/index';
 import { generateBaseBody, generateFlippers, generateFoot, generateHead } from '../generators';
-import { MarcusGenerators, MARCUS_PALETTE, WhiteWhaleGenerators, WHITE_WHALE_PALETTE } from '../characters';
+import { 
+    MarcusGenerators, 
+    MARCUS_PALETTE, 
+    WhiteWhaleGenerators, 
+    WHITE_WHALE_PALETTE,
+    BlackWhaleGenerators,
+    BLACK_WHALE_PALETTE,
+    SilverWhaleGenerators,
+    SILVER_WHALE_PALETTE,
+    GoldWhaleGenerators,
+    GOLD_WHALE_PALETTE
+} from '../characters';
 
 /**
  * Creates a PenguinBuilder factory with cached materials and geometry
@@ -608,35 +619,47 @@ export function createPenguinBuilder(THREE) {
         return group;
     };
     
+    // Whale character configs
+    const WHALE_CONFIGS = {
+        whiteWhale: { generators: WhiteWhaleGenerators, palette: WHITE_WHALE_PALETTE },
+        blackWhale: { generators: BlackWhaleGenerators, palette: BLACK_WHALE_PALETTE },
+        silverWhale: { generators: SilverWhaleGenerators, palette: SILVER_WHALE_PALETTE },
+        goldWhale: { generators: GoldWhaleGenerators, palette: GOLD_WHALE_PALETTE },
+    };
+
     /**
-     * Build White Whale (special character) mesh
+     * Build Whale (special character) mesh - handles all whale color variants
      * Whale head on penguin body
      */
-    const buildWhiteWhaleMesh = (data) => {
+    const buildWhaleMesh = (data) => {
+        const config = WHALE_CONFIGS[data.characterType];
+        if (!config) return null;
+        
+        const { generators, palette } = config;
         const group = new THREE.Group();
-        const pivots = WhiteWhaleGenerators.pivots();
+        const pivots = generators.pivots();
         
         // Whale head
-        const headVoxels = WhiteWhaleGenerators.head();
-        const head = buildPartMerged(headVoxels, WHITE_WHALE_PALETTE);
+        const headVoxels = generators.head();
+        const head = buildPartMerged(headVoxels, palette);
         head.name = 'head';
         
         // Whale-colored penguin body
-        const bodyVoxels = WhiteWhaleGenerators.body();
-        const body = buildPartMerged(bodyVoxels, { ...PALETTE, ...WHITE_WHALE_PALETTE });
+        const bodyVoxels = generators.body();
+        const body = buildPartMerged(bodyVoxels, { ...PALETTE, ...palette });
         body.name = 'body';
         
-        // Whale-colored flippers (using penguin flipper shape)
-        const flipperLVoxels = WhiteWhaleGenerators.flipperLeft();
-        const flipperL = buildPartMerged(flipperLVoxels, { ...PALETTE, ...WHITE_WHALE_PALETTE }, pivots.flipperLeft);
+        // Whale-colored flippers
+        const flipperLVoxels = generators.flipperLeft();
+        const flipperL = buildPartMerged(flipperLVoxels, { ...PALETTE, ...palette }, pivots.flipperLeft);
         flipperL.name = 'flipper_l';
         
-        const flipperRVoxels = WhiteWhaleGenerators.flipperRight();
-        const flipperR = buildPartMerged(flipperRVoxels, { ...PALETTE, ...WHITE_WHALE_PALETTE }, pivots.flipperRight);
+        const flipperRVoxels = generators.flipperRight();
+        const flipperR = buildPartMerged(flipperRVoxels, { ...PALETTE, ...palette }, pivots.flipperRight);
         flipperR.name = 'flipper_r';
         
         // Orange penguin feet (for contrast)
-        const feetVoxels = WhiteWhaleGenerators.feet();
+        const feetVoxels = generators.feet();
         const footL = buildPartMerged(feetVoxels.filter(v => v.x > 0), PALETTE, pivots.footLeft);
         footL.name = 'foot_l';
         const footR = buildPartMerged(feetVoxels.filter(v => v.x < 0), PALETTE, pivots.footRight);
@@ -811,8 +834,8 @@ export function createPenguinBuilder(THREE) {
         // Check for special character types
         if (data.characterType === 'marcus') {
             group = buildMarcusMesh(data);
-        } else if (data.characterType === 'whiteWhale') {
-            group = buildWhiteWhaleMesh(data);
+        } else if (WHALE_CONFIGS[data.characterType]) {
+            group = buildWhaleMesh(data);
         } else {
             // Check if bodyItem hides the body (e.g., "joe" clothing)
             const bodyItemData = data.bodyItem ? ASSETS.BODY[data.bodyItem] : null;

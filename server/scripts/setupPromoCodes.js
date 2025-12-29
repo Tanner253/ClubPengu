@@ -131,6 +131,42 @@ const PROMO_CODES = [
             coins: 0
         }
     },
+    {
+        code: 'BWHALE',
+        name: '🖤 Black Whale Character',
+        description: 'Unlocks the sleek Black Whale character type',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['blackWhale'],
+            skinColor: null,
+            coins: 0
+        }
+    },
+    {
+        code: 'SWHALE',
+        name: '🩶 Silver Whale Character',
+        description: 'Unlocks the shimmering Silver Whale character type',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['silverWhale'],
+            skinColor: null,
+            coins: 0
+        }
+    },
+    {
+        code: 'GWHALE',
+        name: '💛 Gold Whale Character',
+        description: 'Unlocks the legendary Gold Whale character type',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['goldWhale'],
+            skinColor: null,
+            coins: 0
+        }
+    },
     
     // ========== INTERNAL TEAM CODES ==========
     {
