@@ -23,6 +23,33 @@ const CHANGE_TYPES = {
 // ==================== CHANGELOG DATA (1:1 with whitepaper) ====================
 const CHANGELOG = [
     {
+        version: '1.0.2',
+        date: 'December 30, 2025',
+        title: '🏪 Cosmetic Marketplace & Economy',
+        description: 'Full Runescape-style open market for cosmetics, gift system, and tutorial for new players!',
+        highlight: true,
+        stats: { filesChanged: 26, additions: 5593, deletions: 93 },
+        changes: [
+            { type: 'feature', text: 'Cosmetic Marketplace - buy and sell items for Pebbles, RS/CS:GO style open economy' },
+            { type: 'feature', text: 'Real-time market updates - listings appear instantly for all players' },
+            { type: 'feature', text: 'Market announcements in global chat when items are listed or sold' },
+            { type: 'feature', text: 'Complete ownership history tracking - trace any item from mint to current owner' },
+            { type: 'feature', text: 'Gift System - send Gold, Pebbles, Items, or any SPL token to other players' },
+            { type: 'feature', text: 'Tutorial Modal - interactive 6-slide guide for new players' },
+            { type: 'feature', text: '$WADDLE Pebble deposits - buy pebbles with $WADDLE at 1.5x premium rate' },
+            { type: 'feature', text: 'Black Whale, Silver Whale, Gold Whale characters (BWHALE, SWHALE, GWHALE promo codes)' },
+            { type: 'backend', text: 'MarketplaceService.js - listing, buying, canceling with atomic transactions' },
+            { type: 'backend', text: 'MarketListing model with expiration and statistics' },
+            { type: 'backend', text: 'GiftHandlers for secure item/currency transfers between players' },
+            { type: 'backend', text: 'OwnedCosmetic ownership history array for full provenance tracking' },
+            { type: 'improvement', text: 'Item tooltips explain rarity, quality, editions, and market value' },
+            { type: 'improvement', text: 'Listed items disabled in inventory (cannot burn while on sale)' },
+            { type: 'improvement', text: 'Auto-unequip items when listed if only instance owned' },
+            { type: 'fix', text: 'Withdrawal history now updates instantly after transactions' },
+            { type: 'fix', text: 'Portal-based tooltips prevent overflow clipping issues' },
+        ],
+    },
+    {
         version: '1.0.1',
         date: 'December 29, 2025',
         title: '🐋 White Whale Character',

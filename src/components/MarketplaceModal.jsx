@@ -1182,13 +1182,47 @@ const MarketplaceModal = ({ isOpen, onClose }) => {
                                         <p className="text-xs text-white/50 mb-2">
                                             Select an item to list ({sellableItems.length} available)
                                         </p>
-                                        <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                                        <div 
+                                            className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide cursor-grab active:cursor-grabbing select-none"
+                                            onMouseDown={(e) => {
+                                                const el = e.currentTarget;
+                                                el.dataset.dragging = 'true';
+                                                el.dataset.startX = e.pageX;
+                                                el.dataset.scrollLeft = el.scrollLeft;
+                                            }}
+                                            onMouseMove={(e) => {
+                                                const el = e.currentTarget;
+                                                if (el.dataset.dragging !== 'true') return;
+                                                e.preventDefault();
+                                                const walk = (e.pageX - Number(el.dataset.startX)) * 1.5;
+                                                el.scrollLeft = Number(el.dataset.scrollLeft) - walk;
+                                            }}
+                                            onMouseUp={(e) => e.currentTarget.dataset.dragging = 'false'}
+                                            onMouseLeave={(e) => e.currentTarget.dataset.dragging = 'false'}
+                                            onTouchStart={(e) => {
+                                                const el = e.currentTarget;
+                                                el.dataset.dragging = 'true';
+                                                el.dataset.startX = e.touches[0].pageX;
+                                                el.dataset.scrollLeft = el.scrollLeft;
+                                            }}
+                                            onTouchMove={(e) => {
+                                                const el = e.currentTarget;
+                                                if (el.dataset.dragging !== 'true') return;
+                                                const walk = (e.touches[0].pageX - Number(el.dataset.startX)) * 1.5;
+                                                el.scrollLeft = Number(el.dataset.scrollLeft) - walk;
+                                            }}
+                                            onTouchEnd={(e) => e.currentTarget.dataset.dragging = 'false'}
+                                        >
                                             {sellableItems.slice(0, 20).map(item => {
                                                 const r = RARITY_CONFIG[item.rarity] || RARITY_CONFIG.common;
                                                 return (
                                                     <button
                                                         key={item.instanceId}
-                                                        onClick={() => setSellItem(item)}
+                                                        onClick={(e) => {
+                                                            // Prevent click if we were dragging
+                                                            if (e.currentTarget.parentElement?.dataset.dragging === 'true') return;
+                                                            setSellItem(item);
+                                                        }}
                                                         className={`flex-shrink-0 w-16 h-16 rounded-lg border-2 ${r.border} bg-gradient-to-br ${r.bg} hover:border-white/50 transition-all overflow-hidden`}
                                                     >
                                                         <CosmeticThumbnail
