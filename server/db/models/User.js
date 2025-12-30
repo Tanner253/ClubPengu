@@ -773,6 +773,9 @@ userSchema.methods.updateCustomization = function(customization) {
     if (customization.bodyItem) this.customization.bodyItem = customization.bodyItem;
     if (customization.mount) this.customization.mount = customization.mount;
     if (customization.characterType) this.characterType = customization.characterType;
+    // Doginal freestyle colors
+    if (customization.dogPrimaryColor) this.customization.dogPrimaryColor = customization.dogPrimaryColor;
+    if (customization.dogSecondaryColor) this.customization.dogSecondaryColor = customization.dogSecondaryColor;
     return true;
 };
 

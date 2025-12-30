@@ -1632,7 +1632,10 @@ async function handleMessage(playerId, message) {
                             currentCustom.eyes !== newCustom.eyes ||
                             currentCustom.mouth !== newCustom.mouth ||
                             currentCustom.bodyItem !== newCustom.bodyItem ||
-                            currentCustom.mount !== newCustom.mount;
+                            currentCustom.mount !== newCustom.mount ||
+                            currentCustom.dogPrimaryColor !== newCustom.dogPrimaryColor ||
+                            currentCustom.dogSecondaryColor !== newCustom.dogSecondaryColor ||
+                            user.characterType !== newCustom.characterType;
                         
                         if (hasChanges) {
                             // Validate ownership of each cosmetic before applying
@@ -2117,8 +2120,10 @@ async function handleMessage(playerId, message) {
             
             // If authenticated, validate and save to DB
             if (player.walletAddress) {
+                // Save customization AND characterType (characterType is top-level field)
                 const result = await userService.updateProfile(player.walletAddress, {
-                    customization: player.appearance
+                    customization: player.appearance,
+                    characterType: player.appearance.characterType
                 });
                 if (!result.success && result.error === 'COSMETIC_NOT_OWNED') {
                     sendToPlayer(playerId, {
