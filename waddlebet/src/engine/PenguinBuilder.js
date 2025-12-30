@@ -20,7 +20,11 @@ import {
     DoginalGenerators,
     DOGINAL_PALETTE,
     DOG_PALETTES,
-    generateDogPalette
+    generateDogPalette,
+    FrogGenerators,
+    FROG_PALETTE,
+    FROG_PALETTES,
+    generateFrogPalette
 } from '../characters';
 
 /**
@@ -708,6 +712,130 @@ export function createPenguinBuilder(THREE) {
         return group;
     };
     
+    /**
+     * Build Frog (PEPE character) mesh with cosmetics support
+     */
+    const buildFrogMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = FrogGenerators.pivots();
+        
+        // Use freestyle colors if provided, otherwise default green
+        const primaryColor = data.frogPrimaryColor || '#4A8C4A';
+        const secondaryColor = data.frogSecondaryColor || '#B8C8B0';
+        const frogPalette = generateFrogPalette(primaryColor, secondaryColor);
+        
+        // Frog head
+        const headVoxels = FrogGenerators.head();
+        const head = buildPartMerged(headVoxels, frogPalette);
+        head.name = 'head';
+        
+        // Frog body (penguin-style but green)
+        const bodyVoxels = FrogGenerators.body();
+        const body = buildPartMerged(bodyVoxels, frogPalette);
+        body.name = 'body';
+        
+        // Flippers (green frog arms)
+        const flipperLVoxels = FrogGenerators.flipperLeft();
+        const flipperL = buildPartMerged(flipperLVoxels, frogPalette, pivots.flipperLeft);
+        flipperL.name = 'flipper_l';
+        
+        const flipperRVoxels = FrogGenerators.flipperRight();
+        const flipperR = buildPartMerged(flipperRVoxels, frogPalette, pivots.flipperRight);
+        flipperR.name = 'flipper_r';
+        
+        // Orange webbed feet
+        const footLVoxels = FrogGenerators.footLeft();
+        const footL = buildPartMerged(footLVoxels, frogPalette, pivots.footLeft);
+        footL.name = 'foot_l';
+        
+        const footRVoxels = FrogGenerators.footRight();
+        const footR = buildPartMerged(footRVoxels, frogPalette, pivots.footRight);
+        footR.name = 'foot_r';
+        
+        group.add(body, head, flipperL, flipperR, footL, footR);
+        
+        // Add hat support - offset voxels to sit on frog's head
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            if (hatVoxels && hatVoxels.length > 0) {
+                // Offset hat voxels to sit on frog's head (Y+2 for head height, Z+2 for head forward offset)
+                const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + 2, z: v.z + 2 }));
+                const hat = buildPartMerged(offsetHatVoxels, PALETTE);
+                hat.name = 'hat';
+                group.add(hat);
+                
+                // Add propeller blades for propeller hat
+                if (data.hat === 'propeller') {
+                    const blades = new THREE.Group();
+                    blades.name = 'propeller_blades';
+                    blades.position.set(0, 15 * VOXEL_SIZE, 2 * VOXEL_SIZE);
+                    const bladeGeo = new THREE.BoxGeometry(4 * VOXEL_SIZE, 0.2 * VOXEL_SIZE, 0.5 * VOXEL_SIZE);
+                    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                    const b1 = new THREE.Mesh(bladeGeo, bladeMat);
+                    const b2 = new THREE.Mesh(bladeGeo, bladeMat);
+                    b2.rotation.y = Math.PI / 2;
+                    blades.add(b1, b2);
+                    group.add(blades);
+                }
+                
+                // Wizard hat magic trail
+                if (data.hat === 'wizardHat') {
+                    group.userData.hasWizardHat = true;
+                }
+                
+                // Flaming Crown fire particles
+                if (data.hat === 'flamingCrown') {
+                    const fireGroup = new THREE.Group();
+                    fireGroup.name = 'crown_fire';
+                    fireGroup.position.set(0, 14 * VOXEL_SIZE, 2 * VOXEL_SIZE);
+                    
+                    const particleCount = 15;
+                    for (let i = 0; i < particleCount; i++) {
+                        const size = (0.3 + Math.random() * 0.3) * VOXEL_SIZE;
+                        const pGeo = new THREE.BoxGeometry(size, size, size);
+                        const colors = [0xFF4500, 0xFF6600, 0xFFAA00, 0xFFFF00];
+                        const pMat = new THREE.MeshBasicMaterial({ 
+                            color: colors[Math.floor(Math.random() * colors.length)], 
+                            transparent: true, 
+                            opacity: 0.9 
+                        });
+                        const pMesh = new THREE.Mesh(pGeo, pMat);
+                        pMesh.position.set(
+                            (Math.random() - 0.5) * 3 * VOXEL_SIZE,
+                            i * 0.3 * VOXEL_SIZE,
+                            (Math.random() - 0.5) * 3 * VOXEL_SIZE
+                        );
+                        pMesh.userData.particleIndex = i;
+                        pMesh.userData.baseY = pMesh.position.y;
+                        pMesh.userData.baseX = pMesh.position.x;
+                        pMesh.userData.baseZ = pMesh.position.z;
+                        fireGroup.add(pMesh);
+                    }
+                    fireGroup.userData.isFireEmitter = true;
+                    group.add(fireGroup);
+                }
+            }
+        }
+        
+        // Add body item support - offset for frog body position
+        if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
+            const bodyItemData = ASSETS.BODY[data.bodyItem];
+            const bodyItemVoxels = bodyItemData?.voxels || bodyItemData || [];
+            if (bodyItemVoxels.length > 0) {
+                // Offset body item voxels for frog body (similar to dog)
+                const offsetBodyVoxels = bodyItemVoxels.map(v => ({ ...v, y: v.y - 4 }));
+                const bodyItemMesh = buildPartMerged(offsetBodyVoxels, PALETTE);
+                bodyItemMesh.name = 'bodyItem';
+                group.add(bodyItemMesh);
+            }
+        }
+        
+        group.scale.set(0.18, 0.18, 0.18);
+        group.position.y = 0.8;
+        
+        return group;
+    };
+    
     // Whale character configs
     const WHALE_CONFIGS = {
         whiteWhale: { generators: WhiteWhaleGenerators, palette: WHITE_WHALE_PALETTE },
@@ -925,6 +1053,8 @@ export function createPenguinBuilder(THREE) {
             group = buildMarcusMesh(data);
         } else if (data.characterType === 'doginal') {
             group = buildDoginalMesh(data);
+        } else if (data.characterType === 'frog') {
+            group = buildFrogMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {

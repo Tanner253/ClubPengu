@@ -25,6 +25,7 @@ import WhiteWhaleGenerators, {
     GOLD_WHALE_PALETTE
 } from './WhiteWhaleCharacter';
 import DoginalGenerators, { DOGINAL_PALETTE, DOG_PALETTES, generateDogPalette } from './DoginalCharacter';
+import FrogGenerators, { FROG_PALETTE, FROG_PALETTES, generateFrogPalette } from './FrogCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -131,6 +132,23 @@ characterRegistry.registerCharacter('doginal', {
     }
 });
 
+characterRegistry.registerCharacter('frog', {
+    name: 'PEPE Frog',
+    description: 'The legendary PEPE frog - feels good man',
+    generators: FrogGenerators,
+    palette: FROG_PALETTE,
+    palettes: FROG_PALETTES,
+    isSecret: true,
+    previewScale: 0.85,
+    customizationOptions: {
+        disableSkinColor: false,  // Enable color variants
+        disableHats: false,       // Allow hats on the frog!
+        disableEyes: true,        // Frog has its own eyes
+        disableMouth: true,       // Frog has its own mouth
+        disableBodyItems: false,  // Allow body items
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -147,6 +165,10 @@ export {
     DoginalGenerators,
     DOGINAL_PALETTE,
     DOG_PALETTES,
-    generateDogPalette
+    generateDogPalette,
+    FrogGenerators,
+    FROG_PALETTE,
+    FROG_PALETTES,
+    generateFrogPalette
 };
 export default characterRegistry;

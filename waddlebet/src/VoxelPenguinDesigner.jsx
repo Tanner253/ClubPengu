@@ -19,7 +19,11 @@ import {
     DoginalGenerators,
     DOGINAL_PALETTE,
     DOG_PALETTES,
-    generateDogPalette
+    generateDogPalette,
+    FrogGenerators,
+    FROG_PALETTE,
+    FROG_PALETTES,
+    generateFrogPalette
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 
@@ -108,6 +112,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const [dogPrimaryColor, setDogPrimaryColor] = useState(currentData?.dogPrimaryColor || '#D4A04A');
     const [dogSecondaryColor, setDogSecondaryColor] = useState(currentData?.dogSecondaryColor || '#F0D890');
     
+    // Frog freestyle colors (primary skin, secondary belly)
+    const [frogPrimaryColor, setFrogPrimaryColor] = useState(currentData?.frogPrimaryColor || '#4A8C4A');
+    const [frogSecondaryColor, setFrogSecondaryColor] = useState(currentData?.frogSecondaryColor || '#B8C8B0');
+    
     // Sync state when currentData changes (from server restore)
     useEffect(() => {
         if (currentData) {
@@ -121,6 +129,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             // Doginal colors
             setDogPrimaryColor(currentData.dogPrimaryColor || '#D4A04A');
             setDogSecondaryColor(currentData.dogSecondaryColor || '#F0D890');
+            // Frog colors
+            setFrogPrimaryColor(currentData.frogPrimaryColor || '#4A8C4A');
+            setFrogSecondaryColor(currentData.frogSecondaryColor || '#B8C8B0');
         }
     }, [currentData]);
     
@@ -436,8 +447,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharacters = unlockedCharactersList.filter(id => characterRegistry.getCharacter(id));
     
     useEffect(() => {
-        if(updateData) updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor});
-    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, updateData]);
+        if(updateData) updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor});
+    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, updateData]);
 
     const sceneRef = useRef(null);
     const penguinRef = useRef(null);
@@ -795,6 +806,46 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 const offsetBodyVoxels = dogBodyItemVoxels.map(v => ({ ...v, y: v.y - 4 }));
                 addPart(offsetBodyVoxels, 'bodyItem');
             }
+        } else if (characterType === 'frog') {
+            // Build PEPE Frog character - use freestyle color selection!
+            const frogPalette = generateFrogPalette(frogPrimaryColor, frogSecondaryColor);
+            
+            addPart(FrogGenerators.head(), 'head', frogPalette);
+            addPart(FrogGenerators.body(), 'body', frogPalette);
+            addPart(FrogGenerators.flipperLeft(), 'flipper_l', frogPalette);
+            addPart(FrogGenerators.flipperRight(), 'flipper_r', frogPalette);
+            addPart(FrogGenerators.footLeft(), 'foot_l', frogPalette);
+            addPart(FrogGenerators.footRight(), 'foot_r', frogPalette);
+            
+            // Add hat support for frog (offset for frog head position)
+            const frogHatVoxels = ASSETS.HATS[hat] || [];
+            if (frogHatVoxels.length > 0) {
+                // Offset hat voxels to sit on frog's head (Y+2 for head height, Z+2 for head forward offset)
+                const offsetHatVoxels = frogHatVoxels.map(v => ({ ...v, y: v.y + 2, z: v.z + 2 }));
+                addPart(offsetHatVoxels, 'hat');
+                
+                // Add wizard hat glow effect (magic tip light) - offset for frog head
+                if (hat === 'wizardHat') {
+                    const wizardLight = new THREE.PointLight(0xFF69B4, 1.5, 8); // Pink magic glow
+                    wizardLight.position.set(0, (17 + 2) * VOXEL_SIZE, 2 * VOXEL_SIZE);
+                    group.add(wizardLight);
+                    if (mirrorGroup) mirrorGroup.add(wizardLight.clone());
+                    
+                    const starLight = new THREE.PointLight(0xFFD700, 0.8, 5); // Gold glow
+                    starLight.position.set(0, (14 + 2) * VOXEL_SIZE, 4 * VOXEL_SIZE);
+                    group.add(starLight);
+                    if (mirrorGroup) mirrorGroup.add(starLight.clone());
+                }
+            }
+            
+            // Add body item for Frog
+            const frogBodyItemData = ASSETS.BODY[bodyItem];
+            const frogBodyItemVoxels = frogBodyItemData?.voxels || frogBodyItemData || [];
+            if (frogBodyItemVoxels.length > 0) {
+                // Offset for frog body position
+                const offsetBodyVoxels = frogBodyItemVoxels.map(v => ({ ...v, y: v.y - 4 }));
+                addPart(offsetBodyVoxels, 'bodyItem');
+            }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body
             const WHALE_CONFIGS = {
@@ -1139,7 +1190,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             }
         }
 
-    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor]);
+    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor]);
 
     // Get available skin colors - base + unlocked premium
     const availableSkinColors = useMemo(() => {
@@ -1442,6 +1493,102 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                                 setDogSecondaryColor(preset.secondary);
                                             }}
                                             className="flex flex-col items-center p-2 rounded-lg bg-black/30 hover:bg-black/50 border border-amber-500/20 hover:border-amber-400 transition-all"
+                                            title={preset.name}
+                                        >
+                                            <div className="flex gap-1">
+                                                <div 
+                                                    className="w-4 h-4 rounded-full border border-white/30"
+                                                    style={{ backgroundColor: preset.primary }}
+                                                />
+                                                <div 
+                                                    className="w-4 h-4 rounded-full border border-white/30"
+                                                    style={{ backgroundColor: preset.secondary }}
+                                                />
+                                            </div>
+                                            <span className="text-white/70 text-[9px] mt-1">{preset.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ) : characterType === 'frog' ? (
+                        /* PEPE Frog color customization */
+                        <div className="bg-gradient-to-br from-green-900/50 to-emerald-900/50 rounded-xl p-4 border border-green-500/30">
+                            <div className="text-center mb-4">
+                                <span className="text-2xl">🐸</span>
+                                <h3 className="text-white font-bold mt-2">PEPE Colors</h3>
+                                <p className="text-white/60 text-xs mt-1">
+                                    Pick your frog's skin colors!
+                                </p>
+                            </div>
+                            
+                            {/* Primary Color - Main Skin */}
+                            <div className="mb-4">
+                                <label className="text-green-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    🎨 Primary Skin Color
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={frogPrimaryColor}
+                                        onChange={(e) => setFrogPrimaryColor(e.target.value)}
+                                        className="w-12 h-10 rounded cursor-pointer border-2 border-green-500/50"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={frogPrimaryColor}
+                                        onChange={(e) => setFrogPrimaryColor(e.target.value)}
+                                        className="flex-1 bg-black/50 border border-green-500/30 rounded px-2 py-1 text-white text-sm font-mono"
+                                        placeholder="#4A8C4A"
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Secondary Color - Belly */}
+                            <div className="mb-4">
+                                <label className="text-green-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    🎨 Belly Color
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={frogSecondaryColor}
+                                        onChange={(e) => setFrogSecondaryColor(e.target.value)}
+                                        className="w-12 h-10 rounded cursor-pointer border-2 border-green-500/50"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={frogSecondaryColor}
+                                        onChange={(e) => setFrogSecondaryColor(e.target.value)}
+                                        className="flex-1 bg-black/50 border border-green-500/30 rounded px-2 py-1 text-white text-sm font-mono"
+                                        placeholder="#B8C8B0"
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Preset Colors */}
+                            <div>
+                                <label className="text-green-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    Quick Presets
+                                </label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[
+                                        { name: 'Classic', primary: '#4A8C4A', secondary: '#B8C8B0' },
+                                        { name: 'Dark', primary: '#2A4A2A', secondary: '#4A5A4A' },
+                                        { name: 'Golden', primary: '#C8A040', secondary: '#F0E0B0' },
+                                        { name: 'Blue', primary: '#3060A0', secondary: '#80A0C8' },
+                                        { name: 'Red', primary: '#A04030', secondary: '#D0A090' },
+                                        { name: 'Lime', primary: '#80C040', secondary: '#C0E090' },
+                                        { name: 'Purple', primary: '#6040A0', secondary: '#A080C8' },
+                                        { name: 'Cyan', primary: '#40A0A0', secondary: '#80C8C8' },
+                                    ].map((preset) => (
+                                        <button
+                                            key={preset.name}
+                                            onClick={() => {
+                                                setFrogPrimaryColor(preset.primary);
+                                                setFrogSecondaryColor(preset.secondary);
+                                            }}
+                                            className="flex flex-col items-center p-2 rounded-lg bg-black/30 hover:bg-black/50 border border-green-500/20 hover:border-green-400 transition-all"
                                             title={preset.name}
                                         >
                                             <div className="flex gap-1">

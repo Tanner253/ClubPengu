@@ -181,6 +181,18 @@ const PROMO_CODES = [
             coins: 0
         }
     },
+    {
+        code: 'PEPE',
+        name: '🐸 PEPE Frog Character',
+        description: 'Unlocks the legendary PEPE Frog character - feels good man',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['frog'],
+            skinColor: null,
+            coins: 0
+        }
+    },
     
     // ========== INTERNAL TEAM CODES ==========
     {
