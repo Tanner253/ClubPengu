@@ -17,7 +17,9 @@ import {
     GoldWhaleGenerators,
     GOLD_WHALE_PALETTE,
     DoginalGenerators,
-    DOGINAL_PALETTE
+    DOGINAL_PALETTE,
+    DOG_PALETTES,
+    generateDogPalette
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 
@@ -102,6 +104,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const [bodyItem, setBodyItem] = useState(currentData?.bodyItem || 'none');
     const [mount, setMount] = useState(currentData?.mount || 'none');
     
+    // Doginal freestyle colors (primary fur, secondary belly)
+    const [dogPrimaryColor, setDogPrimaryColor] = useState(currentData?.dogPrimaryColor || '#D4A04A');
+    const [dogSecondaryColor, setDogSecondaryColor] = useState(currentData?.dogSecondaryColor || '#F0D890');
+    
     // Sync state when currentData changes (from server restore)
     useEffect(() => {
         if (currentData) {
@@ -112,6 +118,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             setBodyItem(currentData.bodyItem || 'none');
             setMount(currentData.mount || 'none');
             setCharacterType(currentData.characterType || 'penguin');
+            // Doginal colors
+            setDogPrimaryColor(currentData.dogPrimaryColor || '#D4A04A');
+            setDogSecondaryColor(currentData.dogSecondaryColor || '#F0D890');
         }
     }, [currentData]);
     
@@ -427,8 +436,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharacters = unlockedCharactersList.filter(id => characterRegistry.getCharacter(id));
     
     useEffect(() => {
-        if(updateData) updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType});
-    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, updateData]);
+        if(updateData) updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor});
+    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, updateData]);
 
     const sceneRef = useRef(null);
     const penguinRef = useRef(null);
@@ -743,18 +752,20 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             addPart(MarcusGenerators.legLeft(), 'foot_l', MARCUS_PALETTE);
             addPart(MarcusGenerators.legRight(), 'foot_r', MARCUS_PALETTE);
         } else if (characterType === 'doginal') {
-            // Build Doginal dog character
-            addPart(DoginalGenerators.head(), 'head', DOGINAL_PALETTE);
-            addPart(DoginalGenerators.body(), 'body', DOGINAL_PALETTE);
-            addPart(DoginalGenerators.armLeft(), 'flipper_l', DOGINAL_PALETTE);
-            addPart(DoginalGenerators.armRight(), 'flipper_r', DOGINAL_PALETTE);
-            addPart(DoginalGenerators.legLeft(), 'foot_l', DOGINAL_PALETTE);
-            addPart(DoginalGenerators.legRight(), 'foot_r', DOGINAL_PALETTE);
+            // Build Doginal dog character - use freestyle color selection!
+            const dogPalette = generateDogPalette(dogPrimaryColor, dogSecondaryColor);
+            
+            addPart(DoginalGenerators.head(), 'head', dogPalette);
+            addPart(DoginalGenerators.body(), 'body', dogPalette);
+            addPart(DoginalGenerators.armLeft(), 'flipper_l', dogPalette);
+            addPart(DoginalGenerators.armRight(), 'flipper_r', dogPalette);
+            addPart(DoginalGenerators.legLeft(), 'foot_l', dogPalette);
+            addPart(DoginalGenerators.legRight(), 'foot_r', dogPalette);
             
             // Animated parts - tail, ears
-            addPart(DoginalGenerators.tail(), 'tail', DOGINAL_PALETTE);
-            addPart(DoginalGenerators.earLeft(), 'ear_l', DOGINAL_PALETTE);
-            addPart(DoginalGenerators.earRight(), 'ear_r', DOGINAL_PALETTE);
+            addPart(DoginalGenerators.tail(), 'tail', dogPalette);
+            addPart(DoginalGenerators.earLeft(), 'ear_l', dogPalette);
+            addPart(DoginalGenerators.earRight(), 'ear_r', dogPalette);
             
             // Doginal ALWAYS wears wizard hat - it's part of the character!
             const doginalHat = ASSETS.HATS['wizardHat'] || [];
@@ -1128,7 +1139,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             }
         }
 
-    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType]);
+    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor]);
 
     // Get available skin colors - base + unlocked premium
     const availableSkinColors = useMemo(() => {
@@ -1353,8 +1364,104 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 );
                             })}
                         </>
+                    ) : characterType === 'doginal' ? (
+                        /* Doginal color customization */
+                        <div className="bg-gradient-to-br from-amber-900/50 to-orange-900/50 rounded-xl p-4 border border-amber-500/30">
+                            <div className="text-center mb-4">
+                                <span className="text-2xl">🐕</span>
+                                <h3 className="text-white font-bold mt-2">Doginal Colors</h3>
+                                <p className="text-white/60 text-xs mt-1">
+                                    Pick your dog's fur colors!
+                                </p>
+                            </div>
+                            
+                            {/* Primary Color - Main Fur */}
+                            <div className="mb-4">
+                                <label className="text-amber-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    🎨 Primary Fur Color
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={dogPrimaryColor}
+                                        onChange={(e) => setDogPrimaryColor(e.target.value)}
+                                        className="w-12 h-10 rounded cursor-pointer border-2 border-amber-500/50"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={dogPrimaryColor}
+                                        onChange={(e) => setDogPrimaryColor(e.target.value)}
+                                        className="flex-1 bg-black/50 border border-amber-500/30 rounded px-2 py-1 text-white text-sm font-mono"
+                                        placeholder="#D4A04A"
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Secondary Color - Belly */}
+                            <div className="mb-4">
+                                <label className="text-amber-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    🎨 Belly/Accent Color
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={dogSecondaryColor}
+                                        onChange={(e) => setDogSecondaryColor(e.target.value)}
+                                        className="w-12 h-10 rounded cursor-pointer border-2 border-amber-500/50"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={dogSecondaryColor}
+                                        onChange={(e) => setDogSecondaryColor(e.target.value)}
+                                        className="flex-1 bg-black/50 border border-amber-500/30 rounded px-2 py-1 text-white text-sm font-mono"
+                                        placeholder="#F0D890"
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Preset Colors */}
+                            <div>
+                                <label className="text-amber-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    Quick Presets
+                                </label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[
+                                        { name: 'Golden', primary: '#D4A04A', secondary: '#F0D890' },
+                                        { name: 'Black', primary: '#2A2A2A', secondary: '#3A3A3A' },
+                                        { name: 'White', primary: '#F5F5F5', secondary: '#FFFFFF' },
+                                        { name: 'Brown', primary: '#6B4423', secondary: '#9B7653' },
+                                        { name: 'Husky', primary: '#7A8A9A', secondary: '#E8F0F8' },
+                                        { name: 'Red', primary: '#B84020', secondary: '#E88060' },
+                                        { name: 'Corgi', primary: '#E8A040', secondary: '#FFFFFF' },
+                                        { name: 'Dalmatian', primary: '#F8F8F8', secondary: '#FFFFFF' },
+                                    ].map((preset) => (
+                                        <button
+                                            key={preset.name}
+                                            onClick={() => {
+                                                setDogPrimaryColor(preset.primary);
+                                                setDogSecondaryColor(preset.secondary);
+                                            }}
+                                            className="flex flex-col items-center p-2 rounded-lg bg-black/30 hover:bg-black/50 border border-amber-500/20 hover:border-amber-400 transition-all"
+                                            title={preset.name}
+                                        >
+                                            <div className="flex gap-1">
+                                                <div 
+                                                    className="w-4 h-4 rounded-full border border-white/30"
+                                                    style={{ backgroundColor: preset.primary }}
+                                                />
+                                                <div 
+                                                    className="w-4 h-4 rounded-full border border-white/30"
+                                                    style={{ backgroundColor: preset.secondary }}
+                                                />
+                                            </div>
+                                            <span className="text-white/70 text-[9px] mt-1">{preset.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
                     ) : (
-                        /* Special character info - no customization */
+                        /* Other special characters - no customization */
                         <div className="bg-gradient-to-br from-purple-900/50 to-cyan-900/50 rounded-xl p-4 border border-purple-500/30">
                             <div className="text-center">
                                 <span className="text-2xl">🎭</span>

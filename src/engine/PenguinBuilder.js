@@ -18,7 +18,9 @@ import {
     GoldWhaleGenerators,
     GOLD_WHALE_PALETTE,
     DoginalGenerators,
-    DOGINAL_PALETTE
+    DOGINAL_PALETTE,
+    DOG_PALETTES,
+    generateDogPalette
 } from '../characters';
 
 /**
@@ -628,42 +630,47 @@ export function createPenguinBuilder(THREE) {
         const group = new THREE.Group();
         const pivots = DoginalGenerators.pivots();
         
+        // Use freestyle colors if provided, otherwise default golden
+        const primaryColor = data.dogPrimaryColor || '#D4A04A';
+        const secondaryColor = data.dogSecondaryColor || '#F0D890';
+        const dogPalette = generateDogPalette(primaryColor, secondaryColor);
+        
         const headVoxels = DoginalGenerators.head();
-        const head = buildPartMerged(headVoxels, DOGINAL_PALETTE);
+        const head = buildPartMerged(headVoxels, dogPalette);
         head.name = 'head';
         
         const bodyVoxels = DoginalGenerators.body();
-        const body = buildPartMerged(bodyVoxels, DOGINAL_PALETTE);
+        const body = buildPartMerged(bodyVoxels, dogPalette);
         body.name = 'body';
         
         const armLVoxels = DoginalGenerators.armLeft();
-        const armL = buildPartMerged(armLVoxels, DOGINAL_PALETTE, pivots.armLeft);
+        const armL = buildPartMerged(armLVoxels, dogPalette, pivots.armLeft);
         armL.name = 'flipper_l';
         
         const armRVoxels = DoginalGenerators.armRight();
-        const armR = buildPartMerged(armRVoxels, DOGINAL_PALETTE, pivots.armRight);
+        const armR = buildPartMerged(armRVoxels, dogPalette, pivots.armRight);
         armR.name = 'flipper_r';
         
         const legLVoxels = DoginalGenerators.legLeft();
-        const legL = buildPartMerged(legLVoxels, DOGINAL_PALETTE, pivots.legLeft);
+        const legL = buildPartMerged(legLVoxels, dogPalette, pivots.legLeft);
         legL.name = 'foot_l';
         
         const legRVoxels = DoginalGenerators.legRight();
-        const legR = buildPartMerged(legRVoxels, DOGINAL_PALETTE, pivots.legRight);
+        const legR = buildPartMerged(legRVoxels, dogPalette, pivots.legRight);
         legR.name = 'foot_r';
         
         // Animated tail
         const tailVoxels = DoginalGenerators.tail();
-        const tail = buildPartMerged(tailVoxels, DOGINAL_PALETTE, pivots.tail);
+        const tail = buildPartMerged(tailVoxels, dogPalette, pivots.tail);
         tail.name = 'tail';
         
         // Animated ears
         const earLVoxels = DoginalGenerators.earLeft();
-        const earL = buildPartMerged(earLVoxels, DOGINAL_PALETTE, pivots.earLeft);
+        const earL = buildPartMerged(earLVoxels, dogPalette, pivots.earLeft);
         earL.name = 'ear_l';
         
         const earRVoxels = DoginalGenerators.earRight();
-        const earR = buildPartMerged(earRVoxels, DOGINAL_PALETTE, pivots.earRight);
+        const earR = buildPartMerged(earRVoxels, dogPalette, pivots.earRight);
         earR.name = 'ear_r';
         
         group.add(body, head, armL, armR, legL, legR, tail, earL, earR);

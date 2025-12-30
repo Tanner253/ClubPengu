@@ -34,7 +34,10 @@ const userSchema = new mongoose.Schema({
         eyes: { type: String, default: 'normal' },
         mouth: { type: String, default: 'beak' },
         bodyItem: { type: String, default: 'none' },
-        mount: { type: String, default: 'none' }
+        mount: { type: String, default: 'none' },
+        // Doginal freestyle colors
+        dogPrimaryColor: { type: String, default: '#D4A04A' },
+        dogSecondaryColor: { type: String, default: '#F0D890' }
     },
 
     // ========== CURRENCY (Server-Authoritative) ==========

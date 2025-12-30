@@ -10,7 +10,7 @@
  * - Paws instead of penguin feet
  */
 
-// Doginal color palette - Golden/tan dog colors
+// Doginal color palette - Golden/tan dog colors (default)
 export const DOGINAL_PALETTE = {
     // Main fur colors
     main: '#D4A04A',         // Golden tan
@@ -33,6 +33,163 @@ export const DOGINAL_PALETTE = {
     
     // Inner ear
     earInner: '#E0A080',     // Pink-ish inner ear
+};
+
+// Black Dog palette - sleek black coat
+export const BLACK_DOG_PALETTE = {
+    main: '#2A2A2A',
+    mainLight: '#404040',
+    mainDark: '#1A1A1A',
+    mainDeep: '#101010',
+    belly: '#3A3A3A',
+    nose: '#0A0A0A',
+    tongue: '#E87080',
+    mouthLine: '#1A1A1A',
+    eyeWhite: '#FFFFFF',
+    eyeBlack: '#000000',
+    eyeBrown: '#4A3020',
+    earInner: '#3A2A2A',
+};
+
+// White Dog palette - fluffy white coat
+export const WHITE_DOG_PALETTE = {
+    main: '#F5F5F5',
+    mainLight: '#FFFFFF',
+    mainDark: '#E0E0E0',
+    mainDeep: '#C8C8C8',
+    belly: '#FFFFFF',
+    nose: '#2A2020',
+    tongue: '#E87080',
+    mouthLine: '#8A8A8A',
+    eyeWhite: '#FFFFFF',
+    eyeBlack: '#1A1010',
+    eyeBrown: '#4A3020',
+    earInner: '#FFD0D0',
+};
+
+// Brown Dog palette - chocolate brown
+export const BROWN_DOG_PALETTE = {
+    main: '#6B4423',
+    mainLight: '#8B5A2B',
+    mainDark: '#4A2F15',
+    mainDeep: '#3A2010',
+    belly: '#9B7653',
+    nose: '#1A1010',
+    tongue: '#E87080',
+    mouthLine: '#3A2010',
+    eyeWhite: '#FFFFFF',
+    eyeBlack: '#1A1010',
+    eyeBrown: '#3A2010',
+    earInner: '#8B5A4B',
+};
+
+// Husky palette - gray/white mix
+export const HUSKY_DOG_PALETTE = {
+    main: '#7A8A9A',
+    mainLight: '#B0C0D0',
+    mainDark: '#5A6A7A',
+    mainDeep: '#4A5A6A',
+    belly: '#E8F0F8',
+    nose: '#2A2020',
+    tongue: '#E87080',
+    mouthLine: '#4A5A6A',
+    eyeWhite: '#FFFFFF',
+    eyeBlack: '#1A1010',
+    eyeBrown: '#6080C0',  // Blue-ish husky eyes
+    earInner: '#C0A0A0',
+};
+
+// Dalmatian palette - white with spots pattern
+export const DALMATIAN_DOG_PALETTE = {
+    main: '#F8F8F8',
+    mainLight: '#FFFFFF',
+    mainDark: '#2A2A2A',  // Spots color
+    mainDeep: '#1A1A1A',
+    belly: '#FFFFFF',
+    nose: '#1A1010',
+    tongue: '#E87080',
+    mouthLine: '#6A6A6A',
+    eyeWhite: '#FFFFFF',
+    eyeBlack: '#1A1010',
+    eyeBrown: '#4A3020',
+    earInner: '#FFD0D0',
+};
+
+// Red/Rust Dog palette - Irish Setter style
+export const RED_DOG_PALETTE = {
+    main: '#B84020',
+    mainLight: '#D86040',
+    mainDark: '#8A3018',
+    mainDeep: '#6A2010',
+    belly: '#E88060',
+    nose: '#2A1010',
+    tongue: '#E87080',
+    mouthLine: '#5A2010',
+    eyeWhite: '#FFFFFF',
+    eyeBlack: '#1A1010',
+    eyeBrown: '#4A2010',
+    earInner: '#C06050',
+};
+
+// Corgi palette - orange/white
+export const CORGI_DOG_PALETTE = {
+    main: '#E8A040',
+    mainLight: '#F8C060',
+    mainDark: '#C88020',
+    mainDeep: '#A06010',
+    belly: '#FFFFFF',
+    nose: '#2A2020',
+    tongue: '#E87080',
+    mouthLine: '#6A4030',
+    eyeWhite: '#FFFFFF',
+    eyeBlack: '#1A1010',
+    eyeBrown: '#4A3020',
+    earInner: '#E8A080',
+};
+
+// All dog palettes for easy access
+export const DOG_PALETTES = {
+    golden: DOGINAL_PALETTE,
+    black: BLACK_DOG_PALETTE,
+    white: WHITE_DOG_PALETTE,
+    brown: BROWN_DOG_PALETTE,
+    husky: HUSKY_DOG_PALETTE,
+    dalmatian: DALMATIAN_DOG_PALETTE,
+    red: RED_DOG_PALETTE,
+    corgi: CORGI_DOG_PALETTE,
+};
+
+/**
+ * Generate a custom dog palette from primary and secondary colors
+ * This allows freestyle color picking like penguin feathers!
+ * @param {string} primary - Primary fur color (hex)
+ * @param {string} secondary - Secondary/belly color (hex)
+ * @returns {Object} A complete dog palette
+ */
+export const generateDogPalette = (primary, secondary) => {
+    // Helper to darken/lighten hex colors
+    const adjustColor = (hex, percent) => {
+        const num = parseInt(hex.replace('#', ''), 16);
+        const r = Math.min(255, Math.max(0, (num >> 16) + Math.round(255 * percent / 100)));
+        const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + Math.round(255 * percent / 100)));
+        const b = Math.min(255, Math.max(0, (num & 0x0000FF) + Math.round(255 * percent / 100)));
+        return `#${(0x1000000 + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+    };
+    
+    return {
+        main: primary,
+        mainLight: adjustColor(primary, 15),
+        mainDark: adjustColor(primary, -15),
+        mainDeep: adjustColor(primary, -25),
+        belly: secondary,
+        nose: '#2A2020',
+        tongue: '#E87080',
+        mouthLine: adjustColor(primary, -30),
+        eyeWhite: '#FFFFFF',
+        eyeBlack: '#1A1010',
+        eyeBrown: '#4A3020',
+        earInner: adjustColor(secondary, -10),
+    };
 };
 
 // Y offset to position the dog properly (lower than original to not float)
@@ -81,13 +238,13 @@ export const generateDoginalHead = () => {
                 const distZ = z / radiusZ;
                 
                 if (distX * distX + distZ * distZ <= 1) {
-                    let color = DOGINAL_PALETTE.main;
+                    let color = 'main';
                     // Top highlights
-                    if (y > 5) color = DOGINAL_PALETTE.mainLight;
+                    if (y > 5) color = 'mainLight';
                     // Side shadows
-                    if (Math.abs(x) > radiusX * 0.7) color = DOGINAL_PALETTE.mainDark;
+                    if (Math.abs(x) > radiusX * 0.7) color = 'mainDark';
                     // Cheeks/lower face lighter
-                    if (y < 4 && z > 1) color = DOGINAL_PALETTE.belly;
+                    if (y < 4 && z > 1) color = 'belly';
                     addVoxel(x, y, z, color);
                 }
             }
@@ -108,11 +265,11 @@ export const generateDoginalHead = () => {
                 const distY = adjustedY / radiusY;
                 
                 if (distX * distX + distY * distY <= 1) {
-                    let color = DOGINAL_PALETTE.main;
+                    let color = 'main';
                     // Top of snout lighter
-                    if (adjustedY > 0.5) color = DOGINAL_PALETTE.mainLight;
+                    if (adjustedY > 0.5) color = 'mainLight';
                     // Bottom of snout (belly color)
-                    if (adjustedY < -0.3) color = DOGINAL_PALETTE.belly;
+                    if (adjustedY < -0.3) color = 'belly';
                     addVoxel(x, adjustedY + 2, z, color);
                 }
             }
@@ -120,11 +277,11 @@ export const generateDoginalHead = () => {
     }
     
     // Nose - black at end of snout
-    addVoxel(0, 2, 8, DOGINAL_PALETTE.nose);
-    addVoxel(1, 2, 8, DOGINAL_PALETTE.nose);
-    addVoxel(-1, 2, 8, DOGINAL_PALETTE.nose);
-    addVoxel(0, 3, 8, DOGINAL_PALETTE.nose);
-    addVoxel(0, 2, 9, DOGINAL_PALETTE.nose);
+    addVoxel(0, 2, 8, 'nose');
+    addVoxel(1, 2, 8, 'nose');
+    addVoxel(-1, 2, 8, 'nose');
+    addVoxel(0, 3, 8, 'nose');
+    addVoxel(0, 2, 9, 'nose');
     
     // Eyes - big and friendly, positioned on head
     const eyeY = 5;
@@ -132,28 +289,28 @@ export const generateDoginalHead = () => {
     const eyeSpacing = 3;
     
     // Left eye
-    addVoxel(-eyeSpacing, eyeY, eyeZ, DOGINAL_PALETTE.eyeWhite);
-    addVoxel(-eyeSpacing, eyeY + 1, eyeZ, DOGINAL_PALETTE.eyeWhite);
-    addVoxel(-eyeSpacing - 1, eyeY, eyeZ, DOGINAL_PALETTE.eyeWhite);
-    addVoxel(-eyeSpacing, eyeY, eyeZ + 1, DOGINAL_PALETTE.eyeBlack);  // Pupil
-    addVoxel(-eyeSpacing, eyeY + 1, eyeZ + 1, DOGINAL_PALETTE.eyeBrown);  // Iris
+    addVoxel(-eyeSpacing, eyeY, eyeZ, 'eyeWhite');
+    addVoxel(-eyeSpacing, eyeY + 1, eyeZ, 'eyeWhite');
+    addVoxel(-eyeSpacing - 1, eyeY, eyeZ, 'eyeWhite');
+    addVoxel(-eyeSpacing, eyeY, eyeZ + 1, 'eyeBlack');  // Pupil
+    addVoxel(-eyeSpacing, eyeY + 1, eyeZ + 1, 'eyeBrown');  // Iris
     
     // Right eye
-    addVoxel(eyeSpacing, eyeY, eyeZ, DOGINAL_PALETTE.eyeWhite);
-    addVoxel(eyeSpacing, eyeY + 1, eyeZ, DOGINAL_PALETTE.eyeWhite);
-    addVoxel(eyeSpacing + 1, eyeY, eyeZ, DOGINAL_PALETTE.eyeWhite);
-    addVoxel(eyeSpacing, eyeY, eyeZ + 1, DOGINAL_PALETTE.eyeBlack);  // Pupil
-    addVoxel(eyeSpacing, eyeY + 1, eyeZ + 1, DOGINAL_PALETTE.eyeBrown);  // Iris
+    addVoxel(eyeSpacing, eyeY, eyeZ, 'eyeWhite');
+    addVoxel(eyeSpacing, eyeY + 1, eyeZ, 'eyeWhite');
+    addVoxel(eyeSpacing + 1, eyeY, eyeZ, 'eyeWhite');
+    addVoxel(eyeSpacing, eyeY, eyeZ + 1, 'eyeBlack');  // Pupil
+    addVoxel(eyeSpacing, eyeY + 1, eyeZ + 1, 'eyeBrown');  // Iris
     
     // NOTE: Ears are now separate animated parts - see generateDoginalEar
     
     // Mouth/smile line
     for (let x = -1; x <= 1; x++) {
-        addVoxel(x, 1, 6, DOGINAL_PALETTE.mouthLine);
+        addVoxel(x, 1, 6, 'mouthLine');
     }
     
     // Tongue sticking out slightly
-    addVoxel(0, 0, 7, DOGINAL_PALETTE.tongue);
+    addVoxel(0, 0, 7, 'tongue');
     
     return Array.from(voxelMap.values());
 };
@@ -187,13 +344,13 @@ export const generateDoginalBody = () => {
                 const distZ = radiusZ > 0.5 ? z / radiusZ : 0;
                 
                 if (distX * distX + distZ * distZ <= 1) {
-                    let color = DOGINAL_PALETTE.main;
+                    let color = 'main';
                     // Belly (front, lower)
-                    if (z > 1 && y < -2) color = DOGINAL_PALETTE.belly;
+                    if (z > 1 && y < -2) color = 'belly';
                     // Top of back darker
-                    if (y > -2) color = DOGINAL_PALETTE.mainDark;
+                    if (y > -2) color = 'mainDark';
                     // Sides
-                    if (Math.abs(x) > radiusX * 0.7) color = DOGINAL_PALETTE.mainDark;
+                    if (Math.abs(x) > radiusX * 0.7) color = 'mainDark';
                     addVoxel(x, y, z, color);
                 }
             }
@@ -229,18 +386,18 @@ export const generateDoginalArm = (isLeft) => {
     for (let i = 0; i < 8; i++) {
         const legX = shoulderX + side * (i < 3 ? i * 0.3 : 1);
         const legY = shoulderY - i;
-        addVoxel(legX, legY, 3, DOGINAL_PALETTE.main);
-        addVoxel(legX, legY, 4, DOGINAL_PALETTE.main);
+        addVoxel(legX, legY, 3, 'main');
+        addVoxel(legX, legY, 4, 'main');
     }
     
     // Paw - moved forward by 1 (Z+1)
     const pawY = shoulderY - 8;
-    addVoxel(shoulderX + side, pawY, 4, DOGINAL_PALETTE.mainLight);
-    addVoxel(shoulderX + side, pawY, 5, DOGINAL_PALETTE.mainLight);
-    addVoxel(shoulderX + side, pawY, 6, DOGINAL_PALETTE.mainLight);
+    addVoxel(shoulderX + side, pawY, 4, 'mainLight');
+    addVoxel(shoulderX + side, pawY, 5, 'mainLight');
+    addVoxel(shoulderX + side, pawY, 6, 'mainLight');
     // Toe beans (darker)
-    addVoxel(shoulderX + side, pawY - 1, 5, DOGINAL_PALETTE.mainDark);
-    addVoxel(shoulderX + side, pawY - 1, 6, DOGINAL_PALETTE.mainDark);
+    addVoxel(shoulderX + side, pawY - 1, 5, 'mainDark');
+    addVoxel(shoulderX + side, pawY - 1, 6, 'mainDark');
     
     return Array.from(voxelMap.values());
 };
@@ -269,21 +426,21 @@ export const generateDoginalLeg = (isLeft) => {
     for (let i = 0; i < 6; i++) {
         const legX = hipX;
         const legY = hipY - i;
-        addVoxel(legX, legY, -7, DOGINAL_PALETTE.main);
-        addVoxel(legX, legY, -8, DOGINAL_PALETTE.main);
+        addVoxel(legX, legY, -7, 'main');
+        addVoxel(legX, legY, -8, 'main');
         if (i < 3) {
-            addVoxel(legX + side, legY, -7, DOGINAL_PALETTE.mainDark);
+            addVoxel(legX + side, legY, -7, 'mainDark');
         }
     }
     
     // Back paw
     const pawY = hipY - 6;
-    addVoxel(hipX, pawY, -7, DOGINAL_PALETTE.mainLight);
-    addVoxel(hipX, pawY, -6, DOGINAL_PALETTE.mainLight);
-    addVoxel(hipX, pawY, -5, DOGINAL_PALETTE.mainLight);
+    addVoxel(hipX, pawY, -7, 'mainLight');
+    addVoxel(hipX, pawY, -6, 'mainLight');
+    addVoxel(hipX, pawY, -5, 'mainLight');
     // Toe beans
-    addVoxel(hipX, pawY - 1, -6, DOGINAL_PALETTE.mainDark);
-    addVoxel(hipX, pawY - 1, -5, DOGINAL_PALETTE.mainDark);
+    addVoxel(hipX, pawY - 1, -6, 'mainDark');
+    addVoxel(hipX, pawY - 1, -5, 'mainDark');
     
     return Array.from(voxelMap.values());
 };
@@ -309,15 +466,15 @@ export const generateDoginalTail = () => {
         const tailX = 0;
         const tailY = -3 + i * 0.5;
         const tailZ = -4 - i;
-        addVoxel(tailX, tailY, tailZ, DOGINAL_PALETTE.main);
+        addVoxel(tailX, tailY, tailZ, 'main');
         if (i < 3) {
-            addVoxel(tailX + 1, tailY, tailZ, DOGINAL_PALETTE.mainLight);
+            addVoxel(tailX + 1, tailY, tailZ, 'mainLight');
         }
     }
     // Fluffy tail tip
-    addVoxel(0, -1, -8, DOGINAL_PALETTE.mainLight);
-    addVoxel(1, -1, -8, DOGINAL_PALETTE.mainLight);
-    addVoxel(0, 0, -8, DOGINAL_PALETTE.mainLight);
+    addVoxel(0, -1, -8, 'mainLight');
+    addVoxel(1, -1, -8, 'mainLight');
+    addVoxel(0, 0, -8, 'mainLight');
     
     return Array.from(voxelMap.values());
 };
@@ -345,12 +502,12 @@ export const generateDoginalEar = (isLeft) => {
         const earX = side * (5 + (i < 2 ? 0 : 1));
         const earY = 7 - i;
         const earZ = 0;
-        addVoxel(earX, earY, earZ, DOGINAL_PALETTE.main);
-        addVoxel(earX, earY, earZ + 1, DOGINAL_PALETTE.main);
-        addVoxel(earX + side, earY, earZ, DOGINAL_PALETTE.mainDark);
+        addVoxel(earX, earY, earZ, 'main');
+        addVoxel(earX, earY, earZ + 1, 'main');
+        addVoxel(earX + side, earY, earZ, 'mainDark');
         // Inner ear (visible from some angles)
         if (i > 1) {
-            addVoxel(earX - side, earY, earZ, DOGINAL_PALETTE.earInner);
+            addVoxel(earX - side, earY, earZ, 'earInner');
         }
     }
     
