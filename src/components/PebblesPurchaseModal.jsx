@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import PhantomWallet from '../wallet/PhantomWallet';
+import { sendSPLToken } from '../wallet/SolanaPayment';
 
 // Pebble bundles (must match server constants)
 const BUNDLES = [
@@ -14,8 +15,13 @@ const BUNDLES = [
 
 const ROLL_COST = 25; // Pebbles per gacha roll
 const PEBBLES_PER_SOL = 1000;
+const PEBBLES_PER_SOL_WADDLE = 667; // $WADDLE is 1.5x more expensive
+const WADDLE_PREMIUM = 1.5;
 const WITHDRAWAL_RAKE = 5; // 5%
 const MIN_WITHDRAWAL = 100; // Minimum pebbles to withdraw
+
+// $WADDLE token address
+const WADDLE_TOKEN = import.meta.env.VITE_CPW3_TOKEN_ADDRESS || 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump';
 
 // Rake wallet from env (where SOL deposits go)
 const RAKE_WALLET = import.meta.env.VITE_RAKE_WALLET || '';
@@ -35,6 +41,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
     // Buy state
     const [selectedBundle, setSelectedBundle] = useState(null);
     const [isPurchasing, setIsPurchasing] = useState(false);
+    const [paymentMethod, setPaymentMethod] = useState('SOL'); // 'SOL' | 'WADDLE'
     
     // Withdraw state
     const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -73,6 +80,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
             setError(null);
             setSuccess(null);
             setWithdrawAmount('');
+            setPaymentMethod('SOL'); // Default to SOL
             
             // Fetch withdrawal history when opening
             if (isAuthenticated) {
@@ -137,7 +145,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
         };
     }, [isOpen, registerCallbacks, fetchWithdrawals]);
     
-    // Handle purchase - simple SOL transfer using existing wallet
+    // Handle purchase - SOL or $WADDLE transfer
     const handlePurchase = async (bundle) => {
         if (!isAuthenticated || !walletAddress) {
             setError('Please connect your wallet first');
@@ -160,25 +168,55 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                 throw new Error('Wallet not connected');
             }
             
-            console.log(`🪨 Purchasing ${bundle.pebbles} Pebbles for ${bundle.sol} SOL`);
-            
-            // Use PhantomWallet's sendSOL method (simple native SOL transfer)
-            const result = await wallet.sendSOL(RAKE_WALLET, bundle.sol);
-            
-            if (!result.success) {
-                throw new Error(result.message || result.error || 'Transaction failed');
+            if (paymentMethod === 'SOL') {
+                // SOL Payment
+                console.log(`🪨 Purchasing ${bundle.pebbles} Pebbles for ${bundle.sol} SOL`);
+                
+                const result = await wallet.sendSOL(RAKE_WALLET, bundle.sol);
+                
+                if (!result.success) {
+                    throw new Error(result.message || result.error || 'Transaction failed');
+                }
+                
+                console.log(`🪨 Pebble deposit tx: ${result.signature}`);
+                
+                send({
+                    type: 'pebbles_deposit',
+                    txSignature: result.signature,
+                    amountSol: bundle.sol
+                });
+                
+                setSuccess(`Successfully purchased ${bundle.pebbles} Pebbles!`);
+            } else {
+                // $WADDLE Payment (1.5x more expensive)
+                const waddleAmount = bundle.sol * WADDLE_PREMIUM;
+                const pebblesToReceive = Math.floor(bundle.sol * PEBBLES_PER_SOL_WADDLE);
+                
+                console.log(`🪨 Purchasing ${pebblesToReceive} Pebbles for ${waddleAmount} $WADDLE`);
+                
+                // Send $WADDLE SPL token using SolanaPayment
+                const result = await sendSPLToken({
+                    recipientAddress: RAKE_WALLET,
+                    tokenMintAddress: WADDLE_TOKEN,
+                    amount: waddleAmount,
+                    memo: `Pebbles purchase: ${pebblesToReceive}`
+                });
+                
+                if (!result.success) {
+                    throw new Error(result.message || result.error || 'Transaction failed');
+                }
+                
+                console.log(`🪨 Pebble $WADDLE deposit tx: ${result.signature}`);
+                
+                send({
+                    type: 'pebbles_deposit_waddle',
+                    txSignature: result.signature,
+                    waddleAmount: waddleAmount
+                });
+                
+                setSuccess(`Successfully purchased ${pebblesToReceive} Pebbles with $WADDLE!`);
             }
             
-            console.log(`🪨 Pebble deposit tx: ${result.signature}`);
-            
-            // Notify server of the deposit - server will verify on-chain
-            send({
-                type: 'pebbles_deposit',
-                txSignature: result.signature,
-                amountSol: bundle.sol
-            });
-            
-            setSuccess(`Successfully purchased ${bundle.pebbles} Pebbles!`);
             setTimeout(() => {
                 setSuccess(null);
             }, 3000);
@@ -191,7 +229,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
             if (err.message?.includes('User rejected') || err.message?.includes('user rejected')) {
                 userMessage = 'Transaction cancelled';
             } else if (err.message?.includes('insufficient') || err.message?.includes('Insufficient')) {
-                userMessage = 'Insufficient SOL balance';
+                userMessage = `Insufficient ${paymentMethod} balance`;
             }
             
             setError(userMessage);
@@ -296,50 +334,97 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                 <div className="flex-1 overflow-y-auto">
                     {activeTab === 'buy' ? (
                         /* Buy Tab */
-                        <div className="p-4 space-y-2">
-                            <p className="text-xs text-purple-300/60 mb-3">
-                                1 roll = {ROLL_COST} Pebbles • 1,000 Pebbles = 1 SOL
+                        <div className="p-4 space-y-3">
+                            {/* Payment Method Toggle */}
+                            <div className="flex gap-2 p-1 bg-black/30 rounded-lg">
+                                <button
+                                    onClick={() => setPaymentMethod('SOL')}
+                                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                                        paymentMethod === 'SOL'
+                                            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
+                                            : 'text-white/60 hover:text-white hover:bg-white/10'
+                                    }`}
+                                >
+                                    <span>◎</span> SOL
+                                </button>
+                                <button
+                                    onClick={() => setPaymentMethod('WADDLE')}
+                                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+                                        paymentMethod === 'WADDLE'
+                                            ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white'
+                                            : 'text-white/60 hover:text-white hover:bg-white/10'
+                                    }`}
+                                >
+                                    <span>🐧</span> $WADDLE
+                                </button>
+                            </div>
+                            
+                            <p className="text-xs text-purple-300/60">
+                                {paymentMethod === 'SOL' 
+                                    ? `1 roll = ${ROLL_COST} Pebbles • 1,000 Pebbles = 1 SOL`
+                                    : `1 roll = ${ROLL_COST} Pebbles • ${PEBBLES_PER_SOL_WADDLE} Pebbles = 1 $WADDLE (1.5x premium)`
+                                }
                             </p>
                             
-                            {BUNDLES.map((bundle) => (
-                                <button
-                                    key={bundle.id}
-                                    onClick={() => handlePurchase(bundle)}
-                                    disabled={isPurchasing}
-                                    className={`w-full p-3 rounded-xl border transition-all ${
-                                        bundle.featured 
-                                            ? 'bg-gradient-to-r from-purple-600/40 to-pink-600/40 border-purple-400/50 hover:border-purple-400' 
-                                            : 'bg-black/30 border-purple-500/20 hover:border-purple-500/50 hover:bg-black/50'
-                                    } ${isPurchasing && selectedBundle?.id === bundle.id ? 'opacity-50' : ''}`}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <span className="text-2xl">🪨</span>
-                                            <div className="text-left">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-white font-bold">
-                                                        {bundle.pebbles.toLocaleString()}
-                                                    </span>
-                                                    {bundle.bonus > 0 && (
-                                                        <span className="text-green-400 text-xs font-bold bg-green-400/20 px-1.5 py-0.5 rounded">
-                                                            +{bundle.bonusPercent}%
+                            {paymentMethod === 'WADDLE' && (
+                                <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2 text-xs text-cyan-300">
+                                    💡 Paying with $WADDLE costs 1.5x more but supports the ecosystem!
+                                </div>
+                            )}
+                            
+                            {BUNDLES.map((bundle) => {
+                                const displayPrice = paymentMethod === 'SOL' 
+                                    ? bundle.sol 
+                                    : (bundle.sol * WADDLE_PREMIUM).toFixed(2);
+                                const displayPebbles = paymentMethod === 'SOL'
+                                    ? bundle.pebbles
+                                    : Math.floor(bundle.sol * PEBBLES_PER_SOL_WADDLE);
+                                const displayRolls = Math.floor(displayPebbles / ROLL_COST);
+                                
+                                return (
+                                    <button
+                                        key={bundle.id}
+                                        onClick={() => handlePurchase(bundle)}
+                                        disabled={isPurchasing}
+                                        className={`w-full p-3 rounded-xl border transition-all ${
+                                            bundle.featured 
+                                                ? paymentMethod === 'SOL'
+                                                    ? 'bg-gradient-to-r from-purple-600/40 to-pink-600/40 border-purple-400/50 hover:border-purple-400'
+                                                    : 'bg-gradient-to-r from-cyan-600/40 to-blue-600/40 border-cyan-400/50 hover:border-cyan-400'
+                                                : 'bg-black/30 border-purple-500/20 hover:border-purple-500/50 hover:bg-black/50'
+                                        } ${isPurchasing && selectedBundle?.id === bundle.id ? 'opacity-50' : ''}`}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <span className="text-2xl">🪨</span>
+                                                <div className="text-left">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-white font-bold">
+                                                            {displayPebbles.toLocaleString()}
                                                         </span>
-                                                    )}
-                                                </div>
-                                                <div className="text-xs text-purple-300/60">
-                                                    {Math.floor(bundle.pebbles / ROLL_COST)} rolls
+                                                        {bundle.bonus > 0 && paymentMethod === 'SOL' && (
+                                                            <span className="text-green-400 text-xs font-bold bg-green-400/20 px-1.5 py-0.5 rounded">
+                                                                +{bundle.bonusPercent}%
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-xs text-purple-300/60">
+                                                        {displayRolls} rolls
+                                                    </div>
                                                 </div>
                                             </div>
+                                            <div className="text-right">
+                                                <div className="text-white font-bold">
+                                                    {displayPrice} {paymentMethod === 'SOL' ? 'SOL' : '$WADDLE'}
+                                                </div>
+                                                {bundle.featured && (
+                                                    <div className="text-xs text-yellow-400">⭐ Popular</div>
+                                                )}
+                                            </div>
                                         </div>
-                                        <div className="text-right">
-                                            <div className="text-white font-bold">{bundle.sol} SOL</div>
-                                            {bundle.featured && (
-                                                <div className="text-xs text-yellow-400">⭐ Popular</div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </button>
-                            ))}
+                                    </button>
+                                );
+                            })}
                         </div>
                     ) : (
                         /* Withdraw Tab */

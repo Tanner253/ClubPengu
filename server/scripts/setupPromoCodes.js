@@ -170,12 +170,14 @@ const PROMO_CODES = [
     
     // ========== INTERNAL TEAM CODES ==========
     {
-        code: 'AB442BC3C938F16BEA709A0963192E2E',
+        code: 'AB442BC3C938F16BEA70',
         name: '🔑 Team Starter Pack',
-        description: 'Dev/Marketing team code - Unlocks all Common, Uncommon, and Rare cosmetics (non-tradable)',
+        description: 'Dev/Marketing team code - Unlocks all Common, Uncommon, and Rare cosmetics + Wizard Hat (non-tradable)',
         unlocks: {
             mounts: [],
-            cosmetics: [],
+            cosmetics: [
+                { id: 'wizardHat', category: 'hat' }
+            ],
             characters: [],
             skinColor: null,
             coins: 0,

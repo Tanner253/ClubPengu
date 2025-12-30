@@ -1266,6 +1266,11 @@ async function handleMessage(playerId, message) {
     
     // Handle gift messages
     if (message.type?.startsWith('gift_')) {
+        // Helper to find player by ID
+        const getPlayerById = (id) => {
+            const p = players.get(id);
+            return p ? { id, ...p } : null;
+        };
         const handled = await handleGiftMessage(playerId, player, message, sendToPlayer, getPlayerById);
         if (handled) return;
     }
@@ -4287,6 +4292,62 @@ async function handleMessage(playerId, message) {
                     type: 'pebbles_error',
                     error: 'SERVER_ERROR',
                     message: 'Failed to process deposit'
+                });
+            }
+            break;
+        }
+        
+        case 'pebbles_deposit_waddle': {
+            // Player deposited $WADDLE and wants Pebbles (at 1.5x premium rate)
+            if (!player.isAuthenticated || !player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Must be authenticated to deposit'
+                });
+                break;
+            }
+            
+            const { txSignature, waddleAmount } = message;
+            
+            if (!txSignature || !waddleAmount) {
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'INVALID_REQUEST',
+                    message: 'Missing transaction signature or $WADDLE amount'
+                });
+                break;
+            }
+            
+            try {
+                const result = await pebbleService.depositPebblesWithWaddle(
+                    player.walletAddress,
+                    txSignature,
+                    waddleAmount,
+                    playerId
+                );
+                
+                if (result.success) {
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_deposited',
+                        pebbles: result.newBalance,
+                        pebblesAwarded: result.pebblesReceived,
+                        waddleDeposited: result.waddleAmount,
+                        paymentMethod: 'WADDLE'
+                    });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_error',
+                        error: result.error,
+                        message: result.message || 'Deposit failed'
+                    });
+                }
+            } catch (error) {
+                console.error('🪨 Pebble $WADDLE deposit error:', error);
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to process $WADDLE deposit'
                 });
             }
             break;
