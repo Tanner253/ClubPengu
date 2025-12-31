@@ -1271,7 +1271,16 @@ async function handleMessage(playerId, message) {
             const p = players.get(id);
             return p ? { id, ...p } : null;
         };
-        const handled = await handleGiftMessage(playerId, player, message, sendToPlayer, getPlayerById);
+        // Helper to find player by wallet address (for notifying gift recipients)
+        const getPlayerByWallet = (wallet) => {
+            for (const [id, p] of players) {
+                if (p.walletAddress === wallet) {
+                    return { id, ...p };
+                }
+            }
+            return null;
+        };
+        const handled = await handleGiftMessage(playerId, player, message, sendToPlayer, getPlayerById, getPlayerByWallet);
         if (handled) return;
     }
     

@@ -24,6 +24,7 @@ import IglooEntryModal from './components/IglooEntryModal';
 import IglooDetailsPanel from './components/IglooDetailsPanel';
 import IglooRequirementsPanel from './components/IglooRequirementsPanel';
 import TipNotification from './components/TipNotification';
+import GiftNotification from './components/GiftNotification';
 
 // Default penguin appearance for guests
 const DEFAULT_PENGUIN = {
@@ -171,16 +172,21 @@ const AppContent = () => {
     // Tip notification state
     const [incomingTip, setIncomingTip] = useState(null);
     
-    // Listen for incoming tips via WebSocket
+    // Gift notification state
+    const [incomingGift, setIncomingGift] = useState(null);
+    
+    // Listen for incoming tips and gifts via WebSocket
     useEffect(() => {
         const ws = window.__multiplayerWs;
         if (!ws) return;
         
-        const handleTip = (event) => {
+        const handleMessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'tip_received') {
                     setIncomingTip(data);
+                } else if (data.type === 'gift_received') {
+                    setIncomingGift(data);
                 }
             } catch (e) {
                 // Ignore parse errors
@@ -370,6 +376,14 @@ const AppContent = () => {
                 <TipNotification
                     tip={incomingTip}
                     onClose={() => setIncomingTip(null)}
+                />
+            )}
+            
+            {/* Gift Received Notification */}
+            {incomingGift && (
+                <GiftNotification
+                    gift={incomingGift}
+                    onClose={() => setIncomingGift(null)}
                 />
             )}
             

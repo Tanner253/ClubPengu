@@ -8,7 +8,7 @@ import { User, OwnedCosmetic, Transaction, MarketListing } from '../db/models/in
 /**
  * Handle gift-related WebSocket messages
  */
-export async function handleGiftMessage(playerId, player, message, sendToPlayer, getPlayerById) {
+export async function handleGiftMessage(playerId, player, message, sendToPlayer, getPlayerById, getPlayerByWallet = null) {
     switch (message.type) {
         // ==================== GET RECIPIENT INFO ====================
         case 'gift_get_recipient_info': {
@@ -155,15 +155,43 @@ export async function handleGiftMessage(playerId, player, message, sendToPlayer,
                     isAuthenticated: true
                 });
                 
+                // Notify recipient if they're online - update their coins balance immediately
+                if (getPlayerByWallet && recipientWallet) {
+                    const recipientPlayer = getPlayerByWallet(recipientWallet);
+                    if (recipientPlayer && recipientPlayer.id) {
+                        // Send coins_update to recipient so their UI updates immediately
+                        sendToPlayer(recipientPlayer.id, {
+                            type: 'coins_update',
+                            coins: recipient.coins,
+                            isAuthenticated: true
+                        });
+                        console.log(`🪙 Notified recipient ${recipient.username} of gold gift (new balance: ${recipient.coins})`);
+                    }
+                }
+                
+                // Notify recipient if they're online - show gift notification
+                if (getPlayerByWallet && recipientWallet) {
+                    const recipientPlayer = getPlayerByWallet(recipientWallet);
+                    if (recipientPlayer && recipientPlayer.id) {
+                        // Send gift_received message to recipient so they see a notification
+                        sendToPlayer(recipientPlayer.id, {
+                            type: 'gift_received',
+                            giftType: 'gold',
+                            from: {
+                                username: player.name,
+                                walletAddress: player.walletAddress
+                            },
+                            amount: giftAmount
+                        });
+                        console.log(`🎁 Notified recipient ${recipient.username} of gold gift`);
+                    }
+                }
+                
                 sendToPlayer(playerId, {
                     type: 'gift_result',
                     success: true,
                     message: `Sent ${giftAmount} gold to ${recipient.username}!`
                 });
-                
-                // Notify recipient if online
-                const recipientPlayer = Object.values(getPlayerById ? {} : {}).find?.(p => p.walletAddress === recipientWallet);
-                // We don't have direct access to notify recipient here, but the coins will sync on their next action
                 
             } catch (error) {
                 console.error('🎁 Error in gift_send_gold:', error);
@@ -277,6 +305,37 @@ export async function handleGiftMessage(playerId, player, message, sendToPlayer,
                     type: 'pebbles_update',
                     pebbles: sender.pebbles
                 });
+                
+                // Notify recipient if they're online - update their pebbles balance immediately
+                if (getPlayerByWallet && recipientWallet) {
+                    const recipientPlayer = getPlayerByWallet(recipientWallet);
+                    if (recipientPlayer && recipientPlayer.id) {
+                        // Send pebbles_update to recipient so their UI updates immediately
+                        sendToPlayer(recipientPlayer.id, {
+                            type: 'pebbles_update',
+                            pebbles: recipient.pebbles
+                        });
+                        console.log(`🪨 Notified recipient ${recipient.username} of pebbles gift (new balance: ${recipient.pebbles})`);
+                    }
+                }
+                
+                // Notify recipient if they're online - show gift notification
+                if (getPlayerByWallet && recipientWallet) {
+                    const recipientPlayer = getPlayerByWallet(recipientWallet);
+                    if (recipientPlayer && recipientPlayer.id) {
+                        // Send gift_received message to recipient so they see a notification
+                        sendToPlayer(recipientPlayer.id, {
+                            type: 'gift_received',
+                            giftType: 'pebbles',
+                            from: {
+                                username: player.name,
+                                walletAddress: player.walletAddress
+                            },
+                            amount: giftAmount
+                        });
+                        console.log(`🎁 Notified recipient ${recipient.username} of pebbles gift`);
+                    }
+                }
                 
                 sendToPlayer(playerId, {
                     type: 'gift_result',
@@ -422,6 +481,29 @@ export async function handleGiftMessage(playerId, player, message, sendToPlayer,
                 });
                 
                 console.log(`🎁 ${player.name} gifted item ${item.templateId} #${item.serialNumber} to ${recipient.username}`);
+                
+                // Notify recipient if they're online - show gift notification
+                if (getPlayerByWallet && recipientWallet) {
+                    const recipientPlayer = getPlayerByWallet(recipientWallet);
+                    if (recipientPlayer && recipientPlayer.id) {
+                        // Send gift_received message to recipient so they see a notification
+                        sendToPlayer(recipientPlayer.id, {
+                            type: 'gift_received',
+                            giftType: 'item',
+                            from: {
+                                username: player.name,
+                                walletAddress: player.walletAddress
+                            },
+                            item: {
+                                templateId: item.templateId,
+                                instanceId: itemInstanceId,
+                                serialNumber: item.serialNumber,
+                                name: item.name || item.templateId
+                            }
+                        });
+                        console.log(`🎁 Notified recipient ${recipient.username} of cosmetic gift`);
+                    }
+                }
                 
                 sendToPlayer(playerId, {
                     type: 'gift_result',
