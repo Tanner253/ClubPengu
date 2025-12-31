@@ -15,6 +15,7 @@
 import { User, Transaction, PebbleWithdrawal } from '../db/models/index.js';
 import { Connection, PublicKey } from '@solana/web3.js';
 import SolanaTransaction from '../db/models/SolanaTransaction.js';
+import { validateWalletAddress, validateTransactionSignature, validateAmount } from '../utils/securityValidation.js';
 
 // ========== PEBBLE CONFIGURATION ==========
 const PEBBLES_PER_SOL = 1000;           // 1 SOL = 1000 Pebbles (base rate)
@@ -79,24 +80,53 @@ class PebbleService {
     async depositPebbles(walletAddress, txSignature, expectedSolAmount, playerId = null) {
         this._ensureConfigured();
         
-        console.log(`🪨 Pebble deposit requested: ${walletAddress.slice(0, 8)}...`);
-        console.log(`   Tx: ${txSignature.slice(0, 16)}...`);
-        console.log(`   Expected: ${expectedSolAmount} SOL`);
+        // CRITICAL SECURITY: Validate all inputs at service level
+        const walletValidation = validateWalletAddress(walletAddress);
+        if (!walletValidation.valid) {
+            console.error(`🚨 Security: Invalid wallet address in depositPebbles: ${walletValidation.error}`);
+            return { success: false, error: 'INVALID_WALLET', message: walletValidation.error };
+        }
+        
+        const sigValidation = validateTransactionSignature(txSignature);
+        if (!sigValidation.valid) {
+            console.error(`🚨 Security: Invalid transaction signature in depositPebbles: ${sigValidation.error}`);
+            return { success: false, error: 'INVALID_SIGNATURE', message: sigValidation.error };
+        }
+        
+        const solValidation = validateAmount(expectedSolAmount, {
+            min: 0.001,
+            max: 1000,
+            allowFloat: true,
+            allowZero: false
+        });
+        if (!solValidation.valid) {
+            console.error(`🚨 Security: Invalid SOL amount in depositPebbles: ${solValidation.error}`);
+            return { success: false, error: 'INVALID_AMOUNT', message: solValidation.error };
+        }
+        
+        // Use sanitized values
+        const sanitizedWallet = walletValidation.address;
+        const sanitizedSignature = sigValidation.signature;
+        const sanitizedSolAmount = solValidation.value;
+        
+        console.log(`🪨 Pebble deposit requested: ${sanitizedWallet.slice(0, 8)}...`);
+        console.log(`   Tx: ${sanitizedSignature.slice(0, 16)}...`);
+        console.log(`   Expected: ${sanitizedSolAmount} SOL`);
         
         if (!this.rakeWallet) {
             return { success: false, error: 'SERVICE_NOT_CONFIGURED', message: 'RAKE_WALLET not set' };
         }
         
-        const expectedLamports = Math.floor(expectedSolAmount * LAMPORTS_PER_SOL);
-        const expectedPebbles = Math.floor(expectedSolAmount * PEBBLES_PER_SOL);
+        const expectedLamports = Math.floor(sanitizedSolAmount * LAMPORTS_PER_SOL);
+        const expectedPebbles = Math.floor(sanitizedSolAmount * PEBBLES_PER_SOL);
         
         if (expectedPebbles < MIN_DEPOSIT_PEBBLES) {
             return { success: false, error: 'BELOW_MINIMUM', message: `Min ${MIN_DEPOSIT_PEBBLES} Pebbles` };
         }
         
-        // Check if tx already used (replay protection)
+        // Check if tx already used (replay protection) - use sanitized signature
         try {
-            const existsInDb = await SolanaTransaction.isSignatureUsed(txSignature);
+            const existsInDb = await SolanaTransaction.isSignatureUsed(sanitizedSignature);
             if (existsInDb) {
                 console.log(`   ❌ Tx already used`);
                 return { success: false, error: 'TX_ALREADY_USED', message: 'Transaction already processed' };
@@ -109,8 +139,8 @@ class PebbleService {
         // This prevents users from sending transactions to other addresses and still getting pebbles
         try {
             const verification = await this.solanaPaymentService.verifyNativeSOLTransfer(
-                txSignature,
-                walletAddress,           // sender
+                sanitizedSignature,      // Use sanitized signature
+                sanitizedWallet,         // Use sanitized wallet
                 this.rakeWallet,         // recipient (rake wallet) - MUST match
                 expectedLamports,        // amount - MUST match
                 { transactionType: 'pebble_deposit' }
@@ -121,15 +151,15 @@ class PebbleService {
                 return { success: false, error: verification.error, message: verification.message || 'Transaction verification failed' };
             }
             
-            console.log(`   ✅ SOL transfer verified: ${expectedSolAmount} SOL from ${walletAddress.slice(0, 8)}... to rake wallet`);
+            console.log(`   ✅ SOL transfer verified: ${sanitizedSolAmount} SOL from ${sanitizedWallet.slice(0, 8)}... to rake wallet`);
             
         } catch (error) {
             console.error(`   ❌ Verification error:`, error.message);
             return { success: false, error: 'VERIFICATION_FAILED', message: error.message };
         }
         
-        // Credit pebbles
-        const creditResult = await this._creditPebbles(walletAddress, expectedPebbles);
+        // Credit pebbles - use sanitized wallet
+        const creditResult = await this._creditPebbles(sanitizedWallet, expectedPebbles);
         if (!creditResult.success) {
             console.log(`   ❌ Credit failed: ${creditResult.error}`);
             return creditResult;
@@ -156,8 +186,8 @@ class PebbleService {
             success: true,
             pebblesReceived: expectedPebbles,
             newBalance: creditResult.newBalance,
-            solAmount: expectedSolAmount,
-            txSignature
+            solAmount: sanitizedSolAmount,
+            txSignature: sanitizedSignature
         };
     }
     
@@ -168,11 +198,40 @@ class PebbleService {
     async depositPebblesWithWaddle(walletAddress, txSignature, waddleAmount, playerId = null) {
         this._ensureConfigured();
         
+        // CRITICAL SECURITY: Validate all inputs at service level
+        const walletValidation = validateWalletAddress(walletAddress);
+        if (!walletValidation.valid) {
+            console.error(`🚨 Security: Invalid wallet address in depositPebblesWithWaddle: ${walletValidation.error}`);
+            return { success: false, error: 'INVALID_WALLET', message: walletValidation.error };
+        }
+        
+        const sigValidation = validateTransactionSignature(txSignature);
+        if (!sigValidation.valid) {
+            console.error(`🚨 Security: Invalid transaction signature in depositPebblesWithWaddle: ${sigValidation.error}`);
+            return { success: false, error: 'INVALID_SIGNATURE', message: sigValidation.error };
+        }
+        
+        const waddleValidation = validateAmount(waddleAmount, {
+            min: 0.001,
+            max: 1000000,
+            allowFloat: true,
+            allowZero: false
+        });
+        if (!waddleValidation.valid) {
+            console.error(`🚨 Security: Invalid WADDLE amount in depositPebblesWithWaddle: ${waddleValidation.error}`);
+            return { success: false, error: 'INVALID_AMOUNT', message: waddleValidation.error };
+        }
+        
+        // Use sanitized values
+        const sanitizedWallet = walletValidation.address;
+        const sanitizedSignature = sigValidation.signature;
+        const sanitizedWaddleAmount = waddleValidation.value;
+        
         const waddleTokenAddress = process.env.CPW3_TOKEN_ADDRESS || 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump';
         
-        console.log(`🪨 Pebble deposit ($WADDLE) requested: ${walletAddress.slice(0, 8)}...`);
-        console.log(`   Tx: ${txSignature.slice(0, 16)}...`);
-        console.log(`   $WADDLE Amount: ${waddleAmount}`);
+        console.log(`🪨 Pebble deposit ($WADDLE) requested: ${sanitizedWallet.slice(0, 8)}...`);
+        console.log(`   Tx: ${sanitizedSignature.slice(0, 16)}...`);
+        console.log(`   $WADDLE Amount: ${sanitizedWaddleAmount}`);
         
         if (!this.rakeWallet) {
             return { success: false, error: 'SERVICE_NOT_CONFIGURED', message: 'RAKE_WALLET not set' };
@@ -180,15 +239,15 @@ class PebbleService {
         
         // Calculate pebbles at $WADDLE rate (1.5x more expensive = fewer pebbles)
         // Assuming $WADDLE is roughly SOL-pegged for simplicity, adjust as needed
-        const expectedPebbles = Math.floor(waddleAmount * PEBBLES_PER_SOL_WADDLE);
+        const expectedPebbles = Math.floor(sanitizedWaddleAmount * PEBBLES_PER_SOL_WADDLE);
         
         if (expectedPebbles < MIN_DEPOSIT_PEBBLES) {
             return { success: false, error: 'BELOW_MINIMUM', message: `Min ${MIN_DEPOSIT_PEBBLES} Pebbles (need ~${Math.ceil(MIN_DEPOSIT_PEBBLES / PEBBLES_PER_SOL_WADDLE)} $WADDLE)` };
         }
         
-        // Check if tx already used (replay protection)
+        // Check if tx already used (replay protection) - use sanitized signature
         try {
-            const existsInDb = await SolanaTransaction.isSignatureUsed(txSignature);
+            const existsInDb = await SolanaTransaction.isSignatureUsed(sanitizedSignature);
             if (existsInDb) {
                 console.log(`   ❌ Tx already used`);
                 return { success: false, error: 'TX_ALREADY_USED', message: 'Transaction already processed' };
@@ -200,11 +259,11 @@ class PebbleService {
         // Verify the SPL token transfer on-chain
         try {
             const verification = await this.solanaPaymentService.verifyTransaction(
-                txSignature,
-                walletAddress,           // sender
+                sanitizedSignature,      // Use sanitized signature
+                sanitizedWallet,         // Use sanitized wallet
                 this.rakeWallet,         // recipient (rake wallet)
                 waddleTokenAddress,      // $WADDLE token
-                Math.floor(waddleAmount * Math.pow(10, WADDLE_DECIMALS)), // raw amount
+                Math.floor(sanitizedWaddleAmount * Math.pow(10, WADDLE_DECIMALS)), // raw amount
                 { transactionType: 'pebble_deposit_waddle' }
             );
             
@@ -220,8 +279,8 @@ class PebbleService {
             return { success: false, error: 'VERIFICATION_FAILED', message: error.message };
         }
         
-        // Credit pebbles
-        const creditResult = await this._creditPebbles(walletAddress, expectedPebbles);
+        // Credit pebbles - use sanitized wallet
+        const creditResult = await this._creditPebbles(sanitizedWallet, expectedPebbles);
         if (!creditResult.success) {
             console.log(`   ❌ Credit failed: ${creditResult.error}`);
             return creditResult;
@@ -254,10 +313,10 @@ class PebbleService {
             success: true,
             pebblesReceived: expectedPebbles,
             newBalance: creditResult.newBalance,
-            waddleAmount,
+            waddleAmount: sanitizedWaddleAmount,
             paymentMethod: 'WADDLE',
             rate: PEBBLES_PER_SOL_WADDLE,
-            txSignature
+            txSignature: sanitizedSignature
         };
     }
     
@@ -286,33 +345,52 @@ class PebbleService {
     async withdrawPebbles(walletAddress, pebbleAmount, playerId = null) {
         this._ensureConfigured();
         
-        console.log(`🪨 Pebble withdrawal request: ${walletAddress.slice(0, 8)}... - ${pebbleAmount} Pebbles`);
-        
-        // Validate minimum
-        if (pebbleAmount < MIN_WITHDRAWAL_PEBBLES) {
-            return { success: false, error: 'BELOW_MINIMUM', message: `Minimum withdrawal is ${MIN_WITHDRAWAL_PEBBLES} Pebbles (${MIN_WITHDRAWAL_PEBBLES / PEBBLES_PER_SOL} SOL)` };
+        // CRITICAL SECURITY: Validate all inputs at service level
+        const walletValidation = validateWalletAddress(walletAddress);
+        if (!walletValidation.valid) {
+            console.error(`🚨 Security: Invalid wallet address in withdrawPebbles: ${walletValidation.error}`);
+            return { success: false, error: 'INVALID_WALLET', message: walletValidation.error };
         }
         
-        // Server-side balance check (no client trust)
-        const user = await User.findOne({ walletAddress }, 'pebbles pebbleStats');
+        const amountValidation = validateAmount(pebbleAmount, {
+            min: MIN_WITHDRAWAL_PEBBLES,
+            max: 10000000,
+            allowFloat: false,
+            allowZero: false
+        });
+        if (!amountValidation.valid) {
+            console.error(`🚨 Security: Invalid pebble amount in withdrawPebbles: ${amountValidation.error}`);
+            return { success: false, error: 'INVALID_AMOUNT', message: amountValidation.error };
+        }
+        
+        // Use sanitized values
+        const sanitizedWallet = walletValidation.address;
+        const sanitizedPebbleAmount = amountValidation.value;
+        
+        console.log(`🪨 Pebble withdrawal request: ${sanitizedWallet.slice(0, 8)}... - ${sanitizedPebbleAmount} Pebbles`);
+        
+        // Server-side balance check (no client trust) - use sanitized wallet
+        const user = await User.findOne({ walletAddress: sanitizedWallet }, 'pebbles pebbleStats');
         if (!user) {
             return { success: false, error: 'USER_NOT_FOUND', message: 'User not found' };
         }
-        if (user.pebbles < pebbleAmount) {
-            return { success: false, error: 'INSUFFICIENT_PEBBLES', message: `You have ${user.pebbles} Pebbles, need ${pebbleAmount}` };
+        // Ensure pebbles is a valid number
+        const userBalance = Number(user.pebbles) || 0;
+        if (userBalance < sanitizedPebbleAmount) {
+            return { success: false, error: 'INSUFFICIENT_PEBBLES', message: `You have ${userBalance} Pebbles, need ${sanitizedPebbleAmount}` };
         }
         
         // CRITICAL: Only allow withdrawal of pebbles that were actually purchased (deposited)
         // This prevents withdrawing gifted pebbles, which would drain the custodial wallet
         // Gifted pebbles can be spent on gacha but cannot be withdrawn to SOL
-        const totalDeposited = user.pebbleStats?.totalDeposited || 0;
-        const totalWithdrawn = user.pebbleStats?.totalWithdrawn || 0;
+        const totalDeposited = Number(user.pebbleStats?.totalDeposited) || 0;
+        const totalWithdrawn = Number(user.pebbleStats?.totalWithdrawn) || 0;
         const withdrawablePebbles = Math.max(0, totalDeposited - totalWithdrawn);
         
-        if (pebbleAmount > withdrawablePebbles) {
-            const giftedAmount = user.pebbles - withdrawablePebbles;
-            console.log(`   ⚠️ Withdrawal blocked: ${pebbleAmount} requested, but only ${withdrawablePebbles} withdrawable (${giftedAmount} from gifts)`);
-            console.log(`   📊 Stats: ${totalDeposited} deposited, ${totalWithdrawn} withdrawn, ${user.pebbles} current balance`);
+        if (sanitizedPebbleAmount > withdrawablePebbles) {
+            const giftedAmount = userBalance - withdrawablePebbles;
+            console.log(`   ⚠️ Withdrawal blocked: ${sanitizedPebbleAmount} requested, but only ${withdrawablePebbles} withdrawable (${giftedAmount} from gifts)`);
+            console.log(`   📊 Stats: ${totalDeposited} deposited, ${totalWithdrawn} withdrawn, ${userBalance} current balance`);
             return { 
                 success: false, 
                 error: 'CANNOT_WITHDRAW_GIFTED', 
@@ -322,19 +400,19 @@ class PebbleService {
             };
         }
         
-        // Calculate amounts
-        const grossSol = pebbleAmount / PEBBLES_PER_SOL;
-        const rakeAmount = Math.floor(pebbleAmount * (WITHDRAWAL_RAKE_PERCENT / 100));
-        const netPebbles = pebbleAmount - rakeAmount;
+        // Calculate amounts - use sanitized amount
+        const grossSol = sanitizedPebbleAmount / PEBBLES_PER_SOL;
+        const rakeAmount = Math.floor(sanitizedPebbleAmount * (WITHDRAWAL_RAKE_PERCENT / 100));
+        const netPebbles = sanitizedPebbleAmount - rakeAmount;
         const netSol = netPebbles / PEBBLES_PER_SOL;
         const netLamports = Math.floor(netSol * LAMPORTS_PER_SOL);
         
-        console.log(`   Gross: ${pebbleAmount} Pebbles (${grossSol} SOL)`);
+        console.log(`   Gross: ${sanitizedPebbleAmount} Pebbles (${grossSol} SOL)`);
         console.log(`   Rake: ${rakeAmount} Pebbles (${WITHDRAWAL_RAKE_PERCENT}%)`);
         console.log(`   Net: ${netPebbles} Pebbles (${netSol} SOL)`);
         
-        // Deduct pebbles FIRST (atomic, server authority)
-        const deductResult = await this._deductPebblesForWithdrawal(walletAddress, pebbleAmount, rakeAmount);
+        // Deduct pebbles FIRST (atomic, server authority) - use sanitized values
+        const deductResult = await this._deductPebblesForWithdrawal(sanitizedWallet, sanitizedPebbleAmount, rakeAmount);
         if (!deductResult.success) {
             return { success: false, error: 'DEDUCTION_FAILED', message: 'Failed to deduct pebbles' };
         }
@@ -345,7 +423,7 @@ class PebbleService {
         if (canProcessNow && this.custodialWalletService?.isReady()) {
             // Try immediate payout
             const payoutResult = await this._processImmediateWithdrawal(
-                walletAddress, pebbleAmount, rakeAmount, netPebbles, netSol, netLamports, deductResult.newBalance
+                sanitizedWallet, sanitizedPebbleAmount, rakeAmount, netPebbles, netSol, netLamports, deductResult.newBalance
             );
             
             if (payoutResult.success) {
@@ -358,12 +436,12 @@ class PebbleService {
         
         // Queue the withdrawal
         const queueResult = await this._queueWithdrawal(
-            walletAddress, pebbleAmount, rakeAmount, netPebbles, netSol, netLamports.toString()
+            sanitizedWallet, sanitizedPebbleAmount, rakeAmount, netPebbles, netSol, netLamports.toString()
         );
         
         if (!queueResult.success) {
             // Refund if queueing failed
-            await this._refundWithdrawal(walletAddress, pebbleAmount, rakeAmount);
+            await this._refundWithdrawal(sanitizedWallet, sanitizedPebbleAmount, rakeAmount);
             return { success: false, error: 'QUEUE_FAILED', message: 'Failed to queue withdrawal. Pebbles refunded.' };
         }
         
@@ -374,7 +452,7 @@ class PebbleService {
             status: 'queued',
             withdrawalId: queueResult.withdrawalId,
             queuePosition: queueResult.queuePosition,
-            pebbleAmount,
+            pebbleAmount: sanitizedPebbleAmount,
             rakeAmount,
             netPebbles,
             solToReceive: netSol,

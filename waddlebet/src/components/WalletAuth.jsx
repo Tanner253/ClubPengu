@@ -212,9 +212,27 @@ function WalletAuth({ onAuthSuccess }) {
                 
                 {/* Error display */}
                 {authError && (
-                    <div className="mt-3 p-2 bg-red-900/30 rounded-lg border border-red-500/30">
-                        <p className="text-red-400 text-xs">
-                            {authError.code === 'PHANTOM_NOT_INSTALLED' ? (
+                    <div className={`mt-3 p-3 rounded-lg border ${
+                        authError.code === 'BANNED' 
+                            ? 'bg-red-900/50 border-red-500/50' 
+                            : 'bg-red-900/30 border-red-500/30'
+                    }`}>
+                        <p className={`text-xs ${
+                            authError.code === 'BANNED' 
+                                ? 'text-red-300 font-semibold' 
+                                : 'text-red-400'
+                        }`}>
+                            {authError.code === 'BANNED' ? (
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-lg">🚫</span>
+                                        <span className="font-bold">Account Banned</span>
+                                    </div>
+                                    <div className="pl-7 text-red-200/90 whitespace-pre-line">
+                                        {authError.message || 'Your account has been banned. Access denied.'}
+                                    </div>
+                                </div>
+                            ) : authError.code === 'PHANTOM_NOT_INSTALLED' ? (
                                 mobileStatus.isMobile ? (
                                     <>
                                         Open this site in{' '}

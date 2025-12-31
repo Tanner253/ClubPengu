@@ -41,6 +41,7 @@ import rentScheduler from './schedulers/RentScheduler.js';
 import solanaPaymentService from './services/SolanaPaymentService.js';
 import devBotService, { BOT_CONFIG } from './services/DevBotService.js';
 import wagerSettlementService from './services/WagerSettlementService.js';
+import { validateWalletAddress, validateTransactionSignature, validateAmount } from './utils/securityValidation.js';
 
 const PORT = process.env.PORT || 3001;
 const MAX_CONNECTIONS_PER_IP = 2;
@@ -1337,9 +1338,14 @@ async function handleMessage(playerId, message) {
             
             // Check if banned
             if (await authService.isWalletBanned(walletAddress)) {
-                // Get user to retrieve their IP address for IP banning
+                // Get user to retrieve their IP address and ban details
                 const User = (await import('./db/models/User.js')).default;
-                const user = await User.findOne({ walletAddress }, 'lastIpAddress isBanned');
+                const user = await User.findOne({ walletAddress }, 'lastIpAddress isBanned banReason banExpires');
+                
+                // Log banned user connection attempt
+                const username = user?.username || 'Unknown';
+                const banReason = user?.banReason || 'No reason specified';
+                console.log(`🚫 BANNED USER CONNECTION ATTEMPT: ${username} (${walletAddress.slice(0, 8)}...) from IP ${player.ip || 'unknown'} - Reason: ${banReason}`);
                 
                 // If user has a last known IP, ban that IP address
                 if (user?.lastIpAddress && user.lastIpAddress !== 'unknown') {
@@ -1353,10 +1359,22 @@ async function handleMessage(playerId, message) {
                     console.log(`🚫 Banned current connection IP ${player.ip} due to banned user ${walletAddress.slice(0, 8)}...`);
                 }
                 
+                // Build ban message with reason if available
+                let banMessage = 'Your account has been banned. Access denied.';
+                if (user?.banReason) {
+                    banMessage = `Your account has been banned. Reason: ${user.banReason}. Access denied.`;
+                }
+                if (user?.banExpires) {
+                    const expiresDate = new Date(user.banExpires).toLocaleString();
+                    banMessage += ` Ban expires: ${expiresDate}`;
+                }
+                
                 sendToPlayer(playerId, {
                     type: 'auth_failure',
                     error: 'BANNED',
-                    message: 'Your account has been banned. Access denied.'
+                    message: banMessage,
+                    banReason: user?.banReason || null,
+                    banExpires: user?.banExpires || null
                 });
                 
                 // Close connection immediately
@@ -1412,14 +1430,44 @@ async function handleMessage(playerId, message) {
                 
                 // If user is banned, also ban their IP
                 if (error.message === 'BANNED' && player.ip && player.ip !== 'unknown') {
-                    bannedIPs.add(player.ip);
-                    console.log(`🚫 Banned IP ${player.ip} due to banned user authentication attempt`);
-                    
-                    sendToPlayer(playerId, {
-                        type: 'auth_failure',
-                        error: 'BANNED',
-                        message: 'Your account has been banned. Access denied.'
-                    });
+                    // Get ban details for message (walletAddress from the auth_verify message)
+                    const walletAddress = message.walletAddress || player.walletAddress;
+                    if (walletAddress) {
+                        const User = (await import('./db/models/User.js')).default;
+                        const user = await User.findOne({ walletAddress }, 'username banReason banExpires').catch(() => null);
+                        
+                        // Log banned user connection attempt
+                        const username = user?.username || 'Unknown';
+                        const banReason = user?.banReason || 'No reason specified';
+                        console.log(`🚫 BANNED USER CONNECTION ATTEMPT: ${username} (${walletAddress.slice(0, 8)}...) from IP ${player.ip} - Reason: ${banReason}`);
+                        
+                        bannedIPs.add(player.ip);
+                        console.log(`🚫 Banned IP ${player.ip} due to banned user authentication attempt`);
+                        
+                        let banMessage = 'Your account has been banned. Access denied.';
+                        if (user?.banReason) {
+                            banMessage = `Your account has been banned. Reason: ${user.banReason}. Access denied.`;
+                        }
+                        if (user?.banExpires) {
+                            const expiresDate = new Date(user.banExpires).toLocaleString();
+                            banMessage += ` Ban expires: ${expiresDate}`;
+                        }
+                        
+                        sendToPlayer(playerId, {
+                            type: 'auth_failure',
+                            error: 'BANNED',
+                            message: banMessage,
+                            banReason: user?.banReason || null,
+                            banExpires: user?.banExpires || null
+                        });
+                    } else {
+                        // Fallback if walletAddress not available
+                        sendToPlayer(playerId, {
+                            type: 'auth_failure',
+                            error: 'BANNED',
+                            message: 'Your account has been banned. Access denied.'
+                        });
+                    }
                     
                     // Close connection immediately
                     if (player.ws && player.ws.readyState === 1) { // WebSocket.OPEN
@@ -4382,25 +4430,83 @@ async function handleMessage(playerId, message) {
                 break;
             }
             
-            // Client sends either amountSol (preferred) or amountLamports
-            const { txSignature, amountSol, amountLamports } = message;
-            
-            if (!txSignature || (!amountSol && !amountLamports)) {
+            // CRITICAL SECURITY: Validate all inputs
+            const walletValidation = validateWalletAddress(player.walletAddress);
+            if (!walletValidation.valid) {
+                console.error(`🚨 Security: Invalid wallet address in pebbles_deposit: ${walletValidation.error}`);
                 sendToPlayer(playerId, {
                     type: 'pebbles_error',
-                    error: 'INVALID_REQUEST',
-                    message: 'Missing transaction signature or amount'
+                    error: 'INVALID_WALLET',
+                    message: 'Invalid wallet address'
                 });
                 break;
             }
             
-            // Convert to SOL if lamports provided
-            const solAmount = amountSol || (Number(amountLamports) / 1_000_000_000);
+            // Client sends either amountSol (preferred) or amountLamports
+            const { txSignature, amountSol, amountLamports } = message;
+            
+            // Validate transaction signature
+            const sigValidation = validateTransactionSignature(txSignature);
+            if (!sigValidation.valid) {
+                console.error(`🚨 Security: Invalid transaction signature: ${sigValidation.error}`);
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'INVALID_SIGNATURE',
+                    message: sigValidation.error || 'Invalid transaction signature'
+                });
+                break;
+            }
+            
+            if (!amountSol && !amountLamports) {
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'INVALID_REQUEST',
+                    message: 'Missing amount (amountSol or amountLamports required)'
+                });
+                break;
+            }
+            
+            // Validate and convert amount
+            let solAmount;
+            if (amountSol !== undefined) {
+                const solValidation = validateAmount(amountSol, {
+                    min: 0.001, // Minimum 0.001 SOL
+                    max: 1000,  // Maximum 1000 SOL per deposit
+                    allowFloat: true,
+                    allowZero: false
+                });
+                if (!solValidation.valid) {
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_error',
+                        error: 'INVALID_AMOUNT',
+                        message: solValidation.error || 'Invalid SOL amount'
+                    });
+                    break;
+                }
+                solAmount = solValidation.value;
+            } else {
+                // Validate lamports
+                const lamportsValidation = validateAmount(amountLamports, {
+                    min: 1_000_000, // Minimum 0.001 SOL in lamports
+                    max: 1_000_000_000_000, // Maximum 1000 SOL in lamports
+                    allowFloat: false,
+                    allowZero: false
+                });
+                if (!lamportsValidation.valid) {
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_error',
+                        error: 'INVALID_AMOUNT',
+                        message: lamportsValidation.error || 'Invalid lamports amount'
+                    });
+                    break;
+                }
+                solAmount = lamportsValidation.value / 1_000_000_000;
+            }
             
             try {
                 const result = await pebbleService.depositPebbles(
-                    player.walletAddress,
-                    txSignature,
+                    walletValidation.address, // Use sanitized address
+                    sigValidation.signature, // Use sanitized signature
                     solAmount,
                     playerId
                 );
@@ -4441,22 +4547,56 @@ async function handleMessage(playerId, message) {
                 break;
             }
             
-            const { txSignature, waddleAmount } = message;
-            
-            if (!txSignature || !waddleAmount) {
+            // CRITICAL SECURITY: Validate all inputs
+            const walletValidation = validateWalletAddress(player.walletAddress);
+            if (!walletValidation.valid) {
+                console.error(`🚨 Security: Invalid wallet address in pebbles_deposit_waddle: ${walletValidation.error}`);
                 sendToPlayer(playerId, {
                     type: 'pebbles_error',
-                    error: 'INVALID_REQUEST',
-                    message: 'Missing transaction signature or $WADDLE amount'
+                    error: 'INVALID_WALLET',
+                    message: 'Invalid wallet address'
                 });
                 break;
             }
             
+            const { txSignature, waddleAmount } = message;
+            
+            // Validate transaction signature
+            const sigValidation = validateTransactionSignature(txSignature);
+            if (!sigValidation.valid) {
+                console.error(`🚨 Security: Invalid transaction signature: ${sigValidation.error}`);
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'INVALID_SIGNATURE',
+                    message: sigValidation.error || 'Invalid transaction signature'
+                });
+                break;
+            }
+            
+            // Validate WADDLE amount
+            const waddleValidation = validateAmount(waddleAmount, {
+                min: 0.001, // Minimum amount
+                max: 1000000, // Maximum reasonable amount
+                allowFloat: true,
+                allowZero: false
+            });
+            
+            if (!waddleValidation.valid) {
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'INVALID_AMOUNT',
+                    message: waddleValidation.error || 'Invalid $WADDLE amount'
+                });
+                break;
+            }
+            
+            const sanitizedWaddleAmount = waddleValidation.value;
+            
             try {
                 const result = await pebbleService.depositPebblesWithWaddle(
-                    player.walletAddress,
-                    txSignature,
-                    waddleAmount,
+                    walletValidation.address, // Use sanitized address
+                    sigValidation.signature, // Use sanitized signature
+                    sanitizedWaddleAmount, // Use sanitized amount
                     playerId
                 );
                 
@@ -4497,21 +4637,44 @@ async function handleMessage(playerId, message) {
                 break;
             }
             
-            const { pebbleAmount } = message;
-            
-            if (!pebbleAmount || pebbleAmount <= 0) {
+            // CRITICAL SECURITY: Validate wallet address
+            const walletValidation = validateWalletAddress(player.walletAddress);
+            if (!walletValidation.valid) {
+                console.error(`🚨 Security: Invalid wallet address in pebbles_withdraw: ${walletValidation.error}`);
                 sendToPlayer(playerId, {
                     type: 'pebbles_error',
-                    error: 'INVALID_AMOUNT',
-                    message: 'Invalid withdrawal amount'
+                    error: 'INVALID_WALLET',
+                    message: 'Invalid wallet address'
                 });
                 break;
             }
             
+            const { pebbleAmount } = message;
+            
+            // CRITICAL SECURITY: Validate amount with strict type checking
+            const amountValidation = validateAmount(pebbleAmount, {
+                min: 100, // Minimum withdrawal (from MIN_WITHDRAWAL_PEBBLES)
+                max: 10000000, // Maximum reasonable withdrawal
+                allowFloat: false, // Must be integer
+                allowZero: false   // Cannot be zero
+            });
+            
+            if (!amountValidation.valid) {
+                console.error(`🚨 Security: Invalid withdrawal amount: ${amountValidation.error}`);
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'INVALID_AMOUNT',
+                    message: amountValidation.error || 'Invalid withdrawal amount'
+                });
+                break;
+            }
+            
+            const sanitizedPebbleAmount = amountValidation.value;
+            
             try {
                 const result = await pebbleService.withdrawPebbles(
-                    player.walletAddress,
-                    pebbleAmount,
+                    walletValidation.address, // Use sanitized address
+                    sanitizedPebbleAmount, // Use sanitized amount
                     playerId
                 );
                 

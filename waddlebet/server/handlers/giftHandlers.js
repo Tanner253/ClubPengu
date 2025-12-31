@@ -221,8 +221,33 @@ export async function handleGiftMessage(playerId, player, message, sendToPlayer,
                     return true;
                 }
                 
+                // CRITICAL SECURITY: Validate wallet addresses to prevent injection
+                const senderValidation = validateWalletAddress(player.walletAddress);
+                const recipientValidation = validateWalletAddress(recipientWallet);
+                
+                if (!senderValidation.valid) {
+                    console.error(`🚨 Security: Invalid sender wallet address: ${senderValidation.error}`);
+                    sendToPlayer(playerId, {
+                        type: 'gift_result',
+                        success: false,
+                        error: 'INVALID_SENDER',
+                        message: 'Invalid sender wallet address'
+                    });
+                    return true;
+                }
+                
+                if (!recipientValidation.valid) {
+                    sendToPlayer(playerId, {
+                        type: 'gift_result',
+                        success: false,
+                        error: 'INVALID_RECIPIENT',
+                        message: recipientValidation.error || 'Invalid recipient wallet address'
+                    });
+                    return true;
+                }
+                
                 // Can't gift yourself
-                if (recipientWallet === player.walletAddress) {
+                if (recipientValidation.address === senderValidation.address) {
                     sendToPlayer(playerId, {
                         type: 'gift_result',
                         success: false,
@@ -232,20 +257,29 @@ export async function handleGiftMessage(playerId, player, message, sendToPlayer,
                     return true;
                 }
                 
-                // Validate amount
-                const giftAmount = parseInt(amount);
-                if (!giftAmount || giftAmount < 1) {
+                // CRITICAL SECURITY: Validate amount with strict type checking
+                const amountValidation = validateAmount(amount, {
+                    min: 1,
+                    max: 1000000, // Reasonable maximum for gifts
+                    allowFloat: false, // Must be integer
+                    allowZero: false   // Cannot be zero
+                });
+                
+                if (!amountValidation.valid) {
+                    console.error(`🚨 Security: Invalid gift amount: ${amountValidation.error}`);
                     sendToPlayer(playerId, {
                         type: 'gift_result',
                         success: false,
                         error: 'INVALID_AMOUNT',
-                        message: 'Invalid gift amount'
+                        message: amountValidation.error || 'Invalid gift amount'
                     });
                     return true;
                 }
                 
-                // Get sender
-                const sender = await User.findOne({ walletAddress: player.walletAddress });
+                const giftAmount = amountValidation.value;
+                
+                // Get sender (using sanitized address)
+                const sender = await User.findOne({ walletAddress: senderValidation.address });
                 if (!sender) {
                     sendToPlayer(playerId, {
                         type: 'gift_result',
@@ -256,19 +290,20 @@ export async function handleGiftMessage(playerId, player, message, sendToPlayer,
                     return true;
                 }
                 
-                // Check balance
-                if ((sender.pebbles || 0) < giftAmount) {
+                // Check balance (server-side authority - no client trust)
+                const senderBalance = Number(sender.pebbles) || 0;
+                if (senderBalance < giftAmount) {
                     sendToPlayer(playerId, {
                         type: 'gift_result',
                         success: false,
                         error: 'INSUFFICIENT_PEBBLES',
-                        message: `Insufficient pebbles. You have ${sender.pebbles || 0}`
+                        message: `Insufficient pebbles. You have ${senderBalance}`
                     });
                     return true;
                 }
                 
-                // Get recipient
-                const recipient = await User.findOne({ walletAddress: recipientWallet });
+                // Get recipient (using sanitized address)
+                const recipient = await User.findOne({ walletAddress: recipientValidation.address });
                 if (!recipient) {
                     sendToPlayer(playerId, {
                         type: 'gift_result',

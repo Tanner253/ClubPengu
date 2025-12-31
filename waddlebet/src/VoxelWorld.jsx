@@ -1831,20 +1831,20 @@ const VoxelWorld = ({
                 return;
             }
             
-            // Handle Enter and Slash keys to open chat (only if no input is focused, or chat input is focused)
+            // Handle Enter and Slash keys to open chat
             if (e.code === 'Enter' || e.code === 'Slash') {
                 const chatInput = document.getElementById('chat-input-field');
                 if (chatInput) {
-                    // If chat input is already focused, allow normal behavior (Enter sends, Slash types)
-                    if (activeElement === chatInput) {
-                        // Don't prevent default - let Enter send message, let Slash type
+                    // If chat input is already focused, Enter sends message (normal behavior)
+                    if (activeElement === chatInput && e.code === 'Enter') {
+                        // Don't prevent default - let Enter send message
                         return;
                     }
                     // If another input is focused, don't interfere
-                    if (isInputFocused) {
+                    if (isInputFocused && activeElement !== chatInput) {
                         return;
                     }
-                    // Otherwise, focus chat input
+                    // Otherwise, focus chat input (both Enter and Slash do this)
                     chatInput.focus();
                     // Prevent "/" from being typed when opening chat
                     if (e.code === 'Slash') {
