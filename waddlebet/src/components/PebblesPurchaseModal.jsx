@@ -3,6 +3,7 @@ import { useMultiplayer } from '../multiplayer';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import PhantomWallet from '../wallet/PhantomWallet';
 import { sendSPLToken } from '../wallet/SolanaPayment';
+import { fetchTokenData } from '../systems/CasinoTVSystem';
 
 // Pebble bundles (must match server constants)
 const BUNDLES = [
@@ -189,16 +190,30 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                 setSuccess(`Successfully purchased ${bundle.pebbles} Pebbles!`);
             } else {
                 // $WADDLE Payment (1.5x more expensive)
-                const waddleAmount = bundle.sol * WADDLE_PREMIUM;
-                const pebblesToReceive = Math.floor(bundle.sol * PEBBLES_PER_SOL_WADDLE);
+                // Calculate SOL amount needed (1.5x the base SOL amount)
+                const solAmountNeeded = bundle.sol * WADDLE_PREMIUM;
+                const pebblesToReceive = bundle.pebbles; // Same pebbles as SOL, but costs 1.5x more
                 
-                console.log(`🪨 Purchasing ${pebblesToReceive} Pebbles for ${waddleAmount} $WADDLE`);
+                // Fetch current WADDLE price in SOL from DexScreener
+                const tokenData = await fetchTokenData();
+                if (!tokenData || !tokenData.priceNative || tokenData.priceNative <= 0) {
+                    throw new Error('Unable to fetch $WADDLE price. Please try again.');
+                }
+                
+                // Calculate WADDLE tokens needed: SOL amount / price per WADDLE in SOL
+                // priceNative is the price of 1 WADDLE in SOL (e.g., 0.000000266)
+                const waddleTokensNeeded = solAmountNeeded / tokenData.priceNative;
+                
+                console.log(`🪨 Purchasing ${pebblesToReceive} Pebbles`);
+                console.log(`   SOL needed: ${solAmountNeeded} (1.5x premium)`);
+                console.log(`   WADDLE price: ${tokenData.priceNative} SOL per WADDLE`);
+                console.log(`   WADDLE tokens needed: ${waddleTokensNeeded}`);
                 
                 // Send $WADDLE SPL token using SolanaPayment
                 const result = await sendSPLToken({
                     recipientAddress: RAKE_WALLET,
                     tokenMintAddress: WADDLE_TOKEN,
-                    amount: waddleAmount,
+                    amount: waddleTokensNeeded,
                     memo: `Pebbles purchase: ${pebblesToReceive}`
                 });
                 
@@ -211,7 +226,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                 send({
                     type: 'pebbles_deposit_waddle',
                     txSignature: result.signature,
-                    waddleAmount: waddleAmount
+                    waddleAmount: waddleTokensNeeded // Send actual WADDLE token amount
                 });
                 
                 setSuccess(`Successfully purchased ${pebblesToReceive} Pebbles with $WADDLE!`);
@@ -362,7 +377,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                             <p className="text-xs text-purple-300/60">
                                 {paymentMethod === 'SOL' 
                                     ? `1 roll = ${ROLL_COST} Pebbles • 1,000 Pebbles = 1 SOL`
-                                    : `1 roll = ${ROLL_COST} Pebbles • ${PEBBLES_PER_SOL_WADDLE} Pebbles = 1 $WADDLE (1.5x premium)`
+                                    : `1 roll = ${ROLL_COST} Pebbles • Paying with $WADDLE costs 1.5x more (same pebbles, higher cost)`
                                 }
                             </p>
                             
@@ -378,7 +393,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                                     : (bundle.sol * WADDLE_PREMIUM).toFixed(2);
                                 const displayPebbles = paymentMethod === 'SOL'
                                     ? bundle.pebbles
-                                    : Math.floor(bundle.sol * PEBBLES_PER_SOL_WADDLE);
+                                    : bundle.pebbles; // Same pebbles, but costs 1.5x more with WADDLE
                                 const displayRolls = Math.floor(displayPebbles / ROLL_COST);
                                 
                                 return (

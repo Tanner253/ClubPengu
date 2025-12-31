@@ -2008,6 +2008,181 @@ async function handleMessage(playerId, message) {
                 
                 const text = message.text.substring(0, 200);
                 
+                // Handle /tp command (admin/moderator only)
+                if (text.toLowerCase().startsWith('/tp ')) {
+                    // Check if user is authenticated
+                    if (!player.walletAddress) {
+                        sendToPlayer(playerId, {
+                            type: 'chat',
+                            playerId: 'system',
+                            name: 'System',
+                            text: '❌ You must be authenticated to use this command.',
+                            timestamp: Date.now()
+                        });
+                        break;
+                    }
+                    
+                    // Check if user has admin or moderator role
+                    const user = await User.findOne({ walletAddress: player.walletAddress }, 'role');
+                    if (!user || (user.role !== 'admin' && user.role !== 'moderator')) {
+                        sendToPlayer(playerId, {
+                            type: 'chat',
+                            playerId: 'system',
+                            name: 'System',
+                            text: '❌ You do not have permission to use this command.',
+                            timestamp: Date.now()
+                        });
+                        break;
+                    }
+                    
+                    // Parse command: /tp {teleportingplayername} {destination player}
+                    const parts = text.slice(4).trim().split(/\s+/);
+                    if (parts.length < 2) {
+                        sendToPlayer(playerId, {
+                            type: 'chat',
+                            playerId: 'system',
+                            name: 'System',
+                            text: '❌ Usage: /tp <teleportingplayername> <destination player>',
+                            timestamp: Date.now()
+                        });
+                        break;
+                    }
+                    
+                    const teleportingPlayerName = parts[0];
+                    const destinationPlayerName = parts[1];
+                    
+                    // Find both players in the same room
+                    let teleportingPlayer = null;
+                    let destinationPlayer = null;
+                    
+                    // Search in the same room first
+                    if (player.room) {
+                        const roomPlayers = rooms.get(player.room);
+                        if (roomPlayers) {
+                            for (const pid of roomPlayers) {
+                                const p = players.get(pid);
+                                if (p) {
+                                    if (p.name && p.name.toLowerCase() === teleportingPlayerName.toLowerCase()) {
+                                        teleportingPlayer = { id: pid, ...p };
+                                    }
+                                    if (p.name && p.name.toLowerCase() === destinationPlayerName.toLowerCase()) {
+                                        destinationPlayer = { id: pid, ...p };
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // If not found in same room, search all rooms
+                    if (!teleportingPlayer || !destinationPlayer) {
+                        for (const [pid, p] of players) {
+                            if (p.name) {
+                                if (!teleportingPlayer && p.name.toLowerCase() === teleportingPlayerName.toLowerCase()) {
+                                    teleportingPlayer = { id: pid, ...p };
+                                }
+                                if (!destinationPlayer && p.name.toLowerCase() === destinationPlayerName.toLowerCase()) {
+                                    destinationPlayer = { id: pid, ...p };
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (!teleportingPlayer) {
+                        sendToPlayer(playerId, {
+                            type: 'chat',
+                            playerId: 'system',
+                            name: 'System',
+                            text: `❌ Player "${teleportingPlayerName}" not found.`,
+                            timestamp: Date.now()
+                        });
+                        break;
+                    }
+                    
+                    if (!destinationPlayer) {
+                        sendToPlayer(playerId, {
+                            type: 'chat',
+                            playerId: 'system',
+                            name: 'System',
+                            text: `❌ Player "${destinationPlayerName}" not found.`,
+                            timestamp: Date.now()
+                        });
+                        break;
+                    }
+                    
+                    if (!destinationPlayer.position) {
+                        sendToPlayer(playerId, {
+                            type: 'chat',
+                            playerId: 'system',
+                            name: 'System',
+                            text: `❌ Destination player "${destinationPlayerName}" has no position.`,
+                            timestamp: Date.now()
+                        });
+                        break;
+                    }
+                    
+                    // Teleport the player
+                    const destPos = destinationPlayer.position;
+                    const tpPlayer = players.get(teleportingPlayer.id);
+                    if (tpPlayer) {
+                        tpPlayer.position = { ...destPos };
+                        
+                        // If player is in a different room, move them to destination's room
+                        if (tpPlayer.room !== destinationPlayer.room) {
+                            // Remove from old room
+                            if (tpPlayer.room) {
+                                const oldRoom = rooms.get(tpPlayer.room);
+                                if (oldRoom) oldRoom.delete(teleportingPlayer.id);
+                                broadcastToRoom(tpPlayer.room, { type: 'player_left', playerId: teleportingPlayer.id });
+                            }
+                            
+                            // Add to new room
+                            tpPlayer.room = destinationPlayer.room;
+                            if (destinationPlayer.room) {
+                                let newRoom = rooms.get(destinationPlayer.room);
+                                if (!newRoom) {
+                                    newRoom = new Set();
+                                    rooms.set(destinationPlayer.room, newRoom);
+                                }
+                                newRoom.add(teleportingPlayer.id);
+                                broadcastToRoom(destinationPlayer.room, {
+                                    type: 'player_joined',
+                                    playerId: teleportingPlayer.id,
+                                    name: tpPlayer.name,
+                                    position: tpPlayer.position,
+                                    appearance: tpPlayer.appearance,
+                                    isAuthenticated: tpPlayer.isAuthenticated
+                                }, teleportingPlayer.id);
+                            }
+                        }
+                        
+                        // Send teleport message to teleported player
+                        sendToPlayer(teleportingPlayer.id, {
+                            type: 'teleport',
+                            position: destPos,
+                            room: destinationPlayer.room
+                        });
+                        
+                        // Send confirmation to admin/moderator
+                        sendToPlayer(playerId, {
+                            type: 'chat',
+                            playerId: 'system',
+                            name: 'System',
+                            text: `✅ Teleported ${teleportingPlayer.name} to ${destinationPlayer.name}`,
+                            timestamp: Date.now()
+                        });
+                        
+                        // Notify teleported player
+                        sendToPlayer(teleportingPlayer.id, {
+                            type: 'chat',
+                            playerId: 'system',
+                            name: 'System',
+                            text: `✨ You have been teleported to ${destinationPlayer.name}`,
+                            timestamp: Date.now()
+                        });
+                    }
+                    break;
+                }
+                
                 if (text.toLowerCase().startsWith('/afk')) {
                     const afkMessage = text.slice(4).trim() || 'AFK';
                     player.isAfk = true;

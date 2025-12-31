@@ -237,12 +237,43 @@ class PebbleService {
             return { success: false, error: 'SERVICE_NOT_CONFIGURED', message: 'RAKE_WALLET not set' };
         }
         
-        // Calculate pebbles at $WADDLE rate (1.5x more expensive = fewer pebbles)
-        // Assuming $WADDLE is roughly SOL-pegged for simplicity, adjust as needed
-        const expectedPebbles = Math.floor(sanitizedWaddleAmount * PEBBLES_PER_SOL_WADDLE);
+        // Calculate pebbles at $WADDLE rate (1.5x more expensive)
+        // waddleAmount is the actual WADDLE token amount (e.g., 562,721.695165)
+        // We need to convert WADDLE tokens to SOL equivalent, then apply 1.5x premium
+        // Example: 0.1 SOL = 100 pebbles, so 0.15 SOL worth of WADDLE = 100 pebbles
+        
+        // Fetch current WADDLE price in SOL from DexScreener
+        let waddlePriceInSol = 0;
+        try {
+            const response = await fetch('https://api.dexscreener.com/latest/dex/tokens/BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump');
+            if (response.ok) {
+                const data = await response.json();
+                if (data.pairs && data.pairs.length > 0) {
+                    waddlePriceInSol = parseFloat(data.pairs[0].priceNative) || 0;
+                }
+            }
+        } catch (error) {
+            console.warn('   ⚠️ Failed to fetch WADDLE price, using fallback calculation');
+        }
+        
+        if (waddlePriceInSol <= 0) {
+            return { success: false, error: 'PRICE_FETCH_FAILED', message: 'Unable to fetch $WADDLE price. Please try again.' };
+        }
+        
+        // Convert WADDLE tokens to SOL equivalent
+        const solEquivalent = sanitizedWaddleAmount * waddlePriceInSol;
+        
+        // Calculate pebbles: (SOL equivalent / 1.5x premium) * PEBBLES_PER_SOL
+        // This ensures 0.15 SOL worth of WADDLE = 100 pebbles (same as 0.1 SOL base rate)
+        const expectedPebbles = Math.floor((solEquivalent / WADDLE_PREMIUM_MULTIPLIER) * PEBBLES_PER_SOL);
+        
+        console.log(`   📊 WADDLE price: ${waddlePriceInSol} SOL per WADDLE`);
+        console.log(`   📊 SOL equivalent: ${solEquivalent} SOL`);
+        console.log(`   📊 Expected pebbles: ${expectedPebbles} (after 1.5x premium)`);
         
         if (expectedPebbles < MIN_DEPOSIT_PEBBLES) {
-            return { success: false, error: 'BELOW_MINIMUM', message: `Min ${MIN_DEPOSIT_PEBBLES} Pebbles (need ~${Math.ceil(MIN_DEPOSIT_PEBBLES / PEBBLES_PER_SOL_WADDLE)} $WADDLE)` };
+            const minWaddleAmount = (MIN_DEPOSIT_PEBBLES / PEBBLES_PER_SOL) * WADDLE_PREMIUM_MULTIPLIER;
+            return { success: false, error: 'BELOW_MINIMUM', message: `Min ${MIN_DEPOSIT_PEBBLES} Pebbles (need ~${minWaddleAmount.toFixed(3)} $WADDLE)` };
         }
         
         // Check if tx already used (replay protection) - use sanitized signature
@@ -287,7 +318,8 @@ class PebbleService {
         }
         
         console.log(`   ✅ Credited ${expectedPebbles} Pebbles (balance: ${creditResult.newBalance})`);
-        console.log(`   📊 Rate: ${PEBBLES_PER_SOL_WADDLE} Pebbles per $WADDLE (1.5x premium)`);
+        const equivalentSol = sanitizedWaddleAmount / WADDLE_PREMIUM_MULTIPLIER;
+        console.log(`   📊 Rate: ${expectedPebbles} Pebbles for ${sanitizedWaddleAmount} $WADDLE (1.5x premium - same pebbles as ${equivalentSol.toFixed(3)} SOL)`);
         
         // Log transaction
         try {

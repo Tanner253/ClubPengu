@@ -21,6 +21,11 @@ const userSchema = new mongoose.Schema({
         maxlength: 20
         // unique index defined below with schema.index()
     },
+    role: {
+        type: String,
+        enum: ['admin', 'moderator'],
+        default: null
+    },
     characterType: {
         type: String,
         enum: ['penguin', 'marcus', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale', 'doginal', 'frog'],

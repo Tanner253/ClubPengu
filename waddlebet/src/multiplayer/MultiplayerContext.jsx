@@ -849,6 +849,16 @@ export function MultiplayerProvider({ children }) {
                 callbacksRef.current.onPlayerLeft?.(message.playerId);
                 break;
                 
+            case 'teleport':
+                // Admin/moderator teleport command - dispatch event for VoxelWorld to handle
+                window.dispatchEvent(new CustomEvent('teleport', {
+                    detail: {
+                        position: message.position,
+                        room: message.room
+                    }
+                }));
+                break;
+                
             case 'player_moved':
                 const movingPlayer = playersDataRef.current.get(message.playerId);
                 if (movingPlayer) {

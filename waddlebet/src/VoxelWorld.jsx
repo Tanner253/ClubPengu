@@ -1832,7 +1832,8 @@ const VoxelWorld = ({
             }
             
             // Handle Enter and Slash keys to open chat
-            if (e.code === 'Enter' || e.code === 'Slash') {
+            // Only handle Slash if Shift is NOT pressed (to allow "?" to be typed)
+            if (e.code === 'Enter' || (e.code === 'Slash' && !e.shiftKey)) {
                 const chatInput = document.getElementById('chat-input-field');
                 if (chatInput) {
                     // If chat input is already focused, Enter sends message (normal behavior)
@@ -1846,8 +1847,8 @@ const VoxelWorld = ({
                     }
                     // Otherwise, focus chat input (both Enter and Slash do this)
                     chatInput.focus();
-                    // Prevent "/" from being typed when opening chat
-                    if (e.code === 'Slash') {
+                    // Prevent "/" from being typed when opening chat (only if not Shift+Slash)
+                    if (e.code === 'Slash' && !e.shiftKey) {
                         e.preventDefault();
                     }
                     return; // Don't process movement keys when opening chat
@@ -5831,6 +5832,61 @@ const VoxelWorld = ({
         window.addEventListener('chatCommand', handleChatCommand);
         return () => window.removeEventListener('chatCommand', handleChatCommand);
     }, [mpSendEmote, onChangeRoom]);
+    
+    // Handle admin/moderator teleport command
+    useEffect(() => {
+        const handleTeleport = (e) => {
+            const { position, room: targetRoom } = e.detail;
+            
+            if (!position) return;
+            
+            // Clear any seated state first
+            if (seatedRef.current) {
+                seatedRef.current = null;
+                setSeatedOnBench(null);
+                emoteRef.current.type = null;
+                mpSendEmote(null);
+            }
+            
+            // If target room is different, change room first
+            if (targetRoom && room !== targetRoom) {
+                onChangeRoom(targetRoom);
+                // Position will be set after room change
+                setTimeout(() => {
+                    posRef.current.x = position.x || 0;
+                    posRef.current.y = position.y || 0;
+                    posRef.current.z = position.z || 0;
+                    velRef.current = { x: 0, y: 0, z: 0 };
+                    if (playerRef.current) {
+                        playerRef.current.position.set(position.x || 0, position.y || 0, position.z || 0);
+                    }
+                    // Snap camera to new position
+                    if (cameraControllerRef.current) {
+                        cameraControllerRef.current.snapToTarget();
+                    }
+                }, 100);
+            } else {
+                // Same room - just teleport
+                posRef.current.x = position.x || 0;
+                posRef.current.y = position.y || 0;
+                posRef.current.z = position.z || 0;
+                velRef.current = { x: 0, y: 0, z: 0 };
+                
+                if (playerRef.current) {
+                    playerRef.current.position.set(position.x || 0, position.y || 0, position.z || 0);
+                }
+                // Snap camera to new position
+                if (cameraControllerRef.current) {
+                    cameraControllerRef.current.snapToTarget();
+                }
+            }
+            
+            console.log('✨ Teleported to:', position, targetRoom ? `(room: ${targetRoom})` : '');
+        };
+        
+        window.addEventListener('teleport', handleTeleport);
+        return () => window.removeEventListener('teleport', handleTeleport);
+    }, [room, onChangeRoom, mpSendEmote]);
     
     // Listen for room counts updates from server (for igloo occupancy bubbles)
     useEffect(() => {
