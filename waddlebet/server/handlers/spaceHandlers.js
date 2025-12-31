@@ -25,14 +25,15 @@ export async function handleSpaceMessage(playerId, player, message, sendToPlayer
                 const spaces = await spaceService.getAllSpaces();
                 sendToPlayer(playerId, {
                     type: 'space_list',
-                    spaces
+                    spaces: spaces || [] // Ensure we always send an array
                 });
             } catch (error) {
                 console.error('🏠 Error in space_list:', error);
+                // Send empty array instead of error if database isn't available
+                // This allows the game to run in guest mode without database
                 sendToPlayer(playerId, {
-                    type: 'space_error',
-                    error: 'SERVER_ERROR',
-                    message: 'Failed to fetch space list'
+                    type: 'space_list',
+                    spaces: []
                 });
             }
             return true;

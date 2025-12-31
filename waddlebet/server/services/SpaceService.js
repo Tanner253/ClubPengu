@@ -123,6 +123,13 @@ class SpaceService {
      * Get all spaces (public info)
      */
     async getAllSpaces() {
+        // Check if database is connected
+        const { isDBConnected } = await import('../db/connection.js');
+        if (!isDBConnected()) {
+            console.warn('🏠 Database not connected - returning empty space list');
+            return [];
+        }
+        
         const spaces = await Space.find({});
         return spaces.map(space => space.getPublicInfo());
     }
