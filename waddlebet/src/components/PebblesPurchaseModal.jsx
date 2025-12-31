@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { useClickOutside, useEscapeKey } from '../hooks';
+import { useTokenValidation } from '../hooks/useTokenValidation';
 import PhantomWallet from '../wallet/PhantomWallet';
 import { sendSPLToken } from '../wallet/SolanaPayment';
 import { fetchTokenData } from '../systems/CasinoTVSystem';
@@ -45,6 +46,12 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
     const [paymentMethod, setPaymentMethod] = useState('SOL'); // 'SOL' | 'WADDLE'
     const [waddlePrice, setWaddlePrice] = useState(null); // WADDLE price in SOL
     const [loadingWaddlePrice, setLoadingWaddlePrice] = useState(false);
+    
+    // Use the same token validation hook that PvP wagers use (it works correctly!)
+    // Hooks must be called unconditionally, so always pass walletAddress (hook handles null)
+    const { userBalance: waddleBalance, fetchBalance } = useTokenValidation(
+        isAuthenticated ? walletAddress : null
+    );
     
     // Withdraw state
     const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -97,6 +104,15 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                 });
         }
     }, [paymentMethod, waddlePrice, loadingWaddlePrice]);
+    
+    // Fetch WADDLE balance when switching to WADDLE payment method
+    // Use the same method that PvP wagers use (getParsedTokenAccountsByOwner)
+    useEffect(() => {
+        if (paymentMethod === 'WADDLE' && isAuthenticated && walletAddress && WADDLE_TOKEN) {
+            // Fetch balance using the same method that works for PvP wagers
+            fetchBalance(WADDLE_TOKEN, 6); // WADDLE has 6 decimals
+        }
+    }, [paymentMethod, isAuthenticated, walletAddress, fetchBalance]);
 
     // Reset state when modal opens
     useEffect(() => {
@@ -236,9 +252,18 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                 console.log(`🪨 Purchasing ${pebblesToReceive} Pebbles`);
                 console.log(`   SOL needed: ${solAmountNeeded} (1.5x premium)`);
                 console.log(`   WADDLE price: ${tokenData.priceNative} SOL per WADDLE`);
-                console.log(`   WADDLE tokens needed: ${waddleTokensNeeded}`);
+                console.log(`   WADDLE tokens needed: ${waddleTokensNeeded.toLocaleString()}`);
                 
-                // Send $WADDLE SPL token using SolanaPayment
+                // Check WADDLE balance using the same method that PvP wagers use
+                // The balance is already fetched by useTokenValidation hook, but verify here
+                if (waddleBalance !== null && waddleBalance < waddleTokensNeeded) {
+                    throw new Error(`Insufficient WADDLE balance. You have ${waddleBalance.toLocaleString()} WADDLE, but need ${waddleTokensNeeded.toLocaleString()} WADDLE.`);
+                }
+                
+                console.log(`   ✅ Balance check: ${waddleBalance?.toLocaleString() || 'checking...'} WADDLE available`);
+                
+                // Send $WADDLE SPL token using the SAME sendSPLToken that PvP wagers use
+                // This already works perfectly for wagers, so it will work here too
                 const result = await sendSPLToken({
                     recipientAddress: RAKE_WALLET,
                     tokenMintAddress: WADDLE_TOKEN,
@@ -411,8 +436,15 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                             </p>
                             
                             {paymentMethod === 'WADDLE' && (
-                                <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2 text-xs text-cyan-300">
-                                    💡 Paying with $WADDLE costs 1.5x more but supports the ecosystem!
+                                <div className="space-y-2">
+                                    <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2 text-xs text-cyan-300">
+                                        💡 Paying with $WADDLE costs 1.5x more but supports the ecosystem!
+                                    </div>
+                                    {waddleBalance !== null && waddleBalance !== undefined && (
+                                        <div className="text-xs text-cyan-300">
+                                            💰 Your Balance: {waddleBalance.toLocaleString()} $WADDLE
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             

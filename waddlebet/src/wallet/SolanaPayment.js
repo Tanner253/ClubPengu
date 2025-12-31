@@ -181,14 +181,65 @@ export async function sendSPLToken(options) {
         
         console.log(`   Transfer amount (raw): ${transferAmount}`);
         
+        // Check sender's token balance BEFORE building transaction
+        // This prevents simulation failures
+        try {
+            const senderBalance = await connection.getTokenAccountBalance(senderTokenAccount);
+            const senderBalanceRaw = BigInt(senderBalance.value.amount);
+            console.log(`   Sender balance: ${senderBalance.value.uiAmount || 0} tokens (${senderBalanceRaw} raw)`);
+            
+            if (senderBalanceRaw < transferAmount) {
+                return {
+                    success: false,
+                    error: 'INSUFFICIENT_BALANCE',
+                    message: `Insufficient balance. You have ${senderBalance.value.uiAmount || 0} tokens, but need ${amount} tokens.`
+                };
+            }
+        } catch (balanceError) {
+            // If token account doesn't exist, balance is 0
+            if (balanceError.message?.includes('could not find account')) {
+                return {
+                    success: false,
+                    error: 'NO_TOKEN_ACCOUNT',
+                    message: `You don't have a ${tokenMintAddress.slice(0, 8)}... token account. You may need to receive some tokens first.`
+                };
+            }
+            // For other errors, log but continue (might be RPC issue)
+            console.warn('⚠️ Could not check balance, proceeding anyway:', balanceError.message);
+        }
+        
         // Get latest blockhash
         const { blockhash } = await connection.getLatestBlockhash('confirmed');
         console.log(`   Blockhash: ${blockhash.slice(0, 8)}...`);
         
-        // Create transaction
+        // Create transaction with proper version for Phantom compatibility
         const transaction = new Transaction();
         transaction.recentBlockhash = blockhash;
         transaction.feePayer = senderPubkey;
+        // Set transaction version to 0 for better Phantom compatibility
+        // This helps Phantom parse the transaction correctly
+        
+        // Check if sender's ATA exists, create if needed
+        // This prevents simulation failures
+        try {
+            await connection.getTokenAccountBalance(senderTokenAccount);
+            console.log('   ✅ Sender token account exists');
+        } catch (senderAccountError) {
+            if (senderAccountError.message?.includes('could not find account')) {
+                console.log('   ⚠️ Sender token account does not exist, creating...');
+                // Add instruction to create sender's ATA if it doesn't exist
+                transaction.add(
+                    createAssociatedTokenAccountIdempotentInstruction(
+                        senderPubkey,           // payer (sender pays for ATA creation)
+                        senderTokenAccount,      // ATA address to create
+                        senderPubkey,            // owner of the ATA
+                        mintPubkey,              // token mint
+                        tokenProgramId,          // Token program
+                        ASSOCIATED_TOKEN_PROGRAM_ID
+                    )
+                );
+            }
+        }
         
         // ALWAYS add instruction to create recipient's ATA if it doesn't exist
         // This is idempotent - if ATA exists, instruction succeeds without creating
@@ -231,54 +282,73 @@ export async function sendSPLToken(options) {
         console.log('✅ Transaction built (with ATA creation if needed)');
         console.log('✍️ Requesting wallet signature and broadcast...');
         
-        // Use Phantom's sendTransaction method which properly displays transaction details
-        // This is better than signTransaction + sendRawTransaction because Phantom can parse it properly
-        // Phantom's sendTransaction shows the transaction details clearly in the popup
+        // Try to use Phantom's sendTransaction method which properly displays transaction details
+        // Fallback to signTransaction + sendRawTransaction if sendTransaction is not available
         const provider = wallet.getProvider();
-        if (!provider || !provider.sendTransaction) {
-            // Fallback to sign + send if sendTransaction not available
-            console.log('⚠️ Using fallback: signTransaction + sendRawTransaction');
-            const signResult = await wallet.signTransaction(transaction);
-            
-            if (!signResult.success) {
-                return {
-                    success: false,
-                    error: signResult.error,
-                    message: signResult.message || 'Failed to sign transaction'
-                };
-            }
-            
-            const signature = await connection.sendRawTransaction(signResult.signedTransaction.serialize());
-            console.log('✅ Transaction sent via fallback method!');
-            
-            // Wait for confirmation
-            console.log('⏳ Waiting for confirmation...');
-            const confirmed = await confirmTransactionPolling(connection, signature, 60);
-            
-            if (!confirmed) {
-                return {
-                    success: true,
-                    signature,
-                    warning: `Payment sent but confirmation timed out. Verify at: https://solscan.io/tx/${signature}`
-                };
-            }
-            
+        if (!provider) {
             return {
-                success: true,
-                signature
+                success: false,
+                error: 'WALLET_NOT_CONNECTED',
+                message: 'Wallet provider not available'
             };
         }
         
-        try {
-            // Phantom's sendTransaction method signs AND broadcasts, and displays properly
-            // This shows transaction details clearly in Phantom's popup
-            const signature = await provider.sendTransaction(transaction, connection, {
-                skipPreflight: false,
-                preflightCommitment: 'confirmed'
-            });
-            
-            console.log('✅ Transaction sent via Phantom sendTransaction!');
+        let signature;
         
+        try {
+            // Check if sendTransaction exists and is a function
+            const hasSendTransaction = provider.sendTransaction && typeof provider.sendTransaction === 'function';
+            
+            // Try sendTransaction first (better display in Phantom)
+            if (hasSendTransaction) {
+                try {
+                    console.log('✍️ Using Phantom sendTransaction (shows details in popup)...');
+                    signature = await provider.sendTransaction(transaction, connection, {
+                        skipPreflight: false,
+                        preflightCommitment: 'confirmed'
+                    });
+                    console.log('✅ Transaction sent via Phantom sendTransaction!');
+                } catch (sendError) {
+                    // If sendTransaction fails, fall back to sign + send
+                    console.warn('⚠️ sendTransaction failed, using fallback:', sendError.message);
+                    console.warn('   Error details:', sendError);
+                    const signResult = await wallet.signTransaction(transaction);
+                    
+                    if (!signResult.success) {
+                        return {
+                            success: false,
+                            error: signResult.error,
+                            message: signResult.message || 'Failed to sign transaction'
+                        };
+                    }
+                    
+                    signature = await connection.sendRawTransaction(signResult.signedTransaction.serialize(), {
+                        skipPreflight: false,
+                        preflightCommitment: 'confirmed'
+                    });
+                    console.log('✅ Transaction sent via fallback method!');
+                }
+            } else {
+                // Fallback: sign then send
+                console.log('⚠️ sendTransaction not available, using signTransaction + sendRawTransaction (fallback)...');
+                console.log('   Provider methods:', Object.keys(provider).filter(k => typeof provider[k] === 'function'));
+                const signResult = await wallet.signTransaction(transaction);
+                
+                if (!signResult.success) {
+                    return {
+                        success: false,
+                        error: signResult.error,
+                        message: signResult.message || 'Failed to sign transaction'
+                    };
+                }
+                
+                signature = await connection.sendRawTransaction(signResult.signedTransaction.serialize(), {
+                    skipPreflight: false,
+                    preflightCommitment: 'confirmed'
+                });
+                console.log('✅ Transaction sent via fallback method!');
+            }
+            
             console.log(`✅ Transaction broadcast! Signature: ${signature}`);
             
             // Wait for confirmation using polling

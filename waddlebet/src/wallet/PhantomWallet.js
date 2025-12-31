@@ -335,7 +335,7 @@ class PhantomWallet {
             // Get latest blockhash
             const { blockhash } = await connection.getLatestBlockhash('confirmed');
             
-            // Create transaction
+            // Create transaction with proper structure for Phantom compatibility
             const transaction = new Transaction({
                 recentBlockhash: blockhash,
                 feePayer: fromPubkey
@@ -346,6 +346,7 @@ class PhantomWallet {
                     lamports
                 })
             );
+            // Transaction version is automatically set to 0 (legacy) which Phantom parses well
             
             // Add memo instruction if provided (helps with transaction transparency and security)
             if (memo && memo.trim()) {
@@ -358,15 +359,43 @@ class PhantomWallet {
                 console.log(`   Memo: ${memo}`);
             }
             
-            // Use Phantom's sendTransaction method which properly displays transaction details
-            // This shows the transaction details clearly in Phantom's popup (amount, recipient, memo)
-            console.log('✍️ Requesting transaction signature and broadcast via Phantom...');
-            const signature = await provider.sendTransaction(transaction, connection, {
-                skipPreflight: false,
-                preflightCommitment: 'confirmed'
-            });
+            // Try to use Phantom's sendTransaction method which properly displays transaction details
+            // Fallback to signTransaction + sendRawTransaction if sendTransaction is not available
+            let signature;
             
-            console.log(`✅ SOL sent! Tx: ${signature}`);
+            // Check if sendTransaction exists and is a function
+            const hasSendTransaction = provider.sendTransaction && typeof provider.sendTransaction === 'function';
+            
+            if (hasSendTransaction) {
+                try {
+                    console.log('✍️ Using Phantom sendTransaction (shows details in popup)...');
+                    signature = await provider.sendTransaction(transaction, connection, {
+                        skipPreflight: false,
+                        preflightCommitment: 'confirmed'
+                    });
+                    console.log(`✅ SOL sent via sendTransaction! Tx: ${signature}`);
+                } catch (sendError) {
+                    // If sendTransaction fails, fall back to sign + send
+                    console.warn('⚠️ sendTransaction failed, using fallback:', sendError.message);
+                    console.warn('   Error details:', sendError);
+                    const signedTx = await provider.signTransaction(transaction);
+                    signature = await connection.sendRawTransaction(signedTx.serialize(), {
+                        skipPreflight: false,
+                        preflightCommitment: 'confirmed'
+                    });
+                    console.log(`✅ SOL sent via fallback! Tx: ${signature}`);
+                }
+            } else {
+                // Fallback: sign then send
+                console.log('⚠️ sendTransaction not available, using signTransaction + sendRawTransaction (fallback)...');
+                console.log('   Provider methods:', Object.keys(provider).filter(k => typeof provider[k] === 'function'));
+                const signedTx = await provider.signTransaction(transaction);
+                signature = await connection.sendRawTransaction(signedTx.serialize(), {
+                    skipPreflight: false,
+                    preflightCommitment: 'confirmed'
+                });
+                console.log(`✅ SOL sent via fallback! Tx: ${signature}`);
+            }
             
             return {
                 success: true,
