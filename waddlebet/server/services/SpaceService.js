@@ -7,6 +7,7 @@
 import Space from '../db/models/Space.js';
 import User from '../db/models/User.js';
 import solanaPaymentService from './SolanaPaymentService.js';
+import { isDBConnected } from '../db/connection.js';
 
 // ==================== CONFIGURATION ====================
 const DAILY_RENT_CPW3 = parseInt(process.env.DAILY_RENT_CPW3 || '10000');
@@ -261,8 +262,13 @@ class SpaceService {
         const settlement = result;
         
         // Get user info
-        const user = await User.findOne({ walletAddress });
-        const username = user?.username || `Penguin${walletAddress.slice(0, 6)}`;
+        let username = `Penguin${walletAddress.slice(0, 6)}`;
+        if (isDBConnected()) {
+            const user = await User.findOne({ walletAddress }).catch(() => null);
+            if (user) {
+                username = user.username;
+            }
+        }
         
         // Determine space type based on user's character type
         // Map character types to space types

@@ -1339,21 +1339,24 @@ async function handleMessage(playerId, message) {
             // Check if banned
             if (await authService.isWalletBanned(walletAddress)) {
                 // Get user to retrieve their IP address and ban details
-                const User = (await import('./db/models/User.js')).default;
-                const user = await User.findOne({ walletAddress }, 'lastIpAddress isBanned banReason banExpires');
-                
-                // Log banned user connection attempt
-                const username = user?.username || 'Unknown';
-                const banReason = user?.banReason || 'No reason specified';
-                console.log(`🚫 BANNED USER CONNECTION ATTEMPT: ${username} (${walletAddress.slice(0, 8)}...) from IP ${player.ip || 'unknown'} - Reason: ${banReason}`);
-                
-                // If user has a last known IP, ban that IP address
-                if (user?.lastIpAddress && user.lastIpAddress !== 'unknown') {
-                    bannedIPs.add(user.lastIpAddress);
-                    console.log(`🚫 Banned IP ${user.lastIpAddress} due to banned user ${walletAddress.slice(0, 8)}...`);
+                const { isDBConnected } = await import('./db/connection.js');
+                if (isDBConnected()) {
+                    const User = (await import('./db/models/User.js')).default;
+                    const user = await User.findOne({ walletAddress }, 'lastIpAddress isBanned banReason banExpires').catch(() => null);
+                    
+                    // Log banned user connection attempt
+                    const username = user?.username || 'Unknown';
+                    const banReason = user?.banReason || 'No reason specified';
+                    console.log(`🚫 BANNED USER CONNECTION ATTEMPT: ${username} (${walletAddress.slice(0, 8)}...) from IP ${player.ip || 'unknown'} - Reason: ${banReason}`);
+                    
+                    // If user has a last known IP, ban that IP address
+                    if (user?.lastIpAddress && user.lastIpAddress !== 'unknown') {
+                        bannedIPs.add(user.lastIpAddress);
+                        console.log(`🚫 Banned IP ${user.lastIpAddress} due to banned user ${walletAddress.slice(0, 8)}...`);
+                    }
                 }
                 
-                // Also ban current connection IP
+                // Also ban current connection IP (always, even if DB isn't connected)
                 if (player.ip && player.ip !== 'unknown') {
                     bannedIPs.add(player.ip);
                     console.log(`🚫 Banned current connection IP ${player.ip} due to banned user ${walletAddress.slice(0, 8)}...`);
@@ -1361,10 +1364,10 @@ async function handleMessage(playerId, message) {
                 
                 // Build ban message with reason if available
                 let banMessage = 'Your account has been banned. Access denied.';
-                if (user?.banReason) {
+                if (isDBConnected() && user?.banReason) {
                     banMessage = `Your account has been banned. Reason: ${user.banReason}. Access denied.`;
                 }
-                if (user?.banExpires) {
+                if (isDBConnected() && user?.banExpires) {
                     const expiresDate = new Date(user.banExpires).toLocaleString();
                     banMessage += ` Ban expires: ${expiresDate}`;
                 }
@@ -1433,8 +1436,12 @@ async function handleMessage(playerId, message) {
                     // Get ban details for message (walletAddress from the auth_verify message)
                     const walletAddress = message.walletAddress || player.walletAddress;
                     if (walletAddress) {
-                        const User = (await import('./db/models/User.js')).default;
-                        const user = await User.findOne({ walletAddress }, 'username banReason banExpires').catch(() => null);
+                        const { isDBConnected } = await import('./db/connection.js');
+                        let user = null;
+                        if (isDBConnected()) {
+                            const User = (await import('./db/models/User.js')).default;
+                            user = await User.findOne({ walletAddress }, 'username banReason banExpires').catch(() => null);
+                        }
                         
                         // Log banned user connection attempt
                         const username = user?.username || 'Unknown';

@@ -161,6 +161,12 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
      */
     async authenticateUser(walletAddress, playerId, clientData = {}, ipAddress = null) {
         try {
+            // Check if DB is connected first
+            const { isDBConnected } = await import('../db/connection.js');
+            if (!isDBConnected()) {
+                throw new Error('DATABASE_NOT_CONNECTED');
+            }
+            
             // Find or create user
             let user = await User.findOne({ walletAddress });
             let isNewUser = false;
