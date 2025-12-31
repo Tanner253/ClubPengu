@@ -425,32 +425,32 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
         
         // Wait for Three.js to be fully initialized before building penguin
         const buildPenguin = () => {
-            const THREE = threeRef.current;
-            const group = penguinGroupRef.current;
+        const THREE = threeRef.current;
+        const group = penguinGroupRef.current;
             
             if (!THREE || !group || !rendererRef.current) {
                 // If not ready, wait and try again
                 setTimeout(buildPenguin, 50);
                 return;
             }
-            
-            // Clear existing
-            while (group.children.length > 0) {
-                const child = group.children[0];
-                if (child.geometry) child.geometry.dispose();
-                if (child.material) {
-                    if (Array.isArray(child.material)) {
-                        child.material.forEach(m => m.dispose());
-                    } else {
-                        child.material.dispose();
-                    }
+        
+        // Clear existing
+        while (group.children.length > 0) {
+            const child = group.children[0];
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) {
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(m => m.dispose());
+                } else {
+                    child.material.dispose();
                 }
-                group.remove(child);
             }
-            
-            // Generate voxels based on character type
-            let voxels = [];
-            let palette = {};
+            group.remove(child);
+        }
+        
+        // Generate voxels based on character type
+        let voxels = [];
+        let palette = {};
         
         if (characterType === 'penguin') {
             const colorVal = PALETTE[skinColor] || skinColor || '#3B82F6';
@@ -572,17 +572,17 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
         }
         
             // Create voxel meshes with proper color resolution
-            const boxGeo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
-            
+        const boxGeo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+        
             // Group voxels by color for better performance
             const colorGroups = new Map();
-            voxels.forEach(v => {
-                let color = v.c;
+        voxels.forEach(v => {
+            let color = v.c;
                 // Resolve palette colors (for doginal/frog, palette keys like 'main', 'belly', etc.)
-                if (typeof color === 'string' && !color.startsWith('#')) {
-                    color = palette[color] || PALETTE[color] || '#888888';
-                }
-                
+            if (typeof color === 'string' && !color.startsWith('#')) {
+                color = palette[color] || PALETTE[color] || '#888888';
+            }
+            
                 if (!colorGroups.has(color)) {
                     colorGroups.set(color, []);
                 }
@@ -591,13 +591,13 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             
             // Create meshes for each color group
             colorGroups.forEach((voxelList, color) => {
-                const material = new THREE.MeshLambertMaterial({ color });
+            const material = new THREE.MeshLambertMaterial({ color });
                 
                 voxelList.forEach(v => {
-                    const mesh = new THREE.Mesh(boxGeo, material);
-                    mesh.position.set(v.x * VOXEL_SIZE, v.y * VOXEL_SIZE, v.z * VOXEL_SIZE);
-                    group.add(mesh);
-                });
+            const mesh = new THREE.Mesh(boxGeo, material);
+            mesh.position.set(v.x * VOXEL_SIZE, v.y * VOXEL_SIZE, v.z * VOXEL_SIZE);
+            group.add(mesh);
+        });
             });
             
             // Add mount if equipped
@@ -879,7 +879,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                                     <p className="text-white/60 text-xs mt-1">
                                         Pick your dog's fur colors!
                                     </p>
-                                </div>
+                                    </div>
                                 
                                 {/* Primary Color - Main Fur */}
                                 <div className="mb-4">
@@ -926,7 +926,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                                 </div>
                                 
                                 {/* Preset Colors */}
-                                <div>
+                                    <div>
                                     <label className="text-amber-300 text-xs font-bold uppercase tracking-wider block mb-2">
                                         Quick Presets
                                     </label>
@@ -977,7 +977,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                                     <p className="text-white/60 text-xs mt-1">
                                         Pick your frog's skin colors!
                                     </p>
-                                </div>
+                                    </div>
                                 
                                 {/* Primary Color - Main Skin */}
                                 <div className="mb-4">
@@ -1024,7 +1024,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                                 </div>
                                 
                                 {/* Preset Colors */}
-                                <div>
+                                    <div>
                                     <label className="text-green-300 text-xs font-bold uppercase tracking-wider block mb-2">
                                         Quick Presets
                                     </label>

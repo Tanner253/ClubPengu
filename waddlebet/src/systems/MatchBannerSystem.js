@@ -1228,12 +1228,12 @@ export function updateMatchBanners(params) {
         if (!currentMatchIds.has(matchId)) {
             // Clean up banner resources properly
             if (bannerData.sprite) {
-                scene.remove(bannerData.sprite);
+            scene.remove(bannerData.sprite);
                 if (bannerData.sprite.material) {
                     if (bannerData.sprite.material.map) {
                         bannerData.sprite.material.map.dispose();
                     }
-                    bannerData.sprite.material.dispose();
+            bannerData.sprite.material.dispose();
                 }
             }
             banners.delete(matchId);

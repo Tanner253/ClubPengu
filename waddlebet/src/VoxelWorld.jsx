@@ -1836,16 +1836,24 @@ const VoxelWorld = ({
             if (e.code === 'Enter' || (e.code === 'Slash' && !e.shiftKey)) {
                 const chatInput = document.getElementById('chat-input-field');
                 if (chatInput) {
-                    // If chat input is already focused, Enter sends message (normal behavior)
-                    if (activeElement === chatInput && e.code === 'Enter') {
-                        // Don't prevent default - let Enter send message
-                        return;
+                    // If chat input is already focused:
+                    // - Enter sends message (normal behavior, don't prevent default)
+                    // - Slash should be typed as a character (don't prevent default, don't refocus)
+                    if (activeElement === chatInput) {
+                        if (e.code === 'Enter') {
+                            // Don't prevent default - let Enter send message
+                            return;
+                        }
+                        if (e.code === 'Slash') {
+                            // Don't prevent default - let "/" be typed in the input
+                            return;
+                        }
                     }
                     // If another input is focused, don't interfere
                     if (isInputFocused && activeElement !== chatInput) {
                         return;
                     }
-                    // Otherwise, focus chat input (both Enter and Slash do this)
+                    // Otherwise, focus chat input (both Enter and Slash do this when NOT already focused)
                     chatInput.focus();
                     // Prevent "/" from being typed when opening chat (only if not Shift+Slash)
                     if (e.code === 'Slash' && !e.shiftKey) {
