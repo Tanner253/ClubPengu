@@ -1974,10 +1974,10 @@ const VoxelWorld = ({
             let moving = false;
             
             // Jump physics constants
-            // Frogs have special leap abilities: 2x jump height, 2x slower fall
+            // Frogs have special leap abilities: 1.5x jump height, 1.5x slower fall
             const isFrog = playerDataRef.current?.characterType === 'frog';
-            const GRAVITY = isFrog ? 15 : 30; // Frogs fall 2x slower (half gravity)
-            const JUMP_VELOCITY = isFrog ? 24 : 12; // Frogs jump 2x higher
+            const GRAVITY = isFrog ? 20 : 30; // Frogs fall 1.5x slower
+            const JUMP_VELOCITY = isFrog ? 18 : 12; // Frogs jump 1.5x higher
             const GROUND_Y = 0;
             
             // Check keyboard input (disabled during P2P match)
@@ -3708,7 +3708,7 @@ const VoxelWorld = ({
                 
                 // Wizard hat trail for other players - use the same system as local player
                 // Triggers only for wizardHat equipped (unlocked via WZRDOG promo code)
-                const otherAppearance = otherPlayerData?.appearance || {};
+                const otherAppearance = playerData?.appearance || {};
                 const otherHasWizardHat = otherAppearance.hat === 'wizardHat';
                 if (otherHasWizardHat && wizardTrailSystemRef.current) {
                     const poolKey = `player_${id}`;
