@@ -121,14 +121,14 @@ const PROMO_CODES = [
     },
     {
         code: 'DOGINAL',
-        name: '🐕 Dog Character + Wizard Hat',
-        description: 'Unlocks the Dog character type and wizard hat cosmetic (legacy code - dog is now default, but this code still works)',
+        name: '🧙 Wizard Hat (Legacy)',
+        description: 'Legacy code that unlocks the wizard hat cosmetic (dog is now a default character, no code needed)',
         unlocks: {
             mounts: [],
             cosmetics: [
                 { id: 'wizardHat', category: 'hat' }
             ],
-            characters: ['dog'],
+            characters: [],
             skinColor: null,
             coins: 0
         }
