@@ -358,13 +358,10 @@ class PhantomWallet {
                 console.log(`   Memo: ${memo}`);
             }
             
-            // Sign via Phantom
-            console.log('✍️ Requesting signature...');
-            const signedTx = await provider.signTransaction(transaction);
-            
-            // Broadcast
-            console.log('📡 Broadcasting transaction...');
-            const signature = await connection.sendRawTransaction(signedTx.serialize(), {
+            // Use Phantom's sendTransaction method which properly displays transaction details
+            // This shows the transaction details clearly in Phantom's popup (amount, recipient, memo)
+            console.log('✍️ Requesting transaction signature and broadcast via Phantom...');
+            const signature = await provider.sendTransaction(transaction, connection, {
                 skipPreflight: false,
                 preflightCommitment: 'confirmed'
             });

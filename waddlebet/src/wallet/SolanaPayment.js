@@ -229,47 +229,92 @@ export async function sendSPLToken(options) {
         }
         
         console.log('✅ Transaction built (with ATA creation if needed)');
-        console.log('✍️ Requesting wallet signature...');
+        console.log('✍️ Requesting wallet signature and broadcast...');
         
-        // Sign the transaction using Phantom
-        const signResult = await wallet.signTransaction(transaction);
-        
-        if (!signResult.success) {
-            return {
-                success: false,
-                error: signResult.error,
-                message: signResult.message || 'Failed to sign transaction'
-            };
-        }
-        
-        console.log('✅ Transaction signed!');
-        console.log('📡 Broadcasting to Solana network...');
-        
-        // Broadcast the signed transaction
-        const signature = await connection.sendRawTransaction(signResult.signedTransaction.serialize());
-        
-        console.log(`✅ Transaction broadcast! Signature: ${signature}`);
-        
-        // Wait for confirmation using polling
-        console.log('⏳ Waiting for confirmation...');
-        const confirmed = await confirmTransactionPolling(connection, signature, 60);
-        
-        if (!confirmed) {
-            // Return success with warning - user can verify manually
-            console.warn('⚠️ Confirmation timeout (payment likely succeeded)');
+        // Use Phantom's sendTransaction method which properly displays transaction details
+        // This is better than signTransaction + sendRawTransaction because Phantom can parse it properly
+        // Phantom's sendTransaction shows the transaction details clearly in the popup
+        const provider = wallet.getProvider();
+        if (!provider || !provider.sendTransaction) {
+            // Fallback to sign + send if sendTransaction not available
+            console.log('⚠️ Using fallback: signTransaction + sendRawTransaction');
+            const signResult = await wallet.signTransaction(transaction);
+            
+            if (!signResult.success) {
+                return {
+                    success: false,
+                    error: signResult.error,
+                    message: signResult.message || 'Failed to sign transaction'
+                };
+            }
+            
+            const signature = await connection.sendRawTransaction(signResult.signedTransaction.serialize());
+            console.log('✅ Transaction sent via fallback method!');
+            
+            // Wait for confirmation
+            console.log('⏳ Waiting for confirmation...');
+            const confirmed = await confirmTransactionPolling(connection, signature, 60);
+            
+            if (!confirmed) {
+                return {
+                    success: true,
+                    signature,
+                    warning: `Payment sent but confirmation timed out. Verify at: https://solscan.io/tx/${signature}`
+                };
+            }
+            
             return {
                 success: true,
-                signature,
-                warning: `Payment sent but confirmation timed out. Verify at: https://solscan.io/tx/${signature}`
+                signature
             };
         }
         
-        console.log('✅ Payment confirmed!');
+        try {
+            // Phantom's sendTransaction method signs AND broadcasts, and displays properly
+            // This shows transaction details clearly in Phantom's popup
+            const signature = await provider.sendTransaction(transaction, connection, {
+                skipPreflight: false,
+                preflightCommitment: 'confirmed'
+            });
+            
+            console.log('✅ Transaction sent via Phantom sendTransaction!');
         
-        return {
-            success: true,
-            signature
-        };
+            console.log(`✅ Transaction broadcast! Signature: ${signature}`);
+            
+            // Wait for confirmation using polling
+            console.log('⏳ Waiting for confirmation...');
+            const confirmed = await confirmTransactionPolling(connection, signature, 60);
+            
+            if (!confirmed) {
+                // Return success with warning - user can verify manually
+                console.warn('⚠️ Confirmation timeout (payment likely succeeded)');
+                return {
+                    success: true,
+                    signature,
+                    warning: `Payment sent but confirmation timed out. Verify at: https://solscan.io/tx/${signature}`
+                };
+            }
+            
+            console.log('✅ Payment confirmed!');
+            
+            return {
+                success: true,
+                signature
+            };
+            
+        } catch (error) {
+            // Handle Phantom-specific errors
+            if (error.code === 4001 || error.message?.includes('User rejected')) {
+                return {
+                    success: false,
+                    error: 'USER_REJECTED',
+                    message: 'Transaction cancelled by user'
+                };
+            }
+            
+            // Re-throw to be caught by outer catch
+            throw error;
+        }
         
     } catch (error) {
         console.error('❌ Payment failed:', error);
