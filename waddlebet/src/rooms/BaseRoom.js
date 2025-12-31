@@ -250,13 +250,13 @@ class BaseRoom {
 }
 
 /**
- * Generate Igloo interior room
+ * Generate Space interior room
  * @param {THREE} THREE - Three.js library
  * @param {THREE.Scene} scene - Scene to add objects to
  * @returns {Object} Room data with bounds, spawnPos, furniture, beachBall, colliders, map
  */
-export function generateIglooInterior(THREE, scene) {
-    const IGLOO_SIZE = 30;
+export function generateSpaceInterior(THREE, scene) {
+    const SPACE_SIZE = 30;
     scene.background = new THREE.Color(0x0d1520);
     
     // Collision map
@@ -279,7 +279,7 @@ export function generateIglooInterior(THREE, scene) {
     scene.add(innerCarpet);
     
     // Ice floor
-    const floor = new THREE.Mesh(new THREE.CircleGeometry(IGLOO_SIZE / 2, 32), new THREE.MeshStandardMaterial({ color: 0xB8D4E8, roughness: 0.4, metalness: 0.1 }));
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(SPACE_SIZE / 2, 32), new THREE.MeshStandardMaterial({ color: 0xB8D4E8, roughness: 0.4, metalness: 0.1 }));
     floor.rotation.x = -Math.PI / 2;
     floor.position.y = 0.01;
     floor.receiveShadow = true;
@@ -287,7 +287,7 @@ export function generateIglooInterior(THREE, scene) {
     
     // Dome
     const dome = new THREE.Mesh(
-        new THREE.SphereGeometry(IGLOO_SIZE / 2, 32, 24, 0, Math.PI * 2, 0, Math.PI / 2),
+        new THREE.SphereGeometry(SPACE_SIZE / 2, 32, 24, 0, Math.PI * 2, 0, Math.PI / 2),
         new THREE.MeshStandardMaterial({ color: 0x9CB8C8, roughness: 0.5, side: THREE.BackSide })
     );
     dome.scale.y = 0.6;
@@ -296,7 +296,7 @@ export function generateIglooInterior(THREE, scene) {
     // Dome rings
     for (let i = 1; i < 8; i++) {
         const ringY = i * 1.2;
-        const ringRadius = (IGLOO_SIZE / 2) * Math.cos(Math.asin(ringY / (IGLOO_SIZE / 2 * 0.6)));
+        const ringRadius = (SPACE_SIZE / 2) * Math.cos(Math.asin(ringY / (SPACE_SIZE / 2 * 0.6)));
         if (ringRadius > 1) {
             const ring = new THREE.Mesh(new THREE.TorusGeometry(ringRadius, 0.06, 4, 48), new THREE.MeshStandardMaterial({ color: 0x7A9AAA }));
             ring.position.y = ringY;
@@ -520,11 +520,11 @@ export function generateIglooInterior(THREE, scene) {
     scene.add(exitGlow);
     
     const doorFrame = new THREE.Mesh(new THREE.BoxGeometry(3, 3.5, 0.3), new THREE.MeshStandardMaterial({ color: 0x4a3728 }));
-    doorFrame.position.set(0, 1.75, IGLOO_SIZE / 2 - 0.5);
+    doorFrame.position.set(0, 1.75, SPACE_SIZE / 2 - 0.5);
     scene.add(doorFrame);
     
     const doorOpening = new THREE.Mesh(new THREE.PlaneGeometry(2.5, 3), new THREE.MeshBasicMaterial({ color: 0x050a10 }));
-    doorOpening.position.set(0, 1.5, IGLOO_SIZE / 2 - 0.3);
+    doorOpening.position.set(0, 1.5, SPACE_SIZE / 2 - 0.3);
     scene.add(doorOpening);
     
     const furniture = [
@@ -533,7 +533,7 @@ export function generateIglooInterior(THREE, scene) {
         { type: 'chair', position: { x: 7.5, z: -3 }, rotation: -Math.PI / 4, seatHeight: 0.8, snapPoints: [{ x: 0, z: 0 }], interactionRadius: 2 }
     ];
     
-    // Room update function - handles igloo-specific animations
+    // Room update function - handles space-specific animations
     const update = (time, delta) => {
         // Pulse exit glow
         if (exitGlow && exitGlow.material) {
@@ -547,7 +547,7 @@ export function generateIglooInterior(THREE, scene) {
     };
     
     return {
-        bounds: { type: 'circular', radius: IGLOO_SIZE / 2 - 1.5, centerX: 0, centerZ: 0 },
+        bounds: { type: 'circular', radius: SPACE_SIZE / 2 - 1.5, centerX: 0, centerZ: 0 },
         spawnPos: { x: 0, z: 10 },
         furniture,
         beachBall,

@@ -1,9 +1,9 @@
 /**
- * RentScheduler - Runs periodic checks for overdue igloo rentals
+ * RentScheduler - Runs periodic checks for overdue space rentals
  * Handles grace periods and evictions
  */
 
-import iglooService from '../services/IglooService.js';
+import spaceService from '../services/SpaceService.js';
 
 class RentScheduler {
     constructor() {
@@ -59,18 +59,18 @@ class RentScheduler {
         this.checksPerformed++;
         
         try {
-            const result = await iglooService.processOverdueRentals();
+            const result = await spaceService.processOverdueRentals();
             const duration = Date.now() - startTime;
             
             if (result.evictions.length > 0) {
                 console.log(`⏰ Evicted ${result.evictions.length} tenants:`);
                 result.evictions.forEach(e => {
-                    console.log(`   - ${e.previousOwner} from ${e.iglooId}`);
+                    console.log(`   - ${e.previousOwner} from ${e.spaceId}`);
                 });
             }
             
             if (result.gracePeriodCount > 0) {
-                console.log(`⏰ ${result.gracePeriodCount} igloos entered grace period`);
+                console.log(`⏰ ${result.gracePeriodCount} spaces entered grace period`);
             }
             
             // Only log if something happened or every 60 checks (hourly at 60s interval)

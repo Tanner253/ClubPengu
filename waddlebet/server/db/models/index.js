@@ -7,12 +7,12 @@ export { default as User } from './User.js';
 export { default as AuthSession } from './AuthSession.js';
 export { default as Match } from './Match.js';
 export { default as Challenge } from './Challenge.js';
-export { default as Puffle, PUFFLE_PRICES, PUFFLE_TIERS } from './Puffle.js';
+export { default as Pet, PUFFLE_PRICES, PUFFLE_TIERS } from './Pet.js';
 export { default as Transaction } from './Transaction.js';
 export { default as SolanaTransaction } from './SolanaTransaction.js';
 export { default as PromoCode } from './PromoCode.js';
 export { default as PromoRedemption } from './PromoRedemption.js';
-export { default as Igloo } from './Igloo.js';
+export { default as Space } from './Space.js';
 
 // Gacha System
 export { default as CosmeticTemplate } from './CosmeticTemplate.js';

@@ -14,7 +14,7 @@ import { useMultiplayer } from '../multiplayer';
  * GameHUD - Heads Up Display showing coins, stats, and quick actions
  * Responsive: horizontal on landscape/desktop, vertical sidebar on portrait mobile
  */
-const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenSettings, isMobile = false, playerCount = 0, totalPlayerCount = 0, onRequestAuth, currentRoom, isInsideOwnedIgloo = false, onOpenIglooSettings }) => {
+const GameHUD = ({ showMinimap = false, onOpenPets, showInbox = true, onOpenSettings, isMobile = false, playerCount = 0, totalPlayerCount = 0, onRequestAuth, currentRoom, isInsideOwnedSpace = false, onOpenSpaceSettings }) => {
     const [coins, setCoins] = useState(0);
     const [showStatsModal, setShowStatsModal] = useState(false);  // Full stats modal
     const [recentReward, setRecentReward] = useState(null);
@@ -192,22 +192,22 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                         </button>
                     )}
                     
-                    {/* Igloo Settings - Only show when inside owned igloo */}
-                    {isInsideOwnedIgloo && onOpenIglooSettings && (
+                    {/* Space Settings - Only show when inside owned space */}
+                    {isInsideOwnedSpace && onOpenSpaceSettings && (
                         <button
-                            onClick={onOpenIglooSettings}
+                            onClick={onOpenSpaceSettings}
                             className={`${compactBtn} bg-gradient-to-r from-purple-600/80 to-pink-600/80`}
-                            title="Igloo Settings"
+                            title="Space Settings"
                         >
                             🏠
                         </button>
                     )}
                     
-                    {/* Puffles */}
+                    {/* Pets */}
                     <button
-                        onClick={onOpenPuffles}
+                        onClick={onOpenPets}
                         className={`${compactBtn} bg-purple-600/80`}
-                        title="Puffles"
+                        title="Pets"
                     >
                         🐾
                     </button>
@@ -319,26 +319,26 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     </button>
                 )}
                 
-                {/* Igloo Settings Button - Only show when inside owned igloo */}
-                {isInsideOwnedIgloo && onOpenIglooSettings && (
+                {/* Space Settings Button - Only show when inside owned space */}
+                {isInsideOwnedSpace && onOpenSpaceSettings && (
                     <button
-                        onClick={onOpenIglooSettings}
+                        onClick={onOpenSpaceSettings}
                         className="bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500 hover:to-pink-500 active:from-purple-700 active:to-pink-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-xs transition-colors flex items-center justify-center gap-1"
-                        title="Igloo Settings"
+                        title="Space Settings"
                     >
                         🏠
-                        <span className="hidden sm:inline text-[10px]">Igloo</span>
+                        <span className="hidden sm:inline text-[10px]">Space</span>
                     </button>
                 )}
                 
                 {/* Inbox Button */}
                 {showInbox && <InboxButton />}
                 
-                {/* Puffles Button */}
+                {/* Pets Button */}
                 <button
-                    onClick={onOpenPuffles}
+                    onClick={onOpenPets}
                     className="bg-purple-600/80 hover:bg-purple-500 active:bg-purple-400 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-xs transition-colors flex items-center justify-center"
-                    title="Manage Puffles"
+                    title="Manage Pets"
                 >
                     🐾
                 </button>

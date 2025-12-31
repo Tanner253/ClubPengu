@@ -20,8 +20,8 @@ export {
     AI_CONVERSATIONS,
     ROOM_SPAWNS,
     ROOM_PORTALS,
-    IGLOO_BANNER_STYLES,
-    IGLOO_BANNER_CONTENT
+    SPACE_BANNER_STYLES,
+    SPACE_BANNER_CONTENT
 } from './roomConfig.js';
 
 // Solana / x402 configuration
@@ -33,7 +33,7 @@ export {
     SOLANA_DEVNET_NETWORK_ID,
     CURRENT_NETWORK_ID,
     X402_FACILITATOR_URL,
-    IGLOO_CONFIG,
+    SPACE_CONFIG,
     PAYMENT_STATUS,
-    IGLOO_ACCESS
+    SPACE_ACCESS
 } from './solana.js';

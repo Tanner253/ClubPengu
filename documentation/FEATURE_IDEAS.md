@@ -1,6 +1,10 @@
 # 🎮 Feature Ideas & Minigames
 
-A collection of feature ideas to enhance the penguin social game experience. These ideas focus on increasing player engagement, adding variety to gameplay, and creating memorable social moments.
+# 🎮 Feature Ideas & Minigames
+
+A collection of feature ideas to enhance the Waddlebet metaverse experience. These ideas focus on increasing cross-community engagement, adding variety to gameplay, and creating memorable social moments across all character types (Penguins, Dogs, Frogs, and more).
+
+**Note:** All features should be designed to work across character types, encouraging cross-community interaction while respecting each community's unique culture and preferences.
 
 ---
 
@@ -15,20 +19,22 @@ A collection of feature ideas to enhance the penguin social game experience. The
 | Slot Machines | Solo | Casino-style gambling with coin rewards |
 
 ### Existing Rooms
-- **Town Center** - Main hub with shops, social areas, and igloos
+- **Town Center** - Main hub with shops, social areas, and spaces
 - **Dojo** - Battle arena for Card Jitsu
 - **Nightclub** - Dance club with disco ball, DJ booth, and lounge
 - **Casino** - Slot machines and gambling activities
-- **Igloos** - Personal player spaces
+- **Spaces** - Personal player spaces
 
 ### Existing Features
-- Penguin customization (colors, hats, eyes, mouths, clothing, mounts)
-- Puffle pet companions (13 colors, 5 rarity tiers)
-- P2P wagering system with multi-token support
-- Day/night cycle with weather effects
-- Emote wheel system
-- AI NPCs for ambient social activity
-- Multiplayer synchronization and chat
+- **Multi-Character Support** - Play as Penguins, Dogs (Doginals), Frogs (Pepe), Whales, and Marcus
+- **Character-Specific Homes** - Igloos for penguins, doghouses for dogs, ponds for frogs
+- **Deep Customization** - Character-specific appearance options (colors, hats, eyes, mouths, clothing, mounts)
+- **Pet Companions** - Puffles and character-specific pets (13 colors, 5 rarity tiers)
+- **P2P Wagering System** - Bet with any Solana token on minigames
+- **Day/night cycle** - Dynamic lighting with weather effects
+- **Emote wheel system** - Express yourself across all character types
+- **AI NPCs** - Ambient social activity featuring diverse character types
+- **Multiplayer synchronization** - Real-time interaction across all communities
 
 ---
 
@@ -133,7 +139,7 @@ A time-management minigame set in the Pizza Parlor.
 
 ---
 
-#### 5. Puffle Launch 🐾
+#### 5. Pet Launch 🐾
 **Difficulty to Implement:** Low-Medium  
 **Fun Factor:** ⭐⭐⭐⭐
 
@@ -153,7 +159,7 @@ An Angry Birds-style physics game featuring puffle companions.
 
 ---
 
-#### 6. Puffle Obstacle Course 🏃
+#### 6. Pet Obstacle Course 🏃
 **Difficulty to Implement:** Medium  
 **Fun Factor:** ⭐⭐⭐⭐
 
@@ -227,7 +233,7 @@ Incentivize daily engagement with escalating rewards.
 | 2 | 100 coins |
 | 3 | Random common cosmetic |
 | 4 | 200 coins |
-| 5 | Puffle treat pack |
+| 5 | Pet treat pack |
 | 6 | 300 coins |
 | 7 | Rare cosmetic OR 500 coins |
 
@@ -261,10 +267,10 @@ Hidden collectibles scattered throughout the world.
 **Difficulty to Implement:** High  
 **Fun Factor:** ⭐⭐⭐⭐⭐
 
-Expand the igloo system with customization.
+Expand the space system with customization.
 
 **Features:**
-- Multiple igloo sizes/styles
+- Multiple space sizes/styles
 - Furniture placement system
 - Invite friends to private parties
 - Rent out space for passive income
@@ -292,6 +298,30 @@ Time-limited events with exclusive content.
 
 ---
 
+## 🌐 Cross-Community Features
+
+### Community-Specific Content
+
+#### Character-Specific Spaces
+- **Penguin Igloos** - Traditional ice homes with penguin-themed decor
+- **Dog Houses** - Cozy dog-themed spaces for Doginals community
+- **Frog Ponds** - Water-themed areas perfect for Pepe community
+- **Custom Themes** - Players can mix and match themes regardless of character type
+
+#### Community Events
+- **Dogecoin Day** - Celebrate with dog-themed activities, exclusive dog cosmetics, and community gatherings
+- **Pepe Day** - Frog-themed events, meme contests, and exclusive frog items
+- **Penguin Heritage Week** - Nostalgic events celebrating the Club Penguin roots
+- **Cross-Community Tournaments** - Mixed teams competing across character types
+
+#### Character-Specific Pets
+- **Penguin Puffles** - Classic puffle companions (existing)
+- **Dog Companions** - Dog-themed pets for dog characters
+- **Frog Pals** - Frog-themed companions for frog characters
+- **Universal Pets** - Pets that can be owned by any character type
+
+---
+
 ## 📋 Implementation Priority
 
 ### Quick Wins (1-2 days)
@@ -307,18 +337,21 @@ Time-limited events with exclusive content.
 ### Larger Projects (1-2 weeks)
 7. 🛷 Sled Racing - Full minigame with physics
 8. 🍕 Pizza Minigame - Time management gameplay
-9. 🐾 Puffle Games - Multiple mini-activities
+9. 🐾 Pet Games - Multiple mini-activities
 10. 🎄 Seasonal Event System - Framework for rotating content
 
 ---
 
 ## 💡 Design Principles
 
-1. **Nostalgia-Friendly** - Mechanics that feel familiar to fans of classic penguin games
-2. **Accessible** - Easy to learn, optional depth for mastery
-3. **Social-First** - Encourage player interaction and friendly competition
-4. **Rewarding** - Clear progression with tangible rewards
-5. **Performant** - Maintain smooth gameplay on all devices
+1. **Multi-Community First** - Features that work across all character types and bring communities together
+2. **Nostalgia-Friendly** - Mechanics that honor Club Penguin heritage while evolving beyond it
+3. **Accessible** - Easy to learn, optional depth for mastery
+4. **Cross-Community** - Encourage interaction between Penguins, Dogs, Frogs, and all communities
+5. **Social-First** - Player interaction and friendly competition across all character types
+6. **Web3 Native** - True digital ownership, token integration, and real value exchange
+7. **Rewarding** - Clear progression with tangible, tradeable rewards
+8. **Performant** - Maintain smooth gameplay on all devices
 
 ---
 

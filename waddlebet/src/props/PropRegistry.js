@@ -4,8 +4,8 @@
  */
 
 import PineTree from './PineTree';
-import Igloo from './Igloo';
-import SKNYIgloo from './SKNYIgloo';
+import Space from './Space';
+import SKNYSpace from './SKNYSpace';
 import LampPost from './LampPost';
 import Bench from './Bench';
 import SnowPile from './SnowPile';
@@ -31,8 +31,8 @@ import WoodenPost from './WoodenPost';
  */
 export const PROP_TYPES = {
     PINE_TREE: 'pineTree',
-    IGLOO: 'igloo',
-    SKNY_IGLOO: 'sknyIgloo',
+    SPACE: 'space',
+    SKNY_SPACE: 'sknySpace',
     LAMP_POST: 'lampPost',
     BENCH: 'bench',
     SNOW_PILE: 'snowPile',
@@ -60,8 +60,8 @@ export const PROP_TYPES = {
  */
 const propClasses = {
     [PROP_TYPES.PINE_TREE]: PineTree,
-    [PROP_TYPES.IGLOO]: Igloo,
-    [PROP_TYPES.SKNY_IGLOO]: SKNYIgloo,
+    [PROP_TYPES.SPACE]: Space,
+    [PROP_TYPES.SKNY_SPACE]: SKNYSpace,
     [PROP_TYPES.LAMP_POST]: LampPost,
     [PROP_TYPES.BENCH]: Bench,
     [PROP_TYPES.SNOW_PILE]: SnowPile,
@@ -110,11 +110,11 @@ export const createProp = (THREE, scene, type, x, y, z, options = {}) => {
             prop = new PropClass(THREE, options.size || 'medium');
             break;
             
-        case PROP_TYPES.IGLOO:
+        case PROP_TYPES.SPACE:
             prop = new PropClass(THREE, options.withEntrance !== false);
             break;
             
-        case PROP_TYPES.SKNY_IGLOO:
+        case PROP_TYPES.SKNY_SPACE:
             prop = new PropClass(THREE);
             break;
             

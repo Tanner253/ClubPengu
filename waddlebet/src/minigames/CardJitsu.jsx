@@ -8,7 +8,7 @@ import { useMultiplayer } from '../multiplayer';
  * Fire beats Snow, Snow beats Water, Water beats Fire
  * Server-authoritative rewards for authenticated users
  */
-const CardJitsu = ({ penguinData, onExit }) => {
+const CardJitsu = ({ playerData, onExit }) => {
     const { send, isAuthenticated } = useMultiplayer();
     
     // Pass server send function to game for rewards

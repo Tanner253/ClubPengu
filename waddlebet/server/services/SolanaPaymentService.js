@@ -1,6 +1,6 @@
 /**
  * SolanaPaymentService - Direct Solana SPL token transfers
- * Handles on-chain payments for igloo entry fees and other SPL token transfers
+ * Handles on-chain payments for space entry fees and other SPL token transfers
  * 
  * SECURITY FEATURES:
  * - Database-backed replay attack prevention (persistent across restarts)
@@ -234,8 +234,8 @@ class SolanaPaymentService {
      * @param {string} expectedToken - Expected token mint address
      * @param {number} expectedAmount - Expected amount (will verify >= this)
      * @param {Object} options - Optional metadata for audit logging
-     * @param {string} options.transactionType - Type: igloo_rent, igloo_entry_fee, etc.
-     * @param {string} options.iglooId - Related igloo ID
+     * @param {string} options.transactionType - Type: space_rent, space_entry_fee, etc.
+     * @param {string} options.spaceId - Related space ID
      * @param {string} options.matchId - Related match ID
      * @param {string} options.tokenSymbol - Token symbol for logging
      * @param {string} options.ipAddress - Client IP for audit
@@ -466,7 +466,7 @@ class SolanaPaymentService {
                     amountRaw: String(expectedAmount * Math.pow(10, 6)), // Assume 6 decimals
                     tokenMint: expectedToken,
                     tokenSymbol: options?.tokenSymbol || '$WADDLE',
-                    iglooId: options?.iglooId,
+                    spaceId: options?.spaceId,
                     matchId: options?.matchId,
                     status: 'verified',
                     verificationDetails: {
@@ -608,9 +608,9 @@ class SolanaPaymentService {
             tokenAddress,
             expectedAmount,
             {
-                transactionType: options.isRenewal ? 'igloo_rent_renewal' : 'igloo_rent',
+                transactionType: options.isRenewal ? 'space_rent_renewal' : 'space_rent',
                 tokenSymbol: '$WADDLE',
-                iglooId: options.iglooId,
+                spaceId: options.spaceId,
                 ipAddress: options.ipAddress
             }
         );

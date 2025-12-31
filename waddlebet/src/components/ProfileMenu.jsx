@@ -10,7 +10,7 @@ import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import { useDeviceDetection, useClickOutside, useEscapeKey } from '../hooks';
 import TippingPanel from './TippingPanel';
 import GiftPanel from './GiftPanel';
-import PenguinPreview3D from './PenguinPreview3D';
+import PlayerPreview3D from './PlayerPreview3D';
 
 const ProfileMenu = () => {
     const {
@@ -112,7 +112,7 @@ const ProfileMenu = () => {
                         {/* Left: 3D Avatar + Name */}
                         <div className="flex flex-col items-center justify-center min-w-[90px]">
                             <div className="rounded-lg overflow-hidden border border-white/20 shadow-lg bg-slate-900/50">
-                                <PenguinPreview3D 
+                                <PlayerPreview3D 
                                     appearance={selectedPlayer.appearance}
                                     size={70}
                                     autoRotate={true}
@@ -316,7 +316,7 @@ const ProfileMenu = () => {
                     {/* 3D Penguin Preview */}
                     <div className="flex justify-center mb-3">
                         <div className="rounded-xl overflow-hidden border-2 border-white/20 shadow-lg bg-slate-900/50">
-                            <PenguinPreview3D 
+                            <PlayerPreview3D 
                                 appearance={selectedPlayer.appearance}
                                 size={100}
                                 autoRotate={true}

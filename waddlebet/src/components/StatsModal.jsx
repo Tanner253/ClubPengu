@@ -79,12 +79,12 @@ const txTypeDisplay = {
     chat_bonus: { label: 'Chat Bonus', color: 'text-cyan-400', icon: '💬' },
     promo_bonus: { label: 'Promo Code', color: 'text-pink-400', icon: '🎁' },
     starting_bonus: { label: 'Welcome Bonus', color: 'text-green-400', icon: '🎉' },
-    puffle_adopt: { label: 'Puffle Adoption', color: 'text-red-400', icon: '🐾' },
+    puffle_adopt: { label: 'Pet Adoption', color: 'text-red-400', icon: '🐾' },
     purchase: { label: 'Purchase', color: 'text-red-400', icon: '🛒' },
     // Token transactions (with Solscan links)
     token_wager: { label: 'Token Wager', color: 'text-purple-400', icon: '💎' },
     token_entry_fee: { label: 'Entry Fee (Token)', color: 'text-cyan-400', icon: '🎟️' },
-    token_rent: { label: 'Igloo Rent (Token)', color: 'text-blue-400', icon: '🏠' },
+    token_rent: { label: 'Space Rent (Token)', color: 'text-blue-400', icon: '🏠' },
     token_rent_renewal: { label: 'Rent Renewal (Token)', color: 'text-blue-400', icon: '🔄' },
     token_transfer: { label: 'Token Transfer', color: 'text-gray-400', icon: '💸' },
     // Pebble transactions

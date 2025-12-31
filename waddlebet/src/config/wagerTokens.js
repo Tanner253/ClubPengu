@@ -2,7 +2,7 @@
  * Wager Token Configuration
  * Predefined tokens available for wagering on minigames
  * 
- * Similar to igloo token configuration - same pattern for consistency
+ * Similar to space token configuration - same pattern for consistency
  */
 
 // ==================== POPULAR WAGER TOKENS ====================

@@ -69,8 +69,8 @@ class MultiplayerSync {
         this.THREE = options.THREE || window.THREE;
         this.scene = options.scene;
         this.playerMeshes = new Map(); // playerId -> { mesh, bubble, puffleMesh, nameSprite, ... }
-        this.buildPenguinMesh = options.buildPenguinMesh;
-        this.buildPuffleMesh = options.buildPuffleMesh;
+        this.buildCharacterMesh = options.buildCharacterMesh || options.buildPenguinMesh; // Support both for backward compatibility
+        this.buildPetMesh = options.buildPetMesh;
         this.createNameSprite = options.createNameSprite;
         this.createChatBubble = options.createChatBubble;
         this.animateMesh = options.animateMesh;
@@ -85,8 +85,9 @@ class MultiplayerSync {
      * Set callbacks/functions after construction
      */
     setCallbacks(callbacks) {
-        if (callbacks.buildPenguinMesh) this.buildPenguinMesh = callbacks.buildPenguinMesh;
-        if (callbacks.buildPuffleMesh) this.buildPuffleMesh = callbacks.buildPuffleMesh;
+        if (callbacks.buildCharacterMesh) this.buildCharacterMesh = callbacks.buildCharacterMesh;
+        else if (callbacks.buildPenguinMesh) this.buildCharacterMesh = callbacks.buildPenguinMesh; // Backward compatibility
+        if (callbacks.buildPetMesh) this.buildPetMesh = callbacks.buildPetMesh;
         if (callbacks.createNameSprite) this.createNameSprite = callbacks.createNameSprite;
         if (callbacks.createChatBubble) this.createChatBubble = callbacks.createChatBubble;
         if (callbacks.animateMesh) this.animateMesh = callbacks.animateMesh;
@@ -105,7 +106,7 @@ class MultiplayerSync {
      * @param {Map} playersData - Map of playerId -> playerData
      */
     syncPlayerList(playerList, playersData) {
-        if (!this.scene || !this.buildPenguinMesh) return;
+        if (!this.scene || !this.buildCharacterMesh) return;
         
         const currentPlayerIds = new Set(playerList);
         
@@ -133,11 +134,11 @@ class MultiplayerSync {
      * @param {Object} playerData - Player data from server
      */
     addPlayer(id, playerData) {
-        if (!this.scene || !this.buildPenguinMesh) return null;
+        if (!this.scene || !this.buildCharacterMesh) return null;
         
         console.log(`🐧 Creating mesh for ${playerData.name}`);
         
-        const mesh = this.buildPenguinMesh(playerData.appearance);
+        const mesh = this.buildCharacterMesh(playerData.appearance);
         mesh.position.set(
             playerData.position?.x || 0,
             0,
@@ -164,8 +165,8 @@ class MultiplayerSync {
         
         // Create puffle if player has one
         let puffleMesh = null;
-        if (playerData.puffle && this.buildPuffleMesh) {
-            puffleMesh = this.buildPuffleMesh(playerData.puffle);
+        if (playerData.puffle && this.buildPetMesh) {
+            puffleMesh = this.buildPetMesh(playerData.puffle);
             const pufflePos = playerData.pufflePosition || {
                 x: (playerData.position?.x || 0) + 1.5,
                 z: (playerData.position?.z || 0) + 1.5
@@ -237,7 +238,7 @@ class MultiplayerSync {
             }
             
             // Handle puffle updates
-            this.updatePuffle(meshData, playerData, lerpFactor);
+            this.updatePet(meshData, playerData, lerpFactor);
             
             // Handle emote sync
             this.updateEmote(meshData, playerData);
@@ -268,10 +269,10 @@ class MultiplayerSync {
     /**
      * Update puffle for a player
      */
-    updatePuffle(meshData, playerData, lerpFactor) {
+    updatePet(meshData, playerData, lerpFactor) {
         // Handle puffle creation/removal
-        if (playerData.needsPuffleUpdate) {
-            playerData.needsPuffleUpdate = false;
+        if (playerData.needsPetUpdate) {
+            playerData.needsPetUpdate = false;
             
             // Remove old puffle mesh
             if (meshData.puffleMesh) {
@@ -280,8 +281,8 @@ class MultiplayerSync {
             }
             
             // Create new puffle if player has one
-            if (playerData.puffle && this.buildPuffleMesh) {
-                meshData.puffleMesh = this.buildPuffleMesh(playerData.puffle);
+            if (playerData.puffle && this.buildPetMesh) {
+                meshData.puffleMesh = this.buildPetMesh(playerData.puffle);
                 const pufflePos = playerData.pufflePosition || {
                     x: (playerData.position?.x || 0) + 1.5,
                     z: (playerData.position?.z || 0) + 1.5
@@ -293,12 +294,12 @@ class MultiplayerSync {
         
         // Update puffle position
         if (meshData.puffleMesh) {
-            const targetPufflePos = playerData.pufflePosition || {
+            const targetPetPos = playerData.pufflePosition || {
                 x: (playerData.position?.x || 0) + 1.5,
                 z: (playerData.position?.z || 0) + 1.5
             };
-            meshData.puffleMesh.position.x = lerp(meshData.puffleMesh.position.x, targetPufflePos.x, lerpFactor);
-            meshData.puffleMesh.position.z = lerp(meshData.puffleMesh.position.z, targetPufflePos.z, lerpFactor);
+            meshData.puffleMesh.position.x = lerp(meshData.puffleMesh.position.x, targetPetPos.x, lerpFactor);
+            meshData.puffleMesh.position.z = lerp(meshData.puffleMesh.position.z, targetPetPos.z, lerpFactor);
             meshData.puffleMesh.position.y = 0.5;
         }
     }
@@ -360,7 +361,7 @@ class MultiplayerSync {
      */
     updatePlayerAppearance(id, appearance) {
         const meshData = this.playerMeshes.get(id);
-        if (!meshData || !this.buildPenguinMesh) return;
+        if (!meshData || !this.buildCharacterMesh) return;
         
         // Store current position/rotation
         const pos = meshData.mesh.position.clone();
@@ -370,7 +371,7 @@ class MultiplayerSync {
         this.scene.remove(meshData.mesh);
         
         // Build new mesh
-        const newMesh = this.buildPenguinMesh(appearance);
+        const newMesh = this.buildCharacterMesh(appearance);
         newMesh.position.copy(pos);
         newMesh.rotation.y = rot;
         

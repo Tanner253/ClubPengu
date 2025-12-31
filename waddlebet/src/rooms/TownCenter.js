@@ -1,5 +1,5 @@
 import CollisionSystem from '../engine/CollisionSystem';
-import { createProp, PROP_TYPES, Billboard, IceFishingHole, ArcadeMachine, createIglooInfoBoard } from '../props';
+import { createProp, PROP_TYPES, Billboard, IceFishingHole, ArcadeMachine, createSpaceInfoBoard } from '../props';
 import { createNightclubExterior } from '../props/NightclubExterior';
 import { createDojoParkour } from '../props/DojoParkour';
 import { createCasino } from '../buildings';
@@ -51,7 +51,7 @@ function attachPropData(prop, mesh) {
  * - Campfire at the T intersection
  * - Pizza & Gift Shop on sides of the stem
  * - Nightclub at the top of the T (north)
- * - Igloos in the "armpits" of the T
+ * - Spaces in the "armpits" of the T
  */
 class TownCenter {
     static ID = 'town';
@@ -268,7 +268,7 @@ class TownCenter {
             depth: 104,   // From C+75 to C-29
         });
         
-        // T-bar (horizontal street between igloo rows)
+        // T-bar (horizontal street between space rows)
         // Goes from z = C - 29 to z = C - 61
         props.push({
             type: 'gravel_path',
@@ -308,38 +308,38 @@ class TownCenter {
             depth: 18,
         });
         
-        // ==================== IGLOOS - ALONG TOP STREET EDGES ====================
+        // ==================== SPACES - ALONG TOP STREET EDGES ====================
         // T-bar walkway is at z = C-29 to C-61
         // NORTH side of walkway (z < C-61, facing south toward street)
-        // 10 total igloos: igloo1-10, each unique. igloo3 = SKNY GANG nightclub igloo
+        // 10 total spaces: space1-10, each unique. space3 = SKNY GANG nightclub space
         props.push(
-            { type: 'igloo', x: C - 75, z: C - 75, rotation: 0 },      // igloo1
-            { type: 'igloo', x: C - 50, z: C - 78, rotation: 0 },      // igloo2
-            { type: 'skny_igloo', x: C - 25, z: C - 75, rotation: 0 }, // igloo3 - SKNY GANG Nightclub
-            { type: 'igloo', x: C + 25, z: C - 75, rotation: 0 },      // igloo4
-            { type: 'igloo', x: C + 50, z: C - 78, rotation: 0 },      // igloo5
-            { type: 'igloo', x: C + 75, z: C - 75, rotation: 0 },      // igloo6
+            { type: 'space', x: C - 75, z: C - 75, rotation: 0 },      // space1
+            { type: 'space', x: C - 50, z: C - 78, rotation: 0 },      // space2
+            { type: 'skny_space', x: C - 25, z: C - 75, rotation: 0 }, // space3 - SKNY GANG Nightclub
+            { type: 'space', x: C + 25, z: C - 75, rotation: 0 },      // space4
+            { type: 'space', x: C + 50, z: C - 78, rotation: 0 },      // space5
+            { type: 'space', x: C + 75, z: C - 75, rotation: 0 },      // space6
         );
         
         // SOUTH side of walkway (z > C-29, facing north toward street)
         // Slightly closer to street
         props.push(
-            { type: 'igloo', x: C - 70, z: C - 18, rotation: Math.PI },  // igloo7
-            { type: 'igloo', x: C - 40, z: C - 21, rotation: Math.PI },  // igloo8
-            { type: 'igloo', x: C + 40, z: C - 21, rotation: Math.PI },  // igloo9
-            { type: 'igloo', x: C + 70, z: C - 18, rotation: Math.PI },  // igloo10
+            { type: 'space', x: C - 70, z: C - 18, rotation: Math.PI },  // space7
+            { type: 'space', x: C - 40, z: C - 21, rotation: Math.PI },  // space8
+            { type: 'space', x: C + 40, z: C - 21, rotation: Math.PI },  // space9
+            { type: 'space', x: C + 70, z: C - 18, rotation: Math.PI },  // space10
         );
         
-        // ==================== PERSONAL IGLOO - PENGUIN CREATOR ====================
-        // Special igloo that opens the in-game penguin customizer
+        // ==================== PERSONAL SPACE - PENGUIN CREATOR ====================
+        // Special space that opens the in-game penguin customizer
         props.push({
-            type: 'personal_igloo',
+            type: 'personal_space',
             x: C + 67.6,
             z: C + 78.7,
             rotation: Math.PI  // Face north toward spawn
         });
         
-        // Street lights near wardrobe igloo for visibility
+        // Street lights near wardrobe space for visibility
         props.push(
             { type: 'lamp_post', x: C + 60, z: C + 72, isOn: true },   // Left of wardrobe
             { type: 'lamp_post', x: C + 75, z: C + 72, isOn: true },   // Right of wardrobe
@@ -585,15 +585,15 @@ class TownCenter {
         // Bound to dojo position - moves with dojo
         props.push({ type: 'dojo_parkour', x: 0, z: 0 });
         
-        // ==================== MAILBOXES - NEAR IGLOOS & BUILDINGS ====================
-        // Igloos need mail delivery!
+        // ==================== MAILBOXES - NEAR SPACES & BUILDINGS ====================
+        // Spaces need mail delivery!
         props.push(
-            { type: 'mailbox', x: C - 70, z: C - 70, rotation: 0, style: 'classic' },      // Near igloo1
-            { type: 'mailbox', x: C - 20, z: C - 70, rotation: 0, style: 'classic' },      // Near igloo3 (SKNY)
-            { type: 'mailbox', x: C + 30, z: C - 70, rotation: 0, style: 'classic' },      // Near igloo4
-            { type: 'mailbox', x: C + 80, z: C - 70, rotation: 0, style: 'classic' },      // Near igloo6
+            { type: 'mailbox', x: C - 70, z: C - 70, rotation: 0, style: 'classic' },      // Near space1
+            { type: 'mailbox', x: C - 20, z: C - 70, rotation: 0, style: 'classic' },      // Near space3 (SKNY)
+            { type: 'mailbox', x: C + 30, z: C - 70, rotation: 0, style: 'classic' },      // Near space4
+            { type: 'mailbox', x: C + 80, z: C - 70, rotation: 0, style: 'classic' },      // Near space6
             // Removed mailbox at C - 65, C - 10 (was blocking casino area)
-            { type: 'mailbox', x: C + 75, z: C - 10, rotation: Math.PI, style: 'classic' }, // Near igloo10
+            { type: 'mailbox', x: C + 75, z: C - 10, rotation: Math.PI, style: 'classic' }, // Near space10
             { type: 'mailbox', x: C + 52, z: C + 28, rotation: -Math.PI / 2, style: 'modern' }, // Near gift shop
         );
         
@@ -750,30 +750,30 @@ class TownCenter {
                     mesh = attachPropData(treeProp, treeProp.group);
                     break;
                 }
-                case 'igloo': {
+                case 'space': {
                     // Use new modular prop system with auto-attached collision
-                    const iglooProp = createProp(this.THREE, null, PROP_TYPES.IGLOO, 0, 0, 0, { withEntrance: true });
-                    mesh = attachPropData(iglooProp, iglooProp.group);
+                    const spaceProp = createProp(this.THREE, null, PROP_TYPES.SPACE, 0, 0, 0, { withEntrance: true });
+                    mesh = attachPropData(spaceProp, spaceProp.group);
                     break;
                 }
-                case 'skny_igloo': {
-                    // SKNY GANG Nightclub Igloo - special animated nightclub-themed igloo
-                    const sknyProp = createProp(this.THREE, null, PROP_TYPES.SKNY_IGLOO, 0, 0, 0, {});
+                case 'skny_space': {
+                    // SKNY GANG Nightclub Space - special animated nightclub-themed space
+                    const sknyProp = createProp(this.THREE, null, PROP_TYPES.SKNY_SPACE, 0, 0, 0, {});
                     mesh = attachPropData(sknyProp, sknyProp.group);
                     // Store the prop for animation updates
-                    if (!this.sknyIgloos) this.sknyIgloos = [];
-                    this.sknyIgloos.push(sknyProp);
+                    if (!this.sknySpaces) this.sknySpaces = [];
+                    this.sknySpaces.push(sknyProp);
                     break;
                 }
-                case 'personal_igloo': {
-                    // Personal Igloo - Special wardrobe igloo with floating cosmetics
-                    const personalIglooProp = createProp(this.THREE, null, PROP_TYPES.IGLOO, 0, 0, 0, { withEntrance: true });
-                    mesh = attachPropData(personalIglooProp, personalIglooProp.group);
+                case 'personal_space': {
+                    // Personal Space - Special wardrobe space with floating cosmetics
+                    const personalSpaceProp = createProp(this.THREE, null, PROP_TYPES.SPACE, 0, 0, 0, { withEntrance: true });
+                    mesh = attachPropData(personalSpaceProp, personalSpaceProp.group);
                     
-                    // Recolor the igloo to golden/legendary theme
+                    // Recolor the space to golden/legendary theme
                     mesh.traverse((child) => {
                         if (child.isMesh && child.material) {
-                            // Clone material to not affect other igloos
+                            // Clone material to not affect other spaces
                             child.material = child.material.clone();
                             // Give it a golden/purple legendary look
                             if (child.material.color) {
@@ -792,13 +792,13 @@ class TownCenter {
                         }
                     });
                     
-                    // Mark this as a personal igloo for interaction handling
-                    mesh.userData.isPersonalIgloo = true;
+                    // Mark this as a personal space for interaction handling
+                    mesh.userData.isPersonalSpace = true;
                     mesh.userData.interactionType = 'penguin_creator';
                     
                     // === FLOATING COSMETICS (Actual game items) ===
                     const floatingGroup = new this.THREE.Group();
-                    floatingGroup.position.set(0, 8, 0); // Above igloo
+                    floatingGroup.position.set(0, 8, 0); // Above space
                     mesh.add(floatingGroup);
                     
                     // Import actual cosmetics from the game
@@ -914,7 +914,7 @@ class TownCenter {
                     mesh.add(signSprite);
                     
                     // === AMBIENT LIGHTS ===
-                    // Main spotlight on igloo
+                    // Main spotlight on space
                     const spotlight = new this.THREE.SpotLight(0xFFD700, 3, 20, Math.PI / 4, 0.5);
                     spotlight.position.set(0, 15, 5);
                     spotlight.target.position.set(0, 0, 0);
@@ -1632,28 +1632,28 @@ class TownCenter {
         
         this._addWallBoundary(scene);
         
-        // ==================== IGLOO INFO BOARDS ====================
-        // Information boards explaining igloo rental mechanics - one on each side
+        // ==================== SPACE INFO BOARDS ====================
+        // Information boards explaining space rental mechanics - one on each side
         
         // Right side board (east of nightclub)
-        const iglooInfoBoardRight = createIglooInfoBoard(
+        const spaceInfoBoardRight = createSpaceInfoBoard(
             this.THREE,
             { x: C + 63.1, y: 0, z: C - 85.3 },
             0  // Face north
         );
-        scene.add(iglooInfoBoardRight.group);
-        this.propMeshes.push(iglooInfoBoardRight.group);
+        scene.add(spaceInfoBoardRight.group);
+        this.propMeshes.push(spaceInfoBoardRight.group);
         
         // Left side board (west of nightclub) - mirrored position
-        const iglooInfoBoardLeft = createIglooInfoBoard(
+        const spaceInfoBoardLeft = createSpaceInfoBoard(
             this.THREE,
             { x: C - 63.1, y: 0, z: C - 85.3 },
             0  // Face north
         );
-        scene.add(iglooInfoBoardLeft.group);
-        this.propMeshes.push(iglooInfoBoardLeft.group);
+        scene.add(spaceInfoBoardLeft.group);
+        this.propMeshes.push(spaceInfoBoardLeft.group);
         
-        this.iglooInfoBoards = [iglooInfoBoardRight, iglooInfoBoardLeft];
+        this.spaceInfoBoards = [spaceInfoBoardRight, spaceInfoBoardLeft];
         
         // ==================== STATIC MESH OPTIMIZATION ====================
         // CRITICAL: Disable matrixAutoUpdate for all static meshes
@@ -2037,11 +2037,11 @@ class TownCenter {
 
     update(time, delta, nightFactor = 0.5, playerPos = null) {
         if (!this._animatedCache) {
-            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], wardrobeIgloos: [], frameCounter: 0 };
+            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknySpaces: [], floatingSigns: [], wardrobeSpaces: [], frameCounter: 0 };
             this.propMeshes.forEach(mesh => {
-                // Wardrobe/Personal igloo with floating cosmetics
-                if (mesh.userData.isPersonalIgloo && mesh.userData.floatingGroup) {
-                    this._animatedCache.wardrobeIgloos.push({
+                // Wardrobe/Personal space with floating cosmetics
+                if (mesh.userData.isPersonalSpace && mesh.userData.floatingGroup) {
+                    this._animatedCache.wardrobeSpaces.push({
                         mesh: mesh,
                         floatingGroup: mesh.userData.floatingGroup,
                         lights: mesh.userData.wardrobeLights
@@ -2073,9 +2073,9 @@ class TownCenter {
                     });
                 }
             });
-            // SKNY Igloos stored separately during spawn
-            if (this.sknyIgloos) {
-                this._animatedCache.sknyIgloos = this.sknyIgloos;
+            // SKNY Spaces stored separately during spawn
+            if (this.sknySpaces) {
+                this._animatedCache.sknySpaces = this.sknySpaces;
             }
         }
         
@@ -2112,15 +2112,15 @@ class TownCenter {
                 }
             });
             
-            // SKNY Igloo animations - same timing as nightclubs
-            this._animatedCache.sknyIgloos.forEach(sknyProp => {
+            // SKNY Space animations - same timing as nightclubs
+            this._animatedCache.sknySpaces.forEach(sknyProp => {
                 if (sknyProp.update) {
                     sknyProp.update(time);
                 }
             });
             
-            // Wardrobe igloo floating cosmetics animation
-            this._animatedCache.wardrobeIgloos.forEach(({ floatingGroup, lights }) => {
+            // Wardrobe space floating cosmetics animation
+            this._animatedCache.wardrobeSpaces.forEach(({ floatingGroup, lights }) => {
                 if (floatingGroup) {
                     // Rotate each floating item in its orbit
                     floatingGroup.children.forEach((orbit, index) => {

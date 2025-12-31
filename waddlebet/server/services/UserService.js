@@ -3,7 +3,7 @@
  * Server-authoritative for all user data
  */
 
-import { User, Transaction, Puffle, OwnedCosmetic, CosmeticTemplate } from '../db/models/index.js';
+import { User, Transaction, Pet, OwnedCosmetic, CosmeticTemplate } from '../db/models/index.js';
 
 // ========== FREE ITEMS (always available, no gacha needed) ==========
 const FREE_ITEMS = ['none', 'normal', 'beak'];
@@ -282,11 +282,11 @@ class UserService {
     /**
      * Adopt a puffle
      */
-    async adoptPuffle(walletAddress, color, name = 'Puffle') {
+    async adoptPet(walletAddress, color, name = 'Pet') {
         const user = await this.getUser(walletAddress);
         if (!user) return { success: false, error: 'USER_NOT_FOUND' };
 
-        const price = Puffle.getPrice(color);
+        const price = Pet.getPrice(color);
         if (user.coins < price) {
             return { success: false, error: 'INSUFFICIENT_FUNDS', required: price, have: user.coins };
         }
@@ -303,10 +303,10 @@ class UserService {
         if (!coinResult.success) return coinResult;
 
         // Deactivate other puffles
-        await Puffle.deactivateAllForOwner(walletAddress);
+        await Pet.deactivateAllForOwner(walletAddress);
 
         // Create puffle
-        const puffle = new Puffle({
+        const puffle = new Pet({
             puffleId: `puffle_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             ownerWallet: walletAddress,
             name,
@@ -317,7 +317,7 @@ class UserService {
         await puffle.save();
 
         // Update user stats
-        user.stats.puffles.totalPufflesAdopted++;
+        user.stats.puffles.totalPetsAdopted++;
         await user.save();
 
         return { success: true, puffle: puffle.toClientData(), newBalance: coinResult.newBalance };
@@ -326,20 +326,20 @@ class UserService {
     /**
      * Get user's puffles
      */
-    async getPuffles(walletAddress) {
-        const puffles = await Puffle.findByOwner(walletAddress);
+    async getPets(walletAddress) {
+        const puffles = await Pet.findByOwner(walletAddress);
         return puffles.map(p => p.toClientData());
     }
 
     /**
      * Set active puffle
      */
-    async setActivePuffle(walletAddress, puffleId) {
-        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+    async setActivePet(walletAddress, puffleId) {
+        const puffle = await Pet.findOne({ puffleId, ownerWallet: walletAddress });
         if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
 
         // Deactivate all others
-        await Puffle.deactivateAllForOwner(walletAddress);
+        await Pet.deactivateAllForOwner(walletAddress);
         
         // Activate this one
         puffle.isActive = true;
@@ -351,8 +351,8 @@ class UserService {
     /**
      * Deactivate puffle (unequip)
      */
-    async deactivatePuffle(walletAddress) {
-        await Puffle.deactivateAllForOwner(walletAddress);
+    async deactivatePet(walletAddress) {
+        await Pet.deactivateAllForOwner(walletAddress);
         return { success: true };
     }
 
@@ -530,7 +530,7 @@ class UserService {
     }
     
     /**
-     * Get free skin colors (for display in penguin maker)
+     * Get free skin colors (for display in avatar designer)
      */
     static getFreeSkinColors() {
         return FREE_SKIN_COLORS;
@@ -608,8 +608,8 @@ class UserService {
         const roomKey = `stats.roomTime.${room}`;
         await this.incrementStat(walletAddress, roomKey, minutes);
         
-        if (room.startsWith('igloo')) {
-            await this.incrementStat(walletAddress, 'stats.roomTime.totalIglooTime', minutes);
+        if (room.startsWith('space')) {
+            await this.incrementStat(walletAddress, 'stats.roomTime.totalSpaceTime', minutes);
         }
     }
 

@@ -1,7 +1,7 @@
 /**
  * WalletButton - Phantom wallet connection button with status indicator
  * Shows guest mode warning and allows wallet connection
- * When clicked in-game, redirects to penguin maker for clean auth flow
+ * When clicked in-game, redirects to avatar designer for clean auth flow
  */
 
 import React, { useState } from 'react';
@@ -21,7 +21,7 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
     const [showDropdown, setShowDropdown] = useState(false);
     
     const handleConnect = () => {
-        // If onRequestAuth is provided (we're in-game), trigger redirect to penguin maker
+        // If onRequestAuth is provided (we're in-game), trigger redirect to avatar designer
         if (onRequestAuth) {
             onRequestAuth();
         }

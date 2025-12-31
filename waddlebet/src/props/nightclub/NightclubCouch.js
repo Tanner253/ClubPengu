@@ -15,7 +15,7 @@ class NightclubCouch extends BaseProp {
         
         const { rotation = 0 } = options;
         
-        // Same colors as igloo couch
+        // Same colors as space couch
         const couchMat = this.createMaterial({ color: 0x2E4A62, roughness: 0.8 });
         const cushionMat = this.createMaterial({ color: 0x3D5A80, roughness: 0.9 });
         

@@ -1097,7 +1097,7 @@ class WagerSettlementService {
 - [ ] Challenge recipients see token CA + buy link
 - [ ] Existing challenge flow unchanged for coin wagers
 - [ ] x402 settlement success rate > 99%
-- [ ] No duplicate code with igloo token system
+- [ ] No duplicate code with space token system
 - [ ] Clean OOP: WagerSettlementService encapsulates all x402 settlement logic
 - [ ] **SECURITY: No client can manipulate payouts**
 - [ ] **SECURITY: All balances verified on-chain**

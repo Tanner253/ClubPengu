@@ -42,8 +42,8 @@ export { updateMatchBanners, cleanupMatchBanners, renderBannerToCanvas } from '.
 // PvE Activity banner system (fishing, blackjack, etc.)
 export { updatePveBanners, cleanupPveBanners, renderPveBannerToCanvas } from './MatchBannerSystem';
 
-// Igloo occupancy banners
-export { createIglooOccupancySprite, updateIglooOccupancySprite } from './IglooOccupancySystem';
+// Space occupancy banners
+export { createSpaceOccupancySprite, updateSpaceOccupancySprite } from './SpaceOccupancySystem';
 
 // Casino TV banner (3D mesh with real DexScreener data)
 export { createCasinoTVSprite, updateCasinoTVSprite, cleanupCasinoTV, fetchTokenData } from './CasinoTVSystem';

@@ -93,7 +93,7 @@ describe('SolanaTransaction Model', () => {
             // Record a transaction first
             await SolanaTransaction.recordTransaction({
                 signature: 'usedSignature456',
-                type: 'igloo_entry_fee',
+                type: 'space_entry_fee',
                 senderWallet: 'sender123',
                 recipientWallet: 'recipient456',
                 amount: 1000,
@@ -110,54 +110,54 @@ describe('SolanaTransaction Model', () => {
         it('should save transaction with all required fields', async () => {
             const txData = {
                 signature: 'txSig123',
-                type: 'igloo_rent',
+                type: 'space_rent',
                 senderWallet: 'senderWallet',
                 recipientWallet: 'recipientWallet',
                 amount: 10000,
                 amountRaw: '10000000000',
                 tokenMint: 'CPw3token',
                 tokenSymbol: 'CPw3',
-                iglooId: 'igloo5',
+                spaceId: 'space5',
                 status: 'verified'
             };
             
             const doc = await SolanaTransaction.recordTransaction(txData);
             
             expect(doc.signature).toBe('txSig123');
-            expect(doc.type).toBe('igloo_rent');
+            expect(doc.type).toBe('space_rent');
             expect(doc.amount).toBe(10000);
-            expect(doc.iglooId).toBe('igloo5');
+            expect(doc.spaceId).toBe('space5');
             expect(doc.processedAt).toBeDefined();
         });
         
         it('should record entry fee transaction', async () => {
             const doc = await SolanaTransaction.recordTransaction({
                 signature: 'entryFeeSig',
-                type: 'igloo_entry_fee',
+                type: 'space_entry_fee',
                 senderWallet: 'visitor',
                 recipientWallet: 'owner',
                 amount: 500,
                 amountRaw: '500000000',
                 tokenMint: 'token123',
-                iglooId: 'igloo3'
+                spaceId: 'space3'
             });
             
-            expect(doc.type).toBe('igloo_entry_fee');
+            expect(doc.type).toBe('space_entry_fee');
         });
         
         it('should record rent renewal transaction', async () => {
             const doc = await SolanaTransaction.recordTransaction({
                 signature: 'renewalSig',
-                type: 'igloo_rent_renewal',
+                type: 'space_rent_renewal',
                 senderWallet: 'owner',
                 recipientWallet: 'treasury',
                 amount: 10000,
                 amountRaw: '10000000000',
                 tokenMint: 'token123',
-                iglooId: 'igloo7'
+                spaceId: 'space7'
             });
             
-            expect(doc.type).toBe('igloo_rent_renewal');
+            expect(doc.type).toBe('space_rent_renewal');
         });
     });
     
@@ -168,7 +168,7 @@ describe('SolanaTransaction Model', () => {
             // Record some transactions
             await SolanaTransaction.recordTransaction({
                 signature: 'tx1',
-                type: 'igloo_entry_fee',
+                type: 'space_entry_fee',
                 senderWallet: wallet,
                 recipientWallet: 'owner1',
                 amount: 100,
@@ -178,7 +178,7 @@ describe('SolanaTransaction Model', () => {
             
             await SolanaTransaction.recordTransaction({
                 signature: 'tx2',
-                type: 'igloo_entry_fee',
+                type: 'space_entry_fee',
                 senderWallet: wallet,
                 recipientWallet: 'owner2',
                 amount: 200,
@@ -193,7 +193,7 @@ describe('SolanaTransaction Model', () => {
         it('should not count other wallets transactions', async () => {
             await SolanaTransaction.recordTransaction({
                 signature: 'otherTx',
-                type: 'igloo_entry_fee',
+                type: 'space_entry_fee',
                 senderWallet: 'otherWallet',
                 recipientWallet: 'owner',
                 amount: 100,
@@ -212,7 +212,7 @@ describe('SolanaTransaction Model', () => {
             
             await SolanaTransaction.recordTransaction({
                 signature: 'histTx1',
-                type: 'igloo_rent',
+                type: 'space_rent',
                 senderWallet: wallet,
                 recipientWallet: 'treasury',
                 amount: 10000,
@@ -222,7 +222,7 @@ describe('SolanaTransaction Model', () => {
             
             await SolanaTransaction.recordTransaction({
                 signature: 'histTx2',
-                type: 'igloo_entry_fee',
+                type: 'space_entry_fee',
                 senderWallet: 'visitor',
                 recipientWallet: wallet,
                 amount: 500,
@@ -240,7 +240,7 @@ describe('SolanaTransaction Model', () => {
             for (let i = 0; i < 5; i++) {
                 await SolanaTransaction.recordTransaction({
                     signature: `limitTx${i}`,
-                    type: 'igloo_entry_fee',
+                    type: 'space_entry_fee',
                     senderWallet: wallet,
                     recipientWallet: 'owner',
                     amount: 100,
@@ -256,7 +256,7 @@ describe('SolanaTransaction Model', () => {
     
     describe('transaction types', () => {
         it('should accept all valid transaction types', async () => {
-            const types = ['igloo_rent', 'igloo_rent_renewal', 'igloo_entry_fee', 'wager', 'other'];
+            const types = ['space_rent', 'space_rent_renewal', 'space_entry_fee', 'wager', 'other'];
             
             for (const type of types) {
                 const doc = await SolanaTransaction.recordTransaction({

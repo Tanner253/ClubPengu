@@ -55,7 +55,7 @@ class X402Service {
     }
     
     /**
-     * Create a payment authorization payload for igloo rent
+     * Create a payment authorization payload for space rent
      * This signs the intent but does NOT move funds
      * 
      * @param {Object} options - Payment options
@@ -170,18 +170,18 @@ class X402Service {
     /**
      * Create rent payment authorization
      * 
-     * @param {string} iglooId - The igloo being rented
+     * @param {string} spaceId - The space being rented
      * @param {number} days - Number of days (usually 1)
      * @param {number} dailyRentCpw3 - Daily rent in $WADDLE
      * @returns {Promise<Object>}
      */
-    async createRentPayment(iglooId, days, dailyRentCpw3) {
+    async createRentPayment(spaceId, days, dailyRentCpw3) {
         const amount = days * dailyRentCpw3;
         return this.createPaymentPayload({
             amount,
             token: CPW3_TOKEN_ADDRESS,
             recipient: RENT_WALLET_ADDRESS,
-            memo: `rent:${iglooId}:${days}days`,
+            memo: `rent:${spaceId}:${days}days`,
             validityMinutes: 60 // Rent payments valid for 1 hour
         });
     }
@@ -189,18 +189,18 @@ class X402Service {
     /**
      * Create entry fee payment authorization
      * 
-     * @param {string} iglooId - The igloo to enter
+     * @param {string} spaceId - The space to enter
      * @param {number} entryFee - Entry fee amount
-     * @param {string} ownerWallet - Igloo owner's wallet (receives fee)
+     * @param {string} ownerWallet - Space owner's wallet (receives fee)
      * @param {string} tokenAddress - Token address for the fee (defaults to $WADDLE)
      * @returns {Promise<Object>}
      */
-    async createEntryFeePayment(iglooId, entryFee, ownerWallet, tokenAddress = null) {
+    async createEntryFeePayment(spaceId, entryFee, ownerWallet, tokenAddress = null) {
         return this.createPaymentPayload({
             amount: entryFee,
             token: tokenAddress || CPW3_TOKEN_ADDRESS,
             recipient: ownerWallet,
-            memo: `entry:${iglooId}`,
+            memo: `entry:${spaceId}`,
             validityMinutes: 10 // Entry fees valid for 10 minutes
         });
     }

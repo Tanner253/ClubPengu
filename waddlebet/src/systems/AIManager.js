@@ -46,12 +46,12 @@ class AIManager {
     }
     
     /**
-     * Spawn an AI penguin
-     * @param {Function} buildPenguinFn - Function to build penguin mesh
+     * Spawn an AI character
+     * @param {Function} buildCharacterFn - Function to build character mesh
      * @param {THREE.Scene} scene
      * @returns {Object} AI data
      */
-    spawnAI(buildPenguinFn, scene) {
+    spawnAI(buildCharacterFn, scene) {
         if (this.aiPenguins.size >= this.maxAI) return null;
         
         const id = `ai_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -62,8 +62,8 @@ class AIManager {
         const x = this.spawnArea.minX + Math.random() * (this.spawnArea.maxX - this.spawnArea.minX);
         const z = this.spawnArea.minZ + Math.random() * (this.spawnArea.maxZ - this.spawnArea.minZ);
         
-        // Build penguin mesh using provided function
-        const mesh = buildPenguinFn(appearance, name);
+        // Build character mesh using provided function
+        const mesh = buildCharacterFn(appearance, name);
         mesh.position.set(x, 0, z);
         scene.add(mesh);
         

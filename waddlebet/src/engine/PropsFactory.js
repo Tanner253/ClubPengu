@@ -48,8 +48,8 @@ class PropsFactory {
         
         // Ice/Glass
         iceTranslucent: '#D0E8F8',
-        iglooWhite: '#F8FCFF',
-        iglooShadow: '#D8E8F0',
+        spaceWhite: '#F8FCFF',
+        spaceShadow: '#D8E8F0',
     };
 
     constructor(THREE) {

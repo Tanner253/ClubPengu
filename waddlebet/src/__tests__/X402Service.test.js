@@ -154,10 +154,10 @@ describe('X402Service (Client)', () => {
             
             const service = X402Service.getInstance();
             
-            const result = await service.createRentPayment('igloo1', 1, 10000);
+            const result = await service.createRentPayment('space1', 1, 10000);
             
             expect(result.success).toBe(true);
-            expect(result.paymentDetails.memo).toBe('rent:igloo1:1days');
+            expect(result.paymentDetails.memo).toBe('rent:space1:1days');
             expect(result.paymentDetails.amount).toBe('10000');
         });
         
@@ -170,10 +170,10 @@ describe('X402Service (Client)', () => {
             
             const service = X402Service.getInstance();
             
-            const result = await service.createRentPayment('igloo5', 3, 10000);
+            const result = await service.createRentPayment('space5', 3, 10000);
             
             expect(result.success).toBe(true);
-            expect(result.paymentDetails.memo).toBe('rent:igloo5:3days');
+            expect(result.paymentDetails.memo).toBe('rent:space5:3days');
             expect(result.paymentDetails.amount).toBe('30000'); // 3 * 10000
         });
     });
@@ -188,10 +188,10 @@ describe('X402Service (Client)', () => {
             
             const service = X402Service.getInstance();
             
-            const result = await service.createEntryFeePayment('igloo7', 500, 'OwnerWallet789');
+            const result = await service.createEntryFeePayment('space7', 500, 'OwnerWallet789');
             
             expect(result.success).toBe(true);
-            expect(result.paymentDetails.memo).toBe('entry:igloo7');
+            expect(result.paymentDetails.memo).toBe('entry:space7');
             expect(result.paymentDetails.recipient).toBe('OwnerWallet789');
             expect(result.paymentDetails.amount).toBe('500');
         });

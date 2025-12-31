@@ -3,7 +3,7 @@
 
 services:
   - type: web
-    name: clubpenguin-server
+    name: waddlebet-server
     runtime: node
     plan: free
     buildCommand: npm install

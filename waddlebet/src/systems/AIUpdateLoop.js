@@ -17,7 +17,7 @@ import { AI_CONVERSATIONS } from '../config/roomConfig';
  * Update all AI agents in the game loop
  * @param {Object} params - All required parameters
  * @param {Array} params.aiAgents - Array of AI agent objects
- * @param {Array} params.aiPuffles - Array of AI puffle entries { id, puffle }
+ * @param {Array} params.aiPets - Array of AI puffle entries { id, puffle }
  * @param {string} params.currentRoom - Player's current room
  * @param {Object} params.roomData - Current room data (for dance floor, etc.)
  * @param {number} params.frameCount - Current frame number
@@ -36,7 +36,7 @@ import { AI_CONVERSATIONS } from '../config/roomConfig';
 export function updateAIAgents(params) {
     const {
         aiAgents,
-        aiPuffles,
+        aiPets,
         currentRoom,
         roomData,
         frameCount,
@@ -60,7 +60,7 @@ export function updateAIAgents(params) {
 
     // Build lookup maps for O(1) access
     const puffleMap = new Map();
-    aiPuffles.forEach(entry => puffleMap.set(entry.id, entry));
+    aiPets.forEach(entry => puffleMap.set(entry.id, entry));
     
     const aiMap = new Map();
     aiAgents.forEach(ai => aiMap.set(ai.id, ai));
@@ -82,9 +82,9 @@ export function updateAIAgents(params) {
         if (ai.mesh) ai.mesh.visible = sameRoom;
 
         // Also show/hide AI's puffle - O(1) lookup
-        const aiPuffleEntry = puffleMap.get(ai.id);
-        if (aiPuffleEntry && aiPuffleEntry.puffle && aiPuffleEntry.puffle.mesh) {
-            aiPuffleEntry.puffle.mesh.visible = sameRoom;
+        const aiPetEntry = puffleMap.get(ai.id);
+        if (aiPetEntry && aiPetEntry.puffle && aiPetEntry.puffle.mesh) {
+            aiPetEntry.puffle.mesh.visible = sameRoom;
         }
 
         let aiMoving = false;
@@ -112,7 +112,7 @@ export function updateAIAgents(params) {
             dojoBx, dojoBz, dojoHd, dojoDoorZ,
             pizzaBx, pizzaDoorZ,
             nightclubDoorX, nightclubDoorZ,
-            aiPuffleEntry
+            aiPetEntry
         });
 
         // --- AI Behavior (conversation, walking, etc.) ---
@@ -159,8 +159,8 @@ export function updateAIAgents(params) {
             delta
         });
 
-        // --- AI Puffle Follow/Animate ---
-        updateAIPuffle(ai, aiPuffleEntry, {
+        // --- AI Pet Follow/Animate ---
+        updateAIPet(ai, aiPetEntry, {
             time,
             delta,
             roomData
@@ -179,7 +179,7 @@ function updateAIRoomTransition(ai, ctx) {
         dojoBx, dojoBz, dojoHd, dojoDoorZ,
         pizzaBx, pizzaDoorZ,
         nightclubDoorX, nightclubDoorZ,
-        aiPuffleEntry
+        aiPetEntry
     } = ctx;
 
     // Initialize cooldown if not set
@@ -211,21 +211,21 @@ function updateAIRoomTransition(ai, ctx) {
             ai.currentRoom = 'dojo';
             ai.pos.x = (Math.random() - 0.5) * 10;
             ai.pos.z = 10 + Math.random() * 2; // Spawn further inside
-            resetAIAfterTransition(ai, now, aiPuffleEntry);
+            resetAIAfterTransition(ai, now, aiPetEntry);
         }
         // When at pizza door, small chance to enter
         else if (atPizzaDoor && ai.action === 'walk' && Math.random() < 0.02) {
             ai.currentRoom = 'pizza';
             ai.pos.x = (Math.random() - 0.5) * 8;
             ai.pos.z = 10 + Math.random() * 2; // Spawn further inside
-            resetAIAfterTransition(ai, now, aiPuffleEntry);
+            resetAIAfterTransition(ai, now, aiPetEntry);
         }
         // When at nightclub door, small chance to enter
         else if (atNightclubDoor && ai.action === 'walk' && Math.random() < 0.025) {
             ai.currentRoom = 'nightclub';
             ai.pos.x = 20 + (Math.random() - 0.5) * 6;
             ai.pos.z = 24 + Math.random() * 3; // Spawn further inside
-            resetAIAfterTransition(ai, now, aiPuffleEntry);
+            resetAIAfterTransition(ai, now, aiPetEntry);
         }
         // If stuck at door too long without entering, move away
         else if ((atDojoDoor || atPizzaDoor || atNightclubDoor) && ai.stuckCounter > 60) {
@@ -245,7 +245,7 @@ function updateAIRoomTransition(ai, ctx) {
             ai.currentRoom = 'town';
             ai.pos.x = dojoBx + (Math.random() - 0.5) * 6;
             ai.pos.z = dojoDoorZ + 4 + Math.random() * 3;
-            resetAIAfterTransition(ai, now, aiPuffleEntry);
+            resetAIAfterTransition(ai, now, aiPetEntry);
         }
     } else if (ai.currentRoom === 'pizza') {
         // AI in pizza can exit - but only near the actual exit
@@ -255,7 +255,7 @@ function updateAIRoomTransition(ai, ctx) {
             ai.currentRoom = 'town';
             ai.pos.x = pizzaBx + (Math.random() - 0.5) * 6;
             ai.pos.z = pizzaDoorZ + 4 + Math.random() * 3;
-            resetAIAfterTransition(ai, now, aiPuffleEntry);
+            resetAIAfterTransition(ai, now, aiPetEntry);
         }
     } else if (ai.currentRoom === 'nightclub') {
         // AI in nightclub can exit - but only near the actual exit
@@ -265,7 +265,7 @@ function updateAIRoomTransition(ai, ctx) {
             ai.currentRoom = 'town';
             ai.pos.x = nightclubDoorX + (Math.random() - 0.5) * 6;
             ai.pos.z = nightclubDoorZ + 6 + Math.random() * 3;
-            resetAIAfterTransition(ai, now, aiPuffleEntry);
+            resetAIAfterTransition(ai, now, aiPetEntry);
             ai.emoteType = null;
         }
     }
@@ -274,7 +274,7 @@ function updateAIRoomTransition(ai, ctx) {
 /**
  * Reset AI state after room transition
  */
-function resetAIAfterTransition(ai, now, aiPuffleEntry) {
+function resetAIAfterTransition(ai, now, aiPetEntry) {
     ai.action = 'idle';
     ai.actionTimer = now + 2000 + Math.random() * 3000;
     ai.target = null;
@@ -282,9 +282,9 @@ function resetAIAfterTransition(ai, now, aiPuffleEntry) {
     // Prevent rapid room transitions - must stay in room for at least 15-30 seconds
     ai.roomTransitionCooldown = now + 15000 + Math.random() * 15000;
     ai.lastRoomChange = now;
-    if (aiPuffleEntry && aiPuffleEntry.puffle) {
-        aiPuffleEntry.puffle.position.x = ai.pos.x + 1.5;
-        aiPuffleEntry.puffle.position.z = ai.pos.z + 1.5;
+    if (aiPetEntry && aiPetEntry.puffle) {
+        aiPetEntry.puffle.position.x = ai.pos.x + 1.5;
+        aiPetEntry.puffle.position.z = ai.pos.z + 1.5;
     }
 }
 
@@ -621,7 +621,7 @@ function getTownWalkTarget(ai, ctx) {
 }
 
 /**
- * Get a valid random target in town (avoiding buildings/igloos)
+ * Get a valid random target in town (avoiding buildings/spaces)
  */
 function getValidTownTarget(ai, ctx) {
     const { centerX, centerZ, CITY_SIZE, BUILDING_SCALE, BUILDINGS } = ctx;
@@ -658,22 +658,22 @@ function getValidTownTarget(ai, ctx) {
             }
         }
         
-        // Check against igloo positions
+        // Check against space positions
         if (validTarget) {
-            const iglooPositions = [
+            const spacePositions = [
                 { x: -75, z: -75 }, { x: -50, z: -78 }, { x: -25, z: -75 },
                 { x: 25, z: -75 }, { x: 50, z: -78 }, { x: 75, z: -75 },
                 { x: -70, z: -15 }, { x: -40, z: -18 },
                 { x: 40, z: -18 }, { x: 70, z: -15 }
             ];
-            const iglooRadius = 8;
+            const spaceRadius = 8;
             
-            for (const igloo of iglooPositions) {
-                const ix = centerX + igloo.x;
-                const iz = centerZ + igloo.z;
+            for (const space of spacePositions) {
+                const ix = centerX + space.x;
+                const iz = centerZ + space.z;
                 const dx = tx - ix;
                 const dz = tz - iz;
-                if (Math.sqrt(dx*dx + dz*dz) < iglooRadius) {
+                if (Math.sqrt(dx*dx + dz*dz) < spaceRadius) {
                     validTarget = false;
                     break;
                 }
@@ -973,40 +973,40 @@ function updateAIWizardTrail(ai, ctx) {
 /**
  * Update AI puffle companion
  */
-function updateAIPuffle(ai, aiPuffleEntry, ctx) {
+function updateAIPet(ai, aiPetEntry, ctx) {
     const { time, delta, roomData } = ctx;
     
-    if (!aiPuffleEntry || !aiPuffleEntry.puffle || !aiPuffleEntry.puffle.mesh) return;
+    if (!aiPetEntry || !aiPetEntry.puffle || !aiPetEntry.puffle.mesh) return;
     
-    const aiPuffle = aiPuffleEntry.puffle;
+    const aiPet = aiPetEntry.puffle;
     
-    if (typeof aiPuffle.tick === 'function') {
-        aiPuffle.tick();
+    if (typeof aiPet.tick === 'function') {
+        aiPet.tick();
     }
     
-    if (typeof aiPuffle.followOwner === 'function') {
-        aiPuffle.followOwner(ai.pos, delta);
+    if (typeof aiPet.followOwner === 'function') {
+        aiPet.followOwner(ai.pos, delta);
     }
     
-    if (typeof aiPuffle.animate === 'function') {
-        aiPuffle.animate(time);
+    if (typeof aiPet.animate === 'function') {
+        aiPet.animate(time);
     }
     
     // Sync puffle mesh position
-    if (aiPuffle.mesh && aiPuffle.position) {
-        aiPuffle.mesh.position.x = aiPuffle.position.x;
-        aiPuffle.mesh.position.z = aiPuffle.position.z;
+    if (aiPet.mesh && aiPet.position) {
+        aiPet.mesh.position.x = aiPet.position.x;
+        aiPet.mesh.position.z = aiPet.position.z;
         
         // Respect dance floor height in nightclub
         let puffleY = 0.5;
         if (ai.currentRoom === 'nightclub' && roomData && roomData.danceFloor) {
             const df = roomData.danceFloor;
-            if (aiPuffle.position.x >= df.minX && aiPuffle.position.x <= df.maxX && 
-                aiPuffle.position.z >= df.minZ && aiPuffle.position.z <= df.maxZ) {
+            if (aiPet.position.x >= df.minX && aiPet.position.x <= df.maxX && 
+                aiPet.position.z >= df.minZ && aiPet.position.z <= df.maxZ) {
                 puffleY = df.height + 0.5;
             }
         }
-        aiPuffle.mesh.position.y = puffleY;
+        aiPet.mesh.position.y = puffleY;
     }
 }
 

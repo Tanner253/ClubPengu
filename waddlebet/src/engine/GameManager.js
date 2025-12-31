@@ -55,7 +55,7 @@ class GameManager {
      */
     getMigrationData() {
         try {
-            const saved = localStorage.getItem('clubpenguin_save');
+            const saved = localStorage.getItem('waddlebet_save');
             if (!saved) return null;
             
             const data = JSON.parse(saved);
@@ -79,7 +79,7 @@ class GameManager {
     clearMigrationData() {
         try {
             // Clear game save data
-            localStorage.removeItem('clubpenguin_save');
+            localStorage.removeItem('waddlebet_save');
             // Clear cosmetic unlocks (now server-managed)
             localStorage.removeItem('unlocked_mounts');
             localStorage.removeItem('unlocked_cosmetics');

@@ -913,7 +913,7 @@ function AboutSection() {
             {
               icon: <Building className="w-8 h-8" />,
               title: "GTA V Property",
-              description: "Rent igloos, apartments, and lounges. Paywall your space with any token and invite players for exclusive hangouts.",
+              description: "Rent spaces, apartments, and lounges. Paywall your space with any token and invite players for exclusive hangouts.",
               color: "from-purple-500 to-pink-500",
             },
             {
@@ -959,13 +959,13 @@ function FeaturesSection() {
     },
     {
       icon: <Sparkles className="w-6 h-6" />,
-      title: "Puffle Companions",
+      title: "Pet Companions",
       description: "Adopt fluffy puffles from Common to Legendary rarity. Each has unique personalities.",
     },
     {
       icon: <Home className="w-6 h-6" />,
       title: "Virtual Properties",
-      description: "Rent igloos, apartments, and exclusive spaces. Create your own paywalled hangouts.",
+      description: "Rent spaces, apartments, and exclusive spaces. Create your own paywalled hangouts.",
     },
     {
       icon: <Trophy className="w-6 h-6" />,
@@ -1274,7 +1274,7 @@ function EconomySection() {
                 {
                   icon: <Home className="w-5 h-5" />,
                   title: "Property Rentals",
-                  description: "Use tokens to rent igloos, apartments, lounges, and exclusive spaces throughout the game world.",
+                  description: "Use tokens to rent spaces, apartments, lounges, and exclusive spaces throughout the game world.",
                 },
                 {
                   icon: <Sparkles className="w-5 h-5" />,
@@ -1610,7 +1610,7 @@ function PlatformEconomicsSection() {
       icon: "🎨",
     },
     {
-      name: "Igloo Rentals",
+      name: "Space Rentals",
       rate: "Weekly",
       description: "Virtual property subscriptions",
       icon: "🏠",
@@ -1994,7 +1994,7 @@ function RoadmapSection() {
       items: [
         "✅ 3D Voxel World Engine (Three.js)",
         "✅ Penguin Customization (24+ skins, 50+ items)",
-        "✅ Puffle Companion System",
+        "✅ Pet Companion System",
         "✅ Real-time Multiplayer (WebSocket)",
         "✅ AI NPCs & Chat System",
         "✅ MongoDB Database Integration",
@@ -2031,9 +2031,9 @@ function RoadmapSection() {
       title: "Properties & Casino",
       status: "complete",
       items: [
-        "✅ Igloo Ownership System",
+        "✅ Space Ownership System",
         "✅ Weekly Rental Payments",
-        "✅ Igloo Customization (Banners, Themes)",
+        "✅ Space Customization (Banners, Themes)",
         "✅ Slot Machine Gacha System",
         "✅ Casino Room Environment",
         "✅ Jackpot Celebrations",

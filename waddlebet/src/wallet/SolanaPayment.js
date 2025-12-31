@@ -284,21 +284,21 @@ export async function sendSPLToken(options) {
 }
 
 /**
- * Pay igloo entry fee
- * Convenience wrapper for sendSPLToken specifically for igloo entry fees
+ * Pay space entry fee
+ * Convenience wrapper for sendSPLToken specifically for space entry fees
  * 
- * DEAD SIMPLE: Just pay the igloo owner in their specified token
+ * DEAD SIMPLE: Just pay the space owner in their specified token
  * - Decimals are fetched automatically from on-chain
  * - Recipient ATA is created if needed (no questions asked)
  * 
- * @param {string} iglooId - ID of the igloo being entered
+ * @param {string} spaceId - ID of the space being entered
  * @param {number} amount - Fee amount in human readable units (e.g., 10000 = 10000 tokens)
- * @param {string} ownerWallet - Igloo owner's wallet address (receives the fee)
+ * @param {string} ownerWallet - Space owner's wallet address (receives the fee)
  * @param {string} tokenAddress - Token mint address for the fee
  */
-export async function payIglooEntryFee(iglooId, amount, ownerWallet, tokenAddress) {
-    console.log('🏠 Paying igloo entry fee...');
-    console.log(`   Igloo: ${iglooId}`);
+export async function paySpaceEntryFee(spaceId, amount, ownerWallet, tokenAddress) {
+    console.log('🏠 Paying space entry fee...');
+    console.log(`   Space: ${spaceId}`);
     console.log(`   Amount: ${amount} tokens`);
     console.log(`   To: ${ownerWallet.slice(0, 8)}...`);
     console.log(`   Token: ${tokenAddress.slice(0, 8)}...`);
@@ -307,22 +307,22 @@ export async function payIglooEntryFee(iglooId, amount, ownerWallet, tokenAddres
         recipientAddress: ownerWallet,
         tokenMintAddress: tokenAddress,
         amount,
-        memo: `entry:${iglooId}`
+        memo: `entry:${spaceId}`
     });
 }
 
 /**
- * Pay igloo rent
+ * Pay space rent
  * Sends $WADDLE tokens to the rent treasury wallet
  * 
- * @param {string} iglooId - ID of the igloo being rented
+ * @param {string} spaceId - ID of the space being rented
  * @param {number} amount - Rent amount in $WADDLE (human readable, e.g., 10000)
  * @param {string} rentWalletAddress - Treasury wallet that receives rent
  * @param {string} tokenAddress - $WADDLE token address
  */
-export async function payIglooRent(iglooId, amount, rentWalletAddress, tokenAddress) {
-    console.log('🏠 Paying igloo rent...');
-    console.log(`   Igloo: ${iglooId}`);
+export async function paySpaceRent(spaceId, amount, rentWalletAddress, tokenAddress) {
+    console.log('🏠 Paying space rent...');
+    console.log(`   Space: ${spaceId}`);
     console.log(`   Amount: ${amount} $WADDLE`);
     console.log(`   To Treasury: ${rentWalletAddress.slice(0, 8)}...`);
     
@@ -330,7 +330,7 @@ export async function payIglooRent(iglooId, amount, rentWalletAddress, tokenAddr
         recipientAddress: rentWalletAddress,
         tokenMintAddress: tokenAddress,
         amount,
-        memo: `rent:${iglooId}`
+        memo: `rent:${spaceId}`
     });
 }
 
@@ -518,8 +518,8 @@ export async function createSignedWagerTransaction(options) {
 
 export default {
     sendSPLToken,
-    payIglooEntryFee,
-    payIglooRent,
+    paySpaceEntryFee,
+    paySpaceRent,
     getTokenBalance,
     createSignedWagerTransaction
 };

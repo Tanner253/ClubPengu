@@ -6,14 +6,14 @@
  * - Wagering system
  * - Pebbles currency
  * - Cosmetic marketplace
- * - Igloos
+ * - Spaces
  * - Social features
  */
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 
-const TUTORIAL_STORAGE_KEY = 'clubpenguin_tutorial_dismissed';
+const TUTORIAL_STORAGE_KEY = 'waddlebet_tutorial_dismissed';
 
 // Tutorial slides data
 const TUTORIAL_SLIDES = [
@@ -150,20 +150,20 @@ const TUTORIAL_SLIDES = [
         )
     },
     {
-        id: 'igloos',
-        title: '🏠 Igloos - Own & Monetize',
+        id: 'spaces',
+        title: '🏠 Spaces - Own & Monetize',
         icon: '🏔️',
         content: (
             <div className="space-y-3">
                 <p className="text-white/90">
-                    <strong className="text-cyan-400">Igloos</strong> are premium spaces you can rent or own - and monetize!
+                    <strong className="text-cyan-400">Spaces</strong> are premium spaces you can rent or own - and monetize!
                 </p>
                 <div className="space-y-2">
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
                         <span className="text-lg">🏷️</span>
                         <div>
                             <div className="text-green-400 font-bold text-sm">Rent or Own</div>
-                            <p className="text-white/60 text-xs">Secure your own igloo space in the metaverse</p>
+                            <p className="text-white/60 text-xs">Secure your own space space in the metaverse</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">

@@ -460,7 +460,7 @@ const MOUNTS = {
 async function seedCosmetics() {
     console.log('🌱 Starting cosmetic seed...\n');
     
-    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/clubpenguin';
+    const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/waddlebet';
     
     try {
         await mongoose.connect(mongoUri);

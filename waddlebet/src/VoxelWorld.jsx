@@ -5,28 +5,28 @@ import { IconSend } from './Icons';
 import GameHUD from './components/GameHUD';
 import ChatLog from './components/ChatLog';
 import Portal from './components/Portal';
-import IglooPortal from './components/IglooPortal';
+import SpacePortal from './components/SpacePortal';
 import BannerZoomOverlay from './components/BannerZoomOverlay';
-import IglooRentalGuide from './components/IglooRentalGuide';
+import SpaceRentalGuide from './components/SpaceRentalGuide';
 import GachaDropRatesGuide from './components/GachaDropRatesGuide';
-import PenguinCreatorOverlay from './components/PenguinCreatorOverlay';
-import PufflePanel from './components/PufflePanel';
+import PlayerCreatorOverlay from './components/PlayerCreatorOverlay';
+import PetPanel from './components/PetPanel';
 import VirtualJoystick from './components/VirtualJoystick';
 import TouchCameraControl from './components/TouchCameraControl';
 import SettingsMenu from './components/SettingsMenu';
 import ChangelogModal from './components/ChangelogModal';
 import EmoteWheel from './components/EmoteWheel';
 import GameManager from './engine/GameManager';
-import Puffle from './engine/Puffle';
-import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PenguinBuilder';
+import Pet from './engine/Pet';
+import { createCharacterBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PlayerBuilder';
 import TownCenter from './rooms/TownCenter';
 import Nightclub from './rooms/Nightclub';
 import CasinoRoom from './rooms/CasinoRoom';
-import { generateIglooInterior } from './rooms/BaseRoom';
-import { generateSKNYIglooInterior } from './rooms/SKNYIglooInterior';
+import { generateSpaceInterior } from './rooms/BaseRoom';
+import { generateSKNYSpaceInterior } from './rooms/SKNYSpaceInterior';
 import { useMultiplayer } from './multiplayer';
 import { useChallenge } from './challenge';
-import { useIgloo } from './igloo';
+import { useSpace } from './space';
 import { EMOTE_WHEEL_ITEMS, LOOPING_EMOTES, EMOTE_EMOJI_MAP } from './systems';
 import { 
     CITY_SIZE, 
@@ -44,31 +44,31 @@ import {
     NAME_HEIGHT_MARCUS,
     NAME_HEIGHT_WHALE,
     ROOM_PORTALS,
-    IGLOO_BANNER_STYLES,
-    IGLOO_BANNER_CONTENT
+    SPACE_BANNER_STYLES,
+    SPACE_BANNER_CONTENT
 } from './config';
-import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem } from './systems';
+import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createSpaceOccupancySprite, updateSpaceOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem } from './systems';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
 import CasinoBlackjack from './components/CasinoBlackjack';
 import BattleshipGame from './minigames/BattleshipGame';
 
 const VoxelWorld = ({ 
-    penguinData, 
-    onPenguinDataChange, // Callback to update penguinData in parent (App.jsx)
+    playerData, 
+    onPlayerDataChange, // Callback to update playerData in parent (App.jsx)
     room = 'town',  // Current room/layer
     onExitToDesigner, 
     onChangeRoom,
     onStartMinigame,
-    playerPuffle, 
-    onPuffleChange,
-    customSpawnPos,  // Custom spawn position (when returning from dojo/igloo)
+    playerPet, 
+    onPetChange,
+    customSpawnPos,  // Custom spawn position (when returning from dojo/space)
     onPlayerClick,   // Callback when clicking another player (for challenge system)
     isInMatch = false, // True when player is in a P2P match (disable movement input)
     activeMatches = [], // Active matches in the room (for spectator banners)
     spectatingMatch = {}, // Real-time match state data for spectating
     activePveActivities = {}, // PvE activity state for spectator banners (fishing, blackjack, etc.)
-    onRequestAuth    // Callback to redirect to penguin maker for auth
+    onRequestAuth    // Callback to redirect to avatar designer for auth
 }) => {
     const mountRef = useRef(null);
     const sceneRef = useRef(null);
@@ -85,7 +85,7 @@ const VoxelWorld = ({
     const townCenterRef = useRef(null); // TownCenter room instance
     const nightclubRef = useRef(null); // Nightclub room instance
     const casinoRoomRef = useRef(null); // CasinoRoom room instance
-    const sknyIglooInteriorRef = useRef(null); // SKNY GANG igloo interior (with update function)
+    const sknySpaceInteriorRef = useRef(null); // SKNY GANG space interior (with update function)
     const roomDataRef = useRef(null); // Store room data (including beach ball) for multiplayer sync
     const raycasterRef = useRef(null); // For player click detection
     const mouseRef = useRef({ x: 0, y: 0 }); // Mouse position for raycasting
@@ -98,7 +98,7 @@ const VoxelWorld = ({
     const mountEnabledRef = useRef(true); // Track if mount is equipped/enabled
     const mpUpdateAppearanceRef = useRef(null); // Ref for appearance update function
     const cameraControllerRef = useRef(null); // Smooth third-person camera controller
-    const penguinDataRef = useRef(null); // Ref for current penguin data
+    const playerDataRef = useRef(null); // Ref for current player data
     const wasInCasinoRef = useRef(false); // Track if player was inside casino (for one-time zoom)
     const casinoZoomTransitionRef = useRef({ active: false, targetDistance: 20, progress: 0 }); // Casino zoom state
     const slotMachineSystemRef = useRef(null); // Slot machine interaction system
@@ -137,9 +137,9 @@ const VoxelWorld = ({
             }
             
             // SYNC TO SERVER: Notify other players about mount visibility change
-            if (mpUpdateAppearanceRef.current && penguinDataRef.current) {
+            if (mpUpdateAppearanceRef.current && playerDataRef.current) {
                 mpUpdateAppearanceRef.current({
-                    ...penguinDataRef.current,
+                    ...playerDataRef.current,
                     mountEnabled: enabled
                 });
             }
@@ -167,14 +167,14 @@ const VoxelWorld = ({
         sendEmote: mpSendEmote,
         changeRoom: mpChangeRoom,
         updateAppearance: mpUpdateAppearance,
-        updatePuffle: mpUpdatePuffle,
+        updatePet: mpUpdatePet,
         sendBallKick: mpSendBallKick,
         requestBallSync: mpRequestBallSync,
         registerCallbacks,
         chatMessages,
         worldTimeRef: serverWorldTimeRef, // Server-synchronized world time
         isAuthenticated, // For determining persistence mode
-        walletAddress, // User's wallet address for igloo ownership checks
+        walletAddress, // User's wallet address for space ownership checks
         // Slot machine
         spinSlot,
         slotSpinning,
@@ -197,20 +197,20 @@ const VoxelWorld = ({
     }, [mpUpdateAppearance]);
     
     useEffect(() => {
-        penguinDataRef.current = penguinData;
-    }, [penguinData]);
+        playerDataRef.current = playerData;
+    }, [playerData]);
     
-    // Rebuild local player mesh when penguinData changes (e.g., after saving customization)
-    const prevPenguinDataRef = useRef(penguinData);
+    // Rebuild local player mesh when playerData changes (e.g., after saving customization)
+    const prevPlayerDataRef = useRef(playerData);
     useEffect(() => {
         // Skip on initial mount (mesh is built in initThree)
-        if (prevPenguinDataRef.current === penguinData) {
-            prevPenguinDataRef.current = penguinData;
+        if (prevPlayerDataRef.current === playerData) {
+            prevPlayerDataRef.current = playerData;
             return;
         }
-        prevPenguinDataRef.current = penguinData;
+        prevPlayerDataRef.current = playerData;
         
-        if (!playerRef.current || !buildPenguinMeshRef.current || !sceneRef.current || !penguinData) return;
+        if (!playerRef.current || !buildCharacterMeshRef.current || !sceneRef.current || !playerData) return;
         
         // Store current position, rotation, and attachments
         const currentPos = playerRef.current.position.clone();
@@ -221,7 +221,7 @@ const VoxelWorld = ({
         sceneRef.current.remove(playerRef.current);
         
         // Build new mesh with updated appearance
-        const newMesh = buildPenguinMeshRef.current(penguinData);
+        const newMesh = buildCharacterMeshRef.current(playerData);
         newMesh.position.copy(currentPos);
         newMesh.rotation.y = currentRot;
         sceneRef.current.add(newMesh);
@@ -250,33 +250,33 @@ const VoxelWorld = ({
         newMesh.userData._animatedPartsCache = cacheAnimatedParts(newMesh);
         
         console.log('🔄 Rebuilt local player mesh with updated appearance');
-    }, [penguinData]);
+    }, [playerData]);
     
     // Challenge context for position updates and dance trigger
     const { updateLocalPosition, shouldDance, clearDance } = useChallenge();
     
-    // Igloo context for rental state and access control
+    // Space context for rental state and access control
     const { 
-        igloos, 
-        getIgloo, 
-        isOwner: isIglooOwner, 
+        spaces, 
+        getSpace, 
+        isOwner: isSpaceOwner, 
         myRentals, 
         openDetailsPanel,
         openRequirementsPanel,
         openSettingsPanel,
-        checkIglooEntry,
-        enterIglooRoom,
-        leaveIglooRoom,
+        checkSpaceEntry,
+        enterSpaceRoom,
+        leaveSpaceRoom,
         userClearance
-    } = useIgloo();
+    } = useSpace();
     
-    // Check if player is inside their own igloo (for HUD settings button)
-    const isInsideOwnedIgloo = room?.startsWith('igloo') && isIglooOwner(room);
+    // Check if player is inside their own space (for HUD settings button)
+    const isInsideOwnedSpace = room?.startsWith('space') && isSpaceOwner(room);
     
     // Refs for other player meshes and state
     const otherPlayerMeshesRef = useRef(new Map()); // playerId -> { mesh, bubble, puffle }
     const lastPositionSentRef = useRef({ x: 0, y: 0, z: 0, rot: 0, time: 0 });
-    const buildPenguinMeshRef = useRef(null); // Will be set in useEffect
+    const buildCharacterMeshRef = useRef(null); // Will be set in useEffect
     
     // OPTIMIZATION: Reusable vectors to avoid GC pressure in update loop
     const tempVec3Ref = useRef(null);
@@ -290,8 +290,8 @@ const VoxelWorld = ({
     const isGroundedRef = useRef(true);
     const jumpRequestedRef = useRef(false);
     
-    // Store igloo entry spawn position (so exiting returns to correct igloo)
-    const iglooEntrySpawnRef = useRef(null);
+    // Store space entry spawn position (so exiting returns to correct space)
+    const spaceEntrySpawnRef = useRef(null);
     
     // Chat State (for local player bubble)
     const [activeBubble, setActiveBubble] = useState(null);
@@ -301,9 +301,9 @@ const VoxelWorld = ({
     const isFishnuRespectRef = useRef(false); // True when showing Fishnu respect message
     const fishnuRespectMessageRef = useRef(null);
     
-    // Igloo Occupancy Bubbles
-    const iglooOccupancySpritesRef = useRef(new Map()); // Map of igloo id -> sprite
-    const [iglooOccupancy, setIglooOccupancy] = useState({}); // { igloo1: 2, igloo2: 0, ... }
+    // Space Occupancy Bubbles
+    const spaceOccupancySpritesRef = useRef(new Map()); // Map of space id -> sprite
+    const [spaceOccupancy, setSpaceOccupancy] = useState({}); // { space1: 2, space2: 0, ... }
     
     // Lord Fishnu Lore Sprite
     const lordFishnuSpriteRef = useRef(null);
@@ -319,21 +319,21 @@ const VoxelWorld = ({
     const emoteSelectionRef = useRef(-1); // Sticky selection - persists until changed
     const emoteWheelKeyHeld = useRef(false); // Track if T is currently held
     const emoteRef = useRef({ type: null, startTime: 0 });
-    const [showPufflePanel, setShowPufflePanel] = useState(false);
-    const playerPuffleRef = useRef(null);
+    const [showPetPanel, setShowPetPanel] = useState(false);
+    const playerPetRef = useRef(null);
     
     // Banner Zoom Overlay State
     const [bannerZoomOpen, setBannerZoomOpen] = useState(false);
     const [bannerZoomData, setBannerZoomData] = useState(null);
-    const [iglooRentalGuideOpen, setIglooRentalGuideOpen] = useState(false);
+    const [spaceRentalGuideOpen, setSpaceRentalGuideOpen] = useState(false);
     const [gachaDropRatesGuideOpen, setGachaDropRatesGuideOpen] = useState(false);
     const bannerZoomRenderFn = useRef(null);
-    const aiPufflesRef = useRef([]); // { id, puffle }
+    const aiPetsRef = useRef([]); // { id, puffle }
     
     // Multi-puffle ownership system
     // For guests: empty array (no persistence)
     // For authenticated: loaded from server via GameManager sync
-    const [ownedPuffles, setOwnedPuffles] = useState([]);
+    const [ownedPets, setOwnedPets] = useState([]);
     
     // Sync puffles from server when authentication state changes
     useEffect(() => {
@@ -342,7 +342,7 @@ const VoxelWorld = ({
             const serverData = gm.getUserData?.();
             if (serverData?.puffles?.length > 0) {
                 try {
-                    setOwnedPuffles(serverData.puffles.map(p => Puffle.fromJSON(p)));
+                    setOwnedPets(serverData.puffles.map(p => Pet.fromJSON(p)));
                     console.log('🐾 Loaded puffles from server:', serverData.puffles.length);
                 } catch (e) {
                     console.warn('Failed to load puffles from server:', e);
@@ -350,7 +350,7 @@ const VoxelWorld = ({
             }
         } else {
             // Guest mode - no puffles persistence
-            setOwnedPuffles([]);
+            setOwnedPets([]);
         }
     }, [isAuthenticated]);
     
@@ -391,7 +391,7 @@ const VoxelWorld = ({
     }, []);
     
     // Use prop for equipped puffle, with local ref for 3D tracking
-    const puffle = playerPuffle;
+    const puffle = playerPet;
     
     // Portal State
     const [nearbyPortal, setNearbyPortal] = useState(null);
@@ -419,8 +419,8 @@ const VoxelWorld = ({
     const [arcadeGameType, setArcadeGameType] = useState(null); // 'battleship' etc
     const [arcadeInteraction, setArcadeInteraction] = useState(null); // { machine, prompt, gameType }
     
-    // Penguin Creator Overlay State (for in-game wardrobe)
-    const [penguinCreatorOpen, setPenguinCreatorOpen] = useState(false);
+    // Player Creator Overlay State (for in-game wardrobe)
+    const [playerCreatorOpen, setPlayerCreatorOpen] = useState(false);
     
     // Lord Fishnu Interaction State
     const [lordFishnuInteraction, setLordFishnuInteraction] = useState(null); // { canPayRespects, prompt }
@@ -759,7 +759,7 @@ const VoxelWorld = ({
             // No water ring - walls handle boundaries now
             
             // ==================== SPAWN TOWN CENTER PROPS ====================
-            // Create TownCenter room instance and spawn all props (trees, igloos, lamps, etc.)
+            // Create TownCenter room instance and spawn all props (trees, spaces, lamps, etc.)
             const townCenter = new TownCenter(THREE);
             townCenterRef.current = townCenter;
             const { meshes: propMeshes, lights: propLights, collisionSystem } = townCenter.spawn(scene);
@@ -789,54 +789,54 @@ const VoxelWorld = ({
                 iceFishingSystemRef.current.setPlayersRef(() => playersDataRef.current);
             }
             
-            // ==================== IGLOO OCCUPANCY BUBBLES ====================
-            // Create occupancy indicator sprites above each igloo
+            // ==================== SPACE OCCUPANCY BUBBLES ====================
+            // Create occupancy indicator sprites above each space
             const townCenterX = CENTER_X;
             const townCenterZ = CENTER_Z;
             
-            // 10 unique igloos - each has its own room
-            // igloo3 is SKNY GANG nightclub-themed igloo
-            const iglooData = [
-                { id: 'igloo1', x: -75, z: -75, room: 'igloo1' },
-                { id: 'igloo2', x: -50, z: -78, room: 'igloo2' },
-                { id: 'igloo3', x: -25, z: -75, room: 'igloo3' },   // SKNY GANG nightclub
-                { id: 'igloo4', x: 25, z: -75, room: 'igloo4' },
-                { id: 'igloo5', x: 50, z: -78, room: 'igloo5' },
-                { id: 'igloo6', x: 75, z: -75, room: 'igloo6' },
-                { id: 'igloo7', x: -70, z: -15, room: 'igloo7' },
-                { id: 'igloo8', x: -40, z: -18, room: 'igloo8' },
-                { id: 'igloo9', x: 40, z: -18, room: 'igloo9' },
-                { id: 'igloo10', x: 70, z: -15, room: 'igloo10' },
+            // 10 unique spaces - each has its own room
+            // space3 is SKNY GANG nightclub-themed space
+            const spaceData = [
+                { id: 'space1', x: -75, z: -75, room: 'space1' },
+                { id: 'space2', x: -50, z: -78, room: 'space2' },
+                { id: 'space3', x: -25, z: -75, room: 'space3' },   // SKNY GANG nightclub
+                { id: 'space4', x: 25, z: -75, room: 'space4' },
+                { id: 'space5', x: 50, z: -78, room: 'space5' },
+                { id: 'space6', x: 75, z: -75, room: 'space6' },
+                { id: 'space7', x: -70, z: -15, room: 'space7' },
+                { id: 'space8', x: -40, z: -18, room: 'space8' },
+                { id: 'space9', x: 40, z: -18, room: 'space9' },
+                { id: 'space10', x: 70, z: -15, room: 'space10' },
             ];
             
             // Clear any existing sprites
-            iglooOccupancySpritesRef.current.forEach(sprite => {
+            spaceOccupancySpritesRef.current.forEach(sprite => {
                 if (sprite.parent) sprite.parent.remove(sprite);
             });
-            iglooOccupancySpritesRef.current.clear();
+            spaceOccupancySpritesRef.current.clear();
             
-            // Create sprite for each igloo with unique MapleStory-style banners
-            // Use igloo data from IglooContext if available
-            iglooData.forEach((igloo, index) => {
-                // Get server-side igloo state if available
-                const serverIglooData = getIgloo ? getIgloo(igloo.id) : null;
-                const sprite = createIglooOccupancySprite(THREE, 0, index, serverIglooData); // Pass igloo state
+            // Create sprite for each space with unique MapleStory-style banners
+            // Use space data from SpaceContext if available
+            spaceData.forEach((space, index) => {
+                // Get server-side space state if available
+                const serverSpaceData = getSpace ? getSpace(space.id) : null;
+                const sprite = createSpaceOccupancySprite(THREE, 0, index, serverSpaceData); // Pass space state
                 sprite.position.set(
-                    townCenterX + igloo.x,
-                    10, // Higher above igloo for bigger banners
-                    townCenterZ + igloo.z
+                    townCenterX + space.x,
+                    10, // Higher above space for bigger banners
+                    townCenterZ + space.z
                 );
-                sprite.userData.iglooId = igloo.id;
-                sprite.userData.iglooRoom = igloo.room;
-                sprite.userData.iglooX = townCenterX + igloo.x;
-                sprite.userData.iglooZ = townCenterZ + igloo.z;
-                sprite.userData.iglooIndex = index; // Store index for style
+                sprite.userData.spaceId = space.id;
+                sprite.userData.spaceRoom = space.room;
+                sprite.userData.spaceX = townCenterX + space.x;
+                sprite.userData.spaceZ = townCenterZ + space.z;
+                sprite.userData.spaceIndex = index; // Store index for style
                 sprite.visible = false; // Start hidden, show when player is close
                 scene.add(sprite);
-                iglooOccupancySpritesRef.current.set(igloo.id, sprite);
+                spaceOccupancySpritesRef.current.set(space.id, sprite);
             });
             
-            console.log(`Created ${iglooOccupancySpritesRef.current.size} igloo occupancy sprites`);
+            console.log(`Created ${spaceOccupancySpritesRef.current.size} space occupancy sprites`);
             
             // ==================== LORD FISHNU LORE SPRITE ====================
             // Create lore banner above the holy fish sculpture
@@ -1142,17 +1142,17 @@ const VoxelWorld = ({
                     roomData.roomHeight || 20
                 );
             }
-        } else if (room.startsWith('igloo')) {
-            // igloo3 is SKNY GANG nightclub-themed igloo
-            if (room === 'igloo3') {
-                roomData = generateSKNYIglooInterior(THREE, scene);
+        } else if (room.startsWith('space')) {
+            // space3 is SKNY GANG nightclub-themed space
+            if (room === 'space3') {
+                roomData = generateSKNYSpaceInterior(THREE, scene);
                 // Store update function for SKNY interior animations
-                sknyIglooInteriorRef.current = roomData;
+                sknySpaceInteriorRef.current = roomData;
             } else {
-                roomData = generateIglooInterior(THREE, scene);
+                roomData = generateSpaceInterior(THREE, scene);
             }
             mapRef.current = roomData.map;
-            // Request ball sync from server when entering igloo
+            // Request ball sync from server when entering space
             if (mpRequestBallSync) {
                 setTimeout(() => mpRequestBallSync(), 100);
             }
@@ -1164,7 +1164,7 @@ const VoxelWorld = ({
         // Update roomRef for collision checks
         roomRef.current = room;
         
-        const spawnPuffleMesh = (puffleObj, ownerPosition) => {
+        const spawnPetMesh = (puffleObj, ownerPosition) => {
             if (!puffleObj) return null;
             
             // Set puffle's internal position first (slightly offset from owner)
@@ -1298,14 +1298,14 @@ const VoxelWorld = ({
         });
         } // End town-only building generation
         
-        // --- PENGUIN BUILDER (extracted to PenguinBuilder.js) ---
-        const penguinBuilder = createPenguinBuilder(THREE);
-        const { buildPenguinMesh } = penguinBuilder;
+        // --- CHARACTER BUILDER (extracted to PlayerBuilder.js) ---
+        const characterBuilder = createCharacterBuilder(THREE);
+        const { buildCharacterMesh } = characterBuilder;
         
-        // Store buildPenguinMesh for multiplayer to use
-        buildPenguinMeshRef.current = buildPenguinMesh;
+        // Store buildCharacterMesh for multiplayer to use
+        buildCharacterMeshRef.current = buildCharacterMesh;
         
-        // NOTE: cacheAnimatedParts and animateCosmeticsFromCache are imported from PenguinBuilder.js
+        // NOTE: cacheAnimatedParts and animateCosmeticsFromCache are imported from PlayerBuilder.js
         // The inline versions below handle the animation loop specifics
         
         // Wrapper that uses imported functions but passes VOXEL_SIZE
@@ -1313,8 +1313,7 @@ const VoxelWorld = ({
             animateCosmeticsFromCache(cache, time, delta, VOXEL_SIZE);
         };
         
-        // Store buildPenguinMesh for multiplayer to use
-        buildPenguinMeshRef.current = buildPenguinMesh;
+        // Store buildCharacterMesh for multiplayer to use (already set above)
         
         // OPTIMIZATION: Cache animated cosmetic parts to avoid traverse() every frame
         // This function should be called once after building a mesh
@@ -1506,7 +1505,7 @@ const VoxelWorld = ({
         };
         
         // --- BUILD PLAYER ---
-        const playerWrapper = buildPenguinMesh(penguinData);
+        const playerWrapper = buildCharacterMesh(playerData);
         playerRef.current = playerWrapper;
         // OPTIMIZATION: Cache animated parts for local player
         playerWrapper.userData._animatedPartsCache = cacheAnimatedParts(playerWrapper);
@@ -1526,7 +1525,7 @@ const VoxelWorld = ({
         
         // Spawn position: use custom spawn (from portal exit) or default room spawn
         if (customSpawnPos && room === 'town') {
-            // Exiting dojo/igloo: spawn at portal location in town
+            // Exiting dojo/space: spawn at portal location in town
             // customSpawnPos is an OFFSET from town center, so add center coordinates
             const townCenterX = CENTER_X;
             const townCenterZ = CENTER_Z;
@@ -1578,23 +1577,23 @@ const VoxelWorld = ({
             playerRef.current.rotation.y = rotRef.current;
         }
 
-        // Spawn player puffle if equipped (ensure it's a Puffle instance)
+        // Spawn player puffle if equipped (ensure it's a Pet instance)
         if (puffle) {
-            // If puffle is not a proper Puffle instance, recreate it
+            // If puffle is not a proper Pet instance, recreate it
             let puffleInstance = puffle;
-            if (!(puffle instanceof Puffle) || typeof puffle.tick !== 'function') {
-                puffleInstance = new Puffle({
+            if (!(puffle instanceof Pet) || typeof puffle.tick !== 'function') {
+                puffleInstance = new Pet({
                     id: puffle.id,
-                    name: puffle.name || 'Puffle',
+                    name: puffle.name || 'Pet',
                     color: puffle.color || 'blue',
                     happiness: puffle.happiness,
                     energy: puffle.energy,
                     hunger: puffle.hunger
                 });
             }
-            const mesh = spawnPuffleMesh(puffleInstance, posRef.current);
-            playerPuffleRef.current = puffleInstance;
-            playerPuffleRef.current.mesh = mesh;
+            const mesh = spawnPetMesh(puffleInstance, posRef.current);
+            playerPetRef.current = puffleInstance;
+            playerPetRef.current.mesh = mesh;
         }
         
         // --- INITIALIZE/RESTORE AI AGENTS ---
@@ -1618,7 +1617,7 @@ const VoxelWorld = ({
                 };
                 
                 // Store appearance data for mesh rebuilding
-                const aiMesh = buildPenguinMesh(aiData);
+                const aiMesh = buildCharacterMesh(aiData);
                 
                 // Town spawn - avoid spawning inside buildings, water, or out of bounds
                 let sx, sz;
@@ -1662,16 +1661,16 @@ const VoxelWorld = ({
                 scene.add(aiMesh);
 
                 // 20% chance to have a puffle companion
-                let aiPuffle = null;
+                let aiPet = null;
                 if (Math.random() < 0.2) {
-                    const puffleColors = Object.keys(Puffle.COLORS);
+                    const puffleColors = Object.keys(Pet.COLORS);
                     const randomColor = puffleColors[Math.floor(Math.random() * puffleColors.length)];
-                    aiPuffle = new Puffle({ 
+                    aiPet = new Pet({ 
                         color: randomColor, 
-                        name: `${name}'s Puffle`
+                        name: `${name}'s Pet`
                     });
-                    spawnPuffleMesh(aiPuffle, { x: sx, y: 0, z: sz });
-                    aiPufflesRef.current.push({ id: i, puffle: aiPuffle });
+                    spawnPetMesh(aiPet, { x: sx, y: 0, z: sz });
+                    aiPetsRef.current.push({ id: i, puffle: aiPet });
                 }
 
                 aiAgentsRef.current.push({
@@ -1703,7 +1702,7 @@ const VoxelWorld = ({
             // Room changed - rebuild AI meshes and add to new scene
             aiAgentsRef.current.forEach(ai => {
                 // Rebuild mesh using stored appearance data
-                const newMesh = buildPenguinMesh(ai.aiData);
+                const newMesh = buildCharacterMesh(ai.aiData);
                 newMesh.position.set(ai.pos.x, 0, ai.pos.z);
                 newMesh.rotation.y = ai.rot;
                 // Show only if AI is in the same room as player
@@ -1714,7 +1713,7 @@ const VoxelWorld = ({
             });
             
             // Rebuild AI puffle meshes
-            aiPufflesRef.current.forEach(entry => {
+            aiPetsRef.current.forEach(entry => {
                 if (entry.puffle) {
                     const puffleMesh = entry.puffle.createMesh(THREE);
                     puffleMesh.position.set(entry.puffle.position.x, 0.5, entry.puffle.position.z);
@@ -1736,7 +1735,7 @@ const VoxelWorld = ({
                 mouth: 'beard',
                 bodyItem: 'none'
             };
-            const senseiMesh = buildPenguinMesh(senseiData);
+            const senseiMesh = buildCharacterMesh(senseiData);
             // 25% bigger than normal penguins
             senseiMesh.scale.set(1.25, 1.25, 1.25);
             // Cushion is at y=0.2, sensei sits on top of it
@@ -1757,7 +1756,7 @@ const VoxelWorld = ({
                     mouth: 'beak',
                     bodyItem: 'bowtie'
                 };
-                const dealerMesh = buildPenguinMesh(dealerData);
+                const dealerMesh = buildCharacterMesh(dealerData);
                 // Slightly larger dealer penguins
                 dealerMesh.scale.set(1.1, 1.1, 1.1);
                 dealerMesh.position.set(dealerPos.x, 0.05, dealerPos.z);
@@ -1784,7 +1783,7 @@ const VoxelWorld = ({
                 mouth: 'beak',
                 bodyItem: 'suit'
             };
-            const wagerBotMesh = buildPenguinMesh(wagerBotData);
+            const wagerBotMesh = buildCharacterMesh(wagerBotData);
             // Slightly bigger than normal penguins to stand out
             wagerBotMesh.scale.set(1.15, 1.15, 1.15);
             // Position near spawn (visible when entering town)
@@ -1930,7 +1929,7 @@ const VoxelWorld = ({
         let aiMap = new Map();
         const rebuildAIMaps = () => {
             puffleMap.clear();
-            aiPufflesRef.current.forEach(entry => puffleMap.set(entry.id, entry));
+            aiPetsRef.current.forEach(entry => puffleMap.set(entry.id, entry));
             aiMap.clear();
             aiAgentsRef.current.forEach(ai => aiMap.set(ai.id, ai));
         };
@@ -2290,7 +2289,7 @@ const VoxelWorld = ({
                     collided = true;
                 }
             } else if (roomRef.current === 'pizza' && roomData && roomData.bounds) {
-                // Pizza parlor collision - enclosed room like igloos
+                // Pizza parlor collision - enclosed room like spaces
                 const b = roomData.bounds;
                 const playerRadius = 0.6;
                 const playerY = posRef.current.y;
@@ -2370,8 +2369,8 @@ const VoxelWorld = ({
                         }
                     }
                 }
-            } else if (roomRef.current.startsWith('igloo') && roomData && roomData.bounds) {
-                // Igloos use CIRCULAR bounds to match dome shape
+            } else if (roomRef.current.startsWith('space') && roomData && roomData.bounds) {
+                // Spaces use CIRCULAR bounds to match dome shape
                 const b = roomData.bounds;
                 const playerRadius = 0.8;
                 const maxRadius = b.radius - playerRadius;
@@ -2805,13 +2804,13 @@ const VoxelWorld = ({
             }
             
             // Update position (use clamped finalX/finalZ for all rooms)
-            if (roomRef.current === 'dojo' || roomRef.current.startsWith('igloo')) {
-                // Dojo/Igloo: always use clamped position
+            if (roomRef.current === 'dojo' || roomRef.current.startsWith('space')) {
+                // Dojo/Space: always use clamped position
                 posRef.current.x = finalX;
                 posRef.current.z = finalZ;
                 
-                // Check igloo furniture proximity for interaction
-                if (roomRef.current.startsWith('igloo') && roomData && roomData.furniture) {
+                // Check space furniture proximity for interaction
+                if (roomRef.current.startsWith('space') && roomData && roomData.furniture) {
                     let nearInteraction = null;
                     
                     // Check furniture (couches, bar stools)
@@ -2825,7 +2824,7 @@ const VoxelWorld = ({
                         }
                     }
                     
-                    // Check DJ spots (igloo3 SKNY has a DJ booth)
+                    // Check DJ spots (space3 SKNY has a DJ booth)
                     if (!nearInteraction && roomData.djSpots) {
                         for (const dj of roomData.djSpots) {
                             const dx = finalX - dj.position.x;
@@ -3038,7 +3037,7 @@ const VoxelWorld = ({
             let foundGround = false;
             let groundHeight = GROUND_Y;
             
-            // Check for landing on furniture (in igloo rooms)
+            // Check for landing on furniture (in space rooms)
             if (roomData?.colliders) {
                 for (const col of roomData.colliders) {
                     const colliderHeight = col.height || col.hh * 2 || 2;
@@ -3181,18 +3180,18 @@ const VoxelWorld = ({
             }
 
             // Player puffle follow/animate/tick - snake-tail behavior
-            if (playerPuffleRef.current && playerPuffleRef.current.mesh) {
+            if (playerPetRef.current && playerPetRef.current.mesh) {
                 // Tick for stats decay
-                if (typeof playerPuffleRef.current.tick === 'function') {
-                    playerPuffleRef.current.tick();
+                if (typeof playerPetRef.current.tick === 'function') {
+                    playerPetRef.current.tick();
                 }
                 // Follow owner (player) - snake-tail behavior
-                if (typeof playerPuffleRef.current.followOwner === 'function') {
-                    playerPuffleRef.current.followOwner(posRef.current, delta);
+                if (typeof playerPetRef.current.followOwner === 'function') {
+                    playerPetRef.current.followOwner(posRef.current, delta);
                 }
                 // Animate bounce and rotation
-                if (typeof playerPuffleRef.current.animate === 'function') {
-                    playerPuffleRef.current.animate(time);
+                if (typeof playerPetRef.current.animate === 'function') {
+                    playerPetRef.current.animate(time);
                 }
             }
             
@@ -3208,7 +3207,7 @@ const VoxelWorld = ({
                     emoteRef.current.type, 
                     emoteRef.current.startTime, 
                     !!seatedRef.current, 
-                    penguinData?.characterType || 'penguin', 
+                    playerData?.characterType || 'penguin', 
                     isMounted, 
                     isAirborne,
                     time,
@@ -3228,7 +3227,7 @@ const VoxelWorld = ({
                 
                 // --- WIZARD HAT WORLD-SPACE TRAIL (Per-Player Pools) ---
                 // Triggers for wizardHat equipped OR doginal character (who always has wizard hat)
-                const hasWizardHat = penguinData?.hat === 'wizardHat' || penguinData?.characterType === 'doginal';
+                const hasWizardHat = playerData?.hat === 'wizardHat' || playerData?.characterType === 'doginal';
                 if (hasWizardHat && wizardTrailSystemRef.current) {
                     wizardTrailSystemRef.current.getOrCreatePool('localPlayer');
                     wizardTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
@@ -3392,7 +3391,7 @@ const VoxelWorld = ({
             // Update all AI agents (movement, conversations, room transitions, animations)
             updateAIAgents({
                 aiAgents: aiAgentsRef.current,
-                aiPuffles: aiPufflesRef.current,
+                aiPets: aiPetsRef.current,
                 currentRoom: roomRef.current,
                 roomData: roomDataRef.current,
                 frameCount,
@@ -3425,7 +3424,7 @@ const VoxelWorld = ({
                 if (!playerData || !meshData.mesh) continue;
                 
                 // Rebuild mesh if appearance changed
-                if (playerData.needsMeshRebuild && buildPenguinMeshRef.current) {
+                if (playerData.needsMeshRebuild && buildCharacterMeshRef.current) {
                     console.log(`🔄 Rebuilding mesh for ${playerData.name} due to appearance change`);
                     
                     // Store current position and rotation
@@ -3441,7 +3440,7 @@ const VoxelWorld = ({
                     scene.remove(meshData.mesh);
                     
                     // Build new mesh with updated appearance
-                    const newMesh = buildPenguinMeshRef.current(playerData.appearance);
+                    const newMesh = buildCharacterMeshRef.current(playerData.appearance);
                     newMesh.position.copy(currentPos);
                     newMesh.rotation.y = currentRot;
                     scene.add(newMesh);
@@ -3531,8 +3530,8 @@ const VoxelWorld = ({
                 }
                 
                 // Handle puffle creation/removal dynamically
-                if (playerData.needsPuffleUpdate) {
-                    playerData.needsPuffleUpdate = false;
+                if (playerData.needsPetUpdate) {
+                    playerData.needsPetUpdate = false;
                     
                     // Remove old puffle mesh if exists
                     if (meshData.puffleMesh) {
@@ -3543,7 +3542,7 @@ const VoxelWorld = ({
                     // Create new puffle if player has one
                     if (playerData.puffle) {
                         console.log(`🐾 Creating puffle for ${playerData.name}: ${playerData.puffle.color}`);
-                        const puffleInstance = new Puffle({
+                        const puffleInstance = new Pet({
                             color: playerData.puffle.color,
                             name: playerData.puffle.name
                         });
@@ -3559,12 +3558,12 @@ const VoxelWorld = ({
                 
                 // Update puffle position (with fallback to player position offset)
                 if (meshData.puffleMesh) {
-                    const targetPufflePos = playerData.pufflePosition || {
+                    const targetPetPos = playerData.pufflePosition || {
                         x: (playerData.position?.x || 0) + 1.5,
                         z: (playerData.position?.z || 0) + 1.5
                     };
-                    meshData.puffleMesh.position.x = lerp(meshData.puffleMesh.position.x, targetPufflePos.x, lerpFactor);
-                    meshData.puffleMesh.position.z = lerp(meshData.puffleMesh.position.z, targetPufflePos.z, lerpFactor);
+                    meshData.puffleMesh.position.x = lerp(meshData.puffleMesh.position.x, targetPetPos.x, lerpFactor);
+                    meshData.puffleMesh.position.z = lerp(meshData.puffleMesh.position.z, targetPetPos.z, lerpFactor);
                     meshData.puffleMesh.position.y = 0.5;
                 }
                 
@@ -3824,7 +3823,7 @@ const VoxelWorld = ({
                 if (localNameStyle === 'day1' || localNameStyle === 'whale') {
                     const phase = playerNameSpriteRef.current.userData.animationPhase || 0;
                     const floatOffset = Math.sin(time * 1.5 + phase) * 0.1;
-                    const baseHeight = penguinData?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : penguinData?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
+                    const baseHeight = playerData?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : playerData?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
                     playerNameSpriteRef.current.position.y = baseHeight + floatOffset;
                 }
                 
@@ -3865,9 +3864,9 @@ const VoxelWorld = ({
                 casinoRoomRef.current.update(time, delta, 0.7);
             }
             
-            // Animate SKNY GANG igloo interior (disco ball, lasers, LED floor, etc.)
-            if (sknyIglooInteriorRef.current?.update && roomRef.current === 'igloo3') {
-                sknyIglooInteriorRef.current.update(time);
+            // Animate SKNY GANG space interior (disco ball, lasers, LED floor, etc.)
+            if (sknySpaceInteriorRef.current?.update && roomRef.current === 'space3') {
+                sknySpaceInteriorRef.current.update(time);
             }
             
             // Animate building door glows (pulse for interactive doors, town only)
@@ -4080,7 +4079,7 @@ const VoxelWorld = ({
             // Cleanup player name sprite ref
             playerNameSpriteRef.current = null;
         };
-    }, [penguinData, room]); // Rebuild scene when room changes
+    }, [playerData, room]); // Rebuild scene when room changes
     
     // ==================== 3D MATCH BANNERS (SPECTATOR VIEW) ====================
     // Create floating banners above players in active matches
@@ -4276,8 +4275,8 @@ const VoxelWorld = ({
             
             // Collect banner sprites for click detection
             const bannerSprites = [];
-            // Igloo banners
-            iglooOccupancySpritesRef.current.forEach(sprite => {
+            // Space banners
+            spaceOccupancySpritesRef.current.forEach(sprite => {
                 if (sprite.visible) bannerSprites.push(sprite);
             });
             // Match banners (from matchBannersRef)
@@ -4446,10 +4445,10 @@ const VoxelWorld = ({
                 }
                 
                 if (bannerData) {
-                    // Check if this is the Igloo Rental Guide - use special component
-                    if (bannerData.title === '🏠 Igloo Rental Guide' || 
-                        (bannerData.title && bannerData.title.includes('Igloo Rental Guide'))) {
-                        setIglooRentalGuideOpen(true);
+                    // Check if this is the Space Rental Guide - use special component
+                    if (bannerData.title === '🏠 Space Rental Guide' || 
+                        (bannerData.title && bannerData.title.includes('Space Rental Guide'))) {
+                        setSpaceRentalGuideOpen(true);
                         return; // Don't process player clicks if banner was clicked
                     }
                     
@@ -4586,7 +4585,7 @@ const VoxelWorld = ({
         }
         
         // Use taller bubble height for special characters
-        const bubbleHeight = penguinData?.characterType === 'marcus' ? BUBBLE_HEIGHT_MARCUS : penguinData?.characterType === 'whiteWhale' ? BUBBLE_HEIGHT_WHALE : BUBBLE_HEIGHT_PENGUIN;
+        const bubbleHeight = playerData?.characterType === 'marcus' ? BUBBLE_HEIGHT_MARCUS : playerData?.characterType === 'whiteWhale' ? BUBBLE_HEIGHT_WHALE : BUBBLE_HEIGHT_PENGUIN;
         const sprite = createChatSprite(window.THREE, activeBubble, bubbleHeight);
         playerRef.current.add(sprite);
         bubbleSpriteRef.current = sprite;
@@ -4647,25 +4646,25 @@ const VoxelWorld = ({
         GameManager.getInstance().incrementStat('chatsSent');
     }, [chatMessages, playerId, playerName]);
 
-    // Puffle management - supports multiple ownership, 1 equipped at a time
-    const handleAdoptPuffle = (newPuffle) => {
+    // Pet management - supports multiple ownership, 1 equipped at a time
+    const handleAdoptPet = (newPet) => {
         // Add to owned puffles
-        setOwnedPuffles(prev => [...prev, newPuffle]);
+        setOwnedPets(prev => [...prev, newPet]);
         
         // Auto-equip the newly adopted puffle
-        handleEquipPuffle(newPuffle);
+        handleEquipPet(newPet);
     };
     
-    const handleEquipPuffle = (puffleToEquip) => {
+    const handleEquipPet = (puffleToEquip) => {
         // First unequip current puffle if any
-        if (playerPuffleRef.current && playerPuffleRef.current.mesh && sceneRef.current) {
-            sceneRef.current.remove(playerPuffleRef.current.mesh);
-            playerPuffleRef.current.mesh = null;
+        if (playerPetRef.current && playerPetRef.current.mesh && sceneRef.current) {
+            sceneRef.current.remove(playerPetRef.current.mesh);
+            playerPetRef.current.mesh = null;
         }
         
         // Equip new puffle
-        if (onPuffleChange) onPuffleChange(puffleToEquip);
-        playerPuffleRef.current = puffleToEquip;
+        if (onPetChange) onPetChange(puffleToEquip);
+        playerPetRef.current = puffleToEquip;
         
         // Spawn puffle mesh in world if scene is ready
         if (sceneRef.current && window.THREE && puffleToEquip) {
@@ -4677,25 +4676,25 @@ const VoxelWorld = ({
         }
     };
     
-    const handleUnequipPuffle = () => {
+    const handleUnequipPet = () => {
         // Remove mesh from scene
-        if (playerPuffleRef.current && playerPuffleRef.current.mesh && sceneRef.current) {
-            sceneRef.current.remove(playerPuffleRef.current.mesh);
-            playerPuffleRef.current.mesh = null;
+        if (playerPetRef.current && playerPetRef.current.mesh && sceneRef.current) {
+            sceneRef.current.remove(playerPetRef.current.mesh);
+            playerPetRef.current.mesh = null;
         }
         
         // Clear equipped puffle
-        if (onPuffleChange) onPuffleChange(null);
-        playerPuffleRef.current = null;
+        if (onPetChange) onPetChange(null);
+        playerPetRef.current = null;
     };
 
-    const handleUpdatePuffle = (updatedPuffle) => {
+    const handleUpdatePet = (updatedPet) => {
         // Update the puffle instance
-        if (onPuffleChange) onPuffleChange(updatedPuffle);
-        playerPuffleRef.current = updatedPuffle;
+        if (onPetChange) onPetChange(updatedPet);
+        playerPetRef.current = updatedPet;
         
         // Also update in owned puffles list
-        setOwnedPuffles(prev => prev.map(p => p.id === updatedPuffle.id ? updatedPuffle : p));
+        setOwnedPets(prev => prev.map(p => p.id === updatedPet.id ? updatedPet : p));
     };
     
     // Check for nearby portals (room-specific)
@@ -4723,13 +4722,13 @@ const VoxelWorld = ({
             
             if (dist < portal.doorRadius) {
                 if (nearbyPortal?.id !== portal.id) {
-                    // Enrich igloo portals with dynamic state data
-                    if (portal.targetRoom?.startsWith('igloo')) {
-                        const iglooData = getIgloo(portal.targetRoom);
+                    // Enrich space portals with dynamic state data
+                    if (portal.targetRoom?.startsWith('space')) {
+                        const spaceData = getSpace(portal.targetRoom);
                         setNearbyPortal({
                             ...portal,
-                            isIgloo: true,
-                            iglooData: iglooData || null
+                            isSpace: true,
+                            spaceData: spaceData || null
                         });
                     } else {
                         setNearbyPortal(portal);
@@ -4744,8 +4743,8 @@ const VoxelWorld = ({
         }
     };
     
-    // Check igloo proximity and show/hide occupancy bubbles
-    const checkIglooProximity = () => {
+    // Check space proximity and show/hide occupancy bubbles
+    const checkSpaceProximity = () => {
         if (room !== 'town') return;
         
         const playerPos = posRef.current;
@@ -4754,11 +4753,11 @@ const VoxelWorld = ({
         // Hide all banners if player is inside the casino
         const isInCasino = townCenterRef.current?.isPlayerInCasino(playerPos.x, playerPos.z);
         
-        iglooOccupancySpritesRef.current.forEach((sprite, iglooId) => {
+        spaceOccupancySpritesRef.current.forEach((sprite, spaceId) => {
             if (!sprite.userData) return;
             
-            const dx = playerPos.x - sprite.userData.iglooX;
-            const dz = playerPos.z - sprite.userData.iglooZ;
+            const dx = playerPos.x - sprite.userData.spaceX;
+            const dz = playerPos.z - sprite.userData.spaceZ;
             const dist = Math.sqrt(dx * dx + dz * dz);
             
             // Show sprite if player is close enough AND not inside casino
@@ -4796,9 +4795,9 @@ const VoxelWorld = ({
         }
     };
     
-    // Update igloo occupancy sprite with new count
-    const updateIglooOccupancy = (iglooId, count) => {
-        const sprite = iglooOccupancySpritesRef.current.get(iglooId);
+    // Update space occupancy sprite with new count
+    const updateSpaceOccupancy = (spaceId, count) => {
+        const sprite = spaceOccupancySpritesRef.current.get(spaceId);
         if (!sprite) return;
         
         // Recreate the sprite texture with new count
@@ -5044,18 +5043,18 @@ const VoxelWorld = ({
         }
     };
     
-    // State for wardrobe igloo interaction
+    // State for wardrobe space interaction
     const [wardrobeInteraction, setWardrobeInteraction] = useState(null);
     
-    // Check for wardrobe/personal igloo proximity (town only)
-    const checkWardrobeIgloo = () => {
-        if (room !== 'town' || penguinCreatorOpen) {
+    // Check for wardrobe/personal space proximity (town only)
+    const checkWardrobeSpace = () => {
+        if (room !== 'town' || playerCreatorOpen) {
             if (wardrobeInteraction) setWardrobeInteraction(null);
             return;
         }
         
         const playerPos = posRef.current;
-        // Personal igloo position (from TownCenter.js: C + 67.6, C + 78.7)
+        // Personal space position (from TownCenter.js: C + 67.6, C + 78.7)
         const wardrobeX = CENTER_X + 67.6;
         const wardrobeZ = CENTER_Z + 78.7;
         const interactionRadius = 6;
@@ -5079,16 +5078,16 @@ const VoxelWorld = ({
     useEffect(() => {
         const interval = setInterval(() => {
             checkPortals();
-            checkIglooProximity();
+            checkSpaceProximity();
             checkSlotMachines();
             checkBlackjackTables();
             checkFishingSpots();
             checkLordFishnu();
             checkArcadeMachines();
-            checkWardrobeIgloo();
+            checkWardrobeSpace();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, wardrobeInteraction, penguinCreatorOpen, userData?.coins, isAuthenticated]);
+    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, wardrobeInteraction, playerCreatorOpen, userData?.coins, isAuthenticated]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -5127,38 +5126,38 @@ const VoxelWorld = ({
         
         // Room transition
         if (nearbyPortal.targetRoom && onChangeRoom) {
-            // === IGLOO ENTRY REQUIREMENTS CHECK ===
-            // Only check requirements when ENTERING an igloo, not when EXITING to town
-            const isEnteringIgloo = nearbyPortal.targetRoom.startsWith('igloo');
+            // === SPACE ENTRY REQUIREMENTS CHECK ===
+            // Only check requirements when ENTERING an space, not when EXITING to town
+            const isEnteringSpace = nearbyPortal.targetRoom.startsWith('space');
             const isExitingToTown = nearbyPortal.targetRoom === 'town';
             
-            // If entering an igloo (from town), check requirements
-            if (isEnteringIgloo && !isExitingToTown && nearbyPortal.isIgloo && nearbyPortal.iglooData) {
-                const iglooData = nearbyPortal.iglooData;
-                const isOwner = walletAddress && iglooData.ownerWallet === walletAddress;
+            // If entering an space (from town), check requirements
+            if (isEnteringSpace && !isExitingToTown && nearbyPortal.isSpace && nearbyPortal.spaceData) {
+                const spaceData = nearbyPortal.spaceData;
+                const isOwner = walletAddress && spaceData.ownerWallet === walletAddress;
                 
                 // If not rented (available), show details panel instead
-                if (!iglooData.isRented) {
-                    console.log('🏠 Igloo not rented - showing details panel');
+                if (!spaceData.isRented) {
+                    console.log('🏠 Space not rented - showing details panel');
                     openDetailsPanel(nearbyPortal.targetRoom);
                     return;
                 }
                 
                 // Owner always has direct entry
                 if (isOwner) {
-                    console.log('🏠 Owner entering igloo directly');
+                    console.log('🏠 Owner entering space directly');
                     // Continue to room transition below
                 } else {
-                    const accessType = iglooData.accessType;
+                    const accessType = spaceData.accessType;
                     
-                    // PUBLIC igloo - anyone can enter freely, no requirements check needed
+                    // PUBLIC space - anyone can enter freely, no requirements check needed
                     if (accessType === 'public') {
-                        console.log('🏠 Public igloo - entering directly');
+                        console.log('🏠 Public space - entering directly');
                         // Continue to room transition below
                     }
-                    // PRIVATE igloo - only owner can enter, show requirements panel for others
+                    // PRIVATE space - only owner can enter, show requirements panel for others
                     else if (accessType === 'private') {
-                        console.log('🔒 Private igloo - showing requirements panel');
+                        console.log('🔒 Private space - showing requirements panel');
                         openRequirementsPanel(nearbyPortal.targetRoom);
                         return;
                     }
@@ -5173,16 +5172,16 @@ const VoxelWorld = ({
                             // Ask server if user can enter (server checks real balances + paid status)
                             // If allowed: enters directly | If blocked: shows requirements panel
                             console.log('🔍 Checking entry requirements with server...');
-                            checkIglooEntry(nearbyPortal.targetRoom, (iglooId) => {
+                            checkSpaceEntry(nearbyPortal.targetRoom, (spaceId) => {
                                 // This callback is called if user CAN enter directly
-                                console.log('✅ Server approved entry - entering:', iglooId);
+                                console.log('✅ Server approved entry - entering:', spaceId);
                                 
                                 let exitSpawnPos = nearbyPortal.exitSpawnPos;
-                                if (room === 'town' && iglooId.startsWith('igloo')) {
-                                    iglooEntrySpawnRef.current = exitSpawnPos;
+                                if (room === 'town' && spaceId.startsWith('space')) {
+                                    spaceEntrySpawnRef.current = exitSpawnPos;
                                 }
                                 
-                                onChangeRoom(iglooId, exitSpawnPos);
+                                onChangeRoom(spaceId, exitSpawnPos);
                             });
                             return; // Wait for server response
                         }
@@ -5196,16 +5195,16 @@ const VoxelWorld = ({
             
             let exitSpawnPos = nearbyPortal.exitSpawnPos;
             
-            // If entering an igloo from town, store the exit spawn position
-            if (room === 'town' && nearbyPortal.targetRoom.startsWith('igloo')) {
-                iglooEntrySpawnRef.current = nearbyPortal.exitSpawnPos;
+            // If entering an space from town, store the exit spawn position
+            if (room === 'town' && nearbyPortal.targetRoom.startsWith('space')) {
+                spaceEntrySpawnRef.current = nearbyPortal.exitSpawnPos;
             }
             
-            // If exiting an igloo back to town, use the stored entry position
-            if (room.startsWith('igloo') && nearbyPortal.targetRoom === 'town') {
-                if (iglooEntrySpawnRef.current) {
-                    exitSpawnPos = iglooEntrySpawnRef.current;
-                    iglooEntrySpawnRef.current = null; // Clear after use
+            // If exiting an space back to town, use the stored entry position
+            if (room.startsWith('space') && nearbyPortal.targetRoom === 'town') {
+                if (spaceEntrySpawnRef.current) {
+                    exitSpawnPos = spaceEntrySpawnRef.current;
+                    spaceEntrySpawnRef.current = null; // Clear after use
                 }
             }
             
@@ -5508,21 +5507,21 @@ const VoxelWorld = ({
         return () => window.removeEventListener('keydown', handleFishnuKeyPress);
     }, [nearbyPortal, fishingInteraction, emoteWheelOpen, room, handlePayRespects]);
     
-    // E key handler for Wardrobe Igloo (Penguin Creator)
+    // E key handler for Wardrobe Space (Penguin Creator)
     useEffect(() => {
         const handleWardrobeKeyPress = (e) => {
-            if (e.code === 'KeyE' && room === 'town' && !penguinCreatorOpen) {
+            if (e.code === 'KeyE' && room === 'town' && !playerCreatorOpen) {
                 const wi = wardrobeInteractionRef.current;
                 // Only trigger if near wardrobe and NOT near other interactions
                 if (wi?.type === 'wardrobe' && !nearbyPortal && !fishingInteraction && !emoteWheelOpen && !arcadeInteraction) {
-                    setPenguinCreatorOpen(true);
+                    setPlayerCreatorOpen(true);
                     setWardrobeInteraction(null);
                 }
             }
         };
         window.addEventListener('keydown', handleWardrobeKeyPress);
         return () => window.removeEventListener('keydown', handleWardrobeKeyPress);
-    }, [nearbyPortal, fishingInteraction, emoteWheelOpen, arcadeInteraction, room, penguinCreatorOpen]);
+    }, [nearbyPortal, fishingInteraction, emoteWheelOpen, arcadeInteraction, room, playerCreatorOpen]);
     
     // Handle town interactions (benches, snowmen, etc.)
     useEffect(() => {
@@ -5589,7 +5588,7 @@ const VoxelWorld = ({
                     gameType: data?.gameType || 'battleship'
                 });
             }
-            // Note: enter_igloo is handled by portal system, not interaction prompts
+            // Note: enter_space is handled by portal system, not interaction prompts
         };
         
         window.addEventListener('townInteraction', handleTownInteraction);
@@ -5832,50 +5831,50 @@ const VoxelWorld = ({
         return () => window.removeEventListener('chatCommand', handleChatCommand);
     }, [mpSendEmote, onChangeRoom]);
     
-    // Listen for room counts updates from server (for igloo occupancy bubbles)
+    // Listen for room counts updates from server (for space occupancy bubbles)
     useEffect(() => {
         const handleRoomCounts = (event) => {
             const counts = event.detail;
             if (!counts) return;
             
-            // Each igloo has its own unique room (igloo1 -> igloo1, igloo2 -> igloo2, etc.)
-            // Update each igloo sprite with the count from its corresponding room
-            iglooOccupancySpritesRef.current.forEach((sprite, iglooId) => {
-                const roomName = sprite.userData.iglooRoom || iglooId;
+            // Each space has its own unique room (space1 -> space1, space2 -> space2, etc.)
+            // Update each space sprite with the count from its corresponding room
+            spaceOccupancySpritesRef.current.forEach((sprite, spaceId) => {
+                const roomName = sprite.userData.spaceRoom || spaceId;
                 const count = counts[roomName] || 0;
-                // Get server igloo data for dynamic banner content
-                const serverIglooData = getIgloo ? getIgloo(iglooId) : null;
-                updateIglooOccupancySprite(window.THREE, sprite, count, serverIglooData);
+                // Get server space data for dynamic banner content
+                const serverSpaceData = getSpace ? getSpace(spaceId) : null;
+                updateSpaceOccupancySprite(window.THREE, sprite, count, serverSpaceData);
             });
         };
         
         window.addEventListener('roomCounts', handleRoomCounts);
         return () => window.removeEventListener('roomCounts', handleRoomCounts);
-    }, [getIgloo]);
+    }, [getSpace]);
     
-    // Update igloo banners when igloo data changes from server
+    // Update space banners when space data changes from server
     useEffect(() => {
-        if (!igloos || igloos.length === 0) return;
+        if (!spaces || spaces.length === 0) return;
         
-        console.log('🏠 [VoxelWorld] Igloos data changed, updating banners. Sample banner:', 
-            igloos[0]?.banner ? {
-                iglooId: igloos[0].iglooId,
-                font: igloos[0].banner.font,
-                styleIndex: igloos[0].banner.styleIndex,
-                useCustomColors: igloos[0].banner.useCustomColors
+        console.log('🏠 [VoxelWorld] Spaces data changed, updating banners. Sample banner:', 
+            spaces[0]?.banner ? {
+                spaceId: spaces[0].spaceId,
+                font: spaces[0].banner.font,
+                styleIndex: spaces[0].banner.styleIndex,
+                useCustomColors: spaces[0].banner.useCustomColors
             } : 'no banner data'
         );
         
-        // Update each igloo sprite with the latest server data
-        iglooOccupancySpritesRef.current.forEach((sprite, iglooId) => {
-            const serverIglooData = igloos.find(i => i.iglooId === iglooId);
-            if (serverIglooData) {
+        // Update each space sprite with the latest server data
+        spaceOccupancySpritesRef.current.forEach((sprite, spaceId) => {
+            const serverSpaceData = spaces.find(i => i.spaceId === spaceId);
+            if (serverSpaceData) {
                 // Get current occupancy count from sprite
                 const currentCount = sprite.userData.lastCount || 0;
-                updateIglooOccupancySprite(window.THREE, sprite, currentCount, serverIglooData);
+                updateSpaceOccupancySprite(window.THREE, sprite, currentCount, serverSpaceData);
             }
         });
-    }, [igloos]);
+    }, [spaces]);
     
 
     // ==================== MULTIPLAYER SYNC (OPTIMIZED) ====================
@@ -6152,10 +6151,10 @@ const VoxelWorld = ({
     // Join room when connected and scene is ready
     useEffect(() => {
         if (connected && sceneRef.current && playerId) {
-            const puffleData = playerPuffle ? {
-                id: playerPuffle.id,
-                color: playerPuffle.color,
-                name: playerPuffle.name
+            const puffleData = playerPet ? {
+                id: playerPet.id,
+                color: playerPet.color,
+                name: playerPet.name
             } : null;
             
             // Include current mount enabled state and nametag style from settings
@@ -6170,7 +6169,7 @@ const VoxelWorld = ({
             } catch { /* use default */ }
             
             const appearanceWithMount = {
-                ...penguinData,
+                ...playerData,
                 mountEnabled,
                 nametagStyle  // Broadcast nametag style to all players
             };
@@ -6182,7 +6181,7 @@ const VoxelWorld = ({
                 
                 const nameSprite = createNameSprite(playerName, nametagStyle);
                 if (nameSprite) {
-                    const nameHeight = penguinData?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : penguinData?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
+                    const nameHeight = playerData?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : playerData?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
                     nameSprite.position.set(0, nameHeight, 0);
                     playerRef.current.add(nameSprite);
                     playerNameSpriteRef.current = nameSprite;
@@ -6201,7 +6200,7 @@ const VoxelWorld = ({
                 }
             }
         }
-    }, [connected, playerId, room, penguinData, playerName, createNameSprite]);
+    }, [connected, playerId, room, playerData, playerName, createNameSprite]);
     
     // Send position updates (throttled) - OPTIMIZED: 100ms interval, only when changed
     useEffect(() => {
@@ -6221,7 +6220,7 @@ const VoxelWorld = ({
             
             // Only send if moved significantly (including Y for jumps)
             if (distSq > 0.05 || dRot > 0.1 || yChanged) {
-                const pufflePos = playerPuffleRef.current?.position || null;
+                const pufflePos = playerPetRef.current?.position || null;
                 // Send full 3D position including Y for jump sync
                 sendPosition({ x: pos.x, y: pos.y, z: pos.z }, rot, pufflePos);
                 lastPositionSentRef.current = { x: pos.x, y: pos.y, z: pos.z, rot, time: Date.now() };
@@ -6236,7 +6235,7 @@ const VoxelWorld = ({
         return () => clearInterval(interval);
     }, [connected, sendPosition]);
     
-    // Register ball update callback for igloo sync
+    // Register ball update callback for space sync
     useEffect(() => {
         if (!registerCallbacks) return;
         
@@ -6383,7 +6382,7 @@ const VoxelWorld = ({
     
     // Handle player list changes - CREATE/REMOVE meshes only
     useEffect(() => {
-        if (!sceneRef.current || !window.THREE || !buildPenguinMeshRef.current) return;
+        if (!sceneRef.current || !window.THREE || !buildCharacterMeshRef.current) return;
         
         const THREE = window.THREE;
         const scene = sceneRef.current;
@@ -6420,7 +6419,7 @@ const VoxelWorld = ({
             
             console.log(`🐧 Creating mesh for ${playerData.name}`, playerData.puffle ? `with ${playerData.puffle.color} puffle` : '(no puffle)');
             
-            const mesh = buildPenguinMeshRef.current(playerData.appearance);
+            const mesh = buildCharacterMeshRef.current(playerData.appearance);
             mesh.position.set(
                 playerData.position?.x || 0,
                 0,
@@ -6461,7 +6460,7 @@ const VoxelWorld = ({
             let puffleMesh = null;
             if (playerData.puffle) {
                 console.log(`🐾 Creating puffle mesh: ${playerData.puffle.color}`);
-                const puffleInstance = new Puffle({
+                const puffleInstance = new Pet({
                     color: playerData.puffle.color,
                     name: playerData.puffle.name
                 });
@@ -6473,7 +6472,7 @@ const VoxelWorld = ({
                 };
                 puffleMesh.position.set(pufflePos.x, 0.5, pufflePos.z);
                 scene.add(puffleMesh);
-                console.log(`🐾 Puffle mesh added at`, pufflePos);
+                console.log(`🐾 Pet mesh added at`, pufflePos);
             }
             
             // OPTIMIZATION: Check if player has animated cosmetics
@@ -6519,21 +6518,21 @@ const VoxelWorld = ({
         }
     }, [room, connected, playerId]);
     
-    // Track igloo room entry/exit for eligibility checks
+    // Track space room entry/exit for eligibility checks
     useEffect(() => {
-        const isIgloo = room?.startsWith('igloo');
+        const isSpace = room?.startsWith('space');
         
-        if (isIgloo) {
-            // Entering an igloo - set up eligibility tracking with kick callback
+        if (isSpace) {
+            // Entering an space - set up eligibility tracking with kick callback
             const handleKick = (reason) => {
-                console.log('🚪 Kicked from igloo due to:', reason);
+                console.log('🚪 Kicked from space due to:', reason);
                 // Show notification
                 window.dispatchEvent(new CustomEvent('notification', {
                     detail: {
                         type: 'warning',
                         message: reason === 'AUTH_LOST' 
                             ? '🔌 Wallet disconnected - returning to town' 
-                            : '🚫 Access to this igloo has been revoked',
+                            : '🚫 Access to this space has been revoked',
                         duration: 5000
                     }
                 }));
@@ -6542,19 +6541,19 @@ const VoxelWorld = ({
                     onChangeRoom('town', null);
                 }
             };
-            enterIglooRoom(room, handleKick);
+            enterSpaceRoom(room, handleKick);
         } else {
-            // Left an igloo (or in a non-igloo room)
-            leaveIglooRoom();
+            // Left an space (or in a non-space room)
+            leaveSpaceRoom();
         }
         
         // Cleanup when leaving
         return () => {
-            if (isIgloo) {
-                leaveIglooRoom();
+            if (isSpace) {
+                leaveSpaceRoom();
             }
         };
-    }, [room, enterIglooRoom, leaveIglooRoom, onChangeRoom]);
+    }, [room, enterSpaceRoom, leaveSpaceRoom, onChangeRoom]);
     
     // Reset casino zoom state when changing rooms (so zoom triggers properly on re-entry)
     useEffect(() => {
@@ -6591,14 +6590,14 @@ const VoxelWorld = ({
     // Update puffle on server when changed
     useEffect(() => {
         if (connected && playerId) {
-            const puffleData = playerPuffle ? {
-                id: playerPuffle.id,
-                color: playerPuffle.color,
-                name: playerPuffle.name
+            const puffleData = playerPet ? {
+                id: playerPet.id,
+                color: playerPet.color,
+                name: playerPet.name
             } : null;
-            mpUpdatePuffle(puffleData);
+            mpUpdatePet(puffleData);
         }
-    }, [playerPuffle, connected, playerId]);
+    }, [playerPet, connected, playerId]);
     
     // Mobile directional button handlers
     const handleMobileButtonDown = (direction) => {
@@ -6675,10 +6674,10 @@ const VoxelWorld = ({
                 renderCanvas={bannerZoomRenderFn.current}
              />
              
-             {/* Igloo Rental Guide */}
-             <IglooRentalGuide
-                isOpen={iglooRentalGuideOpen}
-                onClose={() => setIglooRentalGuideOpen(false)}
+             {/* Space Rental Guide */}
+             <SpaceRentalGuide
+                isOpen={spaceRentalGuideOpen}
+                onClose={() => setSpaceRentalGuideOpen(false)}
              />
              
              {/* Gacha Drop Rates Guide */}
@@ -6687,13 +6686,13 @@ const VoxelWorld = ({
                 onClose={() => setGachaDropRatesGuideOpen(false)}
              />
              
-             {/* Penguin Creator Overlay (Wardrobe Igloo) */}
-             <PenguinCreatorOverlay
-                isOpen={penguinCreatorOpen}
-                onClose={() => setPenguinCreatorOpen(false)}
-                currentData={penguinData}
+             {/* Player Creator Overlay (Wardrobe Space) */}
+             <PlayerCreatorOverlay
+                isOpen={playerCreatorOpen}
+                onClose={() => setPlayerCreatorOpen(false)}
+                currentData={playerData}
                 onSave={(newData) => {
-                    console.log('🎨 Saving appearance from golden igloo wardrobe:', newData);
+                    console.log('🎨 Saving appearance from golden space wardrobe:', newData);
                     
                     // Update local state immediately (for instant visual feedback)
                     if (onPenguinDataChange) {
@@ -6716,7 +6715,7 @@ const VoxelWorld = ({
                     setTimeout(() => {
                         if (posRef.current && sendPosition && playerRef.current) {
                             const rot = playerRef.current.rotation.y || 0;
-                            const pufflePos = playerPuffleRef.current?.position || null;
+                            const pufflePos = playerPetRef.current?.position || null;
                             sendPosition(
                                 { x: posRef.current.x, y: posRef.current.y, z: posRef.current.z },
                                 rot,
@@ -6730,7 +6729,7 @@ const VoxelWorld = ({
                     setTimeout(() => {
                         if (posRef.current && sendPosition && playerRef.current) {
                             const rot = playerRef.current.rotation.y || 0;
-                            const pufflePos = playerPuffleRef.current?.position || null;
+                            const pufflePos = playerPetRef.current?.position || null;
                             sendPosition(
                                 { x: posRef.current.x, y: posRef.current.y, z: posRef.current.z },
                                 rot,
@@ -6800,15 +6799,15 @@ const VoxelWorld = ({
              
              {/* HUD - Top Right */}
              <GameHUD 
-                onOpenPuffles={() => setShowPufflePanel(true)}
+                onOpenPets={() => setShowPetPanel(true)}
                 onOpenSettings={() => setShowSettings(true)}
                 isMobile={isMobile}
                 playerCount={playerCount}
                 totalPlayerCount={totalPlayerCount}
                 onRequestAuth={onRequestAuth}
                 currentRoom={room}
-                isInsideOwnedIgloo={isInsideOwnedIgloo}
-                onOpenIglooSettings={() => openSettingsPanel(room)}
+                isInsideOwnedSpace={isInsideOwnedSpace}
+                onOpenSpaceSettings={() => openSettingsPanel(room)}
              />
              
              {/* Chat Log - Desktop: bottom-left, Mobile: toggleable overlay */}
@@ -6818,12 +6817,12 @@ const VoxelWorld = ({
                 onClose={() => setShowMobileChat(false)}
              />
              
-             {/* Door/Portal Prompt - Use IglooPortal for igloos, regular Portal otherwise */}
-             {/* Always get fresh iglooData from context to ensure real-time updates */}
-             {nearbyPortal?.isIgloo ? (
-                <IglooPortal
+             {/* Door/Portal Prompt - Use SpacePortal for spaces, regular Portal otherwise */}
+             {/* Always get fresh spaceData from context to ensure real-time updates */}
+             {nearbyPortal?.isSpace ? (
+                <SpacePortal
                     portal={nearbyPortal}
-                    iglooData={getIgloo(nearbyPortal.targetRoom)}
+                    spaceData={getSpace(nearbyPortal.targetRoom)}
                     isNearby={!!nearbyPortal}
                     onEnter={handlePortalEnter}
                     onViewDetails={() => openDetailsPanel(nearbyPortal.targetRoom)}
@@ -7094,8 +7093,8 @@ const VoxelWorld = ({
                 </div>
              )}
              
-             {/* Wardrobe Igloo Interaction UI (Penguin Creator) */}
-             {wardrobeInteraction && room === 'town' && !fishingInteraction && !nearbyPortal && !penguinCreatorOpen && (
+             {/* Wardrobe Space Interaction UI (Penguin Creator) */}
+             {wardrobeInteraction && room === 'town' && !fishingInteraction && !nearbyPortal && !playerCreatorOpen && (
                 <div 
                     className={`absolute bg-gradient-to-b from-purple-900/95 to-indigo-900/95 backdrop-blur-sm rounded-xl border border-yellow-500/50 text-center z-20 shadow-lg shadow-yellow-500/30 ${
                         isMobile 
@@ -7116,7 +7115,7 @@ const VoxelWorld = ({
                     <button
                         className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm transition-all active:scale-95 shadow-lg bg-gradient-to-b from-yellow-400 to-amber-600 hover:from-yellow-300 hover:to-amber-500 text-black"
                         onClick={() => {
-                            setPenguinCreatorOpen(true);
+                            setPlayerCreatorOpen(true);
                             setWardrobeInteraction(null);
                         }}
                     >
@@ -7310,16 +7309,16 @@ const VoxelWorld = ({
                 </div>
              )}
 
-             {/* Puffle Panel */}
-             {showPufflePanel && (
-                <PufflePanel
-                    equippedPuffle={puffle}
-                    ownedPuffles={ownedPuffles}
-                    onAdopt={handleAdoptPuffle}
-                    onEquip={handleEquipPuffle}
-                    onUnequip={handleUnequipPuffle}
-                    onUpdate={handleUpdatePuffle}
-                    onClose={() => setShowPufflePanel(false)}
+             {/* Pet Panel */}
+             {showPetPanel && (
+                <PetPanel
+                    equippedPet={puffle}
+                    ownedPets={ownedPets}
+                    onAdopt={handleAdoptPet}
+                    onEquip={handleEquipPet}
+                    onUnequip={handleUnequipPet}
+                    onUpdate={handleUpdatePet}
+                    onClose={() => setShowPetPanel(false)}
                 />
              )}
              
@@ -7329,8 +7328,8 @@ const VoxelWorld = ({
              }`}>
                  <h2 className={`drop-shadow-lg ${
                      isMobile && !isLandscape ? 'text-sm' : 'text-xl'
-                 } ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room === 'casino_game_room' ? 'text-yellow-400' : room === 'igloo3' ? 'text-fuchsia-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
-                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room === 'casino_game_room' ? '🎰 CASINO' : room === 'igloo3' ? '🎵 SKNY GANG' : room.startsWith('igloo') ? `IGLOO ${room.replace('igloo', '')}` : 'TOWN'}
+                 } ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room === 'casino_game_room' ? 'text-yellow-400' : room === 'space3' ? 'text-fuchsia-400' : room.startsWith('space') ? 'text-cyan-300' : 'text-yellow-400'}`}>
+                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room === 'casino_game_room' ? '🎰 CASINO' : room === 'space3' ? '🎵 SKNY GANG' : room.startsWith('space') ? `SPACE ${room.replace('space', '')}` : 'TOWN'}
                  </h2>
                  {!isMobile && (
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>

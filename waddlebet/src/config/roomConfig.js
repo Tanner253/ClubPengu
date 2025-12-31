@@ -67,7 +67,7 @@ export const NAME_HEIGHT_WHALE = 5.8;
 // AI penguin names
 export const AI_NAMES = [
     "Puddles", "Waddle", "Snowy", "Flipper", "IceCube", 
-    "Chilly", "Pebble", "Igloo", "Frosty", "Slippy"
+    "Chilly", "Pebble", "Space", "Frosty", "Slippy"
 ];
 
 // AI emotes (subset available to AI penguins)
@@ -90,7 +90,7 @@ export const ROOM_SPAWNS = {
     dojo: { x: 0, z: 12 },
     pizza: { x: 0, z: 12 },
     nightclub: { x: 20, z: 28 },
-    igloo: { x: 0, z: 10 },
+    space: { x: 0, z: 10 },
     casino_game_room: { x: 10, z: 10 }  // Near entrance from casino portal room
 };
 
@@ -120,106 +120,106 @@ export const ROOM_PORTALS = {
             doorRadius: 3.5,
             exitSpawnPos: { x: -42, z: 6 }  // Spawn near center when exiting game room
         },
-        // NORTH ROW IGLOOS (north of T-bar, rotation: 0, door faces SOUTH toward street)
-        // Igloos at z ~ -75, doors at z ~ -70, exit spawn at z ~ -62 (on street)
+        // NORTH ROW SPACES (north of T-bar, rotation: 0, door faces SOUTH toward street)
+        // Spaces at z ~ -75, doors at z ~ -70, exit spawn at z ~ -62 (on street)
         { 
-            id: 'igloo-1', 
-            name: 'IGLOO 1', 
+            id: 'space-1', 
+            name: 'SPACE 1', 
             emoji: '🏠', 
-            description: 'Enter Igloo',
-            targetRoom: 'igloo1',
-            position: { x: -75, z: -70 },  // Door position (south of igloo)
+            description: 'Enter Space',
+            targetRoom: 'space1',
+            position: { x: -75, z: -70 },  // Door position (south of space)
             doorRadius: 3,
             exitSpawnPos: { x: -75, z: -62 }  // Spawn on street when exiting
         },
         { 
-            id: 'igloo-2', 
-            name: 'IGLOO 2', 
+            id: 'space-2', 
+            name: 'SPACE 2', 
             emoji: '🏠', 
-            description: 'Enter Igloo',
-            targetRoom: 'igloo2',
+            description: 'Enter Space',
+            targetRoom: 'space2',
             position: { x: -50, z: -73 },
             doorRadius: 3,
             exitSpawnPos: { x: -50, z: -62 }
         },
         { 
-            id: 'igloo-3', 
-            name: 'IGLOO 3', 
+            id: 'space-3', 
+            name: 'SPACE 3', 
             emoji: '🏠', 
-            description: 'Enter Igloo',
-            targetRoom: 'igloo3',
+            description: 'Enter Space',
+            targetRoom: 'space3',
             position: { x: -25, z: -70 },
             doorRadius: 3,
             exitSpawnPos: { x: -25, z: -62 }
         },
         { 
-            id: 'igloo-4', 
-            name: 'IGLOO 4', 
+            id: 'space-4', 
+            name: 'SPACE 4', 
             emoji: '🏠', 
-            description: 'Enter Igloo',
-            targetRoom: 'igloo4',
+            description: 'Enter Space',
+            targetRoom: 'space4',
             position: { x: 25, z: -70 },
             doorRadius: 3,
             exitSpawnPos: { x: 25, z: -62 }
         },
         { 
-            id: 'igloo-5', 
-            name: 'IGLOO 5', 
+            id: 'space-5', 
+            name: 'SPACE 5', 
             emoji: '🏠', 
-            description: 'Enter Igloo',
-            targetRoom: 'igloo5',
+            description: 'Enter Space',
+            targetRoom: 'space5',
             position: { x: 50, z: -73 },
             doorRadius: 3,
             exitSpawnPos: { x: 50, z: -62 }
         },
         { 
-            id: 'igloo-6', 
-            name: 'IGLOO 6', 
+            id: 'space-6', 
+            name: 'SPACE 6', 
             emoji: '🏠', 
-            description: 'Enter Igloo',
-            targetRoom: 'igloo6',
+            description: 'Enter Space',
+            targetRoom: 'space6',
             position: { x: 75, z: -70 },
             doorRadius: 3,
             exitSpawnPos: { x: 75, z: -62 }
         },
-        // SOUTH ROW IGLOOS (south of T-bar, rotation: π, door faces NORTH toward street)
-        // Igloos at z ~ -15, doors at z ~ -20, exit spawn at z ~ -28 (on street)
+        // SOUTH ROW SPACES (south of T-bar, rotation: π, door faces NORTH toward street)
+        // Spaces at z ~ -15, doors at z ~ -20, exit spawn at z ~ -28 (on street)
         { 
-            id: 'igloo-7', 
-            name: 'IGLOO 7', 
+            id: 'space-7', 
+            name: 'SPACE 7', 
             emoji: '🏠', 
-            description: 'Enter Igloo',
-            targetRoom: 'igloo7',
-            position: { x: -70, z: -20 },  // Door is NORTH of igloo (faces street)
+            description: 'Enter Space',
+            targetRoom: 'space7',
+            position: { x: -70, z: -20 },  // Door is NORTH of space (faces street)
             doorRadius: 3,
             exitSpawnPos: { x: -70, z: -28 }
         },
         { 
-            id: 'igloo-8', 
-            name: 'IGLOO 8', 
+            id: 'space-8', 
+            name: 'SPACE 8', 
             emoji: '🏠', 
-            description: 'Enter Igloo',
-            targetRoom: 'igloo8',
+            description: 'Enter Space',
+            targetRoom: 'space8',
             position: { x: -40, z: -23 },
             doorRadius: 3,
             exitSpawnPos: { x: -40, z: -28 }
         },
         { 
-            id: 'igloo-9', 
-            name: 'IGLOO 9', 
+            id: 'space-9', 
+            name: 'SPACE 9', 
             emoji: '🏠', 
-            description: 'Enter Igloo',
-            targetRoom: 'igloo9',
+            description: 'Enter Space',
+            targetRoom: 'space9',
             position: { x: 40, z: -23 },
             doorRadius: 3,
             exitSpawnPos: { x: 40, z: -28 }
         },
         { 
-            id: 'igloo-10', 
-            name: 'IGLOO 10', 
+            id: 'space-10', 
+            name: 'SPACE 10', 
             emoji: '🏠', 
-            description: 'Enter Igloo',
-            targetRoom: 'igloo10',
+            description: 'Enter Space',
+            targetRoom: 'space10',
             position: { x: 70, z: -20 },
             doorRadius: 3,
             exitSpawnPos: { x: 70, z: -28 }
@@ -290,16 +290,16 @@ export const ROOM_PORTALS = {
             exitSpawnPos: { x: 0, z: -55 }
         }
     ],
-    igloo1: [{ id: 'igloo1-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: -75, z: -62 } }],
-    igloo2: [{ id: 'igloo2-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: -50, z: -62 } }],
-    igloo3: [{ id: 'igloo3-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: -25, z: -62 } }],
-    igloo4: [{ id: 'igloo4-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: 25, z: -62 } }],
-    igloo5: [{ id: 'igloo5-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: 50, z: -62 } }],
-    igloo6: [{ id: 'igloo6-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: 75, z: -62 } }],
-    igloo7: [{ id: 'igloo7-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: -70, z: -28 } }],
-    igloo8: [{ id: 'igloo8-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: -40, z: -28 } }],
-    igloo9: [{ id: 'igloo9-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: 40, z: -28 } }],
-    igloo10: [{ id: 'igloo10-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: 70, z: -28 } }],
+    space1: [{ id: 'space1-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: -75, z: -62 } }],
+    space2: [{ id: 'space2-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: -50, z: -62 } }],
+    space3: [{ id: 'space3-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: -25, z: -62 } }],
+    space4: [{ id: 'space4-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: 25, z: -62 } }],
+    space5: [{ id: 'space5-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: 50, z: -62 } }],
+    space6: [{ id: 'space6-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: 75, z: -62 } }],
+    space7: [{ id: 'space7-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: -70, z: -28 } }],
+    space8: [{ id: 'space8-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: -40, z: -28 } }],
+    space9: [{ id: 'space9-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: 40, z: -28 } }],
+    space10: [{ id: 'space10-exit', name: 'EXIT', emoji: '🚪', description: 'Return to Town', targetRoom: 'town', position: { x: 0, z: 13.5 }, doorRadius: 3, exitSpawnPos: { x: 70, z: -28 } }],
     dojo: [
         { 
             id: 'dojo-exit', 
@@ -337,9 +337,9 @@ export const ROOM_PORTALS = {
     ]
 };
 
-// ==================== IGLOO BANNER STYLES ====================
-// MapleStory-style Igloo Banner Styles
-export const IGLOO_BANNER_STYLES = [
+// ==================== SPACE BANNER STYLES ====================
+// MapleStory-style Space Banner Styles
+export const SPACE_BANNER_STYLES = [
     { // Pink/Rose - Oberon style
         bgGradient: ['#FFE4EC', '#FFB6C1', '#FF69B4'],
         borderColor: '#FF1493',
@@ -406,11 +406,11 @@ export const IGLOO_BANNER_STYLES = [
     }
 ];
 
-// Placeholder content for igloo banners
-export const IGLOO_BANNER_CONTENT = [
+// Placeholder content for space banners
+export const SPACE_BANNER_CONTENT = [
     { title: "🌙 Moon Crew HQ", ticker: "$MOON", shill: "Private Alpha • DM for invite" },
     { title: "🔥 Degen's Den", ticker: "$DEGEN", shill: "100x gems daily • VIP access" },
-    { title: "🎧 SKNY GANG", ticker: "$WADDLE", shill: "VIP Access • The Rave Never Stops • Rent igloos for 100k $WADDLE/day" },
+    { title: "🎧 SKNY GANG", ticker: "$WADDLE", shill: "VIP Access • The Rave Never Stops • Rent spaces for 100k $WADDLE/day" },
     { title: "💎 Diamond Flippers", ticker: "$FLIP", shill: "We don't sell • Join the cult" },
     { title: "🚀 Launch Pad", ticker: "$PAD", shill: "Early access • Presale alerts" },
     { title: "🎰 Whale Watchers", ticker: "$WHALE", shill: "Track big wallets • Free signals" },

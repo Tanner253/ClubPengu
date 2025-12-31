@@ -71,7 +71,7 @@ describe('X402Service Integration', () => {
             
             const rentPayload = createValidPayload({
                 amount: '10000',
-                memo: 'rent:igloo1:1days'
+                memo: 'rent:space1:1days'
             });
             const encoded = encodePayload(rentPayload);
             
@@ -102,7 +102,7 @@ describe('X402Service Integration', () => {
             const entryPayload = createValidPayload({
                 amount: '500',
                 recipient: 'OwnerWallet789',
-                memo: 'entry:igloo5'
+                memo: 'entry:space5'
             });
             const encoded = encodePayload(entryPayload);
             

@@ -22,7 +22,7 @@ const transactionSchema = new mongoose.Schema({
             'wager_payout',      // Winner receives pot
             'wager_refund',      // Refund on void/draw
             'purchase',          // Shop purchase
-            'puffle_adopt',      // Puffle adoption cost
+            'puffle_adopt',      // Pet adoption cost
             'promo_bonus',       // Promo code reward
             'stamp_bonus',       // Stamp achievement reward
             'admin_adjustment',  // Admin modification

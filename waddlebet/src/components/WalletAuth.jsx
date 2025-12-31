@@ -1,5 +1,5 @@
 /**
- * WalletAuth - Phantom wallet authentication UI for Penguin Maker
+ * WalletAuth - Phantom wallet authentication UI for Avatar Designer
  * Explains x403 auth, why it's safe, and handles the connection flow
  * Supports both desktop (extension) and mobile (Phantom app)
  */

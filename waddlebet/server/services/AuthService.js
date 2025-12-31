@@ -29,7 +29,7 @@ const pendingChallenges = new Map(); // playerId -> { nonce, createdAt }
 const CHALLENGE_EXPIRY_MS = 3 * 60 * 1000; // 3 minutes (time to read modal)
 
 // Get domain from environment or default
-const APP_DOMAIN = process.env.APP_DOMAIN || 'clubpengu.com';
+const APP_DOMAIN = process.env.APP_DOMAIN || 'waddle.bet';
 const APP_NAME = 'Club Pengu';
 
 class AuthService {

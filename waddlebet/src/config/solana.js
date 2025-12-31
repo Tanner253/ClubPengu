@@ -36,8 +36,8 @@ export const CURRENT_NETWORK_ID = import.meta?.env?.VITE_SOLANA_NETWORK === 'dev
 // Production facilitator URL
 export const X402_FACILITATOR_URL = import.meta.env.VITE_X402_FACILITATOR_URL || 'https://x402.org/facilitator';
 
-// ==================== IGLOO RENTAL CONFIG ====================
-export const IGLOO_CONFIG = {
+// ==================== SPACE RENTAL CONFIG ====================
+export const SPACE_CONFIG = {
     // Daily rent cost in $WADDLE tokens
     DAILY_RENT_CPW3: 10000,
     
@@ -47,28 +47,28 @@ export const IGLOO_CONFIG = {
     // Grace period before eviction (in hours)
     GRACE_PERIOD_HOURS: 12,
     
-    // Total igloos in the game
-    TOTAL_IGLOOS: 10,
+    // Total spaces in the game
+    TOTAL_SPACES: 10,
     
-    // Reserved rental igloos (pre-set owners, not available for public rent)
-    // These are still rental igloos, just pre-configured with owners
-    RESERVED_IGLOO_IDS: ['igloo3', 'igloo8'],
+    // Reserved rental spaces (pre-set owners, not available for public rent)
+    // These are still rental spaces, just pre-configured with owners
+    RESERVED_SPACE_IDS: ['space3', 'space8'],
     
     // Available for rent
-    RENTABLE_IGLOOS: ['igloo1', 'igloo2', 'igloo4', 'igloo5', 'igloo6', 'igloo7', 'igloo9', 'igloo10'],
+    RENTABLE_SPACES: ['space1', 'space2', 'space4', 'space5', 'space6', 'space7', 'space9', 'space10'],
     
-    // Igloo positions (for DB sync)
-    IGLOO_POSITIONS: {
-        'igloo1': { x: -75, z: -70, row: 'north' },
-        'igloo2': { x: -50, z: -73, row: 'north' },
-        'igloo3': { x: -25, z: -70, row: 'north' },  // SKNY GANG
-        'igloo4': { x: 25, z: -70, row: 'north' },
-        'igloo5': { x: 50, z: -73, row: 'north' },
-        'igloo6': { x: 75, z: -70, row: 'north' },
-        'igloo7': { x: -70, z: -20, row: 'south' },
-        'igloo8': { x: -40, z: -23, row: 'south' },  // REGEN
-        'igloo9': { x: 40, z: -23, row: 'south' },
-        'igloo10': { x: 70, z: -20, row: 'south' }
+    // Space positions (for DB sync)
+    SPACE_POSITIONS: {
+        'space1': { x: -75, z: -70, row: 'north' },
+        'space2': { x: -50, z: -73, row: 'north' },
+        'space3': { x: -25, z: -70, row: 'north' },  // SKNY GANG
+        'space4': { x: 25, z: -70, row: 'north' },
+        'space5': { x: 50, z: -73, row: 'north' },
+        'space6': { x: 75, z: -70, row: 'north' },
+        'space7': { x: -70, z: -20, row: 'south' },
+        'space8': { x: -40, z: -23, row: 'south' },  // REGEN
+        'space9': { x: 40, z: -23, row: 'south' },
+        'space10': { x: 70, z: -20, row: 'south' }
     }
 };
 
@@ -82,7 +82,7 @@ export const PAYMENT_STATUS = {
 };
 
 // ==================== ACCESS CONTROL ====================
-export const IGLOO_ACCESS = {
+export const SPACE_ACCESS = {
     PRIVATE: 'private',      // Only owner can enter
     PUBLIC: 'public',        // Anyone can enter
     TOKEN_GATED: 'token',    // Must hold specified token

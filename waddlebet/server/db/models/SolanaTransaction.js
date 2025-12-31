@@ -23,9 +23,9 @@ const solanaTransactionSchema = new mongoose.Schema({
         type: String,
         required: true,
         enum: [
-            'igloo_rent',           // Initial igloo rental payment
-            'igloo_rent_renewal',   // Daily rent payment
-            'igloo_entry_fee',      // Entry fee to someone's igloo
+            'space_rent',           // Initial space rental payment
+            'space_rent_renewal',   // Daily rent payment
+            'space_entry_fee',      // Entry fee to someone's space
             'wager',                // PvP wager payment
             'other'                 // Future use
         ],
@@ -65,7 +65,7 @@ const solanaTransactionSchema = new mongoose.Schema({
     },
     
     // ========== RELATED ENTITIES ==========
-    iglooId: {
+    spaceId: {
         type: String,
         index: true
     },
@@ -115,7 +115,7 @@ const solanaTransactionSchema = new mongoose.Schema({
 solanaTransactionSchema.index({ senderWallet: 1, createdAt: -1 });
 solanaTransactionSchema.index({ recipientWallet: 1, createdAt: -1 });
 solanaTransactionSchema.index({ type: 1, createdAt: -1 });
-solanaTransactionSchema.index({ iglooId: 1, type: 1 });
+solanaTransactionSchema.index({ spaceId: 1, type: 1 });
 
 // For rate limiting queries - count recent transactions per wallet
 solanaTransactionSchema.index({ senderWallet: 1, processedAt: -1 });
@@ -169,7 +169,7 @@ solanaTransactionSchema.statics.countRecentTransactions = async function(walletA
  * @returns {Array} - Transaction history
  */
 solanaTransactionSchema.statics.getWalletHistory = function(walletAddress, options = {}) {
-    const { limit = 50, type, iglooId } = options;
+    const { limit = 50, type, spaceId } = options;
     
     const query = {
         $or: [
@@ -179,7 +179,7 @@ solanaTransactionSchema.statics.getWalletHistory = function(walletAddress, optio
     };
     
     if (type) query.type = type;
-    if (iglooId) query.iglooId = iglooId;
+    if (spaceId) query.spaceId = spaceId;
     
     return this.find(query)
         .sort({ createdAt: -1 })
@@ -188,13 +188,13 @@ solanaTransactionSchema.statics.getWalletHistory = function(walletAddress, optio
 };
 
 /**
- * Get igloo revenue stats
- * @param {string} iglooId - Igloo ID
+ * Get space revenue stats
+ * @param {string} spaceId - Space ID
  * @returns {Object} - Revenue stats
  */
-solanaTransactionSchema.statics.getIglooStats = async function(iglooId) {
+solanaTransactionSchema.statics.getSpaceStats = async function(spaceId) {
     const result = await this.aggregate([
-        { $match: { iglooId, status: 'verified' } },
+        { $match: { spaceId, status: 'verified' } },
         {
             $group: {
                 _id: '$type',

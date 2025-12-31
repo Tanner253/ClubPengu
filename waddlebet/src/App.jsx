@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import VoxelPenguinDesigner from './VoxelPenguinDesigner';
+import VoxelPlayerDesigner from './VoxelPlayerDesigner';
 import VoxelWorld from './VoxelWorld';
 import CardJitsu from './minigames/CardJitsu';
 import P2PCardJitsu from './minigames/P2PCardJitsu';
@@ -12,22 +12,22 @@ import P2PBattleship from './minigames/P2PBattleship';
 import GameManager from './engine/GameManager';
 import { MultiplayerProvider, useMultiplayer } from './multiplayer';
 import { ChallengeProvider, useChallenge } from './challenge';
-import { IglooProvider, useIgloo } from './igloo';
+import { SpaceProvider, useSpace } from './space';
 import ProfileMenu from './components/ProfileMenu';
 import WagerModal from './components/WagerModal';
 import Inbox from './components/Inbox';
 import Notification from './components/Notification';
 import GuestModeWarning from './components/GuestModeWarning';
-import IglooSettingsPanel from './components/IglooSettingsPanel';
-import IglooRentalModal from './components/IglooRentalModal';
-import IglooEntryModal from './components/IglooEntryModal';
-import IglooDetailsPanel from './components/IglooDetailsPanel';
-import IglooRequirementsPanel from './components/IglooRequirementsPanel';
+import SpaceSettingsPanel from './components/SpaceSettingsPanel';
+import SpaceRentalModal from './components/SpaceRentalModal';
+import SpaceEntryModal from './components/SpaceEntryModal';
+import SpaceDetailsPanel from './components/SpaceDetailsPanel';
+import SpaceRequirementsPanel from './components/SpaceRequirementsPanel';
 import TipNotification from './components/TipNotification';
 import GiftNotification from './components/GiftNotification';
 
-// Default penguin appearance for guests
-const DEFAULT_PENGUIN = {
+// Default character appearance for guests
+const DEFAULT_APPEARANCE = {
     skin: 'blue',
     hat: 'none',
     eyes: 'normal',
@@ -134,21 +134,21 @@ const AppContent = () => {
     // Get auth state and user data from multiplayer context
     const { isAuthenticated, userData, isRestoringSession, walletAddress } = useMultiplayer();
     
-    // Penguin customization - synced from server for auth users, defaults for guests
-    const [penguinData, setPenguinData] = useState(DEFAULT_PENGUIN);
+    // Character customization - synced from server for auth users, defaults for guests
+    const [playerData, setPlayerData] = useState(DEFAULT_APPEARANCE);
     
     // Track which wallet we've synced customization for (prevent stale data between wallets)
     const syncedWalletRef = useRef(null);
     
-    // Sync penguin data from server when authenticated (including session restore)
+    // Sync character data from server when authenticated (including session restore)
     // CRITICAL: Track wallet address to detect wallet switches
     useEffect(() => {
         if (isAuthenticated && userData?.customization) {
             // Only sync if this is a NEW wallet or we haven't synced yet
             if (syncedWalletRef.current !== walletAddress) {
-                console.log('🐧 Loading customization from server:', userData.customization);
-                setPenguinData({
-                    ...DEFAULT_PENGUIN,
+                console.log('🎨 Loading customization from server:', userData.customization);
+                setPlayerData({
+                    ...DEFAULT_APPEARANCE,
                     ...userData.customization
                 });
                 syncedWalletRef.current = walletAddress;
@@ -156,17 +156,17 @@ const AppContent = () => {
         } else if (!isAuthenticated && !isRestoringSession) {
             // Guest mode - use defaults and clear synced wallet
             syncedWalletRef.current = null;
-            setPenguinData(DEFAULT_PENGUIN);
+            setPlayerData(DEFAULT_APPEARANCE);
         }
     }, [isAuthenticated, userData?.customization, isRestoringSession, walletAddress]);
     
-    // Puffle state (shared across all rooms)
-    const [playerPuffle, setPlayerPuffle] = useState(null);
+    // Pet state (shared across all rooms)
+    const [playerPet, setPlayerPet] = useState(null);
     
     // Minigame state (separate from room system)
     const [activeMinigame, setActiveMinigame] = useState(null);
     
-    // Custom spawn position (when exiting dojo/igloo to town)
+    // Custom spawn position (when exiting dojo/space to town)
     const [spawnPosition, setSpawnPosition] = useState(null);
     
     // Tip notification state
@@ -220,7 +220,7 @@ const AppContent = () => {
     };
     
     // Change room/layer (town -> dojo, dojo -> town, etc.)
-    // Memoized to prevent useEffect re-runs in VoxelWorld igloo tracking
+    // Memoized to prevent useEffect re-runs in VoxelWorld space tracking
     const handleChangeRoom = useCallback((newRoom, exitSpawnPos = null) => {
         GameManager.getInstance().setRoom(newRoom);
         setSpawnPosition(exitSpawnPos); // Will be used by VoxelWorld for spawn location
@@ -251,7 +251,7 @@ const AppContent = () => {
         setActiveMinigame(null);
     };
     
-    // Handle request to authenticate - redirects to penguin maker
+    // Handle request to authenticate - redirects to avatar designer
     const handleRequestAuth = () => {
         // Exit to designer for clean auth flow
         setCurrentRoom(null);
@@ -267,10 +267,10 @@ const AppContent = () => {
             
             {/* Designer Mode */}
             {!inGameWorld && (
-                <VoxelPenguinDesigner 
+                <VoxelPlayerDesigner 
                     onEnterWorld={handleEnterWorld} 
-                    currentData={penguinData}
-                    updateData={setPenguinData}
+                    currentData={playerData}
+                    updateData={setPlayerData}
                 />
             )}
             
@@ -278,14 +278,14 @@ const AppContent = () => {
             {inGameWorld && (
                 <div className={`absolute inset-0 ${isInMatch ? 'pointer-events-none' : ''}`}>
                     <VoxelWorld 
-                        penguinData={penguinData} 
-                        onPenguinDataChange={setPenguinData}
+                        playerData={playerData} 
+                        onPlayerDataChange={setPlayerData}
                         room={currentRoom}
                         onExitToDesigner={handleExitToDesigner}
                         onChangeRoom={handleChangeRoom}
                         onStartMinigame={handleStartMinigame}
-                        playerPuffle={playerPuffle}
-                        onPuffleChange={setPlayerPuffle}
+                        playerPet={playerPet}
+                        onPetChange={setPlayerPet}
                         customSpawnPos={spawnPosition}
                         onPlayerClick={handlePlayerClick}
                         isInMatch={isInMatch}
@@ -301,7 +301,7 @@ const AppContent = () => {
             {activeMinigame === 'card-jitsu' && !isInMatch && (
                 <div className="absolute inset-0 z-40">
                     <CardJitsu 
-                        penguinData={penguinData}
+                        playerData={playerData}
                         onExit={handleExitMinigame}
                     />
                 </div>
@@ -365,8 +365,8 @@ const AppContent = () => {
                 </>
             )}
             
-            {/* Igloo UI Modals - show when in game world */}
-            {inGameWorld && <IglooUI currentRoom={currentRoom} onEnterRoom={handleChangeRoom} />}
+            {/* Space UI Modals - show when in game world */}
+            {inGameWorld && <SpaceUI currentRoom={currentRoom} onEnterRoom={handleChangeRoom} />}
             
             {/* Global Notification Toast */}
             <Notification />
@@ -394,17 +394,17 @@ const AppContent = () => {
 };
 
 /**
- * IglooUI - Renders igloo-related modals and settings panel
- * Uses IglooContext for state management
+ * SpaceUI - Renders space-related modals and settings panel
+ * Uses SpaceContext for state management
  */
-const IglooUI = ({ currentRoom, onEnterRoom }) => {
+const SpaceUI = ({ currentRoom, onEnterRoom }) => {
     const {
         showSettingsPanel,
         showRentalModal,
         showEntryModal,
         showDetailsPanel,
         showRequirementsPanel,
-        selectedIgloo,
+        selectedSpace,
         entryCheckResult,
         setShowSettingsPanel,
         setShowRentalModal,
@@ -414,36 +414,36 @@ const IglooUI = ({ currentRoom, onEnterRoom }) => {
         updateSettings,
         openSettingsPanel,
         openRentalModal,
-        enterIglooDemo,
-        checkIglooEntry,
+        enterSpaceDemo,
+        checkSpaceEntry,
         isOwner,
         myRentals,
         walletAddress
-    } = useIgloo();
+    } = useSpace();
     
     const { send } = useMultiplayer();
     
-    // Check if we're inside an igloo we own
-    const isInsideOwnedIgloo = currentRoom?.startsWith('igloo') && isOwner(currentRoom);
+    // Check if we're inside an space we own
+    const isInsideOwnedSpace = currentRoom?.startsWith('space') && isOwner(currentRoom);
     
-    // Find the igloo data for settings
-    const currentIglooData = myRentals.find(i => i.iglooId === currentRoom);
+    // Find the space data for settings
+    const currentSpaceData = myRentals.find(i => i.spaceId === currentRoom);
     
     // Handle rental success
     const handleRentSuccess = (result) => {
         console.log('🏠 Rental success:', result);
         setShowRentalModal(false);
         // Refresh data
-        send({ type: 'igloo_list' });
-        send({ type: 'igloo_my_rentals' });
+        send({ type: 'space_list' });
+        send({ type: 'space_my_rentals' });
         
-        // Auto-open settings panel for new owner to customize their igloo
-        if (result.igloo) {
-            // Use the igloo data from the rental result directly
-            openSettingsPanel(result.igloo);
-        } else if (result.iglooId) {
+        // Auto-open settings panel for new owner to customize their space
+        if (result.space) {
+            // Use the space data from the rental result directly
+            openSettingsPanel(result.space);
+        } else if (result.spaceId) {
             // Fallback: just open by ID (will fetch from server)
-            openSettingsPanel(result.iglooId);
+            openSettingsPanel(result.spaceId);
         }
     };
     
@@ -456,60 +456,60 @@ const IglooUI = ({ currentRoom, onEnterRoom }) => {
     return (
         <>
             {/* Settings Panel */}
-            <IglooSettingsPanel
+            <SpaceSettingsPanel
                 isOpen={showSettingsPanel}
                 onClose={() => setShowSettingsPanel(false)}
-                iglooData={selectedIgloo || currentIglooData}
-                onSave={(updatedIgloo) => {
-                    console.log('🏠 Settings saved:', updatedIgloo);
+                spaceData={selectedSpace || currentSpaceData}
+                onSave={(updatedSpace) => {
+                    console.log('🏠 Settings saved:', updatedSpace);
                 }}
             />
             
             {/* Rental Modal */}
-            <IglooRentalModal
+            <SpaceRentalModal
                 isOpen={showRentalModal}
                 onClose={() => setShowRentalModal(false)}
-                iglooData={selectedIgloo}
+                spaceData={selectedSpace}
                 walletAddress={walletAddress}
                 onRentSuccess={handleRentSuccess}
             />
             
             {/* Entry Modal (for access restrictions) */}
-            <IglooEntryModal
+            <SpaceEntryModal
                 isOpen={showEntryModal}
                 onClose={() => setShowEntryModal(false)}
-                iglooData={selectedIgloo}
+                spaceData={selectedSpace}
                 entryCheck={entryCheckResult}
                 walletAddress={walletAddress}
                 onEntrySuccess={handleEntrySuccess}
             />
             
-            {/* Details Panel (marketing view for available igloos) */}
-            <IglooDetailsPanel
+            {/* Details Panel (marketing view for available spaces) */}
+            <SpaceDetailsPanel
                 isOpen={showDetailsPanel}
                 onClose={() => setShowDetailsPanel(false)}
-                iglooData={selectedIgloo}
+                spaceData={selectedSpace}
                 walletAddress={walletAddress}
-                onRent={() => openRentalModal(selectedIgloo?.iglooId)}
-                onPreview={() => enterIglooDemo(selectedIgloo?.iglooId, onEnterRoom)}
+                onRent={() => openRentalModal(selectedSpace?.spaceId)}
+                onPreview={() => enterSpaceDemo(selectedSpace?.spaceId, onEnterRoom)}
             />
             
-            {/* Requirements Panel (for restricted igloos with token gate/entry fee) */}
-            <IglooRequirementsPanel
+            {/* Requirements Panel (for restricted spaces with token gate/entry fee) */}
+            <SpaceRequirementsPanel
                 isOpen={showRequirementsPanel}
                 onClose={() => setShowRequirementsPanel(false)}
-                iglooData={selectedIgloo}
+                spaceData={selectedSpace}
                 walletAddress={walletAddress}
-                onEnterSuccess={(iglooId) => {
+                onEnterSuccess={(spaceId) => {
                     // Entry allowed - transition to room
                     setShowRequirementsPanel(false);
                     if (onEnterRoom) {
-                        onEnterRoom(iglooId);
+                        onEnterRoom(spaceId);
                     }
                 }}
             />
             
-            {/* Igloo Settings Button moved to GameHUD for better mobile/responsive support */}
+            {/* Space Settings Button moved to GameHUD for better mobile/responsive support */}
         </>
     );
 };
@@ -521,7 +521,7 @@ const IglooUI = ({ currentRoom, onEnterRoom }) => {
 const clearOldGameData = () => {
     const keysToRemove = [
         'penguin_customization',  // Old cosmetic persistence
-        'clubpenguin_save',       // Old game save (coins, stamps, etc)
+        'waddlebet_save',       // Old game save (coins, stamps, etc)
         'unlocked_mounts',        // Old mount unlocks
         'unlocked_cosmetics',     // Old cosmetic unlocks
         'owned_puffles',          // Old puffle ownership
@@ -545,12 +545,12 @@ clearOldGameData();
 const App = () => {
     return (
         <MultiplayerProvider>
-            <IglooProvider>
+            <SpaceProvider>
                 <ChallengeProvider>
                     <BackgroundMusic />
                     <AppContent />
                 </ChallengeProvider>
-            </IglooProvider>
+            </SpaceProvider>
         </MultiplayerProvider>
     );
 };

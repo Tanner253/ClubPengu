@@ -7,14 +7,14 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Mock IglooService
-vi.mock('../services/IglooService.js', () => ({
+// Mock SpaceService
+vi.mock('../services/SpaceService.js', () => ({
     default: {
         processOverdueRentals: vi.fn()
     }
 }));
 
-import iglooService from '../services/IglooService.js';
+import spaceService from '../services/SpaceService.js';
 
 // ==================== TESTS ====================
 describe('RentScheduler', () => {
@@ -41,7 +41,7 @@ describe('RentScheduler', () => {
     
     describe('start', () => {
         it('should start the scheduler', async () => {
-            iglooService.processOverdueRentals.mockResolvedValue({ 
+            spaceService.processOverdueRentals.mockResolvedValue({ 
                 evictions: [], 
                 gracePeriodCount: 0 
             });
@@ -52,7 +52,7 @@ describe('RentScheduler', () => {
         });
         
         it('should run check immediately on start', async () => {
-            iglooService.processOverdueRentals.mockResolvedValue({ 
+            spaceService.processOverdueRentals.mockResolvedValue({ 
                 evictions: [], 
                 gracePeriodCount: 0 
             });
@@ -62,11 +62,11 @@ describe('RentScheduler', () => {
             // Flush promises
             await vi.runOnlyPendingTimersAsync();
             
-            expect(iglooService.processOverdueRentals).toHaveBeenCalled();
+            expect(spaceService.processOverdueRentals).toHaveBeenCalled();
         });
         
         it('should not start twice if already running', async () => {
-            iglooService.processOverdueRentals.mockResolvedValue({ 
+            spaceService.processOverdueRentals.mockResolvedValue({ 
                 evictions: [], 
                 gracePeriodCount: 0 
             });
@@ -81,7 +81,7 @@ describe('RentScheduler', () => {
     
     describe('stop', () => {
         it('should stop the scheduler', async () => {
-            iglooService.processOverdueRentals.mockResolvedValue({ 
+            spaceService.processOverdueRentals.mockResolvedValue({ 
                 evictions: [], 
                 gracePeriodCount: 0 
             });
@@ -93,7 +93,7 @@ describe('RentScheduler', () => {
         });
         
         it('should clear interval when stopped', async () => {
-            iglooService.processOverdueRentals.mockResolvedValue({ 
+            spaceService.processOverdueRentals.mockResolvedValue({ 
                 evictions: [], 
                 gracePeriodCount: 0 
             });
@@ -108,7 +108,7 @@ describe('RentScheduler', () => {
     
     describe('checkRentals', () => {
         it('should call processOverdueRentals on interval', async () => {
-            iglooService.processOverdueRentals.mockResolvedValue({ 
+            spaceService.processOverdueRentals.mockResolvedValue({ 
                 evictions: [], 
                 gracePeriodCount: 0 
             });
@@ -118,23 +118,23 @@ describe('RentScheduler', () => {
             // Initial call runs synchronously before interval starts
             // So we just need to verify it was called at least once
             await vi.runOnlyPendingTimersAsync();
-            const initialCalls = iglooService.processOverdueRentals.mock.calls.length;
+            const initialCalls = spaceService.processOverdueRentals.mock.calls.length;
             expect(initialCalls).toBeGreaterThanOrEqual(1);
             
             // Advance by the scheduler's interval (default 60s in updated code)
             await vi.advanceTimersByTimeAsync(scheduler.intervalMs);
             
             // Should have been called again
-            expect(iglooService.processOverdueRentals).toHaveBeenCalledTimes(initialCalls + 1);
+            expect(spaceService.processOverdueRentals).toHaveBeenCalledTimes(initialCalls + 1);
         });
         
         it('should log evictions when they occur', async () => {
             const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
             
-            iglooService.processOverdueRentals.mockResolvedValue({ 
+            spaceService.processOverdueRentals.mockResolvedValue({ 
                 evictions: [
-                    { iglooId: 'igloo1', previousOwner: 'User1' },
-                    { iglooId: 'igloo2', previousOwner: 'User2' }
+                    { spaceId: 'space1', previousOwner: 'User1' },
+                    { spaceId: 'space2', previousOwner: 'User2' }
                 ], 
                 gracePeriodCount: 0 
             });
@@ -149,14 +149,14 @@ describe('RentScheduler', () => {
         it('should log grace period entries', async () => {
             const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
             
-            iglooService.processOverdueRentals.mockResolvedValue({ 
+            spaceService.processOverdueRentals.mockResolvedValue({ 
                 evictions: [], 
                 gracePeriodCount: 3 
             });
             
             await scheduler.checkRentals();
             
-            expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('3 igloos entered grace period'));
+            expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('3 spaces entered grace period'));
             
             consoleSpy.mockRestore();
         });
@@ -164,7 +164,7 @@ describe('RentScheduler', () => {
         it('should handle errors gracefully', async () => {
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
             
-            iglooService.processOverdueRentals.mockRejectedValue(new Error('Database error'));
+            spaceService.processOverdueRentals.mockRejectedValue(new Error('Database error'));
             
             // Should not throw, should return error result
             const result = await scheduler.checkRentals();
@@ -185,14 +185,14 @@ describe('RentScheduler', () => {
     
     describe('triggerCheck', () => {
         it('should allow manual trigger for testing', async () => {
-            iglooService.processOverdueRentals.mockResolvedValue({ 
+            spaceService.processOverdueRentals.mockResolvedValue({ 
                 evictions: [], 
                 gracePeriodCount: 0 
             });
             
             await scheduler.triggerCheck();
             
-            expect(iglooService.processOverdueRentals).toHaveBeenCalled();
+            expect(spaceService.processOverdueRentals).toHaveBeenCalled();
         });
     });
 });

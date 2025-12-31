@@ -689,7 +689,7 @@ export function MultiplayerProvider({ children }) {
             
             // ==================== PUFFLE MESSAGES ====================
             case 'puffle_adopted': {
-                setPuffleAdopting(false);
+                setPetAdopting(false);
                 const result = { 
                     success: true, 
                     puffle: message.puffle, 
@@ -699,12 +699,12 @@ export function MultiplayerProvider({ children }) {
                     puffleAdoptCallbackRef.current(result);
                     puffleAdoptCallbackRef.current = null;
                 }
-                callbacksRef.current.onPuffleAdopted?.(message.puffle);
+                callbacksRef.current.onPetAdopted?.(message.puffle);
                 break;
             }
             
             case 'puffle_adopt_failed': {
-                setPuffleAdopting(false);
+                setPetAdopting(false);
                 const result = { 
                     success: false, 
                     error: message.error, 
@@ -892,7 +892,7 @@ export function MultiplayerProvider({ children }) {
                     console.log(`🐾 ${pufflePlayer.name} ${message.puffle ? 'equipped ' + message.puffle.color + ' puffle' : 'unequipped puffle'}`);
                     pufflePlayer.puffle = message.puffle;
                     pufflePlayer.pufflePosition = message.pufflePosition || null;
-                    pufflePlayer.needsPuffleUpdate = true;
+                    pufflePlayer.needsPetUpdate = true;
                 }
                 break;
                 
@@ -1207,18 +1207,18 @@ export function MultiplayerProvider({ children }) {
         send({ type: 'update_appearance', appearance });
     }, [send]);
     
-    const updatePuffle = useCallback((puffle) => {
+    const updatePet = useCallback((puffle) => {
         send({ type: 'update_puffle', puffle });
     }, [send]);
     
-    // Puffle adoption state
-    const [puffleAdopting, setPuffleAdopting] = useState(false);
+    // Pet adoption state
+    const [puffleAdopting, setPetAdopting] = useState(false);
     const puffleAdoptCallbackRef = useRef(null);
     
     /**
      * Adopt a puffle via server - server handles coin deduction and persistence
      */
-    const adoptPuffle = useCallback((color, name) => {
+    const adoptPet = useCallback((color, name) => {
         return new Promise((resolve) => {
             if (!connected) {
                 resolve({ success: false, error: 'NOT_CONNECTED', message: 'Not connected to server' });
@@ -1230,7 +1230,7 @@ export function MultiplayerProvider({ children }) {
                 return;
             }
             
-            setPuffleAdopting(true);
+            setPetAdopting(true);
             puffleAdoptCallbackRef.current = resolve;
             
             send({ type: 'puffle_adopt', color, name });
@@ -1238,7 +1238,7 @@ export function MultiplayerProvider({ children }) {
             // Timeout after 10 seconds
             setTimeout(() => {
                 if (puffleAdoptCallbackRef.current === resolve) {
-                    setPuffleAdopting(false);
+                    setPetAdopting(false);
                     puffleAdoptCallbackRef.current = null;
                     resolve({ success: false, error: 'TIMEOUT', message: 'Request timed out' });
                 }
@@ -1616,8 +1616,8 @@ export function MultiplayerProvider({ children }) {
         fishingResult,
         clearFishingResult,
         
-        // Puffle Actions
-        adoptPuffle,
+        // Pet Actions
+        adoptPet,
         puffleAdopting,
         
         // Game Actions
@@ -1630,7 +1630,7 @@ export function MultiplayerProvider({ children }) {
         stopEmote,
         changeRoom,
         updateAppearance,
-        updatePuffle,
+        updatePet,
         sendBallKick,
         requestBallSync,
         registerCallbacks,

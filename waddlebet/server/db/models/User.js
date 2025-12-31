@@ -140,10 +140,10 @@ const userSchema = new mongoose.Schema({
             totalAfkTimeMinutes: { type: Number, default: 0 }
         },
         puffles: {
-            totalPufflesAdopted: { type: Number, default: 0 },
-            totalTimesFedPuffle: { type: Number, default: 0 },
-            totalTimesPlayedWithPuffle: { type: Number, default: 0 },
-            totalPuffleHappinessGiven: { type: Number, default: 0 }
+            totalPetsAdopted: { type: Number, default: 0 },
+            totalTimesFedPet: { type: Number, default: 0 },
+            totalTimesPlayedWithPet: { type: Number, default: 0 },
+            totalPetHappinessGiven: { type: Number, default: 0 }
         },
         unlocks: {
             totalCosmeticsOwned: { type: Number, default: 1 },
@@ -158,17 +158,17 @@ const userSchema = new mongoose.Schema({
             dojo: { type: Number, default: 0 },
             pizza: { type: Number, default: 0 },
             market: { type: Number, default: 0 },
-            igloo1: { type: Number, default: 0 },
-            igloo2: { type: Number, default: 0 },
-            igloo3: { type: Number, default: 0 },
-            igloo4: { type: Number, default: 0 },
-            igloo5: { type: Number, default: 0 },
-            igloo6: { type: Number, default: 0 },
-            igloo7: { type: Number, default: 0 },
-            igloo8: { type: Number, default: 0 },
-            igloo9: { type: Number, default: 0 },
-            igloo10: { type: Number, default: 0 },
-            totalIglooTime: { type: Number, default: 0 }
+            space1: { type: Number, default: 0 },
+            space2: { type: Number, default: 0 },
+            space3: { type: Number, default: 0 },
+            space4: { type: Number, default: 0 },
+            space5: { type: Number, default: 0 },
+            space6: { type: Number, default: 0 },
+            space7: { type: Number, default: 0 },
+            space8: { type: Number, default: 0 },
+            space9: { type: Number, default: 0 },
+            space10: { type: Number, default: 0 },
+            totalSpaceTime: { type: Number, default: 0 }
         },
         // ========== GACHA STATS ==========
         gacha: {

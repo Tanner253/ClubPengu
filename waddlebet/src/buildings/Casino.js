@@ -1048,7 +1048,7 @@ class Casino extends BaseBuilding {
             z: z + localX * sin + localZ * cos
         });
         
-        // Bar stools (same format as Pizza Parlor / SKNY Igloo)
+        // Bar stools (same format as Pizza Parlor / SKNY Space)
         const stoolPositions = this.group.userData.stoolPositions || [];
         stoolPositions.forEach((stool, idx) => {
             const worldPos = transform(stool.localX, stool.localZ);
@@ -1065,7 +1065,7 @@ class Casino extends BaseBuilding {
             });
         });
         
-        // Couch (same format as Nightclub / SKNY Igloo)
+        // Couch (same format as Nightclub / SKNY Space)
         const couchPos = this.group.userData.couchPosition;
         if (couchPos) {
             const worldPos = transform(couchPos.localX, couchPos.localZ);

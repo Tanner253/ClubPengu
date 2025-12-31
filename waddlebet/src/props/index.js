@@ -12,7 +12,7 @@ export { getGeometryManager } from './PropGeometries';
 
 // Environmental props
 export { default as PineTree } from './PineTree';
-export { default as Igloo } from './Igloo';
+export { default as Space } from './Space';
 export { default as LampPost } from './LampPost';
 export { default as Bench } from './Bench';
 export { default as SnowPile } from './SnowPile';
@@ -24,7 +24,7 @@ export { default as Campfire } from './Campfire';
 export { default as LogSeat } from './LogSeat';
 export { default as ChristmasTree } from './ChristmasTree';
 export { default as Billboard } from './Billboard';
-export { createIglooInfoBoard } from './IglooInfoBoard';
+export { createSpaceInfoBoard } from './SpaceInfoBoard';
 
 // Quality of life props
 export { default as Mailbox } from './Mailbox';

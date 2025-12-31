@@ -18,7 +18,7 @@ export default defineConfig({
         coverage: {
             provider: 'v8',
             reporter: ['text', 'html', 'lcov', 'json-summary'],
-            include: ['src/wallet/**/*.js', 'src/igloo/**/*.{js,jsx}', 'src/components/Igloo*.jsx', 'src/systems/IglooOccupancySystem.js'],
+            include: ['src/wallet/**/*.js', 'src/space/**/*.{js,jsx}', 'src/components/Space*.jsx', 'src/systems/SpaceOccupancySystem.js'],
             exclude: ['node_modules', 'src/__tests__'],
             thresholds: {
                 lines: 45,

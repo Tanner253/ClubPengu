@@ -17,7 +17,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
     const features = [
         { emoji: '👑', title: 'Whale Status Nametags', description: 'Your $WADDLE balance = your clout. 6 tiers from Standard to Legendary with animated effects.' },
         { emoji: '🎰', title: 'Casino & Slots', description: 'Spin slots with $WADDLE to win tradeable cosmetics. Common to Legendary drops.' },
-        { emoji: '🏠', title: 'Igloo Ownership', description: 'Own or rent igloos. Sell your property on the open market to other players.' },
+        { emoji: '🏠', title: 'Space Ownership', description: 'Own or rent spaces. Sell your property on the open market to other players.' },
         { emoji: '👕', title: 'Tradeable Cosmetics', description: 'Every cosmetic is tradeable. Win rare items in slots, flip for profit.' },
         { emoji: '🎮', title: 'Universal Wagering', description: 'Wager ANY Solana token on PvP games. Tic-tac-toe, Connect 4, Card Jitsu.' },
         { emoji: '🤝', title: 'Cult Collabs', description: 'We partner with ALL Solana cults. Cross-community tournaments with massive prizes.' }
@@ -25,7 +25,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
 
     const roadmapItems = [
         { phase: 'Phase 1', status: 'live', title: 'Foundation', items: ['Multiplayer World', 'P2P Wagering', 'Basic Minigames'] },
-        { phase: 'Phase 2', status: 'building', title: 'Economy', items: ['Casino Launch', 'Igloo System', 'Cosmetic Drops'] },
+        { phase: 'Phase 2', status: 'building', title: 'Economy', items: ['Casino Launch', 'Space System', 'Cosmetic Drops'] },
         { phase: 'Phase 3', status: 'soon', title: 'Expansion', items: ['Building Ownership', 'DAO Governance', 'Mobile App'] },
         { phase: 'Phase 4', status: 'future', title: 'Metaverse', items: ['Cross-chain Support', 'VR Integration', 'Creator Tools'] }
     ];

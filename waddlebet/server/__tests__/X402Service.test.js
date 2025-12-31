@@ -40,7 +40,7 @@ const VALID_PAYLOAD = {
     amount: '10000',
     validUntil: Date.now() + 60000, // Valid for 1 minute
     nonce: 'uniquenonce123',
-    memo: 'rent:igloo1:1days',
+    memo: 'rent:space1:1days',
     signature: 'ValidSignature123'
 };
 

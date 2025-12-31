@@ -25,7 +25,7 @@ Server runs on `ws://localhost:3001`
    - **Instance Type**: Free
 6. Deploy!
 
-After deployment, you'll get a URL like `https://clubpenguin-server.onrender.com`
+After deployment, you'll get a URL like `https://waddlebet-server.onrender.com`
 
 ## Update Frontend
 
@@ -54,7 +54,7 @@ return 'wss://your-app-name.onrender.com';
 - `stop_emote` - Stop emote
 - `change_room` - Room transition
 - `update_appearance` - Appearance change
-- `update_puffle` - Puffle equip/unequip
+- `update_puffle` - Pet equip/unequip
 - `ping` - Keep-alive
 
 ### Server → Client

@@ -26,14 +26,14 @@ import {
     PromoCodeService,
     SlotService,
     FishingService,
-    IglooService,
+    SpaceService,
     BlackjackService,
     GachaService,
     PebbleService,
     ROLL_PRICE_PEBBLES
 } from './services/index.js';
 import custodialWalletService from './services/CustodialWalletService.js';
-import { handleIglooMessage } from './handlers/iglooHandlers.js';
+import { handleSpaceMessage } from './handlers/spaceHandlers.js';
 import { handleTippingMessage } from './handlers/tippingHandlers.js';
 import { handleMarketplaceMessage } from './handlers/marketplaceHandlers.js';
 import { handleGiftMessage } from './handlers/giftHandlers.js';
@@ -61,10 +61,10 @@ const bannedIPs = new Set(); // Set of banned IP addresses
 // playerId -> { activity: 'fishing'|'blackjack', room, state, position, playerName }
 const activePveActivities = new Map();
 
-// Beach ball state per igloo room
+// Beach ball state per space room
 const beachBalls = new Map();
 for (let i = 1; i <= 10; i++) {
-    beachBalls.set(`igloo${i}`, { x: 4.5, z: 3, vx: 0, vz: 0 });
+    beachBalls.set(`space${i}`, { x: 4.5, z: 3, vx: 0, vz: 0 });
 }
 
 // Mount trail points storage
@@ -222,7 +222,7 @@ const broadcastToRoomAll = (roomId, message) => {
     }
 };
 
-// Broadcast to ALL connected players (for global updates like igloo settings)
+// Broadcast to ALL connected players (for global updates like space settings)
 const broadcastToAll = (message) => {
     const data = JSON.stringify(message);
     for (const [playerId, player] of players) {
@@ -664,11 +664,11 @@ setInterval(() => {
     }
 }, TIME_BROADCAST_INTERVAL);
 
-// Room counts for igloo occupancy
+// Room counts for space occupancy
 setInterval(() => {
     const roomCounts = {};
     for (const [roomId, playerSet] of rooms) {
-        if (roomId.startsWith('igloo')) {
+        if (roomId.startsWith('space')) {
             roomCounts[roomId] = playerSet.size;
         }
     }
@@ -1095,7 +1095,7 @@ wss.on('connection', (ws, req) => {
     });
     
     // Auto-disconnect if player doesn't join a room within 5 minutes
-    // This gives time for penguin maker customization before entering world
+    // This gives time for avatar design customization before entering world
     const roomJoinTimeout = setTimeout(() => {
         const player = players.get(playerId);
         if (player && !player.room) {
@@ -1234,8 +1234,8 @@ async function handleMessage(playerId, message) {
     const player = players.get(playerId);
     if (!player) return;
     
-    // Handle igloo messages first (returns true if handled)
-    if (message.type?.startsWith('igloo_')) {
+    // Handle space messages first (returns true if handled)
+    if (message.type?.startsWith('space_')) {
         // Helper to get all players in a specific room with their wallet addresses
         const getPlayersInRoom = (roomId) => {
             const roomPlayers = rooms.get(roomId);
@@ -1245,7 +1245,7 @@ async function handleMessage(playerId, message) {
                 return p ? { id: pid, walletAddress: p.walletAddress, name: p.name } : null;
             }).filter(Boolean);
         };
-        const handled = await handleIglooMessage(playerId, player, message, sendToPlayer, broadcastToAll, getPlayersInRoom);
+        const handled = await handleSpaceMessage(playerId, player, message, sendToPlayer, broadcastToAll, getPlayersInRoom);
         if (handled) return;
     }
     
@@ -1309,7 +1309,7 @@ async function handleMessage(playerId, message) {
         case 'auth_request': {
             // Generate x403 challenge for wallet signature
             // Include domain from request for signer confidence
-            const domain = message.domain || process.env.APP_DOMAIN || 'clubpengu.com';
+            const domain = message.domain || process.env.APP_DOMAIN || 'waddle.bet';
             const challenge = authService.generateChallenge(playerId, domain);
             
             sendToPlayer(playerId, {
@@ -2301,7 +2301,7 @@ async function handleMessage(playerId, message) {
         // ==================== BALL PHYSICS ====================
         case 'ball_kick': {
             const room = player.room;
-            if (room?.startsWith('igloo')) {
+            if (room?.startsWith('space')) {
                 const ball = beachBalls.get(room);
                 if (ball) {
                     ball.x = message.x;
@@ -2322,7 +2322,7 @@ async function handleMessage(playerId, message) {
         
         case 'ball_sync': {
             const room = player.room;
-            if (room?.startsWith('igloo')) {
+            if (room?.startsWith('space')) {
                 const ball = beachBalls.get(room);
                 if (ball) {
                     sendToPlayer(playerId, {
@@ -2490,20 +2490,20 @@ async function handleMessage(playerId, message) {
                 const formattedTokenTransactions = tokenTransactions.map(t => ({
                     id: t.signature?.slice(0, 16) || t._id.toString(),
                     type: t.type === 'wager' ? 'token_wager' : 
-                          t.type === 'igloo_entry_fee' ? 'token_entry_fee' :
-                          t.type === 'igloo_rent' ? 'token_rent' :
-                          t.type === 'igloo_rent_renewal' ? 'token_rent_renewal' : 'token_transfer',
+                          t.type === 'space_entry_fee' ? 'token_entry_fee' :
+                          t.type === 'space_rent' ? 'token_rent' :
+                          t.type === 'space_rent_renewal' ? 'token_rent_renewal' : 'token_transfer',
                     amount: t.amount,
                     currency: t.tokenSymbol || 'SPL',
                     tokenAddress: t.tokenMint,
                     direction: t.recipientWallet === player.walletAddress ? 'in' : 'out',
                     otherParty: t.recipientWallet === player.walletAddress ? t.senderWallet : t.recipientWallet,
                     reason: t.type === 'wager' ? `Wager ${t.matchId ? `for match ${t.matchId}` : ''}` :
-                            t.type === 'igloo_entry_fee' ? `Entry fee ${t.iglooId ? `for ${t.iglooId}` : ''}` :
-                            t.type === 'igloo_rent' ? `Rent ${t.iglooId ? `for ${t.iglooId}` : ''}` :
-                            t.type === 'igloo_rent_renewal' ? `Rent renewal ${t.iglooId ? `for ${t.iglooId}` : ''}` : 'Token transfer',
+                            t.type === 'space_entry_fee' ? `Entry fee ${t.spaceId ? `for ${t.spaceId}` : ''}` :
+                            t.type === 'space_rent' ? `Rent ${t.spaceId ? `for ${t.spaceId}` : ''}` :
+                            t.type === 'space_rent_renewal' ? `Rent renewal ${t.spaceId ? `for ${t.spaceId}` : ''}` : 'Token transfer',
                     matchId: t.matchId,
-                    iglooId: t.iglooId,
+                    spaceId: t.spaceId,
                     timestamp: t.processedAt || t.createdAt,
                     signature: t.signature // For Solscan link
                 }));
@@ -3445,7 +3445,7 @@ async function handleMessage(playerId, message) {
                 break;
             }
             
-            const adoptResult = await userService.adoptPuffle(
+            const adoptResult = await userService.adoptPet(
                 player.walletAddress,
                 message.color,
                 message.name
@@ -3482,7 +3482,7 @@ async function handleMessage(playerId, message) {
                 break;
             }
             
-            const puffles = await userService.getPuffles(player.walletAddress);
+            const puffles = await userService.getPets(player.walletAddress);
             sendToPlayer(playerId, { type: 'puffle_list', puffles });
             break;
         }
@@ -3490,7 +3490,7 @@ async function handleMessage(playerId, message) {
         case 'puffle_activate': {
             if (!player.walletAddress) break;
             
-            const result = await userService.setActivePuffle(player.walletAddress, message.puffleId);
+            const result = await userService.setActivePet(player.walletAddress, message.puffleId);
             if (result.success) {
                 player.puffle = result.puffle;
                 if (player.room) {
@@ -3507,7 +3507,7 @@ async function handleMessage(playerId, message) {
         case 'puffle_deactivate': {
             if (!player.walletAddress) break;
             
-            await userService.deactivatePuffle(player.walletAddress);
+            await userService.deactivatePet(player.walletAddress);
             player.puffle = null;
             player.pufflePosition = null;
             
@@ -5491,8 +5491,8 @@ async function start() {
             console.error('⚠️ Failed to load banned IPs:', error.message);
         }
         
-        // Initialize igloo database records
-        await IglooService.initializeIgloos();
+        // Initialize space database records
+        await SpaceService.initializeSpaces();
         
         // Start rent scheduler (checks for overdue rentals)
         rentScheduler.start();

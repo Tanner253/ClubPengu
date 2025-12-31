@@ -57,7 +57,7 @@ vi.mock('@solana/spl-token', () => ({
 }));
 
 // Import after mocks
-import { sendSPLToken, payIglooEntryFee, payIglooRent } from '../wallet/SolanaPayment.js';
+import { sendSPLToken, paySpaceEntryFee, paySpaceRent } from '../wallet/SolanaPayment.js';
 import PhantomWallet from '../wallet/PhantomWallet.js';
 
 describe('SolanaPayment', () => {
@@ -123,7 +123,7 @@ describe('SolanaPayment', () => {
         });
     });
     
-    describe('payIglooEntryFee', () => {
+    describe('paySpaceEntryFee', () => {
         it('should call sendSPLToken with correct parameters', async () => {
             PhantomWallet.getInstance.mockReturnValue({
                 isConnected: () => true,
@@ -133,8 +133,8 @@ describe('SolanaPayment', () => {
                 })
             });
             
-            const result = await payIglooEntryFee(
-                'igloo3',
+            const result = await paySpaceEntryFee(
+                'space3',
                 500,
                 'ownerWallet12345678',
                 'token123456789'
@@ -143,7 +143,7 @@ describe('SolanaPayment', () => {
             expect(result).toBeDefined();
         });
         
-        it('should include igloo ID in memo', async () => {
+        it('should include space ID in memo', async () => {
             PhantomWallet.getInstance.mockReturnValue({
                 isConnected: () => true,
                 getPublicKey: () => 'senderWallet',
@@ -152,9 +152,9 @@ describe('SolanaPayment', () => {
                 })
             });
             
-            // The function should include the igloo ID
-            await payIglooEntryFee(
-                'igloo7',
+            // The function should include the space ID
+            await paySpaceEntryFee(
+                'space7',
                 1000,
                 'ownerWallet12345678',
                 'token123456789'
@@ -165,7 +165,7 @@ describe('SolanaPayment', () => {
         });
     });
     
-    describe('payIglooRent', () => {
+    describe('paySpaceRent', () => {
         it('should send rent to treasury wallet', async () => {
             PhantomWallet.getInstance.mockReturnValue({
                 isConnected: () => true,
@@ -175,8 +175,8 @@ describe('SolanaPayment', () => {
                 })
             });
             
-            const result = await payIglooRent(
-                'igloo5',
+            const result = await paySpaceRent(
+                'space5',
                 10000,
                 'rentTreasuryWallet123456',
                 'cpw3TokenMint123456'

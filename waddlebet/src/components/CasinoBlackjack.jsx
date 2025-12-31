@@ -2,14 +2,14 @@
  * CasinoBlackjack - PvE Blackjack
  * 
  * 1:1 EXACT copy of blackjacksource.md
- * ONLY change: Dealer uses createPenguinBuilder (black + bowtie)
+ * ONLY change: Dealer uses createCharacterBuilder (black + bowtie)
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
 import gsap from 'gsap';
-import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PenguinBuilder';
+import { createCharacterBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PlayerBuilder';
 import GameManager from '../engine/GameManager';
 
 // --- UTILITIES --- (exact from source)
@@ -197,7 +197,7 @@ class Dealer {
         this.group = new THREE.Group();
         this.scene.add(this.group);
         this.group.position.set(0, 0.4, -22); // Exact position from source
-        this.buildPenguin();
+        this.buildCharacter();
         
         this.state = 'idle';
         this.lookTarget = new THREE.Vector3(0, 0, 0);
@@ -205,9 +205,9 @@ class Dealer {
         this.emoting = false;
     }
 
-    buildPenguin() {
+    buildCharacter() {
         try {
-            const { buildPenguinMesh } = createPenguinBuilder(THREE);
+            const { buildCharacterMesh } = createCharacterBuilder(THREE);
             
             // Black penguin with bowtie as dealer - per user request
             const appearance = {
@@ -221,7 +221,7 @@ class Dealer {
                 characterType: null
             };
             
-            this.penguin = buildPenguinMesh(appearance);
+            this.penguin = buildCharacterMesh(appearance);
             this.penguin.scale.set(3.5, 3.5, 3.5); // Larger dealer
             this.penguin.name = 'dealer_penguin';
             
