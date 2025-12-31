@@ -1363,21 +1363,35 @@ async function handleMessage(playerId, message) {
                 }
                 
                 // Build ban message with reason if available
+                // Build ban message with reason if available (re-query if needed)
                 let banMessage = 'Your account has been banned. Access denied.';
-                if (isDBConnected() && user?.banReason) {
-                    banMessage = `Your account has been banned. Reason: ${user.banReason}. Access denied.`;
-                }
-                if (isDBConnected() && user?.banExpires) {
-                    const expiresDate = new Date(user.banExpires).toLocaleString();
-                    banMessage += ` Ban expires: ${expiresDate}`;
+                let banReasonFinal = null;
+                let banExpiresFinal = null;
+                
+                // Get ban details for message (re-query since user var might be out of scope)
+                if (isDBConnected()) {
+                    const { isDBConnected: checkDB } = await import('./db/connection.js');
+                    if (checkDB()) {
+                        const User = (await import('./db/models/User.js')).default;
+                        const userInfo = await User.findOne({ walletAddress }, 'banReason banExpires').catch(() => null);
+                        if (userInfo?.banReason) {
+                            banMessage = `Your account has been banned. Reason: ${userInfo.banReason}. Access denied.`;
+                            banReasonFinal = userInfo.banReason;
+                        }
+                        if (userInfo?.banExpires) {
+                            const expiresDate = new Date(userInfo.banExpires).toLocaleString();
+                            banMessage += ` Ban expires: ${expiresDate}`;
+                            banExpiresFinal = userInfo.banExpires;
+                        }
+                    }
                 }
                 
                 sendToPlayer(playerId, {
                     type: 'auth_failure',
                     error: 'BANNED',
                     message: banMessage,
-                    banReason: user?.banReason || null,
-                    banExpires: user?.banExpires || null
+                    banReason: banReasonFinal,
+                    banExpires: banExpiresFinal
                 });
                 
                 // Close connection immediately
@@ -1441,6 +1455,8 @@ async function handleMessage(playerId, message) {
                         if (isDBConnected()) {
                             const User = (await import('./db/models/User.js')).default;
                             user = await User.findOne({ walletAddress }, 'username banReason banExpires').catch(() => null);
+                        } else {
+                            console.log(`🚫 BANNED USER CONNECTION ATTEMPT: Unknown (${walletAddress?.slice(0, 8) || 'unknown'}...) from IP ${player.ip} - Database not connected`);
                         }
                         
                         // Log banned user connection attempt

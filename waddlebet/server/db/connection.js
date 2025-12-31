@@ -34,7 +34,9 @@ const connectDB = async () => {
             socketTimeoutMS: 45000,    // Socket timeout
             family: 4,                 // Use IPv4
             retryWrites: true,
-            w: 'majority'
+            w: 'majority',
+            bufferMaxEntries: 0,       // Disable Mongoose buffering when disconnected (prevents timeout errors)
+            bufferCommands: false      // Don't buffer commands when disconnected
         };
 
         await mongoose.connect(mongoUri, options);
