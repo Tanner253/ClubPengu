@@ -100,8 +100,9 @@ class TownCenter {
     // Dojo position for parkour course binding
     static DOJO_OFFSET = { x: 0, z: 70 };
 
-    constructor(THREE) {
+    constructor(THREE, getSpace = null) {
         this.THREE = THREE;
+        this.getSpace = getSpace; // Function to get space data by spaceId
         this.collisionSystem = new CollisionSystem(
             TownCenter.WORLD_SIZE,
             TownCenter.WORLD_SIZE,
@@ -111,6 +112,20 @@ class TownCenter {
         this.propMeshes = [];
         this.lights = [];
         this.propPlacements = this._generatePropPlacements();
+        
+        // Map space positions to space IDs (matching VoxelWorld spaceData)
+        this.spacePositionMap = {
+            [`${TownCenter.CENTER - 75},${TownCenter.CENTER - 75}`]: 'space1',
+            [`${TownCenter.CENTER - 50},${TownCenter.CENTER - 78}`]: 'space2',
+            [`${TownCenter.CENTER - 25},${TownCenter.CENTER - 75}`]: 'space3', // SKNY space
+            [`${TownCenter.CENTER + 25},${TownCenter.CENTER - 75}`]: 'space4',
+            [`${TownCenter.CENTER + 50},${TownCenter.CENTER - 78}`]: 'space5',
+            [`${TownCenter.CENTER + 75},${TownCenter.CENTER - 75}`]: 'space6',
+            [`${TownCenter.CENTER - 70},${TownCenter.CENTER - 18}`]: 'space7',
+            [`${TownCenter.CENTER - 40},${TownCenter.CENTER - 21}`]: 'space8',
+            [`${TownCenter.CENTER + 40},${TownCenter.CENTER - 21}`]: 'space9',
+            [`${TownCenter.CENTER + 70},${TownCenter.CENTER - 18}`]: 'space10',
+        };
     }
 
     /**
@@ -751,8 +766,37 @@ class TownCenter {
                     break;
                 }
                 case 'space': {
+                    // Determine space type from server data
+                    let spaceType = 'igloo'; // Default
+                    let propType = PROP_TYPES.SPACE; // Default to ice dome
+                    
+                    if (this.getSpace) {
+                        // Look up space by position
+                        const spaceKey = `${prop.x},${prop.z}`;
+                        const spaceId = this.spacePositionMap[spaceKey];
+                        if (spaceId) {
+                            const spaceData = this.getSpace(spaceId);
+                            if (spaceData && spaceData.spaceType) {
+                                spaceType = spaceData.spaceType;
+                                // Map spaceType to prop type
+                                switch (spaceType) {
+                                    case 'pond':
+                                        propType = PROP_TYPES.POND;
+                                        break;
+                                    case 'doghouse':
+                                        propType = PROP_TYPES.DOG_HOUSE;
+                                        break;
+                                    case 'igloo':
+                                    default:
+                                        propType = PROP_TYPES.SPACE;
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                    
                     // Use new modular prop system with auto-attached collision
-                    const spaceProp = createProp(this.THREE, null, PROP_TYPES.SPACE, 0, 0, 0, { withEntrance: true });
+                    const spaceProp = createProp(this.THREE, null, propType, 0, 0, 0, { withEntrance: true });
                     mesh = attachPropData(spaceProp, spaceProp.group);
                     break;
                 }

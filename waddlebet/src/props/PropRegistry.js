@@ -6,6 +6,8 @@
 import PineTree from './PineTree';
 import Space from './Space';
 import SKNYSpace from './SKNYSpace';
+import Pond from './Pond';
+import DogHouse from './DogHouse';
 import LampPost from './LampPost';
 import Bench from './Bench';
 import SnowPile from './SnowPile';
@@ -33,6 +35,8 @@ export const PROP_TYPES = {
     PINE_TREE: 'pineTree',
     SPACE: 'space',
     SKNY_SPACE: 'sknySpace',
+    POND: 'pond',
+    DOG_HOUSE: 'dogHouse',
     LAMP_POST: 'lampPost',
     BENCH: 'bench',
     SNOW_PILE: 'snowPile',
@@ -62,6 +66,8 @@ const propClasses = {
     [PROP_TYPES.PINE_TREE]: PineTree,
     [PROP_TYPES.SPACE]: Space,
     [PROP_TYPES.SKNY_SPACE]: SKNYSpace,
+    [PROP_TYPES.POND]: Pond,
+    [PROP_TYPES.DOG_HOUSE]: DogHouse,
     [PROP_TYPES.LAMP_POST]: LampPost,
     [PROP_TYPES.BENCH]: Bench,
     [PROP_TYPES.SNOW_PILE]: SnowPile,
@@ -116,6 +122,14 @@ export const createProp = (THREE, scene, type, x, y, z, options = {}) => {
             
         case PROP_TYPES.SKNY_SPACE:
             prop = new PropClass(THREE);
+            break;
+            
+        case PROP_TYPES.POND:
+            prop = new PropClass(THREE, options.withEntrance !== false);
+            break;
+            
+        case PROP_TYPES.DOG_HOUSE:
+            prop = new PropClass(THREE, options.withEntrance !== false);
             break;
             
         case PROP_TYPES.LAMP_POST:

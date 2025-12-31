@@ -319,12 +319,17 @@ function VoxelPlayerDesigner({ onEnterWorld, currentData, updateData }) {
     // Check if current customization is valid (all equipped items owned)
     const isCustomizationValid = useMemo(() => {
         // Guests can only use default appearance (all 'none'/defaults or base items)
+        // BUT: Guests can select penguin, dog, or frog characters with their default appearance
         if (!isAuthenticated) {
             // Allow guests to use base colors and default options only
             if (!BASE_SKIN_COLORS.includes(skinColor)) return false;
             if (hat !== 'none') return false; // Guests cannot wear hats
-            if (eyes !== 'normal') return false; // Guests can only use default eyes
-            if (mouth !== 'beak') return false; // Guests can only use default mouth
+            // Allow default eyes for penguin ('normal') or 'none' for dog/frog
+            if (characterType === 'penguin' && eyes !== 'normal') return false;
+            if ((characterType === 'dog' || characterType === 'frog') && eyes !== 'none') return false;
+            // Allow default mouth for penguin ('beak') or 'none' for dog/frog
+            if (characterType === 'penguin' && mouth !== 'beak') return false;
+            if ((characterType === 'dog' || characterType === 'frog') && mouth !== 'none') return false;
             if (bodyItem !== 'none') return false; // Guests cannot wear body items
             if (mount !== 'none') return false; // Guests cannot use mounts
             return true;
@@ -339,7 +344,7 @@ function VoxelPlayerDesigner({ onEnterWorld, currentData, updateData }) {
         if (!isMountUnlocked(mount)) return false;
         
         return true;
-    }, [isAuthenticated, skinColor, hat, eyes, mouth, bodyItem, mount, gachaOwnedCosmetics, unlockedCosmetics, unlockedMounts]);
+    }, [isAuthenticated, characterType, skinColor, hat, eyes, mouth, bodyItem, mount, gachaOwnedCosmetics, unlockedCosmetics, unlockedMounts]);
     
     // Handle promo code submission - SERVER HANDLES ALL VALIDATION
     const handlePromoCodeSubmit = async () => {
@@ -419,12 +424,21 @@ function VoxelPlayerDesigner({ onEnterWorld, currentData, updateData }) {
         if (typeId === 'penguin' || typeId === 'dog' || typeId === 'frog' || unlockedCharactersList.includes(typeId)) {
             setCharacterType(typeId);
             
-            // Dog doesn't use penguin cosmetics (has its own eyes, mouth, etc.)
+            // Dog and Frog don't use penguin cosmetics (have their own eyes, mouth, etc.)
             if (typeId === 'dog') {
                 // Don't auto-set hat to 'none' - let users equip wizard hat if they have it unlocked
                 setEyes('none');     // Dog has its own eyes
                 setMouth('none');    // Dog has its own mouth/snout
                 setBodyItem('none'); // No shirt on dog
+            } else if (typeId === 'frog') {
+                // Frogs have their own eyes and mouth built-in
+                setEyes('none');     // Frog has its own eyes
+                setMouth('none');    // Frog has its own mouth
+                setBodyItem('none'); // No body items for frogs (by default)
+            } else if (typeId === 'penguin') {
+                // Reset to penguin defaults when switching back
+                setEyes('normal');
+                setMouth('beak');
             }
         }
     };

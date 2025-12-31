@@ -760,7 +760,8 @@ const VoxelWorld = ({
             
             // ==================== SPAWN TOWN CENTER PROPS ====================
             // Create TownCenter room instance and spawn all props (trees, spaces, lamps, etc.)
-            const townCenter = new TownCenter(THREE);
+            // Pass getSpace function so TownCenter can render spaces based on spaceType
+            const townCenter = new TownCenter(THREE, getSpace || null);
             townCenterRef.current = townCenter;
             const { meshes: propMeshes, lights: propLights, collisionSystem } = townCenter.spawn(scene);
             
@@ -1973,8 +1974,10 @@ const VoxelWorld = ({
             let moving = false;
             
             // Jump physics constants
-            const GRAVITY = 30;
-            const JUMP_VELOCITY = 12;
+            // Frogs have special leap abilities: 2x jump height, 2x slower fall
+            const isFrog = playerDataRef.current?.characterType === 'frog';
+            const GRAVITY = isFrog ? 15 : 30; // Frogs fall 2x slower (half gravity)
+            const JUMP_VELOCITY = isFrog ? 24 : 12; // Frogs jump 2x higher
             const GROUND_Y = 0;
             
             // Check keyboard input (disabled during P2P match)
