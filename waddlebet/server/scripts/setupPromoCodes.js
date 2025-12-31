@@ -120,21 +120,9 @@ const PROMO_CODES = [
         }
     },
     {
-        code: 'DOG',
-        name: '🐕 Dog Character',
-        description: 'Unlocks the dog character type',
-        unlocks: {
-            mounts: [],
-            cosmetics: [],
-            characters: ['dog'],
-            skinColor: null,
-            coins: 0
-        }
-    },
-    {
         code: 'WZRDOG',
         name: '🧙 Wizard Dog',
-        description: 'Unlocks the wizard hat for dog characters',
+        description: 'Unlocks the wizard hat cosmetic (only works when playing as a dog)',
         unlocks: {
             mounts: [],
             cosmetics: [

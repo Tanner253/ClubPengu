@@ -258,14 +258,17 @@ function PlayerCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     }, [showOwnedOnly, isAuthenticated, isCosmeticUnlocked, isMountUnlocked, gachaOwnedCosmetics, cosmeticsFromDB]);
     
     // Available characters - match VoxelPlayerDesigner logic
+    // Base characters (penguin, dog, frog) are always available
     const availableCharacters = useMemo(() => {
-        const chars = [{ id: 'penguin', name: 'Penguin', emoji: '🐧' }];
+        const chars = [
+            { id: 'penguin', name: 'Penguin', emoji: '🐧' },
+            { id: 'dog', name: 'Dog', emoji: '🐕' },
+            { id: 'frog', name: 'PEPE Frog', emoji: '🐸' }
+        ];
         
-        // Check if each character is unlocked
+        // Check if additional characters are unlocked
         unlockedCharacters.forEach(charId => {
-            if (charId === 'dog') chars.push({ id: 'dog', name: 'Dog', emoji: '🐕' });
-            else if (charId === 'frog') chars.push({ id: 'frog', name: 'PEPE Frog', emoji: '🐸' });
-            else if (charId === 'marcus') chars.push({ id: 'marcus', name: 'Marcus', emoji: '🦁' });
+            if (charId === 'marcus') chars.push({ id: 'marcus', name: 'Marcus', emoji: '🦁' });
             else if (charId === 'white_whale') chars.push({ id: 'white_whale', name: 'White Whale', emoji: '🐋' });
             else if (charId === 'black_whale') chars.push({ id: 'black_whale', name: 'Black Whale', emoji: '🐋' });
             else if (charId === 'silver_whale') chars.push({ id: 'silver_whale', name: 'Silver Whale', emoji: '🐋' });

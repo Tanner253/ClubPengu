@@ -415,8 +415,8 @@ function VoxelPlayerDesigner({ onEnterWorld, currentData, updateData }) {
     
     // Handle character type change
     const handleCharacterTypeChange = (typeId) => {
-        // Check if character is unlocked (penguin always available, others from server)
-        if (typeId === 'penguin' || unlockedCharactersList.includes(typeId)) {
+        // Check if character is unlocked (penguin, dog, frog always available, others from server)
+        if (typeId === 'penguin' || typeId === 'dog' || typeId === 'frog' || unlockedCharactersList.includes(typeId)) {
             setCharacterType(typeId);
             
             // Dog doesn't use penguin cosmetics (has its own eyes, mouth, etc.)
@@ -432,9 +432,9 @@ function VoxelPlayerDesigner({ onEnterWorld, currentData, updateData }) {
     // Get current character config
     const currentCharacter = characterRegistry.getCharacter(characterType);
     
-    // Get unlocked characters from server (penguin always available)
+    // Get unlocked characters from server (penguin, dog, and frog always available)
     const unlockedCharactersList = useMemo(() => {
-        const chars = ['penguin']; // Penguin always unlocked
+        const chars = ['penguin', 'dog', 'frog']; // Base characters always unlocked
         if (isAuthenticated && userData?.unlockedCharacters) {
             userData.unlockedCharacters.forEach(c => {
                 if (!chars.includes(c)) chars.push(c);
