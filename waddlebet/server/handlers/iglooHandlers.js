@@ -242,8 +242,19 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     return true;
                 }
                 
-                // PRIVATE igloo - only owner can enter
+                // PRIVATE igloo - only owner can enter (guests blocked)
                 if (igloo.accessType === 'private') {
+                    if (!player.isAuthenticated || !walletAddress) {
+                        sendToPlayer(playerId, {
+                            type: 'igloo_can_enter',
+                            iglooId,
+                            canEnter: false,
+                            isOwner: false,
+                            blockingReason: 'NOT_AUTHENTICATED',
+                            message: 'You must be logged in to enter private igloos'
+                        });
+                        return true;
+                    }
                     sendToPlayer(playerId, {
                         type: 'igloo_can_enter',
                         iglooId,
@@ -255,7 +266,7 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     return true;
                 }
                 
-                // PUBLIC igloo - anyone can enter (no restrictions)
+                // PUBLIC igloo - anyone can enter, including guests (no restrictions)
                 if (igloo.accessType === 'public') {
                     sendToPlayer(playerId, {
                         type: 'igloo_can_enter',
@@ -267,6 +278,19 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 }
                 
                 // TOKEN, FEE, or BOTH access types - check requirements
+                // Guests cannot enter token-gated or fee-based igloos
+                if (!player.isAuthenticated || !walletAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'igloo_can_enter',
+                        iglooId,
+                        canEnter: false,
+                        isOwner: false,
+                        reason: 'NOT_AUTHENTICATED',
+                        message: 'You must be logged in to enter this igloo'
+                    });
+                    return true;
+                }
+                
                 let tokenGateMet = true;
                 let entryFeePaid = true;
                 let userTokenBalance = 0;
@@ -341,8 +365,31 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 const { iglooId } = message;
                 const walletAddress = player.walletAddress || null;
                 
-                // Guests automatically fail eligibility (they shouldn't be in igloos)
+                // Get igloo data first to check if it's public
+                const igloo = await iglooService.getIglooRaw(iglooId);
+                if (!igloo) {
+                    sendToPlayer(playerId, {
+                        type: 'igloo_eligibility_check',
+                        iglooId,
+                        canEnter: false,
+                        reason: 'IGLOO_NOT_FOUND'
+                    });
+                    return true;
+                }
+                
+                // Guests can stay in PUBLIC igloos, but not in private/token/fee igloos
                 if (!player.isAuthenticated || !walletAddress) {
+                    // Allow guests in public igloos
+                    if (igloo.accessType === 'public') {
+                        sendToPlayer(playerId, {
+                            type: 'igloo_eligibility_check',
+                            iglooId,
+                            canEnter: true,
+                            isOwner: false
+                        });
+                        return true;
+                    }
+                    // Block guests from private/token/fee igloos
                     sendToPlayer(playerId, {
                         type: 'igloo_eligibility_check',
                         iglooId,
@@ -369,18 +416,7 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     return true;
                 }
                 
-                // Get igloo data to check requirements
-                const igloo = await iglooService.getIglooRaw(iglooId);
-                if (!igloo) {
-                    sendToPlayer(playerId, {
-                        type: 'igloo_eligibility_check',
-                        iglooId,
-                        canEnter: false,
-                        reason: 'IGLOO_NOT_FOUND'
-                    });
-                    return true;
-                }
-                
+                // Igloo data already fetched above (for guest check)
                 // Owner always has access
                 const isOwner = walletAddress === igloo.ownerWallet;
                 if (isOwner) {
