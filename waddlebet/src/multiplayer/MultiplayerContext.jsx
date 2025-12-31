@@ -401,6 +401,19 @@ export function MultiplayerProvider({ children }) {
                 if (message.success && message.newPebbleBalance !== undefined) {
                     setUserData(prev => prev ? { ...prev, pebbles: message.newPebbleBalance } : prev);
                 }
+                // CRITICAL: Update gachaOwnedCosmetics after market purchase
+                // This ensures the wardrobe knows the user owns the item immediately
+                if (message.success && message.item?.templateId) {
+                    setUserData(prev => {
+                        if (!prev) return prev;
+                        const existingGacha = prev.gachaOwnedCosmetics || [];
+                        if (!existingGacha.includes(message.item.templateId)) {
+                            console.log(`🏪 Added ${message.item.templateId} to gachaOwnedCosmetics after market purchase`);
+                            return { ...prev, gachaOwnedCosmetics: [...existingGacha, message.item.templateId] };
+                        }
+                        return prev;
+                    });
+                }
                 callbacksRef.current.onMarketBuyResult?.(message);
                 break;
                 

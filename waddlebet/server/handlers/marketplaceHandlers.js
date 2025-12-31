@@ -7,6 +7,8 @@
  */
 
 import marketplaceService from '../services/MarketplaceService.js';
+import OwnedCosmetic from '../db/models/OwnedCosmetic.js';
+import User from '../db/models/User.js';
 
 /**
  * Handle marketplace-related messages
@@ -263,6 +265,34 @@ export async function handleMarketplaceMessage(playerId, player, message, sendTo
                         type: 'pebbles_update',
                         pebbles: result.newPebbleBalance
                     });
+                }
+                
+                // CRITICAL: Refresh buyer's inventory after purchase
+                // This ensures the client knows they own the item before they try to equip it
+                if (result.success && result.item) {
+                    try {
+                        const inventory = await OwnedCosmetic.getFullInventory(player.walletAddress, {
+                            page: 1,
+                            limit: 50
+                        });
+                        
+                        const user = await User.findOne({ walletAddress: player.walletAddress });
+                        
+                        sendToPlayer(playerId, {
+                            type: 'inventory_data',
+                            items: inventory.items,
+                            total: inventory.total,
+                            page: inventory.page,
+                            hasMore: inventory.hasMore,
+                            maxSlots: user?.maxInventorySlots || 150,
+                            upgradeInfo: user?.getInventoryUpgradeInfo() || null
+                        });
+                        
+                        console.log(`🏪 Refreshed inventory for buyer ${player.name} after purchase`);
+                    } catch (inventoryError) {
+                        console.error('🏪 Error refreshing inventory after purchase:', inventoryError);
+                        // Don't fail the purchase if inventory refresh fails
+                    }
                 }
                 
                 // Broadcast sale to all players for real-time updates
