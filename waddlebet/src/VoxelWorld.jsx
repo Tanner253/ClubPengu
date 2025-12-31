@@ -200,6 +200,58 @@ const VoxelWorld = ({
         penguinDataRef.current = penguinData;
     }, [penguinData]);
     
+    // Rebuild local player mesh when penguinData changes (e.g., after saving customization)
+    const prevPenguinDataRef = useRef(penguinData);
+    useEffect(() => {
+        // Skip on initial mount (mesh is built in initThree)
+        if (prevPenguinDataRef.current === penguinData) {
+            prevPenguinDataRef.current = penguinData;
+            return;
+        }
+        prevPenguinDataRef.current = penguinData;
+        
+        if (!playerRef.current || !buildPenguinMeshRef.current || !sceneRef.current || !penguinData) return;
+        
+        // Store current position, rotation, and attachments
+        const currentPos = playerRef.current.position.clone();
+        const currentRot = playerRef.current.rotation.y;
+        const nameSprite = playerNameSpriteRef.current;
+        
+        // Remove old mesh from scene
+        sceneRef.current.remove(playerRef.current);
+        
+        // Build new mesh with updated appearance
+        const newMesh = buildPenguinMeshRef.current(penguinData);
+        newMesh.position.copy(currentPos);
+        newMesh.rotation.y = currentRot;
+        sceneRef.current.add(newMesh);
+        
+        // Reattach nametag
+        if (nameSprite) {
+            newMesh.add(nameSprite);
+        }
+        
+        // Update mount visibility based on settings
+        try {
+            const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
+            if (settings.mountEnabled === false) {
+                mountEnabledRef.current = false;
+                const mountGroup = newMesh.getObjectByName('mount');
+                if (mountGroup) {
+                    mountGroup.visible = false;
+                }
+            }
+        } catch (e) { /* ignore */ }
+        
+        // Update playerRef
+        playerRef.current = newMesh;
+        
+        // Rebuild animated parts cache
+        newMesh.userData._animatedPartsCache = cacheAnimatedParts(newMesh);
+        
+        console.log('🔄 Rebuilt local player mesh with updated appearance');
+    }, [penguinData]);
+    
     // Challenge context for position updates and dance trigger
     const { updateLocalPosition, shouldDance, clearDance } = useChallenge();
     
@@ -3345,6 +3397,76 @@ const VoxelWorld = ({
             for (const [id, meshData] of otherMeshes) {
                 const playerData = playersData.get(id);
                 if (!playerData || !meshData.mesh) continue;
+                
+                // Rebuild mesh if appearance changed
+                if (playerData.needsMeshRebuild && buildPenguinMeshRef.current) {
+                    console.log(`🔄 Rebuilding mesh for ${playerData.name} due to appearance change`);
+                    
+                    // Store current position and rotation
+                    const currentPos = meshData.mesh.position.clone();
+                    const currentRot = meshData.mesh.rotation.y;
+                    
+                    // Store nametag and other attachments
+                    const nameSprite = meshData.nameSprite;
+                    const bubble = meshData.bubble;
+                    const goldRainSystem = meshData.goldRainSystem;
+                    
+                    // Remove old mesh from scene
+                    scene.remove(meshData.mesh);
+                    
+                    // Build new mesh with updated appearance
+                    const newMesh = buildPenguinMeshRef.current(playerData.appearance);
+                    newMesh.position.copy(currentPos);
+                    newMesh.rotation.y = currentRot;
+                    scene.add(newMesh);
+                    
+                    // Reattach nametag
+                    if (nameSprite) {
+                        newMesh.add(nameSprite);
+                    }
+                    
+                    // Reattach bubble if it exists
+                    if (bubble) {
+                        newMesh.add(bubble);
+                    }
+                    
+                    // Hide mount if player has mountEnabled set to false
+                    if (playerData.appearance?.mountEnabled === false) {
+                        const mountGroup = newMesh.getObjectByName('mount');
+                        if (mountGroup) {
+                            mountGroup.visible = false;
+                            newMesh.userData.mountVisible = false;
+                        }
+                    }
+                    
+                    // Update mesh reference
+                    meshData.mesh = newMesh;
+                    
+                    // Update animated cosmetics flag
+                    const appearance = playerData.appearance || {};
+                    meshData.hasAnimatedCosmetics = appearance.hat === 'propeller' || 
+                                                     appearance.hat === 'flamingCrown' ||
+                                                     appearance.mouth === 'cigarette' || 
+                                                     appearance.mouth === 'pipe' ||
+                                                     appearance.mouth === 'cigar' ||
+                                                     appearance.mouth === 'fireBreath' ||
+                                                     appearance.mouth === 'iceBreath' ||
+                                                     appearance.mouth === 'bubblegum' ||
+                                                     appearance.eyes === 'laser' ||
+                                                     appearance.eyes === 'fire' ||
+                                                     appearance.bodyItem === 'angelWings' ||
+                                                     appearance.bodyItem === 'demonWings' ||
+                                                     appearance.bodyItem === 'fireAura' ||
+                                                     appearance.bodyItem === 'lightningAura';
+                    
+                    // Clear the rebuild flag
+                    playerData.needsMeshRebuild = false;
+                    
+                    // Clear animated parts cache so it gets rebuilt
+                    if (newMesh.userData._animatedPartsCache) {
+                        delete newMesh.userData._animatedPartsCache;
+                    }
+                }
                 
                 // OPTIMIZATION: Calculate distance to local player
                 const dx = (playerData.position?.x || 0) - localPosX;
@@ -6551,6 +6673,21 @@ const VoxelWorld = ({
                     }
                     // Update appearance on server (broadcasts to all players)
                     mpUpdateAppearance(newData);
+                    
+                    // Force a position update to ensure other players see us moving
+                    // This fixes the issue where players appear stuck after appearance update
+                    // Use setTimeout to ensure position is sent after appearance update is processed
+                    setTimeout(() => {
+                        if (posRef.current && sendPosition && playerRef.current) {
+                            const rot = playerRef.current.rotation.y || 0;
+                            const pufflePos = playerPuffleRef.current?.position || null;
+                            sendPosition(
+                                { x: posRef.current.x, y: posRef.current.y, z: posRef.current.z },
+                                rot,
+                                pufflePos
+                            );
+                        }
+                    }, 100);
                 }}
              />
              

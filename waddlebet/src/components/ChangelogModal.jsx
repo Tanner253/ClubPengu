@@ -23,6 +23,24 @@ const CHANGE_TYPES = {
 // ==================== CHANGELOG DATA (1:1 with whitepaper) ====================
 const CHANGELOG = [
     {
+        version: '1.0.3',
+        date: 'December 31, 2025',
+        title: '🐛 Bug Fixes & Game Balance',
+        description: 'Critical fixes for Blackjack payouts, UNO spectator display, Monopoly rent scaling, and player preview rendering',
+        highlight: false,
+        changes: [
+            { type: 'fix', text: 'Blackjack PvE payouts now correctly credit gold coins to player balance on win' },
+            { type: 'fix', text: 'Improved error handling and validation in blackjack payout system' },
+            { type: 'fix', text: 'UNO spectator banner now updates card counts in real-time when cards are played or drawn' },
+            { type: 'fix', text: 'UNO state notifications trigger immediately on card actions for accurate spectator display' },
+            { type: 'fix', text: 'Monopoly rent now scales dynamically with game duration (1x to 3x over 10 minutes) instead of fixed values' },
+            { type: 'fix', text: 'Monopoly rent calculation uses gameStartTime for fair duration-based scaling' },
+            { type: 'fix', text: 'WagerBot player preview now correctly renders both flippers and all cosmetics (hat, bodyItem)' },
+            { type: 'fix', text: 'PenguinPreview3D flipper generation fixed to call generateFlippers twice (left and right)' },
+            { type: 'improvement', text: 'Monopoly rent system balances early game (cheap) with late game (expensive) for fair gameplay' },
+        ],
+    },
+    {
         version: '1.0.2',
         date: 'December 30, 2025',
         title: '🏪 Cosmetic Marketplace & Economy',
