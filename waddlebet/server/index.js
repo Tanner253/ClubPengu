@@ -1337,11 +1337,32 @@ async function handleMessage(playerId, message) {
             
             // Check if banned
             if (await authService.isWalletBanned(walletAddress)) {
+                // Get user to retrieve their IP address for IP banning
+                const User = (await import('./db/models/User.js')).default;
+                const user = await User.findOne({ walletAddress }, 'lastIpAddress isBanned');
+                
+                // If user has a last known IP, ban that IP address
+                if (user?.lastIpAddress && user.lastIpAddress !== 'unknown') {
+                    bannedIPs.add(user.lastIpAddress);
+                    console.log(`🚫 Banned IP ${user.lastIpAddress} due to banned user ${walletAddress.slice(0, 8)}...`);
+                }
+                
+                // Also ban current connection IP
+                if (player.ip && player.ip !== 'unknown') {
+                    bannedIPs.add(player.ip);
+                    console.log(`🚫 Banned current connection IP ${player.ip} due to banned user ${walletAddress.slice(0, 8)}...`);
+                }
+                
                 sendToPlayer(playerId, {
                     type: 'auth_failure',
                     error: 'BANNED',
-                    message: 'Your account has been banned'
+                    message: 'Your account has been banned. Access denied.'
                 });
+                
+                // Close connection immediately
+                if (player.ws && player.ws.readyState === 1) { // WebSocket.OPEN
+                    player.ws.close(1008, 'Account banned');
+                }
                 break;
             }
             
@@ -1388,6 +1409,24 @@ async function handleMessage(playerId, message) {
                 }
             } catch (error) {
                 console.error('Auth error:', error);
+                
+                // If user is banned, also ban their IP
+                if (error.message === 'BANNED' && player.ip && player.ip !== 'unknown') {
+                    bannedIPs.add(player.ip);
+                    console.log(`🚫 Banned IP ${player.ip} due to banned user authentication attempt`);
+                    
+                    sendToPlayer(playerId, {
+                        type: 'auth_failure',
+                        error: 'BANNED',
+                        message: 'Your account has been banned. Access denied.'
+                    });
+                    
+                    // Close connection immediately
+                    if (player.ws && player.ws.readyState === 1) { // WebSocket.OPEN
+                        player.ws.close(1008, 'Account banned');
+                    }
+                    break;
+                }
                 sendToPlayer(playerId, {
                     type: 'auth_failure',
                     error: 'AUTH_ERROR',
@@ -5268,6 +5307,26 @@ async function start() {
     const dbConnected = await connectDB();
     if (dbConnected) {
         console.log('✅ Database connected');
+        
+        // Load banned users' IPs into bannedIPs Set
+        try {
+            const bannedUsers = await User.find({ 
+                isBanned: true,
+                lastIpAddress: { $exists: true, $ne: null, $ne: 'unknown' }
+            }, 'lastIpAddress walletAddress');
+            
+            for (const user of bannedUsers) {
+                if (user.lastIpAddress) {
+                    bannedIPs.add(user.lastIpAddress);
+                }
+            }
+            
+            if (bannedUsers.length > 0) {
+                console.log(`🚫 Loaded ${bannedUsers.length} banned users' IPs into ban list`);
+            }
+        } catch (error) {
+            console.error('⚠️ Failed to load banned IPs:', error.message);
+        }
         
         // Initialize igloo database records
         await IglooService.initializeIgloos();
