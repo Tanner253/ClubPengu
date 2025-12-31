@@ -14,7 +14,7 @@ import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import gsap from 'gsap';
-import { createCharacterBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PlayerBuilder';
+import { createPlayerBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PlayerBuilder';
 import { PALETTE } from '../constants';
 import ChatLog from '../components/ChatLog';
 
@@ -467,8 +467,8 @@ class MonopolyEngine {
         const featherColor = appearanceData.skin || appearanceData.color || appearanceData.featherColor || (playerId === 0 ? 'cyan' : 'pink');
         
         try {
-            const characterBuilder = createCharacterBuilder(THREE);
-            const { buildCharacterMesh } = characterBuilder;
+            const playerBuilder = createPlayerBuilder(THREE);
+            const { buildPlayerMesh } = playerBuilder;
             
             // Build appearance object matching voxel world format
             const appearance = {
@@ -487,7 +487,7 @@ class MonopolyEngine {
             
             console.log(`🐧 Building penguin with appearance:`, appearance);
             
-            const penguin = buildCharacterMesh(appearance);
+            const penguin = buildPlayerMesh(appearance);
             penguin.scale.set(2, 2, 2);
             penguin.name = 'penguin_mesh';
             group.add(penguin);

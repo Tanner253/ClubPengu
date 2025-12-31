@@ -13,7 +13,7 @@ import { ASSETS } from '../assets/index';
 import { generateBaseBody, generateFlippers, generateFeet, generateHead } from '../generators';
 import { useMultiplayer } from '../multiplayer';
 import { 
-    DoginalGenerators,
+    DogGenerators,
     generateDogPalette,
     FrogGenerators,
     generateFrogPalette
@@ -66,7 +66,7 @@ function PlayerCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     const rendererRef = useRef(null);
     const sceneRef = useRef(null);
     const cameraRef = useRef(null);
-    const characterGroupRef = useRef(null);
+    const playerGroupRef = useRef(null);
     const animationRef = useRef(null);
     const threeRef = useRef(null);
     const controlsRef = useRef(null);
@@ -110,7 +110,7 @@ function PlayerCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     const [mount, setMount] = useState(currentData?.mount || 'none');
     const [characterType, setCharacterType] = useState(currentData?.characterType || 'penguin');
     
-    // Doginal colors
+    // Dog colors
     const [dogPrimaryColor, setDogPrimaryColor] = useState(currentData?.dogPrimaryColor || '#D2691E');
     const [dogSecondaryColor, setDogSecondaryColor] = useState(currentData?.dogSecondaryColor || '#8B4513');
     
@@ -263,7 +263,7 @@ function PlayerCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
         
         // Check if each character is unlocked
         unlockedCharacters.forEach(charId => {
-            if (charId === 'doginal') chars.push({ id: 'doginal', name: 'Doginal', emoji: '🐕' });
+            if (charId === 'dog') chars.push({ id: 'dog', name: 'Dog', emoji: '🐕' });
             else if (charId === 'frog') chars.push({ id: 'frog', name: 'PEPE Frog', emoji: '🐸' });
             else if (charId === 'marcus') chars.push({ id: 'marcus', name: 'Marcus', emoji: '🦁' });
             else if (charId === 'white_whale') chars.push({ id: 'white_whale', name: 'White Whale', emoji: '🐋' });
@@ -387,7 +387,7 @@ function PlayerCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             // Penguin group
             const penguinGroup = new THREE.Group();
             scene.add(penguinGroup);
-            characterGroupRef.current = penguinGroup;
+            playerGroupRef.current = penguinGroup;
             
             // Animation loop - update controls for smooth damping
             const animate = () => {
@@ -426,7 +426,7 @@ function PlayerCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
         // Wait for Three.js to be fully initialized before building character
         const buildCharacter = () => {
             const THREE = threeRef.current;
-            const group = characterGroupRef.current;
+            const group = playerGroupRef.current;
             
             if (!THREE || !group || !rendererRef.current) {
                 // If not ready, wait and try again
@@ -505,30 +505,32 @@ function PlayerCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             if (bodyItemVoxels.length > 0 && !hideBody) {
                 voxels = [...voxels, ...bodyItemVoxels];
             }
-        } else if (characterType === 'doginal') {
+        } else if (characterType === 'dog') {
             palette = generateDogPalette(dogPrimaryColor, dogSecondaryColor);
             // Use correct generator methods (same as VoxelPlayerDesigner)
             const dogVoxels = [
-                ...DoginalGenerators.head(),
-                ...DoginalGenerators.body(),
-                ...DoginalGenerators.armLeft(),
-                ...DoginalGenerators.armRight(),
-                ...DoginalGenerators.legLeft(),
-                ...DoginalGenerators.legRight(),
-                ...DoginalGenerators.tail(),
-                ...DoginalGenerators.earLeft(),
-                ...DoginalGenerators.earRight()
+                ...DogGenerators.head(),
+                ...DogGenerators.body(),
+                ...DogGenerators.armLeft(),
+                ...DogGenerators.armRight(),
+                ...DogGenerators.legLeft(),
+                ...DogGenerators.legRight(),
+                ...DogGenerators.tail(),
+                ...DogGenerators.earLeft(),
+                ...DogGenerators.earRight()
             ];
             
-            // Doginal ALWAYS wears wizard hat - it's part of the character!
-            const doginalHat = ASSETS.HATS['wizardHat'] || [];
-            if (doginalHat.length > 0) {
-                // Offset hat voxels to sit on dog's head (Y+3 for head height, Z+3 for head forward offset)
-                const offsetHatVoxels = doginalHat.map(v => ({ ...v, y: v.y + 3, z: v.z + 3 }));
-                dogVoxels.push(...offsetHatVoxels);
+            // Add hat if equipped (wizard hat can be unlocked via WZRDOG promo code)
+            if (hat && hat !== 'none' && ASSETS.HATS[hat]) {
+                const dogHat = ASSETS.HATS[hat] || [];
+                if (dogHat.length > 0) {
+                    // Offset hat voxels to sit on dog's head (Y+3 for head height, Z+3 for head forward offset)
+                    const offsetHatVoxels = dogHat.map(v => ({ ...v, y: v.y + 3, z: v.z + 3 }));
+                    dogVoxels.push(...offsetHatVoxels);
+                }
             }
             
-            // Add body item (trenchcoat, etc.) for Doginal
+            // Add body item (trenchcoat, etc.) for Dog
             const dogBodyItemData = ASSETS.BODY[bodyItem];
             const dogBodyItemVoxels = dogBodyItemData?.voxels || dogBodyItemData || [];
             if (dogBodyItemVoxels.length > 0) {
@@ -578,7 +580,7 @@ function PlayerCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             const colorGroups = new Map();
             voxels.forEach(v => {
                 let color = v.c;
-                // Resolve palette colors (for doginal/frog, palette keys like 'main', 'belly', etc.)
+                // Resolve palette colors (for dog/frog, palette keys like 'main', 'belly', etc.)
                 if (typeof color === 'string' && !color.startsWith('#')) {
                     color = palette[color] || PALETTE[color] || '#888888';
                 }
@@ -870,12 +872,12 @@ function PlayerCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                             </div>
                         )}
                         
-                        {/* Doginal Colors */}
-                        {characterType === 'doginal' && (
+                        {/* Dog Colors */}
+                        {characterType === 'dog' && (
                             <div className="mb-4 p-3 bg-gradient-to-br from-amber-900/50 to-orange-900/50 rounded-xl border border-amber-500/30">
                                 <div className="text-center mb-4">
                                     <span className="text-2xl">🐕</span>
-                                    <h3 className="text-white font-bold mt-2">Doginal Colors</h3>
+                                    <h3 className="text-white font-bold mt-2">Dog Colors</h3>
                                     <p className="text-white/60 text-xs mt-1">
                                         Pick your dog's fur colors!
                                     </p>

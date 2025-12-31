@@ -15,7 +15,7 @@ import { useChallenge } from '../challenge';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
 import gsap from 'gsap';
-import { createCharacterBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PlayerBuilder';
+import { createPlayerBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PlayerBuilder';
 import { PALETTE } from '../constants';
 import ChatLog from '../components/ChatLog';
 
@@ -809,8 +809,8 @@ class BattleshipEngine {
         const group = new THREE.Group();
         
         try {
-            const characterBuilder = createCharacterBuilder(THREE);
-            const { buildCharacterMesh } = characterBuilder;
+            const playerBuilder = createPlayerBuilder(THREE);
+            const { buildPlayerMesh } = playerBuilder;
             
             const appearance = {
                 color: featherColor,
@@ -823,7 +823,7 @@ class BattleshipEngine {
                 characterType: appearanceData.characterType || playerData?.characterType || null
             };
             
-            const penguin = buildCharacterMesh(appearance);
+            const penguin = buildPlayerMesh(appearance);
             penguin.scale.set(1.5, 1.5, 1.5);
             penguin.name = 'penguin_mesh';
             group.add(penguin);

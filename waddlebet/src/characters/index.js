@@ -24,7 +24,7 @@ import WhiteWhaleGenerators, {
     GoldWhaleGenerators,
     GOLD_WHALE_PALETTE
 } from './WhiteWhaleCharacter';
-import DoginalGenerators, { DOGINAL_PALETTE, DOG_PALETTES, generateDogPalette } from './DoginalCharacter';
+import DogGenerators, { DOG_PALETTE, DOG_PALETTES, generateDogPalette } from './DogCharacter';
 import FrogGenerators, { FROG_PALETTE, FROG_PALETTES, generateFrogPalette } from './FrogCharacter';
 
 // Register all characters (unlocks determined by server)
@@ -115,17 +115,17 @@ characterRegistry.registerCharacter('goldWhale', {
     }
 });
 
-characterRegistry.registerCharacter('doginal', {
-    name: 'Doginal',
-    description: 'A loyal and magical dog companion with a wizard hat',
-    generators: DoginalGenerators,
-    palette: DOGINAL_PALETTE,
+characterRegistry.registerCharacter('dog', {
+    name: 'Dog',
+    description: 'A loyal and magical dog companion',
+    generators: DogGenerators,
+    palette: DOG_PALETTE,
     palettes: DOG_PALETTES,  // Color variants mapped to skin colors
     isSecret: true,
     previewScale: 0.85,
     customizationOptions: {
         disableSkinColor: false,  // Enable color selection!
-        disableHats: false,       // Allow hats - wizard hat by default!
+        disableHats: false,       // Allow hats - wizard hat available via WZRDOG promo code
         disableEyes: true,
         disableMouth: true,
         disableBodyItems: false,
@@ -162,8 +162,8 @@ export {
     SILVER_WHALE_PALETTE,
     GoldWhaleGenerators,
     GOLD_WHALE_PALETTE,
-    DoginalGenerators,
-    DOGINAL_PALETTE,
+    DogGenerators,
+    DOG_PALETTE,
     DOG_PALETTES,
     generateDogPalette,
     FrogGenerators,

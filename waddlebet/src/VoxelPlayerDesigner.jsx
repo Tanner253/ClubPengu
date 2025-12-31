@@ -16,8 +16,8 @@ import {
     SILVER_WHALE_PALETTE,
     GoldWhaleGenerators,
     GOLD_WHALE_PALETTE,
-    DoginalGenerators,
-    DOGINAL_PALETTE,
+    DogGenerators,
+    DOG_PALETTE,
     DOG_PALETTES,
     generateDogPalette,
     FrogGenerators,
@@ -108,7 +108,7 @@ function VoxelPlayerDesigner({ onEnterWorld, currentData, updateData }) {
     const [bodyItem, setBodyItem] = useState(currentData?.bodyItem || 'none');
     const [mount, setMount] = useState(currentData?.mount || 'none');
     
-    // Doginal freestyle colors (primary fur, secondary belly)
+    // Dog freestyle colors (primary fur, secondary belly)
     const [dogPrimaryColor, setDogPrimaryColor] = useState(currentData?.dogPrimaryColor || '#D4A04A');
     const [dogSecondaryColor, setDogSecondaryColor] = useState(currentData?.dogSecondaryColor || '#F0D890');
     
@@ -126,7 +126,7 @@ function VoxelPlayerDesigner({ onEnterWorld, currentData, updateData }) {
             setBodyItem(currentData.bodyItem || 'none');
             setMount(currentData.mount || 'none');
             setCharacterType(currentData.characterType || 'penguin');
-            // Doginal colors
+            // Dog colors
             setDogPrimaryColor(currentData.dogPrimaryColor || '#D4A04A');
             setDogSecondaryColor(currentData.dogSecondaryColor || '#F0D890');
             // Frog colors
@@ -419,9 +419,9 @@ function VoxelPlayerDesigner({ onEnterWorld, currentData, updateData }) {
         if (typeId === 'penguin' || unlockedCharactersList.includes(typeId)) {
             setCharacterType(typeId);
             
-            // Doginal has built-in wizard hat and doesn't use penguin cosmetics
-            if (typeId === 'doginal') {
-                setHat('none');      // Wizard hat is built into the model
+            // Dog doesn't use penguin cosmetics (has its own eyes, mouth, etc.)
+            if (typeId === 'dog') {
+                // Don't auto-set hat to 'none' - let users equip wizard hat if they have it unlocked
                 setEyes('none');     // Dog has its own eyes
                 setMouth('none');    // Dog has its own mouth/snout
                 setBodyItem('none'); // No shirt on dog
@@ -762,43 +762,46 @@ function VoxelPlayerDesigner({ onEnterWorld, currentData, updateData }) {
             addPart(MarcusGenerators.armRight(), 'flipper_r', MARCUS_PALETTE);
             addPart(MarcusGenerators.legLeft(), 'foot_l', MARCUS_PALETTE);
             addPart(MarcusGenerators.legRight(), 'foot_r', MARCUS_PALETTE);
-        } else if (characterType === 'doginal') {
-            // Build Doginal dog character - use freestyle color selection!
+        } else if (characterType === 'dog') {
+            // Build Dog character - use freestyle color selection!
             const dogPalette = generateDogPalette(dogPrimaryColor, dogSecondaryColor);
             
-            addPart(DoginalGenerators.head(), 'head', dogPalette);
-            addPart(DoginalGenerators.body(), 'body', dogPalette);
-            addPart(DoginalGenerators.armLeft(), 'flipper_l', dogPalette);
-            addPart(DoginalGenerators.armRight(), 'flipper_r', dogPalette);
-            addPart(DoginalGenerators.legLeft(), 'foot_l', dogPalette);
-            addPart(DoginalGenerators.legRight(), 'foot_r', dogPalette);
+            addPart(DogGenerators.head(), 'head', dogPalette);
+            addPart(DogGenerators.body(), 'body', dogPalette);
+            addPart(DogGenerators.armLeft(), 'flipper_l', dogPalette);
+            addPart(DogGenerators.armRight(), 'flipper_r', dogPalette);
+            addPart(DogGenerators.legLeft(), 'foot_l', dogPalette);
+            addPart(DogGenerators.legRight(), 'foot_r', dogPalette);
             
             // Animated parts - tail, ears
-            addPart(DoginalGenerators.tail(), 'tail', dogPalette);
-            addPart(DoginalGenerators.earLeft(), 'ear_l', dogPalette);
-            addPart(DoginalGenerators.earRight(), 'ear_r', dogPalette);
+            addPart(DogGenerators.tail(), 'tail', dogPalette);
+            addPart(DogGenerators.earLeft(), 'ear_l', dogPalette);
+            addPart(DogGenerators.earRight(), 'ear_r', dogPalette);
             
-            // Doginal ALWAYS wears wizard hat - it's part of the character!
-            const doginalHat = ASSETS.HATS['wizardHat'] || [];
-            if (doginalHat.length > 0) {
-                // Offset hat voxels to sit on dog's head (Y+3 for head height, Z+3 for head forward offset)
-                const offsetHatVoxels = doginalHat.map(v => ({ ...v, y: v.y + 3, z: v.z + 3 }));
-                addPart(offsetHatVoxels, 'hat');
-                
-                // Add wizard hat glow effect (magic tip light) - offset for dog head
-                const wizardLight = new THREE.PointLight(0xFF69B4, 1.5, 8); // Pink magic glow
-                wizardLight.position.set(0, (17 + 3) * VOXEL_SIZE, 0); // Tip of wizard hat, offset
-                group.add(wizardLight);
-                if (mirrorGroup) mirrorGroup.add(wizardLight.clone());
-                
-                // Add gold star glows
-                const starLight = new THREE.PointLight(0xFFD700, 0.8, 5); // Gold glow
-                starLight.position.set(0, (14 + 3) * VOXEL_SIZE, 2 * VOXEL_SIZE);
-                group.add(starLight);
-                if (mirrorGroup) mirrorGroup.add(starLight.clone());
+            // Add hat if equipped (wizard hat can be unlocked via WZRDOG promo code)
+            if (hat && hat !== 'none' && ASSETS.HATS[hat]) {
+                const dogHat = ASSETS.HATS[hat] || [];
+                if (dogHat.length > 0) {
+                    const offsetHatVoxels = dogHat.map(v => ({ ...v, y: v.y + 3, z: v.z + 3 }));
+                    addPart(offsetHatVoxels, 'hat');
+                    
+                    // Add wizard hat glow effect (magic tip light) - offset for dog head
+                    if (hat === 'wizardHat') {
+                        const wizardLight = new THREE.PointLight(0xFF69B4, 1.5, 8); // Pink magic glow
+                        wizardLight.position.set(0, (17 + 3) * VOXEL_SIZE, 0); // Tip of wizard hat, offset
+                        group.add(wizardLight);
+                        if (mirrorGroup) mirrorGroup.add(wizardLight.clone());
+                        
+                        // Add gold star glows
+                        const starLight = new THREE.PointLight(0xFFD700, 0.8, 5); // Gold glow
+                        starLight.position.set(0, (14 + 3) * VOXEL_SIZE, 2 * VOXEL_SIZE);
+                        group.add(starLight);
+                        if (mirrorGroup) mirrorGroup.add(starLight.clone());
+                    }
+                }
             }
             
-            // Add body item (trenchcoat, etc.) for Doginal
+            // Add body item (trenchcoat, etc.) for Dog
             const dogBodyItemData = ASSETS.BODY[bodyItem];
             const dogBodyItemVoxels = dogBodyItemData?.voxels || dogBodyItemData || [];
             if (dogBodyItemVoxels.length > 0) {
@@ -1440,12 +1443,12 @@ function VoxelPlayerDesigner({ onEnterWorld, currentData, updateData }) {
                                 );
                             })}
                         </>
-                    ) : characterType === 'doginal' ? (
-                        /* Doginal color customization */
+                    ) : characterType === 'dog' ? (
+                        /* Dog color customization */
                         <div className="bg-gradient-to-br from-amber-900/50 to-orange-900/50 rounded-xl p-4 border border-amber-500/30">
                             <div className="text-center mb-4">
                                 <span className="text-2xl">🐕</span>
-                                <h3 className="text-white font-bold mt-2">Doginal Colors</h3>
+                                <h3 className="text-white font-bold mt-2">Dog Colors</h3>
                                 <p className="text-white/60 text-xs mt-1">
                                     Pick your dog's fur colors!
                                 </p>

@@ -15,7 +15,7 @@ import { useChallenge } from '../challenge';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
 import gsap from 'gsap';
-import { createCharacterBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PlayerBuilder';
+import { createPlayerBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PlayerBuilder';
 import { PALETTE } from '../constants';
 import ChatLog from '../components/ChatLog';
 
@@ -529,8 +529,8 @@ class UnoEngine {
         const group = new THREE.Group();
         
         try {
-            const characterBuilder = createCharacterBuilder(THREE);
-            const { buildCharacterMesh } = characterBuilder;
+            const playerBuilder = createPlayerBuilder(THREE);
+            const { buildPlayerMesh } = playerBuilder;
             
             // Build appearance object matching voxel world format
             const appearance = {
@@ -544,7 +544,7 @@ class UnoEngine {
                 characterType: appearanceData.characterType || playerData?.characterType || null
             };
             
-            const penguin = buildCharacterMesh(appearance);
+            const penguin = buildPlayerMesh(appearance);
             penguin.scale.set(1.5, 1.5, 1.5);
             penguin.name = 'penguin_mesh';
             group.add(penguin);

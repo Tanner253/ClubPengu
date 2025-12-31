@@ -266,7 +266,7 @@ class SpaceService {
             'blackWhale': 'igloo',
             'silverWhale': 'igloo',
             'goldWhale': 'igloo',
-            'doginal': 'doghouse',
+            'dog': 'doghouse',
             'frog': 'pond'
         };
         

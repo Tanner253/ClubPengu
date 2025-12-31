@@ -19,7 +19,7 @@ We've created a Web3-native social gaming metaverse that honors the nostalgia of
 ### Why We Add Dogs, Frogs, and More
 
 - **Community Expansion** - Tap into massive, passionate Web3 communities:
-  - **Dogs (Doginals)** - The entire Dogecoin/Doginals ecosystem
+  - **Dogs** - The entire Dogecoin ecosystem
   - **Frogs (Pepe)** - The Pepe meme community
   - **Future Communities** - Whales, and more as we grow
 - **Cross-Pollination** - Create a melting pot where communities mingle, trade, and play together
@@ -67,7 +67,7 @@ We've created a Web3-native social gaming metaverse that honors the nostalgia of
 | Character Type | Home Type | Target Community | Unique Features |
 |---------------|-----------|------------------|-----------------|
 | 🐧 Penguin | Igloo | Club Penguin Nostalgia | Classic penguin mechanics, puffles |
-| 🐕 Dog (Doginal) | Doghouse | Dogecoin/Doginals | Dog-themed cosmetics, community events |
+| 🐕 Dog | Doghouse | Dogecoin | Dog-themed cosmetics, community events |
 | 🐸 Frog (Pepe) | Pond | Pepe Meme Culture | Frog-specific items, meme aesthetics |
 | 🐋 Whale | Mansion | High-Value Holders | Exclusive whale-only spaces |
 | 👤 Marcus | Apartment | Original Character | Unique customization options |
@@ -89,7 +89,7 @@ We've created a Web3-native social gaming metaverse that honors the nostalgia of
 - Property rental system
 
 ### Phase 2: Multi-Community (Current)
-- Dog character support (Doginals community)
+- Dog character support (Dogecoin community)
 - Frog character support (Pepe community)
 - Community-specific homes (doghouses, ponds)
 - Cross-community spaces
@@ -147,7 +147,7 @@ We've created a Web3-native social gaming metaverse that honors the nostalgia of
 
 A metaverse where:
 - A nostalgic penguin player can reminisce in their igloo
-- A Dogecoin holder can hang out in their doghouse with fellow doginals
+- A Dogecoin holder can hang out in their doghouse with fellow dogs
 - A Pepe collector can chill in their pond with other frogs
 - All communities come together in shared spaces to play, trade, and create
 - Real value flows through token wagering, property rental, and item trading

@@ -26,7 +26,7 @@ A collection of feature ideas to enhance the Waddlebet metaverse experience. The
 - **Spaces** - Personal player spaces
 
 ### Existing Features
-- **Multi-Character Support** - Play as Penguins, Dogs (Doginals), Frogs (Pepe), Whales, and Marcus
+- **Multi-Character Support** - Play as Penguins, Dogs, Frogs (Pepe), Whales, and Marcus
 - **Character-Specific Homes** - Igloos for penguins, doghouses for dogs, ponds for frogs
 - **Deep Customization** - Character-specific appearance options (colors, hats, eyes, mouths, clothing, mounts)
 - **Pet Companions** - Puffles and character-specific pets (13 colors, 5 rarity tiers)
@@ -304,7 +304,7 @@ Time-limited events with exclusive content.
 
 #### Character-Specific Spaces
 - **Penguin Igloos** - Traditional ice homes with penguin-themed decor
-- **Dog Houses** - Cozy dog-themed spaces for Doginals community
+- **Dog Houses** - Cozy dog-themed spaces for Dogecoin community
 - **Frog Ponds** - Water-themed areas perfect for Pepe community
 - **Custom Themes** - Players can mix and match themes regardless of character type
 

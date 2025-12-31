@@ -2,14 +2,14 @@
  * CasinoBlackjack - PvE Blackjack
  * 
  * 1:1 EXACT copy of blackjacksource.md
- * ONLY change: Dealer uses createCharacterBuilder (black + bowtie)
+ * ONLY change: Dealer uses createPlayerBuilder (black + bowtie)
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
 import gsap from 'gsap';
-import { createCharacterBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PlayerBuilder';
+import { createPlayerBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PlayerBuilder';
 import GameManager from '../engine/GameManager';
 
 // --- UTILITIES --- (exact from source)
@@ -207,7 +207,7 @@ class Dealer {
 
     buildCharacter() {
         try {
-            const { buildCharacterMesh } = createCharacterBuilder(THREE);
+            const { buildPlayerMesh } = createPlayerBuilder(THREE);
             
             // Black penguin with bowtie as dealer - per user request
             const appearance = {
@@ -221,7 +221,7 @@ class Dealer {
                 characterType: null
             };
             
-            this.penguin = buildCharacterMesh(appearance);
+            this.penguin = buildPlayerMesh(appearance);
             this.penguin.scale.set(3.5, 3.5, 3.5); // Larger dealer
             this.penguin.name = 'dealer_penguin';
             

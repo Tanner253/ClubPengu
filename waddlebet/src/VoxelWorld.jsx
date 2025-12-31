@@ -18,7 +18,7 @@ import ChangelogModal from './components/ChangelogModal';
 import EmoteWheel from './components/EmoteWheel';
 import GameManager from './engine/GameManager';
 import Pet from './engine/Pet';
-import { createCharacterBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PlayerBuilder';
+import { createPlayerBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PlayerBuilder';
 import TownCenter from './rooms/TownCenter';
 import Nightclub from './rooms/Nightclub';
 import CasinoRoom from './rooms/CasinoRoom';
@@ -210,7 +210,7 @@ const VoxelWorld = ({
         }
         prevPlayerDataRef.current = playerData;
         
-        if (!playerRef.current || !buildCharacterMeshRef.current || !sceneRef.current || !playerData) return;
+        if (!playerRef.current || !buildPlayerMeshRef.current || !sceneRef.current || !playerData) return;
         
         // Store current position, rotation, and attachments
         const currentPos = playerRef.current.position.clone();
@@ -221,7 +221,7 @@ const VoxelWorld = ({
         sceneRef.current.remove(playerRef.current);
         
         // Build new mesh with updated appearance
-        const newMesh = buildCharacterMeshRef.current(playerData);
+        const newMesh = buildPlayerMeshRef.current(playerData);
         newMesh.position.copy(currentPos);
         newMesh.rotation.y = currentRot;
         sceneRef.current.add(newMesh);
@@ -276,7 +276,7 @@ const VoxelWorld = ({
     // Refs for other player meshes and state
     const otherPlayerMeshesRef = useRef(new Map()); // playerId -> { mesh, bubble, puffle }
     const lastPositionSentRef = useRef({ x: 0, y: 0, z: 0, rot: 0, time: 0 });
-    const buildCharacterMeshRef = useRef(null); // Will be set in useEffect
+    const buildPlayerMeshRef = useRef(null); // Will be set in useEffect
     
     // OPTIMIZATION: Reusable vectors to avoid GC pressure in update loop
     const tempVec3Ref = useRef(null);
@@ -1298,12 +1298,12 @@ const VoxelWorld = ({
         });
         } // End town-only building generation
         
-        // --- CHARACTER BUILDER (extracted to PlayerBuilder.js) ---
-        const characterBuilder = createCharacterBuilder(THREE);
-        const { buildCharacterMesh } = characterBuilder;
+        // --- PLAYER BUILDER (extracted to PlayerBuilder.js) ---
+        const playerBuilder = createPlayerBuilder(THREE);
+        const { buildPlayerMesh } = playerBuilder;
         
-        // Store buildCharacterMesh for multiplayer to use
-        buildCharacterMeshRef.current = buildCharacterMesh;
+        // Store buildPlayerMesh for multiplayer to use
+        buildPlayerMeshRef.current = buildPlayerMesh;
         
         // NOTE: cacheAnimatedParts and animateCosmeticsFromCache are imported from PlayerBuilder.js
         // The inline versions below handle the animation loop specifics
@@ -1505,7 +1505,7 @@ const VoxelWorld = ({
         };
         
         // --- BUILD PLAYER ---
-        const playerWrapper = buildCharacterMesh(playerData);
+        const playerWrapper = buildPlayerMesh(playerData);
         playerRef.current = playerWrapper;
         // OPTIMIZATION: Cache animated parts for local player
         playerWrapper.userData._animatedPartsCache = cacheAnimatedParts(playerWrapper);
@@ -1617,7 +1617,7 @@ const VoxelWorld = ({
                 };
                 
                 // Store appearance data for mesh rebuilding
-                const aiMesh = buildCharacterMesh(aiData);
+                const aiMesh = buildPlayerMesh(aiData);
                 
                 // Town spawn - avoid spawning inside buildings, water, or out of bounds
                 let sx, sz;
@@ -1702,7 +1702,7 @@ const VoxelWorld = ({
             // Room changed - rebuild AI meshes and add to new scene
             aiAgentsRef.current.forEach(ai => {
                 // Rebuild mesh using stored appearance data
-                const newMesh = buildCharacterMesh(ai.aiData);
+                const newMesh = buildPlayerMesh(ai.aiData);
                 newMesh.position.set(ai.pos.x, 0, ai.pos.z);
                 newMesh.rotation.y = ai.rot;
                 // Show only if AI is in the same room as player
@@ -1735,7 +1735,7 @@ const VoxelWorld = ({
                 mouth: 'beard',
                 bodyItem: 'none'
             };
-            const senseiMesh = buildCharacterMesh(senseiData);
+            const senseiMesh = buildPlayerMesh(senseiData);
             // 25% bigger than normal penguins
             senseiMesh.scale.set(1.25, 1.25, 1.25);
             // Cushion is at y=0.2, sensei sits on top of it
@@ -1756,7 +1756,7 @@ const VoxelWorld = ({
                     mouth: 'beak',
                     bodyItem: 'bowtie'
                 };
-                const dealerMesh = buildCharacterMesh(dealerData);
+                const dealerMesh = buildPlayerMesh(dealerData);
                 // Slightly larger dealer penguins
                 dealerMesh.scale.set(1.1, 1.1, 1.1);
                 dealerMesh.position.set(dealerPos.x, 0.05, dealerPos.z);
@@ -1783,7 +1783,7 @@ const VoxelWorld = ({
                 mouth: 'beak',
                 bodyItem: 'suit'
             };
-            const wagerBotMesh = buildCharacterMesh(wagerBotData);
+            const wagerBotMesh = buildPlayerMesh(wagerBotData);
             // Slightly bigger than normal penguins to stand out
             wagerBotMesh.scale.set(1.15, 1.15, 1.15);
             // Position near spawn (visible when entering town)
@@ -3226,8 +3226,8 @@ const VoxelWorld = ({
                 }
                 
                 // --- WIZARD HAT WORLD-SPACE TRAIL (Per-Player Pools) ---
-                // Triggers for wizardHat equipped OR doginal character (who always has wizard hat)
-                const hasWizardHat = playerData?.hat === 'wizardHat' || playerData?.characterType === 'doginal';
+                // Triggers only for wizardHat equipped (unlocked via WZRDOG promo code)
+                const hasWizardHat = playerData?.hat === 'wizardHat';
                 if (hasWizardHat && wizardTrailSystemRef.current) {
                     wizardTrailSystemRef.current.getOrCreatePool('localPlayer');
                     wizardTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
@@ -3424,7 +3424,7 @@ const VoxelWorld = ({
                 if (!playerData || !meshData.mesh) continue;
                 
                 // Rebuild mesh if appearance changed
-                if (playerData.needsMeshRebuild && buildCharacterMeshRef.current) {
+                if (playerData.needsMeshRebuild && buildPlayerMeshRef.current) {
                     console.log(`🔄 Rebuilding mesh for ${playerData.name} due to appearance change`);
                     
                     // Store current position and rotation
@@ -3440,7 +3440,7 @@ const VoxelWorld = ({
                     scene.remove(meshData.mesh);
                     
                     // Build new mesh with updated appearance
-                    const newMesh = buildCharacterMeshRef.current(playerData.appearance);
+                    const newMesh = buildPlayerMeshRef.current(playerData.appearance);
                     newMesh.position.copy(currentPos);
                     newMesh.rotation.y = currentRot;
                     scene.add(newMesh);
@@ -3704,9 +3704,9 @@ const VoxelWorld = ({
                 // Slot displays are now attached to machines, not players
                 
                 // Wizard hat trail for other players - use the same system as local player
-                // Triggers for wizardHat equipped OR doginal character (who always has wizard hat)
-                const otherAppearance = playerData.appearance || {};
-                const otherHasWizardHat = otherAppearance.hat === 'wizardHat' || otherAppearance.characterType === 'doginal';
+                // Triggers only for wizardHat equipped (unlocked via WZRDOG promo code)
+                const otherAppearance = otherPlayerData?.appearance || {};
+                const otherHasWizardHat = otherAppearance.hat === 'wizardHat';
                 if (otherHasWizardHat && wizardTrailSystemRef.current) {
                     const poolKey = `player_${id}`;
                     wizardTrailSystemRef.current.getOrCreatePool(poolKey);
@@ -6382,7 +6382,7 @@ const VoxelWorld = ({
     
     // Handle player list changes - CREATE/REMOVE meshes only
     useEffect(() => {
-        if (!sceneRef.current || !window.THREE || !buildCharacterMeshRef.current) return;
+        if (!sceneRef.current || !window.THREE || !buildPlayerMeshRef.current) return;
         
         const THREE = window.THREE;
         const scene = sceneRef.current;
@@ -6419,7 +6419,7 @@ const VoxelWorld = ({
             
             console.log(`🐧 Creating mesh for ${playerData.name}`, playerData.puffle ? `with ${playerData.puffle.color} puffle` : '(no puffle)');
             
-            const mesh = buildCharacterMeshRef.current(playerData.appearance);
+            const mesh = buildPlayerMeshRef.current(playerData.appearance);
             mesh.position.set(
                 playerData.position?.x || 0,
                 0,

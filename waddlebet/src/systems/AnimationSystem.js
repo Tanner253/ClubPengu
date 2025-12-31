@@ -20,7 +20,7 @@ export function cacheAnimParts(meshWrapper) {
         mouthPart: meshInner.getObjectByName('mouth'),
         footL: meshInner.getObjectByName('foot_l'),
         footR: meshInner.getObjectByName('foot_r'),
-        // Doginal-specific animated parts
+        // Dog-specific animated parts
         tail: meshInner.getObjectByName('tail'),
         earL: meshInner.getObjectByName('ear_l'),
         earR: meshInner.getObjectByName('ear_r')
@@ -59,7 +59,7 @@ export function animateMesh(
     // Character type flags for different animations
     const isMarcus = characterType === 'marcus';
     const isWhale = characterType?.includes('Whale');
-    const isDoginal = characterType === 'doginal';
+    const isDog = characterType === 'dog';
     
     // Use cached parts if available, otherwise look up and cache
     if (!meshWrapper._animParts) {
@@ -80,7 +80,7 @@ export function animateMesh(
     if(hatPart) { hatPart.rotation.x = 0; hatPart.position.y = 0; hatPart.position.z = 0; }
     if(eyesPart) { eyesPart.position.y = 0; eyesPart.position.z = 0; eyesPart.rotation.x = 0; }
     if(mouthPart) { mouthPart.position.y = 0; mouthPart.position.z = 0; mouthPart.rotation.x = 0; }
-    // Doginal animated parts reset
+    // Dog animated parts reset
     if(tail) { tail.rotation.set(0,0,0); }
     if(earL) { earL.rotation.set(0,0,0); }
     if(earR) { earR.rotation.set(0,0,0); }
@@ -274,7 +274,7 @@ export function animateMesh(
         // Walking animation
         const walkCycle = time * 10;
         
-        if (isDoginal) {
+        if (isDog) {
             // Quadruped dog trot animation
             // Front-left + back-right move together, front-right + back-left together
             const trotSpeed = time * 12; // Faster trot cycle
@@ -321,7 +321,7 @@ export function animateMesh(
         }
     } else {
         // Idle animation
-        if (isDoginal) {
+        if (isDog) {
             // Dog idle - subtle breathing and ear twitch
             meshInner.rotation.z = Math.sin(time * 1.5) * 0.015;
             if(head) head.rotation.x = Math.sin(time * 0.8) * 0.02; // Slight head movement

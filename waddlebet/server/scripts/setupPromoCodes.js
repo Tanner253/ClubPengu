@@ -120,15 +120,27 @@ const PROMO_CODES = [
         }
     },
     {
-        code: 'DOGINAL',
-        name: '🐕 Doginal Character',
-        description: 'Unlocks the magical Doginal dog character with Wizard Hat',
+        code: 'DOG',
+        name: '🐕 Dog Character',
+        description: 'Unlocks the dog character type',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['dog'],
+            skinColor: null,
+            coins: 0
+        }
+    },
+    {
+        code: 'WZRDOG',
+        name: '🧙 Wizard Dog',
+        description: 'Unlocks the wizard hat for dog characters',
         unlocks: {
             mounts: [],
             cosmetics: [
                 { id: 'wizardHat', category: 'hat' }
             ],
-            characters: ['doginal'],
+            characters: [],
             skinColor: null,
             coins: 0
         }

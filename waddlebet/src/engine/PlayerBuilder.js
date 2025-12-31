@@ -18,8 +18,8 @@ import {
     SILVER_WHALE_PALETTE,
     GoldWhaleGenerators,
     GOLD_WHALE_PALETTE,
-    DoginalGenerators,
-    DOGINAL_PALETTE,
+    DogGenerators,
+    DOG_PALETTE,
     DOG_PALETTES,
     generateDogPalette,
     FrogGenerators,
@@ -29,11 +29,11 @@ import {
 } from '../characters';
 
 /**
- * Creates a CharacterBuilder factory with cached materials and geometry
+ * Creates a PlayerBuilder factory with cached materials and geometry
  * @param {Object} THREE - Three.js instance
- * @returns {Object} Builder object with buildCharacterMesh function
+ * @returns {Object} Builder object with buildPlayerMesh function
  */
-export function createCharacterBuilder(THREE) {
+export function createPlayerBuilder(THREE) {
     // Material cache - reuse materials for same colors (HUGE performance gain)
     const materialCache = new Map();
     const getMaterial = (color) => {
@@ -629,69 +629,72 @@ export function createCharacterBuilder(THREE) {
     };
     
     /**
-     * Build Doginal (dog character) mesh with hat support
+     * Build Dog (dog character) mesh with hat support
      */
-    const buildDoginalMesh = (data) => {
+    const buildDogMesh = (data) => {
         const group = new THREE.Group();
-        const pivots = DoginalGenerators.pivots();
+        const pivots = DogGenerators.pivots();
         
         // Use freestyle colors if provided, otherwise default golden
         const primaryColor = data.dogPrimaryColor || '#D4A04A';
         const secondaryColor = data.dogSecondaryColor || '#F0D890';
         const dogPalette = generateDogPalette(primaryColor, secondaryColor);
         
-        const headVoxels = DoginalGenerators.head();
+        const headVoxels = DogGenerators.head();
         const head = buildPartMerged(headVoxels, dogPalette);
         head.name = 'head';
         
-        const bodyVoxels = DoginalGenerators.body();
+        const bodyVoxels = DogGenerators.body();
         const body = buildPartMerged(bodyVoxels, dogPalette);
         body.name = 'body';
         
-        const armLVoxels = DoginalGenerators.armLeft();
+        const armLVoxels = DogGenerators.armLeft();
         const armL = buildPartMerged(armLVoxels, dogPalette, pivots.armLeft);
         armL.name = 'flipper_l';
         
-        const armRVoxels = DoginalGenerators.armRight();
+        const armRVoxels = DogGenerators.armRight();
         const armR = buildPartMerged(armRVoxels, dogPalette, pivots.armRight);
         armR.name = 'flipper_r';
         
-        const legLVoxels = DoginalGenerators.legLeft();
+        const legLVoxels = DogGenerators.legLeft();
         const legL = buildPartMerged(legLVoxels, dogPalette, pivots.legLeft);
         legL.name = 'foot_l';
         
-        const legRVoxels = DoginalGenerators.legRight();
+        const legRVoxels = DogGenerators.legRight();
         const legR = buildPartMerged(legRVoxels, dogPalette, pivots.legRight);
         legR.name = 'foot_r';
         
         // Animated tail
-        const tailVoxels = DoginalGenerators.tail();
+        const tailVoxels = DogGenerators.tail();
         const tail = buildPartMerged(tailVoxels, dogPalette, pivots.tail);
         tail.name = 'tail';
         
         // Animated ears
-        const earLVoxels = DoginalGenerators.earLeft();
+        const earLVoxels = DogGenerators.earLeft();
         const earL = buildPartMerged(earLVoxels, dogPalette, pivots.earLeft);
         earL.name = 'ear_l';
         
-        const earRVoxels = DoginalGenerators.earRight();
+        const earRVoxels = DogGenerators.earRight();
         const earR = buildPartMerged(earRVoxels, dogPalette, pivots.earRight);
         earR.name = 'ear_r';
         
         group.add(body, head, armL, armR, legL, legR, tail, earL, earR);
         
-        // Doginal ALWAYS wears wizard hat - use proper hat system with effects!
-        // Create modified data to pass to addHat, but offset the voxels for dog head
-        const wizardHatVoxels = ASSETS.HATS['wizardHat'];
-        if (wizardHatVoxels && wizardHatVoxels.length > 0) {
-            // Offset hat voxels to sit on dog's head (Y+3 for head height, Z+3 for head forward offset)
-            const offsetHatVoxels = wizardHatVoxels.map(v => ({ ...v, y: v.y + 3, z: v.z + 3 }));
-            const hat = buildPartMerged(offsetHatVoxels, PALETTE);
-            hat.name = 'hat';
-            group.add(hat);
-            
-            // Set up wizard hat flag for magic trail animations (same as addHat does)
-            group.userData.hasWizardHat = true;
+        // Add hat if equipped (wizard hat can be unlocked via WZRDOG promo code)
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            if (hatVoxels && hatVoxels.length > 0) {
+                // Offset hat voxels to sit on dog's head (Y+3 for head height, Z+3 for head forward offset)
+                const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + 3, z: v.z + 3 }));
+                const hat = buildPartMerged(offsetHatVoxels, PALETTE);
+                hat.name = 'hat';
+                group.add(hat);
+                
+                // Set up wizard hat flag for magic trail animations if wizard hat is equipped
+                if (data.hat === 'wizardHat') {
+                    group.userData.hasWizardHat = true;
+                }
+            }
         }
         
         // Add body item (trenchcoat, etc.) - offset for dog body position
@@ -1026,20 +1029,20 @@ export function createCharacterBuilder(THREE) {
     };
     
     /**
-     * Main build function - creates character mesh with all cosmetics
-     * @param {Object} data - Character customization data
-     * @returns {THREE.Group} The character wrapper mesh
+     * Main build function - creates player mesh with all cosmetics
+     * @param {Object} data - Player customization data
+     * @returns {THREE.Group} The player wrapper mesh
      */
-    const buildCharacterMesh = (data) => {
+    const buildPlayerMesh = (data) => {
         // Validate data to prevent "Cannot convert object to primitive value" errors
         if (!data || typeof data !== 'object') {
-            console.warn('buildCharacterMesh received invalid data:', data);
+            console.warn('buildPlayerMesh received invalid data:', data);
             data = {}; // Use empty object as fallback
         }
         
         // Ensure color is a primitive value (string or number), not an object
         if (data.color && typeof data.color === 'object') {
-            console.warn('buildCharacterMesh: color is an object, converting:', data.color);
+            console.warn('buildPlayerMesh: color is an object, converting:', data.color);
             if (data.color.isColor && typeof data.color.getHex === 'function') {
                 data.color = data.color.getHex();
             } else if (typeof data.color.r !== 'undefined') {
@@ -1054,8 +1057,8 @@ export function createCharacterBuilder(THREE) {
         // Check for special character types
         if (data.characterType === 'marcus') {
             group = buildMarcusMesh(data);
-        } else if (data.characterType === 'doginal') {
-            group = buildDoginalMesh(data);
+        } else if (data.characterType === 'dog') {
+            group = buildDogMesh(data);
         } else if (data.characterType === 'frog') {
             group = buildFrogMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
@@ -1082,7 +1085,7 @@ export function createCharacterBuilder(THREE) {
     };
     
     return {
-        buildCharacterMesh,
+        buildPlayerMesh,
         buildPartMerged,
         getMaterial,
         sharedVoxelGeo
@@ -1287,8 +1290,9 @@ export function animateCosmeticsFromCache(cache, time, delta, VOXEL_SIZE) {
     }
 }
 
-export default createCharacterBuilder;
+export default createPlayerBuilder;
 
-// Backward compatibility alias (deprecated - use createCharacterBuilder)
-export const createPenguinBuilder = createCharacterBuilder;
+// Backward compatibility aliases (deprecated - use createPlayerBuilder)
+export const createCharacterBuilder = createPlayerBuilder;
+export const createPenguinBuilder = createPlayerBuilder;
 

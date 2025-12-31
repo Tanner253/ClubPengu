@@ -6,7 +6,8 @@ export { default as Pet } from './Pet';
 export { default as PropsFactory } from './PropsFactory';
 export { default as CollisionSystem } from './CollisionSystem';
 export { 
-    default as createCharacterBuilder,
+    default as createPlayerBuilder,
+    createCharacterBuilder, // Backward compatibility alias
     createPenguinBuilder, // Backward compatibility alias
     cacheAnimatedParts, 
     animateCosmeticsFromCache 

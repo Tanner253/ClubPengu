@@ -69,7 +69,7 @@ class MultiplayerSync {
         this.THREE = options.THREE || window.THREE;
         this.scene = options.scene;
         this.playerMeshes = new Map(); // playerId -> { mesh, bubble, puffleMesh, nameSprite, ... }
-        this.buildCharacterMesh = options.buildCharacterMesh || options.buildPenguinMesh; // Support both for backward compatibility
+        this.buildPlayerMesh = options.buildPlayerMesh || options.buildCharacterMesh || options.buildPenguinMesh; // Support all for backward compatibility
         this.buildPetMesh = options.buildPetMesh;
         this.createNameSprite = options.createNameSprite;
         this.createChatBubble = options.createChatBubble;
@@ -85,8 +85,9 @@ class MultiplayerSync {
      * Set callbacks/functions after construction
      */
     setCallbacks(callbacks) {
-        if (callbacks.buildCharacterMesh) this.buildCharacterMesh = callbacks.buildCharacterMesh;
-        else if (callbacks.buildPenguinMesh) this.buildCharacterMesh = callbacks.buildPenguinMesh; // Backward compatibility
+        if (callbacks.buildPlayerMesh) this.buildPlayerMesh = callbacks.buildPlayerMesh;
+        else if (callbacks.buildCharacterMesh) this.buildPlayerMesh = callbacks.buildCharacterMesh;
+        else if (callbacks.buildPenguinMesh) this.buildPlayerMesh = callbacks.buildPenguinMesh; // Backward compatibility
         if (callbacks.buildPetMesh) this.buildPetMesh = callbacks.buildPetMesh;
         if (callbacks.createNameSprite) this.createNameSprite = callbacks.createNameSprite;
         if (callbacks.createChatBubble) this.createChatBubble = callbacks.createChatBubble;
@@ -134,11 +135,11 @@ class MultiplayerSync {
      * @param {Object} playerData - Player data from server
      */
     addPlayer(id, playerData) {
-        if (!this.scene || !this.buildCharacterMesh) return null;
+        if (!this.scene || !this.buildPlayerMesh) return null;
         
         console.log(`🐧 Creating mesh for ${playerData.name}`);
         
-        const mesh = this.buildCharacterMesh(playerData.appearance);
+        const mesh = this.buildPlayerMesh(playerData.appearance);
         mesh.position.set(
             playerData.position?.x || 0,
             0,
@@ -361,7 +362,7 @@ class MultiplayerSync {
      */
     updatePlayerAppearance(id, appearance) {
         const meshData = this.playerMeshes.get(id);
-        if (!meshData || !this.buildCharacterMesh) return;
+        if (!meshData || !this.buildPlayerMesh) return;
         
         // Store current position/rotation
         const pos = meshData.mesh.position.clone();
@@ -371,7 +372,7 @@ class MultiplayerSync {
         this.scene.remove(meshData.mesh);
         
         // Build new mesh
-        const newMesh = this.buildCharacterMesh(appearance);
+        const newMesh = this.buildPlayerMesh(appearance);
         newMesh.position.copy(pos);
         newMesh.rotation.y = rot;
         

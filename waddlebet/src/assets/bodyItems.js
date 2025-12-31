@@ -772,7 +772,7 @@ export const BODY = {
     
     joe: { hideBody: true, voxels: [] },
     
-    // DOGINAL EXCLUSIVE: White Trenchcoat
+    // DOG EXCLUSIVE: White Trenchcoat
     // Designed for dog body shape (Y_OFFSET=4), no overlapping voxels
     dogTrenchcoat: (() => {
         const voxelMap = new Map();

@@ -26,12 +26,12 @@
 
 Waddlebet is a **Web3 social gaming metaverse** that evolves beyond classic penguin games into a welcoming ecosystem for all communities. Built on Solana, we've taken the nostalgic charm of penguin social games and supercharged it with Web3 technology, cross-community support, and features that surpass anything Club Penguin ever offered.
 
-**Our Vision:** A metaverse where all Web3 communities feel at home - from nostalgic Club Penguin veterans to Dogecoin/Doginals enthusiasts, Pepe frog collectors, and beyond. We're not a copy; we're the evolution.
+**Our Vision:** A metaverse where all Web3 communities feel at home - from nostalgic Club Penguin veterans to Dogecoin enthusiasts, Pepe frog collectors, and beyond. We're not a copy; we're the evolution.
 
 ### Core Philosophy
 
 - **🐧 Penguin Nostalgia** - We honor the Club Penguin heritage with igloos, penguins, and the social experience you remember, capturing that original user base
-- **🐕 Multi-Community Support** - Dogs for the Dogecoin/Doginals community, Frogs for the Pepe community, and room to grow
+- **🐕 Multi-Community Support** - Dogs for the Dogecoin community, Frogs for the Pepe community, and room to grow
 - **🌐 Web3 Native** - Built from the ground up for Web3 with Solana integration, token gating, and true digital ownership
 - **🚀 Beyond the Original** - Features Club Penguin never had: real property ownership, token wagering, tradeable NFTs, and cross-community mingling
 
@@ -47,7 +47,7 @@ Waddlebet is a **Web3 social gaming metaverse** that evolves beyond classic peng
 ## ✨ Features
 
 ### 🎨 Deep Customization & Multi-Character Support
-- **Multiple Character Types** - Play as Penguins, Dogs (Doginals), Frogs (Pepe), Whales, and Marcus
+- **Multiple Character Types** - Play as Penguins, Dogs, Frogs (Pepe), Whales, and Marcus
 - **Character-Specific Customization** - Each character type has unique appearance options
 - **24+ Colors Per Character** - From classic variants to legendary rainbow and ghost variants
 - **17+ Headwear Options** - Crowns, viking helmets, party hats, ninja masks (compatible across types)
@@ -227,7 +227,7 @@ waddlebet/
 - [x] Playable Demo Release
 
 ### Phase 2: Multi-Community Expansion (Current) 🚧
-- [x] Dog Character Support (Doginals community)
+- [x] Dog Character Support (Dogecoin community)
 - [x] Frog Character Support (Pepe community)
 - [x] Character-Specific Customization
 - [x] Space Type System (igloo, doghouse, pond, etc.)

@@ -9,7 +9,7 @@ import { VOXEL_SIZE, PALETTE } from '../constants';
 import { generateBaseBody, generateFlippers, generateFeet, generateHead } from '../generators';
 import { ASSETS } from '../assets/index';
 import { 
-    DoginalGenerators,
+    DogGenerators,
     generateDogPalette,
     FrogGenerators,
     generateFrogPalette,
@@ -52,7 +52,7 @@ const PlayerPreview3D = ({
     const rendererRef = useRef(null);
     const sceneRef = useRef(null);
     const cameraRef = useRef(null);
-    const characterGroupRef = useRef(null);
+    const playerGroupRef = useRef(null);
     const animationRef = useRef(null);
     
     useEffect(() => {
@@ -101,21 +101,21 @@ const PlayerPreview3D = ({
             backLight.position.set(-5, 5, -5);
             scene.add(backLight);
             
-            // Character group
-            const characterGroup = new THREE.Group();
-            scene.add(characterGroup);
-            characterGroupRef.current = characterGroup;
+            // Player group
+            const playerGroup = new THREE.Group();
+            scene.add(playerGroup);
+            playerGroupRef.current = playerGroup;
             
-            // Build the character
-            buildCharacter(THREE, characterGroup, appearance);
+            // Build the player
+            buildPlayer(THREE, playerGroup, appearance);
             
             // Animation loop
             const animate = () => {
                 if (!mounted) return;
                 animationRef.current = requestAnimationFrame(animate);
                 
-                if (autoRotate && characterGroupRef.current) {
-                    characterGroupRef.current.rotation.y += rotationSpeed;
+                if (autoRotate && playerGroupRef.current) {
+                    playerGroupRef.current.rotation.y += rotationSpeed;
                 }
                 
                 renderer.render(scene, camera);
@@ -136,13 +136,13 @@ const PlayerPreview3D = ({
         };
     }, [size, autoRotate, rotationSpeed]);
     
-    // Rebuild character when appearance changes
+    // Rebuild player when appearance changes
     useEffect(() => {
-        if (!characterGroupRef.current || !sceneRef.current) return;
+        if (!playerGroupRef.current || !sceneRef.current) return;
         
         const rebuild = async () => {
             const THREE = await import('three');
-            buildCharacter(THREE, characterGroupRef.current, appearance);
+            buildPlayer(THREE, playerGroupRef.current, appearance);
         };
         
         rebuild();
@@ -157,11 +157,11 @@ const PlayerPreview3D = ({
     );
 };
 
-// Build character mesh from appearance data
-function buildCharacter(THREE, group, appearance) {
+// Build player mesh from appearance data
+function buildPlayer(THREE, group, appearance) {
     // Validate appearance object
     if (!appearance || typeof appearance !== 'object') {
-        console.warn('buildCharacter: Invalid appearance object, using defaults');
+        console.warn('buildPlayer: Invalid appearance object, using defaults');
         appearance = {};
     }
     
@@ -208,18 +208,18 @@ function buildCharacter(THREE, group, appearance) {
             ...generateFlippers(characterPalette.main, false), // Right flipper
             ...generateFeet()
         ];
-    } else if (characterType === 'doginal') {
+    } else if (characterType === 'dog') {
         characterPalette = generateDogPalette(
             appearance.dogPrimaryColor || '#D2691E',
             appearance.dogSecondaryColor || '#8B4513'
         );
         voxels = [
-            ...DoginalGenerators.generateDogBody(characterPalette),
-            ...DoginalGenerators.generateDogHead(characterPalette),
-            ...DoginalGenerators.generateDogFlipper(true, characterPalette),
-            ...DoginalGenerators.generateDogFlipper(false, characterPalette),
-            ...DoginalGenerators.generateDogFoot(true, characterPalette),
-            ...DoginalGenerators.generateDogFoot(false, characterPalette)
+            ...DogGenerators.generateDogBody(characterPalette),
+            ...DogGenerators.generateDogHead(characterPalette),
+            ...DogGenerators.generateDogFlipper(true, characterPalette),
+            ...DogGenerators.generateDogFlipper(false, characterPalette),
+            ...DogGenerators.generateDogFoot(true, characterPalette),
+            ...DogGenerators.generateDogFoot(false, characterPalette)
         ];
     } else if (characterType === 'frog') {
         characterPalette = generateFrogPalette(
@@ -361,7 +361,7 @@ function buildCharacter(THREE, group, appearance) {
     addMount(THREE, group, appearance);
 }
 
-// Add cosmetics to the character
+// Add cosmetics to the player
 function addCosmetics(THREE, group, appearance, characterType, paletteOrSkinColor) {
     // Determine the palette to use for cosmetics
     // If paletteOrSkinColor is an object (palette), use it; otherwise use default PALETTE
@@ -417,7 +417,7 @@ function addCosmetics(THREE, group, appearance, characterType, paletteOrSkinColo
     }
 }
 
-// Add mount to the character
+// Add mount to the player
 function addMount(THREE, group, appearance) {
     if (!appearance.mount || appearance.mount === 'none' || !ASSETS.MOUNTS || !ASSETS.MOUNTS[appearance.mount]) {
         return;

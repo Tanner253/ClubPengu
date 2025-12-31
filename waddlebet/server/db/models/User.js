@@ -23,7 +23,7 @@ const userSchema = new mongoose.Schema({
     },
     characterType: {
         type: String,
-        enum: ['penguin', 'marcus', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale', 'doginal', 'frog'],
+        enum: ['penguin', 'marcus', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale', 'dog', 'frog'],
         default: 'penguin'
     },
 
@@ -35,7 +35,7 @@ const userSchema = new mongoose.Schema({
         mouth: { type: String, default: 'beak' },
         bodyItem: { type: String, default: 'none' },
         mount: { type: String, default: 'none' },
-        // Doginal freestyle colors
+        // Dog freestyle colors
         dogPrimaryColor: { type: String, default: '#D4A04A' },
         dogSecondaryColor: { type: String, default: '#F0D890' },
         // Frog freestyle colors
@@ -776,7 +776,7 @@ userSchema.methods.updateCustomization = function(customization) {
     if (customization.bodyItem) this.customization.bodyItem = customization.bodyItem;
     if (customization.mount) this.customization.mount = customization.mount;
     if (customization.characterType) this.characterType = customization.characterType;
-    // Doginal freestyle colors
+    // Dog freestyle colors
     if (customization.dogPrimaryColor) this.customization.dogPrimaryColor = customization.dogPrimaryColor;
     if (customization.dogSecondaryColor) this.customization.dogSecondaryColor = customization.dogSecondaryColor;
     // Frog freestyle colors

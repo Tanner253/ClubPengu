@@ -1,5 +1,5 @@
 /**
- * DoginalCharacter - The Doginal dog character model
+ * DogCharacter - The Dog character model
  * A cute voxel dog with floppy ears, snout, and wagging tail
  * 
  * Features:
@@ -10,8 +10,8 @@
  * - Paws instead of penguin feet
  */
 
-// Doginal color palette - Golden/tan dog colors (default)
-export const DOGINAL_PALETTE = {
+// Dog color palette - Golden/tan dog colors (default)
+export const DOG_PALETTE = {
     // Main fur colors
     main: '#D4A04A',         // Golden tan
     mainLight: '#E8C06A',    // Light golden
@@ -149,7 +149,7 @@ export const CORGI_DOG_PALETTE = {
 
 // All dog palettes for easy access
 export const DOG_PALETTES = {
-    golden: DOGINAL_PALETTE,
+    golden: DOG_PALETTE,
     black: BLACK_DOG_PALETTE,
     white: WHITE_DOG_PALETTE,
     brown: BROWN_DOG_PALETTE,
@@ -198,7 +198,7 @@ const Y_OFFSET = 4;
 /**
  * Generate the dog's head with snout and ears
  */
-export const generateDoginalHead = () => {
+export const generateDogHead = () => {
     const voxelMap = new Map();
     const Z_HEAD_OFFSET = 3; // Push head forward on the body
     
@@ -302,7 +302,7 @@ export const generateDoginalHead = () => {
     addVoxel(eyeSpacing, eyeY, eyeZ + 1, 'eyeBlack');  // Pupil
     addVoxel(eyeSpacing, eyeY + 1, eyeZ + 1, 'eyeBrown');  // Iris
     
-    // NOTE: Ears are now separate animated parts - see generateDoginalEar
+    // NOTE: Ears are now separate animated parts - see generateDogEar
     
     // Mouth/smile line
     for (let x = -1; x <= 1; x++) {
@@ -318,7 +318,7 @@ export const generateDoginalHead = () => {
 /**
  * Generate the dog's body
  */
-export const generateDoginalBody = () => {
+export const generateDogBody = () => {
     const voxelMap = new Map();
     
     const addVoxel = (x, y, z, c) => {
@@ -357,7 +357,7 @@ export const generateDoginalBody = () => {
         }
     }
     
-    // NOTE: Tail is now a separate animated part - see generateDoginalTail
+    // NOTE: Tail is now a separate animated part - see generateDogTail
     
     return Array.from(voxelMap.values());
 };
@@ -365,7 +365,7 @@ export const generateDoginalBody = () => {
 /**
  * Generate dog's front legs/paws
  */
-export const generateDoginalArm = (isLeft) => {
+export const generateDogArm = (isLeft) => {
     const voxelMap = new Map();
     const side = isLeft ? 1 : -1;
     
@@ -405,7 +405,7 @@ export const generateDoginalArm = (isLeft) => {
 /**
  * Generate dog's back legs
  */
-export const generateDoginalLeg = (isLeft) => {
+export const generateDogLeg = (isLeft) => {
     const voxelMap = new Map();
     const side = isLeft ? 1 : -1;
     
@@ -448,7 +448,7 @@ export const generateDoginalLeg = (isLeft) => {
 /**
  * Generate dog's tail (separate for animation)
  */
-export const generateDoginalTail = () => {
+export const generateDogTail = () => {
     const voxelMap = new Map();
     
     const addVoxel = (x, y, z, c) => {
@@ -482,7 +482,7 @@ export const generateDoginalTail = () => {
 /**
  * Generate dog's ear (separate for animation)
  */
-export const generateDoginalEar = (isLeft) => {
+export const generateDogEar = (isLeft) => {
     const voxelMap = new Map();
     const side = isLeft ? -1 : 1;
     const Z_HEAD_OFFSET = 3; // Match head forward offset
@@ -517,7 +517,7 @@ export const generateDoginalEar = (isLeft) => {
 /**
  * Get pivot points for animation
  */
-export const getDoginalPivots = () => ({
+export const getDogPivots = () => ({
     tail: { x: 0, y: -3 + Y_OFFSET, z: -4 },     // Base of tail
     earLeft: { x: -5, y: 7 + Y_OFFSET, z: 3 },   // Top of left ear (with head Z offset)
     earRight: { x: 5, y: 7 + Y_OFFSET, z: 3 },   // Top of right ear
@@ -530,9 +530,9 @@ export const getDoginalPivots = () => ({
 });
 
 /**
- * Generate complete Doginal model
+ * Generate complete Dog model
  */
-export const generateDoginalComplete = () => {
+export const generateDogComplete = () => {
     const voxelMap = new Map();
     
     const addVoxels = (voxels) => {
@@ -544,30 +544,30 @@ export const generateDoginalComplete = () => {
         });
     };
     
-    addVoxels(generateDoginalHead());
-    addVoxels(generateDoginalBody());
-    addVoxels(generateDoginalArm(true));
-    addVoxels(generateDoginalArm(false));
-    addVoxels(generateDoginalLeg(true));
-    addVoxels(generateDoginalLeg(false));
+    addVoxels(generateDogHead());
+    addVoxels(generateDogBody());
+    addVoxels(generateDogArm(true));
+    addVoxels(generateDogArm(false));
+    addVoxels(generateDogLeg(true));
+    addVoxels(generateDogLeg(false));
     
     return Array.from(voxelMap.values());
 };
 
 // Export generators object for registry
-export const DoginalGenerators = {
-    head: generateDoginalHead,
-    body: generateDoginalBody,
-    armLeft: () => generateDoginalArm(true),
-    armRight: () => generateDoginalArm(false),
-    legLeft: () => generateDoginalLeg(true),
-    legRight: () => generateDoginalLeg(false),
-    tail: generateDoginalTail,
-    earLeft: () => generateDoginalEar(true),
-    earRight: () => generateDoginalEar(false),
-    complete: generateDoginalComplete,
-    pivots: getDoginalPivots,
+export const DogGenerators = {
+    head: generateDogHead,
+    body: generateDogBody,
+    armLeft: () => generateDogArm(true),
+    armRight: () => generateDogArm(false),
+    legLeft: () => generateDogLeg(true),
+    legRight: () => generateDogLeg(false),
+    tail: generateDogTail,
+    earLeft: () => generateDogEar(true),
+    earRight: () => generateDogEar(false),
+    complete: generateDogComplete,
+    pivots: getDogPivots,
 };
 
-export default DoginalGenerators;
+export default DogGenerators;
 

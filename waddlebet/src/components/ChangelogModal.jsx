@@ -37,7 +37,7 @@ const CHANGELOG = [
             { type: 'fix', text: 'Monopoly rent calculation uses gameStartTime for fair duration-based scaling' },
             { type: 'fix', text: 'WagerBot player preview now correctly renders both flippers and all cosmetics (hat, bodyItem)' },
             { type: 'fix', text: 'PlayerPreview3D flipper generation fixed to call generateFlippers twice (left and right)' },
-            { type: 'fix', text: 'PlayerPreview3D now correctly renders all character types (penguin, doginal, frog, whales, marcus) with all cosmetics' },
+            { type: 'fix', text: 'PlayerPreview3D now correctly renders all character types (penguin, dog, frog, whales, marcus) with all cosmetics' },
             { type: 'fix', text: 'Player appearance updates now properly rebuild meshes for all clients in real-time' },
             { type: 'fix', text: 'Fixed state synchronization issue where players appeared stuck after saving customization in space wardrobe' },
             { type: 'fix', text: 'Local player mesh now rebuilds when penguinData changes after saving customization' },
