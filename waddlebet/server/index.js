@@ -1362,7 +1362,6 @@ async function handleMessage(playerId, message) {
                     console.log(`🚫 Banned current connection IP ${player.ip} due to banned user ${walletAddress.slice(0, 8)}...`);
                 }
                 
-                // Build ban message with reason if available
                 // Build ban message with reason if available (re-query if needed)
                 let banMessage = 'Your account has been banned. Access denied.';
                 let banReasonFinal = null;
