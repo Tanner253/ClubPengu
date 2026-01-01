@@ -145,6 +145,41 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                         </div>
                     </div>
                     
+                    {/* Performance Mode Toggle */}
+                    <div className="bg-black/30 rounded-xl p-3 border border-yellow-500/20">
+                        <div className="flex items-center justify-between">
+                            <div className="flex-1 mr-3">
+                                <h3 className="text-white font-medium text-sm">⚡ Performance Mode</h3>
+                                <p className="text-yellow-400/70 text-[11px] mt-0.5">
+                                    Optimize for older hardware (disables shadows, reduces quality)
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    handleToggle('performanceMode');
+                                    // Dispatch event to notify that settings changed (may need page reload for some effects)
+                                    window.dispatchEvent(new CustomEvent('performanceModeChanged', { 
+                                        detail: { enabled: settings.performanceMode === true } 
+                                    }));
+                                }}
+                                className={`relative w-14 h-8 rounded-full transition-colors duration-200 shrink-0 touch-manipulation select-none ${
+                                    settings.performanceMode === true ? 'bg-yellow-500' : 'bg-gray-600'
+                                }`}
+                            >
+                                <div 
+                                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
+                                        settings.performanceMode === true ? 'translate-x-7' : 'translate-x-1'
+                                    }`}
+                                />
+                            </button>
+                        </div>
+                        {settings.performanceMode === true && (
+                            <p className="text-yellow-300/70 text-[10px] mt-2">
+                                ⚠️ Some changes require page reload to take effect
+                            </p>
+                        )}
+                    </div>
+                    
                     {/* Particle Effects Toggle */}
                     <div className="bg-black/30 rounded-xl p-3">
                         <div className="flex items-center justify-between">

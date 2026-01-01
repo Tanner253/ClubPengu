@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * Portal - Interactive building door prompt (Club Pengu / MapleStory style)
@@ -12,6 +12,20 @@ const Portal = ({
     color = 'gray',
     hasGame = false
 }) => {
+    const [isMobile, setIsMobile] = useState(false);
+    
+    useEffect(() => {
+        const checkMobile = () => {
+            const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isIPadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            setIsMobile(mobileUA || isIPadOS || hasTouch);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+    
     if (!isNearby) return null;
     
     return (
@@ -35,7 +49,7 @@ const Portal = ({
                         onClick={onEnter}
                         className="bg-white/20 hover:bg-white/30 text-white px-5 py-2 rounded-lg retro-text text-xs transition-all border border-white/30 hover:border-white/50"
                     >
-                        🚪 ENTER [E]
+                        🚪 {isMobile ? 'ENTER' : 'ENTER [E]'}
                     </button>
                 ) : (
                     <div className="text-white/50 text-xs retro-text py-1">

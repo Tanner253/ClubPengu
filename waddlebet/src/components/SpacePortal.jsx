@@ -3,7 +3,7 @@
  * Shows dynamic information based on space ownership, access type, rent status, etc.
  */
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { SPACE_CONFIG } from '../config/solana.js';
 
 /**
@@ -25,6 +25,20 @@ const SpacePortal = ({
     isAuthenticated,  // Is user logged in
     userClearance     // { canEnter, tokenGateMet, entryFeePaid } - user's status for this space
 }) => {
+    const [isMobile, setIsMobile] = useState(false);
+    
+    useEffect(() => {
+        const checkMobile = () => {
+            const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isIPadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            setIsMobile(mobileUA || isIPadOS || hasTouch);
+        };
+        checkMobile();
+        window.addEventListener('resize', checkMobile);
+        return () => window.removeEventListener('resize', checkMobile);
+    }, []);
+    
     if (!isNearby || !portal) return null;
     
     // Extract space ID from portal targetRoom (e.g., 'space3' -> 'space3')
@@ -71,7 +85,7 @@ const SpacePortal = ({
                 description: 'Enter to manage settings',
                 color: 'purple',
                 canEnter: true,
-                actionText: '🚪 ENTER [E]',
+                actionText: isMobile ? '🚪 ENTER' : '🚪 ENTER [E]',
                 showWallet: true,
                 walletDisplay: abbreviateWallet(ownerWallet)
             };
@@ -89,7 +103,7 @@ const SpacePortal = ({
                 description: 'You have access to this space',
                 color: 'green',
                 canEnter: true,
-                actionText: '🚪 ENTER [E]',
+                actionText: isMobile ? '🚪 ENTER' : '🚪 ENTER [E]',
                 showWallet: !!ownerWallet,
                 walletDisplay: abbreviateWallet(ownerWallet)
             };
@@ -115,7 +129,7 @@ const SpacePortal = ({
                             'Token gate + Entry fee required',
                 color: 'purple',
                 canEnter: false,
-                actionText: 'VIEW REQUIREMENTS [E]',
+                actionText: isMobile ? 'VIEW REQUIREMENTS' : 'VIEW REQUIREMENTS [E]',
                 showRequirements: true,
                 hasTokenGate: true,
                 hasEntryFee: true,
@@ -144,7 +158,7 @@ const SpacePortal = ({
                 description: tokenMet ? 'You have enough tokens!' : `Hold ${minBalance.toLocaleString()} ${tokenSymbol}`,
                 color: tokenMet ? 'green' : 'purple',
                 canEnter: tokenMet,
-                actionText: tokenMet ? '🚪 ENTER [E]' : 'VIEW REQUIREMENTS [E]',
+                actionText: tokenMet ? (isMobile ? '🚪 ENTER' : '🚪 ENTER [E]') : (isMobile ? 'VIEW REQUIREMENTS' : 'VIEW REQUIREMENTS [E]'),
                 showRequirements: !tokenMet,
                 hasTokenGate: true,
                 hasEntryFee: false,
@@ -168,7 +182,7 @@ const SpacePortal = ({
                 description: feePaid ? 'Entry fee paid!' : `Pay ${entryFeeAmount.toLocaleString()} ${feeTokenSymbol}`,
                 color: feePaid ? 'green' : 'yellow',
                 canEnter: feePaid,
-                actionText: feePaid ? '🚪 ENTER [E]' : 'VIEW REQUIREMENTS [E]',
+                actionText: feePaid ? (isMobile ? '🚪 ENTER' : '🚪 ENTER [E]') : (isMobile ? 'VIEW REQUIREMENTS' : 'VIEW REQUIREMENTS [E]'),
                 showRequirements: !feePaid,
                 hasTokenGate: false,
                 hasEntryFee: true,
@@ -204,7 +218,7 @@ const SpacePortal = ({
                 description: 'Open to visitors',
                 color: 'green',
                 canEnter: true,
-                actionText: '🚪 ENTER [E]',
+                actionText: isMobile ? '🚪 ENTER' : '🚪 ENTER [E]',
                 showWallet: !!ownerWallet,
                 walletDisplay: abbreviateWallet(ownerWallet)
             };
@@ -218,7 +232,7 @@ const SpacePortal = ({
             description: portal.description || 'Enter Space',
             color: 'gray',
             canEnter: true,
-            actionText: '🚪 ENTER [E]',
+            actionText: isMobile ? '🚪 ENTER' : '🚪 ENTER [E]',
             showWallet: !!ownerWallet,
             walletDisplay: abbreviateWallet(ownerWallet)
         };

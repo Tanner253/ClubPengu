@@ -214,6 +214,21 @@ waddlebet/
 
 ---
 
+## 📚 Documentation
+
+### Technical Documentation
+- **[3D Rendering Architecture](./documentation/3D_RENDERING_ARCHITECTURE.md)** - How the voxel-based rendering system works, asset creation, and Three.js integration
+- **[Performance Mode](./documentation/PERFORMANCE_MODE.md)** - Optimization settings for older hardware and performance tuning
+- **[Vision & Direction](./documentation/VISION.md)** - Game philosophy, roadmap, and community strategy
+- **[Server Documentation](./documentation/SERVER_README.md)** - Backend architecture and API documentation
+
+### Implementation Guides
+- **[Wager Implementation](./documentation/WAGER_IMPLEMENTATION.md)** - P2P wagering system details
+- **[Gacha Implementation Plan](./documentation/GACHA_IMPLEMENTATION_PLAN.md)** - Cosmetics and gacha system
+- **[Inventory System Plan](./documentation/INVENTORY_SYSTEM_PLAN.md)** - Player inventory management
+
+---
+
 ## 📍 Roadmap
 
 ### Phase 1: Foundation ✅

@@ -261,13 +261,19 @@ export function MultiplayerProvider({ children }) {
                 break;
                 
             case 'auth_failure':
-                console.error(`🔐 Auth failed: ${message.error}`);
+                // Only log as error for unexpected failures, warn for expected session expiry
+                const isExpectedExpiry = message.error === 'TOKEN_EXPIRED' || message.error === 'SESSION_INVALID';
+                if (isExpectedExpiry) {
+                    console.warn(`🔐 Session expired: ${message.error} - This is normal when sessions expire`);
+                } else {
+                    console.error(`🔐 Auth failed: ${message.error}`, message.message);
+                }
                 setAuthError({ code: message.error, message: message.message });
                 setIsAuthenticating(false);
                 setIsRestoringSession(false);
                 
                 // Clear stored session on failure
-                if (message.error === 'TOKEN_EXPIRED' || message.error === 'SESSION_INVALID') {
+                if (isExpectedExpiry) {
                     localStorage.removeItem('auth_token');
                     localStorage.removeItem('wallet_address');
                     localStorage.removeItem('session_timestamp');

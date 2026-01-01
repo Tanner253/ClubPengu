@@ -147,6 +147,9 @@ const Inbox = () => {
     const { userData, isAuthenticated } = useMultiplayer();
     
     const panelRef = useRef(null);
+    const moreMenuRef = useRef(null);
+    const [showMoreMenu, setShowMoreMenu] = useState(false);
+    
     // Server-authoritative coins from userData
     // In dev mode, give guests coins for testing
     const isDev = import.meta.env.DEV;
@@ -158,6 +161,11 @@ const Inbox = () => {
                     setShowInbox(false);
                 }
     }, showInbox);
+    
+    // Close more menu when clicking outside
+    useClickOutside(moreMenuRef, () => {
+        setShowMoreMenu(false);
+    }, showMoreMenu);
     
     if (!showInbox) return null;
     
@@ -257,6 +265,14 @@ const Inbox = () => {
                                 </p>
                             )}
                         </div>
+                        {/* X button for all challenges (including expired) */}
+                        <button
+                            onClick={(e) => { e.stopPropagation(); deleteInboxMessage(msg.id); }}
+                            className="p-1.5 sm:p-2 text-white/40 hover:text-white active:text-white hover:bg-white/10 active:bg-white/20 rounded-lg transition-colors shrink-0"
+                            title="Remove notification"
+                        >
+                            ✕
+                        </button>
                     </div>
                 </div>
             );
@@ -334,6 +350,20 @@ const Inbox = () => {
         return null;
     };
     
+    // Clear all expired notifications
+    const clearExpired = () => {
+        const now = Date.now();
+        inbox.forEach(msg => {
+            if (msg.expiresAt && msg.expiresAt < now) {
+                deleteInboxMessage(msg.id);
+            }
+        });
+        setShowMoreMenu(false);
+    };
+    
+    // Count expired notifications
+    const expiredCount = inbox.filter(msg => msg.expiresAt && msg.expiresAt < Date.now()).length;
+    
     // Stop propagation to prevent 3D canvas interactions
     const handlePanelInteraction = (e) => {
         e.stopPropagation();
@@ -364,12 +394,47 @@ const Inbox = () => {
                             </span>
                         )}
                     </h3>
-                    <button 
-                        onClick={() => setShowInbox(false)}
-                        className="text-white/50 hover:text-white active:text-white transition-colors text-lg sm:text-xl w-8 h-8 flex items-center justify-center"
-                    >
-                        ✕
-                    </button>
+                    <div className="flex items-center gap-2">
+                        {/* More menu button */}
+                        <div className="relative" ref={moreMenuRef}>
+                            <button 
+                                onClick={(e) => { 
+                                    e.stopPropagation(); 
+                                    setShowMoreMenu(!showMoreMenu); 
+                                }}
+                                className="text-white/50 hover:text-white active:text-white transition-colors text-lg sm:text-xl w-8 h-8 flex items-center justify-center"
+                                title="More options"
+                            >
+                                ⋮
+                            </button>
+                            {/* More menu dropdown */}
+                            {showMoreMenu && (
+                                <div className="absolute right-0 top-10 bg-gray-800 border border-white/20 rounded-lg shadow-xl z-50 min-w-[160px] overflow-hidden">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            clearExpired();
+                                        }}
+                                        disabled={expiredCount === 0}
+                                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors ${
+                                            expiredCount > 0
+                                                ? 'text-white hover:bg-white/10 active:bg-white/20'
+                                                : 'text-white/30 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        🗑️ Clear Expired ({expiredCount})
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                        {/* Close button */}
+                        <button 
+                            onClick={() => setShowInbox(false)}
+                            className="text-white/50 hover:text-white active:text-white transition-colors text-lg sm:text-xl w-8 h-8 flex items-center justify-center"
+                        >
+                            ✕
+                        </button>
+                    </div>
                 </div>
                 
                 {/* Messages */}

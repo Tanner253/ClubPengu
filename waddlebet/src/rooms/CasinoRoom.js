@@ -42,7 +42,8 @@ class CasinoRoom extends BaseRoom {
         // Mobile/Apple GPU detection for performance optimizations
         this.isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
         this.isAppleDevice = typeof window !== 'undefined' && window._isAppleDevice;
-        this.needsOptimization = this.isMobileGPU || this.isAppleDevice;
+        this.performanceMode = typeof window !== 'undefined' && window._performanceMode;
+        this.needsOptimization = this.isMobileGPU || this.isAppleDevice || this.performanceMode;
     }
     
     /**
@@ -102,8 +103,8 @@ class CasinoRoom extends BaseRoom {
         // ==================== LIGHTING ====================
         this._createLighting(scene, W, D, H, CX, CZ);
         
-        // ==================== APPLE/MOBILE SHADOW OPTIMIZATION ====================
-        // Disable all shadows on Apple/Mobile for significant performance boost
+        // ==================== APPLE/MOBILE/PERFORMANCE MODE SHADOW OPTIMIZATION ====================
+        // Disable all shadows on Apple/Mobile/Performance Mode for significant performance boost
         if (this.needsOptimization) {
             this.meshes.forEach(mesh => {
                 mesh.castShadow = false;
@@ -116,7 +117,11 @@ class CasinoRoom extends BaseRoom {
                     }
                 });
             });
-            console.log('🍎 CasinoRoom: Disabled shadows for Apple/Mobile optimization');
+            if (this.performanceMode) {
+                console.log('⚡ CasinoRoom: Disabled shadows for Performance Mode');
+            } else {
+                console.log('🍎 CasinoRoom: Disabled shadows for Apple/Mobile optimization');
+            }
         }
         
         return { 

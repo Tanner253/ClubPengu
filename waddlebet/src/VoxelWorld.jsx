@@ -448,7 +448,8 @@ const VoxelWorld = ({
             cameraSensitivity: 0.3,
             soundEnabled: true,
             showFps: false,
-            snowEnabled: true // Snowfall particles - ON by default
+            snowEnabled: true, // Snowfall particles - ON by default
+            performanceMode: false // Performance optimization mode - OFF by default
         };
         try {
             const saved = localStorage.getItem('game_settings');
@@ -567,42 +568,57 @@ const VoxelWorld = ({
         // Desktop (PC/Mac) can handle full quality
         const isMobileGPU = isIOSDevice || isAndroidDevice;
         
+        // Check if user has enabled Performance Mode in settings
+        const performanceModeEnabled = gameSettings.performanceMode === true;
+        
         // Store detection globally for other components to use
         window._isMacDevice = isAppleDevice; // Keep same name for compatibility
         window._isIOSDevice = isIOSDevice;
         window._isAppleDevice = isAppleDevice;
         window._isAndroidDevice = isAndroidDevice;
         window._isMobileGPU = isMobileGPU;
+        window._performanceMode = performanceModeEnabled;
         
         // Log for debugging
-        console.log('🖥️ Platform:', navigator.platform, '| isApple:', isAppleDevice, '| isIOS:', isIOSDevice, '| isAndroid:', isAndroidDevice, '| isMobileGPU:', isMobileGPU);
+        console.log('🖥️ Platform:', navigator.platform, '| isApple:', isAppleDevice, '| isIOS:', isIOSDevice, '| isAndroid:', isAndroidDevice, '| isMobileGPU:', isMobileGPU, '| Performance Mode:', performanceModeEnabled);
         
         // ==================== RENDERER SETTINGS ====================
         // Apple devices (Mac + iOS) need optimizations for WebGL-via-Metal issues on Safari
         // Android gets mobile optimizations too
         // Windows/Linux desktop can handle full quality
-        const needsOptimization = isAppleDevice || isAndroidDevice;
+        // OR user manually enabled Performance Mode
+        const needsOptimization = isAppleDevice || isAndroidDevice || performanceModeEnabled;
         
         const rendererOptions = {
-            antialias: !needsOptimization, // Apple/Android: false (big perf gain), PC: true
+            antialias: !needsOptimization, // Apple/Android/Performance Mode: false (big perf gain), PC: true
             powerPreference: 'high-performance',
             depth: true
         };
         
-        // Apple/Android: lower precision for faster shader math and Metal compatibility
+        // Apple/Android/Performance Mode: lower precision for faster shader math and Metal compatibility
         if (needsOptimization) {
             rendererOptions.precision = 'mediump';
             rendererOptions.stencil = false;
         }
         
+        // Performance Mode: Apply additional aggressive optimizations
+        if (performanceModeEnabled) {
+            console.log('⚡ Performance Mode enabled - applying aggressive optimizations');
+        }
+        
         const renderer = new THREE.WebGLRenderer(rendererOptions);
         
-        // Apple/Android: DPR capped at 1.0 (renders at native resolution, not 2x/3x)
+        // Apple/Android/Performance Mode: DPR capped at 1.0 (renders at native resolution, not 2x/3x)
         // This is the BIGGEST performance win - Retina/high-DPR renders 4-9x more pixels
         // PC: allow up to 2x for crisp visuals
+        // Performance Mode: Force 1.0x for maximum FPS
         const dpr = needsOptimization ? Math.min(window.devicePixelRatio, 1.0) : Math.min(window.devicePixelRatio, 2);
         renderer.setPixelRatio(dpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
+        
+        if (performanceModeEnabled) {
+            console.log('⚡ Performance Mode: Pixel ratio capped at 1.0x (was', window.devicePixelRatio, ')');
+        }
         
         // Apple/Android: flat rendering (faster), fixes Metal rendering issues
         if (needsOptimization) {
@@ -617,13 +633,19 @@ const VoxelWorld = ({
             }
         }
         
-        // Shadows: Apple/Android gets BasicShadowMap (fastest), PC gets PCFShadowMap (better quality)
-        renderer.shadowMap.enabled = true;
-        if (needsOptimization) {
-            renderer.shadowMap.type = THREE.BasicShadowMap;
-            console.log('📱 Apple/Android: Using BasicShadowMap for better performance');
+        // Shadows: Performance Mode DISABLES shadows completely (huge FPS boost)
+        // Apple/Android gets BasicShadowMap (fastest), PC gets PCFShadowMap (better quality)
+        if (performanceModeEnabled) {
+            renderer.shadowMap.enabled = false;
+            console.log('⚡ Performance Mode: Shadows DISABLED (major FPS boost)');
         } else {
-            renderer.shadowMap.type = THREE.PCFShadowMap;
+            renderer.shadowMap.enabled = true;
+            if (needsOptimization) {
+                renderer.shadowMap.type = THREE.BasicShadowMap;
+                console.log('📱 Apple/Android: Using BasicShadowMap for better performance');
+            } else {
+                renderer.shadowMap.type = THREE.PCFShadowMap;
+            }
         }
         mountRef.current.appendChild(renderer.domElement);
         rendererRef.current = renderer;
@@ -674,23 +696,30 @@ const VoxelWorld = ({
         
         const sunLight = new THREE.DirectionalLight(0xF8F8FF, 1.0); // Cold bright sun
         sunLight.position.set(80, 100, 60);
-        sunLight.castShadow = true;
-        // Apple (Mac + iOS) + Android: 512 shadow map (faster), PC: 1024 (better quality)
-        const shadowMapSize = needsOptimization ? 512 : 1024;
-        sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
-        sunLight.shadow.camera.left = -100;
-        sunLight.shadow.camera.right = 100;
-        sunLight.shadow.camera.top = 100;
-        sunLight.shadow.camera.bottom = -100;
-        sunLight.shadow.bias = -0.0005; // Reduce shadow acne
+        // Performance Mode: Disable shadow casting completely
+        sunLight.castShadow = !performanceModeEnabled;
+        if (!performanceModeEnabled) {
+            // Apple (Mac + iOS) + Android: 512 shadow map (faster), PC: 1024 (better quality)
+            const shadowMapSize = needsOptimization ? 512 : 1024;
+            sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
+            sunLight.shadow.camera.left = -100;
+            sunLight.shadow.camera.right = 100;
+            sunLight.shadow.camera.top = 100;
+            sunLight.shadow.camera.bottom = -100;
+            sunLight.shadow.bias = -0.0005; // Reduce shadow acne
+        }
         scene.add(sunLight);
         sunLightRef.current = sunLight;
         
         // ==================== SNOWFALL PARTICLE SYSTEM ====================
-        // Apple (Mac + iOS) + Android: use reduced particles for performance
+        // Apple (Mac + iOS) + Android + Performance Mode: use reduced particles for performance
         const snowfallSystem = new SnowfallSystem(THREE, scene, { isMobileGPU: needsOptimization });
         snowfallSystem.create({ x: posRef.current?.x || 50, z: posRef.current?.z || 50 });
         snowfallSystemRef.current = snowfallSystem;
+        
+        if (performanceModeEnabled) {
+            console.log('⚡ Performance Mode: Particle systems optimized for performance');
+        }
         
         // --- ICY ICEBERG ISLAND GENERATION ---
         const generateCity = () => {
@@ -753,7 +782,8 @@ const VoxelWorld = ({
             
             const icePlane = new THREE.Mesh(iceGeo, iceMat);
             icePlane.position.set(CITY_SIZE/2 * BUILDING_SCALE, 0, CITY_SIZE/2 * BUILDING_SCALE);
-            icePlane.receiveShadow = true;
+            // Performance Mode: disable shadow receiving
+            icePlane.receiveShadow = !performanceModeEnabled;
             scene.add(icePlane);
             
             // No water ring - walls handle boundaries now
@@ -1157,6 +1187,22 @@ const VoxelWorld = ({
             if (mpRequestBallSync) {
                 setTimeout(() => mpRequestBallSync(), 100);
             }
+        }
+        
+        // ==================== PERFORMANCE MODE: DISABLE ALL SHADOWS ====================
+        // After all rooms are loaded, disable shadows on all meshes if Performance Mode is enabled
+        if (performanceModeEnabled) {
+            scene.traverse((object) => {
+                if (object.isMesh) {
+                    object.castShadow = false;
+                    object.receiveShadow = false;
+                }
+                // Also disable shadows on lights
+                if (object.isLight && object.castShadow !== undefined) {
+                    object.castShadow = false;
+                }
+            });
+            console.log('⚡ Performance Mode: Disabled all shadows in scene');
         }
         
         // Store roomData in ref for multiplayer access
@@ -2847,7 +2893,7 @@ const VoxelWorld = ({
                             window.dispatchEvent(new CustomEvent('townInteraction', {
                                 detail: {
                                     action: 'dj',
-                                    message: '🎧 Press E to DJ',
+                                    message: isMobile ? '🎧 Tap to DJ' : '🎧 Press E to DJ',
                                     emote: 'DJ',
                                     data: {
                                         worldX: dj.position.x,
@@ -2861,7 +2907,7 @@ const VoxelWorld = ({
                             window.dispatchEvent(new CustomEvent('townInteraction', {
                                 detail: {
                                     action: 'sit',
-                                    message: `Press E to sit on ${furn.type}`,
+                                    message: isMobile ? `Tap to sit on ${furn.type}` : `Press E to sit on ${furn.type}`,
                                     emote: 'Sit',
                                     data: {
                                         worldX: furn.position.x,
@@ -2924,7 +2970,7 @@ const VoxelWorld = ({
                         window.dispatchEvent(new CustomEvent('townInteraction', {
                             detail: {
                                 action: 'dj',
-                                message: '🎧 Press E to DJ',
+                                message: isMobile ? '🎧 Tap to DJ' : '🎧 Press E to DJ',
                                 emote: 'DJ',
                                 data: {
                                     worldX: dj.position.x,
@@ -2939,7 +2985,7 @@ const VoxelWorld = ({
                         window.dispatchEvent(new CustomEvent('townInteraction', {
                             detail: {
                                 action: 'sit',
-                                message: `Press E to sit on ${furn.type}`,
+                                message: isMobile ? `Tap to sit on ${furn.type}` : `Press E to sit on ${furn.type}`,
                                 emote: 'Sit',
                                 data: {
                                     worldX: furn.position.x,
@@ -3005,7 +3051,7 @@ const VoxelWorld = ({
                     window.dispatchEvent(new CustomEvent('townInteraction', {
                         detail: {
                             action: 'sit',
-                            message: `Press E to sit on ${nearFurniture.type}`,
+                            message: isMobile ? `Tap to sit on ${nearFurniture.type}` : `Press E to sit on ${nearFurniture.type}`,
                             emote: 'Sit',
                             data: {
                                 worldX: nearFurniture.position.x,
@@ -4891,7 +4937,14 @@ const VoxelWorld = ({
         
         if (interaction) {
             if (!slotInteraction || slotInteraction.machine?.id !== interaction.machine?.id) {
-                setSlotInteraction(interaction);
+                // Replace exact prompt strings for mobile
+                let prompt = interaction.prompt;
+                if (isMobile) {
+                    prompt = prompt
+                        .replace('Press E to Roll', 'Tap to Roll')
+                        .replace('Press E', 'Tap');
+                }
+                setSlotInteraction({ ...interaction, prompt });
             }
         } else if (slotInteraction) {
             setSlotInteraction(null);
@@ -4979,7 +5032,14 @@ const VoxelWorld = ({
         
         if (interaction) {
             if (!fishingInteraction || fishingInteraction.spot?.id !== interaction.spot?.id) {
-                setFishingInteraction(interaction);
+                // Replace exact prompt strings for mobile
+                let prompt = interaction.prompt;
+                if (isMobile) {
+                    prompt = prompt
+                        .replace('Press E to Fish', 'Tap to Fish')
+                        .replace('Press E to fish', 'Tap to fish');
+                }
+                setFishingInteraction({ ...interaction, prompt });
             }
         } else if (fishingInteraction) {
             setFishingInteraction(null);
@@ -5006,7 +5066,7 @@ const VoxelWorld = ({
         if (distance < interactionRadius) {
             if (!arcadeInteraction) {
                 setArcadeInteraction({
-                    prompt: '🎮 Press E to play Battleship',
+                    prompt: isMobile ? '🎮 Tap to play Battleship' : '🎮 Press E to play Battleship',
                     gameType: 'battleship'
                 });
             }
@@ -5038,7 +5098,7 @@ const VoxelWorld = ({
             if (!lordFishnuInteraction) {
                 setLordFishnuInteraction({
                     canPayRespects: true,
-                    prompt: '🐟 Press E to pay respects to Lord Fishnu'
+                    prompt: isMobile ? '🐟 Tap to pay respects to Lord Fishnu' : '🐟 Press E to pay respects to Lord Fishnu'
                 });
             }
         } else if (lordFishnuInteraction) {
@@ -5069,7 +5129,7 @@ const VoxelWorld = ({
         if (distance < interactionRadius) {
             if (!wardrobeInteraction) {
                 setWardrobeInteraction({
-                    prompt: '✨ Press E to customize your penguin',
+                    prompt: isMobile ? '✨ Tap to customize your penguin' : '✨ Press E to customize your penguin',
                     type: 'wardrobe'
                 });
             }
@@ -5090,7 +5150,7 @@ const VoxelWorld = ({
             checkWardrobeSpace();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, wardrobeInteraction, playerCreatorOpen, userData?.coins, isAuthenticated]);
+    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, wardrobeInteraction, playerCreatorOpen, userData?.coins, isAuthenticated, isMobile]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -5539,13 +5599,16 @@ const VoxelWorld = ({
                 return;
             }
             
+            // Get current mobile state
+            const mobileState = isMobile;
+            
             if (action === 'sit' && emote) {
                 // Don't show prompt if already seated
                 if (seatedRef.current) return;
                 // Pass bench data including snap points and world position
                 setNearbyInteraction({ 
                     action, 
-                    message: 'Press E to sit', 
+                    message: mobileState ? 'Tap to sit' : 'Press E to sit', 
                     emote,
                     benchData: data // Contains snapPoints, seatHeight, etc.
                 });
@@ -5553,41 +5616,46 @@ const VoxelWorld = ({
                 // Don't show prompt if already DJing
                 if (seatedRef.current) return;
                 // Pass DJ booth data
+                const defaultDjMessage = mobileState ? '🎧 Tap to DJ' : '🎧 Press E to DJ';
                 setNearbyInteraction({ 
                     action, 
-                    message: message || '🎧 Press E to DJ',
+                    message: message || defaultDjMessage,
                     emote: emote || 'DJ',
                     benchData: data // Contains position, rotation, etc.
                 });
             } else if (action === 'climb_roof') {
                 // Show ladder climb prompt
+                const defaultClimbMessage = mobileState ? '🪜 Climb to Roof' : '🪜 Climb to Roof (Press E)';
                 setNearbyInteraction({ 
                     action, 
-                    message: message || '🪜 Climb to Roof (Press E)',
+                    message: message || defaultClimbMessage,
                     data: data
                 });
             } else if (action === 'interact_snowman') {
-                // Show snowman message
+                // Show snowman message (no "Press E" in this one)
                 setNearbyInteraction({ action, message: message || '☃️ Say hi to the snowman!', emote: 'Wave' });
             } else if (action === 'enter_casino_game_room') {
                 // Casino game room portal
+                const defaultCasinoMessage = mobileState ? '🎰 Enter Game Room' : '🎰 Enter Game Room (Press E)';
                 setNearbyInteraction({ 
                     action, 
-                    message: message || '🎰 Enter Game Room (Press E)',
+                    message: message || defaultCasinoMessage,
                     targetRoom: data?.destination || 'casino_game_room'
                 });
             } else if (action === 'enter_nightclub') {
                 // Nightclub portal
+                const defaultNightclubMessage = mobileState ? '🎵 Enter Nightclub' : '🎵 Enter Nightclub (Press E)';
                 setNearbyInteraction({ 
                     action, 
-                    message: message || '🎵 Enter Nightclub (Press E)',
+                    message: message || defaultNightclubMessage,
                     targetRoom: data?.destination || 'nightclub'
                 });
             } else if (action === 'play_arcade') {
                 // Arcade machine interaction
+                const defaultArcadeMessage = mobileState ? '🎮 Tap to play' : '🎮 Press E to play';
                 setNearbyInteraction({ 
                     action, 
-                    message: message || '🎮 Press E to play',
+                    message: message || defaultArcadeMessage,
                     gameType: data?.gameType || 'battleship'
                 });
             }
@@ -5596,7 +5664,7 @@ const VoxelWorld = ({
         
         window.addEventListener('townInteraction', handleTownInteraction);
         return () => window.removeEventListener('townInteraction', handleTownInteraction);
-    }, []);
+    }, [isMobile]);
     
     // Handle interaction with E key
     useEffect(() => {
@@ -6768,7 +6836,8 @@ const VoxelWorld = ({
              
              {/* Mobile Jump Button - positioned above action buttons on opposite side of joystick */}
              {/* 50% larger for better touch targets */}
-             {isMobile && (
+             {/* Hidden when player is seated (can't jump while sitting) */}
+             {isMobile && !seatedOnBench && (
                 <button 
                     className={`absolute ${isLandscape ? 'bottom-[200px]' : 'bottom-[200px]'} ${gameSettings.leftHanded ? 'left-3' : 'right-3'} ${isLandscape ? 'w-24 h-24' : 'w-[72px] h-[72px]'} rounded-full bg-green-600/80 border-2 border-white/40 flex items-center justify-center active:scale-90 active:bg-green-500 transition-all z-30 touch-none`}
                     onTouchStart={(e) => { e.preventDefault(); jumpRequestedRef.current = true; }}
@@ -7145,12 +7214,15 @@ const VoxelWorld = ({
                     }`}
                 >
                     {/* Mobile-friendly message without "Press E" */}
-                    <p className="text-white retro-text text-sm mb-2">
-                        {isMobile 
-                            ? nearbyInteraction.message.replace('Press E to ', 'Tap to ').replace('(Press E)', '')
-                            : nearbyInteraction.message
-                        }
-                    </p>
+                    {/* Hide message on mobile for actions with clear button labels (button already indicates what to do) */}
+                    {!(isMobile && ['sit', 'dj', 'climb_roof', 'play_arcade'].includes(nearbyInteraction.action)) && (
+                        <p className="text-white retro-text text-sm mb-2">
+                            {isMobile 
+                                ? nearbyInteraction.message.replace('Press E to ', 'Tap to ').replace('(Press E)', '')
+                                : nearbyInteraction.message
+                            }
+                        </p>
+                    )}
                     
                     {/* Action Button */}
                     <button
