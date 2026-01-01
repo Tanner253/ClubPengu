@@ -425,6 +425,7 @@ const VoxelWorld = ({
     // Lord Fishnu Interaction State
     const [lordFishnuInteraction, setLordFishnuInteraction] = useState(null); // { canPayRespects, prompt }
     const lordFishnuCooldownRef = useRef(false); // Prevent spam
+    const lordFishnuTimeoutRef = useRef(null);
     
     // Bench Sitting State
     const [seatedOnBench, setSeatedOnBench] = useState(null); // { benchId, snapPoint, worldPos }
@@ -1184,9 +1185,17 @@ const VoxelWorld = ({
             }
             mapRef.current = roomData.map;
             // Request ball sync from server when entering space
+            let ballSyncTimeout = null;
             if (mpRequestBallSync) {
-                setTimeout(() => mpRequestBallSync(), 100);
+                ballSyncTimeout = setTimeout(() => mpRequestBallSync(), 100);
             }
+            
+            // Cleanup function for this useEffect
+            return () => {
+                if (ballSyncTimeout) {
+                    clearTimeout(ballSyncTimeout);
+                }
+            };
         }
         
         // ==================== PERFORMANCE MODE: DISABLE ALL SHADOWS ====================
@@ -4125,6 +4134,23 @@ const VoxelWorld = ({
                 cameraControllerRef.current.dispose();
                 cameraControllerRef.current = null;
             }
+            // Cleanup timeout refs to prevent memory leaks
+            if (spinLockTimeoutRef.current) {
+                clearTimeout(spinLockTimeoutRef.current);
+                spinLockTimeoutRef.current = null;
+            }
+            if (blackjackLockTimeoutRef.current) {
+                clearTimeout(blackjackLockTimeoutRef.current);
+                blackjackLockTimeoutRef.current = null;
+            }
+            if (fishingLockTimeoutRef.current) {
+                clearTimeout(fishingLockTimeoutRef.current);
+                fishingLockTimeoutRef.current = null;
+            }
+            if (lordFishnuTimeoutRef.current) {
+                clearTimeout(lordFishnuTimeoutRef.current);
+                lordFishnuTimeoutRef.current = null;
+            }
             // Cleanup player name sprite ref
             playerNameSpriteRef.current = null;
         };
@@ -4234,7 +4260,8 @@ const VoxelWorld = ({
             triggerEmote('Dance');
             // Clear the dance flag after triggering
             if (clearDance) {
-                setTimeout(() => clearDance(), 100);
+                const danceTimeout = setTimeout(() => clearDance(), 100);
+                return () => clearTimeout(danceTimeout);
             }
         }
     }, [shouldDance, clearDance]);
@@ -5350,7 +5377,9 @@ const VoxelWorld = ({
     
     // Ref-based lock to prevent E spam (React state updates too slowly)
     const spinLockRef = useRef(false);
+    const spinLockTimeoutRef = useRef(null);
     const fishingLockRef = useRef(false);
+    const fishingLockTimeoutRef = useRef(null);
     
     const handleSlotSpin = useCallback(async () => {
         if (spinLockRef.current) return;
@@ -5377,7 +5406,14 @@ const VoxelWorld = ({
                 slotMachineSystemRef.current.handleSpinError(machineId);
             }
         }).finally(() => {
-            setTimeout(() => { spinLockRef.current = false; }, 500);
+            // Clear any existing timeout
+            if (spinLockTimeoutRef.current) {
+                clearTimeout(spinLockTimeoutRef.current);
+            }
+            spinLockTimeoutRef.current = setTimeout(() => { 
+                spinLockRef.current = false;
+                spinLockTimeoutRef.current = null;
+            }, 500);
         });
     }, [spinSlot, playerId, playerName]);
     
@@ -5395,6 +5431,7 @@ const VoxelWorld = ({
     
     // Blackjack lock ref to prevent E spam
     const blackjackLockRef = useRef(false);
+    const blackjackLockTimeoutRef = useRef(null);
     
     // Handle blackjack start action - opens the blackjack UI overlay
     const handleBlackjackStart = useCallback(() => {
@@ -5405,13 +5442,21 @@ const VoxelWorld = ({
         
         blackjackLockRef.current = true;
         
+        // Clear any existing timeout
+        if (blackjackLockTimeoutRef.current) {
+            clearTimeout(blackjackLockTimeoutRef.current);
+        }
+        
         // Open the blackjack game overlay
         setBlackjackTableId(currentBJInteraction.tableId);
         setBlackjackGameActive(true);
         
         // Send sit message to server (done in CasinoBlackjack component)
         
-        setTimeout(() => { blackjackLockRef.current = false; }, 300);
+        blackjackLockTimeoutRef.current = setTimeout(() => { 
+            blackjackLockRef.current = false;
+            blackjackLockTimeoutRef.current = null;
+        }, 300);
     }, [blackjackGameActive]);
     
     // Blackjack is click-only (no E key) to avoid conflict with sit interaction
@@ -5434,6 +5479,11 @@ const VoxelWorld = ({
         
         fishingLockRef.current = true;
         
+        // Clear any existing timeout
+        if (fishingLockTimeoutRef.current) {
+            clearTimeout(fishingLockTimeoutRef.current);
+        }
+        
         // Start fishing on server (deduct bait cost)
         const result = await startFishing(spotId);
         if (result.error) {
@@ -5454,7 +5504,10 @@ const VoxelWorld = ({
             iceFishingSystemRef.current.startLocalFishing(spotId);
         }
         
-        setTimeout(() => { fishingLockRef.current = false; }, 300);
+        fishingLockTimeoutRef.current = setTimeout(() => { 
+            fishingLockRef.current = false;
+            fishingLockTimeoutRef.current = null;
+        }, 300);
     }, [startFishing, playerName, fishingGameActive]);
     
     // Track depth for fishing game result
@@ -5537,8 +5590,13 @@ const VoxelWorld = ({
         
         // Set cooldown to prevent spam
         lordFishnuCooldownRef.current = true;
-        setTimeout(() => {
+        // Clear any existing timeout
+        if (lordFishnuTimeoutRef.current) {
+            clearTimeout(lordFishnuTimeoutRef.current);
+        }
+        lordFishnuTimeoutRef.current = setTimeout(() => {
             lordFishnuCooldownRef.current = false;
+            lordFishnuTimeoutRef.current = null;
         }, 3000); // 3 second cooldown
         
         // Pick random holy message

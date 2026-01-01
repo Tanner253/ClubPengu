@@ -1551,11 +1551,13 @@ export function MultiplayerProvider({ children }) {
                 }
             } else if (wasHidden) {
                 console.log('📱 Connection lost while hidden, reconnecting...');
-                setTimeout(() => {
+                const reconnectTimeout = setTimeout(() => {
                     if (wsRef.current?.readyState !== WebSocket.OPEN) {
                         connect();
                     }
                 }, 500);
+                // Store timeout for cleanup (will be cleaned up by useEffect return)
+                return () => clearTimeout(reconnectTimeout);
             }
         };
         
