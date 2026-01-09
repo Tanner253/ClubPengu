@@ -201,26 +201,6 @@ class BaseProp {
     getLandingSurface() {
         return null; // Override in subclass if prop can be landed on
     }
-    
-    /**
-     * Optimize static meshes for performance
-     * Call this after spawn() for props that don't animate most of their meshes
-     * @param {Set<THREE.Mesh>} excludeMeshes - Optional set of meshes to exclude (for animated parts)
-     */
-    optimizeStaticMeshes(excludeMeshes = new Set()) {
-        if (!this.group) return;
-        
-        this.group.traverse(child => {
-            if (child.isMesh && !excludeMeshes.has(child)) {
-                // Disable matrix auto-update for static meshes
-                child.updateMatrix();
-                child.matrixAutoUpdate = false;
-            }
-        });
-        
-        // Update the group's world matrix once
-        this.group.updateMatrixWorld(true);
-    }
 }
 
 export default BaseProp;

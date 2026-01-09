@@ -25,7 +25,7 @@ export const generateFlippers = (mainColor, isLeft) => {
         for(let y=-4; y<2; y++) {
             for(let z=-1; z<2; z++) {
                 if (x===2 && (y>0 || y<-3)) continue;
-                voxels.push({x: isLeft ? x+5 : -x-5, y: y-1, z, c: mainColor});
+                voxels.push({x: isLeft ? x+5 : -x-5, y: y, z, c: mainColor});
             }
         }
     }

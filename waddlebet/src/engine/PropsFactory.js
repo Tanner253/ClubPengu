@@ -1135,29 +1135,6 @@ class PropsFactory {
             group.add(searchlightGroup);
         }
         
-        // ==================== LASER BEAMS ====================
-        const laserColors = [neonRed, neonGreen, neonBlue, neonPink];
-        const lasers = [];
-        
-        for (let i = 0; i < 6; i++) {
-            const laserMat = new THREE.MeshBasicMaterial({
-                color: laserColors[i % laserColors.length],
-                transparent: true,
-                opacity: 0.6
-            });
-            const laserGeo = new THREE.CylinderGeometry(0.03, 0.03, 30, 4);
-            const laser = new THREE.Mesh(laserGeo, laserMat);
-            laser.userData.isLaser = true;
-            laser.userData.laserIndex = i;
-            laser.position.set(
-                (i % 2 === 0 ? -1 : 1) * (w / 4 + i * 0.5),
-                h + 5,
-                d / 2
-            );
-            lasers.push(laser);
-            group.add(laser);
-        }
-        
         // ==================== SMOKE/FOG PARTICLES ====================
         const smokeCount = 50;
         const smokeMat = new THREE.PointsMaterial({
@@ -1336,6 +1313,45 @@ class PropsFactory {
         roofCouchGroup.rotation.y = 0; // Face toward front (south)
         group.add(roofCouchGroup);
         
+        // ==================== LADDER (BACK OF BUILDING) ====================
+        // Ladder on the back (north side) of the nightclub for roof access
+        const ladderGroup = new THREE.Group();
+        ladderGroup.name = 'nightclub_ladder';
+        
+        const ladderMat = this.getMaterial(0x444444, { roughness: 0.3, metalness: 0.8 });
+        const ladderHeight = h + 2; // Goes from ground to roof + parapet
+        const ladderWidth = 1.2;
+        const rungCount = Math.floor(ladderHeight / 0.8);
+        const rungRadius = 0.06;
+        const sideRadius = 0.08;
+        
+        // Ladder side rails
+        const sideGeo = new THREE.CylinderGeometry(sideRadius, sideRadius, ladderHeight, 8);
+        const leftSide = new THREE.Mesh(sideGeo, ladderMat);
+        leftSide.position.set(-ladderWidth / 2, ladderHeight / 2, 0);
+        leftSide.castShadow = true;
+        ladderGroup.add(leftSide);
+        
+        const rightSide = new THREE.Mesh(sideGeo, ladderMat);
+        rightSide.position.set(ladderWidth / 2, ladderHeight / 2, 0);
+        rightSide.castShadow = true;
+        ladderGroup.add(rightSide);
+        
+        // Ladder rungs
+        const rungGeo = new THREE.CylinderGeometry(rungRadius, rungRadius, ladderWidth, 8);
+        for (let i = 0; i < rungCount; i++) {
+            const rung = new THREE.Mesh(rungGeo, ladderMat);
+            rung.rotation.z = Math.PI / 2;
+            rung.position.set(0, 0.5 + i * 0.8, 0);
+            rung.castShadow = true;
+            ladderGroup.add(rung);
+        }
+        
+        // Position ladder on back wall, slightly to the right side
+        ladderGroup.position.set(w / 4, 0, -d / 2 - 0.15);
+        ladderGroup.rotation.y = Math.PI; // Face outward (toward north)
+        group.add(ladderGroup);
+        
         // ==================== STAR BURST AROUND SIGN ====================
         const starBurstColors = [neonPink, neonBlue, neonYellow, neonGreen];
         for (let i = 0; i < 12; i++) {
@@ -1362,7 +1378,6 @@ class PropsFactory {
         
         // Store references for animation
         group.userData.searchlights = searchlights;
-        group.userData.lasers = lasers;
         group.userData.smoke = smoke;
         group.userData.musicNotes = musicNotes;
         
@@ -1413,13 +1428,6 @@ class PropsFactory {
                 sl.rotation.x = Math.sin(time * 0.3 + idx) * 0.2;
             });
             
-            // Laser animation
-            lasers.forEach((laser, idx) => {
-                const laserAngle = time * 2 + idx * Math.PI / 3;
-                laser.rotation.x = Math.sin(laserAngle) * Math.PI / 4;
-                laser.rotation.z = Math.cos(laserAngle * 0.7) * Math.PI / 6;
-                laser.material.opacity = 0.3 + bassIntensity * 0.5;
-            });
             
             // Smoke particles
             if (smoke && smoke.geometry) {

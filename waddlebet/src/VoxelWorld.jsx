@@ -1332,7 +1332,11 @@ const VoxelWorld = ({
                 fireEmitter: null,
                 breathFire: null,
                 breathIce: null,
-                bubblegum: null
+                bubblegum: null,
+                // Animated skin colors (cosmic, galaxy, rainbow, nebula)
+                animatedSkin: null,
+                cosmicStars: [],
+                animatedSkinGlow: null
             };
             
             mesh.traverse(child => {
@@ -1347,6 +1351,16 @@ const VoxelWorld = ({
                 if (child.userData?.isBreathFire) cache.breathFire = child;
                 if (child.userData?.isBreathIce) cache.breathIce = child;
                 if (child.userData?.isBubblegum) cache.bubblegum = child;
+                // Animated skin data
+                if (child.userData?.animatedSkin) cache.animatedSkin = child.userData.animatedSkin;
+                if (child.userData?.isCosmicStar) cache.cosmicStars.push(child);
+                if (child.userData?.isCosmicStars) {
+                    // Traverse stars group
+                    child.children.forEach(star => {
+                        if (star.userData?.isCosmicStar) cache.cosmicStars.push(star);
+                    });
+                }
+                if (child.userData?.isAnimatedSkinGlow) cache.animatedSkinGlow = child;
             });
             
             return cache;
@@ -1501,6 +1515,81 @@ const VoxelWorld = ({
                     else if (cycleTime < 0.85) scale = 2.1 - (cycleTime - 0.8) * 30;
                     else scale = 0.5;
                     bubble.scale.setScalar(Math.max(0.3, scale));
+                }
+            }
+            
+            // Animated skin colors (cosmic, galaxy, rainbow, nebula)
+            // Each body part has a phase offset for a flowing galaxy effect
+            if (cache.animatedSkin && cache.animatedSkin.materials && cache.animatedSkin.materials.length > 0) {
+                const skinConfig = cache.animatedSkin.config;
+                if (skinConfig && skinConfig.colors) {
+                    const baseT = time * skinConfig.speed;
+                    const colorCount = skinConfig.colors.length;
+                    
+                    cache.animatedSkin.materials.forEach((mat, idx) => {
+                        if (mat && mat.color) {
+                            // Each material has its own phase offset for galaxy flow effect
+                            // Use ?? instead of || so that phaseOffset=0 (for rainbow) is respected
+                            const phaseOffset = mat.userData?.phaseOffset ?? (idx * 0.7);
+                            const t = baseT + phaseOffset;
+                            
+                            // Interpolate between colors based on time + offset
+                            const colorIndex = Math.abs(t) % colorCount;
+                            const fromIdx = Math.floor(colorIndex) % colorCount;
+                            const toIdx = (fromIdx + 1) % colorCount;
+                            const blend = colorIndex - Math.floor(colorIndex);
+                            
+                            const fromColor = new THREE.Color(skinConfig.colors[fromIdx]);
+                            const toColor = new THREE.Color(skinConfig.colors[toIdx]);
+                            const currentColor = fromColor.clone().lerp(toColor, blend);
+                            
+                            mat.color.copy(currentColor);
+                            if (mat.emissive) {
+                                mat.emissive.copy(currentColor);
+                                mat.emissiveIntensity = (skinConfig.emissive || 0.1) + Math.sin(t * 2) * 0.05;
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // Cosmic stars twinkling
+            if (cache.cosmicStars && cache.cosmicStars.length > 0) {
+                cache.cosmicStars.forEach(star => {
+                    if (star && star.material && star.userData) {
+                        // Each star twinkles at its own rate
+                        const twinkle = Math.sin(time * (star.userData.twinkleSpeed || 1) + (star.userData.twinkleOffset || 0));
+                        const twinkleNorm = (twinkle + 1) / 2; // Normalize to 0-1
+                        
+                        // Opacity pulsing
+                        star.material.opacity = 0.4 + twinkleNorm * 0.6;
+                        
+                        // Emissive intensity pulsing for glow effect
+                        star.material.emissiveIntensity = 0.6 + twinkleNorm * 0.8;
+                        
+                        // Subtle color temperature shift (warmer when bright)
+                        const warmth = twinkleNorm * 0.15;
+                        if (star.material.emissive) {
+                            star.material.emissive.setRGB(0.7 + warmth, 0.75 + warmth * 0.5, 1.0);
+                        }
+                        
+                        // Subtle size pulsing
+                        const baseScale = star.userData.baseScale || 1;
+                        const starScale = baseScale * (0.8 + twinkleNorm * 0.4);
+                        star.scale.setScalar(starScale);
+                    }
+                });
+            }
+            
+            // Animated skin glow light - follows the average color of animated materials
+            if (cache.animatedSkinGlow && cache.animatedSkin && cache.animatedSkin.materials.length > 0) {
+                // Get color from first material (they're all similar with slight offsets)
+                const firstMat = cache.animatedSkin.materials[0];
+                if (firstMat && firstMat.color) {
+                    cache.animatedSkinGlow.color.copy(firstMat.color);
+                    // Subtle pulse (reduced 80%)
+                    const pulse = Math.sin(time * 2) * 0.06 + 0.06;
+                    cache.animatedSkinGlow.intensity = 0.24 + pulse;
                 }
             }
         };
@@ -3479,6 +3568,8 @@ const VoxelWorld = ({
                     
                     // Update animated cosmetics flag
                     const appearance = playerData.appearance || {};
+                    // Animated skin colors (cosmic, galaxy, rainbow, prismatic, nebula)
+                    const animatedSkins = ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula'];
                     meshData.hasAnimatedCosmetics = appearance.hat === 'propeller' || 
                                                      appearance.hat === 'flamingCrown' ||
                                                      appearance.mouth === 'cigarette' || 
@@ -3492,7 +3583,8 @@ const VoxelWorld = ({
                                                      appearance.bodyItem === 'angelWings' ||
                                                      appearance.bodyItem === 'demonWings' ||
                                                      appearance.bodyItem === 'fireAura' ||
-                                                     appearance.bodyItem === 'lightningAura';
+                                                     appearance.bodyItem === 'lightningAura' ||
+                                                     animatedSkins.includes(appearance.skin);
                     
                     // Clear the rebuild flag
                     playerData.needsMeshRebuild = false;
@@ -6542,6 +6634,8 @@ const VoxelWorld = ({
             
             // OPTIMIZATION: Check if player has animated cosmetics
             const appearance = playerData.appearance || {};
+            // Animated skin colors (cosmic, galaxy, rainbow, prismatic, nebula)
+            const animatedSkins = ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula'];
             const hasAnimatedCosmetics = appearance.hat === 'propeller' || 
                                          appearance.hat === 'flamingCrown' ||
                                          appearance.mouth === 'cigarette' || 
@@ -6555,7 +6649,8 @@ const VoxelWorld = ({
                                          appearance.bodyItem === 'angelWings' ||
                                          appearance.bodyItem === 'demonWings' ||
                                          appearance.bodyItem === 'fireAura' ||
-                                         appearance.bodyItem === 'lightningAura';
+                                         appearance.bodyItem === 'lightningAura' ||
+                                         animatedSkins.includes(appearance.skin);
             
             meshes.set(id, { 
                 mesh, 

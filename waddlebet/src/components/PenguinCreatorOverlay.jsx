@@ -23,6 +23,9 @@ import {
 const FREE_DEFAULT_COSMETICS = ['none', 'normal', 'beak'];
 const FREE_SKIN_COLORS = ['blue']; // Only blue is free by default
 
+// TEMPORARY: Client-side unlock all cosmetics bypass (matches server UNLOCK_ALL_COSMETICS)
+const UNLOCK_ALL_COSMETICS = import.meta.env.VITE_UNLOCK_ALL_COSMETICS === 'true';
+
 // PREMIUM SKIN COLORS (gacha drops) - All colors except blue require unlock
 // This matches VoxelPenguinDesigner - used as fallback when database hasn't loaded
 const PREMIUM_SKIN_COLORS = [
@@ -148,6 +151,9 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     
     // Check if a cosmetic is unlocked (or doesn't require unlock)
     const isCosmeticUnlocked = useCallback((itemName, category = null) => {
+        // TEMPORARY: Unlock all cosmetics for everyone
+        if (UNLOCK_ALL_COSMETICS) return true;
+        
         // Default items are always available
         if (FREE_DEFAULT_COSMETICS.includes(itemName)) return true;
         
@@ -177,6 +183,8 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     
     // Check if mount is unlocked
     const isMountUnlocked = useCallback((mountName) => {
+        // TEMPORARY: Unlock all for everyone
+        if (UNLOCK_ALL_COSMETICS) return true;
         if (mountName === 'none') return true;
         return unlockedMounts.includes(mountName);
     }, [unlockedMounts]);
@@ -212,6 +220,8 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     
     // Check if skin color is unlocked
     const isSkinColorUnlocked = useCallback((color) => {
+        // TEMPORARY: Unlock all for everyone
+        if (UNLOCK_ALL_COSMETICS) return true;
         // Free colors are always unlocked
         if (FREE_SKIN_COLORS.includes(color)) return true;
         // Check if owned via gacha or promo

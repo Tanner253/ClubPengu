@@ -35,7 +35,7 @@ export const PALETTE = {
     neonGreen: '#39FF14', neonOrange: '#FF6700', neonPink: '#FF6EC7', neonYellow: '#CCFF00',
     
     // EPIC (special colors)
-    rainbow: '#FF0000', galaxy: '#1A0533', aurora: '#00FF7F', sunset: '#FF4500',
+    rainbow: '#FF0000', prismatic: '#FF00FF', galaxy: '#1A0533', aurora: '#00FF7F', sunset: '#FF4500',
     ocean: '#006994', lava: '#CF1020', ice: '#B8DBF0', prismatic: '#FFFFFF',
     roseGold: '#B76E79', champagne: '#F7E7CE',
     neonCyan: '#00FFFF', neonPurple: '#9D00FF', neonRed: '#FF0000',

@@ -28,6 +28,54 @@ import {
 } from '../characters';
 
 /**
+ * Animated skin color configurations
+ * Colors shift over time for various effects
+ */
+export const ANIMATED_SKIN_COLORS = {
+    cosmic: {
+        // Galaxy with shifting purples, deep blues, and magenta hints
+        colors: ['#0B0B45', '#1a0a3e', '#3d1a6e', '#6b2d8b', '#4a1259', '#2a0e4f', '#0B0B45'],
+        speed: 0.5,
+        emissive: 0.2,
+        hasStars: true,
+        usePhaseOffsets: true // Each part at different point in cycle
+    },
+    galaxy: {
+        // Darker, more mysterious space feel
+        colors: ['#1A0533', '#0a1628', '#2a1055', '#0f0f3f', '#1a0a3e', '#1A0533'],
+        speed: 0.4,
+        emissive: 0.15,
+        hasStars: true,
+        usePhaseOffsets: true
+    },
+    rainbow: {
+        // Full spectrum cycling - WHOLE penguin same color
+        colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0088ff', '#8800ff'],
+        speed: 0.8,
+        emissive: 0.25,
+        hasStars: false,
+        usePhaseOffsets: false // All parts same color
+    },
+    prismatic: {
+        // Each body part is a DIFFERENT color from the spectrum (like a prism splitting light)
+        colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#00ffff', '#0088ff', '#8800ff', '#ff00ff'],
+        speed: 0.6,
+        emissive: 0.3,
+        hasStars: false,
+        usePhaseOffsets: true, // Each part different color
+        phaseMultiplier: 1.2 // Larger offset between parts for more contrast
+    },
+    nebula: {
+        // Purple/violet nebula
+        colors: ['#9932CC', '#4B0082', '#8A2BE2', '#9400D3', '#6B238E', '#9932CC'],
+        speed: 0.6,
+        emissive: 0.2,
+        hasStars: true,
+        usePhaseOffsets: true
+    }
+};
+
+/**
  * Creates a PenguinBuilder factory with cached materials and geometry
  * @param {Object} THREE - Three.js instance
  * @returns {Object} Builder object with buildPenguinMesh function
@@ -68,8 +116,12 @@ export function createPenguinBuilder(THREE) {
     
     /**
      * Build a part from voxels, merged by color into InstancedMeshes
+     * @param {Array} voxels - Voxel data
+     * @param {Object} palette - Color palette
+     * @param {Object} pivot - Pivot point for rotation
+     * @param {Object} animatedSkinInfo - Optional: { skinHex, skinConfig, materials[] } for animated skins
      */
-    const buildPartMerged = (voxels, palette, pivot) => {
+    const buildPartMerged = (voxels, palette, pivot, animatedSkinInfo = null) => {
         const g = new THREE.Group();
         
         // Group voxels by color
@@ -105,10 +157,34 @@ export function createPenguinBuilder(THREE) {
                 matrices.push(tempMatrix.clone());
             });
             
+            // Check if this is an animated skin color that needs special material
+            let material;
+            const isAnimatedSkinColor = animatedSkinInfo && colorKey === animatedSkinInfo.skinHex;
+            
+            if (isAnimatedSkinColor) {
+                // Create unique material for animated skin (not cached - needs to animate)
+                material = new THREE.MeshStandardMaterial({ 
+                    color: new THREE.Color(colorKey),
+                    roughness: 0.3,
+                    metalness: 0.1,
+                    emissive: new THREE.Color(colorKey),
+                    emissiveIntensity: animatedSkinInfo.skinConfig?.emissive || 0.1
+                });
+                // Add phase offset for multi-color effect (only if usePhaseOffsets is true)
+                const useOffsets = animatedSkinInfo.skinConfig?.usePhaseOffsets ?? true;
+                const phaseMultiplier = animatedSkinInfo.skinConfig?.phaseMultiplier || 0.7;
+                const phaseOffset = useOffsets ? (animatedSkinInfo.materials.length * phaseMultiplier) : 0;
+                material.userData = { phaseOffset };
+                // Track this material for animation
+                animatedSkinInfo.materials.push(material);
+            } else {
+                material = getMaterial(colorKey);
+            }
+            
             // Use InstancedMesh for many voxels of same color
             const instancedMesh = new THREE.InstancedMesh(
                 sharedVoxelGeo,
-                getMaterial(colorKey),
+                material,
                 matrices.length
             );
             matrices.forEach((m, i) => instancedMesh.setMatrixAt(i, m));
@@ -948,10 +1024,10 @@ export function createPenguinBuilder(THREE) {
         whiteFlippersRight.name = 'flipper_r';
         
         whiteFlippersLeft.scale.set(0.9, 0.9, 0.9);
-        whiteFlippersLeft.position.set(6 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
+        whiteFlippersLeft.position.set(5 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
         
         whiteFlippersRight.scale.set(0.9, 0.9, 0.9);
-        whiteFlippersRight.position.set(-6 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
+        whiteFlippersRight.position.set(-5 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
         
         group.userData.isJoeMode = true;
         group.add(whiteFlippersLeft, whiteFlippersRight, footL, footR);
@@ -969,17 +1045,26 @@ export function createPenguinBuilder(THREE) {
     const buildStandardPenguin = (data) => {
         const group = new THREE.Group();
         const skin = data.skin || 'blue';
+        const skinHex = PALETTE[skin] || skin;
         
-        const body = buildPartMerged(generateBaseBody(PALETTE[skin] || skin), PALETTE);
-        const head = buildPartMerged(generateHead(PALETTE[skin] || skin), PALETTE);
+        // Check if this is an animated skin (cosmic, galaxy, rainbow, nebula)
+        const skinConfig = ANIMATED_SKIN_COLORS[skin];
+        const animatedSkinInfo = skinConfig ? {
+            skinHex,
+            skinConfig,
+            materials: [] // Will be populated by buildPartMerged
+        } : null;
+        
+        const body = buildPartMerged(generateBaseBody(skinHex), PALETTE, null, animatedSkinInfo);
+        const head = buildPartMerged(generateHead(skinHex), PALETTE, null, animatedSkinInfo);
         
         const footL = buildPartMerged(generateFoot(3), PALETTE, {x:3, y:-6, z:1});
         footL.name = 'foot_l';
         const footR = buildPartMerged(generateFoot(-3), PALETTE, {x:-3, y:-6, z:1});
         footR.name = 'foot_r';
         
-        const flippersLeft = buildPartMerged(generateFlippers(PALETTE[skin] || skin, true), PALETTE, {x:5, y:0, z:0});
-        const flippersRight = buildPartMerged(generateFlippers(PALETTE[skin] || skin, false), PALETTE, {x:-5, y:0, z:0});
+        const flippersLeft = buildPartMerged(generateFlippers(skinHex, true), PALETTE, {x:5, y:0, z:0}, animatedSkinInfo);
+        const flippersRight = buildPartMerged(generateFlippers(skinHex, false), PALETTE, {x:-5, y:0, z:0}, animatedSkinInfo);
         
         flippersLeft.name = 'flipper_l';
         flippersRight.name = 'flipper_r';
@@ -1017,6 +1102,73 @@ export function createPenguinBuilder(THREE) {
         addEyes(group, data);
         addMouth(group, data);
         addBodyItem(group, data);
+        
+        // Add cosmic stars for animated skins
+        if (animatedSkinInfo && skinConfig?.hasStars) {
+            const starsGroup = new THREE.Group();
+            starsGroup.name = 'cosmic_stars';
+            
+            const starCount = 30;
+            const starGeometry = new THREE.SphereGeometry(VOXEL_SIZE * 0.12, 6, 6);
+            
+            for (let i = 0; i < starCount; i++) {
+                const starMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.8,
+                    emissive: new THREE.Color(0xaabbff),
+                    emissiveIntensity: 1.0,
+                    roughness: 0.2,
+                    metalness: 0.8
+                });
+                
+                const star = new THREE.Mesh(starGeometry, starMaterial);
+                
+                // Random position on the penguin surface
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI * 0.7 + 0.15;
+                const radius = 1.0 + Math.random() * 0.8;
+                
+                star.position.set(
+                    Math.sin(phi) * Math.cos(theta) * radius,
+                    Math.cos(phi) * radius + 0.3,
+                    Math.sin(phi) * Math.sin(theta) * radius
+                );
+                
+                // Store twinkle parameters
+                star.userData.twinkleSpeed = 0.8 + Math.random() * 1.2;
+                star.userData.twinkleOffset = Math.random() * Math.PI * 2;
+                star.userData.baseScale = 0.6 + Math.random() * 0.5;
+                star.userData.isCosmicStar = true;
+                
+                starsGroup.add(star);
+            }
+            
+            starsGroup.userData.isCosmicStars = true;
+            group.add(starsGroup);
+        }
+        
+        // Add subtle glow light for animated skins (reduced 80% from original)
+        if (animatedSkinInfo && animatedSkinInfo.materials.length > 0) {
+            const glowLight = new THREE.PointLight(
+                new THREE.Color(skinConfig.colors[0]), // Initial color
+                0.3, // Intensity (reduced 80% from 1.5)
+                5    // Distance (reduced from 8)
+            );
+            glowLight.position.set(0, 3 * VOXEL_SIZE, 0); // Center of penguin body
+            glowLight.name = 'animated_skin_glow';
+            glowLight.userData.isAnimatedSkinGlow = true;
+            group.add(glowLight);
+        }
+        
+        // Store animated skin data on the group for animation
+        if (animatedSkinInfo && animatedSkinInfo.materials.length > 0) {
+            group.userData.animatedSkin = {
+                skinName: skin,
+                config: skinConfig,
+                materials: animatedSkinInfo.materials
+            };
+        }
         
         group.scale.set(0.2, 0.2, 0.2);
         group.position.y = 0.8;
@@ -1107,7 +1259,11 @@ export function cacheAnimatedParts(mesh) {
         fireEmitter: null,
         breathFire: null,
         breathIce: null,
-        bubblegum: null
+        bubblegum: null,
+        // Animated skin (cosmic, galaxy, rainbow, nebula)
+        animatedSkin: null,
+        cosmicStars: [],
+        animatedSkinGlow: null
     };
     
     mesh.traverse(child => {
@@ -1122,6 +1278,16 @@ export function cacheAnimatedParts(mesh) {
         if (child.userData?.isBreathFire) cache.breathFire = child;
         if (child.userData?.isBreathIce) cache.breathIce = child;
         if (child.userData?.isBubblegum) cache.bubblegum = child;
+        // Animated skin data
+        if (child.userData?.animatedSkin) cache.animatedSkin = child.userData.animatedSkin;
+        if (child.userData?.isCosmicStar) cache.cosmicStars.push(child);
+        if (child.userData?.isCosmicStars) {
+            // Traverse stars group
+            child.children.forEach(star => {
+                if (star.userData?.isCosmicStar) cache.cosmicStars.push(star);
+            });
+        }
+        if (child.userData?.isAnimatedSkinGlow) cache.animatedSkinGlow = child;
     });
     
     return cache;
@@ -1282,6 +1448,85 @@ export function animateCosmeticsFromCache(cache, time, delta, VOXEL_SIZE) {
             else if (cycleTime < 0.85) scale = 2.1 - (cycleTime - 0.8) * 30;
             else scale = 0.5;
             bubble.scale.setScalar(Math.max(0.3, scale));
+        }
+    }
+    
+    // Animated skin colors (cosmic, galaxy, rainbow, nebula)
+    // Each body part has a phase offset for a flowing galaxy effect
+    if (cache.animatedSkin && cache.animatedSkin.materials && cache.animatedSkin.materials.length > 0) {
+        const skinConfig = cache.animatedSkin.config;
+        if (skinConfig && skinConfig.colors) {
+            const baseT = time * skinConfig.speed;
+            const colorCount = skinConfig.colors.length;
+            
+            // Need THREE for color operations - get from window
+            const THREE = window.THREE;
+            if (THREE) {
+                cache.animatedSkin.materials.forEach((mat, idx) => {
+                    if (mat && mat.color) {
+                        // Each material has its own phase offset for galaxy flow effect
+                        // Use ?? instead of || so that phaseOffset=0 (for rainbow) is respected
+                        const phaseOffset = mat.userData?.phaseOffset ?? (idx * 0.7);
+                        const t = baseT + phaseOffset;
+                        
+                        // Interpolate between colors based on time + offset
+                        const colorIndex = Math.abs(t) % colorCount;
+                        const fromIdx = Math.floor(colorIndex) % colorCount;
+                        const toIdx = (fromIdx + 1) % colorCount;
+                        const blend = colorIndex - Math.floor(colorIndex);
+                        
+                        const fromColor = new THREE.Color(skinConfig.colors[fromIdx]);
+                        const toColor = new THREE.Color(skinConfig.colors[toIdx]);
+                        const currentColor = fromColor.clone().lerp(toColor, blend);
+                        
+                        mat.color.copy(currentColor);
+                        if (mat.emissive) {
+                            mat.emissive.copy(currentColor);
+                            mat.emissiveIntensity = (skinConfig.emissive || 0.1) + Math.sin(t * 2) * 0.05;
+                        }
+                    }
+                });
+            }
+        }
+    }
+    
+    // Cosmic stars twinkling
+    if (cache.cosmicStars && cache.cosmicStars.length > 0) {
+        cache.cosmicStars.forEach(star => {
+            if (star && star.material && star.userData) {
+                // Each star twinkles at its own rate
+                const twinkle = Math.sin(time * (star.userData.twinkleSpeed || 1) + (star.userData.twinkleOffset || 0));
+                const twinkleNorm = (twinkle + 1) / 2; // Normalize to 0-1
+                
+                // Opacity pulsing
+                star.material.opacity = 0.4 + twinkleNorm * 0.6;
+                
+                // Emissive intensity pulsing for glow effect
+                star.material.emissiveIntensity = 0.6 + twinkleNorm * 0.8;
+                
+                // Subtle color temperature shift (warmer when bright)
+                const warmth = twinkleNorm * 0.15;
+                if (star.material.emissive) {
+                    star.material.emissive.setRGB(0.7 + warmth, 0.75 + warmth * 0.5, 1.0);
+                }
+                
+                // Subtle size pulsing
+                const baseScale = star.userData.baseScale || 1;
+                const scale = baseScale * (0.8 + twinkleNorm * 0.4);
+                star.scale.setScalar(scale);
+            }
+        });
+    }
+    
+    // Animated skin glow light - follows the average color of animated materials
+    if (cache.animatedSkinGlow && cache.animatedSkin && cache.animatedSkin.materials.length > 0) {
+        // Get color from first material (they're all similar with slight offsets)
+        const firstMat = cache.animatedSkin.materials[0];
+        if (firstMat && firstMat.color) {
+            cache.animatedSkinGlow.color.copy(firstMat.color);
+            // Subtle pulse (reduced 80%)
+            const pulse = Math.sin(time * 2) * 0.06 + 0.06;
+            cache.animatedSkinGlow.intensity = 0.24 + pulse;
         }
     }
 }

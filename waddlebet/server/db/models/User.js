@@ -425,6 +425,13 @@ const PROMO_EXCLUSIVE_IDS = [
 ];
 
 userSchema.methods.ownsCosmetic = function(cosmeticId) {
+    // TEMPORARY: Unlock all cosmetics for everyone
+    // TODO: Set to false when ready to enforce cosmetic ownership
+    const UNLOCK_ALL_COSMETICS = true;
+    if (UNLOCK_ALL_COSMETICS) {
+        return true;
+    }
+    
     // 'none' is always available
     if (cosmeticId === 'none') return true;
     
