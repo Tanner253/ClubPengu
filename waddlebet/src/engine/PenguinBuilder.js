@@ -24,7 +24,11 @@ import {
     FrogGenerators,
     FROG_PALETTE,
     FROG_PALETTES,
-    generateFrogPalette
+    generateFrogPalette,
+    ShrimpGenerators,
+    SHRIMP_PALETTE,
+    SHRIMP_PALETTES,
+    generateShrimpPalette
 } from '../characters';
 
 /**
@@ -914,6 +918,113 @@ export function createPenguinBuilder(THREE) {
         return group;
     };
     
+    /**
+     * Build Shrimp character mesh with tail flappers and antennae
+     */
+    const buildShrimpMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = ShrimpGenerators.pivots();
+        
+        // Use shrimpPrimaryColor first, then fall back to skin-based palette
+        let shrimpPalette;
+        
+        if (data.shrimpPrimaryColor) {
+            // Generate palette from custom color
+            shrimpPalette = generateShrimpPalette(data.shrimpPrimaryColor);
+        } else if (SHRIMP_PALETTES[data.skin]) {
+            // Use named palette if skin matches
+            shrimpPalette = SHRIMP_PALETTES[data.skin];
+        } else if (data.skin && PALETTE[data.skin]) {
+            // Generate palette from penguin skin color
+            shrimpPalette = generateShrimpPalette(PALETTE[data.skin]);
+        } else {
+            shrimpPalette = SHRIMP_PALETTE; // Default orange
+        }
+        
+        // Shrimp head with antennae and eye stalks
+        const headVoxels = ShrimpGenerators.head();
+        const head = buildPartMerged(headVoxels, shrimpPalette);
+        head.name = 'head';
+        
+        // Shrimp body (segmented)
+        const bodyVoxels = ShrimpGenerators.body();
+        const body = buildPartMerged(bodyVoxels, shrimpPalette);
+        body.name = 'body';
+        
+        // Arms/claws (flipper position for cosmetic compatibility)
+        const armLVoxels = ShrimpGenerators.flipperLeft();
+        const armL = buildPartMerged(armLVoxels, shrimpPalette, pivots.flipperLeft);
+        armL.name = 'flipper_l';
+        
+        const armRVoxels = ShrimpGenerators.flipperRight();
+        const armR = buildPartMerged(armRVoxels, shrimpPalette, pivots.flipperRight);
+        armR.name = 'flipper_r';
+        
+        // Tail fan (the distinctive shrimp tail flappers!)
+        const tailVoxels = ShrimpGenerators.tail();
+        const tail = buildPartMerged(tailVoxels, shrimpPalette, pivots.tail);
+        tail.name = 'tail';
+        tail.userData.isTailFlapper = true; // For animation
+        
+        // Walking legs
+        const legsVoxels = ShrimpGenerators.legs();
+        const legs = buildPartMerged(legsVoxels, shrimpPalette);
+        legs.name = 'legs';
+        
+        group.add(body, head, armL, armR, tail, legs);
+        
+        // Add hat support (no eyes/mouth for shrimp - has own eye stalks and rostrum)
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            if (hatVoxels && hatVoxels.length > 0) {
+                // Offset hat: Y+2, Z+2 (raised by 3 from -1, pushed back toward tail)
+                const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + 2, z: v.z + 2 }));
+                const hat = buildPartMerged(offsetHatVoxels, PALETTE);
+                hat.name = 'hat';
+                group.add(hat);
+                
+                // Propeller hat blades
+                if (data.hat === 'propeller') {
+                    const blades = new THREE.Group();
+                    blades.name = 'propeller_blades';
+                    blades.position.set(0, 16 * VOXEL_SIZE, 2 * VOXEL_SIZE);
+                    const bladeGeo = new THREE.BoxGeometry(4 * VOXEL_SIZE, 0.2 * VOXEL_SIZE, 0.5 * VOXEL_SIZE);
+                    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                    const b1 = new THREE.Mesh(bladeGeo, bladeMat);
+                    const b2 = new THREE.Mesh(bladeGeo, bladeMat);
+                    b2.rotation.y = Math.PI / 2;
+                    blades.add(b1, b2);
+                    group.add(blades);
+                }
+                
+                if (data.hat === 'wizardHat') {
+                    group.userData.hasWizardHat = true;
+                }
+            }
+        }
+        
+        // Add body item support
+        if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
+            const bodyItemData = ASSETS.BODY[data.bodyItem];
+            const bodyItemVoxels = bodyItemData?.voxels || bodyItemData || [];
+            if (bodyItemVoxels.length > 0) {
+                // Offset clothing for shrimp body: Y-2 (raised by 3 from -5)
+                const offsetBodyVoxels = bodyItemVoxels.map(v => ({ ...v, y: v.y - 2 }));
+                const bodyItemMesh = buildPartMerged(offsetBodyVoxels, PALETTE);
+                bodyItemMesh.name = 'bodyItem';
+                group.add(bodyItemMesh);
+            }
+        }
+        
+        group.scale.set(0.18, 0.18, 0.18);
+        group.position.y = 0.8;
+        
+        // Mark as shrimp for tail animation
+        group.userData.isShrimp = true;
+        
+        return group;
+    };
+    
     // Whale character configs
     const WHALE_CONFIGS = {
         whiteWhale: { generators: WhiteWhaleGenerators, palette: WHITE_WHALE_PALETTE },
@@ -1209,6 +1320,8 @@ export function createPenguinBuilder(THREE) {
             group = buildDoginalMesh(data);
         } else if (data.characterType === 'frog') {
             group = buildFrogMesh(data);
+        } else if (data.characterType === 'shrimp') {
+            group = buildShrimpMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {

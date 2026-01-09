@@ -60,6 +60,7 @@ export function animateMesh(
     const isMarcus = characterType === 'marcus';
     const isWhale = characterType?.includes('Whale');
     const isDoginal = characterType === 'doginal';
+    const isShrimp = characterType === 'shrimp';
     
     // Use cached parts if available, otherwise look up and cache
     if (!meshWrapper._animParts) {
@@ -311,8 +312,35 @@ export function animateMesh(
                 earR.rotation.x = Math.sin(trotSpeed * 2) * 0.15;
                 earR.rotation.z = 0.1 - Math.sin(trotSpeed) * 0.1;
             }
+        } else if (isShrimp) {
+            // Shrimp scuttle animation - tail flapping propulsion style
+            const scuttleSpeed = time * 14; // Fast scuttle
+            const flapAmount = 0.5;
+            
+            // TAIL FLAPPING - up and down like swimming/propulsion
+            if(tail) {
+                tail.rotation.x = Math.sin(scuttleSpeed) * flapAmount;
+            }
+            
+            // Arms/claws wave alternately while moving
+            if(flipperL) {
+                flipperL.rotation.x = Math.sin(scuttleSpeed) * 0.4;
+                flipperL.rotation.z = 0.2 + Math.sin(scuttleSpeed * 0.5) * 0.1;
+            }
+            if(flipperR) {
+                flipperR.rotation.x = Math.sin(scuttleSpeed + Math.PI) * 0.4;
+                flipperR.rotation.z = -0.2 - Math.sin(scuttleSpeed * 0.5) * 0.1;
+            }
+            
+            // Body bob - shrimp scuttles with a bounce
+            meshInner.position.y = 0.8 + Math.abs(Math.sin(scuttleSpeed * 2)) * 0.06;
+            meshInner.rotation.z = Math.sin(scuttleSpeed) * 0.04;
+            
+            // Antennae movement (via head bob)
+            if(head) head.rotation.x = Math.sin(scuttleSpeed * 1.5) * 0.08;
+            if(hatPart) hatPart.rotation.x = Math.sin(scuttleSpeed * 1.5) * 0.08;
         } else {
-            // Standard biped walking animation (penguin, marcus, whale)
+            // Standard biped walking animation (penguin, marcus, whale, frog)
         if(footL) footL.rotation.x = Math.sin(walkCycle) * 0.5;
         if(footR) footR.rotation.x = Math.sin(walkCycle + Math.PI) * 0.5;
         if(flipperL) flipperL.rotation.x = Math.sin(walkCycle) * 0.5;
@@ -335,6 +363,26 @@ export function animateMesh(
             const earTwitch = Math.sin(time * 0.5) > 0.9 ? Math.sin(time * 15) * 0.1 : 0;
             if(earL) earL.rotation.z = -0.05 + earTwitch;
             if(earR) earR.rotation.z = 0.05 - earTwitch;
+        } else if (isShrimp) {
+            // Shrimp idle - gentle tail sway and antennae movement
+            meshInner.rotation.z = Math.sin(time * 1.2) * 0.015;
+            
+            // TAIL - gentle up/down movement like breathing/floating
+            if(tail) {
+                tail.rotation.x = Math.sin(time * 2) * 0.15;
+            }
+            
+            // Arms held slightly forward, occasional twitch
+            const clawTwitch = Math.sin(time * 0.7) > 0.8 ? Math.sin(time * 12) * 0.1 : 0;
+            if(flipperL) {
+                flipperL.rotation.z = 0.15 + clawTwitch;
+            }
+            if(flipperR) {
+                flipperR.rotation.z = -0.15 - clawTwitch;
+            }
+            
+            // Antennae subtle movement (via head)
+            if(head) head.rotation.x = Math.sin(time * 0.8) * 0.03;
         } else {
         meshInner.rotation.z = Math.sin(time * 1.5) * 0.02;
         }

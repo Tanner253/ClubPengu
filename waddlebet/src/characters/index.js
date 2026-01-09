@@ -26,6 +26,7 @@ import WhiteWhaleGenerators, {
 } from './WhiteWhaleCharacter';
 import DoginalGenerators, { DOGINAL_PALETTE, DOG_PALETTES, generateDogPalette } from './DoginalCharacter';
 import FrogGenerators, { FROG_PALETTE, FROG_PALETTES, generateFrogPalette } from './FrogCharacter';
+import ShrimpGenerators, { SHRIMP_PALETTE, SHRIMP_PALETTES, generateShrimpPalette } from './ShrimpCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -149,6 +150,23 @@ characterRegistry.registerCharacter('frog', {
     }
 });
 
+characterRegistry.registerCharacter('shrimp', {
+    name: 'Shrimp',
+    description: 'A cute shrimp with tail flappers and antennae',
+    generators: ShrimpGenerators,
+    palette: SHRIMP_PALETTE,
+    palettes: SHRIMP_PALETTES,
+    isSecret: true,
+    previewScale: 0.8,
+    customizationOptions: {
+        disableSkinColor: false,  // Enable color variants (orange, raw, golden, blue)
+        disableHats: false,       // Allow hats
+        disableEyes: true,        // Shrimp has its own eye stalks
+        disableMouth: true,       // Shrimp has rostrum
+        disableBodyItems: false,  // Allow body items
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -169,6 +187,10 @@ export {
     FrogGenerators,
     FROG_PALETTE,
     FROG_PALETTES,
-    generateFrogPalette
+    generateFrogPalette,
+    ShrimpGenerators,
+    SHRIMP_PALETTE,
+    SHRIMP_PALETTES,
+    generateShrimpPalette
 };
 export default characterRegistry;

@@ -23,7 +23,10 @@ import {
     FrogGenerators,
     FROG_PALETTE,
     FROG_PALETTES,
-    generateFrogPalette
+    generateFrogPalette,
+    ShrimpGenerators,
+    SHRIMP_PALETTE,
+    generateShrimpPalette
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 
@@ -120,6 +123,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const [frogPrimaryColor, setFrogPrimaryColor] = useState(currentData?.frogPrimaryColor || '#4A8C4A');
     const [frogSecondaryColor, setFrogSecondaryColor] = useState(currentData?.frogSecondaryColor || '#B8C8B0');
     
+    // Shrimp color (primary shell color)
+    const [shrimpPrimaryColor, setShrimpPrimaryColor] = useState(currentData?.shrimpPrimaryColor || '#FF6B4A');
+    
     // Sync state when currentData changes (from server restore)
     useEffect(() => {
         if (currentData) {
@@ -136,6 +142,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             // Frog colors
             setFrogPrimaryColor(currentData.frogPrimaryColor || '#4A8C4A');
             setFrogSecondaryColor(currentData.frogSecondaryColor || '#B8C8B0');
+            // Shrimp color
+            setShrimpPrimaryColor(currentData.shrimpPrimaryColor || '#FF6B4A');
         }
     }, [currentData]);
     
@@ -467,8 +475,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharacters = unlockedCharactersList.filter(id => characterRegistry.getCharacter(id));
     
     useEffect(() => {
-        if(updateData) updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor});
-    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, updateData]);
+        if(updateData) updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor});
+    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, updateData]);
 
     const sceneRef = useRef(null);
     const penguinRef = useRef(null);
@@ -1066,6 +1074,46 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 const offsetBodyVoxels = frogBodyItemVoxels.map(v => ({ ...v, y: v.y - 2 }));
                 addPart(offsetBodyVoxels, 'bodyItem');
             }
+        } else if (characterType === 'shrimp') {
+            // Build Shrimp character - segmented body with tail flappers and clawed arms
+            const shrimpPalette = generateShrimpPalette(shrimpPrimaryColor || '#FF6B4A');
+            
+            addPart(ShrimpGenerators.head(), 'head', shrimpPalette);
+            addPart(ShrimpGenerators.body(), 'body', shrimpPalette);
+            addPart(ShrimpGenerators.flipperLeft(), 'flipper_l', shrimpPalette);
+            addPart(ShrimpGenerators.flipperRight(), 'flipper_r', shrimpPalette);
+            addPart(ShrimpGenerators.tail(), 'tail', shrimpPalette);
+            addPart(ShrimpGenerators.legs(), 'legs', shrimpPalette);
+            
+            // Add hat support for shrimp
+            const shrimpHatVoxels = ASSETS.HATS[hat] || [];
+            if (shrimpHatVoxels.length > 0) {
+                // Offset hat voxels: Y+1, Z+2 (pushed back toward tail)
+                const offsetHatVoxels = shrimpHatVoxels.map(v => ({ ...v, y: v.y + 1, z: v.z + 2 }));
+                addPart(offsetHatVoxels, 'hat');
+                
+                // Add wizard hat glow effect if equipped
+                if (hat === 'wizardHat') {
+                    const wizardLight = new THREE.PointLight(0xFF69B4, 1.5, 8);
+                    wizardLight.position.set(0, 18 * VOXEL_SIZE, 2 * VOXEL_SIZE);
+                    group.add(wizardLight);
+                    if (mirrorGroup) mirrorGroup.add(wizardLight.clone());
+                    
+                    const starLight = new THREE.PointLight(0xFFD700, 0.8, 5);
+                    starLight.position.set(0, 15 * VOXEL_SIZE, 4 * VOXEL_SIZE);
+                    group.add(starLight);
+                    if (mirrorGroup) mirrorGroup.add(starLight.clone());
+                }
+            }
+            
+            // Add body item for Shrimp (lowered by 4 from previous)
+            const shrimpBodyItemData = ASSETS.BODY[bodyItem];
+            const shrimpBodyItemVoxels = shrimpBodyItemData?.voxels || shrimpBodyItemData || [];
+            if (shrimpBodyItemVoxels.length > 0) {
+                // Offset for shrimp body position: lowered by 4 (was +2, now -2)
+                const offsetBodyVoxels = shrimpBodyItemVoxels.map(v => ({ ...v, y: v.y - 2 }));
+                addPart(offsetBodyVoxels, 'bodyItem');
+            }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body
             const WHALE_CONFIGS = {
@@ -1416,7 +1464,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             createCosmicStars(group);
         }
 
-    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor]);
+    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor]);
 
     // Get available skin colors - base + unlocked premium
     const availableSkinColors = useMemo(() => {
@@ -2011,6 +2059,71 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                                 />
                                             </div>
                                             <span className="text-white/70 text-[9px] mt-1">{preset.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ) : characterType === 'shrimp' ? (
+                        /* Shrimp color customization */
+                        <div className="bg-gradient-to-br from-orange-900/50 to-red-900/50 rounded-xl p-4 border border-orange-500/30">
+                            <div className="text-center mb-4">
+                                <span className="text-2xl">🦐</span>
+                                <h3 className="text-white font-bold mt-2">Shrimp Colors</h3>
+                                <p className="text-white/60 text-xs mt-1">
+                                    Pick your shrimp's shell color!
+                                </p>
+                            </div>
+                            
+                            {/* Shell Color */}
+                            <div className="mb-4">
+                                <label className="text-orange-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    🎨 Shell Color
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={shrimpPrimaryColor}
+                                        onChange={(e) => setShrimpPrimaryColor(e.target.value)}
+                                        className="w-12 h-10 rounded cursor-pointer border-2 border-orange-500/50"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={shrimpPrimaryColor}
+                                        onChange={(e) => setShrimpPrimaryColor(e.target.value)}
+                                        className="flex-1 bg-black/50 border border-orange-500/30 rounded px-2 py-1 text-white text-sm font-mono"
+                                        placeholder="#FF6B4A"
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Preset Colors */}
+                            <div>
+                                <label className="text-orange-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    Quick Presets
+                                </label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[
+                                        { name: 'Cooked', color: '#FF6B4A', emoji: '🦐' },
+                                        { name: 'Raw', color: '#7A8A9A', emoji: '🥶' },
+                                        { name: 'Golden', color: '#FFB840', emoji: '✨' },
+                                        { name: 'Blue', color: '#4080C0', emoji: '💎' },
+                                        { name: 'Pink', color: '#FF9999', emoji: '💗' },
+                                        { name: 'Red', color: '#CC3333', emoji: '🔴' },
+                                        { name: 'Tiger', color: '#FF8844', emoji: '🐯' },
+                                        { name: 'Ghost', color: '#CCDDEE', emoji: '👻' },
+                                    ].map((preset) => (
+                                        <button
+                                            key={preset.name}
+                                            onClick={() => setShrimpPrimaryColor(preset.color)}
+                                            className="flex flex-col items-center p-2 rounded-lg bg-black/30 hover:bg-black/50 border border-orange-500/20 hover:border-orange-400 transition-all"
+                                            title={preset.name}
+                                        >
+                                            <div 
+                                                className="w-6 h-6 rounded-full border border-white/30"
+                                                style={{ backgroundColor: preset.color }}
+                                            />
+                                            <span className="text-white/70 text-[9px] mt-1">{preset.emoji} {preset.name}</span>
                                         </button>
                                     ))}
                                 </div>

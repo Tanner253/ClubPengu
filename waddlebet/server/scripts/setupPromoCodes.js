@@ -193,6 +193,18 @@ const PROMO_CODES = [
             coins: 0
         }
     },
+    {
+        code: 'SHRIMPS',
+        name: '🦐 Shrimp Character',
+        description: 'Unlocks the adorable Shrimp character with tail flappers and antennae',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['shrimp'],
+            skinColor: null,
+            coins: 0
+        }
+    },
     
     // ========== INTERNAL TEAM CODES ==========
     {

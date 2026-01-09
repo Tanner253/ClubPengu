@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
     },
     characterType: {
         type: String,
-        enum: ['penguin', 'marcus', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale', 'doginal', 'frog'],
+        enum: ['penguin', 'marcus', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale', 'doginal', 'frog', 'shrimp'],
         default: 'penguin'
     },
 
@@ -45,7 +45,9 @@ const userSchema = new mongoose.Schema({
         dogSecondaryColor: { type: String, default: '#F0D890' },
         // Frog freestyle colors
         frogPrimaryColor: { type: String, default: '#6B8E23' },
-        frogSecondaryColor: { type: String, default: '#556B2F' }
+        frogSecondaryColor: { type: String, default: '#556B2F' },
+        // Shrimp color
+        shrimpPrimaryColor: { type: String, default: '#FF6B4A' }
     },
 
     // ========== CURRENCY (Server-Authoritative) ==========
@@ -794,6 +796,8 @@ userSchema.methods.updateCustomization = function(customization) {
     // Frog freestyle colors
     if (customization.frogPrimaryColor) this.customization.frogPrimaryColor = customization.frogPrimaryColor;
     if (customization.frogSecondaryColor) this.customization.frogSecondaryColor = customization.frogSecondaryColor;
+    // Shrimp color
+    if (customization.shrimpPrimaryColor) this.customization.shrimpPrimaryColor = customization.shrimpPrimaryColor;
     return true;
 };
 

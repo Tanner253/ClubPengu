@@ -16,7 +16,9 @@ import {
     DoginalGenerators,
     generateDogPalette,
     FrogGenerators,
-    generateFrogPalette
+    generateFrogPalette,
+    ShrimpGenerators,
+    generateShrimpPalette
 } from '../characters';
 
 // FREE items that are always available (not in database)
@@ -121,6 +123,9 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     const [frogPrimaryColor, setFrogPrimaryColor] = useState(currentData?.frogPrimaryColor || '#6B8E23');
     const [frogSecondaryColor, setFrogSecondaryColor] = useState(currentData?.frogSecondaryColor || '#556B2F');
     
+    // Shrimp color
+    const [shrimpPrimaryColor, setShrimpPrimaryColor] = useState(currentData?.shrimpPrimaryColor || '#FF6B4A');
+    
     // Show owned only toggle
     const [showOwnedOnly, setShowOwnedOnly] = useState(false);
     
@@ -143,6 +148,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             if (currentData.dogSecondaryColor) setDogSecondaryColor(currentData.dogSecondaryColor);
             if (currentData.frogPrimaryColor) setFrogPrimaryColor(currentData.frogPrimaryColor);
             if (currentData.frogSecondaryColor) setFrogSecondaryColor(currentData.frogSecondaryColor);
+            if (currentData.shrimpPrimaryColor) setShrimpPrimaryColor(currentData.shrimpPrimaryColor);
         }
     }, [currentData, isOpen]);
     
@@ -579,6 +585,36 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             }
             
             voxels = frogVoxels;
+        } else if (characterType === 'shrimp') {
+            // Shrimp character - segmented body with tail flappers and clawed arms
+            palette = generateShrimpPalette(shrimpPrimaryColor || '#FF6B4A');
+            const shrimpVoxels = [
+                ...ShrimpGenerators.head(),
+                ...ShrimpGenerators.body(),
+                ...ShrimpGenerators.flipperLeft(),
+                ...ShrimpGenerators.flipperRight(),
+                ...ShrimpGenerators.tail(),
+                ...ShrimpGenerators.legs()
+            ];
+            
+            // Add hat support for shrimp (offset for shrimp head position)
+            const shrimpHatVoxels = ASSETS.HATS[hat] || [];
+            if (shrimpHatVoxels.length > 0) {
+                // Offset hat voxels: Y+1, Z+2 (pushed back toward tail)
+                const offsetHatVoxels = shrimpHatVoxels.map(v => ({ ...v, y: v.y + 1, z: v.z + 2 }));
+                shrimpVoxels.push(...offsetHatVoxels);
+            }
+            
+            // Add body item for shrimp (lowered by 4 from previous)
+            const shrimpBodyItemData = ASSETS.BODY[bodyItem];
+            const shrimpBodyItemVoxels = shrimpBodyItemData?.voxels || shrimpBodyItemData || [];
+            if (shrimpBodyItemVoxels.length > 0) {
+                // Offset for shrimp body position: lowered by 4 (was +2, now -2)
+                const offsetBodyVoxels = shrimpBodyItemVoxels.map(v => ({ ...v, y: v.y - 2 }));
+                shrimpVoxels.push(...offsetBodyVoxels);
+            }
+            
+            voxels = shrimpVoxels;
         }
         
             // Create voxel meshes with proper color resolution
@@ -668,7 +704,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
         buildPenguin();
         
         // No cleanup needed - buildPenguin handles its own retries
-    }, [isOpen, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor]);
+    }, [isOpen, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor]);
     
     // Reset to default appearance
     const handleResetToDefault = useCallback(() => {
@@ -684,6 +720,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
         setDogSecondaryColor('#8B4513');
         setFrogPrimaryColor('#6B8E23');
         setFrogSecondaryColor('#556B2F');
+        setShrimpPrimaryColor('#FF6B4A');
     }, []);
     
     // Handle promo code submission
@@ -772,11 +809,12 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             dogPrimaryColor,
             dogSecondaryColor,
             frogPrimaryColor,
-            frogSecondaryColor
+            frogSecondaryColor,
+            shrimpPrimaryColor
         };
         onSave(finalData);
         onClose();
-    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, onSave, onClose, isCosmeticUnlocked, isMountUnlocked, isSkinColorUnlocked]);
+    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, onSave, onClose, isCosmeticUnlocked, isMountUnlocked, isSkinColorUnlocked]);
     
     // Count all and unlocked items for display - Using database cosmetics
     // MUST be before early return to avoid hooks error
@@ -1069,6 +1107,73 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                                                     />
                                                 </div>
                                                 <span className="text-white/70 text-[9px] mt-1">{preset.name}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Shrimp Colors */}
+                        {characterType === 'shrimp' && (
+                            <div className="mb-4 p-3 bg-gradient-to-br from-orange-900/50 to-red-900/50 rounded-xl border border-orange-500/30">
+                                <div className="text-center mb-4">
+                                    <span className="text-2xl">🦐</span>
+                                    <h3 className="text-white font-bold mt-2">Shrimp Colors</h3>
+                                    <p className="text-white/60 text-xs mt-1">
+                                        Pick your shrimp's shell color!
+                                    </p>
+                                </div>
+                                
+                                {/* Shell Color */}
+                                <div className="mb-3">
+                                    <label className="text-orange-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                        Shell Color
+                                    </label>
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            type="color"
+                                            value={shrimpPrimaryColor}
+                                            onChange={(e) => setShrimpPrimaryColor(e.target.value)}
+                                            className="w-12 h-10 rounded cursor-pointer border-2 border-orange-500/50"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={shrimpPrimaryColor}
+                                            onChange={(e) => setShrimpPrimaryColor(e.target.value)}
+                                            className="flex-1 bg-black/50 border border-orange-500/30 rounded px-2 py-1 text-white text-sm font-mono"
+                                            placeholder="#FF6B4A"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                {/* Quick Presets */}
+                                <div>
+                                    <label className="text-orange-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                        Quick Presets
+                                    </label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {[
+                                            { name: 'Cooked', color: '#FF6B4A', emoji: '🦐' },
+                                            { name: 'Raw', color: '#7A8A9A', emoji: '🥶' },
+                                            { name: 'Golden', color: '#FFB840', emoji: '✨' },
+                                            { name: 'Blue', color: '#4080C0', emoji: '💎' },
+                                            { name: 'Pink', color: '#FF9999', emoji: '💗' },
+                                            { name: 'Red', color: '#CC3333', emoji: '🔴' },
+                                            { name: 'Tiger', color: '#FF8844', emoji: '🐯' },
+                                            { name: 'Ghost', color: '#CCDDEE', emoji: '👻' },
+                                        ].map((preset) => (
+                                            <button
+                                                key={preset.name}
+                                                onClick={() => setShrimpPrimaryColor(preset.color)}
+                                                className="flex flex-col items-center p-2 rounded-lg bg-black/30 hover:bg-black/50 border border-orange-500/20 hover:border-orange-400 transition-all"
+                                                title={preset.name}
+                                            >
+                                                <div 
+                                                    className="w-6 h-6 rounded-full border border-white/30"
+                                                    style={{ backgroundColor: preset.color }}
+                                                />
+                                                <span className="text-white/70 text-[9px] mt-1">{preset.emoji} {preset.name}</span>
                                             </button>
                                         ))}
                                     </div>
