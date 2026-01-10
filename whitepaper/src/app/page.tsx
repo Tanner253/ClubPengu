@@ -106,7 +106,6 @@ function Navigation() {
   const navItems = [
     { label: "Bundle", href: "#bundle" },
     { label: "Product", href: "#about" },
-    { label: "Wagering", href: "#wagering" },
     { label: "Economics", href: "#economics" },
     { label: "Team", href: "#team" },
     { label: "Roadmap", href: "#roadmap" },
@@ -466,6 +465,76 @@ function HeroSection() {
   );
 }
 
+// Video/Demo Section
+function VideoSection() {
+  return (
+    <section id="demo" className="py-24 px-6 relative overflow-hidden">
+      {/* Background glow */}
+      <div className="absolute inset-0">
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-cyan-500/10 rounded-full blur-3xl" />
+      </div>
+
+      <div className="max-w-5xl mx-auto relative">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-12"
+        >
+          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">Gameplay</span>
+          <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
+            See <span className="gradient-text-blue">WaddleBet</span> in Action
+          </h2>
+          <p className="text-slate-400 text-lg max-w-2xl mx-auto">
+            Watch real gameplay footage and see what we&apos;re building. This is not a concept—it&apos;s playable right now.
+          </p>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          whileInView={{ opacity: 1, scale: 1 }}
+          viewport={{ once: true }}
+          className="glass-card rounded-2xl overflow-hidden border border-cyan-500/30"
+        >
+          <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
+            <iframe
+              className="absolute inset-0 w-full h-full"
+              src="https://www.youtube.com/embed/H2Ge_hb5Gfc?si=sSHAAsfu5ZjwFFYz"
+              title="WaddleBet Gameplay Demo"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
+            />
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: 0.2 }}
+          className="mt-8 flex flex-wrap justify-center gap-4"
+        >
+          {[
+            { icon: "🎮", label: "Real Gameplay" },
+            { icon: "🔧", label: "Active Development" },
+            { icon: "🐧", label: "Playable Now" },
+          ].map((item, i) => (
+            <span
+              key={i}
+              className="px-4 py-2 rounded-full bg-white/5 border border-cyan-500/20 text-slate-300 text-sm flex items-center gap-2"
+            >
+              <span>{item.icon}</span>
+              {item.label}
+            </span>
+          ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
 // Bundle Section - Demystifying the Bundle
 function BundleSection() {
   const bundleHolders = [
@@ -521,24 +590,55 @@ function BundleSection() {
       </div>
 
       <div className="max-w-6xl mx-auto relative">
-        {/* Header */}
+        {/* Header - Always Visible */}
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-8"
         >
           <span className="text-emerald-400 text-sm font-semibold uppercase tracking-widest">Transparency</span>
           <h2 className="text-4xl md:text-6xl font-bold mt-4 mb-6">
             Demystifying the <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400">Bundle</span>
           </h2>
-          <p className="text-slate-400 text-lg max-w-3xl mx-auto">
+          <p className="text-slate-400 text-lg max-w-3xl mx-auto mb-8">
             We&apos;re migrating our community and holders to $WADDLE. 
             The dev wallet will purchase ~40% of supply and distribute it to proven, battle-tested holders.
           </p>
+
+          {/* FAQ Teaser */}
+          <div className="inline-block p-4 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/30 mb-4">
+            <p className="text-amber-400 font-medium flex items-center gap-2 justify-center flex-wrap">
+              <span className="text-lg">❓</span>
+              <span className="text-slate-300">FAQ:</span>
+              <span>&quot;Why is there a ~40% bundle/cluster?&quot;</span>
+              <span className="text-slate-500 text-sm">— Expand below for the full story...</span>
+            </p>
+          </div>
         </motion.div>
 
-        {/* Airdrop Distribution Timeline */}
+        {/* Expandable Bundle Details */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+        >
+          <details className="glass-card rounded-2xl overflow-hidden border border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-cyan-500/5">
+            <summary className="p-6 cursor-pointer hover:bg-white/5 transition-colors flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-xl">
+                  📊
+                </div>
+                <div className="text-left">
+                  <span className="font-bold text-lg">View Full Bundle Breakdown</span>
+                  <p className="text-slate-400 text-sm">Distribution details, wallet list, timeline & why this bundle is different</p>
+                </div>
+              </div>
+              <ChevronDown className="w-6 h-6 text-emerald-400 shrink-0" />
+            </summary>
+            
+            <div className="p-6 pt-0 border-t border-white/5 space-y-16 mt-6">
+              {/* Airdrop Distribution Timeline */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -860,28 +960,26 @@ function BundleSection() {
           </details>
         </motion.div>
 
-        {/* Bottom CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mt-12 text-center"
-        >
-          <p className="text-slate-500 mb-4">This bundle is a pillar of strength, not a red flag.</p>
-          <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30">
-            <span className="text-emerald-400 font-semibold">🏆 Community Strength</span>
-            <span className="text-slate-500">•</span>
-            <span className="text-cyan-400 font-semibold">💎 Diamond Hands Only</span>
-            <span className="text-slate-500">•</span>
-            <span className="text-purple-400 font-semibold">🚀 To Millions Together</span>
-          </div>
+              {/* Bottom CTA inside expandable */}
+              <div className="text-center pt-8 border-t border-white/5">
+                <p className="text-slate-500 mb-4">This bundle is a pillar of strength, not a red flag.</p>
+                <div className="inline-flex flex-wrap items-center justify-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30">
+                  <span className="text-emerald-400 font-semibold">🏆 Community Strength</span>
+                  <span className="text-slate-500">•</span>
+                  <span className="text-cyan-400 font-semibold">💎 Diamond Hands Only</span>
+                  <span className="text-slate-500">•</span>
+                  <span className="text-purple-400 font-semibold">🚀 To Millions Together</span>
+                </div>
+              </div>
+            </div>
+          </details>
         </motion.div>
       </div>
     </section>
   );
 }
 
-// About Section
+// About Section - Enhanced with SPL Token Wagering
 function AboutSection() {
   return (
     <section id="about" className="py-32 px-6 relative">
@@ -890,7 +988,7 @@ function AboutSection() {
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-12"
         >
           <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">About</span>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
@@ -902,24 +1000,89 @@ function AboutSection() {
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-3 gap-8">
+        {/* Hero Feature: Any SPL Token Wagering */}
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="glass-card rounded-2xl p-8 mb-12 border-2 border-cyan-500/40 bg-gradient-to-br from-cyan-500/10 via-purple-500/5 to-pink-500/10"
+        >
+          <div className="flex flex-col lg:flex-row items-center gap-8">
+            <div className="flex-1 text-center lg:text-left">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/30 mb-4">
+                <Coins className="w-4 h-4 text-cyan-400" />
+                <span className="text-cyan-400 text-sm font-semibold">First of Its Kind</span>
+              </div>
+              <h3 className="text-3xl md:text-4xl font-bold mb-4">
+                Wager <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400">Any SPL Token</span>
+              </h3>
+              <p className="text-slate-300 text-lg mb-6 leading-relaxed">
+                <span className="text-white font-semibold">The first true multi-token PvP platform.</span> No more fragmented communities. 
+                $BONK holder? Challenge a $WIF degen. $PENGU maxi? Wager against $SOL whales. 
+                <span className="text-cyan-400 font-semibold"> Every Solana community, one arena.</span>
+              </p>
+              <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-6">
+                {["$SOL", "$BONK", "$WIF", "$PENGU", "$WADDLE", "Any Token"].map((token, i) => (
+                  <span
+                    key={i}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                      i === 5
+                        ? "bg-gradient-to-r from-cyan-500/30 to-purple-500/30 border border-cyan-500/50 text-white"
+                        : "bg-white/5 border border-white/10 text-slate-300"
+                    }`}
+                  >
+                    {token}
+                  </span>
+                ))}
+              </div>
+              <p className="text-slate-400 text-sm">
+                Enter any contract address. If it&apos;s on Solana, you can wager it. Real-time blockchain validation ensures authenticity.
+              </p>
+            </div>
+            <div className="lg:w-80 shrink-0">
+              <div className="glass-card rounded-xl p-6 border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-pink-500/10">
+                <h4 className="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2">
+                  <Zap className="w-5 h-5" />
+                  Why This Matters
+                </h4>
+                <ul className="space-y-3 text-sm">
+                  {[
+                    { icon: "🌊", text: "Liquidity for every token" },
+                    { icon: "🤝", text: "Cross-community interaction" },
+                    { icon: "🎮", text: "Real utility beyond trading" },
+                    { icon: "⚡", text: "Instant on-chain settlement" },
+                    { icon: "🔒", text: "Custodial escrow protection" },
+                  ].map((item, i) => (
+                    <li key={i} className="flex items-center gap-2 text-slate-300">
+                      <span>{item.icon}</span>
+                      <span>{item.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Core Features Grid */}
+        <div className="grid md:grid-cols-3 gap-8 mb-12">
           {[
             {
               icon: <Users className="w-8 h-8" />,
-              title: "WaddleBet Vibes",
-              description: "Classic 3D voxel world, penguin customization, puffles, emotes, and the social experience you remember—rebuilt for Web3.",
+              title: "Classic Social Gaming",
+              description: "3D voxel world, penguin customization, puffles, emotes, and the social experience you remember—rebuilt for Web3.",
               color: "from-cyan-500 to-blue-500",
             },
             {
               icon: <Building className="w-8 h-8" />,
-              title: "GTA V Property",
-              description: "Rent igloos, apartments, and lounges. Paywall your space with any token and invite players for exclusive hangouts.",
+              title: "Virtual Properties",
+              description: "Rent igloos and lounges. Paywall your space with any token. Host exclusive hangouts and earn from visitors.",
               color: "from-purple-500 to-pink-500",
             },
             {
               icon: <Repeat className="w-8 h-8" />,
-              title: "RuneScape Trading",
-              description: "Open gacha for rare cosmetics. Trade items with other players. Build your penguin empire through smart trading.",
+              title: "Open Market Trading",
+              description: "Runescape-style cosmetics marketplace. Trade items with other players. Build your collection through gacha and deals.",
               color: "from-yellow-500 to-orange-500",
             },
           ].map((item, i) => (
@@ -939,84 +1102,30 @@ function AboutSection() {
             </motion.div>
           ))}
         </div>
-      </div>
-    </section>
-  );
-}
 
-// Features Section
-function FeaturesSection() {
-  const features = [
-    {
-      icon: <Gamepad2 className="w-6 h-6" />,
-      title: "Classic Minigames",
-      description: "Card Jitsu, Connect 4, Tic Tac Toe, Pong, and more. Challenge friends or strangers.",
-    },
-    {
-      icon: <Palette className="w-6 h-6" />,
-      title: "Deep Customization",
-      description: "24+ penguin colors, hats, outfits, accessories. Express yourself in the virtual world.",
-    },
-    {
-      icon: <Sparkles className="w-6 h-6" />,
-      title: "Puffle Companions",
-      description: "Adopt fluffy puffles from Common to Legendary rarity. Each has unique personalities.",
-    },
-    {
-      icon: <Home className="w-6 h-6" />,
-      title: "Virtual Properties",
-      description: "Rent igloos, apartments, and exclusive spaces. Create your own paywalled hangouts.",
-    },
-    {
-      icon: <Trophy className="w-6 h-6" />,
-      title: "P2P Wagering",
-      description: "Bet any Solana token on minigames. Winner takes all. You choose the stakes.",
-    },
-    {
-      icon: <Zap className="w-6 h-6" />,
-      title: "Solana Speed",
-      description: "Instant transactions, low fees. All tokens on Solana chain are supported.",
-    },
-  ];
-
-  return (
-    <section id="features" className="py-32 px-6 relative">
-      <div className="section-divider mb-32" />
-      
-      <div className="max-w-6xl mx-auto">
+        {/* Quick Features List */}
         <motion.div
-          initial={{ opacity: 0, y: 40 }}
+          initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="glass-card rounded-2xl p-6"
         >
-          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">Features</span>
-          <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
-            Everything You <span className="gradient-text-blue">Need</span>
-          </h2>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            A complete social gaming experience, powered by blockchain technology.
-          </p>
-        </motion.div>
-
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((feature, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.05 }}
-              className="feature-card glass-card rounded-2xl p-6 group"
-            >
-              <div className="w-12 h-12 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 mb-4 group-hover:bg-cyan-500/20 transition-colors">
-                {feature.icon}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-center">
+            {[
+              { icon: <Gamepad2 className="w-5 h-5" />, label: "8+ Minigames" },
+              { icon: <Palette className="w-5 h-5" />, label: "267+ Cosmetics" },
+              { icon: <Sparkles className="w-5 h-5" />, label: "Puffle Pets" },
+              { icon: <Home className="w-5 h-5" />, label: "Own Property" },
+              { icon: <Trophy className="w-5 h-5" />, label: "P2P Wagers" },
+              { icon: <Zap className="w-5 h-5" />, label: "Instant Settle" },
+            ].map((item, i) => (
+              <div key={i} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white/5">
+                <div className="text-cyan-400">{item.icon}</div>
+                <span className="text-slate-300 text-xs font-medium">{item.label}</span>
               </div>
-              <h3 className="text-lg font-bold mb-2">{feature.title}</h3>
-              <p className="text-slate-400 text-sm">{feature.description}</p>
-            </motion.div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </motion.div>
       </div>
     </section>
   );
@@ -1481,119 +1590,6 @@ function WhaleStatusSection() {
 
 
 // Wagering Section
-function WageringSection() {
-  const games = [
-    { name: "Card Jitsu", emoji: "⚔️", description: "Fire beats Snow, Snow beats Water, Water beats Fire" },
-    { name: "Connect 4", emoji: "🔴", description: "Classic four-in-a-row strategy game" },
-    { name: "Blackjack", emoji: "🃏", description: "P2P vs shared dealer - best result wins" },
-    { name: "Battleship", emoji: "🚢", description: "Classic naval warfare strategy game" },
-    { name: "Tic Tac Toe", emoji: "⭕", description: "Quick matches, high stakes" },
-    { name: "Monopoly", emoji: "🎩", description: "Property trading and strategy" },
-    { name: "UNO", emoji: "🎴", description: "Classic card game, first to empty hand wins" },
-  ];
-
-  return (
-    <section id="wagering" className="py-32 px-6 relative">
-      <div className="section-divider mb-32" />
-      
-      <div className="max-w-6xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
-        >
-          <span className="text-pink-400 text-sm font-semibold uppercase tracking-widest">Wagering</span>
-          <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
-            Bet <span className="text-pink-400">Any</span> Solana Token
-          </h2>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            P2P wagering on minigames. You choose the token, you set the stakes. 
-            All Solana-based tokens supported.
-          </p>
-        </motion.div>
-
-        {/* Token showcase */}
-          <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          className="flex flex-wrap justify-center gap-3 mb-16"
-          >
-          {["$SOL", "$BONK", "$WIF", "$PENGU", "Any SPL Token"].map((token, i) => (
-            <span
-              key={i}
-              className={`px-4 py-2 rounded-full text-sm font-medium ${
-                i === 5
-                  ? "bg-gradient-to-r from-cyan-500/20 to-purple-500/20 border border-cyan-500/30 text-white"
-                  : "bg-white/5 border border-white/10 text-slate-300"
-              }`}
-            >
-              {token}
-            </span>
-          ))}
-        </motion.div>
-
-        {/* Games grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-          {games.map((game, i) => (
-                    <motion.div
-                      key={i}
-              initial={{ opacity: 0, y: 40 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.05 }}
-              className="feature-card glass-card rounded-2xl p-4 md:p-6 text-center"
-            >
-              <span className="text-4xl md:text-5xl mb-3 md:mb-4 block">{game.emoji}</span>
-              <h3 className="text-base md:text-lg font-bold mb-1 md:mb-2">{game.name}</h3>
-              <p className="text-slate-400 text-xs md:text-sm">{game.description}</p>
-                    </motion.div>
-                  ))}
-              </div>
-              
-        {/* How it works */}
-          <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          className="mt-16 glass-card rounded-2xl p-8 md:p-12"
-          >
-          <h3 className="text-2xl font-bold mb-8 text-center">How P2P Wagering Works</h3>
-          <div className="grid md:grid-cols-4 gap-8">
-            {[
-              { step: "01", title: "Challenge", desc: "Challenge another player to any minigame" },
-              { step: "02", title: "Select Token", desc: "Both players agree on which Solana token to wager" },
-              { step: "03", title: "Set Stakes", desc: "Determine the amount—micro bets to high stakes" },
-              { step: "04", title: "Play & Win", desc: "Winner gets 95% of pot. 5% rake supports platform." },
-            ].map((item, i) => (
-              <div key={i} className="text-center">
-                <div className="text-4xl font-bold text-cyan-500/30 mb-4">{item.step}</div>
-                <h4 className="font-semibold mb-2">{item.title}</h4>
-                <p className="text-slate-400 text-sm">{item.desc}</p>
-                </div>
-              ))}
-            </div>
-            
-          {/* Rake disclosure */}
-          <div className="mt-8 p-4 rounded-xl bg-gradient-to-r from-green-500/10 to-cyan-500/10 border border-green-500/20">
-            <div className="flex items-center gap-3">
-              <div className="text-2xl">💰</div>
-                <div>
-                <h4 className="font-semibold text-green-400">Platform Rake: 5%</h4>
-                <p className="text-slate-400 text-sm">
-                  A 5% rake is taken from all P2P wager pots to support platform development. 
-                  Winner receives 95% of the total pot instantly on-chain.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-      </div>
-    </section>
-  );
-}
-
 // Platform Economics Section
 function PlatformEconomicsSection() {
   const revenueStreams = [
@@ -2042,27 +2038,27 @@ function RoadmapSection() {
     {
       phase: "Phase 5",
       title: "Rebranding",
-      status: "current",
+      status: "complete",
       items: [
-        "🔄 New Token Launch",
-        "🔄 OG Holder Airdrop",
-        "🔄 Brand Refresh & Marketing",
-        "🔄 Community Growth Campaign",
-        "🔄 Influencer Partnerships",
-        "🔄 Exchange Listings",
+        "✅ New Token Launch ($WADDLE)",
+        "✅ OG Holder Airdrop",
+        "✅ Brand Refresh to WaddleBet",
+        "✅ Shrimp Character & Feathers",
+        "✅ Security Patches & Ban System",
+        "✅ PBR Casino Slot Reels",
       ],
     },
     {
       phase: "Phase 6",
       title: "House Games",
-      status: "upcoming",
+      status: "current",
       items: [
-        "🎲 Dice (1-2% House Edge)",
-        "📍 Plinko (3-5% House Edge)",
-        "📈 Limbo / Crash Game",
-        "🎰 Enhanced Slots (Real Payouts)",
-        "🃏 PvE Blackjack vs Dealer",
-        "⛏️ Mines Game",
+        "🔄 Dice (1-2% House Edge)",
+        "🔄 Plinko (3-5% House Edge)",
+        "🔄 Limbo / Crash Game",
+        "🔄 Enhanced Slots (Real Payouts)",
+        "🔄 PvE Blackjack vs Dealer",
+        "🔄 Mines Game",
       ],
     },
     {
@@ -2391,14 +2387,13 @@ export default function WhitepaperPage() {
       <Snowfall />
       <Navigation />
       <HeroSection />
+      <VideoSection />
       <BundleSection />
       <AboutSection />
-      <FeaturesSection />
       <CustomizationSection />
       <WhaleStatusSection />
       <GachaSystemSection />
       <EconomySection />
-      <WageringSection />
       <PlatformEconomicsSection />
       <TeamSection />
       <RoadmapSection />
