@@ -1704,7 +1704,6 @@ async function handleMessage(playerId, message) {
         // ==================== JOIN/MOVEMENT ====================
         case 'join': {
             player.name = message.name || player.name;
-            player.appearance = message.appearance || {};
             player.puffle = message.puffle || null;
             
             const roomId = message.room || 'town';
@@ -1734,12 +1733,28 @@ async function handleMessage(playerId, message) {
                 if (user) {
                     coins = user.coins || 0;
                     
+                    // IMPORTANT: For authenticated users, use database customization as the 
+                    // authoritative source. This ensures animated skins (rainbow, cosmic, etc.)
+                    // are properly synced to all clients. Merge with client data for fields
+                    // like mountEnabled and nametagStyle that aren't in the DB.
+                    const dbCustomization = user.customization?.toObject ? user.customization.toObject() : (user.customization || {});
+                    const clientAppearance = message.appearance || {};
+                    
+                    // Start with DB customization, overlay non-cosmetic client fields
+                    player.appearance = {
+                        ...dbCustomization,
+                        characterType: user.characterType || clientAppearance.characterType || 'penguin',
+                        // Preserve client-side settings that aren't stored in DB
+                        mountEnabled: clientAppearance.mountEnabled,
+                        nametagStyle: clientAppearance.nametagStyle
+                    };
+                    
                     // Check if this is first entry (username not locked yet)
                     const isFirstEntry = !user.lastUsernameChangeAt && !user.isEstablishedUser();
                     
-                    // Only save customization if it actually changed AND all items are owned
+                    // Only save customization if client sends changes AND all items are owned
                     if (message.appearance) {
-                        const currentCustom = user.customization || {};
+                        const currentCustom = dbCustomization;
                         const newCustom = message.appearance;
                         const hasChanges = 
                             currentCustom.skin !== newCustom.skin ||
@@ -1800,8 +1815,13 @@ async function handleMessage(playerId, message) {
                             user.updateCustomization(validatedCustom);
                             needsSave = true;
                             
-                            // Update player appearance with validated values
-                            player.appearance = validatedCustom;
+                            // Update player appearance with validated values, preserving non-DB fields
+                            player.appearance = {
+                                ...validatedCustom,
+                                characterType: validatedCustom.characterType || user.characterType || 'penguin',
+                                mountEnabled: clientAppearance.mountEnabled,
+                                nametagStyle: clientAppearance.nametagStyle
+                            };
                             
                             // Notify player if items were locked
                             if (hadLockedItem) {
@@ -1859,6 +1879,9 @@ async function handleMessage(playerId, message) {
                     // Update player name from DB
                     player.name = user.username;
                 }
+            } else {
+                // Guest user - use client appearance directly
+                player.appearance = message.appearance || {};
             }
             
             const existingPlayers = getPlayersInRoom(roomId, playerId);
