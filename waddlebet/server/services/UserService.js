@@ -394,9 +394,19 @@ class UserService {
         }
         
         // Check if owned via gacha (OwnedCosmetic)
-        const owned = await OwnedCosmetic.userOwnsTemplate(walletAddress, cosmeticId);
+        // IMPORTANT: templateId is stored as `${category}_${assetKey}` in the database
+        // If we have a category, construct the proper templateId
+        if (category) {
+            const templateId = `${category}_${cosmeticId}`;
+            const owned = await OwnedCosmetic.userOwnsTemplate(walletAddress, templateId);
+            if (owned) return true;
+        }
         
-        return owned;
+        // Also check by assetKey directly (fallback for legacy or if category not provided)
+        // This queries by the raw cosmeticId in case some templates don't follow the prefix pattern
+        const ownedByAsset = await OwnedCosmetic.userOwnsTemplate(walletAddress, cosmeticId);
+        
+        return ownedByAsset;
     }
     
     /**

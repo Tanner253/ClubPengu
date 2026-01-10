@@ -1737,13 +1737,24 @@ async function handleMessage(playerId, message) {
                     // authoritative source. This ensures animated skins (rainbow, cosmic, etc.)
                     // are properly synced to all clients. Merge with client data for fields
                     // like mountEnabled and nametagStyle that aren't in the DB.
-                    const dbCustomization = user.customization?.toObject ? user.customization.toObject() : (user.customization || {});
+                    // Convert to plain object to ensure Mongoose nested paths spread correctly
+                    const userPlain = user.toObject();
+                    const dbCustomization = userPlain.customization || {};
                     const clientAppearance = message.appearance || {};
                     
                     // Start with DB customization, overlay non-cosmetic client fields
                     player.appearance = {
-                        ...dbCustomization,
-                        characterType: user.characterType || clientAppearance.characterType || 'penguin',
+                        skin: dbCustomization.skin || 'blue',
+                        hat: dbCustomization.hat || 'none',
+                        eyes: dbCustomization.eyes || 'normal',
+                        mouth: dbCustomization.mouth || 'beak',
+                        bodyItem: dbCustomization.bodyItem || 'none',
+                        mount: dbCustomization.mount || 'none',
+                        dogPrimaryColor: dbCustomization.dogPrimaryColor,
+                        dogSecondaryColor: dbCustomization.dogSecondaryColor,
+                        frogPrimaryColor: dbCustomization.frogPrimaryColor,
+                        frogSecondaryColor: dbCustomization.frogSecondaryColor,
+                        characterType: userPlain.characterType || clientAppearance.characterType || 'penguin',
                         // Preserve client-side settings that aren't stored in DB
                         mountEnabled: clientAppearance.mountEnabled,
                         nametagStyle: clientAppearance.nametagStyle
