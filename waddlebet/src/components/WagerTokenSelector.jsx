@@ -105,13 +105,14 @@ const WagerTokenSelector = ({
     const handleQuickSelect = useCallback((token) => {
         setCustomAddress(token.address);
         
+        const amount = parseInt(tokenAmount, 10) || 0;
         onTokenSelect({
             tokenAddress: token.address,
             tokenSymbol: token.symbol,
             tokenDecimals: token.decimals,
-            tokenAmount: parseFloat(tokenAmount) || 0,
+            tokenAmount: amount,
             amountRaw: tokenAmount 
-                ? String(Math.floor(parseFloat(tokenAmount) * Math.pow(10, token.decimals)))
+                ? String(amount * Math.pow(10, token.decimals))
                 : null
         });
         
@@ -142,24 +143,22 @@ const WagerTokenSelector = ({
     }, [validateTokenDebounced, resetValidation, onTokenSelect]);
     
     /**
-     * Handle token amount change
+     * Handle token amount change - only allow whole numbers
      */
     const handleAmountChange = useCallback((e) => {
-        const value = e.target.value.replace(/[^0-9.]/g, '');
-        // Only allow one decimal point
-        const parts = value.split('.');
-        const sanitized = parts.length > 2 ? `${parts[0]}.${parts.slice(1).join('')}` : value;
+        // Only allow digits (no decimals)
+        const value = e.target.value.replace(/[^0-9]/g, '');
         
-        setTokenAmount(sanitized);
+        setTokenAmount(value);
         
-        if (selectedToken?.tokenAddress && sanitized) {
+        if (selectedToken?.tokenAddress && value) {
             const decimals = tokenMetadata?.decimals || selectedToken.tokenDecimals || 6;
-            const amount = parseFloat(sanitized) || 0;
+            const amount = parseInt(value, 10) || 0;
             
             onTokenSelect({
                 ...selectedToken,
                 tokenAmount: amount,
-                amountRaw: String(Math.floor(amount * Math.pow(10, decimals)))
+                amountRaw: String(amount * Math.pow(10, decimals))
             });
         }
     }, [selectedToken, tokenMetadata, onTokenSelect]);
@@ -169,13 +168,14 @@ const WagerTokenSelector = ({
      */
     React.useEffect(() => {
         if (isValid && tokenMetadata && customAddress) {
+            const amount = parseInt(tokenAmount, 10) || 0;
             onTokenSelect({
                 tokenAddress: customAddress,
                 tokenSymbol: tokenMetadata.symbol,
                 tokenDecimals: tokenMetadata.decimals,
-                tokenAmount: parseFloat(tokenAmount) || 0,
+                tokenAmount: amount,
                 amountRaw: tokenAmount 
-                    ? String(Math.floor(parseFloat(tokenAmount) * Math.pow(10, tokenMetadata.decimals)))
+                    ? String(amount * Math.pow(10, tokenMetadata.decimals))
                     : null
             });
         }
@@ -273,7 +273,8 @@ const WagerTokenSelector = ({
                             <div className="relative">
                                 <input
                                     type="text"
-                                    inputMode="decimal"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
                                     value={tokenAmount}
                                     onChange={handleAmountChange}
                                     placeholder="0"
@@ -285,11 +286,11 @@ const WagerTokenSelector = ({
                                 </span>
                             </div>
                             
-                            {/* Quick amount buttons */}
+                            {/* Quick amount buttons - whole numbers only */}
                             {userBalance > 0 && (
                                 <div className="flex gap-1 mt-2">
                                     {[0.25, 0.5, 1].map((fraction) => {
-                                        const amount = Math.floor(userBalance * fraction * 100) / 100;
+                                        const amount = Math.floor(userBalance * fraction);
                                         return (
                                             <button
                                                 key={fraction}
