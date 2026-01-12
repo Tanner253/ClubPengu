@@ -1,4 +1,4 @@
-# 🐧 Waddlebet 🐧 Club penguin inspired remake 
+# 🐧 Waddlebet 🐧 Club penguin inspired remake 🐧
 
 <div align="center">
 
