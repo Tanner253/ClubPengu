@@ -100,6 +100,17 @@ let broadcastToRoom, sendToPlayer;
 
 // ==================== HTTP SERVER ====================
 const server = http.createServer((req, res) => {
+    // Block banned IPs FIRST - before anything else (silently - no logging since Render logs externally)
+    const forwarded = req.headers['x-forwarded-for'];
+    const httpClientIP = forwarded ? forwarded.split(',')[0].trim() : 
+                         (req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown');
+    if (bannedIPs.has(httpClientIP)) {
+        // Immediately close connection with 403 - no CORS headers, no response body
+        res.writeHead(403);
+        res.end();
+        return;
+    }
+    
     // CORS headers for admin endpoints
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
