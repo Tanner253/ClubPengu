@@ -1,10 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { useClickOutside, useEscapeKey } from '../hooks';
-import { useTokenValidation } from '../hooks/useTokenValidation';
 import PhantomWallet from '../wallet/PhantomWallet';
-import { sendSPLToken } from '../wallet/SolanaPayment';
-import { fetchTokenData } from '../systems/CasinoTVSystem';
 
 // Pebble bundles (must match server constants)
 const BUNDLES = [
@@ -17,13 +14,8 @@ const BUNDLES = [
 
 const ROLL_COST = 25; // Pebbles per gacha roll
 const PEBBLES_PER_SOL = 1000;
-const PEBBLES_PER_SOL_WADDLE = 667; // $WADDLE is 1.5x more expensive
-const WADDLE_PREMIUM = 1.5;
 const WITHDRAWAL_RAKE = 5; // 5%
 const MIN_WITHDRAWAL = 100; // Minimum pebbles to withdraw
-
-// $WADDLE token address
-const WADDLE_TOKEN = import.meta.env.VITE_CPW3_TOKEN_ADDRESS || 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump';
 
 // Rake wallet from env (where SOL deposits go)
 const RAKE_WALLET = import.meta.env.VITE_RAKE_WALLET || '';
@@ -43,15 +35,6 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
     // Buy state
     const [selectedBundle, setSelectedBundle] = useState(null);
     const [isPurchasing, setIsPurchasing] = useState(false);
-    const [paymentMethod, setPaymentMethod] = useState('SOL'); // 'SOL' | 'WADDLE'
-    const [waddlePrice, setWaddlePrice] = useState(null); // WADDLE price in SOL
-    const [loadingWaddlePrice, setLoadingWaddlePrice] = useState(false);
-    
-    // Use the same token validation hook that PvP wagers use (it works correctly!)
-    // Hooks must be called unconditionally, so always pass walletAddress (hook handles null)
-    const { userBalance: waddleBalance, fetchBalance } = useTokenValidation(
-        isAuthenticated ? walletAddress : null
-    );
     
     // Withdraw state
     const [withdrawAmount, setWithdrawAmount] = useState('');
@@ -83,37 +66,6 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
         send({ type: 'pebbles_withdrawals' });
     }, [send]);
     
-    // Fetch WADDLE price when payment method changes to WADDLE
-    useEffect(() => {
-        if (paymentMethod === 'WADDLE' && !waddlePrice && !loadingWaddlePrice) {
-            setLoadingWaddlePrice(true);
-            fetchTokenData()
-                .then(data => {
-                    if (data && data.priceNative && data.priceNative > 0) {
-                        setWaddlePrice(data.priceNative);
-                    } else {
-                        setError('Unable to fetch $WADDLE price. Please try again.');
-                    }
-                })
-                .catch(err => {
-                    console.error('Failed to fetch WADDLE price:', err);
-                    setError('Unable to fetch $WADDLE price. Please try again.');
-                })
-                .finally(() => {
-                    setLoadingWaddlePrice(false);
-                });
-        }
-    }, [paymentMethod, waddlePrice, loadingWaddlePrice]);
-    
-    // Fetch WADDLE balance when switching to WADDLE payment method
-    // Use the same method that PvP wagers use (getParsedTokenAccountsByOwner)
-    useEffect(() => {
-        if (paymentMethod === 'WADDLE' && isAuthenticated && walletAddress && WADDLE_TOKEN) {
-            // Fetch balance using the same method that works for PvP wagers
-            fetchBalance(WADDLE_TOKEN, 6); // WADDLE has 6 decimals
-        }
-    }, [paymentMethod, isAuthenticated, walletAddress, fetchBalance]);
-
     // Reset state when modal opens
     useEffect(() => {
         if (isOpen) {
@@ -121,8 +73,6 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
             setError(null);
             setSuccess(null);
             setWithdrawAmount('');
-            setPaymentMethod('SOL'); // Default to SOL
-            setWaddlePrice(null); // Reset WADDLE price
             
             // Fetch withdrawal history when opening
             if (isAuthenticated) {
@@ -187,7 +137,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
         };
     }, [isOpen, registerCallbacks, fetchWithdrawals]);
     
-    // Handle purchase - SOL or $WADDLE transfer
+    // Handle purchase - SOL transfer only
     const handlePurchase = async (bundle) => {
         if (!isAuthenticated || !walletAddress) {
             setError('Please connect your wallet first');
@@ -210,81 +160,28 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                 throw new Error('Wallet not connected');
             }
             
-            if (paymentMethod === 'SOL') {
-                // SOL Payment
-                console.log(`🪨 Purchasing ${bundle.pebbles} Pebbles for ${bundle.sol} SOL`);
-                
-                const result = await wallet.sendSOL(
-                    RAKE_WALLET, 
-                    bundle.sol,
-                    `WaddleBet: Purchase ${bundle.pebbles} Pebbles with SOL`
-                );
-                
-                if (!result.success) {
-                    throw new Error(result.message || result.error || 'Transaction failed');
-                }
-                
-                console.log(`🪨 Pebble deposit tx: ${result.signature}`);
-                
-                send({
-                    type: 'pebbles_deposit',
-                    txSignature: result.signature,
-                    amountSol: bundle.sol
-                });
-                
-                setSuccess(`Successfully purchased ${bundle.pebbles} Pebbles!`);
-            } else {
-                // $WADDLE Payment (1.5x more expensive)
-                // Calculate SOL amount needed (1.5x the base SOL amount)
-                const solAmountNeeded = bundle.sol * WADDLE_PREMIUM;
-                const pebblesToReceive = bundle.pebbles; // Same pebbles as SOL, but costs 1.5x more
-                
-                // Fetch current WADDLE price in SOL from DexScreener
-                const tokenData = await fetchTokenData();
-                if (!tokenData || !tokenData.priceNative || tokenData.priceNative <= 0) {
-                    throw new Error('Unable to fetch $WADDLE price. Please try again.');
-                }
-                
-                // Calculate WADDLE tokens needed: SOL amount / price per WADDLE in SOL
-                // priceNative is the price of 1 WADDLE in SOL (e.g., 0.000000266)
-                const waddleTokensNeeded = solAmountNeeded / tokenData.priceNative;
-                
-                console.log(`🪨 Purchasing ${pebblesToReceive} Pebbles`);
-                console.log(`   SOL needed: ${solAmountNeeded} (1.5x premium)`);
-                console.log(`   WADDLE price: ${tokenData.priceNative} SOL per WADDLE`);
-                console.log(`   WADDLE tokens needed: ${waddleTokensNeeded.toLocaleString()}`);
-                
-                // Check WADDLE balance using the same method that PvP wagers use
-                // The balance is already fetched by useTokenValidation hook, but verify here
-                if (waddleBalance !== null && waddleBalance < waddleTokensNeeded) {
-                    throw new Error(`Insufficient WADDLE balance. You have ${waddleBalance.toLocaleString()} WADDLE, but need ${waddleTokensNeeded.toLocaleString()} WADDLE.`);
-                }
-                
-                console.log(`   ✅ Balance check: ${waddleBalance?.toLocaleString() || 'checking...'} WADDLE available`);
-                
-                // Send $WADDLE SPL token using the SAME sendSPLToken that PvP wagers use
-                // This already works perfectly for wagers, so it will work here too
-                const result = await sendSPLToken({
-                    recipientAddress: RAKE_WALLET,
-                    tokenMintAddress: WADDLE_TOKEN,
-                    amount: waddleTokensNeeded,
-                    memo: `WaddleBet: Purchase ${pebblesToReceive} Pebbles with $WADDLE`
-                });
-                
-                if (!result.success) {
-                    throw new Error(result.message || result.error || 'Transaction failed');
-                }
-                
-                console.log(`🪨 Pebble $WADDLE deposit tx: ${result.signature}`);
-                
-                send({
-                    type: 'pebbles_deposit_waddle',
-                    txSignature: result.signature,
-                    waddleAmount: waddleTokensNeeded // Send actual WADDLE token amount
-                });
-                
-                setSuccess(`Successfully purchased ${pebblesToReceive} Pebbles with $WADDLE!`);
+            // SOL Payment
+            console.log(`🪨 Purchasing ${bundle.pebbles} Pebbles for ${bundle.sol} SOL`);
+            
+            const result = await wallet.sendSOL(
+                RAKE_WALLET, 
+                bundle.sol,
+                `WaddleBet: Purchase ${bundle.pebbles} Pebbles with SOL`
+            );
+            
+            if (!result.success) {
+                throw new Error(result.message || result.error || 'Transaction failed');
             }
+            
+            console.log(`🪨 Pebble deposit tx: ${result.signature}`);
+            
+            send({
+                type: 'pebbles_deposit',
+                txSignature: result.signature,
+                amountSol: bundle.sol
+            });
+            
+            setSuccess(`Successfully purchased ${bundle.pebbles} Pebbles!`);
             
             setTimeout(() => {
                 setSuccess(null);
@@ -298,7 +195,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
             if (err.message?.includes('User rejected') || err.message?.includes('user rejected')) {
                 userMessage = 'Transaction cancelled';
             } else if (err.message?.includes('insufficient') || err.message?.includes('Insufficient')) {
-                userMessage = `Insufficient ${paymentMethod} balance`;
+                userMessage = 'Insufficient SOL balance';
             }
             
             setError(userMessage);
@@ -404,81 +301,12 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                     {activeTab === 'buy' ? (
                         /* Buy Tab */
                         <div className="p-4 space-y-3">
-                            {/* Payment Method Toggle */}
-                            <div className="flex gap-2 p-1 bg-black/30 rounded-lg">
-                                <button
-                                    onClick={() => setPaymentMethod('SOL')}
-                                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                                        paymentMethod === 'SOL'
-                                            ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white'
-                                            : 'text-white/60 hover:text-white hover:bg-white/10'
-                                    }`}
-                                >
-                                    <span>◎</span> SOL
-                                </button>
-                                <button
-                                    onClick={() => setPaymentMethod('WADDLE')}
-                                    className={`flex-1 py-2 px-3 rounded-lg text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-                                        paymentMethod === 'WADDLE'
-                                            ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white'
-                                            : 'text-white/60 hover:text-white hover:bg-white/10'
-                                    }`}
-                                >
-                                    <span>🐧</span> $WADDLE
-                                </button>
-                            </div>
-                            
                             <p className="text-xs text-purple-300/60">
-                                {paymentMethod === 'SOL' 
-                                    ? `1 roll = ${ROLL_COST} Pebbles • 1,000 Pebbles = 1 SOL`
-                                    : `1 roll = ${ROLL_COST} Pebbles • Paying with $WADDLE costs 1.5x more (same pebbles, higher cost)`
-                                }
+                                1 roll = {ROLL_COST} Pebbles • 1,000 Pebbles = 1 SOL
                             </p>
                             
-                            {paymentMethod === 'WADDLE' && (
-                                <div className="space-y-2">
-                                    <div className="bg-cyan-500/10 border border-cyan-500/30 rounded-lg p-2 text-xs text-cyan-300">
-                                        💡 Paying with $WADDLE costs 1.5x more but supports the ecosystem!
-                                    </div>
-                                    {waddleBalance !== null && waddleBalance !== undefined && (
-                                        <div className="text-xs text-cyan-300">
-                                            💰 Your Balance: {waddleBalance.toLocaleString()} $WADDLE
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                            
                             {BUNDLES.map((bundle) => {
-                                // Calculate display price
-                                let displayPrice;
-                                if (paymentMethod === 'SOL') {
-                                    displayPrice = bundle.sol;
-                                } else {
-                                    // For WADDLE, calculate actual token amount needed
-                                    if (waddlePrice && waddlePrice > 0) {
-                                        const solAmountNeeded = bundle.sol * WADDLE_PREMIUM;
-                                        const waddleTokensNeeded = solAmountNeeded / waddlePrice;
-                                        // Format large numbers nicely
-                                        if (waddleTokensNeeded >= 1000) {
-                                            displayPrice = waddleTokensNeeded.toLocaleString(undefined, { 
-                                                maximumFractionDigits: 0 
-                                            });
-                                        } else {
-                                            displayPrice = waddleTokensNeeded.toLocaleString(undefined, { 
-                                                maximumFractionDigits: 2,
-                                                minimumFractionDigits: 0
-                                            });
-                                        }
-                                    } else {
-                                        // Show loading state
-                                        displayPrice = '...';
-                                    }
-                                }
-                                
-                                const displayPebbles = paymentMethod === 'SOL'
-                                    ? bundle.pebbles
-                                    : bundle.pebbles; // Same pebbles, but costs 1.5x more with WADDLE
-                                const displayRolls = Math.floor(displayPebbles / ROLL_COST);
+                                const displayRolls = Math.floor(bundle.pebbles / ROLL_COST);
                                 
                                 return (
                                     <button
@@ -487,9 +315,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                                         disabled={isPurchasing}
                                         className={`w-full p-3 rounded-xl border transition-all ${
                                             bundle.featured 
-                                                ? paymentMethod === 'SOL'
-                                                    ? 'bg-gradient-to-r from-purple-600/40 to-pink-600/40 border-purple-400/50 hover:border-purple-400'
-                                                    : 'bg-gradient-to-r from-cyan-600/40 to-blue-600/40 border-cyan-400/50 hover:border-cyan-400'
+                                                ? 'bg-gradient-to-r from-purple-600/40 to-pink-600/40 border-purple-400/50 hover:border-purple-400'
                                                 : 'bg-black/30 border-purple-500/20 hover:border-purple-500/50 hover:bg-black/50'
                                         } ${isPurchasing && selectedBundle?.id === bundle.id ? 'opacity-50' : ''}`}
                                     >
@@ -499,9 +325,9 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                                                 <div className="text-left">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-white font-bold">
-                                                            {displayPebbles.toLocaleString()}
+                                                            {bundle.pebbles.toLocaleString()}
                                                         </span>
-                                                        {bundle.bonus > 0 && paymentMethod === 'SOL' && (
+                                                        {bundle.bonus > 0 && (
                                                             <span className="text-green-400 text-xs font-bold bg-green-400/20 px-1.5 py-0.5 rounded">
                                                                 +{bundle.bonusPercent}%
                                                             </span>
@@ -514,13 +340,7 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-white font-bold">
-                                                    {displayPrice === '...' ? (
-                                                        <span className="text-white/60">Loading...</span>
-                                                    ) : (
-                                                        <>
-                                                            {displayPrice} {paymentMethod === 'SOL' ? 'SOL' : '$WADDLE'}
-                                                        </>
-                                                    )}
+                                                    {bundle.sol} SOL
                                                 </div>
                                                 {bundle.featured && (
                                                     <div className="text-xs text-yellow-400">⭐ Popular</div>

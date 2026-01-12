@@ -56,6 +56,8 @@ const players = new Map(); // playerId -> { id, name, room, position, rotation, 
 const rooms = new Map(); // roomId -> Set of playerIds
 const ipConnections = new Map(); // ip -> Set of playerIds
 const bannedIPs = new Set(); // Set of banned IP addresses
+const bannedIPLogTimes = new Map(); // ip -> timestamp of last log (for throttling repeated connection attempts)
+const BANNED_IP_LOG_INTERVAL = 60 * 1000; // Only log banned IP attempts once per minute
 
 // PvE Activity tracking (for spectator banners)
 // playerId -> { activity: 'fishing'|'blackjack', room, state, position, playerName }
@@ -707,7 +709,13 @@ function generateGuestName() {
 function canIPConnect(ip) {
     // Check if IP is banned (blocks all connections from this IP)
     if (bannedIPs.has(ip)) {
-        console.log(`🚫 Blocked connection attempt from banned IP: ${ip}`);
+        // Throttle logging to avoid log spam from repeated connection attempts
+        const now = Date.now();
+        const lastLogTime = bannedIPLogTimes.get(ip) || 0;
+        if (now - lastLogTime >= BANNED_IP_LOG_INTERVAL) {
+            console.log(`🚫 Blocked connection attempt from banned IP: ${ip}`);
+            bannedIPLogTimes.set(ip, now);
+        }
         return false;
     }
     
@@ -1042,7 +1050,13 @@ wss.on('connection', (ws, req) => {
     
     // Check if IP is banned first (before any other checks)
     if (bannedIPs.has(clientIP)) {
-        console.log(`🚫 Blocked connection from banned IP: ${clientIP}`);
+        // Throttle logging to avoid log spam from repeated connection attempts
+        const now = Date.now();
+        const lastLogTime = bannedIPLogTimes.get(clientIP) || 0;
+        if (now - lastLogTime >= BANNED_IP_LOG_INTERVAL) {
+            console.log(`🚫 Blocked connection from banned IP: ${clientIP}`);
+            bannedIPLogTimes.set(clientIP, now);
+        }
         ws.send(JSON.stringify({
             type: 'error',
             code: 'IP_BANNED',
@@ -1781,45 +1795,51 @@ async function handleMessage(playerId, message) {
                             user.characterType !== newCustom.characterType;
                         
                         if (hasChanges) {
+                            // TEMPORARY: Skip ownership validation when all cosmetics are unlocked
+                            // TODO: Remove this check when ready to enforce cosmetic ownership
+                            const UNLOCK_ALL_COSMETICS = true;
+                            
                             // Validate ownership of each cosmetic before applying
                             const validatedCustom = { ...newCustom };
                             let hadLockedItem = false;
                             
-                            // Check skin color
-                            if (newCustom.skin && !await userService.ownsCosmetic(player.walletAddress, newCustom.skin, 'skin')) {
-                                console.log(`🔒 Blocked locked skin color: ${newCustom.skin}`);
-                                validatedCustom.skin = 'blue'; // Reset to default
-                                hadLockedItem = true;
-                            }
-                            // Check hat
-                            if (newCustom.hat && !await userService.ownsCosmetic(player.walletAddress, newCustom.hat, 'hat')) {
-                                console.log(`🔒 Blocked locked hat: ${newCustom.hat}`);
-                                validatedCustom.hat = 'none';
-                                hadLockedItem = true;
-                            }
-                            // Check eyes
-                            if (newCustom.eyes && !await userService.ownsCosmetic(player.walletAddress, newCustom.eyes, 'eyes')) {
-                                console.log(`🔒 Blocked locked eyes: ${newCustom.eyes}`);
-                                validatedCustom.eyes = 'normal';
-                                hadLockedItem = true;
-                            }
-                            // Check mouth
-                            if (newCustom.mouth && !await userService.ownsCosmetic(player.walletAddress, newCustom.mouth, 'mouth')) {
-                                console.log(`🔒 Blocked locked mouth: ${newCustom.mouth}`);
-                                validatedCustom.mouth = 'beak';
-                                hadLockedItem = true;
-                            }
-                            // Check bodyItem
-                            if (newCustom.bodyItem && !await userService.ownsCosmetic(player.walletAddress, newCustom.bodyItem, 'bodyItem')) {
-                                console.log(`🔒 Blocked locked bodyItem: ${newCustom.bodyItem}`);
-                                validatedCustom.bodyItem = 'none';
-                                hadLockedItem = true;
-                            }
-                            // Check mount
-                            if (newCustom.mount && !await userService.ownsCosmetic(player.walletAddress, newCustom.mount, 'mount')) {
-                                console.log(`🔒 Blocked locked mount: ${newCustom.mount}`);
-                                validatedCustom.mount = 'none';
-                                hadLockedItem = true;
+                            if (!UNLOCK_ALL_COSMETICS) {
+                                // Check skin color
+                                if (newCustom.skin && !await userService.ownsCosmetic(player.walletAddress, newCustom.skin, 'skin')) {
+                                    console.log(`🔒 Blocked locked skin color: ${newCustom.skin}`);
+                                    validatedCustom.skin = 'blue'; // Reset to default
+                                    hadLockedItem = true;
+                                }
+                                // Check hat
+                                if (newCustom.hat && !await userService.ownsCosmetic(player.walletAddress, newCustom.hat, 'hat')) {
+                                    console.log(`🔒 Blocked locked hat: ${newCustom.hat}`);
+                                    validatedCustom.hat = 'none';
+                                    hadLockedItem = true;
+                                }
+                                // Check eyes
+                                if (newCustom.eyes && !await userService.ownsCosmetic(player.walletAddress, newCustom.eyes, 'eyes')) {
+                                    console.log(`🔒 Blocked locked eyes: ${newCustom.eyes}`);
+                                    validatedCustom.eyes = 'normal';
+                                    hadLockedItem = true;
+                                }
+                                // Check mouth
+                                if (newCustom.mouth && !await userService.ownsCosmetic(player.walletAddress, newCustom.mouth, 'mouth')) {
+                                    console.log(`🔒 Blocked locked mouth: ${newCustom.mouth}`);
+                                    validatedCustom.mouth = 'beak';
+                                    hadLockedItem = true;
+                                }
+                                // Check bodyItem
+                                if (newCustom.bodyItem && !await userService.ownsCosmetic(player.walletAddress, newCustom.bodyItem, 'bodyItem')) {
+                                    console.log(`🔒 Blocked locked bodyItem: ${newCustom.bodyItem}`);
+                                    validatedCustom.bodyItem = 'none';
+                                    hadLockedItem = true;
+                                }
+                                // Check mount
+                                if (newCustom.mount && !await userService.ownsCosmetic(player.walletAddress, newCustom.mount, 'mount')) {
+                                    console.log(`🔒 Blocked locked mount: ${newCustom.mount}`);
+                                    validatedCustom.mount = 'none';
+                                    hadLockedItem = true;
+                                }
                             }
                             
                             // Apply validated customization
@@ -4740,96 +4760,6 @@ async function handleMessage(playerId, message) {
                     type: 'pebbles_error',
                     error: 'SERVER_ERROR',
                     message: 'Failed to process deposit'
-                });
-            }
-            break;
-        }
-        
-        case 'pebbles_deposit_waddle': {
-            // Player deposited $WADDLE and wants Pebbles (at 1.5x premium rate)
-            if (!player.isAuthenticated || !player.walletAddress) {
-                sendToPlayer(playerId, {
-                    type: 'pebbles_error',
-                    error: 'NOT_AUTHENTICATED',
-                    message: 'Must be authenticated to deposit'
-                });
-                break;
-            }
-            
-            // CRITICAL SECURITY: Validate all inputs
-            const walletValidation = validateWalletAddress(player.walletAddress);
-            if (!walletValidation.valid) {
-                console.error(`🚨 Security: Invalid wallet address in pebbles_deposit_waddle: ${walletValidation.error}`);
-                sendToPlayer(playerId, {
-                    type: 'pebbles_error',
-                    error: 'INVALID_WALLET',
-                    message: 'Invalid wallet address'
-                });
-                break;
-            }
-            
-            const { txSignature, waddleAmount } = message;
-            
-            // Validate transaction signature
-            const sigValidation = validateTransactionSignature(txSignature);
-            if (!sigValidation.valid) {
-                console.error(`🚨 Security: Invalid transaction signature: ${sigValidation.error}`);
-                sendToPlayer(playerId, {
-                    type: 'pebbles_error',
-                    error: 'INVALID_SIGNATURE',
-                    message: sigValidation.error || 'Invalid transaction signature'
-                });
-                break;
-            }
-            
-            // Validate WADDLE amount
-            const waddleValidation = validateAmount(waddleAmount, {
-                min: 0.001, // Minimum amount
-                max: 1000000, // Maximum reasonable amount
-                allowFloat: true,
-                allowZero: false
-            });
-            
-            if (!waddleValidation.valid) {
-                sendToPlayer(playerId, {
-                    type: 'pebbles_error',
-                    error: 'INVALID_AMOUNT',
-                    message: waddleValidation.error || 'Invalid $WADDLE amount'
-                });
-                break;
-            }
-            
-            const sanitizedWaddleAmount = waddleValidation.value;
-            
-            try {
-                const result = await pebbleService.depositPebblesWithWaddle(
-                    walletValidation.address, // Use sanitized address
-                    sigValidation.signature, // Use sanitized signature
-                    sanitizedWaddleAmount, // Use sanitized amount
-                    playerId
-                );
-                
-                if (result.success) {
-                    sendToPlayer(playerId, {
-                        type: 'pebbles_deposited',
-                        pebbles: result.newBalance,
-                        pebblesAwarded: result.pebblesReceived,
-                        waddleDeposited: result.waddleAmount,
-                        paymentMethod: 'WADDLE'
-                    });
-                } else {
-                    sendToPlayer(playerId, {
-                        type: 'pebbles_error',
-                        error: result.error,
-                        message: result.message || 'Deposit failed'
-                    });
-                }
-            } catch (error) {
-                console.error('🪨 Pebble $WADDLE deposit error:', error);
-                sendToPlayer(playerId, {
-                    type: 'pebbles_error',
-                    error: 'SERVER_ERROR',
-                    message: 'Failed to process $WADDLE deposit'
                 });
             }
             break;

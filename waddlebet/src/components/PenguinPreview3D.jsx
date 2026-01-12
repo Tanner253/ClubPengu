@@ -142,8 +142,13 @@ const PenguinPreview3D = ({
         if (!penguinGroupRef.current || !sceneRef.current) return;
         
         const rebuild = async () => {
-            const THREE = await import('three');
-            buildPenguin(THREE, penguinGroupRef.current, appearance);
+            try {
+                const THREE = await import('three');
+                console.log('🎨 Rebuilding penguin preview with appearance:', appearance);
+                buildPenguin(THREE, penguinGroupRef.current, appearance);
+            } catch (error) {
+                console.error('Error rebuilding penguin preview:', error);
+            }
         };
         
         rebuild();
@@ -215,25 +220,36 @@ function buildPenguin(THREE, group, appearance) {
             appearance.dogSecondaryColor || '#8B4513'
         );
         voxels = [
-            ...DoginalGenerators.generateDogBody(characterPalette),
-            ...DoginalGenerators.generateDogHead(characterPalette),
-            ...DoginalGenerators.generateDogFlipper(true, characterPalette),
-            ...DoginalGenerators.generateDogFlipper(false, characterPalette),
-            ...DoginalGenerators.generateDogFoot(true, characterPalette),
-            ...DoginalGenerators.generateDogFoot(false, characterPalette)
+            ...DoginalGenerators.head(),
+            ...DoginalGenerators.body(),
+            ...DoginalGenerators.armLeft(),
+            ...DoginalGenerators.armRight(),
+            ...DoginalGenerators.legLeft(),
+            ...DoginalGenerators.legRight(),
+            ...DoginalGenerators.tail(),
+            ...DoginalGenerators.earLeft(),
+            ...DoginalGenerators.earRight()
         ];
+        
+        // Doginal ALWAYS wears wizard hat - it's part of the character!
+        const doginalHat = ASSETS.HATS['wizardHat'] || [];
+        if (doginalHat.length > 0) {
+            // Offset hat voxels to sit on dog's head (Y+3 for head height, Z+3 for head forward offset)
+            const offsetHatVoxels = doginalHat.map(v => ({ ...v, y: v.y + 3, z: v.z + 3 }));
+            voxels = [...voxels, ...offsetHatVoxels];
+        }
     } else if (characterType === 'frog') {
         characterPalette = generateFrogPalette(
             appearance.frogPrimaryColor || '#6B8E23',
             appearance.frogSecondaryColor || '#556B2F'
         );
         voxels = [
-            ...FrogGenerators.generateFrogBody(characterPalette),
-            ...FrogGenerators.generateFrogHead(characterPalette),
-            ...FrogGenerators.generateFrogFlipper(true, characterPalette),
-            ...FrogGenerators.generateFrogFlipper(false, characterPalette),
-            ...FrogGenerators.generateFrogFoot(true, characterPalette),
-            ...FrogGenerators.generateFrogFoot(false, characterPalette)
+            ...FrogGenerators.head(),
+            ...FrogGenerators.body(),
+            ...FrogGenerators.flipperLeft(),
+            ...FrogGenerators.flipperRight(),
+            ...FrogGenerators.footLeft(),
+            ...FrogGenerators.footRight()
         ];
     } else if (characterType === 'shrimp') {
         characterPalette = generateShrimpPalette(appearance.shrimpPrimaryColor || '#FF6B4A');

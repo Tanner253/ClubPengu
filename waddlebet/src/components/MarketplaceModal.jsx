@@ -137,7 +137,7 @@ const TOOLTIPS = {
         title: 'What are Pebbles?',
         desc: 'In-game premium currency for trading.',
         points: [
-            '💰 Buy Pebbles with SOL or $WADDLE',
+            '💰 Buy Pebbles with SOL',
             '🏪 Trade cosmetics on the marketplace',
             '🎰 Tip players & buy gacha rolls',
             '💸 Cash out to SOL anytime (5% fee)',

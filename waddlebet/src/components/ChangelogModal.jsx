@@ -66,7 +66,6 @@ const CHANGELOG = [
             { type: 'feature', text: 'Complete ownership history tracking - trace any item from mint to current owner' },
             { type: 'feature', text: 'Gift System - send Gold, Pebbles, Items, or any SPL token to other players' },
             { type: 'feature', text: 'Tutorial Modal - interactive 6-slide guide for new players' },
-            { type: 'feature', text: '$WADDLE Pebble deposits - buy pebbles with $WADDLE at 1.5x premium rate' },
             { type: 'feature', text: 'Black Whale, Silver Whale, Gold Whale characters (BWHALE, SWHALE, GWHALE promo codes)' },
             { type: 'backend', text: 'MarketplaceService.js - listing, buying, canceling with atomic transactions' },
             { type: 'backend', text: 'MarketListing model with expiration and statistics' },

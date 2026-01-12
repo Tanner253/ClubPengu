@@ -931,9 +931,9 @@ const VoxelWorld = ({
             
             const loreLines = [
                 'In the Great Thaw of Year 42, when the',
-                'Shark Armies besieged Pengu Island,',
+                'Shark Armies besieged Waddle Island,',
                 'Lord Fishnu rose from the depths to',
-                'defend our beloved island.',
+                'defend our beloved land.',
                 '',
                 'With his Divine Tail Slap, he scattered',
                 'a thousand predators. His golden eyes',
@@ -1867,11 +1867,14 @@ const VoxelWorld = ({
         const isDev = import.meta.env.DEV || window.location.hostname === 'localhost';
         if (room === 'town' && isDev) {
             const wagerBotData = {
+                characterType: 'doginal',
                 skin: 'purple',
-                hat: 'tophat',
-                eyes: 'normal',
-                mouth: 'beak',
-                bodyItem: 'suit'
+                hat: 'none',
+                eyes: 'none',
+                mouth: 'none',
+                bodyItem: 'none',
+                dogPrimaryColor: '#D2691E',
+                dogSecondaryColor: '#8B4513'
             };
             const wagerBotMesh = buildPenguinMesh(wagerBotData);
             // Slightly bigger than normal penguins to stand out
@@ -4597,15 +4600,19 @@ const VoxelWorld = ({
                     // Handle WagerBot NPC click (dev mode)
                     if (clickedPlayerId === 'dev_bot_wager') {
                         console.log('🖱️ Clicked on WagerBot NPC');
+                        // Use the same appearance as defined in server/services/DevBotService.js BOT_CONFIG
                         onPlayerClick({
                             id: 'dev_bot_wager',
                             name: '🤖 WagerBot',
                             appearance: {
+                                characterType: 'doginal',
                                 skin: 'purple',
-                                hat: 'tophat',
-                                eyes: 'normal',
-                                mouth: 'beak',
-                                bodyItem: 'suit'
+                                hat: 'none',
+                                eyes: 'none',
+                                mouth: 'none',
+                                bodyItem: 'none',
+                                dogPrimaryColor: '#D2691E',
+                                dogSecondaryColor: '#8B4513'
                             },
                             position: { x: 105, y: 0, z: 100 },
                             isAuthenticated: true, // Bot is "authenticated" so can accept wagers

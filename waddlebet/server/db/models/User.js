@@ -783,21 +783,22 @@ userSchema.methods.changeUsername = async function(newUsername) {
  * Update customization
  */
 userSchema.methods.updateCustomization = function(customization) {
-    if (customization.skin) this.customization.skin = customization.skin;
-    if (customization.hat) this.customization.hat = customization.hat;
-    if (customization.eyes) this.customization.eyes = customization.eyes;
-    if (customization.mouth) this.customization.mouth = customization.mouth;
-    if (customization.bodyItem) this.customization.bodyItem = customization.bodyItem;
-    if (customization.mount) this.customization.mount = customization.mount;
-    if (customization.characterType) this.characterType = customization.characterType;
+    // Always update if provided (including animated skins like 'cosmic', 'galaxy', etc.)
+    if (customization.skin !== undefined) this.customization.skin = customization.skin;
+    if (customization.hat !== undefined) this.customization.hat = customization.hat;
+    if (customization.eyes !== undefined) this.customization.eyes = customization.eyes;
+    if (customization.mouth !== undefined) this.customization.mouth = customization.mouth;
+    if (customization.bodyItem !== undefined) this.customization.bodyItem = customization.bodyItem;
+    if (customization.mount !== undefined) this.customization.mount = customization.mount;
+    if (customization.characterType !== undefined) this.characterType = customization.characterType;
     // Doginal freestyle colors
-    if (customization.dogPrimaryColor) this.customization.dogPrimaryColor = customization.dogPrimaryColor;
-    if (customization.dogSecondaryColor) this.customization.dogSecondaryColor = customization.dogSecondaryColor;
+    if (customization.dogPrimaryColor !== undefined) this.customization.dogPrimaryColor = customization.dogPrimaryColor;
+    if (customization.dogSecondaryColor !== undefined) this.customization.dogSecondaryColor = customization.dogSecondaryColor;
     // Frog freestyle colors
-    if (customization.frogPrimaryColor) this.customization.frogPrimaryColor = customization.frogPrimaryColor;
-    if (customization.frogSecondaryColor) this.customization.frogSecondaryColor = customization.frogSecondaryColor;
+    if (customization.frogPrimaryColor !== undefined) this.customization.frogPrimaryColor = customization.frogPrimaryColor;
+    if (customization.frogSecondaryColor !== undefined) this.customization.frogSecondaryColor = customization.frogSecondaryColor;
     // Shrimp color
-    if (customization.shrimpPrimaryColor) this.customization.shrimpPrimaryColor = customization.shrimpPrimaryColor;
+    if (customization.shrimpPrimaryColor !== undefined) this.customization.shrimpPrimaryColor = customization.shrimpPrimaryColor;
     return true;
 };
 
