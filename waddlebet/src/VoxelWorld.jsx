@@ -2320,7 +2320,7 @@ const VoxelWorld = ({
                 }
                 }
                 // === AIR MOVEMENT ===
-                // In air: allow movement in facing direction (like ground, but same speed - no boost)
+                // In air: allow movement in facing direction with proper momentum
                 else {
                     // Mobile Joystick in air: same 2D plane movement with auto-facing
                     if (joystickMagnitude > 0.1 && !inMatch) {
@@ -2364,9 +2364,20 @@ const VoxelWorld = ({
                         velRef.current.z = -Math.cos(rotRef.current) * speed;
                         velRef.current.x = -Math.sin(rotRef.current) * speed;
                         moving = true;
+                    } else {
+                        // No input in air - apply air momentum with CURRENT delta
+                        // This prevents lag spikes from causing massive forward movement
+                        // Get the direction of current velocity and re-apply with current delta
+                        const currentVelMag = Math.sqrt(velRef.current.x * velRef.current.x + velRef.current.z * velRef.current.z);
+                        if (currentVelMag > 0.01) {
+                            // Normalize direction, apply BASE_SPEED * current delta
+                            // This maintains momentum direction but uses correct delta timing
+                            const airMomentumSpeed = BASE_SPEED * delta * 0.9; // 90% of ground speed for air drag
+                            velRef.current.x = (velRef.current.x / currentVelMag) * airMomentumSpeed;
+                            velRef.current.z = (velRef.current.z / currentVelMag) * airMomentumSpeed;
+                        }
+                        // If velocity was basically zero, keep it zero
                     }
-                    // No input in air - maintain momentum (don't reset to 0)
-                    // velocity stays as-is from last frame
                 }
             } else {
                 velRef.current.x = 0;
@@ -3950,8 +3961,15 @@ const VoxelWorld = ({
                 }
             }
 
+            // PARKOUR PERFORMANCE MODE: Skip heavy animations when player is high up (parkour course 4+)
+            // This significantly improves FPS during parkour challenges
+            // Note: Particles (snow, gold rain) are NOT affected - only prop animations
+            const PARKOUR_PERFORMANCE_Y_THRESHOLD = 30; // Stage 4 starts around Y=33
+            const inParkourPerformanceMode = roomRef.current === 'town' && posRef.current.y >= PARKOUR_PERFORMANCE_Y_THRESHOLD;
+            
             // Animate campfire (flames, embers, light flicker) and Christmas tree
-            if (townCenterRef.current && roomRef.current === 'town') {
+            // Skip when in parkour performance mode
+            if (townCenterRef.current && roomRef.current === 'town' && !inParkourPerformanceMode) {
                 const worldTime = serverWorldTimeRef?.current ?? 0.35;
                 const nightFactor = calculateNightFactor(worldTime);
                 // Pass player position for distance-based animation culling
@@ -3975,7 +3993,8 @@ const VoxelWorld = ({
             }
             
             // Animate building door glows (pulse for interactive doors, town only)
-            if (roomRef.current === 'town') {
+            // Skip door glow animations when in parkour performance mode
+            if (roomRef.current === 'town' && !inParkourPerformanceMode) {
                 portalsRef.current.forEach(building => {
                     if (building.mesh && building.gameId) {
                         const glow = building.mesh.getObjectByName(`door_glow_${building.id}`);
@@ -5896,9 +5915,75 @@ const VoxelWorld = ({
     
     // ==================== CHAT COMMANDS ====================
     // Handle /spawn command to teleport to TOWN CENTER spawn (always)
+    // Handle /tp pk1-pk5 commands for parkour testing (DEV only)
     useEffect(() => {
         const handleChatCommand = (e) => {
             const { command } = e.detail;
+            
+            // Parkour teleport positions (DEV/QA only)
+            // Based on: CENTER = 100, DOJO_OFFSET = { x: 0, z: 70 }
+            // dojoX = 100, dojoZ = 170, mirrored = true
+            const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'qa';
+            
+            // Parkour stage start positions (approximate, for testing)
+            // Y values raised +3 to land on top of platforms with clearance
+            const parkourPositions = {
+                // Stage 1 (Blue) - Ground level start near dojo
+                pk1: { x: CENTER_X - 12, y: 4, z: CENTER_Z + 70 + 9, name: 'Stage 1 (Blue) Start' },
+                // Stage 2 (Purple) - Tier 1 platform (first roof)
+                pk2: { x: CENTER_X - 13, y: 14, z: CENTER_Z + 70, name: 'Stage 2 (Purple) Start' },
+                // Stage 3 (Green) - Tier 3 platform
+                pk3: { x: CENTER_X - 6, y: 25, z: CENTER_Z + 70 + 2, name: 'Stage 3 (Green) Start' },
+                // Stage 4 (Orange) - Near fishing area (end of stage 3)
+                pk4: { x: CENTER_X - 70.4 + 4, y: 37, z: CENTER_Z + 78.5 - 2, name: 'Stage 4 (Orange) Start' },
+                // Stage 5 (Red) - End of stage 4
+                pk5: { x: CENTER_X - 70.4 + 49 + 3, y: 48, z: CENTER_Z + 78.5 + 1 + 3, name: 'Stage 5 (Red) Start' },
+                // Stage 6 (Cyan) - The Gauntlet - Expert course
+                pk6: { x: CENTER_X - 70.4 + 49 + 48 - 3, y: 57, z: CENTER_Z + 78.5 + 1 + 2 - 3, name: 'Stage 6 (Cyan) - The Gauntlet' },
+            };
+            
+            // Handle parkour teleports (DEV only)
+            if (isDev && parkourPositions[command]) {
+                const pos = parkourPositions[command];
+                
+                // Clear any seated state first
+                if (seatedRef.current) {
+                    seatedRef.current = null;
+                    setSeatedOnBench(null);
+                    emoteRef.current.type = null;
+                    mpSendEmote(null);
+                }
+                
+                // If not in town, change room to town first
+                if (roomRef.current !== 'town') {
+                    if (onChangeRoom) {
+                        onChangeRoom('town', null);
+                    }
+                    // Teleport after room change
+                    setTimeout(() => {
+                        posRef.current.x = pos.x;
+                        posRef.current.y = pos.y;
+                        posRef.current.z = pos.z;
+                        velRef.current = { x: 0, y: 0, z: 0 };
+                        if (playerRef.current) {
+                            playerRef.current.position.set(pos.x, pos.y, pos.z);
+                        }
+                    }, 100);
+                } else {
+                    // Already in town - just teleport
+                    posRef.current.x = pos.x;
+                    posRef.current.y = pos.y;
+                    posRef.current.z = pos.z;
+                    velRef.current = { x: 0, y: 0, z: 0 };
+                    
+                    if (playerRef.current) {
+                        playerRef.current.position.set(pos.x, pos.y, pos.z);
+                    }
+                }
+                
+                console.log(`🎮 Teleported to ${pos.name}:`, { x: pos.x, y: pos.y, z: pos.z });
+                return;
+            }
             
             if (command === 'spawn') {
                 // ALWAYS teleport to town center spawn - no questions asked

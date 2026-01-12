@@ -437,15 +437,44 @@ class IglooService {
         // Update access type
         if (settings.accessType) {
             igloo.accessType = settings.accessType;
+            
+            // IMPORTANT: When setting to PUBLIC or PRIVATE, reset ALL gate/fee requirements
+            // This ensures owners can properly go back to public without old settings persisting
+            if (settings.accessType === 'public' || settings.accessType === 'private') {
+                console.log(`🏠 [IglooService] Access type changed to ${settings.accessType} - resetting all gates/fees`);
+                
+                // Reset token gate to defaults
+                igloo.tokenGate = {
+                    enabled: false,
+                    tokenAddress: null,
+                    tokenSymbol: null,
+                    minimumBalance: 0
+                };
+                
+                // Reset entry fee to defaults
+                igloo.entryFee = {
+                    enabled: false,
+                    amount: 0,
+                    tokenAddress: null,
+                    tokenSymbol: null
+                };
+                
+                // Clear all paid entry records since requirements are now reset
+                igloo.resetEntryFees();
+                
+                // Mark as modified to ensure Mongoose saves these changes
+                igloo.markModified('tokenGate');
+                igloo.markModified('entryFee');
+            }
         }
         
-        // Update token gate
-        if (settings.tokenGate) {
+        // Update token gate (only if NOT public/private - those reset above)
+        if (settings.tokenGate && settings.accessType !== 'public' && settings.accessType !== 'private') {
             igloo.tokenGate = { ...igloo.tokenGate, ...settings.tokenGate };
         }
         
-        // Update entry fee
-        if (settings.entryFee) {
+        // Update entry fee (only if NOT public/private - those reset above)
+        if (settings.entryFee && settings.accessType !== 'public' && settings.accessType !== 'private') {
             igloo.entryFee = { ...igloo.entryFee, ...settings.entryFee };
         }
         

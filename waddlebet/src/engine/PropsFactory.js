@@ -569,6 +569,728 @@ class PropsFactory {
             group.add(globe);
         });
 
+        // ==================== PHASE 3: TIER 3 TO ICE FISHING AREA ====================
+        // Stage 3 starts from tier 3 platform and heads toward ice fishing area
+        // Ice fishing area is at approximately (C - 70.4, C + 78.5) where C is the center
+        // Since dojo is at center X (dojoOffset.x = 0), dojoX is the center
+        const C = dojoX; // TownCenter.CENTER (dojo is at center X)
+        const fishingAreaX = C - 70.4;
+        const fishingAreaZ = C + 78.5;
+        const phase3StartY = tier3Surface;
+        const phase3Colors = [0x00FF00, 0x32CD32, 0x228B22, 0x3CB371, 0x66CDAA, 0x2E8B57, 0x90EE90];
+        
+        // Redesigned Phase 3: Natural, curved path similar to phases 1 and 2
+        // Features zigzag patterns, varied platform sizes, and organic feeling jumps
+        // Journey: Tier 3 (dojo) -> west/southwest -> loop around -> ice fishing area
+        const phase3Layout = [
+            // === START: Leave tier 3 heading southwest ===
+            { x: dojoX - 6, y: phase3StartY, z: dojoZ + 2, w: 3.0, d: 3.0, type: 'phase3_start', color: 0x00FF00 },
+            
+            // === SECTION 1: Initial curve southwest with rising platforms ===
+            { x: dojoX - 9, y: phase3StartY + 0.8, z: dojoZ + 5, w: 2.5, d: 2.5 },
+            { x: dojoX - 11, y: phase3StartY + 1.5, z: dojoZ + 9, w: 2.0, d: 3.0 },  // Long narrow
+            { x: dojoX - 8, y: phase3StartY + 2.3, z: dojoZ + 12, w: 2.5, d: 2.0 },  // Curve back east a bit
+            { x: dojoX - 11, y: phase3StartY + 3.0, z: dojoZ + 15, w: 3.0, d: 2.5 }, // Back west - zigzag!
+            
+            // === SECTION 2: Big zigzag heading generally west ===
+            { x: dojoX - 15, y: phase3StartY + 3.5, z: dojoZ + 13, w: 2.0, d: 2.0 },  // Sharp turn north
+            { x: dojoX - 18, y: phase3StartY + 4.2, z: dojoZ + 16, w: 2.5, d: 2.5 },  // Back south
+            { x: dojoX - 22, y: phase3StartY + 4.8, z: dojoZ + 14, w: 2.0, d: 3.0 },  // Northwest
+            { x: dojoX - 25, y: phase3StartY + 5.4, z: dojoZ + 17, w: 3.0, d: 2.0 },  // Southwest - larger rest platform
+            { x: dojoX - 28, y: phase3StartY + 5.8, z: dojoZ + 14, w: 2.0, d: 2.5 },  // Sharp north zigzag
+            
+            // === SECTION 3: Dramatic S-curve with big sweeps ===
+            { x: dojoX - 30, y: phase3StartY + 6.3, z: dojoZ + 18, w: 2.5, d: 2.0 },  // Sweep far south!
+            { x: dojoX - 33, y: phase3StartY + 6.8, z: dojoZ + 15, w: 2.0, d: 2.5 },  // Back north
+            { x: dojoX - 38, y: phase3StartY + 7.2, z: dojoZ + 19, w: 3.0, d: 2.5 },  // Big jump southwest - rest spot
+            { x: dojoX - 41, y: phase3StartY + 7.6, z: dojoZ + 15, w: 2.0, d: 2.0 },  // Sharp north
+            { x: dojoX - 45, y: phase3StartY + 8.0, z: dojoZ + 18, w: 2.5, d: 2.5 },  // Back south
+            { x: dojoX - 48, y: phase3StartY + 8.5, z: dojoZ + 14, w: 2.0, d: 3.0 },  // North again - keep zigzagging!
+            
+            // === SECTION 4: Wild finish with dramatic curves ===
+            { x: dojoX - 53, y: phase3StartY + 9.0, z: dojoZ + 17, w: 2.5, d: 2.0 },  // Big south swing
+            { x: dojoX - 55, y: phase3StartY + 9.4, z: dojoZ + 13, w: 2.0, d: 2.5 },  // Sharp north
+            { x: dojoX - 60, y: phase3StartY + 9.8, z: dojoZ + 16, w: 3.0, d: 2.5 },  // Southwest rest platform
+            { x: dojoX - 63, y: phase3StartY + 10.2, z: dojoZ + 12, w: 2.0, d: 2.0 }, // Tricky north jump
+            { x: fishingAreaX + 6, y: phase3StartY + 10.6, z: fishingAreaZ - 5, w: 2.5, d: 2.5 }, // Approach fishing
+            { x: fishingAreaX + 3, y: phase3StartY + 11.0, z: fishingAreaZ - 2, w: 2.5, d: 3.0 }, // Near fishing area
+            
+            // === END: Grand finale platform overlooking ice fishing ===
+            { x: fishingAreaX, y: phase3StartY + 11.4, z: fishingAreaZ + 1, w: 4.0, d: 4.0, type: 'phase3_end', color: 0xFFD700 },
+        ];
+        
+        phase3Layout.forEach((plat, idx) => {
+            const color = plat.color || phase3Colors[idx % phase3Colors.length];
+            const isSpecial = plat.type === 'phase3_start' || plat.type === 'phase3_end';
+            const platformHeight = isSpecial ? 0.5 : 0.35;
+            
+            const platform = this.createParkourPlatform({
+                width: plat.w,
+                depth: plat.d,
+                height: platformHeight,
+                color: color,
+                glowing: isSpecial
+            });
+            
+            platform.position.set(plat.x, plat.y, plat.z);
+            group.add(platform);
+            
+            platforms.push({
+                mesh: platform,
+                x: plat.x,
+                y: plat.y,
+                z: plat.z,
+                width: plat.w,
+                depth: plat.d,
+                height: platformHeight,
+                phase: 3
+            });
+            
+            colliders.push({
+                x: plat.x,
+                y: plat.y,
+                z: plat.z,
+                type: 'box',
+                size: { x: plat.w, y: platformHeight, z: plat.d },
+                height: platformHeight
+            });
+
+            if (idx > 0 && idx < phase3Layout.length - 1) {
+                const numMat = this.getMaterial(0x228B22, { roughness: 0.7 });
+                const numGeo = new THREE.RingGeometry(0.12, 0.2, 16);
+                const num = new THREE.Mesh(numGeo, numMat);
+                num.rotation.x = -Math.PI / 2;
+                num.position.set(plat.x, plat.y + platformHeight + 0.01, plat.z);
+                group.add(num);
+            }
+        });
+
+        // Phase 3 sign on tier 3 platform
+        const sign3Group = new THREE.Group();
+        const post3Mat = this.getMaterial(0x228B22, { roughness: 0.8 });
+        const post3Geo = new THREE.CylinderGeometry(0.15, 0.2, 2.5, 8);
+        const post3 = new THREE.Mesh(post3Geo, post3Mat);
+        post3.position.y = 1.25;
+        post3.castShadow = true;
+        sign3Group.add(post3);
+        
+        const frame3Mat = this.getMaterial(0x32CD32, { roughness: 0.7 });
+        const frame3Geo = new THREE.BoxGeometry(3.5, 1.5, 0.2);
+        const frame3 = new THREE.Mesh(frame3Geo, frame3Mat);
+        frame3.position.y = 2.8;
+        frame3.castShadow = true;
+        sign3Group.add(frame3);
+        
+        const canvas3 = document.createElement('canvas');
+        canvas3.width = 512;
+        canvas3.height = 200;
+        const ctx3 = canvas3.getContext('2d');
+        
+        ctx3.fillStyle = '#003300';
+        ctx3.fillRect(0, 0, 512, 200);
+        
+        ctx3.strokeStyle = '#00FF00';
+        ctx3.lineWidth = 6;
+        ctx3.strokeRect(8, 8, 496, 184);
+        
+        ctx3.fillStyle = '#00FF00';
+        ctx3.font = 'bold 38px Arial';
+        ctx3.textAlign = 'center';
+        ctx3.fillText('🎣 FISHING EXPEDITION 🎣', 256, 65);
+        
+        ctx3.font = '26px Arial';
+        ctx3.fillStyle = '#90EE90';
+        ctx3.fillText('Stage 3: To the Ice!', 256, 110);
+        
+        ctx3.font = '22px Arial';
+        ctx3.fillStyle = '#98FB98';
+        ctx3.fillText('🌊 Journey to the Frozen Pond 🌊', 256, 155);
+        
+        const texture3 = new THREE.CanvasTexture(canvas3);
+        const sign3Mat = new THREE.MeshStandardMaterial({ 
+            map: texture3,
+            roughness: 0.4
+        });
+        const sign3Geo = new THREE.BoxGeometry(3.2, 1.2, 0.08);
+        const sign3 = new THREE.Mesh(sign3Geo, sign3Mat);
+        sign3.position.y = 2.8;
+        sign3.position.z = 0.12;
+        sign3Group.add(sign3);
+        
+        const arrow3Mat = this.getMaterial(0x00FF00, { 
+            roughness: 0.4,
+            emissive: 0x00FF00,
+            emissiveIntensity: 0.5
+        });
+        const arrow3Geo = new THREE.ConeGeometry(0.35, 0.7, 4);
+        const signArrow3 = new THREE.Mesh(arrow3Geo, arrow3Mat);
+        signArrow3.position.set(0, 3.7, 0);
+        sign3Group.add(signArrow3);
+        
+        sign3Group.position.set(dojoX - 6, tier3Surface - 0.5, dojoZ + 2);
+        sign3Group.rotation.y = -Math.PI / 6; // Point toward the first platforms
+        group.add(sign3Group);
+        
+        // Debug log for stage 3
+        console.log(`🎣 Stage 3 parkour created: ${phase3Layout.length} platforms from dojo (${dojoX}, ${dojoZ}) to fishing area (${fishingAreaX.toFixed(1)}, ${fishingAreaZ.toFixed(1)})`);
+
+        // ==================== PHASE 4: EXPLORING THE MAP ====================
+        // Stage 4 continues from fishing area, exploring more of the map
+        // Phase 3 ends at (fishingAreaX, fishingAreaZ + 1) - start NEARBY but not overlapping
+        const phase4StartY = phase3StartY + 11.4; // Match phase 3 end height
+        const phase4Colors = [0xFF8C00, 0xFF7F50, 0xFF6347, 0xFF4500, 0xFFA500];
+        
+        // Phase 3 end position for reference (don't overlap!)
+        const phase3EndX = fishingAreaX;
+        const phase3EndZ = fishingAreaZ + 1;
+        
+        // Phase 4: From fishing area with dramatic zigzags like stages 1 & 2
+        // Features: sharp turns, direction changes, S-curves, and varied spacing
+        const phase4Layout = [
+            // === START: Jump FROM phase 3 end ===
+            { x: phase3EndX + 4, y: phase4StartY + 0.5, z: phase3EndZ - 2, w: 3.0, d: 3.0, type: 'phase4_start', color: 0xFF8C00 },
+            
+            // === SECTION 1: Sharp zigzag heading east then TURN north ===
+            { x: phase3EndX + 7, y: phase4StartY + 1.0, z: phase3EndZ - 5, w: 2.5, d: 2.5 },   // South!
+            { x: phase3EndX + 10, y: phase4StartY + 1.6, z: phase3EndZ - 2, w: 2.0, d: 2.5 },  // Back north
+            { x: phase3EndX + 8, y: phase4StartY + 2.2, z: phase3EndZ + 2, w: 2.5, d: 2.0 },   // WEST + north - direction change!
+            { x: phase3EndX + 11, y: phase4StartY + 2.7, z: phase3EndZ + 5, w: 3.0, d: 2.5 },  // East + north
+            { x: phase3EndX + 14, y: phase4StartY + 3.2, z: phase3EndZ + 2, w: 2.0, d: 2.0 },  // South curve
+            
+            // === SECTION 2: S-curve heading generally east ===
+            { x: phase3EndX + 17, y: phase4StartY + 3.7, z: phase3EndZ + 6, w: 2.5, d: 2.5 },  // Big north swing
+            { x: phase3EndX + 20, y: phase4StartY + 4.2, z: phase3EndZ + 3, w: 2.0, d: 3.0 },  // South
+            { x: phase3EndX + 18, y: phase4StartY + 4.8, z: phase3EndZ - 1, w: 3.0, d: 2.0 },  // WEST + south - U-turn!
+            { x: phase3EndX + 21, y: phase4StartY + 5.3, z: phase3EndZ - 4, w: 2.5, d: 2.0 },  // Continue south
+            { x: phase3EndX + 24, y: phase4StartY + 5.8, z: phase3EndZ - 1, w: 2.0, d: 2.5 },  // Back north
+            
+            // === SECTION 3: Loop around pattern ===
+            { x: phase3EndX + 27, y: phase4StartY + 6.3, z: phase3EndZ + 3, w: 2.5, d: 2.5 },  // North swing
+            { x: phase3EndX + 30, y: phase4StartY + 6.8, z: phase3EndZ + 7, w: 2.0, d: 2.0 },  // Far north!
+            { x: phase3EndX + 33, y: phase4StartY + 7.3, z: phase3EndZ + 4, w: 3.0, d: 2.5 },  // South
+            { x: phase3EndX + 31, y: phase4StartY + 7.8, z: phase3EndZ, w: 2.5, d: 2.0 },      // WEST + south
+            { x: phase3EndX + 34, y: phase4StartY + 8.3, z: phase3EndZ - 3, w: 2.0, d: 2.5 },  // East + south
+            
+            // === SECTION 4: Final dramatic curves to end ===
+            { x: phase3EndX + 37, y: phase4StartY + 8.8, z: phase3EndZ + 1, w: 2.5, d: 2.5 },  // North
+            { x: phase3EndX + 40, y: phase4StartY + 9.3, z: phase3EndZ + 5, w: 2.0, d: 3.0 },  // Far north
+            { x: phase3EndX + 43, y: phase4StartY + 9.8, z: phase3EndZ + 2, w: 3.0, d: 2.0 },  // South curve
+            { x: phase3EndX + 46, y: phase4StartY + 10.3, z: phase3EndZ - 2, w: 2.5, d: 2.5 }, // Far south
+            
+            // === END: Grand finale platform ===
+            { x: phase3EndX + 49, y: phase4StartY + 10.8, z: phase3EndZ + 1, w: 4.0, d: 4.0, type: 'phase4_end', color: 0xFFD700 },
+        ];
+        
+        // Store phase 4 end position for phase 5 connection
+        const phase4EndX = phase3EndX + 49;
+        const phase4EndZ = phase3EndZ + 1;
+        
+        phase4Layout.forEach((plat, idx) => {
+            const color = plat.color || phase4Colors[idx % phase4Colors.length];
+            const isSpecial = plat.type === 'phase4_start' || plat.type === 'phase4_end';
+            const platformHeight = isSpecial ? 0.5 : 0.35;
+            
+            const platform = this.createParkourPlatform({
+                width: plat.w,
+                depth: plat.d,
+                height: platformHeight,
+                color: color,
+                glowing: isSpecial
+            });
+            
+            platform.position.set(plat.x, plat.y, plat.z);
+            group.add(platform);
+            
+            platforms.push({
+                mesh: platform,
+                x: plat.x,
+                y: plat.y,
+                z: plat.z,
+                width: plat.w,
+                depth: plat.d,
+                height: platformHeight,
+                phase: 4
+            });
+            
+            colliders.push({
+                x: plat.x,
+                y: plat.y,
+                z: plat.z,
+                type: 'box',
+                size: { x: plat.w, y: platformHeight, z: plat.d },
+                height: platformHeight
+            });
+
+            if (idx > 0 && idx < phase4Layout.length - 1) {
+                const numMat = this.getMaterial(0xFF6347, { roughness: 0.7 });
+                const numGeo = new THREE.RingGeometry(0.12, 0.2, 16);
+                const num = new THREE.Mesh(numGeo, numMat);
+                num.rotation.x = -Math.PI / 2;
+                num.position.set(plat.x, plat.y + platformHeight + 0.01, plat.z);
+                group.add(num);
+            }
+        });
+
+        // Phase 4 sign
+        const sign4Group = new THREE.Group();
+        const post4Mat = this.getMaterial(0xFF6347, { roughness: 0.8 });
+        const post4Geo = new THREE.CylinderGeometry(0.15, 0.2, 2.5, 8);
+        const post4 = new THREE.Mesh(post4Geo, post4Mat);
+        post4.position.y = 1.25;
+        post4.castShadow = true;
+        sign4Group.add(post4);
+        
+        const frame4Mat = this.getMaterial(0xFF8C00, { roughness: 0.7 });
+        const frame4Geo = new THREE.BoxGeometry(3.5, 1.5, 0.2);
+        const frame4 = new THREE.Mesh(frame4Geo, frame4Mat);
+        frame4.position.y = 2.8;
+        frame4.castShadow = true;
+        sign4Group.add(frame4);
+        
+        const canvas4 = document.createElement('canvas');
+        canvas4.width = 512;
+        canvas4.height = 200;
+        const ctx4 = canvas4.getContext('2d');
+        
+        ctx4.fillStyle = '#4B0000';
+        ctx4.fillRect(0, 0, 512, 200);
+        
+        ctx4.strokeStyle = '#FF8C00';
+        ctx4.lineWidth = 6;
+        ctx4.strokeRect(8, 8, 496, 184);
+        
+        ctx4.fillStyle = '#FF8C00';
+        ctx4.font = 'bold 38px Arial';
+        ctx4.textAlign = 'center';
+        ctx4.fillText('🗺️ MAP EXPLORER 🗺️', 256, 65);
+        
+        ctx4.font = '26px Arial';
+        ctx4.fillStyle = '#FFB347';
+        ctx4.fillText('Stage 4: Across the Land', 256, 110);
+        
+        ctx4.font = '22px Arial';
+        ctx4.fillStyle = '#FFD700';
+        ctx4.fillText('🌟 Discover New Heights 🌟', 256, 155);
+        
+        const texture4 = new THREE.CanvasTexture(canvas4);
+        const sign4Mat = new THREE.MeshStandardMaterial({ 
+            map: texture4,
+            roughness: 0.4
+        });
+        const sign4Geo = new THREE.BoxGeometry(3.2, 1.2, 0.08);
+        const sign4 = new THREE.Mesh(sign4Geo, sign4Mat);
+        sign4.position.y = 2.8;
+        sign4.position.z = 0.12;
+        sign4Group.add(sign4);
+        
+        const arrow4Mat = this.getMaterial(0xFF8C00, { 
+            roughness: 0.4,
+            emissive: 0xFF8C00,
+            emissiveIntensity: 0.5
+        });
+        const arrow4Geo = new THREE.ConeGeometry(0.35, 0.7, 4);
+        const signArrow4 = new THREE.Mesh(arrow4Geo, arrow4Mat);
+        signArrow4.position.set(0, 3.7, 0);
+        sign4Group.add(signArrow4);
+        
+        // Position sign near phase 4 start (which is offset from phase 3 end)
+        sign4Group.position.set(phase3EndX + 4, phase4StartY, phase3EndZ - 2);
+        sign4Group.rotation.y = -Math.PI / 6;
+        group.add(sign4Group);
+
+        // ==================== PHASE 5: FINAL ASCENT ====================
+        // Stage 5 is the final stage, reaching the highest point
+        // Start from where phase 4 ends (phase4EndX, phase4EndZ)
+        const phase5StartY = phase4StartY + 11.2; // Match phase 4 end height
+        const phase5Colors = [0xFF0000, 0xDC143C, 0xB22222, 0x8B0000, 0xFF1493];
+        
+        // Phase 5: From phase 4 end with dramatic zigzags like stages 1 & 2
+        // Features: sharp turns, direction changes, S-curves - the ULTIMATE challenge!
+        const phase5Layout = [
+            // === START: Jump FROM phase 4 end ===
+            { x: phase4EndX + 3, y: phase5StartY + 0.5, z: phase4EndZ + 3, w: 3.0, d: 3.0, type: 'phase5_start', color: 0xFF0000 },
+            
+            // === SECTION 1: Dramatic S-curve start ===
+            { x: phase4EndX + 6, y: phase5StartY + 1.0, z: phase4EndZ + 7, w: 2.5, d: 2.5 },   // Far north!
+            { x: phase4EndX + 9, y: phase5StartY + 1.6, z: phase4EndZ + 4, w: 2.0, d: 2.5 },   // South
+            { x: phase4EndX + 7, y: phase5StartY + 2.2, z: phase4EndZ, w: 2.5, d: 2.0 },       // WEST + south - direction change!
+            { x: phase4EndX + 10, y: phase5StartY + 2.7, z: phase4EndZ - 3, w: 3.0, d: 2.5 },  // Far south
+            { x: phase4EndX + 13, y: phase5StartY + 3.2, z: phase4EndZ + 1, w: 2.0, d: 2.0 },  // Back north
+            
+            // === SECTION 2: Loop-de-loop pattern ===
+            { x: phase4EndX + 16, y: phase5StartY + 3.7, z: phase4EndZ + 5, w: 2.5, d: 2.5 },  // North swing
+            { x: phase4EndX + 19, y: phase5StartY + 4.2, z: phase4EndZ + 8, w: 2.0, d: 3.0 },  // Far north!
+            { x: phase4EndX + 22, y: phase5StartY + 4.8, z: phase4EndZ + 5, w: 3.0, d: 2.0 },  // South
+            { x: phase4EndX + 20, y: phase5StartY + 5.3, z: phase4EndZ + 1, w: 2.5, d: 2.0 },  // WEST + south - U-turn!
+            { x: phase4EndX + 23, y: phase5StartY + 5.8, z: phase4EndZ - 2, w: 2.0, d: 2.5 },  // East + far south
+            
+            // === SECTION 3: Spiral climb ===
+            { x: phase4EndX + 26, y: phase5StartY + 6.3, z: phase4EndZ + 2, w: 2.5, d: 2.5 },  // North
+            { x: phase4EndX + 29, y: phase5StartY + 6.8, z: phase4EndZ + 6, w: 2.0, d: 2.0 },  // Far north
+            { x: phase4EndX + 32, y: phase5StartY + 7.3, z: phase4EndZ + 3, w: 3.0, d: 2.5 },  // South
+            { x: phase4EndX + 30, y: phase5StartY + 7.8, z: phase4EndZ - 1, w: 2.5, d: 2.0 },  // WEST + south
+            { x: phase4EndX + 33, y: phase5StartY + 8.3, z: phase4EndZ - 4, w: 2.0, d: 2.5 },  // East + far south
+            
+            // === SECTION 4: Final dramatic ascent to summit ===
+            { x: phase4EndX + 36, y: phase5StartY + 8.8, z: phase4EndZ, w: 2.5, d: 2.5 },      // Back to center
+            { x: phase4EndX + 39, y: phase5StartY + 9.3, z: phase4EndZ + 4, w: 2.0, d: 3.0 },  // North
+            { x: phase4EndX + 42, y: phase5StartY + 9.8, z: phase4EndZ + 8, w: 3.0, d: 2.0 },  // Far north!
+            { x: phase4EndX + 45, y: phase5StartY + 10.3, z: phase4EndZ + 5, w: 2.5, d: 2.5 }, // South
+            
+            // === END: Ultimate summit platform! ===
+            { x: phase4EndX + 48, y: phase5StartY + 10.8, z: phase4EndZ + 2, w: 5.0, d: 5.0, type: 'phase5_end', color: 0xFFD700 },
+        ];
+        
+        phase5Layout.forEach((plat, idx) => {
+            const color = plat.color || phase5Colors[idx % phase5Colors.length];
+            const isSpecial = plat.type === 'phase5_start' || plat.type === 'phase5_end';
+            const platformHeight = isSpecial ? 0.5 : 0.35;
+            
+            const platform = this.createParkourPlatform({
+                width: plat.w,
+                depth: plat.d,
+                height: platformHeight,
+                color: color,
+                glowing: isSpecial
+            });
+            
+            platform.position.set(plat.x, plat.y, plat.z);
+            group.add(platform);
+            
+            platforms.push({
+                mesh: platform,
+                x: plat.x,
+                y: plat.y,
+                z: plat.z,
+                width: plat.w,
+                depth: plat.d,
+                height: platformHeight,
+                phase: 5
+            });
+            
+            colliders.push({
+                x: plat.x,
+                y: plat.y,
+                z: plat.z,
+                type: 'box',
+                size: { x: plat.w, y: platformHeight, z: plat.d },
+                height: platformHeight
+            });
+
+            if (idx > 0 && idx < phase5Layout.length - 1) {
+                const numMat = this.getMaterial(0xB22222, { roughness: 0.7 });
+                const numGeo = new THREE.RingGeometry(0.12, 0.2, 16);
+                const num = new THREE.Mesh(numGeo, numMat);
+                num.rotation.x = -Math.PI / 2;
+                num.position.set(plat.x, plat.y + platformHeight + 0.01, plat.z);
+                group.add(num);
+            }
+        });
+
+        // Phase 5 sign
+        const sign5Group = new THREE.Group();
+        const post5Mat = this.getMaterial(0xB22222, { roughness: 0.8 });
+        const post5Geo = new THREE.CylinderGeometry(0.15, 0.2, 2.5, 8);
+        const post5 = new THREE.Mesh(post5Geo, post5Mat);
+        post5.position.y = 1.25;
+        post5.castShadow = true;
+        sign5Group.add(post5);
+        
+        const frame5Mat = this.getMaterial(0xFF0000, { roughness: 0.7 });
+        const frame5Geo = new THREE.BoxGeometry(3.5, 1.5, 0.2);
+        const frame5 = new THREE.Mesh(frame5Geo, frame5Mat);
+        frame5.position.y = 2.8;
+        frame5.castShadow = true;
+        sign5Group.add(frame5);
+        
+        const canvas5 = document.createElement('canvas');
+        canvas5.width = 512;
+        canvas5.height = 200;
+        const ctx5 = canvas5.getContext('2d');
+        
+        ctx5.fillStyle = '#1A0000';
+        ctx5.fillRect(0, 0, 512, 200);
+        
+        ctx5.strokeStyle = '#FF0000';
+        ctx5.lineWidth = 6;
+        ctx5.strokeRect(8, 8, 496, 184);
+        
+        ctx5.fillStyle = '#FF0000';
+        ctx5.font = 'bold 38px Arial';
+        ctx5.textAlign = 'center';
+        ctx5.fillText('👑 LEGENDARY PEAK 👑', 256, 65);
+        
+        ctx5.font = '26px Arial';
+        ctx5.fillStyle = '#FF6B6B';
+        ctx5.fillText('Stage 5: The Ultimate Challenge', 256, 110);
+        
+        ctx5.font = '22px Arial';
+        ctx5.fillStyle = '#FFD700';
+        ctx5.fillText('🏆 Reach the Summit! 🏆', 256, 155);
+        
+        const texture5 = new THREE.CanvasTexture(canvas5);
+        const sign5Mat = new THREE.MeshStandardMaterial({ 
+            map: texture5,
+            roughness: 0.4
+        });
+        const sign5Geo = new THREE.BoxGeometry(3.2, 1.2, 0.08);
+        const sign5 = new THREE.Mesh(sign5Geo, sign5Mat);
+        sign5.position.y = 2.8;
+        sign5.position.z = 0.12;
+        sign5Group.add(sign5);
+        
+        const arrow5Mat = this.getMaterial(0xFF0000, { 
+            roughness: 0.4,
+            emissive: 0xFF0000,
+            emissiveIntensity: 0.5
+        });
+        const arrow5Geo = new THREE.ConeGeometry(0.35, 0.7, 4);
+        const signArrow5 = new THREE.Mesh(arrow5Geo, arrow5Mat);
+        signArrow5.position.set(0, 3.7, 0);
+        sign5Group.add(signArrow5);
+        
+        // Position sign near phase 5 start (which is offset from phase 4 end)
+        sign5Group.position.set(phase4EndX + 3, phase5StartY, phase4EndZ - 2);
+        sign5Group.rotation.y = -Math.PI / 6;
+        group.add(sign5Group);
+
+        // ==================== PHASE 6: THE GAUNTLET - EXPERT COURSE ====================
+        // Stage 6 is the expert course - technically complex with big drops and climbs
+        // Heads toward the nightclub/star ice statue area
+        // Colors: Cyan/Teal theme for the "frozen" expert challenge
+        const phase5EndX = phase4EndX + 48;
+        const phase5EndY = phase5StartY + 10.8;
+        const phase5EndZ = phase4EndZ + 2;
+        const phase6StartY = phase5EndY;
+        const phase6Colors = [0x00CED1, 0x20B2AA, 0x008B8B, 0x40E0D0, 0x48D1CC, 0x00FFFF, 0x5F9EA0];
+        
+        // Nightclub is at approximately (C, C - 75) - we're heading there!
+        // This is the EXPERT course - tiny platforms, big drops, tight jumps
+        const phase6Layout = [
+            // === START: Jump from phase 5 end ===
+            { x: phase5EndX - 3, y: phase6StartY + 0.5, z: phase5EndZ - 3, w: 3.0, d: 3.0, type: 'phase6_start', color: 0x00CED1 },
+            
+            // === SECTION 1: The Drop - Fall down then climb back up! ===
+            { x: phase5EndX - 6, y: phase6StartY - 2, z: phase5EndZ - 6, w: 2.0, d: 2.0 },      // DROP DOWN!
+            { x: phase5EndX - 9, y: phase6StartY - 5, z: phase5EndZ - 9, w: 1.8, d: 1.8 },      // Keep falling
+            { x: phase5EndX - 12, y: phase6StartY - 8, z: phase5EndZ - 12, w: 2.5, d: 2.0 },    // Bottom of drop - rest
+            { x: phase5EndX - 15, y: phase6StartY - 6, z: phase5EndZ - 15, w: 1.5, d: 1.5 },    // TINY - start climbing!
+            { x: phase5EndX - 18, y: phase6StartY - 4, z: phase5EndZ - 12, w: 1.8, d: 1.8 },    // Zigzag climb
+            { x: phase5EndX - 21, y: phase6StartY - 2, z: phase5EndZ - 15, w: 1.5, d: 2.0 },    // Narrow
+            { x: phase5EndX - 24, y: phase6StartY, z: phase5EndZ - 18, w: 2.0, d: 1.5 },        // Back to original height
+            
+            // === SECTION 2: Spiral Descent - Circle down then up ===
+            { x: phase5EndX - 27, y: phase6StartY - 1, z: phase5EndZ - 21, w: 1.8, d: 1.8 },    // Start spiral
+            { x: phase5EndX - 25, y: phase6StartY - 3, z: phase5EndZ - 24, w: 1.5, d: 1.5 },    // TINY - east curve
+            { x: phase5EndX - 28, y: phase6StartY - 5, z: phase5EndZ - 27, w: 2.0, d: 2.0 },    // West curve
+            { x: phase5EndX - 31, y: phase6StartY - 7, z: phase5EndZ - 24, w: 1.5, d: 1.5 },    // TINY - back east
+            { x: phase5EndX - 34, y: phase6StartY - 5, z: phase5EndZ - 27, w: 2.5, d: 2.0 },    // Rest - climbing up
+            { x: phase5EndX - 37, y: phase6StartY - 3, z: phase5EndZ - 30, w: 1.8, d: 1.8 },    // Continue up
+            { x: phase5EndX - 40, y: phase6StartY - 1, z: phase5EndZ - 33, w: 1.5, d: 1.5 },    // TINY
+            
+            // === SECTION 3: The Needle Run - Tiny platforms in a row ===
+            { x: phase5EndX - 43, y: phase6StartY, z: phase5EndZ - 36, w: 1.5, d: 1.5 },        // TINY
+            { x: phase5EndX - 46, y: phase6StartY + 0.5, z: phase5EndZ - 39, w: 1.5, d: 1.5 },  // TINY
+            { x: phase5EndX - 49, y: phase6StartY + 1, z: phase5EndZ - 42, w: 1.5, d: 1.5 },    // TINY
+            { x: phase5EndX - 52, y: phase6StartY + 0.5, z: phase5EndZ - 45, w: 2.0, d: 2.0 },  // Slightly bigger rest
+            { x: phase5EndX - 55, y: phase6StartY, z: phase5EndZ - 48, w: 1.5, d: 1.5 },        // TINY
+            { x: phase5EndX - 58, y: phase6StartY - 0.5, z: phase5EndZ - 51, w: 1.5, d: 1.5 },  // TINY - slight drop
+            
+            // === SECTION 4: The Plunge - Another big drop! ===
+            { x: phase5EndX - 61, y: phase6StartY - 3, z: phase5EndZ - 54, w: 2.0, d: 2.0 },    // DROP!
+            { x: phase5EndX - 64, y: phase6StartY - 6, z: phase5EndZ - 57, w: 1.8, d: 1.8 },    // Keep dropping
+            { x: phase5EndX - 67, y: phase6StartY - 9, z: phase5EndZ - 60, w: 2.5, d: 2.5 },    // Bottom rest
+            { x: phase5EndX - 70, y: phase6StartY - 7, z: phase5EndZ - 63, w: 1.5, d: 1.5 },    // TINY climb
+            { x: phase5EndX - 73, y: phase6StartY - 5, z: phase5EndZ - 66, w: 1.8, d: 2.0 },    // Climbing
+            
+            // === SECTION 5: Zigzag Ascent toward nightclub ===
+            { x: phase5EndX - 76, y: phase6StartY - 3, z: phase5EndZ - 69, w: 2.0, d: 1.5 },    // Climb
+            { x: phase5EndX - 73, y: phase6StartY - 1, z: phase5EndZ - 72, w: 1.5, d: 1.5 },    // EAST zigzag + TINY
+            { x: phase5EndX - 76, y: phase6StartY + 1, z: phase5EndZ - 75, w: 2.0, d: 2.0 },    // West + up
+            { x: phase5EndX - 79, y: phase6StartY + 3, z: phase5EndZ - 78, w: 1.5, d: 1.5 },    // TINY
+            { x: phase5EndX - 76, y: phase6StartY + 5, z: phase5EndZ - 81, w: 1.8, d: 1.8 },    // East zigzag
+            { x: phase5EndX - 79, y: phase6StartY + 7, z: phase5EndZ - 84, w: 2.5, d: 2.5 },    // Rest platform
+            
+            // === SECTION 6: Final Approach - Near nightclub ===
+            { x: phase5EndX - 82, y: phase6StartY + 8, z: phase5EndZ - 87, w: 1.5, d: 1.5 },    // TINY
+            { x: phase5EndX - 85, y: phase6StartY + 9, z: phase5EndZ - 90, w: 1.8, d: 1.8 },    // Getting close
+            { x: phase5EndX - 88, y: phase6StartY + 10, z: phase5EndZ - 93, w: 2.0, d: 2.0 },   // Almost there
+            { x: phase5EndX - 91, y: phase6StartY + 11, z: phase5EndZ - 96, w: 1.5, d: 1.5 },   // TINY
+            { x: phase5EndX - 94, y: phase6StartY + 12, z: phase5EndZ - 99, w: 2.0, d: 2.0 },   // Penultimate
+            
+            // === END: The Frozen Throne - overlooking nightclub ===
+            { x: phase5EndX - 97, y: phase6StartY + 13, z: phase5EndZ - 102, w: 5.0, d: 5.0, type: 'phase6_end', color: 0x00FFFF },
+        ];
+        
+        // Store phase 6 end position
+        const phase6EndX = phase5EndX - 97;
+        const phase6EndY = phase6StartY + 13;
+        const phase6EndZ = phase5EndZ - 102;
+        
+        phase6Layout.forEach((plat, idx) => {
+            const color = plat.color || phase6Colors[idx % phase6Colors.length];
+            const isSpecial = plat.type === 'phase6_start' || plat.type === 'phase6_end';
+            const platformHeight = isSpecial ? 0.5 : 0.35;
+            
+            const platform = this.createParkourPlatform({
+                width: plat.w,
+                depth: plat.d,
+                height: platformHeight,
+                color: color,
+                glowing: isSpecial
+            });
+            
+            platform.position.set(plat.x, plat.y, plat.z);
+            group.add(platform);
+            
+            platforms.push({
+                mesh: platform,
+                x: plat.x,
+                y: plat.y,
+                z: plat.z,
+                width: plat.w,
+                depth: plat.d,
+                height: platformHeight,
+                phase: 6
+            });
+            
+            colliders.push({
+                x: plat.x,
+                y: plat.y,
+                z: plat.z,
+                type: 'box',
+                size: { x: plat.w, y: platformHeight, z: plat.d },
+                height: platformHeight
+            });
+
+            if (idx > 0 && idx < phase6Layout.length - 1) {
+                const numMat = this.getMaterial(0x008B8B, { roughness: 0.7 });
+                const numGeo = new THREE.RingGeometry(0.12, 0.2, 16);
+                const num = new THREE.Mesh(numGeo, numMat);
+                num.rotation.x = -Math.PI / 2;
+                num.position.set(plat.x, plat.y + platformHeight + 0.01, plat.z);
+                group.add(num);
+            }
+        });
+
+        // Phase 6 sign
+        const sign6Group = new THREE.Group();
+        const post6Mat = this.getMaterial(0x008B8B, { roughness: 0.8 });
+        const post6Geo = new THREE.CylinderGeometry(0.15, 0.2, 2.5, 8);
+        const post6 = new THREE.Mesh(post6Geo, post6Mat);
+        post6.position.y = 1.25;
+        post6.castShadow = true;
+        sign6Group.add(post6);
+        
+        const frame6Mat = this.getMaterial(0x00CED1, { roughness: 0.7 });
+        const frame6Geo = new THREE.BoxGeometry(3.5, 1.5, 0.2);
+        const frame6 = new THREE.Mesh(frame6Geo, frame6Mat);
+        frame6.position.y = 2.8;
+        frame6.castShadow = true;
+        sign6Group.add(frame6);
+        
+        const canvas6 = document.createElement('canvas');
+        canvas6.width = 512;
+        canvas6.height = 200;
+        const ctx6 = canvas6.getContext('2d');
+        
+        ctx6.fillStyle = '#001A1A';
+        ctx6.fillRect(0, 0, 512, 200);
+        
+        ctx6.strokeStyle = '#00FFFF';
+        ctx6.lineWidth = 6;
+        ctx6.strokeRect(8, 8, 496, 184);
+        
+        ctx6.fillStyle = '#00FFFF';
+        ctx6.font = 'bold 36px Arial';
+        ctx6.textAlign = 'center';
+        ctx6.fillText('❄️ THE GAUNTLET ❄️', 256, 60);
+        
+        ctx6.font = '24px Arial';
+        ctx6.fillStyle = '#40E0D0';
+        ctx6.fillText('Stage 6: Expert Challenge', 256, 105);
+        
+        ctx6.font = '20px Arial';
+        ctx6.fillStyle = '#20B2AA';
+        ctx6.fillText('⚠️ Tiny Platforms • Big Drops ⚠️', 256, 145);
+        
+        ctx6.font = '18px Arial';
+        ctx6.fillStyle = '#5F9EA0';
+        ctx6.fillText('Only the worthy reach the Frozen Throne', 256, 175);
+        
+        const texture6 = new THREE.CanvasTexture(canvas6);
+        const sign6Mat = new THREE.MeshStandardMaterial({ 
+            map: texture6,
+            roughness: 0.4
+        });
+        const sign6Geo = new THREE.BoxGeometry(3.2, 1.2, 0.08);
+        const sign6 = new THREE.Mesh(sign6Geo, sign6Mat);
+        sign6.position.y = 2.8;
+        sign6.position.z = 0.12;
+        sign6Group.add(sign6);
+        
+        const arrow6Mat = this.getMaterial(0x00FFFF, { 
+            roughness: 0.4,
+            emissive: 0x00FFFF,
+            emissiveIntensity: 0.5
+        });
+        const arrow6Geo = new THREE.ConeGeometry(0.35, 0.7, 4);
+        const signArrow6 = new THREE.Mesh(arrow6Geo, arrow6Mat);
+        signArrow6.position.set(0, 3.7, 0);
+        sign6Group.add(signArrow6);
+        
+        // Position sign near phase 6 start
+        sign6Group.position.set(phase5EndX - 3, phase6StartY, phase5EndZ - 3);
+        sign6Group.rotation.y = Math.PI / 4;
+        group.add(sign6Group);
+
+        // Debug log for stage 6
+        console.log(`❄️ Stage 6 parkour created: ${phase6Layout.length} platforms - THE GAUNTLET`);
+
+        // Final platform decoration - Frozen Throne with ice arch
+        const frozenThroneY = phase6EndY;
+        const frozenThroneX = phase6EndX;
+        const frozenThroneZ = phase6EndZ;
+        const iceArchMat = this.getMaterial(0x00FFFF, { 
+            metalness: 0.9, 
+            roughness: 0.1,
+            emissive: 0x00FFFF,
+            emissiveIntensity: 1.0
+        });
+        const iceArchGeo = new THREE.TorusGeometry(2.5, 0.3, 8, 16, Math.PI);
+        const iceArch = new THREE.Mesh(iceArchGeo, iceArchMat);
+        iceArch.position.set(frozenThroneX, frozenThroneY + 3, frozenThroneZ);
+        group.add(iceArch);
+        
+        // Ice pillars
+        [-2.5, 2.5].forEach(side => {
+            const icePillarGeo = new THREE.CylinderGeometry(0.2, 0.25, 3, 8);
+            const icePillar = new THREE.Mesh(icePillarGeo, iceArchMat);
+            icePillar.position.set(frozenThroneX + side, frozenThroneY + 1.5, frozenThroneZ);
+            group.add(icePillar);
+        });
+        
+        // Floating ice crystals around the throne
+        const crystalMat = this.getMaterial(0x87CEEB, { 
+            emissive: 0x00FFFF, 
+            emissiveIntensity: 0.8,
+            transparent: true,
+            opacity: 0.7
+        });
+        const crystalPositions = [
+            { x: frozenThroneX - 3, z: frozenThroneZ + 2 },
+            { x: frozenThroneX + 3, z: frozenThroneZ + 2 },
+            { x: frozenThroneX - 3, z: frozenThroneZ - 2 },
+            { x: frozenThroneX + 3, z: frozenThroneZ - 2 },
+        ];
+        crystalPositions.forEach((pos, idx) => {
+            const crystalGeo = new THREE.OctahedronGeometry(0.4, 0);
+            const crystal = new THREE.Mesh(crystalGeo, crystalMat);
+            crystal.position.set(pos.x, frozenThroneY + 2 + Math.sin(idx) * 0.5, pos.z);
+            crystal.rotation.y = idx * Math.PI / 4;
+            group.add(crystal);
+        });
+
         return { 
             mesh: group, 
             platforms, 
