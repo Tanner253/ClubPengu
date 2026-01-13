@@ -27,6 +27,7 @@ import WhiteWhaleGenerators, {
 import DoginalGenerators, { DOGINAL_PALETTE, DOG_PALETTES, generateDogPalette } from './DoginalCharacter';
 import FrogGenerators, { FROG_PALETTE, FROG_PALETTES, generateFrogPalette } from './FrogCharacter';
 import ShrimpGenerators, { SHRIMP_PALETTE, SHRIMP_PALETTES, generateShrimpPalette } from './ShrimpCharacter';
+import DuckGenerators, { DUCK_PALETTE, DUCK_PALETTES } from './DuckCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -167,6 +168,24 @@ characterRegistry.registerCharacter('shrimp', {
     }
 });
 
+characterRegistry.registerCharacter('duck', {
+    name: 'Duck',
+    description: 'A friendly duck with a bright orange bill',
+    generators: DuckGenerators,
+    palette: DUCK_PALETTE,
+    palettes: DUCK_PALETTES,
+    isSecret: true,
+    previewScale: 0.9,
+    customizationOptions: {
+        disableSkinColor: true,   // Duck has fixed yellow coloring
+        disableHats: false,       // Allow hats on the duck
+        disableEyes: true,        // Duck has its own eyes built into model
+        disableMouth: true,       // Duck has a bill built into model
+        disableBodyItems: false,  // Allow body items (shirts)
+        disableMounts: false,     // Allow mounts
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -191,6 +210,9 @@ export {
     ShrimpGenerators,
     SHRIMP_PALETTE,
     SHRIMP_PALETTES,
-    generateShrimpPalette
+    generateShrimpPalette,
+    DuckGenerators,
+    DUCK_PALETTE,
+    DUCK_PALETTES
 };
 export default characterRegistry;

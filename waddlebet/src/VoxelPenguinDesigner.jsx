@@ -26,7 +26,9 @@ import {
     generateFrogPalette,
     ShrimpGenerators,
     SHRIMP_PALETTE,
-    generateShrimpPalette
+    generateShrimpPalette,
+    DuckGenerators,
+    DUCK_PALETTE
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 
@@ -182,6 +184,21 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     // Collapsible section states (for cleaner UI)
     const [colorsExpanded, setColorsExpanded] = useState(false);
     const [walletExpanded, setWalletExpanded] = useState(false);
+    const [characterExpanded, setCharacterExpanded] = useState(false);
+    
+    // Character emoji mapping for grid display
+    const CHARACTER_EMOJIS = {
+        penguin: '🐧',
+        marcus: '🪱',
+        doginal: '🐕',
+        frog: '🐸',
+        shrimp: '🦐',
+        duck: '🦆',
+        whiteWhale: '🐋',
+        blackWhale: '🖤',
+        silverWhale: '🩶',
+        goldWhale: '💛'
+    };
     
     // Customization state - from props (synced from server for auth users)
     const [skinColor, setSkinColor] = useState(currentData?.skin || 'blue');
@@ -530,6 +547,12 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 setMouth('none');    // Dog has its own mouth/snout
                 setBodyItem('none'); // No shirt on dog
             }
+            
+            // Duck has built-in eyes and bill, but allows hats and clothing
+            if (typeId === 'duck') {
+                setEyes('none');     // Duck has its own eyes
+                setMouth('none');    // Duck has a bill
+            }
         }
     };
     
@@ -537,7 +560,13 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const currentCharacter = characterRegistry.getCharacter(characterType);
     
     // Get unlocked characters from server (penguin always available)
+    // When UNLOCK_ALL_COSMETICS is true, show all characters to everyone (including guests)
     const unlockedCharactersList = useMemo(() => {
+        // TEMPORARY: Unlock all characters for everyone (matches cosmetics unlock)
+        if (UNLOCK_ALL_COSMETICS) {
+            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
+        }
+        
         const chars = ['penguin']; // Penguin always unlocked
         if (isAuthenticated && userData?.unlockedCharacters) {
             userData.unlockedCharacters.forEach(c => {
@@ -1189,6 +1218,29 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 // Offset for shrimp body position: lowered by 4 (was +2, now -2)
                 const offsetBodyVoxels = shrimpBodyItemVoxels.map(v => ({ ...v, y: v.y - 2 }));
                 addPart(offsetBodyVoxels, 'bodyItem');
+            }
+        } else if (characterType === 'duck') {
+            // Build Duck character - similar to penguin but with orange bill and wings
+            addPart(DuckGenerators.head(), 'head', DUCK_PALETTE);
+            addPart(DuckGenerators.body(), 'body', DUCK_PALETTE);
+            addPart(DuckGenerators.armLeft(), 'flipper_l', DUCK_PALETTE);
+            addPart(DuckGenerators.armRight(), 'flipper_r', DUCK_PALETTE);
+            addPart(DuckGenerators.legLeft(), 'foot_l', DUCK_PALETTE);
+            addPart(DuckGenerators.legRight(), 'foot_r', DUCK_PALETTE);
+            addPart(DuckGenerators.tail(), 'tail', DUCK_PALETTE);  // Animated tail!
+            
+            // Add hat support for duck - raised by 5 for duck head height
+            const duckHatVoxels = ASSETS.HATS[hat] || [];
+            if (duckHatVoxels.length > 0) {
+                const offsetHatVoxels = duckHatVoxels.map(v => ({ ...v, y: v.y + 4 }));
+                addPart(offsetHatVoxels, 'hat');
+            }
+            
+            // Add body item support for duck
+            const duckBodyItemData = ASSETS.BODY[bodyItem];
+            const duckBodyItemVoxels = duckBodyItemData?.voxels || duckBodyItemData || [];
+            if (duckBodyItemVoxels.length > 0) {
+                addPart(duckBodyItemVoxels, 'bodyItem');
             }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body
@@ -2205,6 +2257,60 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 </div>
                             </div>
                         </div>
+                    ) : characterType === 'duck' ? (
+                        /* Duck character - allows hats, clothing, and mounts */
+                        <div className="space-y-3">
+                            <div className="bg-gradient-to-br from-yellow-900/50 to-orange-900/50 rounded-xl p-4 border border-yellow-500/30">
+                                <div className="text-center">
+                                    <span className="text-2xl">🦆</span>
+                                    <h3 className="text-white font-bold mt-2">Duck</h3>
+                                    <p className="text-white/60 text-xs mt-1">
+                                        A friendly duck with a bright orange bill
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {/* Duck Cosmetics - Hats, Clothing, Mounts */}
+                            {[
+                                { label: 'HEADWEAR', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
+                                { label: 'CLOTHING', key: 'body', val: bodyItem, set: setBodyItem, list: options.body, defaultVal: null },
+                                { label: 'MOUNTS', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                            ].map((opt, i) => {
+                                const categoryForCheck = opt.key === 'head' ? 'hat' : opt.key === 'body' ? 'bodyItem' : opt.key;
+                                const isCurrentLocked = opt.isMount 
+                                    ? (opt.val !== 'none' && !isMountUnlocked(opt.val))
+                                    : (opt.val !== 'none' && opt.val !== opt.defaultVal && !isCosmeticUnlocked(opt.val, categoryForCheck));
+                                
+                                return (
+                                    <div key={i} className="flex flex-col gap-1">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                            {opt.label}
+                                            {opt.isMount && <span className="text-orange-400 ml-1">(PROMO)</span>}
+                                        </span>
+                                        <div className={`flex items-center justify-between rounded-lg p-1 ${
+                                            isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
+                                        }`}>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, -1, opt.defaultVal)}
+                                            >
+                                                <IconChevronLeft size={20} />
+                                            </button>
+                                            <span className={`text-sm font-bold capitalize ${isCurrentLocked ? 'text-red-400' : 'text-white'}`}>
+                                                {isCurrentLocked && '🔒 '}
+                                                {opt.val.replace(/([A-Z])/g, ' $1').trim()}
+                                            </span>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, 1, opt.defaultVal)}
+                                            >
+                                                <IconChevronRight size={20} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     ) : (
                         /* Other special characters - no customization */
                         <div className="bg-gradient-to-br from-purple-900/50 to-cyan-900/50 rounded-xl p-4 border border-purple-500/30">
@@ -2249,46 +2355,60 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         </div>
                     )}
                     
-                    {/* Character Selector - only show if multiple characters unlocked */}
+                    {/* Character Selector - Collapsible Grid */}
                     {unlockedCharacters.length > 1 && (
-                        <div className="mt-4">
-                            <label className="block text-xs text-cyan-400 mb-2 retro-text">CHARACTER</label>
-                            <div 
-                                className="flex gap-2 overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing select-none"
-                                onMouseDown={(e) => {
-                                    const el = e.currentTarget;
-                                    el.dataset.dragging = 'true';
-                                    el.dataset.startX = e.pageX;
-                                    el.dataset.scrollLeft = el.scrollLeft;
-                                }}
-                                onMouseMove={(e) => {
-                                    const el = e.currentTarget;
-                                    if (el.dataset.dragging !== 'true') return;
-                                    e.preventDefault();
-                                    const walk = (e.pageX - Number(el.dataset.startX)) * 1.5;
-                                    el.scrollLeft = Number(el.dataset.scrollLeft) - walk;
-                                }}
-                                onMouseUp={(e) => e.currentTarget.dataset.dragging = 'false'}
-                                onMouseLeave={(e) => e.currentTarget.dataset.dragging = 'false'}
+                        <div className="mb-2">
+                            <button
+                                onClick={() => setCharacterExpanded(!characterExpanded)}
+                                className="w-full flex items-center justify-between p-2 bg-gradient-to-r from-purple-900/40 to-cyan-900/40 hover:from-purple-800/50 hover:to-cyan-800/50 rounded-lg border border-purple-500/30 transition-all"
                             >
-                                {unlockedCharacters.map(charId => {
-                                    const char = characterRegistry.getCharacter(charId);
-                                    if (!char) return null;
-                                    return (
-                                        <button
-                                            key={charId}
-                                            onClick={() => handleCharacterTypeChange(charId)}
-                                            className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                                                characterType === charId
-                                                    ? 'bg-cyan-500 text-black border-2 border-cyan-300'
-                                                    : 'bg-black/50 text-white border-2 border-cyan-500/30 hover:border-cyan-400'
-                                            }`}
-                                        >
-                                            {char.name.toUpperCase()}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">{CHARACTER_EMOJIS[characterType] || '🐧'}</span>
+                                    <span className="text-white font-bold text-sm">
+                                        {currentCharacter?.name || 'Penguin'}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-purple-400 text-xs">
+                                        {unlockedCharacters.length} unlocked
+                                    </span>
+                                    <span className={`text-purple-400 transition-transform ${characterExpanded ? 'rotate-180' : ''}`}>
+                                        ▼
+                                    </span>
+                                </div>
+                            </button>
+                            
+                            {characterExpanded && (
+                                <div className="mt-2 p-3 bg-black/40 rounded-lg border border-purple-500/20">
+                                    <div className="grid grid-cols-5 gap-2">
+                                        {unlockedCharacters.map(charId => {
+                                            const char = characterRegistry.getCharacter(charId);
+                                            if (!char) return null;
+                                            const isSelected = characterType === charId;
+                                            return (
+                                                <button
+                                                    key={charId}
+                                                    onClick={() => {
+                                                        handleCharacterTypeChange(charId);
+                                                        setCharacterExpanded(false);
+                                                    }}
+                                                    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+                                                        isSelected
+                                                            ? 'bg-purple-500/50 border-2 border-purple-300 scale-105'
+                                                            : 'bg-black/30 border border-purple-500/20 hover:border-purple-400 hover:bg-purple-900/30'
+                                                    }`}
+                                                    title={char.name}
+                                                >
+                                                    <span className="text-2xl">{CHARACTER_EMOJIS[charId] || '❓'}</span>
+                                                    <span className={`text-[9px] mt-1 font-bold ${isSelected ? 'text-white' : 'text-gray-400'}`}>
+                                                        {char.name.length > 6 ? char.name.substring(0, 6) : char.name}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                     

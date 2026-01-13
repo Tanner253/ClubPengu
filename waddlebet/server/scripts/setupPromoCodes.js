@@ -205,6 +205,18 @@ const PROMO_CODES = [
             coins: 0
         }
     },
+    {
+        code: 'DUCK',
+        name: '🦆 Duck Character',
+        description: 'Unlocks the friendly Duck character with a bright orange bill',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['duck'],
+            skinColor: null,
+            coins: 0
+        }
+    },
     
     // ========== INTERNAL TEAM CODES ==========
     {

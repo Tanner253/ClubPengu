@@ -61,6 +61,7 @@ export function animateMesh(
     const isWhale = characterType?.includes('Whale');
     const isDoginal = characterType === 'doginal';
     const isShrimp = characterType === 'shrimp';
+    const isDuck = characterType === 'duck';
     
     // Use cached parts if available, otherwise look up and cache
     if (!meshWrapper._animParts) {
@@ -339,6 +340,32 @@ export function animateMesh(
             // Antennae movement (via head bob)
             if(head) head.rotation.x = Math.sin(scuttleSpeed * 1.5) * 0.08;
             if(hatPart) hatPart.rotation.x = Math.sin(scuttleSpeed * 1.5) * 0.08;
+        } else if (isDuck) {
+            // Duck waddle animation - cute waddle with tail wag!
+            const waddleSpeed = time * 10;
+            const waddleAmount = 0.4;
+            
+            // Feet waddle alternating
+            if(footL) footL.rotation.x = Math.sin(waddleSpeed) * waddleAmount;
+            if(footR) footR.rotation.x = Math.sin(waddleSpeed + Math.PI) * waddleAmount;
+            
+            // Wings flap slightly while waddling
+            if(flipperL) flipperL.rotation.z = 0.2 + Math.sin(waddleSpeed * 2) * 0.15;
+            if(flipperR) flipperR.rotation.z = -0.2 - Math.sin(waddleSpeed * 2) * 0.15;
+            
+            // Body waddle side-to-side (classic duck waddle!)
+            meshInner.position.y = 0.8 + Math.abs(Math.sin(waddleSpeed)) * 0.05;
+            meshInner.rotation.z = Math.sin(waddleSpeed) * 0.08; // More pronounced side waddle
+            
+            // Head bob
+            if(head) head.rotation.x = Math.sin(waddleSpeed * 2) * 0.04;
+            if(hatPart) hatPart.rotation.x = Math.sin(waddleSpeed * 2) * 0.04;
+            
+            // TAIL WAG - happy duck tail wagging while waddling!
+            if(tail) {
+                tail.rotation.y = Math.sin(time * 18) * 0.6; // Fast side-to-side wag
+                tail.rotation.x = -0.15; // Tail slightly up when moving
+            }
         } else {
             // Standard biped walking animation (penguin, marcus, whale, frog)
         if(footL) footL.rotation.x = Math.sin(walkCycle) * 0.5;
@@ -383,6 +410,21 @@ export function animateMesh(
             
             // Antennae subtle movement (via head)
             if(head) head.rotation.x = Math.sin(time * 0.8) * 0.03;
+        } else if (isDuck) {
+            // Duck idle - gentle breathing sway and tail wag
+            meshInner.rotation.z = Math.sin(time * 1.2) * 0.02;
+            
+            // Slight head movement
+            if(head) head.rotation.x = Math.sin(time * 0.9) * 0.025;
+            
+            // Wings resting at sides with subtle movement
+            if(flipperL) flipperL.rotation.z = 0.15 + Math.sin(time * 1.5) * 0.03;
+            if(flipperR) flipperR.rotation.z = -0.15 - Math.sin(time * 1.5) * 0.03;
+            
+            // TAIL - gentle slow wag when idle (happy duck)
+            if(tail) {
+                tail.rotation.y = Math.sin(time * 2.5) * 0.3; // Slower, gentler wag
+            }
         } else {
         meshInner.rotation.z = Math.sin(time * 1.5) * 0.02;
         }

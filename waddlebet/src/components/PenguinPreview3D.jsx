@@ -23,7 +23,9 @@ import {
     GoldWhaleGenerators,
     GOLD_WHALE_PALETTE,
     ShrimpGenerators,
-    generateShrimpPalette
+    generateShrimpPalette,
+    DuckGenerators,
+    DUCK_PALETTE
 } from '../characters';
 
 // Color palette for penguin skins
@@ -260,6 +262,17 @@ function buildPenguin(THREE, group, appearance) {
             ...ShrimpGenerators.flipperRight(),
             ...ShrimpGenerators.tail(),
             ...ShrimpGenerators.legs()
+        ];
+    } else if (characterType === 'duck') {
+        characterPalette = DUCK_PALETTE;
+        voxels = [
+            ...DuckGenerators.head(),
+            ...DuckGenerators.body(),
+            ...DuckGenerators.armLeft(),
+            ...DuckGenerators.armRight(),
+            ...DuckGenerators.legLeft(),
+            ...DuckGenerators.legRight(),
+            ...DuckGenerators.tail()
         ];
     } else if (characterType === 'marcus') {
         characterPalette = MARCUS_PALETTE;

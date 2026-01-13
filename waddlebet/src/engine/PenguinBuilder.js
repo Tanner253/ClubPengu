@@ -28,7 +28,9 @@ import {
     ShrimpGenerators,
     SHRIMP_PALETTE,
     SHRIMP_PALETTES,
-    generateShrimpPalette
+    generateShrimpPalette,
+    DuckGenerators,
+    DUCK_PALETTE
 } from '../characters';
 
 /**
@@ -1025,6 +1027,101 @@ export function createPenguinBuilder(THREE) {
         return group;
     };
     
+    /**
+     * Build Duck character mesh with orange bill and wings
+     */
+    const buildDuckMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = DuckGenerators.pivots();
+        
+        // Duck uses fixed yellow palette
+        const duckPalette = DUCK_PALETTE;
+        
+        // Duck head with bill
+        const headVoxels = DuckGenerators.head();
+        const head = buildPartMerged(headVoxels, duckPalette);
+        head.name = 'head';
+        
+        // Duck body
+        const bodyVoxels = DuckGenerators.body();
+        const body = buildPartMerged(bodyVoxels, duckPalette);
+        body.name = 'body';
+        
+        // Wings (like flippers)
+        const wingLVoxels = DuckGenerators.armLeft();
+        const wingL = buildPartMerged(wingLVoxels, duckPalette, pivots.armLeft);
+        wingL.name = 'flipper_l';
+        
+        const wingRVoxels = DuckGenerators.armRight();
+        const wingR = buildPartMerged(wingRVoxels, duckPalette, pivots.armRight);
+        wingR.name = 'flipper_r';
+        
+        // Orange webbed feet
+        const footLVoxels = DuckGenerators.legLeft();
+        const footL = buildPartMerged(footLVoxels, duckPalette, pivots.legLeft);
+        footL.name = 'foot_l';
+        
+        const footRVoxels = DuckGenerators.legRight();
+        const footR = buildPartMerged(footRVoxels, duckPalette, pivots.legRight);
+        footR.name = 'foot_r';
+        
+        // Tail (separate for animation - wagging!)
+        const tailVoxels = DuckGenerators.tail();
+        const tail = buildPartMerged(tailVoxels, duckPalette, pivots.tail);
+        tail.name = 'tail';
+        
+        group.add(body, head, wingL, wingR, footL, footR, tail);
+        
+        // Add hat support - raised by 5 for duck head height
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            if (hatVoxels && hatVoxels.length > 0) {
+                // Offset hat voxels up by 5 for duck's taller head
+                const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + 5 }));
+                const hat = buildPartMerged(offsetHatVoxels, PALETTE);
+                hat.name = 'hat';
+                group.add(hat);
+                
+                // Propeller hat blades - also raised
+                if (data.hat === 'propeller') {
+                    const blades = new THREE.Group();
+                    blades.name = 'propeller_blades';
+                    blades.position.set(0, 17 * VOXEL_SIZE, 0);  // 12 + 5 = 17
+                    const bladeGeo = new THREE.BoxGeometry(4 * VOXEL_SIZE, 0.2 * VOXEL_SIZE, 0.5 * VOXEL_SIZE);
+                    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                    const b1 = new THREE.Mesh(bladeGeo, bladeMat);
+                    const b2 = new THREE.Mesh(bladeGeo, bladeMat);
+                    b2.rotation.y = Math.PI / 2;
+                    blades.add(b1, b2);
+                    group.add(blades);
+                }
+                
+                if (data.hat === 'wizardHat') {
+                    group.userData.hasWizardHat = true;
+                }
+            }
+        }
+        
+        // Add body item support
+        if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
+            const bodyItemData = ASSETS.BODY[data.bodyItem];
+            const bodyItemVoxels = bodyItemData?.voxels || bodyItemData || [];
+            if (bodyItemVoxels.length > 0) {
+                const bodyItemMesh = buildPartMerged(bodyItemVoxels, PALETTE);
+                bodyItemMesh.name = 'bodyItem';
+                group.add(bodyItemMesh);
+            }
+        }
+        
+        group.scale.set(0.2, 0.2, 0.2);
+        group.position.y = 0.8;
+        
+        // Mark as duck for animations
+        group.userData.isDuck = true;
+        
+        return group;
+    };
+    
     // Whale character configs
     const WHALE_CONFIGS = {
         whiteWhale: { generators: WhiteWhaleGenerators, palette: WHITE_WHALE_PALETTE },
@@ -1322,6 +1419,8 @@ export function createPenguinBuilder(THREE) {
             group = buildFrogMesh(data);
         } else if (data.characterType === 'shrimp') {
             group = buildShrimpMesh(data);
+        } else if (data.characterType === 'duck') {
+            group = buildDuckMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {
