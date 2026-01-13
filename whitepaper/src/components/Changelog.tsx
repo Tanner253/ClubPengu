@@ -697,7 +697,7 @@ export default function Changelog() {
           </h2>
           <p className="text-slate-400 text-lg max-w-2xl mx-auto mb-8">
             Every line of code, every feature, every optimization documented. 
-            <span className="text-cyan-400 font-semibold"> 9 days of shipping.</span>
+            <span className="text-cyan-400 font-semibold"> 36 days of shipping.</span>
           </p>
           
           {/* Impressive stats */}
