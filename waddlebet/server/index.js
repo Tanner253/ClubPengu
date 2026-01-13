@@ -699,6 +699,60 @@ setInterval(() => {
     }
 }, 3000);
 
+// ==================== TURNSTILE VERIFICATION ====================
+// Track verified players (playerId -> true) to avoid re-verification
+const turnstileVerified = new Map();
+
+/**
+ * Verify Cloudflare Turnstile token server-side
+ * @param {string} token - The turnstile token from client
+ * @param {string} clientIP - The client's IP address (optional but recommended)
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function verifyTurnstileToken(token, clientIP = null) {
+    const secretKey = process.env.TURNSTILE_SECRET_KEY;
+    
+    // If no secret key configured, skip verification (dev mode)
+    if (!secretKey) {
+        console.log('⚠️ Turnstile: No secret key configured, skipping verification');
+        return { success: true };
+    }
+    
+    // Token is required when secret key is set
+    if (!token) {
+        return { success: false, error: 'TURNSTILE_REQUIRED' };
+    }
+    
+    try {
+        const formData = new URLSearchParams();
+        formData.append('secret', secretKey);
+        formData.append('response', token);
+        if (clientIP) {
+            formData.append('remoteip', clientIP);
+        }
+        
+        const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData.toString()
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ Turnstile verification successful');
+            return { success: true };
+        } else {
+            console.warn('❌ Turnstile verification failed:', result['error-codes']);
+            return { success: false, error: 'TURNSTILE_INVALID', codes: result['error-codes'] };
+        }
+    } catch (error) {
+        console.error('Turnstile verification error:', error);
+        // Fail open in case of network issues (graceful degradation)
+        return { success: true, warning: 'VERIFICATION_UNAVAILABLE' };
+    }
+}
+
 // ==================== HELPER FUNCTIONS ====================
 function getClientIP(req) {
     const forwarded = req.headers['x-forwarded-for'];
@@ -1159,6 +1213,9 @@ wss.on('connection', (ws, req) => {
     ws.on('close', async () => {
         console.log(`[${ts()}] Player disconnected: ${playerId}`);
         const player = players.get(playerId);
+        
+        // Clean up turnstile verification (memory management)
+        turnstileVerified.delete(playerId);
         
         if (player) {
             // Handle slot disconnect (cancel any active spin)
@@ -1728,6 +1785,23 @@ async function handleMessage(playerId, message) {
         
         // ==================== JOIN/MOVEMENT ====================
         case 'join': {
+            // Verify Turnstile token on first join (if secret key is configured)
+            if (!turnstileVerified.has(playerId) && process.env.TURNSTILE_SECRET_KEY) {
+                const turnstileResult = await verifyTurnstileToken(message.turnstileToken, player.ip);
+                
+                if (!turnstileResult.success) {
+                    sendToPlayer(playerId, {
+                        type: 'join_error',
+                        error: turnstileResult.error || 'VERIFICATION_FAILED',
+                        message: 'Human verification required. Please complete the security check.'
+                    });
+                    return true;
+                }
+                
+                // Mark as verified so we don't re-verify on room changes
+                turnstileVerified.set(playerId, true);
+            }
+            
             player.name = message.name || player.name;
             player.puffle = message.puffle || null;
             

@@ -100,6 +100,82 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const [promoCode, setPromoCode] = useState('');
     const [promoMessage, setPromoMessage] = useState(null);
     
+    // Cloudflare Turnstile verification state
+    const [turnstileToken, setTurnstileToken] = useState(null);
+    const [turnstileVerified, setTurnstileVerified] = useState(false);
+    const [turnstileError, setTurnstileError] = useState(null);
+    const turnstileWidgetRef = useRef(null);
+    const turnstileContainerRef = useRef(null);
+    
+    // Initialize Turnstile widget
+    useEffect(() => {
+        // Skip Turnstile on localhost (dev mode) - Cloudflare requires domain whitelist
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocalhost) {
+            console.log('⚠️ Turnstile: Skipping verification on localhost (dev mode)');
+            setTurnstileVerified(true);
+            return;
+        }
+        
+        // Only render if we have the site key and Turnstile is loaded
+        const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+        if (!siteKey || typeof window.turnstile === 'undefined') {
+            // No site key or Turnstile not loaded - skip verification (dev mode)
+            if (!siteKey) {
+                console.log('⚠️ Turnstile: No site key configured, skipping verification');
+                setTurnstileVerified(true);
+            }
+            return;
+        }
+        
+        // Wait for container to be mounted
+        if (!turnstileContainerRef.current) return;
+        
+        // Render the widget
+        try {
+            turnstileWidgetRef.current = window.turnstile.render(turnstileContainerRef.current, {
+                sitekey: siteKey,
+                theme: 'dark',
+                size: 'flexible',
+                callback: (token) => {
+                    console.log('✅ Turnstile verification successful');
+                    setTurnstileToken(token);
+                    setTurnstileVerified(true);
+                    setTurnstileError(null);
+                },
+                'error-callback': (errorCode) => {
+                    console.error('❌ Turnstile error:', errorCode);
+                    setTurnstileError('Verification failed. Please try again.');
+                    setTurnstileVerified(false);
+                },
+                'expired-callback': () => {
+                    console.warn('⏰ Turnstile token expired');
+                    setTurnstileToken(null);
+                    setTurnstileVerified(false);
+                    // Reset widget to get new token
+                    if (turnstileWidgetRef.current) {
+                        window.turnstile.reset(turnstileWidgetRef.current);
+                    }
+                }
+            });
+        } catch (err) {
+            console.error('Turnstile render error:', err);
+            // Allow entry if Turnstile fails to load (graceful degradation)
+            setTurnstileVerified(true);
+        }
+        
+        return () => {
+            // Cleanup widget on unmount
+            if (turnstileWidgetRef.current && typeof window.turnstile !== 'undefined') {
+                try {
+                    window.turnstile.remove(turnstileWidgetRef.current);
+                } catch (e) {
+                    // Ignore cleanup errors
+                }
+            }
+        };
+    }, [scriptsLoaded]); // Re-run when scripts are loaded
+    
     // Show only owned cosmetics toggle
     const [showOwnedOnly, setShowOwnedOnly] = useState(false);
     
@@ -2216,6 +2292,22 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         </div>
                     )}
                     
+                    {/* Cloudflare Turnstile Verification */}
+                    {import.meta.env.VITE_TURNSTILE_SITE_KEY && !turnstileVerified && (
+                        <div className="mt-4 p-3 bg-slate-800/50 rounded-lg border border-orange-500/30">
+                            <div className="flex items-center gap-2 mb-2">
+                                <svg className="w-4 h-4 text-orange-500 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z"/>
+                                </svg>
+                                <span className="text-xs text-orange-400 font-medium">Human Verification Required</span>
+                            </div>
+                            <div ref={turnstileContainerRef} className="flex justify-center" />
+                            {turnstileError && (
+                                <p className="text-xs text-red-400 text-center mt-2">{turnstileError}</p>
+                            )}
+                        </div>
+                    )}
+                    
                     {/* Enter World Button */}
                     {isAuthenticated && isNewUser && (!username || username.length < 3 || usernameStatus === 'taken') ? (
                         <div className="mt-4">
@@ -2244,10 +2336,22 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 }
                             </p>
                         </div>
+                    ) : !turnstileVerified ? (
+                        <div className="mt-4">
+                            <button 
+                                disabled
+                                className="w-full py-3 bg-orange-900/50 text-orange-400 font-bold rounded-lg retro-text text-xs border-b-4 border-orange-900 flex justify-center items-center gap-2 cursor-not-allowed"
+                            >
+                                <IconWorld size={16} /> ⏳ VERIFYING...
+                            </button>
+                            <p className="text-xs text-orange-400 text-center mt-2">
+                                Complete the security check above
+                            </p>
+                        </div>
                     ) : (
                         <div className="mt-4">
                             <button 
-                                onClick={onEnterWorld}
+                                onClick={() => onEnterWorld(turnstileToken)}
                                 className="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg shadow-lg transform active:scale-95 transition-all retro-text text-xs border-b-4 border-yellow-700 flex justify-center items-center gap-2"
                             >
                                 <IconWorld size={16} /> {isAuthenticated ? 'ENTER WORLD' : 'PLAY AS GUEST'}
@@ -2268,6 +2372,22 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     <IconCamera size={14} /> Click & Drag to Rotate • Scroll to Zoom
                 </div>
             )}
+            
+            {/* Cloudflare Badge - Centered at bottom */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                <a 
+                    href="https://www.cloudflare.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500/20 to-orange-600/20 hover:from-orange-500/30 hover:to-orange-600/30 rounded-full border border-orange-500/40 hover:border-orange-500/60 transition-all shadow-lg shadow-orange-500/10 group"
+                >
+                    <svg className="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.2678-.2246-.2767-.5765-.4198-.9725-.4466l-8.5057-.1123a.1654.1654 0 0 1-.1328-.0615.141.141 0 0 1-.0236-.1388.1742.1742 0 0 1 .1535-.121l8.5858-.1102c.974-.0288 2.0298-.8037 2.3878-1.7598l.454-1.214a.27.27 0 0 0 .0147-.1964 5.0842 5.0842 0 0 0-9.8793-1.0239c-.5765-.4259-1.2998-.649-2.0676-.5592-1.2763.1496-2.3055 1.1608-2.4816 2.4398a2.6573 2.6573 0 0 0 .0103.8627 3.8782 3.8782 0 0 0-3.7637 3.8765c0 .1949.0143.3856.042.5718a.167.167 0 0 0 .1657.1423l15.5878.0037c.0738 0 .1393-.0493.1577-.121l.0004-.0001z"/>
+                        <path d="M19.4846 10.0557a.1008.1008 0 0 0-.0996-.0234c-.3333.1015-.6872.1545-1.0517.1545-1.1328 0-2.1415-.5193-2.8042-1.3329a.1012.1012 0 0 0-.0996-.0234.1027.1027 0 0 0-.0722.0793c-.2139.9577-.8575 1.7673-1.7112 2.2298a.1.1 0 0 0-.0512.1244c.1076.3112.1638.6456.1638.9932 0 .0616-.0016.1229-.0048.1838a.1.1 0 0 0 .0996.1052l5.4023.0698c.0502 0 .0935-.0355.1017-.0856a3.2137 3.2137 0 0 0 .0417-.5142c0-1.3006-.7745-2.4221-1.8862-2.9347a.1003.1003 0 0 0-.0284-.0258z"/>
+                    </svg>
+                    <span className="text-xs text-orange-400/90 font-medium group-hover:text-orange-300 transition-colors">Protected by Cloudflare</span>
+                </a>
+            </div>
 
             {!scriptsLoaded && (
                 <div className="absolute inset-0 bg-black flex items-center justify-center text-white retro-text z-50">

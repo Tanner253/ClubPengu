@@ -68,7 +68,8 @@ const VoxelWorld = ({
     activeMatches = [], // Active matches in the room (for spectator banners)
     spectatingMatch = {}, // Real-time match state data for spectating
     activePveActivities = {}, // PvE activity state for spectator banners (fishing, blackjack, etc.)
-    onRequestAuth    // Callback to redirect to penguin maker for auth
+    onRequestAuth,    // Callback to redirect to penguin maker for auth
+    turnstileToken = null // Cloudflare Turnstile verification token (for bot protection)
 }) => {
     const mountRef = useRef(null);
     const sceneRef = useRef(null);
@@ -6423,7 +6424,7 @@ const VoxelWorld = ({
                 nametagStyle  // Broadcast nametag style to all players
             };
             
-            mpJoinRoom(room, appearanceWithMount, puffleData);
+            mpJoinRoom(room, appearanceWithMount, puffleData, turnstileToken);
             
             // Add player's own name tag (so they can see their username)
             if (playerRef.current && playerName && !playerNameSpriteRef.current) {

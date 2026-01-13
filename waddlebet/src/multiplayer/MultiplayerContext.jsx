@@ -1182,13 +1182,14 @@ export function MultiplayerProvider({ children }) {
     }, [send]);
     
     // Join a room
-    const joinRoom = useCallback((room, appearance, puffle = null) => {
+    const joinRoom = useCallback((room, appearance, puffle = null, turnstileToken = null) => {
         send({
             type: 'join',
             room,
             name: playerName,
             appearance,
-            puffle
+            puffle,
+            turnstileToken // Cloudflare Turnstile verification token
         });
     }, [send, playerName]);
     

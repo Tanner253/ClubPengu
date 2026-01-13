@@ -207,8 +207,14 @@ const AppContent = () => {
         console.log('💰 Coins:', gm.getCoins());
     }, []);
     
+    // Turnstile token for bot protection
+    const [turnstileToken, setTurnstileToken] = useState(null);
+    
     // Enter the game world (from designer)
-    const handleEnterWorld = () => {
+    const handleEnterWorld = (token = null) => {
+        if (token) {
+            setTurnstileToken(token);
+        }
         GameManager.getInstance().setRoom('town');
         setCurrentRoom('town');
     };
@@ -288,6 +294,7 @@ const AppContent = () => {
                         onPuffleChange={setPlayerPuffle}
                         customSpawnPos={spawnPosition}
                         onPlayerClick={handlePlayerClick}
+                        turnstileToken={turnstileToken}
                         isInMatch={isInMatch}
                         activeMatches={activeMatches}
                         spectatingMatch={spectatingMatch}
