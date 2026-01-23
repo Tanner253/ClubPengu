@@ -53,7 +53,7 @@ const SOCIAL_LINKS = {
   pumpfun: "#", // Coming soon
 };
 
-const CONTRACT_ADDRESS = "BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump";
+const CONTRACT_ADDRESS = "9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump";
 
 // Snow effect component
 function Snowfall() {
