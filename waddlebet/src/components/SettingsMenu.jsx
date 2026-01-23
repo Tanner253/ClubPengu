@@ -202,6 +202,39 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                         </p>
                     </div>
                     
+                    {/* Green Candles Trail Effect */}
+                    <div className="bg-black/30 rounded-xl p-3">
+                        <div className="flex items-center justify-between">
+                            <div className="flex-1 mr-3">
+                                <h3 className="text-white font-medium text-sm">📈 Green Candles</h3>
+                                <p className="text-white/50 text-[11px] mt-0.5">
+                                    Trading candle trail effect (visible to all)
+                                </p>
+                            </div>
+                            <button
+                                onClick={() => {
+                                    handleToggle('greenCandlesEnabled');
+                                    // Dispatch event to notify VoxelWorld of green candles toggle
+                                    window.dispatchEvent(new CustomEvent('greenCandlesToggled', { 
+                                        detail: { enabled: !settings.greenCandlesEnabled } 
+                                    }));
+                                }}
+                                className={`relative w-14 h-8 rounded-full transition-colors duration-200 shrink-0 touch-manipulation select-none ${
+                                    settings.greenCandlesEnabled ? 'bg-green-500' : 'bg-gray-600'
+                                }`}
+                            >
+                                <div 
+                                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
+                                        settings.greenCandlesEnabled ? 'translate-x-7' : 'translate-x-1'
+                                    }`}
+                                />
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-green-400/70 mt-2">
+                            {settings.greenCandlesEnabled ? '📊 Candles sprouting when you walk!' : '💤 Off - No candle trail'}
+                        </p>
+                    </div>
+                    
                     {/* Nametag Style Selection - Only show options for authenticated users */}
                     <div className="bg-black/30 rounded-xl p-3">
                         <h3 className="text-white font-medium text-sm mb-2">🏷️ Nametag Style</h3>

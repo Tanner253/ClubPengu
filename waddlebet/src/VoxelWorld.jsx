@@ -151,6 +151,24 @@ const VoxelWorld = ({
         return () => window.removeEventListener('mountToggled', handleMountToggle);
     }, []);
     
+    // Green candles toggle - listen for settings changes
+    useEffect(() => {
+        const handleGreenCandlesToggle = (e) => {
+            const enabled = e.detail?.enabled ?? false;
+            
+            // SYNC TO SERVER: Notify other players about green candles change
+            if (mpUpdateAppearanceRef.current && penguinDataRef.current) {
+                mpUpdateAppearanceRef.current({
+                    ...penguinDataRef.current,
+                    greenCandlesEnabled: enabled
+                });
+            }
+        };
+        
+        window.addEventListener('greenCandlesToggled', handleGreenCandlesToggle);
+        return () => window.removeEventListener('greenCandlesToggled', handleGreenCandlesToggle);
+    }, []);
+    
     
     // Multiplayer - OPTIMIZED: use refs for positions, state only for player list changes
     const {
@@ -3351,10 +3369,11 @@ const VoxelWorld = ({
                     wizardTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
                 }
                 
-                // --- GAKE CHARACTER GREEN CANDLE TRAIL ---
-                // Triggers for Gake character (green trading candles sprout from ground)
+                // --- GREEN CANDLE TRAIL ---
+                // Triggers for Gake character OR when greenCandlesEnabled setting is on
                 const isGake = penguinData?.characterType === 'gake';
-                if (isGake && gakeCandleTrailSystemRef.current) {
+                const greenCandlesEnabled = gameSettingsRef.current?.greenCandlesEnabled === true;
+                if ((isGake || greenCandlesEnabled) && gakeCandleTrailSystemRef.current) {
                     gakeCandleTrailSystemRef.current.getOrCreatePool('localPlayer');
                     gakeCandleTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
                 }
@@ -3842,9 +3861,10 @@ const VoxelWorld = ({
                     wizardTrailSystemRef.current.update(poolKey, meshData.mesh.position, isMoving, time, delta);
                 }
                 
-                // Gake candle trail for other players
+                // Green candle trail for other players (Gake character OR greenCandlesEnabled setting)
                 const otherIsGake = otherAppearance.characterType === 'gake';
-                if (otherIsGake && gakeCandleTrailSystemRef.current) {
+                const otherGreenCandlesEnabled = otherAppearance.greenCandlesEnabled === true;
+                if ((otherIsGake || otherGreenCandlesEnabled) && gakeCandleTrailSystemRef.current) {
                     const poolKey = `player_${id}`;
                     gakeCandleTrailSystemRef.current.getOrCreatePool(poolKey);
                     gakeCandleTrailSystemRef.current.update(poolKey, meshData.mesh.position, isMoving, time, delta);
@@ -6433,21 +6453,24 @@ const VoxelWorld = ({
                 name: playerPuffle.name
             } : null;
             
-            // Include current mount enabled state and nametag style from settings
+            // Include current mount enabled state, nametag style, and green candles from settings
             // Guests always get 'default' nametag style - only authenticated users get special styles
             let mountEnabled = true;
             let nametagStyle = 'default';
+            let greenCandlesEnabled = false;
             try {
                 const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
                 mountEnabled = settings.mountEnabled !== false;
                 // Only authenticated users can use non-default nametag styles
                 nametagStyle = isAuthenticated ? (settings.nametagStyle || 'day1') : 'default';
+                greenCandlesEnabled = settings.greenCandlesEnabled === true;
             } catch { /* use default */ }
             
             const appearanceWithMount = {
                 ...penguinData,
                 mountEnabled,
-                nametagStyle  // Broadcast nametag style to all players
+                nametagStyle,  // Broadcast nametag style to all players
+                greenCandlesEnabled  // Broadcast green candles setting to all players
             };
             
             console.log(`🚀 Joining room ${room} with appearance: characterType=${appearanceWithMount.characterType || 'undefined'}`);
