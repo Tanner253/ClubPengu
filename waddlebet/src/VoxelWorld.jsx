@@ -47,7 +47,7 @@ import {
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './config';
-import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem } from './systems';
+import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem } from './systems';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
 import CasinoBlackjack from './components/CasinoBlackjack';
@@ -95,6 +95,7 @@ const VoxelWorld = ({
     const matchBannersRef = useRef(new Map()); // matchId -> { sprite, canvas, ctx }
     const pveBannersRef = useRef(new Map()); // playerId -> { sprite, canvas, ctx } for PvE activities
     const wizardTrailSystemRef = useRef(null); // World-space wizard hat particle trail
+    const gakeCandleTrailSystemRef = useRef(null); // Gake character green candle trail
     const mountTrailSystemRef = useRef(null); // Mount trail system (icy trails, etc.)
     const mountEnabledRef = useRef(true); // Track if mount is equipped/enabled
     const mpUpdateAppearanceRef = useRef(null); // Ref for appearance update function
@@ -545,6 +546,9 @@ const VoxelWorld = ({
         
         // Initialize wizard trail particle system
         wizardTrailSystemRef.current = new WizardTrailSystem(THREE, scene);
+        
+        // Initialize Gake candle trail system (green trading candles)
+        gakeCandleTrailSystemRef.current = new GakeCandleTrailSystem(THREE, scene);
         
         // Initialize mount trail system (icy trails, etc.)
         mountTrailSystemRef.current = new MountTrailSystem(THREE, scene);
@@ -3347,6 +3351,14 @@ const VoxelWorld = ({
                     wizardTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
                 }
                 
+                // --- GAKE CHARACTER GREEN CANDLE TRAIL ---
+                // Triggers for Gake character (green trading candles sprout from ground)
+                const isGake = penguinData?.characterType === 'gake';
+                if (isGake && gakeCandleTrailSystemRef.current) {
+                    gakeCandleTrailSystemRef.current.getOrCreatePool('localPlayer');
+                    gakeCandleTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
+                }
+                
                 // --- SLOT MACHINE SYSTEM (spectator bubbles) ---
                 if (slotMachineSystemRef.current) {
                     // Pass player position for distance-based culling optimization
@@ -3830,6 +3842,14 @@ const VoxelWorld = ({
                     wizardTrailSystemRef.current.update(poolKey, meshData.mesh.position, isMoving, time, delta);
                 }
                 
+                // Gake candle trail for other players
+                const otherIsGake = otherAppearance.characterType === 'gake';
+                if (otherIsGake && gakeCandleTrailSystemRef.current) {
+                    const poolKey = `player_${id}`;
+                    gakeCandleTrailSystemRef.current.getOrCreatePool(poolKey);
+                    gakeCandleTrailSystemRef.current.update(poolKey, meshData.mesh.position, isMoving, time, delta);
+                }
+                
                 // Dynamic name tag scaling based on camera distance
                 // Scale smaller when closer, max size when far (no scaling up beyond default)
                 if (meshData.nameSprite && camera) {
@@ -4176,6 +4196,11 @@ const VoxelWorld = ({
             if (wizardTrailSystemRef.current) {
                 wizardTrailSystemRef.current.dispose();
                 wizardTrailSystemRef.current = null;
+            }
+            // Cleanup Gake candle trail system
+            if (gakeCandleTrailSystemRef.current) {
+                gakeCandleTrailSystemRef.current.dispose();
+                gakeCandleTrailSystemRef.current = null;
             }
             // Cleanup Mount trail system
             if (mountTrailSystemRef.current) {

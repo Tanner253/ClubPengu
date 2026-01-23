@@ -60,6 +60,9 @@ export { default as SnowfallSystem } from './SnowfallSystem';
 // Wizard trail particle system
 export { default as WizardTrailSystem } from './WizardTrailSystem';
 
+// Gake candle trail system (green trading candles)
+export { default as GakeCandleTrailSystem } from './GakeCandleTrailSystem';
+
 // Mount trail system (icy trails, etc.)
 export { default as MountTrailSystem, TRAIL_TYPES } from './MountTrailSystem';
 

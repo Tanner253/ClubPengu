@@ -229,6 +229,18 @@ const PROMO_CODES = [
             coins: 0
         }
     },
+    {
+        code: 'GAKE',
+        name: '⭐ Gake',
+        description: 'Unlocks the lovable pink starfish with green shorts',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['gake'],
+            skinColor: null,
+            coins: 0
+        }
+    },
     
     // ========== INTERNAL TEAM CODES ==========
     {

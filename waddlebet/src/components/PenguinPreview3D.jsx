@@ -27,7 +27,9 @@ import {
     DuckGenerators,
     DUCK_PALETTE,
     TungTungGenerators,
-    TUNG_PALETTE
+    TUNG_PALETTE,
+    GakeGenerators,
+    GAKE_PALETTE
 } from '../characters';
 
 // Color palette for penguin skins
@@ -286,6 +288,16 @@ function buildPenguin(THREE, group, appearance) {
             ...TungTungGenerators.legLeft(),
             ...TungTungGenerators.legRight()
         ];
+    } else if (characterType === 'gake') {
+        characterPalette = GAKE_PALETTE;
+        voxels = [
+            ...GakeGenerators.head(),
+            ...GakeGenerators.body(),
+            ...GakeGenerators.armLeft(),
+            ...GakeGenerators.armRight(),
+            ...GakeGenerators.footLeft(),
+            ...GakeGenerators.footRight()
+        ];
     } else if (characterType === 'marcus') {
         characterPalette = MARCUS_PALETTE;
         voxels = [
@@ -421,17 +433,21 @@ function addCosmetics(THREE, group, appearance, characterType, paletteOrSkinColo
         ? paletteOrSkinColor 
         : PALETTE;
     
-    // Add hat
+    // Add hat - with offset for special characters
     if (appearance.hat && appearance.hat !== 'none' && ASSETS.HATS && ASSETS.HATS[appearance.hat]) {
-        const hatVoxels = ASSETS.HATS[appearance.hat];
+        let hatVoxels = ASSETS.HATS[appearance.hat];
         if (hatVoxels && hatVoxels.length > 0) {
+            // Apply offset for Gake (raised head, y+2)
+            if (characterType === 'gake') {
+                hatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + 2 }));
+            }
             const hatGroup = buildVoxelGroup(THREE, hatVoxels, cosmeticsPalette);
             hatGroup.name = 'hat';
             group.add(hatGroup);
         }
     }
     
-    // Add eyes - with offset for TungTung character
+    // Add eyes - with offset for TungTung and Gake characters
     const eyesKey = appearance.eyes && ASSETS.EYES && ASSETS.EYES[appearance.eyes] ? appearance.eyes : 'normal';
     if (ASSETS.EYES && ASSETS.EYES[eyesKey]) {
         let eyesVoxels = ASSETS.EYES[eyesKey];
@@ -440,13 +456,17 @@ function addCosmetics(THREE, group, appearance, characterType, paletteOrSkinColo
             if (characterType === 'tungTung') {
                 eyesVoxels = eyesVoxels.map(v => ({ ...v, y: v.y + 21, z: v.z + 1 }));
             }
+            // Apply offset for Gake (raised head, y+2)
+            if (characterType === 'gake') {
+                eyesVoxels = eyesVoxels.map(v => ({ ...v, y: v.y + 2 }));
+            }
             const eyesGroup = buildVoxelGroup(THREE, eyesVoxels, cosmeticsPalette);
             eyesGroup.name = 'eyes';
             group.add(eyesGroup);
         }
     }
     
-    // Add mouth (ASSETS.MOUTH is an alias for MOUTHS) - with offset for TungTung character
+    // Add mouth (ASSETS.MOUTH is an alias for MOUTHS) - with offset for TungTung and Gake characters
     const mouthKey = appearance.mouth && ASSETS.MOUTH && ASSETS.MOUTH[appearance.mouth] ? appearance.mouth : 'beak';
     if (ASSETS.MOUTH && ASSETS.MOUTH[mouthKey]) {
         let mouthVoxels = ASSETS.MOUTH[mouthKey];
@@ -454,6 +474,10 @@ function addCosmetics(THREE, group, appearance, characterType, paletteOrSkinColo
             // Apply offset for TungTung (tall cylinder - face on upper half, y+21)
             if (characterType === 'tungTung') {
                 mouthVoxels = mouthVoxels.map(v => ({ ...v, y: v.y + 21, z: v.z + 1 }));
+            }
+            // Apply offset for Gake (raised head, y+2)
+            if (characterType === 'gake') {
+                mouthVoxels = mouthVoxels.map(v => ({ ...v, y: v.y + 2 }));
             }
             const mouthGroup = buildVoxelGroup(THREE, mouthVoxels, cosmeticsPalette);
             mouthGroup.name = 'mouth';
