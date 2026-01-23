@@ -62,6 +62,7 @@ export function animateMesh(
     const isDoginal = characterType === 'doginal';
     const isShrimp = characterType === 'shrimp';
     const isDuck = characterType === 'duck';
+    const isTungTung = characterType === 'tungTung';
     
     // Use cached parts if available, otherwise look up and cache
     if (!meshWrapper._animParts) {
@@ -155,12 +156,18 @@ export function animateMesh(
         }
         else if (emoteType === 'Laugh') {
             const laughRot = -0.5 + Math.sin(eTime * 20) * 0.2; 
-            if(head) head.rotation.x = laughRot;
-            if(hatPart) hatPart.rotation.x = laughRot;
-            if(eyesPart) eyesPart.rotation.x = laughRot;
-            if(mouthPart) mouthPart.rotation.x = laughRot;
-            meshInner.rotation.x = -0.2;
-            meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 15)) * 0.1;
+            if (isTungTung) {
+                // TungTung has a tall cylindrical head - rotate the whole body instead
+                meshInner.rotation.x = laughRot * 0.5;
+                meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 15)) * 0.15;
+            } else {
+                if(head) head.rotation.x = laughRot;
+                if(hatPart) hatPart.rotation.x = laughRot;
+                if(eyesPart) eyesPart.rotation.x = laughRot;
+                if(mouthPart) mouthPart.rotation.x = laughRot;
+                meshInner.rotation.x = -0.2;
+                meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 15)) * 0.1;
+            }
         }
         else if (emoteType === 'Breakdance') {
             const spinSpeed = eTime * 6;
@@ -212,25 +219,31 @@ export function animateMesh(
             const HEAD_LIFT = 1.0;
             const HEAD_FORWARD = 0.25;
             
-            if(head) {
-                head.rotation.x = headBangAmount;
-                head.position.y = HEAD_LIFT;
-                head.position.z = HEAD_FORWARD;
-            }
-            if(hatPart) {
-                hatPart.rotation.x = headBangAmount;
-                hatPart.position.y = HEAD_LIFT;
-                hatPart.position.z = HEAD_FORWARD;
-            }
-            if(eyesPart) {
-                eyesPart.rotation.x = headBangAmount;
-                eyesPart.position.y = HEAD_LIFT;
-                eyesPart.position.z = HEAD_FORWARD;
-            }
-            if(mouthPart) {
-                mouthPart.rotation.x = headBangAmount;
-                mouthPart.position.y = HEAD_LIFT;
-                mouthPart.position.z = HEAD_FORWARD;
+            if (isTungTung) {
+                // TungTung has a tall cylindrical body - rock the whole body forward/back
+                meshInner.rotation.x = headBangAmount * 0.6;
+                meshInner.position.y = 0.8 + Math.abs(Math.sin(bangSpeed)) * 0.1;
+            } else {
+                if(head) {
+                    head.rotation.x = headBangAmount;
+                    head.position.y = HEAD_LIFT;
+                    head.position.z = HEAD_FORWARD;
+                }
+                if(hatPart) {
+                    hatPart.rotation.x = headBangAmount;
+                    hatPart.position.y = HEAD_LIFT;
+                    hatPart.position.z = HEAD_FORWARD;
+                }
+                if(eyesPart) {
+                    eyesPart.rotation.x = headBangAmount;
+                    eyesPart.position.y = HEAD_LIFT;
+                    eyesPart.position.z = HEAD_FORWARD;
+                }
+                if(mouthPart) {
+                    mouthPart.rotation.x = headBangAmount;
+                    mouthPart.position.y = HEAD_LIFT;
+                    mouthPart.position.z = HEAD_FORWARD;
+                }
             }
             
             const pumpAmount = Math.sin(bangSpeed) * 0.15;
@@ -366,6 +379,22 @@ export function animateMesh(
                 tail.rotation.y = Math.sin(time * 18) * 0.6; // Fast side-to-side wag
                 tail.rotation.x = -0.15; // Tail slightly up when moving
             }
+        } else if (isTungTung) {
+            // Tung Tung walking - menacing march with bat swing
+            const marchSpeed = time * 8;
+            const marchAmount = 0.45;
+            
+            // Legs march with purpose
+            if(footL) footL.rotation.x = Math.sin(marchSpeed) * marchAmount;
+            if(footR) footR.rotation.x = Math.sin(marchSpeed + Math.PI) * marchAmount;
+            
+            // Arms swing - right arm (with bat) swings more menacingly
+            if(flipperL) flipperL.rotation.x = Math.sin(marchSpeed) * 0.4;
+            if(flipperR) flipperR.rotation.x = Math.sin(marchSpeed + Math.PI) * 0.3 + Math.sin(time * 12) * 0.1; // Bat ready swing
+            
+            // Slight body lean forward while marching
+            meshInner.rotation.z = Math.sin(marchSpeed) * 0.06;
+            meshInner.position.y = 0.8 + Math.abs(Math.sin(marchSpeed)) * 0.03;
         } else {
             // Standard biped walking animation (penguin, marcus, whale, frog)
         if(footL) footL.rotation.x = Math.sin(walkCycle) * 0.5;
@@ -424,6 +453,22 @@ export function animateMesh(
             // TAIL - gentle slow wag when idle (happy duck)
             if(tail) {
                 tail.rotation.y = Math.sin(time * 2.5) * 0.3; // Slower, gentler wag
+            }
+        } else if (isTungTung) {
+            // Tung Tung idle - menacing presence with bat at ready
+            meshInner.rotation.z = Math.sin(time * 1.2) * 0.015;
+            
+            // Slight lean forward like ready to strike
+            if(head) head.rotation.x = Math.sin(time * 0.6) * 0.02;
+            
+            // Left arm relaxed at side
+            if(flipperL) flipperL.rotation.z = 0.1 + Math.sin(time * 1.5) * 0.02;
+            
+            // Right arm (with bat) - occasional menacing tap/swing
+            if(flipperR) {
+                const batTwitch = Math.sin(time * 0.4) > 0.85 ? Math.sin(time * 8) * 0.15 : 0;
+                flipperR.rotation.z = -0.1 - Math.sin(time * 1.5) * 0.02;
+                flipperR.rotation.x = batTwitch; // Occasional bat tap
             }
         } else {
         meshInner.rotation.z = Math.sin(time * 1.5) * 0.02;

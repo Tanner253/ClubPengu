@@ -28,6 +28,7 @@ import DoginalGenerators, { DOGINAL_PALETTE, DOG_PALETTES, generateDogPalette } 
 import FrogGenerators, { FROG_PALETTE, FROG_PALETTES, generateFrogPalette } from './FrogCharacter';
 import ShrimpGenerators, { SHRIMP_PALETTE, SHRIMP_PALETTES, generateShrimpPalette } from './ShrimpCharacter';
 import DuckGenerators, { DUCK_PALETTE, DUCK_PALETTES } from './DuckCharacter';
+import TungTungGenerators, { TUNG_PALETTE } from './TungTungCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -186,6 +187,23 @@ characterRegistry.registerCharacter('duck', {
     }
 });
 
+characterRegistry.registerCharacter('tungTung', {
+    name: 'Tung Tung Tung Sahur',
+    description: 'The legendary log creature with a baseball bat - Tung Tung Tung Sahur!',
+    generators: TungTungGenerators,
+    palette: TUNG_PALETTE,
+    isSecret: true,
+    previewScale: 0.75,
+    customizationOptions: {
+        disableSkinColor: true,   // Fixed wood/tan coloring
+        disableHats: true,        // No hats - head is part of the log
+        disableEyes: false,       // Allow eyes customization
+        disableMouth: false,      // Allow mouth customization
+        disableBodyItems: true,   // Has bat already, no body items
+        disableMounts: false,     // Allow mounts
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -213,6 +231,8 @@ export {
     generateShrimpPalette,
     DuckGenerators,
     DUCK_PALETTE,
-    DUCK_PALETTES
+    DUCK_PALETTES,
+    TungTungGenerators,
+    TUNG_PALETTE
 };
 export default characterRegistry;

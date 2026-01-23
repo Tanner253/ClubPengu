@@ -30,7 +30,9 @@ import {
     SHRIMP_PALETTES,
     generateShrimpPalette,
     DuckGenerators,
-    DUCK_PALETTE
+    DUCK_PALETTE,
+    TungTungGenerators,
+    TUNG_PALETTE
 } from '../characters';
 
 /**
@@ -1122,6 +1124,72 @@ export function createPenguinBuilder(THREE) {
         return group;
     };
     
+    /**
+     * Build Tung Tung Tung Sahur (tall cylindrical log creature with bat)
+     */
+    const buildTungTungMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = TungTungGenerators.pivots();
+        
+        // Head - upper half of cylinder (y=10-20)
+        const headVoxels = TungTungGenerators.head();
+        const head = buildPartMerged(headVoxels, TUNG_PALETTE, pivots.head);
+        head.name = 'head';
+        
+        // Body - lower half of cylinder (y=0-10)
+        const bodyVoxels = TungTungGenerators.body();
+        const body = buildPartMerged(bodyVoxels, TUNG_PALETTE, pivots.body);
+        body.name = 'body';
+        
+        // Arms (right arm has the baseball bat built in)
+        const armLVoxels = TungTungGenerators.armLeft();
+        const armL = buildPartMerged(armLVoxels, TUNG_PALETTE, pivots.armLeft);
+        armL.name = 'flipper_l';
+        
+        const armRVoxels = TungTungGenerators.armRight();
+        const armR = buildPartMerged(armRVoxels, TUNG_PALETTE, pivots.armRight);
+        armR.name = 'flipper_r';
+        
+        // Legs
+        const legLVoxels = TungTungGenerators.legLeft();
+        const legL = buildPartMerged(legLVoxels, TUNG_PALETTE, pivots.legLeft);
+        legL.name = 'foot_l';
+        
+        const legRVoxels = TungTungGenerators.legRight();
+        const legR = buildPartMerged(legRVoxels, TUNG_PALETTE, pivots.legRight);
+        legR.name = 'foot_r';
+        
+        group.add(head, body, armL, armR, legL, legR);
+        
+        // Add eyes - offset for tall cylinder (face is on head, upper half)
+        // Head is y=15-30, face around y=27-29, standard eyes at y=6-8, offset +21
+        if (data.eyes && data.eyes !== 'none' && ASSETS.EYES[data.eyes]) {
+            const eyeVoxels = ASSETS.EYES[data.eyes];
+            const offsetEyeVoxels = eyeVoxels.map(v => ({ ...v, y: v.y + 8, z: v.z + 1 }));
+            const eyesMesh = buildPartMerged(offsetEyeVoxels, PALETTE);
+            eyesMesh.name = 'eyes';
+            group.add(eyesMesh);
+        }
+        
+        // Add mouth - offset for tall cylinder
+        if (data.mouth && data.mouth !== 'none' && ASSETS.MOUTH[data.mouth]) {
+            const mouthVoxels = ASSETS.MOUTH[data.mouth];
+            const offsetMouthVoxels = mouthVoxels.map(v => ({ ...v, y: v.y + 8, z: v.z + 1 }));
+            const mouthMesh = buildPartMerged(offsetMouthVoxels, PALETTE);
+            mouthMesh.name = 'mouth';
+            group.add(mouthMesh);
+        }
+        
+        // Slightly smaller scale due to tall body
+        group.scale.set(0.16, 0.16, 0.16);
+        group.position.y = 0.8;
+        
+        // Mark as Tung Tung for animations
+        group.userData.isTungTung = true;
+        
+        return group;
+    };
+    
     // Whale character configs
     const WHALE_CONFIGS = {
         whiteWhale: { generators: WhiteWhaleGenerators, palette: WHITE_WHALE_PALETTE },
@@ -1421,6 +1489,8 @@ export function createPenguinBuilder(THREE) {
             group = buildShrimpMesh(data);
         } else if (data.characterType === 'duck') {
             group = buildDuckMesh(data);
+        } else if (data.characterType === 'tungTung') {
+            group = buildTungTungMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {

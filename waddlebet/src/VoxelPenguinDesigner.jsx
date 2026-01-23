@@ -28,7 +28,9 @@ import {
     SHRIMP_PALETTE,
     generateShrimpPalette,
     DuckGenerators,
-    DUCK_PALETTE
+    DUCK_PALETTE,
+    TungTungGenerators,
+    TUNG_PALETTE
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 
@@ -194,6 +196,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         frog: '🐸',
         shrimp: '🦐',
         duck: '🦆',
+        tungTung: '🪵',
         whiteWhale: '🐋',
         blackWhale: '🖤',
         silverWhale: '🩶',
@@ -564,7 +567,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharactersList = useMemo(() => {
         // TEMPORARY: Unlock all characters for everyone (matches cosmetics unlock)
         if (UNLOCK_ALL_COSMETICS) {
-            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
+            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
         }
         
         const chars = ['penguin']; // Penguin always unlocked
@@ -1241,6 +1244,34 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             const duckBodyItemVoxels = duckBodyItemData?.voxels || duckBodyItemData || [];
             if (duckBodyItemVoxels.length > 0) {
                 addPart(duckBodyItemVoxels, 'bodyItem');
+            }
+        } else if (characterType === 'tungTung') {
+            // Build Tung Tung Tung Sahur - tall cylindrical log creature with bat
+            addPart(TungTungGenerators.head(), 'head', TUNG_PALETTE);  // Head is the main cylinder
+            // Body is empty for this character (integrated into head)
+            const tungBodyVoxels = TungTungGenerators.body();
+            if (tungBodyVoxels.length > 0) {
+                addPart(tungBodyVoxels, 'body', TUNG_PALETTE);
+            }
+            addPart(TungTungGenerators.armLeft(), 'flipper_l', TUNG_PALETTE);
+            addPart(TungTungGenerators.armRight(), 'flipper_r', TUNG_PALETTE);  // Has bat built in!
+            addPart(TungTungGenerators.legLeft(), 'foot_l', TUNG_PALETTE);
+            addPart(TungTungGenerators.legRight(), 'foot_r', TUNG_PALETTE);
+            
+            // Add eyes - raised and forward for the tall cylinder
+            // Head is y=15-30 (with Y_OFFSET=6 → y=21-36), face should be around y=27-29
+            // Standard penguin eyes are around y=6-8, so offset by +21 to get to y=27-29
+            const tungEyeVoxels = ASSETS.EYES[eyes] || [];
+            if (tungEyeVoxels.length > 0) {
+                const offsetEyeVoxels = tungEyeVoxels.map(v => ({ ...v, y: v.y + 21, z: v.z + 1 }));
+                addPart(offsetEyeVoxels, 'eyes');
+            }
+            
+            // Add mouth - raised and forward for the tall cylinder
+            const tungMouthVoxels = ASSETS.MOUTH[mouth] || [];
+            if (tungMouthVoxels.length > 0) {
+                const offsetMouthVoxels = tungMouthVoxels.map(v => ({ ...v, y: v.y + 21, z: v.z + 1 }));
+                addPart(offsetMouthVoxels, 'mouth');
             }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body
@@ -2302,6 +2333,65 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                             </span>
                                             <button 
                                                 className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, 1, opt.defaultVal)}
+                                            >
+                                                <IconChevronRight size={20} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : characterType === 'tungTung' ? (
+                        /* Tung Tung Tung Sahur - eyes, mouth, and mounts */
+                        <div className="space-y-3">
+                            <div className="bg-gradient-to-br from-amber-900/50 to-orange-900/50 rounded-xl p-4 border border-amber-500/30">
+                                <div className="text-center">
+                                    <span className="text-3xl">🪵</span>
+                                    <h3 className="text-white font-bold mt-2">Tung Tung Tung Sahur</h3>
+                                    <p className="text-white/60 text-xs mt-1">
+                                        The legendary log creature with a baseball bat!
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="bg-black/30 rounded-lg p-3">
+                                <p className="text-amber-400 text-xs text-center italic">
+                                    🏏 Comes with a baseball bat permanently equipped
+                                </p>
+                            </div>
+                            
+                            {/* Eyes, Mouth, and Mounts for Tung Tung */}
+                            {[
+                                { label: 'EYES', key: 'eyes', val: eyes, set: setEyes, list: options.eyes, defaultVal: 'normal' },
+                                { label: 'MOUTH', key: 'mouth', val: mouth, set: setMouth, list: options.mouth, defaultVal: 'beak' },
+                                { label: 'MOUNTS', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                            ].map((opt, i) => {
+                                const categoryForCheck = opt.key === 'mounts' ? 'mount' : opt.key;
+                                const isCurrentLocked = opt.isMount 
+                                    ? (opt.val !== 'none' && !isMountUnlocked(opt.val))
+                                    : (opt.val !== 'none' && opt.val !== opt.defaultVal && !isCosmeticUnlocked(opt.val, categoryForCheck));
+                                
+                                return (
+                                    <div key={i} className="flex flex-col gap-1">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                            {opt.label}
+                                            {opt.isMount && <span className="text-orange-400 ml-1">(PROMO)</span>}
+                                        </span>
+                                        <div className={`flex items-center justify-between rounded-lg p-1 ${
+                                            isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
+                                        }`}>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-amber-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, -1, opt.defaultVal)}
+                                            >
+                                                <IconChevronLeft size={20} />
+                                            </button>
+                                            <span className={`text-sm font-bold capitalize ${isCurrentLocked ? 'text-red-400' : 'text-white'}`}>
+                                                {isCurrentLocked && '🔒 '}
+                                                {opt.val.replace(/([A-Z])/g, ' $1').trim()}
+                                            </span>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-amber-400"
                                                 onClick={() => cycle(opt.val, opt.list, opt.set, 1, opt.defaultVal)}
                                             >
                                                 <IconChevronRight size={20} />

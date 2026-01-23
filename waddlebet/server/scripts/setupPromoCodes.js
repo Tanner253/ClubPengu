@@ -217,6 +217,18 @@ const PROMO_CODES = [
             coins: 0
         }
     },
+    {
+        code: 'TUNG',
+        name: '🪵 Tung Tung Tung Sahur',
+        description: 'Unlocks the legendary log creature with a baseball bat - Tung Tung Tung Sahur!',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['tungTung'],
+            skinColor: null,
+            coins: 0
+        }
+    },
     
     // ========== INTERNAL TEAM CODES ==========
     {

@@ -328,6 +328,8 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                 { id: 'frog', name: 'PEPE Frog', emoji: '🐸' },
                 { id: 'shrimp', name: 'Shrimp', emoji: '🦐' },
                 { id: 'marcus', name: 'Marcus', emoji: '🦁' },
+                { id: 'duck', name: 'Duck', emoji: '🦆' },
+                { id: 'tungTung', name: 'Tung Tung', emoji: '🪵' },
                 { id: 'whiteWhale', name: 'White Whale', emoji: '🐋' },
                 { id: 'blackWhale', name: 'Black Whale', emoji: '🐋' },
                 { id: 'silverWhale', name: 'Silver Whale', emoji: '🐋' },
@@ -349,6 +351,8 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             else if (normalizedId === 'frog') chars.push({ id: 'frog', name: 'PEPE Frog', emoji: '🐸' });
             else if (normalizedId === 'shrimp') chars.push({ id: 'shrimp', name: 'Shrimp', emoji: '🦐' });
             else if (normalizedId === 'marcus') chars.push({ id: 'marcus', name: 'Marcus', emoji: '🦁' });
+            else if (normalizedId === 'duck') chars.push({ id: 'duck', name: 'Duck', emoji: '🦆' });
+            else if (normalizedId === 'tungTung') chars.push({ id: 'tungTung', name: 'Tung Tung', emoji: '🪵' });
             else if (normalizedId === 'whiteWhale') chars.push({ id: 'whiteWhale', name: 'White Whale', emoji: '🐋' });
             else if (normalizedId === 'blackWhale') chars.push({ id: 'blackWhale', name: 'Black Whale', emoji: '🐋' });
             else if (normalizedId === 'silverWhale') chars.push({ id: 'silverWhale', name: 'Silver Whale', emoji: '🐋' });
