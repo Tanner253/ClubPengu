@@ -29,6 +29,7 @@ import FrogGenerators, { FROG_PALETTE, FROG_PALETTES, generateFrogPalette } from
 import ShrimpGenerators, { SHRIMP_PALETTE, SHRIMP_PALETTES, generateShrimpPalette } from './ShrimpCharacter';
 import DuckGenerators, { DUCK_PALETTE, DUCK_PALETTES } from './DuckCharacter';
 import TungTungGenerators, { TUNG_PALETTE } from './TungTungCharacter';
+import GakeGenerators, { GAKE_PALETTE } from './GakeCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -204,6 +205,23 @@ characterRegistry.registerCharacter('tungTung', {
     }
 });
 
+characterRegistry.registerCharacter('gake', {
+    name: 'Gake',
+    description: 'A lovable pink starfish with green shorts',
+    generators: GakeGenerators,
+    palette: GAKE_PALETTE,
+    isSecret: true,
+    previewScale: 0.85,
+    customizationOptions: {
+        disableSkinColor: true,   // Fixed pink coloring
+        disableHats: false,       // Allow hats
+        disableEyes: false,       // Allow eyes customization
+        disableMouth: false,      // Allow mouth customization
+        disableBodyItems: false,  // Allow body items
+        disableMounts: false,     // Allow mounts
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -233,6 +251,8 @@ export {
     DUCK_PALETTE,
     DUCK_PALETTES,
     TungTungGenerators,
-    TUNG_PALETTE
+    TUNG_PALETTE,
+    GakeGenerators,
+    GAKE_PALETTE
 };
 export default characterRegistry;

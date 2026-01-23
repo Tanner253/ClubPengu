@@ -1316,6 +1316,7 @@ async function handleMessage(playerId, message) {
     const player = players.get(playerId);
     if (!player) return;
     
+    
     // Handle igloo messages first (returns true if handled)
     if (message.type?.startsWith('igloo_')) {
         // Helper to get all players in a specific room with their wallet addresses
@@ -1483,7 +1484,11 @@ async function handleMessage(playerId, message) {
                 player.walletAddress = walletAddress;
                 player.authToken = authResult.token;
                 player.name = authResult.user.username;
-                player.appearance = authResult.user.customization;
+                // Include characterType from top-level user field (not in customization subdoc)
+                player.appearance = {
+                    ...authResult.user.customization,
+                    characterType: authResult.user.characterType || 'penguin'
+                };
                 
                 // Associate wallet with inbox
                 inboxService.associateWallet(walletAddress, playerId);
@@ -1745,7 +1750,13 @@ async function handleMessage(playerId, message) {
                 player.walletAddress = walletAddress;
                 player.authToken = token;
                 player.name = user.username;
-                player.appearance = user.customization;
+                // Include characterType from top-level user field (not in customization subdoc)
+                const userObj = user.toObject();
+                player.appearance = {
+                    ...userObj.customization,
+                    characterType: userObj.characterType || 'penguin'
+                };
+                
                 
                 // Associate wallet with inbox
                 inboxService.associateWallet(walletAddress, playerId);
@@ -1785,8 +1796,13 @@ async function handleMessage(playerId, message) {
         
         // ==================== JOIN/MOVEMENT ====================
         case 'join': {
+            try {
             // Verify Turnstile token on first join (if secret key is configured)
-            if (!turnstileVerified.has(playerId) && process.env.TURNSTILE_SECRET_KEY) {
+            // Skip on localhost (dev mode)
+            const isLocalhost = player.ip === '::1' || player.ip === '127.0.0.1' || player.ip === '::ffff:127.0.0.1';
+            if (isLocalhost) {
+                turnstileVerified.set(playerId, true);
+            } else if (!turnstileVerified.has(playerId) && process.env.TURNSTILE_SECRET_KEY) {
                 const turnstileResult = await verifyTurnstileToken(message.turnstileToken, player.ip);
                 
                 if (!turnstileResult.success) {
@@ -1804,6 +1820,8 @@ async function handleMessage(playerId, message) {
             
             player.name = message.name || player.name;
             player.puffle = message.puffle || null;
+            
+            console.log(`[${ts()}] 📥 Join request: name=${player.name}, characterType=${message.appearance?.characterType || 'none'}, authenticated=${!!player.walletAddress}`);
             
             const roomId = message.room || 'town';
             joinRoom(playerId, roomId);
@@ -1842,6 +1860,12 @@ async function handleMessage(playerId, message) {
                     const clientAppearance = message.appearance || {};
                     
                     // Start with DB customization, overlay non-cosmetic client fields
+                    // IMPORTANT: Use client's characterType if provided, because DB default is 'penguin' (always truthy)
+                    // The client sends characterType when the user changes it in the designer before joining
+                    const resolvedCharacterType = clientAppearance.characterType !== undefined 
+                        ? clientAppearance.characterType 
+                        : (userPlain.characterType || 'penguin');
+                    
                     player.appearance = {
                         skin: dbCustomization.skin || 'blue',
                         hat: dbCustomization.hat || 'none',
@@ -1853,11 +1877,14 @@ async function handleMessage(playerId, message) {
                         dogSecondaryColor: dbCustomization.dogSecondaryColor,
                         frogPrimaryColor: dbCustomization.frogPrimaryColor,
                         frogSecondaryColor: dbCustomization.frogSecondaryColor,
-                        characterType: userPlain.characterType || clientAppearance.characterType || 'penguin',
+                        shrimpPrimaryColor: dbCustomization.shrimpPrimaryColor,
+                        characterType: resolvedCharacterType,
                         // Preserve client-side settings that aren't stored in DB
                         mountEnabled: clientAppearance.mountEnabled,
                         nametagStyle: clientAppearance.nametagStyle
                     };
+                    
+                    console.log(`[${ts()}] 🎨 Player appearance set: characterType=${resolvedCharacterType} (client=${clientAppearance.characterType}, db=${userPlain.characterType})`);
                     
                     // Check if this is first entry (username not locked yet)
                     const isFirstEntry = !user.lastUsernameChangeAt && !user.isEstablishedUser();
@@ -1866,6 +1893,8 @@ async function handleMessage(playerId, message) {
                     if (message.appearance) {
                         const currentCustom = dbCustomization;
                         const newCustom = message.appearance;
+                        
+                        
                         const hasChanges = 
                             currentCustom.skin !== newCustom.skin ||
                             currentCustom.hat !== newCustom.hat ||
@@ -1877,7 +1906,9 @@ async function handleMessage(playerId, message) {
                             currentCustom.dogSecondaryColor !== newCustom.dogSecondaryColor ||
                             currentCustom.frogPrimaryColor !== newCustom.frogPrimaryColor ||
                             currentCustom.frogSecondaryColor !== newCustom.frogSecondaryColor ||
-                            user.characterType !== newCustom.characterType;
+                            currentCustom.shrimpPrimaryColor !== newCustom.shrimpPrimaryColor ||
+                            (newCustom.characterType !== undefined && user.characterType !== newCustom.characterType);
+                        
                         
                         if (hasChanges) {
                             // TEMPORARY: Skip ownership validation when all cosmetics are unlocked
@@ -1927,17 +1958,34 @@ async function handleMessage(playerId, message) {
                                 }
                             }
                             
-                            // Apply validated customization
+                            // Apply validated customization (this updates user.characterType if provided)
                             user.updateCustomization(validatedCustom);
                             needsSave = true;
                             
                             // Update player appearance with validated values, preserving non-DB fields
+                            // After updateCustomization, user.characterType should reflect the new value
+                            const finalCharacterType = validatedCustom.characterType !== undefined 
+                                ? validatedCustom.characterType 
+                                : user.characterType;
+                            
                             player.appearance = {
-                                ...validatedCustom,
-                                characterType: validatedCustom.characterType || user.characterType || 'penguin',
+                                skin: validatedCustom.skin || dbCustomization.skin || 'blue',
+                                hat: validatedCustom.hat || dbCustomization.hat || 'none',
+                                eyes: validatedCustom.eyes || dbCustomization.eyes || 'normal',
+                                mouth: validatedCustom.mouth || dbCustomization.mouth || 'beak',
+                                bodyItem: validatedCustom.bodyItem || dbCustomization.bodyItem || 'none',
+                                mount: validatedCustom.mount || dbCustomization.mount || 'none',
+                                dogPrimaryColor: validatedCustom.dogPrimaryColor || dbCustomization.dogPrimaryColor,
+                                dogSecondaryColor: validatedCustom.dogSecondaryColor || dbCustomization.dogSecondaryColor,
+                                frogPrimaryColor: validatedCustom.frogPrimaryColor || dbCustomization.frogPrimaryColor,
+                                frogSecondaryColor: validatedCustom.frogSecondaryColor || dbCustomization.frogSecondaryColor,
+                                shrimpPrimaryColor: validatedCustom.shrimpPrimaryColor || dbCustomization.shrimpPrimaryColor,
+                                characterType: finalCharacterType,
                                 mountEnabled: clientAppearance.mountEnabled,
                                 nametagStyle: clientAppearance.nametagStyle
                             };
+                            
+                            console.log(`[${ts()}] 🎨 Appearance updated: characterType=${finalCharacterType}`);
                             
                             // Notify player if items were locked
                             if (hadLockedItem) {
@@ -1997,7 +2045,25 @@ async function handleMessage(playerId, message) {
                 }
             } else {
                 // Guest user - use client appearance directly
-                player.appearance = message.appearance || {};
+                // Ensure all appearance fields including characterType are preserved
+                const guestAppearance = message.appearance || {};
+                player.appearance = {
+                    skin: guestAppearance.skin || 'blue',
+                    hat: guestAppearance.hat || 'none',
+                    eyes: guestAppearance.eyes || 'normal',
+                    mouth: guestAppearance.mouth || 'beak',
+                    bodyItem: guestAppearance.bodyItem || 'none',
+                    mount: guestAppearance.mount || 'none',
+                    characterType: guestAppearance.characterType || 'penguin',
+                    dogPrimaryColor: guestAppearance.dogPrimaryColor,
+                    dogSecondaryColor: guestAppearance.dogSecondaryColor,
+                    frogPrimaryColor: guestAppearance.frogPrimaryColor,
+                    frogSecondaryColor: guestAppearance.frogSecondaryColor,
+                    shrimpPrimaryColor: guestAppearance.shrimpPrimaryColor,
+                    mountEnabled: guestAppearance.mountEnabled,
+                    nametagStyle: guestAppearance.nametagStyle
+                };
+                console.log(`[${ts()}] 👤 Guest ${player.name} appearance set: characterType=${player.appearance.characterType}`);
             }
             
             const existingPlayers = getPlayersInRoom(roomId, playerId);
@@ -2021,6 +2087,9 @@ async function handleMessage(playerId, message) {
                 isAuthenticated: player.isAuthenticated,
                 userData // Include updated user data (with lastUsernameChangeAt)
             });
+            
+            // Log what we're about to broadcast for debugging
+            console.log(`[${ts()}] 📤 Broadcasting player_joined: name=${player.name}, characterType=${player.appearance?.characterType || 'undefined'}`);
             
             broadcastToRoom(roomId, {
                 type: 'player_joined',
@@ -2059,6 +2128,9 @@ async function handleMessage(playerId, message) {
             }
             
             console.log(`[${ts()}] ${player.name} joined ${roomId}${player.isAuthenticated ? ' (authenticated)' : ' (guest)'}`);
+            } catch (joinError) {
+                console.error(`[${ts()}] ❌ Join handler error:`, joinError.message);
+            }
             break;
         }
         
@@ -2547,7 +2619,14 @@ async function handleMessage(playerId, message) {
         }
         
         case 'update_appearance': {
-            player.appearance = message.appearance || player.appearance;
+            // Merge new appearance with existing, ensuring characterType is preserved
+            const newAppearance = message.appearance || {};
+            player.appearance = {
+                ...player.appearance,
+                ...newAppearance
+            };
+            
+            console.log(`[${ts()}] 🎨 Appearance update for ${player.name}: characterType=${player.appearance.characterType}`);
             
             // If authenticated, validate and save to DB
             if (player.walletAddress) {
@@ -2562,9 +2641,15 @@ async function handleMessage(playerId, message) {
                         code: 'COSMETIC_NOT_OWNED',
                         message: `You don't own: ${result.item}`
                     });
-                    // Reset appearance from DB
+                    // Reset appearance from DB, including characterType
                     const user = await userService.getUser(player.walletAddress);
-                    if (user) player.appearance = user.customization;
+                    if (user) {
+                        const userObj = user.toObject();
+                        player.appearance = {
+                            ...userObj.customization,
+                            characterType: userObj.characterType || 'penguin'
+                        };
+                    }
                     return;
                 }
             }
@@ -2576,7 +2661,7 @@ async function handleMessage(playerId, message) {
                     playerId,
                     appearance: player.appearance
                 }, playerId);
-                console.log(`🎨 Broadcasted appearance update for ${player.name} (${playerId}) to room ${player.room}`);
+                console.log(`[${ts()}] 🎨 Broadcasted appearance (characterType=${player.appearance.characterType}) for ${player.name} to room ${player.room}`);
             } else {
                 console.warn(`⚠️ Cannot broadcast appearance update - player ${player.name} (${playerId}) not in a room`);
             }

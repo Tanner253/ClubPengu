@@ -32,7 +32,9 @@ import {
     DuckGenerators,
     DUCK_PALETTE,
     TungTungGenerators,
-    TUNG_PALETTE
+    TUNG_PALETTE,
+    GakeGenerators,
+    GAKE_PALETTE
 } from '../characters';
 
 /**
@@ -1190,6 +1192,85 @@ export function createPenguinBuilder(THREE) {
         return group;
     };
     
+    /**
+     * Build Gake (Patrick Star style) mesh
+     * Uses same pivot points as penguin for proper animations
+     */
+    const buildGakeMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = GakeGenerators.pivots();
+        
+        // Head - same pivot as penguin
+        const headVoxels = GakeGenerators.head();
+        const head = buildPartMerged(headVoxels, GAKE_PALETTE);
+        head.name = 'head';
+        
+        // Body - same pivot as penguin
+        const bodyVoxels = GakeGenerators.body();
+        const body = buildPartMerged(bodyVoxels, GAKE_PALETTE);
+        body.name = 'body';
+        
+        // Flippers - same pivot as penguin
+        const armLVoxels = GakeGenerators.armLeft();
+        const armL = buildPartMerged(armLVoxels, GAKE_PALETTE, pivots.armLeft);
+        armL.name = 'flipper_l';
+        
+        const armRVoxels = GakeGenerators.armRight();
+        const armR = buildPartMerged(armRVoxels, GAKE_PALETTE, pivots.armRight);
+        armR.name = 'flipper_r';
+        
+        // Feet - same pivot as penguin
+        const footLVoxels = GakeGenerators.footLeft();
+        const footL = buildPartMerged(footLVoxels, GAKE_PALETTE, pivots.footLeft);
+        footL.name = 'foot_l';
+        
+        const footRVoxels = GakeGenerators.footRight();
+        const footR = buildPartMerged(footRVoxels, GAKE_PALETTE, pivots.footRight);
+        footR.name = 'foot_r';
+        
+        group.add(head, body, armL, armR, footL, footR);
+        
+        // Gake's face is raised by +2 compared to penguin
+        const GAKE_FACE_OFFSET = 2;
+        
+        // Add eyes - raised to match Gake's head position
+        if (data.eyes && data.eyes !== 'none' && ASSETS.EYES[data.eyes]) {
+            const eyeVoxels = ASSETS.EYES[data.eyes];
+            const offsetEyeVoxels = eyeVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+            const eyesMesh = buildPartMerged(offsetEyeVoxels, PALETTE);
+            eyesMesh.name = 'eyes';
+            group.add(eyesMesh);
+        }
+        
+        // Add mouth - raised to match Gake's head position
+        if (data.mouth && data.mouth !== 'none' && ASSETS.MOUTH[data.mouth]) {
+            const mouthVoxels = ASSETS.MOUTH[data.mouth];
+            const offsetMouthVoxels = mouthVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+            const mouthMesh = buildPartMerged(offsetMouthVoxels, PALETTE);
+            mouthMesh.name = 'mouth';
+            group.add(mouthMesh);
+        }
+        
+        // Add hat support - raised to match Gake's head position
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+            const hatMesh = buildPartMerged(offsetHatVoxels, PALETTE);
+            hatMesh.name = 'hat';
+            group.add(hatMesh);
+        }
+        
+        // Note: Gake does NOT support body items - only hat, eyes, and mouth/beak
+        
+        group.scale.set(0.16, 0.16, 0.16);
+        group.position.y = 0.8;
+        
+        // Mark as Gake for animations
+        group.userData.isGake = true;
+        
+        return group;
+    };
+    
     // Whale character configs
     const WHALE_CONFIGS = {
         whiteWhale: { generators: WhiteWhaleGenerators, palette: WHITE_WHALE_PALETTE },
@@ -1478,6 +1559,11 @@ export function createPenguinBuilder(THREE) {
         
         let group;
         
+        // Debug log for character type
+        if (data.characterType && data.characterType !== 'penguin') {
+            console.log(`🎭 Building ${data.characterType} character mesh`);
+        }
+        
         // Check for special character types
         if (data.characterType === 'marcus') {
             group = buildMarcusMesh(data);
@@ -1491,6 +1577,8 @@ export function createPenguinBuilder(THREE) {
             group = buildDuckMesh(data);
         } else if (data.characterType === 'tungTung') {
             group = buildTungTungMesh(data);
+        } else if (data.characterType === 'gake') {
+            group = buildGakeMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {

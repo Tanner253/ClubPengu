@@ -30,7 +30,9 @@ import {
     DuckGenerators,
     DUCK_PALETTE,
     TungTungGenerators,
-    TUNG_PALETTE
+    TUNG_PALETTE,
+    GakeGenerators,
+    GAKE_PALETTE
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 
@@ -197,6 +199,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         shrimp: '🦐',
         duck: '🦆',
         tungTung: '🪵',
+        gake: '⭐',
         whiteWhale: '🐋',
         blackWhale: '🖤',
         silverWhale: '🩶',
@@ -539,8 +542,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     
     // Handle character type change
     const handleCharacterTypeChange = (typeId) => {
+        console.log(`🎭 Character type change requested: ${typeId}`);
         // Check if character is unlocked (penguin always available, others from server)
         if (typeId === 'penguin' || unlockedCharactersList.includes(typeId)) {
+            console.log(`🎭 Setting character type to: ${typeId}`);
             setCharacterType(typeId);
             
             // Doginal has built-in wizard hat and doesn't use penguin cosmetics
@@ -556,6 +561,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 setEyes('none');     // Duck has its own eyes
                 setMouth('none');    // Duck has a bill
             }
+            
+            // Gake only supports hat, eyes, and mouth - no body items
+            if (typeId === 'gake') {
+                setBodyItem('none'); // Gake doesn't wear clothes
+            }
         }
     };
     
@@ -567,7 +577,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharactersList = useMemo(() => {
         // TEMPORARY: Unlock all characters for everyone (matches cosmetics unlock)
         if (UNLOCK_ALL_COSMETICS) {
-            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
+            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
         }
         
         const chars = ['penguin']; // Penguin always unlocked
@@ -583,7 +593,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharacters = unlockedCharactersList.filter(id => characterRegistry.getCharacter(id));
     
     useEffect(() => {
-        if(updateData) updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor});
+        if(updateData) {
+            console.log(`📦 Syncing appearance to parent: characterType=${characterType}`);
+            updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor});
+        }
     }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, updateData]);
 
     const sceneRef = useRef(null);
@@ -1272,6 +1285,45 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             if (tungMouthVoxels.length > 0) {
                 const offsetMouthVoxels = tungMouthVoxels.map(v => ({ ...v, y: v.y + 21, z: v.z + 1 }));
                 addPart(offsetMouthVoxels, 'mouth');
+            }
+        } else if (characterType === 'gake') {
+            // Build Gake - Patrick Star style pink starfish
+            addPart(GakeGenerators.head(), 'head', GAKE_PALETTE);
+            addPart(GakeGenerators.body(), 'body', GAKE_PALETTE);
+            addPart(GakeGenerators.armLeft(), 'flipper_l', GAKE_PALETTE);
+            addPart(GakeGenerators.armRight(), 'flipper_r', GAKE_PALETTE);
+            addPart(GakeGenerators.footLeft(), 'foot_l', GAKE_PALETTE);
+            addPart(GakeGenerators.footRight(), 'foot_r', GAKE_PALETTE);
+            
+            // Gake's face is raised by +3 compared to penguin
+            const GAKE_FACE_OFFSET = 2;
+            
+            // Add eyes - raised to match Gake's head position
+            const gakeEyeVoxels = ASSETS.EYES[eyes] || [];
+            if (gakeEyeVoxels.length > 0) {
+                const offsetEyes = gakeEyeVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+                addPart(offsetEyes, 'eyes');
+            }
+            
+            // Add mouth - raised to match Gake's head position
+            const gakeMouthVoxels = ASSETS.MOUTH[mouth] || [];
+            if (gakeMouthVoxels.length > 0) {
+                const offsetMouth = gakeMouthVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+                addPart(offsetMouth, 'mouth');
+            }
+            
+            // Add hat - raised to match Gake's head position
+            const gakeHatVoxels = ASSETS.HATS[hat] || [];
+            if (gakeHatVoxels.length > 0) {
+                const offsetHat = gakeHatVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+                addPart(offsetHat, 'hat');
+            }
+            
+            // Add body item
+            const gakeBodyItemData = ASSETS.BODY[bodyItem];
+            const gakeBodyItemVoxels = gakeBodyItemData?.voxels || gakeBodyItemData || [];
+            if (gakeBodyItemVoxels.length > 0) {
+                addPart(gakeBodyItemVoxels, 'bodyItem');
             }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body

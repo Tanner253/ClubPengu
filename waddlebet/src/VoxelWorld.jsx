@@ -47,7 +47,7 @@ import {
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './config';
-import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem } from './systems';
+import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem } from './systems';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
 import CasinoBlackjack from './components/CasinoBlackjack';
@@ -95,6 +95,7 @@ const VoxelWorld = ({
     const matchBannersRef = useRef(new Map()); // matchId -> { sprite, canvas, ctx }
     const pveBannersRef = useRef(new Map()); // playerId -> { sprite, canvas, ctx } for PvE activities
     const wizardTrailSystemRef = useRef(null); // World-space wizard hat particle trail
+    const gakeCandleTrailSystemRef = useRef(null); // Gake character green candle trail
     const mountTrailSystemRef = useRef(null); // Mount trail system (icy trails, etc.)
     const mountEnabledRef = useRef(true); // Track if mount is equipped/enabled
     const mpUpdateAppearanceRef = useRef(null); // Ref for appearance update function
@@ -148,6 +149,24 @@ const VoxelWorld = ({
         
         window.addEventListener('mountToggled', handleMountToggle);
         return () => window.removeEventListener('mountToggled', handleMountToggle);
+    }, []);
+    
+    // Green candles toggle - listen for settings changes
+    useEffect(() => {
+        const handleGreenCandlesToggle = (e) => {
+            const enabled = e.detail?.enabled ?? false;
+            
+            // SYNC TO SERVER: Notify other players about green candles change
+            if (mpUpdateAppearanceRef.current && penguinDataRef.current) {
+                mpUpdateAppearanceRef.current({
+                    ...penguinDataRef.current,
+                    greenCandlesEnabled: enabled
+                });
+            }
+        };
+        
+        window.addEventListener('greenCandlesToggled', handleGreenCandlesToggle);
+        return () => window.removeEventListener('greenCandlesToggled', handleGreenCandlesToggle);
     }, []);
     
     
@@ -545,6 +564,9 @@ const VoxelWorld = ({
         
         // Initialize wizard trail particle system
         wizardTrailSystemRef.current = new WizardTrailSystem(THREE, scene);
+        
+        // Initialize Gake candle trail system (green trading candles)
+        gakeCandleTrailSystemRef.current = new GakeCandleTrailSystem(THREE, scene);
         
         // Initialize mount trail system (icy trails, etc.)
         mountTrailSystemRef.current = new MountTrailSystem(THREE, scene);
@@ -3347,6 +3369,15 @@ const VoxelWorld = ({
                     wizardTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
                 }
                 
+                // --- GREEN CANDLE TRAIL ---
+                // Triggers for Gake character OR when greenCandlesEnabled setting is on
+                const isGake = penguinData?.characterType === 'gake';
+                const greenCandlesEnabled = gameSettingsRef.current?.greenCandlesEnabled === true;
+                if ((isGake || greenCandlesEnabled) && gakeCandleTrailSystemRef.current) {
+                    gakeCandleTrailSystemRef.current.getOrCreatePool('localPlayer');
+                    gakeCandleTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
+                }
+                
                 // --- SLOT MACHINE SYSTEM (spectator bubbles) ---
                 if (slotMachineSystemRef.current) {
                     // Pass player position for distance-based culling optimization
@@ -3539,7 +3570,7 @@ const VoxelWorld = ({
                 
                 // Rebuild mesh if appearance changed
                 if (playerData.needsMeshRebuild && buildPenguinMeshRef.current) {
-                    console.log(`🔄 Rebuilding mesh for ${playerData.name} due to appearance change`);
+                    console.log(`🔄 Rebuilding mesh for ${playerData.name} due to appearance change (characterType=${playerData.appearance?.characterType || 'penguin'})`);
                     
                     // Store current position and rotation
                     const currentPos = meshData.mesh.position.clone();
@@ -3828,6 +3859,15 @@ const VoxelWorld = ({
                     const poolKey = `player_${id}`;
                     wizardTrailSystemRef.current.getOrCreatePool(poolKey);
                     wizardTrailSystemRef.current.update(poolKey, meshData.mesh.position, isMoving, time, delta);
+                }
+                
+                // Green candle trail for other players (Gake character OR greenCandlesEnabled setting)
+                const otherIsGake = otherAppearance.characterType === 'gake';
+                const otherGreenCandlesEnabled = otherAppearance.greenCandlesEnabled === true;
+                if ((otherIsGake || otherGreenCandlesEnabled) && gakeCandleTrailSystemRef.current) {
+                    const poolKey = `player_${id}`;
+                    gakeCandleTrailSystemRef.current.getOrCreatePool(poolKey);
+                    gakeCandleTrailSystemRef.current.update(poolKey, meshData.mesh.position, isMoving, time, delta);
                 }
                 
                 // Dynamic name tag scaling based on camera distance
@@ -4176,6 +4216,11 @@ const VoxelWorld = ({
             if (wizardTrailSystemRef.current) {
                 wizardTrailSystemRef.current.dispose();
                 wizardTrailSystemRef.current = null;
+            }
+            // Cleanup Gake candle trail system
+            if (gakeCandleTrailSystemRef.current) {
+                gakeCandleTrailSystemRef.current.dispose();
+                gakeCandleTrailSystemRef.current = null;
             }
             // Cleanup Mount trail system
             if (mountTrailSystemRef.current) {
@@ -6401,29 +6446,34 @@ const VoxelWorld = ({
     // Join room when connected and scene is ready
     useEffect(() => {
         if (connected && sceneRef.current && playerId) {
+            console.log(`🔗 Join room effect triggered - penguinData.characterType=${penguinData?.characterType || 'undefined'}`);
             const puffleData = playerPuffle ? {
                 id: playerPuffle.id,
                 color: playerPuffle.color,
                 name: playerPuffle.name
             } : null;
             
-            // Include current mount enabled state and nametag style from settings
+            // Include current mount enabled state, nametag style, and green candles from settings
             // Guests always get 'default' nametag style - only authenticated users get special styles
             let mountEnabled = true;
             let nametagStyle = 'default';
+            let greenCandlesEnabled = false;
             try {
                 const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
                 mountEnabled = settings.mountEnabled !== false;
                 // Only authenticated users can use non-default nametag styles
                 nametagStyle = isAuthenticated ? (settings.nametagStyle || 'day1') : 'default';
+                greenCandlesEnabled = settings.greenCandlesEnabled === true;
             } catch { /* use default */ }
             
             const appearanceWithMount = {
                 ...penguinData,
                 mountEnabled,
-                nametagStyle  // Broadcast nametag style to all players
+                nametagStyle,  // Broadcast nametag style to all players
+                greenCandlesEnabled  // Broadcast green candles setting to all players
             };
             
+            console.log(`🚀 Joining room ${room} with appearance: characterType=${appearanceWithMount.characterType || 'undefined'}`);
             mpJoinRoom(room, appearanceWithMount, puffleData, turnstileToken);
             
             // Add player's own name tag (so they can see their username)
@@ -6667,7 +6717,7 @@ const VoxelWorld = ({
             const playerData = playersData.get(id);
             if (!playerData || !playerData.appearance) continue;
             
-            console.log(`🐧 Creating mesh for ${playerData.name}`, playerData.puffle ? `with ${playerData.puffle.color} puffle` : '(no puffle)');
+            console.log(`🐧 Creating mesh for ${playerData.name} (characterType=${playerData.appearance?.characterType || 'penguin'})`, playerData.puffle ? `with ${playerData.puffle.color} puffle` : '(no puffle)');
             
             const mesh = buildPenguinMeshRef.current(playerData.appearance);
             mesh.position.set(

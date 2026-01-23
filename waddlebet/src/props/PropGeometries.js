@@ -50,6 +50,9 @@ class PropGeometries {
                 case 'Icosahedron':
                     geometry = new this.THREE.IcosahedronGeometry(...args);
                     break;
+                case 'Octahedron':
+                    geometry = new this.THREE.OctahedronGeometry(...args);
+                    break;
                 case 'Circle':
                     geometry = new this.THREE.CircleGeometry(...args);
                     break;

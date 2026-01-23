@@ -302,6 +302,17 @@ class PromoCodeService {
             }
         }
 
+        // Unlock effects
+        if (promoCode.unlocks.effects) {
+            for (const effectId of promoCode.unlocks.effects) {
+                if (!user.unlockedEffects.includes(effectId)) {
+                    user.unlockedEffects.push(effectId);
+                    if (!unlocked.effects) unlocked.effects = [];
+                    unlocked.effects.push(effectId);
+                }
+            }
+        }
+
         // Unlock by rarity - query all cosmetics at specified rarities and create OwnedCosmetic records
         if (promoCode.unlocks.unlockByRarity && promoCode.unlocks.unlockByRarity.length > 0) {
             try {
