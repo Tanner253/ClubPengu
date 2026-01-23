@@ -193,6 +193,54 @@ const PROMO_CODES = [
             coins: 0
         }
     },
+    {
+        code: 'SHRIMPS',
+        name: '🦐 Shrimp Character',
+        description: 'Unlocks the adorable Shrimp character with tail flappers and antennae',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['shrimp'],
+            skinColor: null,
+            coins: 0
+        }
+    },
+    {
+        code: 'DUCK',
+        name: '🦆 Duck Character',
+        description: 'Unlocks the friendly Duck character with a bright orange bill',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['duck'],
+            skinColor: null,
+            coins: 0
+        }
+    },
+    {
+        code: 'TUNG',
+        name: '🪵 Tung Tung Tung Sahur',
+        description: 'Unlocks the legendary log creature with a baseball bat - Tung Tung Tung Sahur!',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['tungTung'],
+            skinColor: null,
+            coins: 0
+        }
+    },
+    {
+        code: 'GAKE',
+        name: '⭐ Gake',
+        description: 'Unlocks the lovable pink starfish with green shorts',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['gake'],
+            skinColor: null,
+            coins: 0
+        }
+    },
     
     // ========== INTERNAL TEAM CODES ==========
     {

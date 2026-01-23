@@ -55,26 +55,31 @@ class UserService {
             const user = await this.getUser(walletAddress);
             if (!user) return { success: false, error: 'USER_NOT_FOUND' };
 
-            const { skin, hat, eyes, mouth, bodyItem, mount } = filteredUpdates.customization;
-            
-            // Check each cosmetic with the authoritative ownsCosmetic method
-            if (skin && !await this.ownsCosmetic(walletAddress, skin, 'skin')) {
-                return { success: false, error: 'COSMETIC_NOT_OWNED', item: skin, category: 'skin' };
-            }
-            if (hat && !await this.ownsCosmetic(walletAddress, hat, 'hat')) {
-                return { success: false, error: 'COSMETIC_NOT_OWNED', item: hat, category: 'hat' };
-            }
-            if (eyes && !await this.ownsCosmetic(walletAddress, eyes, 'eyes')) {
-                return { success: false, error: 'COSMETIC_NOT_OWNED', item: eyes, category: 'eyes' };
-            }
-            if (mouth && !await this.ownsCosmetic(walletAddress, mouth, 'mouth')) {
-                return { success: false, error: 'COSMETIC_NOT_OWNED', item: mouth, category: 'mouth' };
-            }
-            if (bodyItem && !await this.ownsCosmetic(walletAddress, bodyItem, 'bodyItem')) {
-                return { success: false, error: 'COSMETIC_NOT_OWNED', item: bodyItem, category: 'bodyItem' };
-            }
-            if (mount && !await this.ownsCosmetic(walletAddress, mount, 'mount')) {
-                return { success: false, error: 'MOUNT_NOT_OWNED', item: mount, category: 'mount' };
+            // TEMPORARY: Skip ownership validation when all cosmetics are unlocked
+            // TODO: Remove this check when ready to enforce cosmetic ownership
+            const UNLOCK_ALL_COSMETICS = true;
+            if (!UNLOCK_ALL_COSMETICS) {
+                const { skin, hat, eyes, mouth, bodyItem, mount } = filteredUpdates.customization;
+                
+                // Check each cosmetic with the authoritative ownsCosmetic method
+                if (skin && !await this.ownsCosmetic(walletAddress, skin, 'skin')) {
+                    return { success: false, error: 'COSMETIC_NOT_OWNED', item: skin, category: 'skin' };
+                }
+                if (hat && !await this.ownsCosmetic(walletAddress, hat, 'hat')) {
+                    return { success: false, error: 'COSMETIC_NOT_OWNED', item: hat, category: 'hat' };
+                }
+                if (eyes && !await this.ownsCosmetic(walletAddress, eyes, 'eyes')) {
+                    return { success: false, error: 'COSMETIC_NOT_OWNED', item: eyes, category: 'eyes' };
+                }
+                if (mouth && !await this.ownsCosmetic(walletAddress, mouth, 'mouth')) {
+                    return { success: false, error: 'COSMETIC_NOT_OWNED', item: mouth, category: 'mouth' };
+                }
+                if (bodyItem && !await this.ownsCosmetic(walletAddress, bodyItem, 'bodyItem')) {
+                    return { success: false, error: 'COSMETIC_NOT_OWNED', item: bodyItem, category: 'bodyItem' };
+                }
+                if (mount && !await this.ownsCosmetic(walletAddress, mount, 'mount')) {
+                    return { success: false, error: 'MOUNT_NOT_OWNED', item: mount, category: 'mount' };
+                }
             }
         }
 
@@ -368,6 +373,13 @@ class UserService {
      * @returns {Promise<boolean>} Whether the user owns the cosmetic
      */
     async ownsCosmetic(walletAddress, cosmeticId, category = null) {
+        // TEMPORARY: Unlock all cosmetics for everyone
+        // TODO: Set to false when ready to enforce cosmetic ownership
+        const UNLOCK_ALL_COSMETICS = true;
+        if (UNLOCK_ALL_COSMETICS) {
+            return true;
+        }
+        
         // Always allow 'none' and other free defaults
         if (FREE_ITEMS.includes(cosmeticId)) {
             return true;
@@ -394,9 +406,19 @@ class UserService {
         }
         
         // Check if owned via gacha (OwnedCosmetic)
-        const owned = await OwnedCosmetic.userOwnsTemplate(walletAddress, cosmeticId);
+        // IMPORTANT: templateId is stored as `${category}_${assetKey}` in the database
+        // If we have a category, construct the proper templateId
+        if (category) {
+            const templateId = `${category}_${cosmeticId}`;
+            const owned = await OwnedCosmetic.userOwnsTemplate(walletAddress, templateId);
+            if (owned) return true;
+        }
         
-        return owned;
+        // Also check by assetKey directly (fallback for legacy or if category not provided)
+        // This queries by the raw cosmeticId in case some templates don't follow the prefix pattern
+        const ownedByAsset = await OwnedCosmetic.userOwnsTemplate(walletAddress, cosmeticId);
+        
+        return ownedByAsset;
     }
     
     /**

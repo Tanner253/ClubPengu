@@ -4,24 +4,34 @@
  * Players can walk inside and climb stairs to the bar area
  * Contains a portal to warp to the Casino Game Room
  * 
- * Features an EXTRAVAGANT exterior decoration system with:
- * - Vegas-style marquee with thousands of chasing bulb lights
- * - Giant animated slot machine displays
- * - Golden dice tower pillars
- * - Rotating playing cards animation
- * - Animated roulette wheel on roof
- * - Searchlights sweeping the sky
- * - Jackpot display with scrolling numbers
- * - Neon tubing shapes and LED strips
+ * VEGAS STYLE exterior with:
+ * - Cream/gold Art Deco facade
+ * - Neon trim and animated marquee bulbs
+ * - Grand entrance with columns
+ * - Animated elements built-in (no separate CasinoExterior)
  */
 
 import BaseBuilding from './BaseBuilding';
-import { createCasinoExterior } from '../props/CasinoExterior';
+import AnimatedRouletteWheel from '../props/casino/AnimatedRouletteWheel';
+import PBRSlotReels from '../props/casino/PBRSlotReels';
+import GoldenDiceTower from '../props/casino/GoldenDiceTower';
+import NeonTubing from '../props/casino/NeonTubing';
 
 class Casino extends BaseBuilding {
     constructor(THREE) {
         super(THREE);
-        this.exterior = null;
+        
+        // Animated elements
+        this.marqueBulbs = [];
+        this.neonTubes = [];
+        this.rouletteWheel = null;
+        this.floatingText = null;
+        this.slotMachineDisplay = null;
+        
+        // Exterior props
+        this.exteriorProps = [];
+        this.coinStacks = [];
+        this.spotlights = [];
         
         // Mobile/Apple GPU detection for performance optimizations
         this.isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
@@ -34,17 +44,20 @@ class Casino extends BaseBuilding {
         const group = this.group;
         group.name = 'casino_building';
 
-        // Colors
-        const darkPurple = 0x1a0a2e;
-        const goldAccent = 0xFFD700;
-        const neonPink = 0xFF1493;
-        const neonCyan = 0x00FFFF;
-        const carpetRed = 0x8B0000;
-        const wallColor = 0x1a1a2e;
-        const barWood = 0x3d2817;
+        // ==================== VEGAS COLOR PALETTE ====================
+        const creamWhite = 0xFFF8E7;      // Main facade
+        const goldAccent = 0xFFD700;       // Gold trim
+        const warmGold = 0xDAA520;         // Darker gold accents
+        const burgundy = 0x800020;         // Rich accent color
+        const neonPink = 0xFF1493;         // Neon trim
+        const neonCyan = 0x00FFFF;         // Neon accent
+        const neonYellow = 0xFFFF00;       // Marquee bulbs
+        const carpetRed = 0x8B0000;        // Interior carpet
+        const interiorWall = 0x2a1a2e;     // Dark interior walls
+        const barWood = 0x3d2817;          // Bar wood
 
         // ==================== GROUND FLOOR ====================
-        // Floor - flat red carpet texture (no elevation, like gravel path)
+        // Floor - flat red carpet texture
         const carpetMat = this.getMaterial(carpetRed, { 
             roughness: 0.9,
             polygonOffset: true,
@@ -58,143 +71,513 @@ class Casino extends BaseBuilding {
         carpet.receiveShadow = true;
         group.add(carpet);
 
-        // Back wall (full height, from ground)
-        const wallMat = this.getMaterial(wallColor, { roughness: 0.85 });
-        const backWallGeo = new THREE.BoxGeometry(w, h, 0.5);
-        const backWall = new THREE.Mesh(backWallGeo, wallMat);
-        backWall.position.set(0, h / 2, -d / 2 + 0.25);
+        // ==================== EXTERIOR FACADE (VEGAS STYLE) ====================
+        const facadeMat = this.getMaterial(creamWhite, { roughness: 0.6 });
+        const facadeAccentMat = this.getMaterial(warmGold, { roughness: 0.4, metalness: 0.3 });
+        const goldTrimMat = this.getMaterial(goldAccent, { metalness: 0.8, roughness: 0.2 });
+        const burgundyMat = this.getMaterial(burgundy, { roughness: 0.7 });
+        
+        // Back wall - cream facade (interior dark)
+        const backWallGeo = new THREE.BoxGeometry(w, h, 0.8);
+        const backWall = new THREE.Mesh(backWallGeo, facadeMat);
+        backWall.position.set(0, h / 2, -d / 2 + 0.4);
         backWall.castShadow = true;
         group.add(backWall);
+        
+        // Interior back wall overlay (dark)
+        const interiorBackMat = this.getMaterial(interiorWall, { roughness: 0.85 });
+        const interiorBackGeo = new THREE.BoxGeometry(w - 1, h - 0.5, 0.1);
+        const interiorBack = new THREE.Mesh(interiorBackGeo, interiorBackMat);
+        interiorBack.position.set(0, h / 2, -d / 2 + 0.9);
+        group.add(interiorBack);
 
-        // Left wall (full height, from ground)
-        const leftWallGeo = new THREE.BoxGeometry(0.5, h, d);
-        const leftWall = new THREE.Mesh(leftWallGeo, wallMat);
-        leftWall.position.set(-w / 2 + 0.25, h / 2, 0);
+        // Left wall - layered facade
+        const leftWallGeo = new THREE.BoxGeometry(0.8, h, d);
+        const leftWall = new THREE.Mesh(leftWallGeo, facadeMat);
+        leftWall.position.set(-w / 2 + 0.4, h / 2, 0);
         leftWall.castShadow = true;
         group.add(leftWall);
+        
+        // Interior left wall overlay
+        const interiorLeftGeo = new THREE.BoxGeometry(0.1, h - 0.5, d - 1);
+        const interiorLeft = new THREE.Mesh(interiorLeftGeo, interiorBackMat);
+        interiorLeft.position.set(-w / 2 + 0.9, h / 2, 0);
+        group.add(interiorLeft);
 
-        // Right wall (full height, from ground)
-        const rightWall = new THREE.Mesh(leftWallGeo, wallMat);
-        rightWall.position.set(w / 2 - 0.25, h / 2, 0);
+        // Right wall
+        const rightWall = new THREE.Mesh(leftWallGeo, facadeMat);
+        rightWall.position.set(w / 2 - 0.4, h / 2, 0);
         rightWall.castShadow = true;
         group.add(rightWall);
+        
+        // Interior right wall overlay
+        const interiorRight = new THREE.Mesh(interiorLeftGeo, interiorBackMat);
+        interiorRight.position.set(w / 2 - 0.9, h / 2, 0);
+        group.add(interiorRight);
 
-        // Front wall - OPEN in the middle (entrance)
+        // Front wall sections - OPEN entrance
         const entranceWidth = 12;
         const frontSectionWidth = (w - entranceWidth) / 2;
-        const frontWallLeftGeo = new THREE.BoxGeometry(frontSectionWidth, h, 0.5);
-        const frontWallLeft = new THREE.Mesh(frontWallLeftGeo, wallMat);
-        frontWallLeft.position.set(-w / 2 + frontSectionWidth / 2 + 0.25, h / 2, d / 2 - 0.25);
+        
+        // Front left facade section
+        const frontWallLeftGeo = new THREE.BoxGeometry(frontSectionWidth, h, 0.8);
+        const frontWallLeft = new THREE.Mesh(frontWallLeftGeo, facadeMat);
+        frontWallLeft.position.set(-w / 2 + frontSectionWidth / 2 + 0.4, h / 2, d / 2 - 0.4);
         group.add(frontWallLeft);
 
-        const frontWallRight = new THREE.Mesh(frontWallLeftGeo, wallMat);
-        frontWallRight.position.set(w / 2 - frontSectionWidth / 2 - 0.25, h / 2, d / 2 - 0.25);
+        // Front right facade section
+        const frontWallRight = new THREE.Mesh(frontWallLeftGeo, facadeMat);
+        frontWallRight.position.set(w / 2 - frontSectionWidth / 2 - 0.4, h / 2, d / 2 - 0.4);
         group.add(frontWallRight);
 
-        // Top front section (above entrance)
-        const entranceTopGeo = new THREE.BoxGeometry(entranceWidth, h - 6, 0.5);
-        const entranceTop = new THREE.Mesh(entranceTopGeo, wallMat);
-        entranceTop.position.set(0, h - (h - 6) / 2, d / 2 - 0.25);
+        // Top front section (above entrance) - Art Deco style
+        const entranceTopGeo = new THREE.BoxGeometry(entranceWidth + 2, h - 6, 0.8);
+        const entranceTop = new THREE.Mesh(entranceTopGeo, facadeMat);
+        entranceTop.position.set(0, h - (h - 6) / 2, d / 2 - 0.4);
         group.add(entranceTop);
+        
+        // ==================== ART DECO FACADE DETAILS (ALL SIDES) ====================
+        
+        // FRONT FACADE - Horizontal gold trim bands (LEFT and RIGHT of entrance only)
+        const leftTrimWidth = frontSectionWidth - 1;
+        const rightTrimWidth = frontSectionWidth - 1;
+        
+        [2, 5, h - 1].forEach(yPos => {
+            // Left trim (before entrance)
+            const leftTrimGeo = new THREE.BoxGeometry(leftTrimWidth, 0.25, 0.25);
+            const leftTrim = new THREE.Mesh(leftTrimGeo, goldTrimMat);
+            leftTrim.position.set(-w/2 + leftTrimWidth/2 + 0.5, yPos, d / 2 + 0.5);
+            group.add(leftTrim);
+            
+            // Right trim (after entrance)
+            const rightTrimGeo = new THREE.BoxGeometry(rightTrimWidth, 0.25, 0.25);
+            const rightTrim = new THREE.Mesh(rightTrimGeo, goldTrimMat);
+            rightTrim.position.set(w/2 - rightTrimWidth/2 - 0.5, yPos, d / 2 + 0.5);
+            group.add(rightTrim);
+        });
+        
+        // SIDE WALLS - Horizontal gold trim bands
+        [2, 5, h - 1].forEach(yPos => {
+            // Left side
+            const leftSideTrimGeo = new THREE.BoxGeometry(0.25, 0.25, d - 2);
+            const leftSideTrim = new THREE.Mesh(leftSideTrimGeo, goldTrimMat);
+            leftSideTrim.position.set(-w/2 - 0.5, yPos, 0);
+            group.add(leftSideTrim);
+            
+            // Right side
+            const rightSideTrim = new THREE.Mesh(leftSideTrimGeo, goldTrimMat);
+            rightSideTrim.position.set(w/2 + 0.5, yPos, 0);
+            group.add(rightSideTrim);
+        });
+        
+        // BACK WALL - Horizontal gold trim bands
+        [2, 5, h - 1].forEach(yPos => {
+            const backTrimGeo = new THREE.BoxGeometry(w - 2, 0.25, 0.25);
+            const backTrim = new THREE.Mesh(backTrimGeo, goldTrimMat);
+            backTrim.position.set(0, yPos, -d/2 - 0.5);
+            group.add(backTrim);
+        });
+        
+        // Vertical gold pilasters on front facade (only on solid wall sections)
+        const pilasterGeo = new THREE.BoxGeometry(0.5, h, 0.35);
+        // Left section pilasters
+        [-w/2 + 2, -w/2 + frontSectionWidth - 2].forEach(xPos => {
+            const pilaster = new THREE.Mesh(pilasterGeo, facadeAccentMat);
+            pilaster.position.set(xPos, h / 2, d / 2 + 0.55);
+            group.add(pilaster);
+        });
+        // Right section pilasters
+        [w/2 - frontSectionWidth + 2, w/2 - 2].forEach(xPos => {
+            const pilaster = new THREE.Mesh(pilasterGeo, facadeAccentMat);
+            pilaster.position.set(xPos, h / 2, d / 2 + 0.55);
+            group.add(pilaster);
+        });
+        
+        // Side wall pilasters
+        const sidePilasterGeo = new THREE.BoxGeometry(0.35, h, 0.5);
+        [-d/4, d/4].forEach(zPos => {
+            // Left side
+            const leftPilaster = new THREE.Mesh(sidePilasterGeo, facadeAccentMat);
+            leftPilaster.position.set(-w/2 - 0.55, h / 2, zPos);
+            group.add(leftPilaster);
+            // Right side
+            const rightPilaster = new THREE.Mesh(sidePilasterGeo, facadeAccentMat);
+            rightPilaster.position.set(w/2 + 0.55, h / 2, zPos);
+            group.add(rightPilaster);
+        });
+        
+        // Burgundy accent panels on front (only on solid sections, not entrance)
+        const panelGeo = new THREE.BoxGeometry(3.5, 2.5, 0.1);
+        [-w/2 + frontSectionWidth/2, w/2 - frontSectionWidth/2].forEach(xPos => {
+            const panel = new THREE.Mesh(panelGeo, burgundyMat);
+            panel.position.set(xPos, 3.5, d / 2 + 0.65);
+            group.add(panel);
+        });
 
-        // ==================== CEILING ====================
-        const ceilingMat = this.getMaterial(0x0a0a15, { roughness: 0.95 });
-        const ceilingGeo = new THREE.BoxGeometry(w, 0.3, d);
+        // ==================== GRAND ENTRANCE (NO BLOCKING) ====================
+        // Entrance columns positioned OUTSIDE entrance opening
+        const columnMat = this.getMaterial(creamWhite, { roughness: 0.5 });
+        const columnPositions = [
+            { x: -entranceWidth / 2 - 1.5, z: d / 2 + 2 },
+            { x: entranceWidth / 2 + 1.5, z: d / 2 + 2 },
+        ];
+        
+        columnPositions.forEach(pos => {
+            // Column base (stepped) - clear of entrance
+            const base1Geo = new THREE.BoxGeometry(2, 0.35, 2);
+            const base1 = new THREE.Mesh(base1Geo, goldTrimMat);
+            base1.position.set(pos.x, 0.18, pos.z);
+            group.add(base1);
+            
+            const base2Geo = new THREE.BoxGeometry(1.6, 0.25, 1.6);
+            const base2 = new THREE.Mesh(base2Geo, goldTrimMat);
+            base2.position.set(pos.x, 0.48, pos.z);
+            group.add(base2);
+            
+            // Main column shaft
+            const columnGeo = new THREE.CylinderGeometry(0.6, 0.7, h - 2, 12);
+            const column = new THREE.Mesh(columnGeo, columnMat);
+            column.position.set(pos.x, h / 2, pos.z);
+            group.add(column);
+            
+            // Column rings
+            for (let i = 1; i < 4; i++) {
+                const ringGeo = new THREE.TorusGeometry(0.65, 0.05, 6, 16);
+                const ring = new THREE.Mesh(ringGeo, goldTrimMat);
+                ring.position.set(pos.x, i * 3, pos.z);
+                ring.rotation.x = Math.PI / 2;
+                group.add(ring);
+            }
+            
+            // Column capital
+            const capitalGeo = new THREE.CylinderGeometry(0.9, 0.6, 0.7, 12);
+            const capital = new THREE.Mesh(capitalGeo, goldTrimMat);
+            capital.position.set(pos.x, h - 0.55, pos.z);
+            group.add(capital);
+            
+            // Capital crown
+            const crownGeo = new THREE.BoxGeometry(1.8, 0.25, 1.8);
+            const crown = new THREE.Mesh(crownGeo, goldTrimMat);
+            crown.position.set(pos.x, h - 0.13, pos.z);
+            group.add(crown);
+        });
+        
+        // Entrance canopy - ABOVE entrance, not blocking
+        const canopyGeo = new THREE.BoxGeometry(entranceWidth + 6, 0.35, 2.5);
+        const canopy = new THREE.Mesh(canopyGeo, burgundyMat);
+        canopy.position.set(0, 6.8, d / 2 + 2.25);
+        group.add(canopy);
+        
+        // Gold trim on canopy front edge only
+        const canopyTrimGeo = new THREE.BoxGeometry(entranceWidth + 6.2, 0.12, 0.15);
+        const canopyTrim = new THREE.Mesh(canopyTrimGeo, goldTrimMat);
+        canopyTrim.position.set(0, 6.68, d / 2 + 3.45);
+        group.add(canopyTrim);
+
+        // ==================== RED CARPET WITH VELVET ROPES ====================
+        // Simplified on mobile (fewer rope posts)
+        this.createRedCarpet(group, d, goldTrimMat);
+        
+        // ==================== GOLDEN DICE TOWERS ====================
+        // Apple/Mobile: Reduced dice count for performance
+        if (!this.needsOptimization) {
+            [-1, 1].forEach(side => {
+                const diceTower = new GoldenDiceTower(THREE);
+                diceTower.spawn(group, side * 10, 0, d / 2 + 4, {
+                    diceCount: 4,
+                    diceSize: 1.2,
+                    baseRadius: 1.8
+                });
+                this.exteriorProps.push(diceTower);
+            });
+        } else {
+            // Mobile: Single smaller dice tower
+            const diceTower = new GoldenDiceTower(THREE);
+            diceTower.spawn(group, 10, 0, d / 2 + 4, {
+                diceCount: 2,
+                diceSize: 1.0,
+                baseRadius: 1.5
+            });
+            this.exteriorProps.push(diceTower);
+        }
+        
+        // ==================== NEON CARD SUITS ====================
+        // Apple/Mobile: Only 2 suits instead of 4
+        const suits = this.needsOptimization ? ['heart', 'spade'] : ['heart', 'diamond', 'spade', 'club'];
+        const suitColors = this.needsOptimization ? [0xFF0044, 0x00DDFF] : [0xFF0044, 0xFF0088, 0x00DDFF, 0x44FF44];
+        const suitSpacing = this.needsOptimization ? w / 2.5 : w / 4.5;
+        suits.forEach((suit, idx) => {
+            const suitNeon = new NeonTubing(THREE);
+            const xPos = this.needsOptimization ? (idx === 0 ? -w / 4 : w / 4) : -w / 3 + (idx * suitSpacing);
+            suitNeon.spawn(group, xPos, h - 2, d / 2 + 1.5, {
+                shape: suit,
+                size: this.needsOptimization ? 1.0 : 1.2,
+                color: suitColors[idx],
+                glowIntensity: this.needsOptimization ? 0.6 : 0.9
+            });
+            this.exteriorProps.push(suitNeon);
+        });
+        
+        // ==================== NEON DOLLAR SIGNS ====================
+        // Apple/Mobile: Skip dollar signs (too many draw calls)
+        if (!this.needsOptimization) {
+            [-1, 1].forEach(side => {
+                const dollarNeon = new NeonTubing(THREE);
+                dollarNeon.spawn(group, side * (w / 2 - 5), h - 4, d / 2 + 1.5, {
+                    shape: 'dollar',
+                    size: 2,
+                    color: 0x00FF44,
+                    glowIntensity: 1.0
+                });
+                this.exteriorProps.push(dollarNeon);
+            });
+        }
+        
+        // ==================== ANIMATED COIN STACKS ====================
+        // Apple/Mobile: Reduced coin stacks
+        if (!this.needsOptimization) {
+            this.createCoinStacks(group, w, d);
+        }
+        
+        // ==================== SPOTLIGHTS ====================
+        // Already skipped on mobile in createSpotlights()
+        this.createSpotlights(group, w, h, d);
+
+        // ==================== ROOFTOP / PARAPET (ALL SIDES) ====================
+        // Ceiling inset by 1 on each side to sit inside walls (not overlap)
+        const ceilingMat = this.getMaterial(0x1a1a2a, { roughness: 0.95 });
+        const ceilingGeo = new THREE.BoxGeometry(w - 2, 0.25, d - 2);
         const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
         ceiling.position.set(0, h, 0);
         group.add(ceiling);
-
-        // ==================== ARCHITECTURAL DETAILS ====================
-        // Corner pillars - gold accented columns
-        const pillarMat = this.getMaterial(0x2a1a3e, { roughness: 0.7 });
-        const pillarGoldMat = this.getMaterial(goldAccent, { metalness: 0.8, roughness: 0.3 });
         
-        const pillarPositions = [
-            { x: -w / 2 + 1, z: d / 2 - 1 },
-            { x: w / 2 - 1, z: d / 2 - 1 },
-        ];
+        const parapetHeight = 1.8;
+        const ceilingTop = h + 0.13;
         
-        pillarPositions.forEach(pos => {
-            // Main pillar body
-            const pillarGeo = new THREE.CylinderGeometry(0.8, 1.0, h, 8);
-            const pillar = new THREE.Mesh(pillarGeo, pillarMat);
-            pillar.position.set(pos.x, h / 2, pos.z);
-            group.add(pillar);
-            
-            // Gold base
-            const baseGeo = new THREE.CylinderGeometry(1.2, 1.3, 0.5, 8);
-            const base = new THREE.Mesh(baseGeo, pillarGoldMat);
-            base.position.set(pos.x, 0.25, pos.z);
-            group.add(base);
-            
-            // Gold capital (top)
-            const capitalGeo = new THREE.CylinderGeometry(1.1, 0.8, 0.6, 8);
-            const capital = new THREE.Mesh(capitalGeo, pillarGoldMat);
-            capital.position.set(pos.x, h - 0.3, pos.z);
-            group.add(capital);
-            
-            // OPTIMIZED: Single gold ring at center of pillar instead of multiple
-            const ringGeo = new THREE.TorusGeometry(0.85, 0.08, 6, 16);
-            const ring = new THREE.Mesh(ringGeo, pillarGoldMat);
-            ring.position.set(pos.x, h / 2, pos.z);
-            ring.rotation.x = Math.PI / 2;
-            group.add(ring);
+        // Parapet material with polygonOffset to prevent z-fighting
+        const parapetMat = this.getMaterial(creamWhite, { 
+            roughness: 0.6,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -1
         });
         
-        // Entrance archway frame - pushed forward to avoid z-fighting with walls
-        const archMat = this.getMaterial(goldAccent, { metalness: 0.7, roughness: 0.3 });
-        const archZ = d / 2 + 0.3; // Push forward from wall
+        // Front parapet - sits on top of wall
+        const mainParapetGeo = new THREE.BoxGeometry(w + 0.4, parapetHeight, 0.6);
+        const mainParapet = new THREE.Mesh(mainParapetGeo, parapetMat);
+        mainParapet.position.set(0, ceilingTop + parapetHeight / 2, d / 2);
+        group.add(mainParapet);
         
-        // Vertical arch sides
-        const archSideGeo = new THREE.BoxGeometry(0.4, 6, 0.5);
-        [-1, 1].forEach(side => {
-            const archSide = new THREE.Mesh(archSideGeo, archMat);
-            archSide.position.set(side * 6, 3, archZ);
-            group.add(archSide);
+        // Art Deco stepped crown on front
+        const crownStep1Geo = new THREE.BoxGeometry(10, 1.3, 0.65);
+        const crownStep1 = new THREE.Mesh(crownStep1Geo, parapetMat);
+        crownStep1.position.set(0, ceilingTop + parapetHeight + 0.65, d / 2 + 0.1);
+        group.add(crownStep1);
+        
+        const crownStep2Geo = new THREE.BoxGeometry(6, 0.9, 0.65);
+        const crownStep2 = new THREE.Mesh(crownStep2Geo, parapetMat);
+        crownStep2.position.set(0, ceilingTop + parapetHeight + 1.75, d / 2 + 0.1);
+        group.add(crownStep2);
+        
+        // Gold sunburst on crown
+        const sunburstMat = this.getMaterial(goldAccent, { 
+            metalness: 0.9, 
+            roughness: 0.2,
+            emissive: goldAccent,
+            emissiveIntensity: 0.3
         });
+        const sunburstGeo = new THREE.CircleGeometry(1.3, 16);
+        const sunburst = new THREE.Mesh(sunburstGeo, sunburstMat);
+        sunburst.position.set(0, ceilingTop + parapetHeight + 1.75, d / 2 + 0.45);
+        group.add(sunburst);
         
-        // Arch top (curved would be expensive, use angled segments)
-        const archTopGeo = new THREE.BoxGeometry(12.8, 0.5, 0.5);
-        const archTop = new THREE.Mesh(archTopGeo, archMat);
-        archTop.position.set(0, 6.25, archZ);
-        group.add(archTop);
-        
-        // Decorative keystone
-        const keystoneGeo = new THREE.BoxGeometry(1.5, 1.2, 0.6);
-        const keystone = new THREE.Mesh(keystoneGeo, archMat);
-        keystone.position.set(0, 6.8, archZ + 0.1);
-        group.add(keystone);
-        
-        // Roof parapet (raised edge around roof) - positioned on TOP of ceiling
-        const parapetMat = this.getMaterial(0x1a0a2e, { roughness: 0.8 });
-        const parapetHeight = 1.5;
-        const ceilingTop = h + 0.15; // Top of ceiling (ceiling is 0.3 thick, centered at h)
-        
-        // Front parapet - sits on top of ceiling, pushed slightly forward
-        const frontParapetGeo = new THREE.BoxGeometry(w, parapetHeight, 0.4);
-        const frontParapet = new THREE.Mesh(frontParapetGeo, parapetMat);
-        frontParapet.position.set(0, ceilingTop + parapetHeight / 2, d / 2 + 0.1);
-        group.add(frontParapet);
-        
-        // Side parapets - sit on top of ceiling
-        const sideParapetGeo = new THREE.BoxGeometry(0.4, parapetHeight, d - 0.8);
+        // Side parapets - sit on top of walls
+        const sideParapetGeo = new THREE.BoxGeometry(0.6, parapetHeight, d + 0.4);
         [-1, 1].forEach(side => {
             const sideParapet = new THREE.Mesh(sideParapetGeo, parapetMat);
-            sideParapet.position.set(side * (w / 2 + 0.1), ceilingTop + parapetHeight / 2, 0);
+            sideParapet.position.set(side * (w / 2), ceilingTop + parapetHeight / 2, 0);
             group.add(sideParapet);
         });
         
-        // Back parapet
-        const backParapetGeo = new THREE.BoxGeometry(w, parapetHeight, 0.4);
+        // Back parapet - sits on top of wall
+        const backParapetGeo = new THREE.BoxGeometry(w + 0.4, parapetHeight, 0.6);
         const backParapet = new THREE.Mesh(backParapetGeo, parapetMat);
-        backParapet.position.set(0, ceilingTop + parapetHeight / 2, -d / 2 - 0.1);
+        backParapet.position.set(0, ceilingTop + parapetHeight / 2, -d / 2);
         group.add(backParapet);
         
-        // Gold trim on parapet top (front only for visibility)
-        const parapetTrimGeo = new THREE.BoxGeometry(w + 0.6, 0.15, 0.5);
-        const parapetTrim = new THREE.Mesh(parapetTrimGeo, pillarGoldMat);
-        parapetTrim.position.set(0, ceilingTop + parapetHeight + 0.08, d / 2 + 0.15);
-        group.add(parapetTrim);
+        // Gold trim along all parapet tops
+        const frontParapetTrimGeo = new THREE.BoxGeometry(w + 0.6, 0.15, 0.35);
+        const frontParapetTrim = new THREE.Mesh(frontParapetTrimGeo, goldTrimMat);
+        frontParapetTrim.position.set(0, ceilingTop + parapetHeight + 0.08, d / 2 + 0.15);
+        group.add(frontParapetTrim);
+        
+        const sideParapetTrimGeo = new THREE.BoxGeometry(0.35, 0.15, d + 0.6);
+        [-1, 1].forEach(side => {
+            const sideTrim = new THREE.Mesh(sideParapetTrimGeo, goldTrimMat);
+            sideTrim.position.set(side * (w / 2 + 0.15), ceilingTop + parapetHeight + 0.08, 0);
+            group.add(sideTrim);
+        });
+        
+        const backParapetTrimGeo = new THREE.BoxGeometry(w + 0.6, 0.15, 0.35);
+        const backParapetTrim = new THREE.Mesh(backParapetTrimGeo, goldTrimMat);
+        backParapetTrim.position.set(0, ceilingTop + parapetHeight + 0.08, -d / 2 - 0.15);
+        group.add(backParapetTrim);
+
+        // ==================== ANIMATED ROULETTE WHEEL ON ROOF (Centered backdrop for sign) ====================
+        const rouletteWheel = new AnimatedRouletteWheel(THREE);
+        rouletteWheel.spawn(group, 0, h + 5, d / 2 + 1, {
+            wheelRadius: 5,
+            tiltAngle: Math.PI / 2.5  // More upright to serve as backdrop
+        });
+        this.rouletteWheelProp = rouletteWheel;
+        if (rouletteWheel.group) {
+            this.rouletteWheel = rouletteWheel.group;
+        }
+
+        // ==================== FLOATING "CASINO" TEXT (Vegas Style - In front of wheel) ====================
+        const signCanvas = document.createElement('canvas');
+        signCanvas.width = 1024;
+        signCanvas.height = 256;
+        const signCtx = signCanvas.getContext('2d');
+        
+        // Draw Vegas-style casino sign
+        const drawCasinoSign = () => {
+            signCtx.clearRect(0, 0, 1024, 256);
+            signCtx.textAlign = 'center';
+            signCtx.textBaseline = 'middle';
+            signCtx.font = 'bold 120px "Impact", "Haettenschweiler", sans-serif';
+            
+            const spacedText = 'C A S I N O';
+            
+            // Outer glow
+            signCtx.shadowColor = '#FFD700';
+            signCtx.shadowBlur = 40;
+            signCtx.fillStyle = '#FFD700';
+            signCtx.globalAlpha = 0.7;
+            signCtx.fillText(spacedText, 512, 128);
+            
+            // Inner glow
+            signCtx.shadowBlur = 20;
+            signCtx.fillStyle = '#FFFF00';
+            signCtx.globalAlpha = 0.85;
+            signCtx.fillText(spacedText, 512, 128);
+            
+            // Core text
+            signCtx.shadowBlur = 10;
+            signCtx.fillStyle = '#FFFFCC';
+            signCtx.globalAlpha = 1.0;
+            signCtx.fillText(spacedText, 512, 128);
+        };
+        
+        drawCasinoSign();
+        
+        const signTexture = new THREE.CanvasTexture(signCanvas);
+        signTexture.needsUpdate = true;
+        
+        const signSpriteMat = new THREE.SpriteMaterial({
+            map: signTexture,
+            transparent: true
+        });
+        const signSprite = new THREE.Sprite(signSpriteMat);
+        signSprite.name = 'casino_title_sign';
+        signSprite.scale.set(25, 6, 1);
+        signSprite.position.set(0, h + 5, d / 2 + 3);  // In front of roulette wheel
+        signSprite.renderOrder = 100;
+        signSprite.userData.isFloatingText = true;
+        signSprite.userData.baseY = h + 5;
+        group.add(signSprite);
+        this.floatingText = signSprite;
+        
+        // Accent light under sign - Apple/Mobile: skip
+        if (!this.needsOptimization) {
+            const signLight = new THREE.PointLight(0xFFAA00, 2, 20);
+            signLight.position.set(0, h + 1, d / 2 + 4);
+            group.add(signLight);
+            this.lights.push(signLight);
+        }
+
+        // ==================== PBR SLOT REELS DISPLAY (Above Entrance Canopy) ====================
+        const slotDisplay = new PBRSlotReels(THREE);
+        slotDisplay.spawn(group, 0, 10, d / 2 + 1.5, {
+            width: 10,
+            height: 6,
+            reelCount: 3,
+            symbolsPerReel: 6,
+            frameColor: 0xFFD700
+        });
+        this.slotMachineDisplay = slotDisplay;
+
+        // ==================== NEON OUTLINE (ABOVE ENTRANCE) ====================
+        const neonMat = this.getMaterial(neonPink, {
+            emissive: neonPink,
+            emissiveIntensity: 1.0,
+            roughness: 0.3
+        });
+        
+        // Neon frame around upper facade (above entrance)
+        const neonTopGeo = new THREE.BoxGeometry(entranceWidth + 2, 0.15, 0.15);
+        const neonTop = new THREE.Mesh(neonTopGeo, neonMat);
+        neonTop.position.set(0, h - 0.5, d / 2 + 0.75);
+        group.add(neonTop);
+        this.neonTubes.push(neonTop);
+        
+        const neonBottomGeo = new THREE.BoxGeometry(entranceWidth + 2, 0.15, 0.15);
+        const neonBottom = new THREE.Mesh(neonBottomGeo, neonMat);
+        neonBottom.position.set(0, 6.9, d / 2 + 0.75);
+        group.add(neonBottom);
+        this.neonTubes.push(neonBottom);
+        
+        // Vertical neon sides (beside entrance)
+        const neonSideGeo = new THREE.BoxGeometry(0.15, h - 7.4, 0.15);
+        [-entranceWidth/2 - 0.9, entranceWidth/2 + 0.9].forEach(xPos => {
+            const neonSide = new THREE.Mesh(neonSideGeo, neonMat);
+            neonSide.position.set(xPos, (h + 6.9) / 2, d / 2 + 0.75);
+            group.add(neonSide);
+            this.neonTubes.push(neonSide);
+        });
+        
+        // ==================== MARQUEE BULBS (AROUND CANOPY) ====================
+        const bulbGeo = new THREE.SphereGeometry(0.1, 8, 6);
+        const bulbsPerSide = 18;
+        
+        // Front edge of canopy
+        for (let i = 0; i < bulbsPerSide; i++) {
+            const x = -entranceWidth / 2 - 2.5 + (i / (bulbsPerSide - 1)) * (entranceWidth + 5);
+            const bulbMat = new THREE.MeshStandardMaterial({
+                color: neonYellow,
+                emissive: neonYellow,
+                emissiveIntensity: 0.8,
+                roughness: 0.3
+            });
+            const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+            bulb.position.set(x, 6.55, d / 2 + 3.4);
+            bulb.userData.bulbIndex = i;
+            bulb.userData.bulbMat = bulbMat;
+            group.add(bulb);
+            this.marqueBulbs.push(bulb);
+        }
+        
+        // Side edges of canopy
+        for (let i = 0; i < 5; i++) {
+            const z = d / 2 + 1 + (i / 4) * 2.3;
+            [-entranceWidth / 2 - 2.8, entranceWidth / 2 + 2.8].forEach((x, sideIdx) => {
+                const bulbMat = new THREE.MeshStandardMaterial({
+                    color: neonYellow,
+                    emissive: neonYellow,
+                    emissiveIntensity: 0.8,
+                    roughness: 0.3
+                });
+                const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+                bulb.position.set(x, 6.55, z);
+                bulb.userData.bulbIndex = bulbsPerSide + i + sideIdx * 5;
+                bulb.userData.bulbMat = bulbMat;
+                group.add(bulb);
+                this.marqueBulbs.push(bulb);
+            });
+        }
+
+        // Pillar gold accents (keeping compatible with old code)
+        const pillarGoldMat = goldTrimMat;
 
         // ==================== 2ND FLOOR (BAR AREA) ====================
         const secondFloorHeight = 5;
@@ -684,20 +1067,6 @@ class Casino extends BaseBuilding {
             roughness: 0.3
         });
 
-        const neonVertGeo = new THREE.BoxGeometry(0.2, 6, 0.2);
-        const neonLeft = new THREE.Mesh(neonVertGeo, neonTrimMat);
-        neonLeft.position.set(-6, 3.5, d / 2 + 0.1);
-        group.add(neonLeft);
-
-        const neonRight = new THREE.Mesh(neonVertGeo, neonTrimMat);
-        neonRight.position.set(6, 3.5, d / 2 + 0.1);
-        group.add(neonRight);
-
-        const neonTopGeo = new THREE.BoxGeometry(12.4, 0.2, 0.2);
-        const neonTop = new THREE.Mesh(neonTopGeo, neonTrimMat);
-        neonTop.position.set(0, 6.5, d / 2 + 0.1);
-        group.add(neonTop);
-
         // ==================== INTERIOR LIGHTING ====================
         // Apple/Mobile: Skip expensive point lights (ambient + emissive materials provide enough light)
         if (!this.needsOptimization) {
@@ -723,10 +1092,10 @@ class Casino extends BaseBuilding {
         chandelierGroup.add(chain);
         
         // Central hub (ornate sphere)
-        const hubGeo = new THREE.SphereGeometry(0.4, 12, 8);
-        const hub = new THREE.Mesh(hubGeo, chainMat);
-        hub.position.y = h - 1.7;
-        chandelierGroup.add(hub);
+        const chandelierHubGeo = new THREE.SphereGeometry(0.4, 12, 8);
+        const chandelierHub = new THREE.Mesh(chandelierHubGeo, chainMat);
+        chandelierHub.position.y = h - 1.7;
+        chandelierGroup.add(chandelierHub);
         
         // Chandelier body (concentric rings)
         const chandelierBodyMat = this.getMaterial(0xFFD700, { metalness: 0.9, roughness: 0.15 });
@@ -938,96 +1307,427 @@ class Casino extends BaseBuilding {
         // DexScreener iframe URL for the TV ($WADDLE, candles, market cap, 1hr)
         group.userData.tvIframeUrl = 'https://dexscreener.com/solana/BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump?embed=1&theme=dark&chartStyle=1&chartType=mc&interval=60';
 
-        // ==================== EXTRAVAGANT EXTERIOR DECORATIONS ====================
-        // Create the Vegas-style casino exterior with all the bells and whistles
-        try {
-            this.exterior = createCasinoExterior(THREE, {
-                width: w,
-                height: h,
-                depth: d
-            });
-            
-            if (this.exterior && this.exterior.mesh) {
-                group.add(this.exterior.mesh);
-                
-                // Add exterior lights to the building's light collection
-                if (this.exterior.lights) {
-                    this.lights.push(...this.exterior.lights);
-                }
-            }
-        } catch (e) {
-            console.warn('Casino exterior decorations failed to load:', e);
-        }
-
-        // ==================== APPLE/MOBILE SHADOW OPTIMIZATION ====================
-        // Disable all shadows on Apple/Mobile for significant performance boost
+        // ==================== APPLE/MOBILE PERFORMANCE OPTIMIZATIONS ====================
         if (this.needsOptimization) {
+            let meshCount = 0;
+            let lightsDisabled = 0;
+            
             group.traverse(child => {
                 if (child.isMesh) {
+                    meshCount++;
+                    // Disable shadows completely
                     child.castShadow = false;
                     child.receiveShadow = false;
+                    
+                    // Reduce material complexity for Apple GPUs
+                    if (child.material) {
+                        // Lower emissive intensity to reduce GPU load
+                        if (child.material.emissiveIntensity > 0.5) {
+                            child.material.emissiveIntensity *= 0.7;
+                        }
+                        // Ensure no unnecessary transparency computations
+                        if (child.material.transparent && child.material.opacity === 1) {
+                            child.material.transparent = false;
+                        }
+                    }
+                }
+                
+                // Reduce point light intensity and range on Apple/Mobile
+                if (child.isLight && child.isPointLight) {
+                    child.intensity *= 0.6;
+                    child.distance *= 0.7;
+                    lightsDisabled++;
                 }
             });
-            console.log('🍎 Casino: Disabled shadows for Apple/Mobile optimization');
+            
+            console.log(`🍎 Casino: Apple/Mobile optimizations applied - ${meshCount} meshes, ${lightsDisabled} lights reduced`);
         }
 
-        // ==================== STATIC MESH OPTIMIZATION ====================
-        // CRITICAL PERFORMANCE: Disable matrixAutoUpdate for static meshes
-        // This prevents Three.js from recalculating world matrices every frame
-        // The casino interior is static - only the exterior has animations
-        group.traverse(child => {
-            if (child.isMesh) {
-                // Update matrix once, then disable auto-update
-                child.updateMatrix();
-                child.matrixAutoUpdate = false;
-                
-                // Frustum culling should stay enabled (default is true)
-                // child.frustumCulled = true; // Already default
-            }
-        });
-        
-        // Update the group's matrix as well
-        group.updateMatrixWorld(true);
-        console.log('🎰 Casino: Applied static mesh optimizations (matrixAutoUpdate=false)');
+        // Store optimization flag for update throttling
+        group.userData.needsOptimization = this.needsOptimization;
 
         return group;
     }
     
     /**
-     * Update animated exterior elements
+     * Create red carpet with velvet ropes - Vegas VIP entrance!
+     */
+    createRedCarpet(group, d, goldTrimMat) {
+        const THREE = this.THREE;
+        
+        const carpetWidth = 8;
+        const carpetLength = 18;
+        
+        // Luxurious red carpet
+        const carpetMat = this.getMaterial(0x8B0000, { roughness: 0.85 });
+        const carpetGeo = new THREE.PlaneGeometry(carpetWidth, carpetLength);
+        const carpet = new THREE.Mesh(carpetGeo, carpetMat);
+        carpet.rotation.x = -Math.PI / 2;
+        carpet.position.set(0, 0.02, d / 2 + carpetLength / 2);
+        carpet.receiveShadow = true;
+        group.add(carpet);
+        
+        // Gold trim edges
+        [-1, 1].forEach(side => {
+            const trimGeo = new THREE.BoxGeometry(0.2, 0.08, carpetLength);
+            const trim = new THREE.Mesh(trimGeo, goldTrimMat);
+            trim.position.set(side * carpetWidth / 2, 0.04, d / 2 + carpetLength / 2);
+            group.add(trim);
+        });
+        
+        // Velvet rope posts with ornate tops
+        // Apple/Mobile: Reduced segments for geometry
+        const postSegments = this.needsOptimization ? 6 : 12;
+        const postMat = this.getMaterial(0xFFD700, { 
+            metalness: 0.9, 
+            roughness: 0.2,
+            emissive: 0xFFAA00,
+            emissiveIntensity: this.needsOptimization ? 0.05 : 0.1
+        });
+        
+        // Apple/Mobile: Fewer posts (every 8 units instead of 4)
+        const postSpacing = this.needsOptimization ? 8 : 4;
+        const ropePostPositions = [];
+        [-1, 1].forEach(side => {
+            for (let z = d / 2 + 3; z <= d / 2 + carpetLength - 2; z += postSpacing) {
+                ropePostPositions.push({ x: side * (carpetWidth / 2 + 0.8), z });
+            }
+        });
+        
+        ropePostPositions.forEach((pos, idx) => {
+            // Post base
+            const baseGeo = new THREE.CylinderGeometry(0.2, 0.25, 0.15, postSegments);
+            const base = new THREE.Mesh(baseGeo, postMat);
+            base.position.set(pos.x, 0.08, pos.z);
+            group.add(base);
+            
+            // Post shaft
+            const shaftGeo = new THREE.CylinderGeometry(0.08, 0.1, 1.1, postSegments);
+            const shaft = new THREE.Mesh(shaftGeo, postMat);
+            shaft.position.set(pos.x, 0.7, pos.z);
+            group.add(shaft);
+            
+            // Ornate ball top - skip on mobile for perf
+            if (!this.needsOptimization) {
+                const ballGeo = new THREE.SphereGeometry(0.18, postSegments, postSegments);
+                const ball = new THREE.Mesh(ballGeo, postMat);
+                ball.position.set(pos.x, 1.35, pos.z);
+                group.add(ball);
+            }
+        });
+        
+        // Velvet ropes (deep red)
+        // Apple/Mobile: Skip ropes entirely for major draw call reduction
+        if (!this.needsOptimization) {
+            const ropeMat = this.getMaterial(0x660022, { 
+                roughness: 0.7,
+                emissive: 0x220000,
+                emissiveIntensity: 0.2
+            });
+            
+            [-1, 1].forEach(side => {
+                for (let i = 0; i < ropePostPositions.length / 2 - 1; i++) {
+                    const startZ = d / 2 + 3 + i * postSpacing;
+                    const ropeLength = postSpacing - 0.2;
+                    const ropeGeo = new THREE.CylinderGeometry(0.04, 0.04, ropeLength, 6);
+                    const rope = new THREE.Mesh(ropeGeo, ropeMat);
+                    rope.rotation.x = Math.PI / 2;
+                    rope.position.set(side * (carpetWidth / 2 + 0.8), 1.1, startZ + ropeLength / 2);
+                    group.add(rope);
+                }
+            });
+        }
+        
+        // Carpet end welcome mat with star pattern
+        const welcomeMat = this.getMaterial(0xFFD700, {
+            emissive: 0xFFAA00,
+            emissiveIntensity: 0.3
+        });
+        const starGeo = new THREE.CircleGeometry(1.5, 5);
+        const star = new THREE.Mesh(starGeo, welcomeMat);
+        star.rotation.x = -Math.PI / 2;
+        star.rotation.z = Math.PI / 2;
+        star.position.set(0, 0.03, d / 2 + carpetLength - 2);
+        group.add(star);
+    }
+    
+    /**
+     * Create animated coin stacks for that Vegas wealth feel
+     */
+    createCoinStacks(group, w, d) {
+        const THREE = this.THREE;
+        
+        const coinMat = this.getMaterial(0xFFD700, {
+            metalness: 0.95,
+            roughness: 0.15,
+            emissive: 0xFFAA00,
+            emissiveIntensity: 0.2
+        });
+        
+        // Coin stack positions around entrance
+        const stackPositions = [
+            { x: -w / 2 - 2, z: d / 2 + 2, height: 6 },
+            { x: w / 2 + 2, z: d / 2 + 2, height: 5 },
+            { x: -w / 2 - 2, z: d / 2 + 8, height: 4 },
+            { x: w / 2 + 2, z: d / 2 + 8, height: 7 },
+        ];
+        
+        stackPositions.forEach((stack, stackIdx) => {
+            const stackGroup = new THREE.Group();
+            stackGroup.position.set(stack.x, 0, stack.z);
+            stackGroup.userData.baseY = 0;
+            stackGroup.userData.stackIndex = stackIdx;
+            
+            for (let i = 0; i < stack.height; i++) {
+                const coinGeo = new THREE.CylinderGeometry(0.4, 0.4, 0.1, 20);
+                const coin = new THREE.Mesh(coinGeo, coinMat);
+                coin.position.y = 0.05 + i * 0.12;
+                coin.rotation.y = Math.random() * 0.2 - 0.1;
+                stackGroup.add(coin);
+                
+                // Coin edge detail
+                const edgeGeo = new THREE.TorusGeometry(0.38, 0.02, 4, 20);
+                const edge = new THREE.Mesh(edgeGeo, coinMat);
+                edge.position.y = 0.05 + i * 0.12;
+                edge.rotation.x = Math.PI / 2;
+                stackGroup.add(edge);
+            }
+            
+            group.add(stackGroup);
+            this.coinStacks.push(stackGroup);
+        });
+    }
+    
+    /**
+     * Create sweeping spotlights for dramatic effect
+     */
+    createSpotlights(group, w, h, d) {
+        const THREE = this.THREE;
+        
+        // Skip on mobile for performance
+        if (this.needsOptimization) return;
+        
+        // Spotlight housings
+        const housingMat = this.getMaterial(0x222222, {
+            metalness: 0.8,
+            roughness: 0.3
+        });
+        
+        const spotlightPositions = [
+            { x: -w / 2 - 3, z: d / 2 + 12 },
+            { x: w / 2 + 3, z: d / 2 + 12 },
+        ];
+        
+        spotlightPositions.forEach((pos, idx) => {
+            // Housing - narrow end (0.4) at TOP where light emits, wide end (0.7) at bottom
+            // Tilted to point upward into the sky
+            const housingGeo = new THREE.CylinderGeometry(0.4, 0.7, 1.2, 12);
+            const housing = new THREE.Mesh(housingGeo, housingMat);
+            housing.position.set(pos.x, 1.8, pos.z);
+            // Tilt backward so narrow end points UP toward the sky (positive X rotation)
+            housing.rotation.x = Math.PI / 2 - 0.3; // ~60 degrees up
+            group.add(housing);
+            
+            // Lens/glass at the emitting end (narrow top)
+            const lensMat = this.getMaterial(0xFFFFAA, {
+                emissive: 0xFFFF88,
+                emissiveIntensity: 1.5,
+                transparent: true,
+                opacity: 0.9
+            });
+            const lensGeo = new THREE.CircleGeometry(0.35, 12);
+            const lens = new THREE.Mesh(lensGeo, lensMat);
+            // Position at the narrow end of the housing, pointing up
+            lens.position.set(pos.x, 1.8 + 0.55, pos.z - 0.3);
+            lens.rotation.x = -Math.PI / 2 + 0.3; // Match housing angle
+            group.add(lens);
+            
+            // Tripod legs
+            for (let leg = 0; leg < 3; leg++) {
+                const angle = (leg / 3) * Math.PI * 2;
+                const legGeo = new THREE.CylinderGeometry(0.05, 0.08, 1.8, 6);
+                const legMesh = new THREE.Mesh(legGeo, housingMat);
+                legMesh.position.set(
+                    pos.x + Math.cos(angle) * 0.5,
+                    0.9,
+                    pos.z + Math.sin(angle) * 0.5
+                );
+                // Legs splay outward
+                legMesh.rotation.z = Math.cos(angle) * 0.25;
+                legMesh.rotation.x = Math.sin(angle) * 0.25;
+                group.add(legMesh);
+            }
+            
+            // Spotlight beam (cone) - points UP into the sky
+            const beamMat = this.getMaterial(0xFFFFAA, {
+                transparent: true,
+                opacity: 0.12,
+                emissive: 0xFFFFAA,
+                emissiveIntensity: 0.4,
+                side: THREE.DoubleSide
+            });
+            const beamGeo = new THREE.ConeGeometry(5, 20, 16, 1, true);
+            const beam = new THREE.Mesh(beamGeo, beamMat);
+            beam.position.set(pos.x, 12, pos.z);
+            beam.rotation.x = Math.PI; // Cone points UP
+            beam.userData.spotlightBeam = true;
+            beam.userData.spotlightIndex = idx;
+            beam.userData.baseX = pos.x;
+            beam.userData.baseZ = pos.z;
+            group.add(beam);
+            this.spotlights.push(beam);
+        });
+    }
+    
+    /**
+     * Update animated exterior elements (marquee bulbs, neon, roulette, text)
+     * OPTIMIZED: Throttled updates for Apple/Mobile devices
      * @param {number} time - Current time in seconds
      * @param {number} delta - Time since last frame
      */
     update(time, delta) {
-        if (this.exterior && this.exterior.update) {
-            this.exterior.update(time, delta);
+        // ==================== APPLE/MOBILE THROTTLING ====================
+        // Skip every other frame on mobile for major performance gains
+        if (this.needsOptimization) {
+            this._frameCount = (this._frameCount || 0) + 1;
+            if (this._frameCount % 2 === 0) {
+                // Only update essential animations on even frames
+                if (this.rouletteWheelProp && this.rouletteWheelProp.update) {
+                    this.rouletteWheelProp.update(time, delta * 2);
+                }
+                if (this.slotMachineDisplay && this.slotMachineDisplay.update) {
+                    this.slotMachineDisplay.update(time, delta * 2);
+                }
+                return; // Skip all other animations
+            }
+        }
+        
+        // ==================== MARQUEE BULBS ====================
+        // Animate marquee bulbs - chasing pattern
+        if (this.marqueBulbs && this.marqueBulbs.length > 0) {
+            const chaseSpeed = this.needsOptimization ? 4 : 8;
+            const activeIndex = Math.floor(time * chaseSpeed) % this.marqueBulbs.length;
+            
+            this.marqueBulbs.forEach((bulb, idx) => {
+                if (bulb.userData.bulbMat) {
+                    const distance = Math.abs(idx - activeIndex);
+                    const wrapDistance = Math.min(distance, this.marqueBulbs.length - distance);
+                    const intensity = Math.max(0, 1 - wrapDistance * 0.15);
+                    bulb.userData.bulbMat.emissiveIntensity = 0.2 + intensity * 0.8;
+                }
+            });
+        }
+        
+        // ==================== NEON TUBES ====================
+        // Animate neon tubes - subtle pulse (throttled on mobile)
+        if (this.neonTubes && this.neonTubes.length > 0) {
+            const pulseSpeed = this.needsOptimization ? 1.5 : 3;
+            const pulseIntensity = 0.8 + Math.sin(time * pulseSpeed) * 0.2;
+            this.neonTubes.forEach(tube => {
+                if (tube.material && tube.material.emissiveIntensity !== undefined) {
+                    tube.material.emissiveIntensity = pulseIntensity;
+                }
+            });
+        }
+        
+        // ==================== ROULETTE WHEEL ====================
+        if (this.rouletteWheelProp && this.rouletteWheelProp.update) {
+            this.rouletteWheelProp.update(time, delta);
+        }
+        
+        // ==================== SLOT MACHINE ====================
+        if (this.slotMachineDisplay && this.slotMachineDisplay.update) {
+            this.slotMachineDisplay.update(time, delta);
+        }
+        
+        // ==================== FLOATING TEXT ====================
+        if (this.floatingText) {
+            const baseY = this.floatingText.userData.baseY || 19;
+            const bobSpeed = this.needsOptimization ? 1 : 1.5;
+            const bobAmount = this.needsOptimization ? 0.15 : 0.3;
+            this.floatingText.position.y = baseY + Math.sin(time * bobSpeed) * bobAmount;
+        }
+        
+        // ==================== EXTERIOR PROPS ====================
+        // Skip on mobile - already reduced in build()
+        if (this.exteriorProps && this.exteriorProps.length > 0 && !this.needsOptimization) {
+            this.exteriorProps.forEach(prop => {
+                if (prop.update) {
+                    prop.update(time, delta);
+                }
+            });
+        } else if (this.exteriorProps && this.needsOptimization) {
+            // Mobile: Only update first prop (reduced set)
+            if (this.exteriorProps[0] && this.exteriorProps[0].update) {
+                this.exteriorProps[0].update(time, delta);
+            }
+        }
+        
+        // ==================== COIN STACKS ====================
+        // Skip on mobile (coin stacks not created on mobile anyway)
+        if (this.coinStacks && this.coinStacks.length > 0 && !this.needsOptimization) {
+            this.coinStacks.forEach((stack, idx) => {
+                const bounce = Math.sin(time * 2 + idx * 0.8) * 0.05;
+                stack.position.y = bounce;
+                stack.rotation.y = Math.sin(time * 0.5 + idx) * 0.1;
+            });
+        }
+        
+        // ==================== SPOTLIGHTS ====================
+        // Already skipped in createSpotlights() on mobile
+        if (this.spotlights && this.spotlights.length > 0) {
+            this.spotlights.forEach((beam, idx) => {
+                const sweepAngle = Math.sin(time * 0.8 + idx * Math.PI) * 0.4;
+                const baseX = beam.userData.baseX;
+                const baseZ = beam.userData.baseZ;
+                
+                // Sweep left/right
+                beam.position.x = baseX + Math.sin(sweepAngle) * 3;
+                beam.rotation.z = sweepAngle * 0.3;
+                
+                // Pulse intensity
+                if (beam.material) {
+                    beam.material.opacity = 0.1 + Math.sin(time * 3 + idx) * 0.05;
+                }
+            });
         }
     }
     
     /**
-     * Get decoration colliders for exterior props (chip stacks, dice, etc.)
+     * Get decoration colliders for exterior props
      * Returns world-space collider positions
      */
     getDecorationColliders(buildingX, buildingZ, rotation = 0) {
-        if (!this.exterior || !this.exterior.getDecorationColliders) {
-            return [];
-        }
+        // Entrance columns are the main exterior colliders
+        const dim = this.group.userData.dimensions;
+        const d = dim?.d || 32;
+        const entranceWidth = 12;
         
-        const localColliders = this.exterior.getDecorationColliders();
+        const colliders = [];
         const cos = Math.cos(rotation);
         const sin = Math.sin(rotation);
         
-        return localColliders.map(collider => {
-            // Transform local coordinates to world coordinates
-            const worldX = buildingX + collider.x * cos - collider.z * sin;
-            const worldZ = buildingZ + collider.x * sin + collider.z * cos;
-            
-            return {
-                ...collider,
+        // Column positions (local)
+        const columnPositions = [
+            { x: -entranceWidth / 2 - 0.5, z: d / 2 + 1 },
+            { x: entranceWidth / 2 + 0.5, z: d / 2 + 1 },
+        ];
+        
+        columnPositions.forEach((col, idx) => {
+            const worldX = buildingX + col.x * cos - col.z * sin;
+            const worldZ = buildingZ + col.x * sin + col.z * cos;
+            colliders.push({
+                x: col.x,
+                z: col.z,
                 worldX,
-                worldZ
-            };
+                worldZ,
+                size: { x: 2, z: 2 },
+                height: 14,
+                name: `casino_column_${idx}`
+            });
         });
+        
+        return colliders;
     }
 
     /**
@@ -1295,7 +1995,7 @@ class Casino extends BaseBuilding {
 }
 
 /**
- * Create a Casino building with extravagant exterior decorations
+ * Create a Casino building with Vegas-style exterior
  * @param {THREE} THREE - Three.js library
  * @param {Object} config - Building configuration
  * @returns {THREE.Group} - The casino mesh with update function attached
@@ -1311,14 +2011,12 @@ export function createCasino(THREE, config = {}) {
     mesh.userData.getDecorationColliders = (x, z, rot) => casino.getDecorationColliders(x, z, rot);
     mesh.userData.lights = casino.lights;
     
-    // Expose update function for animated exterior elements
+    // Expose update function for animated marquee and neon
     mesh.userData.update = (time, delta) => casino.update(time, delta);
     mesh.userData.hasAnimatedExterior = true;
-    
-    // Store reference to exterior for direct access if needed
-    mesh.userData.exterior = casino.exterior;
     
     return mesh;
 }
 
 export default Casino;
+

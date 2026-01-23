@@ -23,7 +23,16 @@ import {
     FrogGenerators,
     FROG_PALETTE,
     FROG_PALETTES,
-    generateFrogPalette
+    generateFrogPalette,
+    ShrimpGenerators,
+    SHRIMP_PALETTE,
+    generateShrimpPalette,
+    DuckGenerators,
+    DUCK_PALETTE,
+    TungTungGenerators,
+    TUNG_PALETTE,
+    GakeGenerators,
+    GAKE_PALETTE
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 
@@ -97,8 +106,105 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const [promoCode, setPromoCode] = useState('');
     const [promoMessage, setPromoMessage] = useState(null);
     
+    // Cloudflare Turnstile verification state
+    const [turnstileToken, setTurnstileToken] = useState(null);
+    const [turnstileVerified, setTurnstileVerified] = useState(false);
+    const [turnstileError, setTurnstileError] = useState(null);
+    const turnstileWidgetRef = useRef(null);
+    const turnstileContainerRef = useRef(null);
+    
+    // Initialize Turnstile widget
+    useEffect(() => {
+        // Skip Turnstile on localhost (dev mode) - Cloudflare requires domain whitelist
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (isLocalhost) {
+            console.log('⚠️ Turnstile: Skipping verification on localhost (dev mode)');
+            setTurnstileVerified(true);
+            return;
+        }
+        
+        // Only render if we have the site key and Turnstile is loaded
+        const siteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY;
+        if (!siteKey || typeof window.turnstile === 'undefined') {
+            // No site key or Turnstile not loaded - skip verification (dev mode)
+            if (!siteKey) {
+                console.log('⚠️ Turnstile: No site key configured, skipping verification');
+                setTurnstileVerified(true);
+            }
+            return;
+        }
+        
+        // Wait for container to be mounted
+        if (!turnstileContainerRef.current) return;
+        
+        // Render the widget
+        try {
+            turnstileWidgetRef.current = window.turnstile.render(turnstileContainerRef.current, {
+                sitekey: siteKey,
+                theme: 'dark',
+                size: 'flexible',
+                callback: (token) => {
+                    console.log('✅ Turnstile verification successful');
+                    setTurnstileToken(token);
+                    setTurnstileVerified(true);
+                    setTurnstileError(null);
+                },
+                'error-callback': (errorCode) => {
+                    console.error('❌ Turnstile error:', errorCode);
+                    setTurnstileError('Verification failed. Please try again.');
+                    setTurnstileVerified(false);
+                },
+                'expired-callback': () => {
+                    console.warn('⏰ Turnstile token expired');
+                    setTurnstileToken(null);
+                    setTurnstileVerified(false);
+                    // Reset widget to get new token
+                    if (turnstileWidgetRef.current) {
+                        window.turnstile.reset(turnstileWidgetRef.current);
+                    }
+                }
+            });
+        } catch (err) {
+            console.error('Turnstile render error:', err);
+            // Allow entry if Turnstile fails to load (graceful degradation)
+            setTurnstileVerified(true);
+        }
+        
+        return () => {
+            // Cleanup widget on unmount
+            if (turnstileWidgetRef.current && typeof window.turnstile !== 'undefined') {
+                try {
+                    window.turnstile.remove(turnstileWidgetRef.current);
+                } catch (e) {
+                    // Ignore cleanup errors
+                }
+            }
+        };
+    }, [scriptsLoaded]); // Re-run when scripts are loaded
+    
     // Show only owned cosmetics toggle
     const [showOwnedOnly, setShowOwnedOnly] = useState(false);
+    
+    // Collapsible section states (for cleaner UI)
+    const [colorsExpanded, setColorsExpanded] = useState(false);
+    const [walletExpanded, setWalletExpanded] = useState(false);
+    const [characterExpanded, setCharacterExpanded] = useState(false);
+    
+    // Character emoji mapping for grid display
+    const CHARACTER_EMOJIS = {
+        penguin: '🐧',
+        marcus: '🪱',
+        doginal: '🐕',
+        frog: '🐸',
+        shrimp: '🦐',
+        duck: '🦆',
+        tungTung: '🪵',
+        gake: '⭐',
+        whiteWhale: '🐋',
+        blackWhale: '🖤',
+        silverWhale: '🩶',
+        goldWhale: '💛'
+    };
     
     // Customization state - from props (synced from server for auth users)
     const [skinColor, setSkinColor] = useState(currentData?.skin || 'blue');
@@ -116,6 +222,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const [frogPrimaryColor, setFrogPrimaryColor] = useState(currentData?.frogPrimaryColor || '#4A8C4A');
     const [frogSecondaryColor, setFrogSecondaryColor] = useState(currentData?.frogSecondaryColor || '#B8C8B0');
     
+    // Shrimp color (primary shell color)
+    const [shrimpPrimaryColor, setShrimpPrimaryColor] = useState(currentData?.shrimpPrimaryColor || '#FF6B4A');
+    
     // Sync state when currentData changes (from server restore)
     useEffect(() => {
         if (currentData) {
@@ -132,6 +241,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             // Frog colors
             setFrogPrimaryColor(currentData.frogPrimaryColor || '#4A8C4A');
             setFrogSecondaryColor(currentData.frogSecondaryColor || '#B8C8B0');
+            // Shrimp color
+            setShrimpPrimaryColor(currentData.shrimpPrimaryColor || '#FF6B4A');
         }
     }, [currentData]);
     
@@ -203,6 +314,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     
     // Check if a mount is unlocked
     const isMountUnlocked = React.useCallback((mountId) => {
+        // TEMPORARY: Unlock all for everyone
+        // Note: UNLOCK_ALL_COSMETICS defined below, but this is hoisted
+        if (true) return true; // TODO: Change to UNLOCK_ALL_COSMETICS check when ready
         // 'none' is always available
         if (mountId === 'none') return true;
         // All mounts are promo-exclusive currently
@@ -272,6 +386,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     
     // Check if a skin color is unlocked
     const isSkinColorUnlocked = (colorId) => {
+        // TEMPORARY: Unlock all for everyone
+        // Note: UNLOCK_ALL_COSMETICS defined below, but we just return true here for now
+        return true; // TODO: Remove when ready to enforce cosmetic ownership
         // Base colors are always unlocked
         if (BASE_SKIN_COLORS.includes(colorId)) return true;
         // Premium colors require gacha unlock
@@ -285,8 +402,15 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     // Default cosmetics that are free for everyone (including guests)
     const FREE_DEFAULT_COSMETICS = ['none', 'normal', 'beak'];
     
+    // TEMPORARY: Unlock all cosmetics for everyone
+    // TODO: Set to false when ready to enforce cosmetic ownership
+    const UNLOCK_ALL_COSMETICS = true;
+    
     // Check if a cosmetic is unlocked (or doesn't require unlock)
     const isCosmeticUnlocked = React.useCallback((cosmeticId, category = null) => {
+        // TEMPORARY: Unlock all cosmetics for everyone
+        if (UNLOCK_ALL_COSMETICS) return true;
+        
         // Default items are always available
         if (FREE_DEFAULT_COSMETICS.includes(cosmeticId)) return true;
         
@@ -318,6 +442,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     
     // Check if current customization is valid (all equipped items owned)
     const isCustomizationValid = useMemo(() => {
+        // TEMPORARY: Allow everything for everyone when unlocked
+        if (UNLOCK_ALL_COSMETICS) return true;
+        
         // Guests can only use default appearance (all 'none'/defaults or base items)
         if (!isAuthenticated) {
             // Allow guests to use base colors and default options only
@@ -415,8 +542,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     
     // Handle character type change
     const handleCharacterTypeChange = (typeId) => {
+        console.log(`🎭 Character type change requested: ${typeId}`);
         // Check if character is unlocked (penguin always available, others from server)
         if (typeId === 'penguin' || unlockedCharactersList.includes(typeId)) {
+            console.log(`🎭 Setting character type to: ${typeId}`);
             setCharacterType(typeId);
             
             // Doginal has built-in wizard hat and doesn't use penguin cosmetics
@@ -426,6 +555,17 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 setMouth('none');    // Dog has its own mouth/snout
                 setBodyItem('none'); // No shirt on dog
             }
+            
+            // Duck has built-in eyes and bill, but allows hats and clothing
+            if (typeId === 'duck') {
+                setEyes('none');     // Duck has its own eyes
+                setMouth('none');    // Duck has a bill
+            }
+            
+            // Gake only supports hat, eyes, and mouth - no body items
+            if (typeId === 'gake') {
+                setBodyItem('none'); // Gake doesn't wear clothes
+            }
         }
     };
     
@@ -433,7 +573,13 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const currentCharacter = characterRegistry.getCharacter(characterType);
     
     // Get unlocked characters from server (penguin always available)
+    // When UNLOCK_ALL_COSMETICS is true, show all characters to everyone (including guests)
     const unlockedCharactersList = useMemo(() => {
+        // TEMPORARY: Unlock all characters for everyone (matches cosmetics unlock)
+        if (UNLOCK_ALL_COSMETICS) {
+            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
+        }
+        
         const chars = ['penguin']; // Penguin always unlocked
         if (isAuthenticated && userData?.unlockedCharacters) {
             userData.unlockedCharacters.forEach(c => {
@@ -447,8 +593,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharacters = unlockedCharactersList.filter(id => characterRegistry.getCharacter(id));
     
     useEffect(() => {
-        if(updateData) updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor});
-    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, updateData]);
+        if(updateData) {
+            console.log(`📦 Syncing appearance to parent: characterType=${characterType}`);
+            updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor});
+        }
+    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, updateData]);
 
     const sceneRef = useRef(null);
     const penguinRef = useRef(null);
@@ -460,6 +609,62 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const reqRef = useRef(null);
     const rendererRef = useRef(null);
     const cameraRef = useRef(null);
+    
+    // Refs for animated skin colors (cosmic, galaxy, rainbow, nebula)
+    const animatedSkinMaterialsRef = useRef([]);
+    const cosmicStarsRef = useRef([]); // Stars for cosmic/galaxy skins
+    const currentSkinRef = useRef(skinColor);
+    const lastPenguinPosRef = useRef({ x: 0, y: 0, rotY: 0 }); // Track movement for texture shift
+    
+    // Update ref when skinColor changes
+    useEffect(() => {
+        currentSkinRef.current = skinColor;
+    }, [skinColor]);
+    
+    // Animated skin color configurations
+    const ANIMATED_SKIN_COLORS = {
+        cosmic: {
+            // Galaxy with shifting purples, deep blues, and magenta hints
+            colors: ['#0B0B45', '#1a0a3e', '#3d1a6e', '#6b2d8b', '#4a1259', '#2a0e4f', '#0B0B45'],
+            speed: 0.5,
+            emissive: 0.2,
+            hasStars: true,
+            usePhaseOffsets: true
+        },
+        galaxy: {
+            // Darker, more mysterious space feel
+            colors: ['#1A0533', '#0a1628', '#2a1055', '#0f0f3f', '#1a0a3e', '#1A0533'],
+            speed: 0.4,
+            emissive: 0.15,
+            hasStars: true,
+            usePhaseOffsets: true
+        },
+        rainbow: {
+            // Full spectrum cycling - WHOLE penguin same color
+            colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0088ff', '#8800ff'],
+            speed: 0.8,
+            emissive: 0.25,
+            hasStars: false,
+            usePhaseOffsets: false // All parts same color
+        },
+        prismatic: {
+            // Each body part is a DIFFERENT color (like a prism)
+            colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#00ffff', '#0088ff', '#8800ff', '#ff00ff'],
+            speed: 0.6,
+            emissive: 0.3,
+            hasStars: false,
+            usePhaseOffsets: true,
+            phaseMultiplier: 1.2
+        },
+        nebula: {
+            // Purple/violet nebula
+            colors: ['#9932CC', '#4B0082', '#8A2BE2', '#9400D3', '#6B238E', '#9932CC'],
+            speed: 0.6,
+            emissive: 0.2,
+            hasStars: true,
+            usePhaseOffsets: true
+        }
+    };
 
     // --- SCRIPT LOADING ---
     useEffect(() => {
@@ -681,6 +886,90 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     l.intensity = intensity;
                 });
             }
+            
+            // Animate special skin colors (cosmic, galaxy, rainbow, nebula)
+            const skinConfig = ANIMATED_SKIN_COLORS[currentSkinRef.current];
+            if (skinConfig && animatedSkinMaterialsRef.current.length > 0) {
+                // Get penguin position/rotation for movement-reactive texture
+                const penguinPos = penguinRef.current ? {
+                    x: penguinRef.current.position.x,
+                    y: penguinRef.current.position.y,
+                    rotY: penguinRef.current.rotation.y
+                } : { x: 0, y: 0, rotY: 0 };
+                
+                // Calculate movement delta for texture shift effect
+                const moveDelta = {
+                    x: (penguinPos.x - lastPenguinPosRef.current.x) * skinConfig.movementSensitivity,
+                    y: (penguinPos.y - lastPenguinPosRef.current.y) * skinConfig.movementSensitivity,
+                    rot: (penguinPos.rotY - lastPenguinPosRef.current.rotY) * skinConfig.movementSensitivity * 2
+                };
+                lastPenguinPosRef.current = { ...penguinPos };
+                
+                // Time + movement offset = moving through the galaxy
+                const movementOffset = penguinPos.rotY * 0.5 + penguinPos.y * 0.2;
+                const t = (timeRef.current * skinConfig.speed) + movementOffset;
+                const colorCount = skinConfig.colors.length;
+                
+                // Check if we should use phase offsets (different colors per part)
+                const useOffsets = skinConfig.usePhaseOffsets ?? true;
+                const phaseMultiplier = skinConfig.phaseMultiplier || 0.7;
+                
+                // Add subtle color variation based on movement
+                const moveIntensity = Math.abs(moveDelta.rot) + Math.abs(moveDelta.y);
+                
+                animatedSkinMaterialsRef.current.forEach((mat, index) => {
+                    if (mat && mat.color) {
+                        // Apply phase offset if configured (prismatic = different colors per part)
+                        const phaseOffset = useOffsets ? (index * phaseMultiplier) : 0;
+                        
+                        // Calculate color with phase offset
+                        const colorIndex = Math.abs(t + phaseOffset) % colorCount;
+                        const fromIdx = Math.floor(colorIndex) % colorCount;
+                        const toIdx = (fromIdx + 1) % colorCount;
+                        const blend = colorIndex - Math.floor(colorIndex);
+                        
+                        const fromColor = new THREE.Color(skinConfig.colors[fromIdx]);
+                        const toColor = new THREE.Color(skinConfig.colors[toIdx]);
+                        const materialColor = fromColor.clone().lerp(toColor, blend);
+                        
+                        // Brighten slightly when moving
+                        if (moveIntensity > 0.001) {
+                            materialColor.offsetHSL(0, 0, Math.min(moveIntensity * 0.5, 0.1));
+                        }
+                        
+                        mat.color.copy(materialColor);
+                        if (mat.emissive && skinConfig.emissive) {
+                            mat.emissive.copy(materialColor);
+                            mat.emissiveIntensity = skinConfig.emissive + Math.sin(t * 2) * 0.05;
+                        }
+                    }
+                });
+            }
+            
+            // Animate cosmic stars (twinkling effect)
+            if (cosmicStarsRef.current.length > 0) {
+                cosmicStarsRef.current.forEach((star, i) => {
+                    if (star && star.material) {
+                        // Each star twinkles at its own rate (smooth sine wave)
+                        const twinkle = Math.sin(timeRef.current * star.userData.twinkleSpeed + star.userData.twinkleOffset);
+                        const twinkleNorm = (twinkle + 1) / 2; // Normalize to 0-1
+                        
+                        // Opacity pulsing
+                        star.material.opacity = 0.4 + twinkleNorm * 0.6;
+                        
+                        // Emissive intensity pulsing for glow effect
+                        star.material.emissiveIntensity = 0.6 + twinkleNorm * 0.8;
+                        
+                        // Subtle color temperature shift (warmer when bright)
+                        const warmth = twinkleNorm * 0.15;
+                        star.material.emissive.setRGB(0.7 + warmth, 0.75 + warmth * 0.5, 1.0);
+                        
+                        // Subtle size pulsing
+                        const scale = star.userData.baseScale * (0.8 + twinkleNorm * 0.4);
+                        star.scale.setScalar(scale);
+                    }
+                });
+            }
 
             renderer.render(scene, camera);
         };
@@ -709,8 +998,57 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         
         particlesRef.current = [];
         lasersRef.current = [];
+        animatedSkinMaterialsRef.current = [];
+        cosmicStarsRef.current = [];
+        
+        // Get the current skin color hex for tracking animated materials
+        const currentSkinHex = PALETTE[skinColor] || skinColor;
+        const isAnimatedSkin = ANIMATED_SKIN_COLORS[skinColor] !== undefined;
+        const skinConfig = ANIMATED_SKIN_COLORS[skinColor];
+        
+        // Function to create stars for cosmic/galaxy skins
+        const createCosmicStars = (targetGroup) => {
+            if (!skinConfig?.hasStars) return;
+            
+            const starCount = 30; // Number of stars on the penguin
+            const starGeometry = new THREE.SphereGeometry(VOXEL_SIZE * 0.12, 6, 6);
+            
+            for (let i = 0; i < starCount; i++) {
+                // Use MeshStandardMaterial for proper emissive glow
+                const starMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.8,
+                    emissive: new THREE.Color(0xaabbff), // Slight blue-white glow
+                    emissiveIntensity: 1.0,
+                    roughness: 0.2,
+                    metalness: 0.8
+                });
+                
+                const star = new THREE.Mesh(starGeometry, starMaterial);
+                
+                // Random position on the penguin surface (body/head area)
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI * 0.7 + 0.15; // Avoid poles
+                const radius = 1.0 + Math.random() * 0.8; // Vary distance from center
+                
+                star.position.set(
+                    Math.sin(phi) * Math.cos(theta) * radius,
+                    Math.cos(phi) * radius + 0.3, // Offset up to body/head area
+                    Math.sin(phi) * Math.sin(theta) * radius
+                );
+                
+                // Store twinkle parameters - slower twinkling
+                star.userData.twinkleSpeed = 0.8 + Math.random() * 1.2; // Slower twinkle
+                star.userData.twinkleOffset = Math.random() * Math.PI * 2; // Random phase
+                star.userData.baseScale = 0.6 + Math.random() * 0.5; // Random size
+                
+                targetGroup.add(star);
+                cosmicStarsRef.current.push(star);
+            }
+        };
 
-        function buildVoxelPart(voxelData, colorPalette, offset = {x:0, y:0, z:0}) {
+        function buildVoxelPart(voxelData, colorPalette, offset = {x:0, y:0, z:0}, trackSkinMaterial = false) {
             const geometry = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
             const partGroup = new THREE.Group();
             const colorBatches = {};
@@ -729,11 +1067,20 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
 
             Object.keys(colorBatches).forEach(color => {
                 const count = colorBatches[color].length;
-                const mesh = new THREE.InstancedMesh(geometry, new THREE.MeshStandardMaterial({ 
+                const material = new THREE.MeshStandardMaterial({ 
                     color: new THREE.Color(color),
                     roughness: 0.3,
                     metalness: 0.1,
-                }), count);
+                });
+                
+                // Track skin-colored materials for animation
+                if (trackSkinMaterial && isAnimatedSkin && color === currentSkinHex) {
+                    material.emissive = new THREE.Color(color);
+                    material.emissiveIntensity = 0.1;
+                    animatedSkinMaterialsRef.current.push(material);
+                }
+                
+                const mesh = new THREE.InstancedMesh(geometry, material, count);
                 colorBatches[color].forEach((matrix, i) => mesh.setMatrixAt(i, matrix));
                 mesh.instanceMatrix.needsUpdate = true;
                 mesh.castShadow = true;
@@ -743,8 +1090,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             return partGroup;
         }
 
-        const addPart = (voxels, name, palette = PALETTE) => {
-            const partGroup = buildVoxelPart(voxels, palette);
+        const addPart = (voxels, name, palette = PALETTE, trackSkinMaterial = false) => {
+            const partGroup = buildVoxelPart(voxels, palette, {x:0, y:0, z:0}, trackSkinMaterial);
             partGroup.name = name;
             group.add(partGroup);
             if (mirrorGroup) {
@@ -848,6 +1195,136 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 const offsetBodyVoxels = frogBodyItemVoxels.map(v => ({ ...v, y: v.y - 2 }));
                 addPart(offsetBodyVoxels, 'bodyItem');
             }
+        } else if (characterType === 'shrimp') {
+            // Build Shrimp character - segmented body with tail flappers and clawed arms
+            const shrimpPalette = generateShrimpPalette(shrimpPrimaryColor || '#FF6B4A');
+            
+            addPart(ShrimpGenerators.head(), 'head', shrimpPalette);
+            addPart(ShrimpGenerators.body(), 'body', shrimpPalette);
+            addPart(ShrimpGenerators.flipperLeft(), 'flipper_l', shrimpPalette);
+            addPart(ShrimpGenerators.flipperRight(), 'flipper_r', shrimpPalette);
+            addPart(ShrimpGenerators.tail(), 'tail', shrimpPalette);
+            addPart(ShrimpGenerators.legs(), 'legs', shrimpPalette);
+            
+            // Add hat support for shrimp
+            const shrimpHatVoxels = ASSETS.HATS[hat] || [];
+            if (shrimpHatVoxels.length > 0) {
+                // Offset hat voxels: Y+1, Z+2 (pushed back toward tail)
+                const offsetHatVoxels = shrimpHatVoxels.map(v => ({ ...v, y: v.y + 1, z: v.z + 2 }));
+                addPart(offsetHatVoxels, 'hat');
+                
+                // Add wizard hat glow effect if equipped
+                if (hat === 'wizardHat') {
+                    const wizardLight = new THREE.PointLight(0xFF69B4, 1.5, 8);
+                    wizardLight.position.set(0, 18 * VOXEL_SIZE, 2 * VOXEL_SIZE);
+                    group.add(wizardLight);
+                    if (mirrorGroup) mirrorGroup.add(wizardLight.clone());
+                    
+                    const starLight = new THREE.PointLight(0xFFD700, 0.8, 5);
+                    starLight.position.set(0, 15 * VOXEL_SIZE, 4 * VOXEL_SIZE);
+                    group.add(starLight);
+                    if (mirrorGroup) mirrorGroup.add(starLight.clone());
+                }
+            }
+            
+            // Add body item for Shrimp (lowered by 4 from previous)
+            const shrimpBodyItemData = ASSETS.BODY[bodyItem];
+            const shrimpBodyItemVoxels = shrimpBodyItemData?.voxels || shrimpBodyItemData || [];
+            if (shrimpBodyItemVoxels.length > 0) {
+                // Offset for shrimp body position: lowered by 4 (was +2, now -2)
+                const offsetBodyVoxels = shrimpBodyItemVoxels.map(v => ({ ...v, y: v.y - 2 }));
+                addPart(offsetBodyVoxels, 'bodyItem');
+            }
+        } else if (characterType === 'duck') {
+            // Build Duck character - similar to penguin but with orange bill and wings
+            addPart(DuckGenerators.head(), 'head', DUCK_PALETTE);
+            addPart(DuckGenerators.body(), 'body', DUCK_PALETTE);
+            addPart(DuckGenerators.armLeft(), 'flipper_l', DUCK_PALETTE);
+            addPart(DuckGenerators.armRight(), 'flipper_r', DUCK_PALETTE);
+            addPart(DuckGenerators.legLeft(), 'foot_l', DUCK_PALETTE);
+            addPart(DuckGenerators.legRight(), 'foot_r', DUCK_PALETTE);
+            addPart(DuckGenerators.tail(), 'tail', DUCK_PALETTE);  // Animated tail!
+            
+            // Add hat support for duck - raised by 5 for duck head height
+            const duckHatVoxels = ASSETS.HATS[hat] || [];
+            if (duckHatVoxels.length > 0) {
+                const offsetHatVoxels = duckHatVoxels.map(v => ({ ...v, y: v.y + 4 }));
+                addPart(offsetHatVoxels, 'hat');
+            }
+            
+            // Add body item support for duck
+            const duckBodyItemData = ASSETS.BODY[bodyItem];
+            const duckBodyItemVoxels = duckBodyItemData?.voxels || duckBodyItemData || [];
+            if (duckBodyItemVoxels.length > 0) {
+                addPart(duckBodyItemVoxels, 'bodyItem');
+            }
+        } else if (characterType === 'tungTung') {
+            // Build Tung Tung Tung Sahur - tall cylindrical log creature with bat
+            addPart(TungTungGenerators.head(), 'head', TUNG_PALETTE);  // Head is the main cylinder
+            // Body is empty for this character (integrated into head)
+            const tungBodyVoxels = TungTungGenerators.body();
+            if (tungBodyVoxels.length > 0) {
+                addPart(tungBodyVoxels, 'body', TUNG_PALETTE);
+            }
+            addPart(TungTungGenerators.armLeft(), 'flipper_l', TUNG_PALETTE);
+            addPart(TungTungGenerators.armRight(), 'flipper_r', TUNG_PALETTE);  // Has bat built in!
+            addPart(TungTungGenerators.legLeft(), 'foot_l', TUNG_PALETTE);
+            addPart(TungTungGenerators.legRight(), 'foot_r', TUNG_PALETTE);
+            
+            // Add eyes - raised and forward for the tall cylinder
+            // Head is y=15-30 (with Y_OFFSET=6 → y=21-36), face should be around y=27-29
+            // Standard penguin eyes are around y=6-8, so offset by +21 to get to y=27-29
+            const tungEyeVoxels = ASSETS.EYES[eyes] || [];
+            if (tungEyeVoxels.length > 0) {
+                const offsetEyeVoxels = tungEyeVoxels.map(v => ({ ...v, y: v.y + 21, z: v.z + 1 }));
+                addPart(offsetEyeVoxels, 'eyes');
+            }
+            
+            // Add mouth - raised and forward for the tall cylinder
+            const tungMouthVoxels = ASSETS.MOUTH[mouth] || [];
+            if (tungMouthVoxels.length > 0) {
+                const offsetMouthVoxels = tungMouthVoxels.map(v => ({ ...v, y: v.y + 21, z: v.z + 1 }));
+                addPart(offsetMouthVoxels, 'mouth');
+            }
+        } else if (characterType === 'gake') {
+            // Build Gake - Patrick Star style pink starfish
+            addPart(GakeGenerators.head(), 'head', GAKE_PALETTE);
+            addPart(GakeGenerators.body(), 'body', GAKE_PALETTE);
+            addPart(GakeGenerators.armLeft(), 'flipper_l', GAKE_PALETTE);
+            addPart(GakeGenerators.armRight(), 'flipper_r', GAKE_PALETTE);
+            addPart(GakeGenerators.footLeft(), 'foot_l', GAKE_PALETTE);
+            addPart(GakeGenerators.footRight(), 'foot_r', GAKE_PALETTE);
+            
+            // Gake's face is raised by +3 compared to penguin
+            const GAKE_FACE_OFFSET = 2;
+            
+            // Add eyes - raised to match Gake's head position
+            const gakeEyeVoxels = ASSETS.EYES[eyes] || [];
+            if (gakeEyeVoxels.length > 0) {
+                const offsetEyes = gakeEyeVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+                addPart(offsetEyes, 'eyes');
+            }
+            
+            // Add mouth - raised to match Gake's head position
+            const gakeMouthVoxels = ASSETS.MOUTH[mouth] || [];
+            if (gakeMouthVoxels.length > 0) {
+                const offsetMouth = gakeMouthVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+                addPart(offsetMouth, 'mouth');
+            }
+            
+            // Add hat - raised to match Gake's head position
+            const gakeHatVoxels = ASSETS.HATS[hat] || [];
+            if (gakeHatVoxels.length > 0) {
+                const offsetHat = gakeHatVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+                addPart(offsetHat, 'hat');
+            }
+            
+            // Add body item
+            const gakeBodyItemData = ASSETS.BODY[bodyItem];
+            const gakeBodyItemVoxels = gakeBodyItemData?.voxels || gakeBodyItemData || [];
+            if (gakeBodyItemVoxels.length > 0) {
+                addPart(gakeBodyItemVoxels, 'bodyItem');
+            }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body
             const WHALE_CONFIGS = {
@@ -882,10 +1359,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
 
             // Only render body if not hidden by clothing item
             if (!hideBody) {
-                addPart(bodyVoxels, 'body');
-                addPart(headVoxels, 'head');
-                addPart(flippersLeft, 'flipper_l');
-                addPart(flippersRight, 'flipper_r');
+                // Track skin materials for animated colors (cosmic, galaxy, rainbow, nebula)
+                addPart(bodyVoxels, 'body', PALETTE, true);
+                addPart(headVoxels, 'head', PALETTE, true);
+                addPart(flippersLeft, 'flipper_l', PALETTE, true);
+                addPart(flippersRight, 'flipper_r', PALETTE, true);
                 addPart(feetVoxels, 'feet');
                 addPart(hatVoxels, 'hat');
                 addPart(eyeVoxels, 'eyes');
@@ -1191,8 +1669,13 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 group.position.y = (mountData.seatOffset.y || 0) * VOXEL_SIZE;
             }
         }
+        
+        // Add cosmic stars for animated skins (only for penguin character type)
+        if (characterType === 'penguin') {
+            createCosmicStars(group);
+        }
 
-    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor]);
+    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor]);
 
     // Get available skin colors - base + unlocked premium
     const availableSkinColors = useMemo(() => {
@@ -1329,41 +1812,201 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     <h2 className={`text-white font-bold flex items-center gap-2 sticky top-0 bg-gray-900/50 p-2 rounded backdrop-blur-md z-20 ${isPortrait && isMobileView ? 'text-base mb-1' : 'text-lg mb-2'}`}>
                         <IconSettings size={isPortrait && isMobileView ? 16 : 20} /> {characterType === 'penguin' ? 'Wardrobe' : currentCharacter?.name || 'Character'}
                     </h2>
+                    
+                    {/* Wallet & Account Section - Collapsible, at top */}
+                    <div className="mb-2">
+                        <button
+                            onClick={() => setWalletExpanded(!walletExpanded)}
+                            className="w-full flex items-center justify-between p-2 bg-purple-900/30 hover:bg-purple-900/50 rounded-lg border border-purple-500/30 transition-colors"
+                        >
+                            <span className="text-purple-300 font-semibold text-sm flex items-center gap-2">
+                                👛 Account & Promo
+                                {!isAuthenticated && <span className="text-xs text-amber-400">(Guest)</span>}
+                                {isAuthenticated && <span className="text-xs text-green-400">✓</span>}
+                            </span>
+                            <span className="text-purple-400 text-xs">{walletExpanded ? '▼' : '▶'}</span>
+                        </button>
+                        {walletExpanded && (
+                            <div className="mt-2 p-3 bg-black/30 rounded-lg border border-purple-500/20 space-y-3">
+                                {/* Wallet Auth */}
+                                <WalletAuth />
+                                
+                                {/* Username - only for authenticated */}
+                                {isAuthenticated && (
+                                    <div>
+                                        <label className="block text-xs text-yellow-400 mb-1">
+                                            {isReturningUser ? '🔒 USERNAME' : '✏️ USERNAME'}
+                                        </label>
+                                        {isReturningUser ? (
+                                            <div className="w-full px-3 py-2 bg-black/30 border border-gray-500/50 rounded-lg text-white text-sm">
+                                                {username}
+                                            </div>
+                                        ) : (
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    value={username}
+                                                    onChange={(e) => handleUsernameChange(e.target.value)}
+                                                    maxLength={20}
+                                                    minLength={3}
+                                                    placeholder="3-20 characters..."
+                                                    className={`w-full px-3 py-2 pr-20 bg-black/50 border rounded-lg text-white text-sm focus:outline-none placeholder-white/30 ${
+                                                        usernameStatus === 'taken' ? 'border-red-500/50'
+                                                            : usernameStatus === 'available' ? 'border-green-500/50'
+                                                            : 'border-yellow-500/50'
+                                                    }`}
+                                                />
+                                                {username.length >= 3 && (
+                                                    <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1.5 py-0.5 rounded ${
+                                                        usernameStatus === 'available' ? 'bg-green-500/50 text-green-300'
+                                                            : usernameStatus === 'taken' ? 'bg-red-500/50 text-red-300'
+                                                            : 'bg-gray-500/50 text-gray-300'
+                                                    }`}>
+                                                        {usernameStatus === 'checking' && '⏳'}
+                                                        {usernameStatus === 'available' && '✓'}
+                                                        {usernameStatus === 'taken' && '✗'}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                                
+                                {/* Promo Code */}
+                                <div>
+                                    <label className="block text-xs text-purple-400 mb-1">PROMO CODE</label>
+                                    <div className="flex gap-2">
+                                        <input
+                                            type="text"
+                                            value={promoCode}
+                                            onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                                            onKeyDown={(e) => e.key === 'Enter' && !promoLoading && handlePromoCodeSubmit()}
+                                            maxLength={20}
+                                            placeholder={isAuthenticated ? "Enter code..." : "Login first"}
+                                            disabled={promoLoading || !isAuthenticated}
+                                            className={`flex-1 px-3 py-2 bg-black/50 border border-purple-500/50 rounded-lg text-white text-sm focus:outline-none placeholder-white/30 uppercase ${!isAuthenticated ? 'opacity-50' : ''}`}
+                                        />
+                                        <button
+                                            onClick={handlePromoCodeSubmit}
+                                            disabled={promoLoading || !isAuthenticated}
+                                            className={`px-3 py-2 text-white rounded-lg text-xs font-bold ${
+                                                promoLoading || !isAuthenticated ? 'bg-gray-600 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-500'
+                                            }`}
+                                        >
+                                            {promoLoading ? '...' : '→'}
+                                        </button>
+                                    </div>
+                                    {promoMessage && (
+                                        <p className={`text-xs mt-1 ${promoMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                                            {promoMessage.text}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
 
                     {/* Customization options - ONLY for penguin character */}
                     {characterType === 'penguin' ? (
                         <>
-                            <div className="flex flex-col gap-1 text-white">
-                                <span className={`font-semibold text-gray-300 uppercase tracking-wider ${isPortrait && isMobileView ? 'text-[10px]' : 'text-xs'}`}>
-                                    Feathers ({options.skin.filter(c => isSkinColorUnlocked(c)).length}/{options.skin.length})
-                                </span>
-                                <div className={`grid gap-1.5 ${isPortrait && isMobileView ? 'grid-cols-8' : 'grid-cols-6 gap-2'}`}>
-                                    {options.skin.map(c => {
-                                        const isUnlocked = isSkinColorUnlocked(c);
-                                        const isSelected = skinColor === c;
-                                        return (
-                                        <button 
-                                            key={c}
-                                                onClick={() => isUnlocked && setSkinColor(c)}
-                                                title={isUnlocked ? c : `${c} (🔒 Gacha)`}
-                                                disabled={!isUnlocked}
-                                                className={`rounded-full border-2 relative ${
-                                                    isSelected ? 'border-white scale-110 shadow-lg' : 'border-transparent'
-                                                } ${
-                                                    isUnlocked ? 'opacity-100 hover:scale-105 cursor-pointer' : 'opacity-30 cursor-not-allowed'
-                                                } transition-all ${isPortrait && isMobileView ? 'w-6 h-6' : 'w-8 h-8'}`}
-                                            style={{backgroundColor: PALETTE[c] || c}}
-                                            >
-                                                {!isUnlocked && (
-                                                    <span className="absolute inset-0 flex items-center justify-center text-white text-[8px]">🔒</span>
-                                                )}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
+                            {/* Feathers (Colors) - Collapsible */}
+                            <div className="mb-2">
+                                <button
+                                    onClick={() => setColorsExpanded(!colorsExpanded)}
+                                    className="w-full flex items-center justify-between p-2 bg-cyan-900/30 hover:bg-cyan-900/50 rounded-lg border border-cyan-500/30 transition-colors"
+                                >
+                                    <span className="text-cyan-300 font-semibold text-sm flex items-center gap-2">
+                                        🎨 Feathers
+                                        <span className="text-xs text-cyan-400/70">({options.skin.length} colors)</span>
+                                        <span 
+                                            className="w-4 h-4 rounded-full border border-white/50" 
+                                            style={{ backgroundColor: PALETTE[skinColor] || skinColor }}
+                                        />
+                                    </span>
+                                    <span className="text-cyan-400 text-xs">{colorsExpanded ? '▼' : '▶'}</span>
+                                </button>
+                                {colorsExpanded && (
+                                    <div className="mt-2 p-3 bg-black/30 rounded-lg border border-cyan-500/20">
+                                        <div className={`grid gap-1.5 ${isPortrait && isMobileView ? 'grid-cols-8' : 'grid-cols-8'} max-h-[120px] overflow-y-auto overflow-x-hidden`}>
+                                            {options.skin.map(c => {
+                                                const isUnlocked = isSkinColorUnlocked(c);
+                                                const isSelected = skinColor === c;
+                                                // Special animated colors get gradient backgrounds
+                                                const isCosmicColor = c === 'cosmic';
+                                                const isGalaxyColor = c === 'galaxy';
+                                                const isRainbowColor = c === 'rainbow';
+                                                const isPrismaticColor = c === 'prismatic';
+                                                const isNebulaColor = c === 'nebula';
+                                                const isAnimatedColor = isCosmicColor || isGalaxyColor || isRainbowColor || isPrismaticColor || isNebulaColor;
+                                                
+                                                // Galaxy/cosmic gradient style (slow, gentle animations)
+                                                const getAnimatedStyle = () => {
+                                                    if (isCosmicColor) {
+                                                        return {
+                                                            background: 'linear-gradient(135deg, #0B0B45 0%, #1a0a3e 20%, #3d1a6e 40%, #6b2d8b 50%, #3d1a6e 60%, #1a0a3e 80%, #0B0B45 100%)',
+                                                            backgroundSize: '400% 400%',
+                                                            animation: 'cosmicShift 12s ease infinite',
+                                                            boxShadow: isSelected ? '0 0 8px 2px rgba(107, 45, 139, 0.6)' : 'none'
+                                                        };
+                                                    }
+                                                    if (isGalaxyColor) {
+                                                        return {
+                                                            background: 'linear-gradient(135deg, #1A0533 0%, #2a1055 25%, #0a1628 50%, #1a0a3e 75%, #1A0533 100%)',
+                                                            backgroundSize: '400% 400%',
+                                                            animation: 'cosmicShift 15s ease infinite',
+                                                            boxShadow: isSelected ? '0 0 8px 2px rgba(26, 5, 51, 0.8)' : 'none'
+                                                        };
+                                                    }
+                                                    if (isRainbowColor) {
+                                                        return {
+                                                            background: 'linear-gradient(135deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff, #ff0000)',
+                                                            backgroundSize: '600% 600%',
+                                                            animation: 'rainbowShift 10s linear infinite',
+                                                            boxShadow: isSelected ? '0 0 8px 2px rgba(255, 255, 255, 0.5)' : 'none'
+                                                        };
+                                                    }
+                                                    if (isPrismaticColor) {
+                                                        // Multi-color prism effect - each section different color
+                                                        return {
+                                                            background: 'conic-gradient(from 0deg, #ff0000, #ff8800, #ffff00, #00ff00, #00ffff, #0088ff, #8800ff, #ff00ff, #ff0000)',
+                                                            animation: 'rainbowShift 8s linear infinite',
+                                                            boxShadow: isSelected ? '0 0 8px 2px rgba(255, 0, 255, 0.5)' : 'none'
+                                                        };
+                                                    }
+                                                    if (isNebulaColor) {
+                                                        return {
+                                                            background: 'linear-gradient(135deg, #9932CC 0%, #4B0082 30%, #8A2BE2 50%, #9400D3 70%, #9932CC 100%)',
+                                                            backgroundSize: '400% 400%',
+                                                            animation: 'cosmicShift 14s ease infinite',
+                                                            boxShadow: isSelected ? '0 0 8px 2px rgba(153, 50, 204, 0.6)' : 'none'
+                                                        };
+                                                    }
+                                                    return { backgroundColor: PALETTE[c] || c };
+                                                };
+                                                
+                                                return (
+                                                    <button 
+                                                        key={c}
+                                                        onClick={() => isUnlocked && setSkinColor(c)}
+                                                        title={c}
+                                                        disabled={!isUnlocked}
+                                                        className={`rounded-full border-2 relative ${
+                                                            isSelected ? 'border-white scale-110 shadow-lg' : 'border-transparent'
+                                                        } ${
+                                                            isUnlocked ? 'opacity-100 hover:scale-105 cursor-pointer' : 'opacity-30 cursor-not-allowed'
+                                                        } transition-all w-6 h-6`}
+                                                        style={isAnimatedColor ? getAnimatedStyle() : {backgroundColor: PALETTE[c] || c}}
+                                                    >
+                                                        {!isUnlocked && (
+                                                            <span className="absolute inset-0 flex items-center justify-center text-white text-[6px]">🔒</span>
+                                                        )}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-
-                            <hr className="border-gray-600/50" />
 
                             {[
                                 { label: 'HEADWEAR', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
@@ -1632,6 +2275,184 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 </div>
                             </div>
                         </div>
+                    ) : characterType === 'shrimp' ? (
+                        /* Shrimp color customization */
+                        <div className="bg-gradient-to-br from-orange-900/50 to-red-900/50 rounded-xl p-4 border border-orange-500/30">
+                            <div className="text-center mb-4">
+                                <span className="text-2xl">🦐</span>
+                                <h3 className="text-white font-bold mt-2">Shrimp Colors</h3>
+                                <p className="text-white/60 text-xs mt-1">
+                                    Pick your shrimp's shell color!
+                                </p>
+                            </div>
+                            
+                            {/* Shell Color */}
+                            <div className="mb-4">
+                                <label className="text-orange-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    🎨 Shell Color
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={shrimpPrimaryColor}
+                                        onChange={(e) => setShrimpPrimaryColor(e.target.value)}
+                                        className="w-12 h-10 rounded cursor-pointer border-2 border-orange-500/50"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={shrimpPrimaryColor}
+                                        onChange={(e) => setShrimpPrimaryColor(e.target.value)}
+                                        className="flex-1 bg-black/50 border border-orange-500/30 rounded px-2 py-1 text-white text-sm font-mono"
+                                        placeholder="#FF6B4A"
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Preset Colors */}
+                            <div>
+                                <label className="text-orange-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    Quick Presets
+                                </label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[
+                                        { name: 'Cooked', color: '#FF6B4A', emoji: '🦐' },
+                                        { name: 'Raw', color: '#7A8A9A', emoji: '🥶' },
+                                        { name: 'Golden', color: '#FFB840', emoji: '✨' },
+                                        { name: 'Blue', color: '#4080C0', emoji: '💎' },
+                                        { name: 'Pink', color: '#FF9999', emoji: '💗' },
+                                        { name: 'Red', color: '#CC3333', emoji: '🔴' },
+                                        { name: 'Tiger', color: '#FF8844', emoji: '🐯' },
+                                        { name: 'Ghost', color: '#CCDDEE', emoji: '👻' },
+                                    ].map((preset) => (
+                                        <button
+                                            key={preset.name}
+                                            onClick={() => setShrimpPrimaryColor(preset.color)}
+                                            className="flex flex-col items-center p-2 rounded-lg bg-black/30 hover:bg-black/50 border border-orange-500/20 hover:border-orange-400 transition-all"
+                                            title={preset.name}
+                                        >
+                                            <div 
+                                                className="w-6 h-6 rounded-full border border-white/30"
+                                                style={{ backgroundColor: preset.color }}
+                                            />
+                                            <span className="text-white/70 text-[9px] mt-1">{preset.emoji} {preset.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ) : characterType === 'duck' ? (
+                        /* Duck character - allows hats, clothing, and mounts */
+                        <div className="space-y-3">
+                            <div className="bg-gradient-to-br from-yellow-900/50 to-orange-900/50 rounded-xl p-4 border border-yellow-500/30">
+                                <div className="text-center">
+                                    <span className="text-2xl">🦆</span>
+                                    <h3 className="text-white font-bold mt-2">Duck</h3>
+                                    <p className="text-white/60 text-xs mt-1">
+                                        A friendly duck with a bright orange bill
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {/* Duck Cosmetics - Hats, Clothing, Mounts */}
+                            {[
+                                { label: 'HEADWEAR', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
+                                { label: 'CLOTHING', key: 'body', val: bodyItem, set: setBodyItem, list: options.body, defaultVal: null },
+                                { label: 'MOUNTS', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                            ].map((opt, i) => {
+                                const categoryForCheck = opt.key === 'head' ? 'hat' : opt.key === 'body' ? 'bodyItem' : opt.key;
+                                const isCurrentLocked = opt.isMount 
+                                    ? (opt.val !== 'none' && !isMountUnlocked(opt.val))
+                                    : (opt.val !== 'none' && opt.val !== opt.defaultVal && !isCosmeticUnlocked(opt.val, categoryForCheck));
+                                
+                                return (
+                                    <div key={i} className="flex flex-col gap-1">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                            {opt.label}
+                                            {opt.isMount && <span className="text-orange-400 ml-1">(PROMO)</span>}
+                                        </span>
+                                        <div className={`flex items-center justify-between rounded-lg p-1 ${
+                                            isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
+                                        }`}>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, -1, opt.defaultVal)}
+                                            >
+                                                <IconChevronLeft size={20} />
+                                            </button>
+                                            <span className={`text-sm font-bold capitalize ${isCurrentLocked ? 'text-red-400' : 'text-white'}`}>
+                                                {isCurrentLocked && '🔒 '}
+                                                {opt.val.replace(/([A-Z])/g, ' $1').trim()}
+                                            </span>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, 1, opt.defaultVal)}
+                                            >
+                                                <IconChevronRight size={20} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : characterType === 'tungTung' ? (
+                        /* Tung Tung Tung Sahur - eyes, mouth, and mounts */
+                        <div className="space-y-3">
+                            <div className="bg-gradient-to-br from-amber-900/50 to-orange-900/50 rounded-xl p-4 border border-amber-500/30">
+                                <div className="text-center">
+                                    <span className="text-3xl">🪵</span>
+                                    <h3 className="text-white font-bold mt-2">Tung Tung Tung Sahur</h3>
+                                    <p className="text-white/60 text-xs mt-1">
+                                        The legendary log creature with a baseball bat!
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="bg-black/30 rounded-lg p-3">
+                                <p className="text-amber-400 text-xs text-center italic">
+                                    🏏 Comes with a baseball bat permanently equipped
+                                </p>
+                            </div>
+                            
+                            {/* Eyes, Mouth, and Mounts for Tung Tung */}
+                            {[
+                                { label: 'EYES', key: 'eyes', val: eyes, set: setEyes, list: options.eyes, defaultVal: 'normal' },
+                                { label: 'MOUTH', key: 'mouth', val: mouth, set: setMouth, list: options.mouth, defaultVal: 'beak' },
+                                { label: 'MOUNTS', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                            ].map((opt, i) => {
+                                const categoryForCheck = opt.key === 'mounts' ? 'mount' : opt.key;
+                                const isCurrentLocked = opt.isMount 
+                                    ? (opt.val !== 'none' && !isMountUnlocked(opt.val))
+                                    : (opt.val !== 'none' && opt.val !== opt.defaultVal && !isCosmeticUnlocked(opt.val, categoryForCheck));
+                                
+                                return (
+                                    <div key={i} className="flex flex-col gap-1">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                            {opt.label}
+                                            {opt.isMount && <span className="text-orange-400 ml-1">(PROMO)</span>}
+                                        </span>
+                                        <div className={`flex items-center justify-between rounded-lg p-1 ${
+                                            isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
+                                        }`}>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-amber-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, -1, opt.defaultVal)}
+                                            >
+                                                <IconChevronLeft size={20} />
+                                            </button>
+                                            <span className={`text-sm font-bold capitalize ${isCurrentLocked ? 'text-red-400' : 'text-white'}`}>
+                                                {isCurrentLocked && '🔒 '}
+                                                {opt.val.replace(/([A-Z])/g, ' $1').trim()}
+                                            </span>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-amber-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, 1, opt.defaultVal)}
+                                            >
+                                                <IconChevronRight size={20} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     ) : (
                         /* Other special characters - no customization */
                         <div className="bg-gradient-to-br from-purple-900/50 to-cyan-900/50 rounded-xl p-4 border border-purple-500/30">
@@ -1676,182 +2497,78 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         </div>
                     )}
                     
-                    {/* Username Section - Only show after authentication */}
-                    {!isAuthenticated && !isRestoringSession && (
-                        <div className="mt-4 p-3 bg-black/30 rounded-lg border border-gray-500/30">
-                            <p className="text-xs text-gray-400 text-center">
-                                🔐 Connect wallet to set your username
-                            </p>
-                        </div>
-                    )}
-                    
-                    {isRestoringSession && (
-                        <div className="mt-4 p-3 bg-black/30 rounded-lg border border-cyan-500/30">
-                            <p className="text-xs text-cyan-400 text-center animate-pulse">
-                                🔄 Restoring session...
-                            </p>
-                        </div>
-                    )}
-                    
-                    {isAuthenticated && (
-                        <div className="mt-4">
-                            <label className="block text-xs text-yellow-400 mb-1 retro-text">
-                                {isReturningUser ? '🔒 USERNAME (LOCKED)' : '✏️ CHOOSE USERNAME'}
-                            </label>
-                            
-                            {/* Returning user - locked username display */}
-                            {isReturningUser && (
-                                <>
-                                    <div className="w-full px-3 py-2 bg-black/30 border-2 border-gray-500/50 rounded-lg text-white text-sm">
-                                        {username}
-                                    </div>
-                                    <p className="text-xs text-orange-400 mt-1">
-                                        🔒 Username locked for 30 days after first entry
-                                    </p>
-                                </>
-                            )}
-                            
-                            {/* New user - editable username */}
-                            {!isReturningUser && (
-                                <>
-                                    <div className="relative">
-                                        <input
-                                            type="text"
-                                            value={username}
-                                            onChange={(e) => handleUsernameChange(e.target.value)}
-                                            maxLength={20}
-                                            minLength={3}
-                                            placeholder="Choose a unique name (3-20 chars)..."
-                                            className={`w-full px-3 py-2 pr-24 bg-black/50 border-2 rounded-lg text-white text-sm focus:outline-none placeholder-white/30 ${
-                                                usernameStatus === 'taken' 
-                                                    ? 'border-red-500/50 focus:border-red-400'
-                                                    : usernameStatus === 'available'
-                                                        ? 'border-green-500/50 focus:border-green-400'
-                                                        : username.length > 0 && username.length < 3 
-                                                            ? 'border-red-500/50 focus:border-red-400' 
-                                                            : 'border-yellow-500/50 focus:border-yellow-400'
-                                            }`}
-                                        />
-                                        {/* Availability status badge */}
-                                        {username.length >= 3 && (
-                                            <span className={`absolute right-2 top-1/2 -translate-y-1/2 text-xs px-2 py-0.5 rounded ${
-                                                usernameStatus === 'checking' 
-                                                    ? 'bg-gray-500/50 text-gray-300'
-                                                    : usernameStatus === 'available'
-                                                        ? 'bg-green-500/50 text-green-300'
-                                                        : usernameStatus === 'taken'
-                                                            ? 'bg-red-500/50 text-red-300'
-                                                            : usernameStatus === 'current'
-                                                                ? 'bg-blue-500/50 text-blue-300'
-                                                                : 'bg-gray-500/50 text-gray-300'
-                                            }`}>
-                                                {usernameStatus === 'checking' && '⏳ Checking...'}
-                                                {usernameStatus === 'available' && '✓ Available'}
-                                                {usernameStatus === 'taken' && '✗ Taken'}
-                                                {usernameStatus === 'current' && '✓ Current'}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex justify-between mt-1">
-                                        <p className="text-xs text-amber-400">
-                                            ⚠️ Cannot be changed for 30 days after entering world
-                                        </p>
-                                        <p className={`text-xs ${
-                                            username.length > 0 && username.length < 3 ? 'text-red-400' : 'text-white/40'
-                                        }`}>
-                                            {username.length}/20
-                                        </p>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    )}
-                    
-                    {/* Promo Code Input */}
-                    <div className="mt-2">
-                        <label className="block text-xs text-purple-400 mb-1 retro-text">PROMO CODE</label>
-                        <div className="flex gap-2">
-                            <input
-                                type="text"
-                                value={promoCode}
-                                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                                onKeyDown={(e) => e.key === 'Enter' && !promoLoading && handlePromoCodeSubmit()}
-                                maxLength={20}
-                                placeholder={isAuthenticated ? "Enter code..." : "Login to redeem"}
-                                disabled={promoLoading || !isAuthenticated}
-                                className={`flex-1 px-3 py-2 bg-black/50 border-2 border-purple-500/50 rounded-lg text-white text-sm focus:border-purple-400 focus:outline-none placeholder-white/30 uppercase ${!isAuthenticated ? 'opacity-50' : ''}`}
-                            />
-                            <button
-                                onClick={handlePromoCodeSubmit}
-                                disabled={promoLoading || !isAuthenticated}
-                                className={`px-3 py-2 text-white rounded-lg text-xs font-bold transition-colors ${
-                                    promoLoading || !isAuthenticated 
-                                        ? 'bg-gray-600 cursor-not-allowed' 
-                                        : 'bg-purple-600 hover:bg-purple-500'
-                                }`}
-                            >
-                                {promoLoading ? '...' : 'REDEEM'}
-                            </button>
-                        </div>
-                        {promoMessage && (
-                            <p className={`text-xs mt-1 ${promoMessage.type === 'success' ? 'text-green-400' : 'text-red-400'}`}>
-                                {promoMessage.text}
-                            </p>
-                        )}
-                        {!isAuthenticated && (
-                            <p className="text-xs mt-1 text-amber-400/70">
-                                Connect wallet to redeem promo codes
-                            </p>
-                        )}
-                    </div>
-                    
-                    {/* Character Selector - only show if multiple characters unlocked */}
+                    {/* Character Selector - Collapsible Grid */}
                     {unlockedCharacters.length > 1 && (
-                        <div className="mt-4">
-                            <label className="block text-xs text-cyan-400 mb-2 retro-text">CHARACTER</label>
-                            <div 
-                                className="flex gap-2 overflow-x-auto scrollbar-hide cursor-grab active:cursor-grabbing select-none"
-                                onMouseDown={(e) => {
-                                    const el = e.currentTarget;
-                                    el.dataset.dragging = 'true';
-                                    el.dataset.startX = e.pageX;
-                                    el.dataset.scrollLeft = el.scrollLeft;
-                                }}
-                                onMouseMove={(e) => {
-                                    const el = e.currentTarget;
-                                    if (el.dataset.dragging !== 'true') return;
-                                    e.preventDefault();
-                                    const walk = (e.pageX - Number(el.dataset.startX)) * 1.5;
-                                    el.scrollLeft = Number(el.dataset.scrollLeft) - walk;
-                                }}
-                                onMouseUp={(e) => e.currentTarget.dataset.dragging = 'false'}
-                                onMouseLeave={(e) => e.currentTarget.dataset.dragging = 'false'}
+                        <div className="mb-2">
+                            <button
+                                onClick={() => setCharacterExpanded(!characterExpanded)}
+                                className="w-full flex items-center justify-between p-2 bg-gradient-to-r from-purple-900/40 to-cyan-900/40 hover:from-purple-800/50 hover:to-cyan-800/50 rounded-lg border border-purple-500/30 transition-all"
                             >
-                                {unlockedCharacters.map(charId => {
-                                    const char = characterRegistry.getCharacter(charId);
-                                    if (!char) return null;
-                                    return (
-                                        <button
-                                            key={charId}
-                                            onClick={() => handleCharacterTypeChange(charId)}
-                                            className={`flex-shrink-0 px-3 py-2 rounded-lg text-xs font-bold transition-all whitespace-nowrap ${
-                                                characterType === charId
-                                                    ? 'bg-cyan-500 text-black border-2 border-cyan-300'
-                                                    : 'bg-black/50 text-white border-2 border-cyan-500/30 hover:border-cyan-400'
-                                            }`}
-                                        >
-                                            {char.name.toUpperCase()}
-                                        </button>
-                                    );
-                                })}
-                            </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-lg">{CHARACTER_EMOJIS[characterType] || '🐧'}</span>
+                                    <span className="text-white font-bold text-sm">
+                                        {currentCharacter?.name || 'Penguin'}
+                                    </span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-purple-400 text-xs">
+                                        {unlockedCharacters.length} unlocked
+                                    </span>
+                                    <span className={`text-purple-400 transition-transform ${characterExpanded ? 'rotate-180' : ''}`}>
+                                        ▼
+                                    </span>
+                                </div>
+                            </button>
+                            
+                            {characterExpanded && (
+                                <div className="mt-2 p-3 bg-black/40 rounded-lg border border-purple-500/20">
+                                    <div className="grid grid-cols-5 gap-2">
+                                        {unlockedCharacters.map(charId => {
+                                            const char = characterRegistry.getCharacter(charId);
+                                            if (!char) return null;
+                                            const isSelected = characterType === charId;
+                                            return (
+                                                <button
+                                                    key={charId}
+                                                    onClick={() => {
+                                                        handleCharacterTypeChange(charId);
+                                                        setCharacterExpanded(false);
+                                                    }}
+                                                    className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+                                                        isSelected
+                                                            ? 'bg-purple-500/50 border-2 border-purple-300 scale-105'
+                                                            : 'bg-black/30 border border-purple-500/20 hover:border-purple-400 hover:bg-purple-900/30'
+                                                    }`}
+                                                    title={char.name}
+                                                >
+                                                    <span className="text-2xl">{CHARACTER_EMOJIS[charId] || '❓'}</span>
+                                                    <span className={`text-[9px] mt-1 font-bold ${isSelected ? 'text-white' : 'text-gray-400'}`}>
+                                                        {char.name.length > 6 ? char.name.substring(0, 6) : char.name}
+                                                    </span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
                     
-                    {/* Wallet Authentication */}
-                    <div className="mt-4">
-                        <WalletAuth />
-                    </div>
+                    {/* Cloudflare Turnstile Verification */}
+                    {import.meta.env.VITE_TURNSTILE_SITE_KEY && !turnstileVerified && (
+                        <div className="mt-4 p-3 bg-slate-800/50 rounded-lg border border-orange-500/30">
+                            <div className="flex items-center gap-2 mb-2">
+                                <svg className="w-4 h-4 text-orange-500 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z"/>
+                                </svg>
+                                <span className="text-xs text-orange-400 font-medium">Human Verification Required</span>
+                            </div>
+                            <div ref={turnstileContainerRef} className="flex justify-center" />
+                            {turnstileError && (
+                                <p className="text-xs text-red-400 text-center mt-2">{turnstileError}</p>
+                            )}
+                        </div>
+                    )}
                     
                     {/* Enter World Button */}
                     {isAuthenticated && isNewUser && (!username || username.length < 3 || usernameStatus === 'taken') ? (
@@ -1881,10 +2598,22 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 }
                             </p>
                         </div>
+                    ) : !turnstileVerified ? (
+                        <div className="mt-4">
+                            <button 
+                                disabled
+                                className="w-full py-3 bg-orange-900/50 text-orange-400 font-bold rounded-lg retro-text text-xs border-b-4 border-orange-900 flex justify-center items-center gap-2 cursor-not-allowed"
+                            >
+                                <IconWorld size={16} /> ⏳ VERIFYING...
+                            </button>
+                            <p className="text-xs text-orange-400 text-center mt-2">
+                                Complete the security check above
+                            </p>
+                        </div>
                     ) : (
                         <div className="mt-4">
                             <button 
-                                onClick={onEnterWorld}
+                                onClick={() => onEnterWorld(turnstileToken)}
                                 className="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg shadow-lg transform active:scale-95 transition-all retro-text text-xs border-b-4 border-yellow-700 flex justify-center items-center gap-2"
                             >
                                 <IconWorld size={16} /> {isAuthenticated ? 'ENTER WORLD' : 'PLAY AS GUEST'}
@@ -1905,6 +2634,22 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     <IconCamera size={14} /> Click & Drag to Rotate • Scroll to Zoom
                 </div>
             )}
+            
+            {/* Cloudflare Badge - Centered at bottom */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                <a 
+                    href="https://www.cloudflare.com" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500/20 to-orange-600/20 hover:from-orange-500/30 hover:to-orange-600/30 rounded-full border border-orange-500/40 hover:border-orange-500/60 transition-all shadow-lg shadow-orange-500/10 group"
+                >
+                    <svg className="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.2678-.2246-.2767-.5765-.4198-.9725-.4466l-8.5057-.1123a.1654.1654 0 0 1-.1328-.0615.141.141 0 0 1-.0236-.1388.1742.1742 0 0 1 .1535-.121l8.5858-.1102c.974-.0288 2.0298-.8037 2.3878-1.7598l.454-1.214a.27.27 0 0 0 .0147-.1964 5.0842 5.0842 0 0 0-9.8793-1.0239c-.5765-.4259-1.2998-.649-2.0676-.5592-1.2763.1496-2.3055 1.1608-2.4816 2.4398a2.6573 2.6573 0 0 0 .0103.8627 3.8782 3.8782 0 0 0-3.7637 3.8765c0 .1949.0143.3856.042.5718a.167.167 0 0 0 .1657.1423l15.5878.0037c.0738 0 .1393-.0493.1577-.121l.0004-.0001z"/>
+                        <path d="M19.4846 10.0557a.1008.1008 0 0 0-.0996-.0234c-.3333.1015-.6872.1545-1.0517.1545-1.1328 0-2.1415-.5193-2.8042-1.3329a.1012.1012 0 0 0-.0996-.0234.1027.1027 0 0 0-.0722.0793c-.2139.9577-.8575 1.7673-1.7112 2.2298a.1.1 0 0 0-.0512.1244c.1076.3112.1638.6456.1638.9932 0 .0616-.0016.1229-.0048.1838a.1.1 0 0 0 .0996.1052l5.4023.0698c.0502 0 .0935-.0355.1017-.0856a3.2137 3.2137 0 0 0 .0417-.5142c0-1.3006-.7745-2.4221-1.8862-2.9347a.1003.1003 0 0 0-.0284-.0258z"/>
+                    </svg>
+                    <span className="text-xs text-orange-400/90 font-medium group-hover:text-orange-300 transition-colors">Protected by Cloudflare</span>
+                </a>
+            </div>
 
             {!scriptsLoaded && (
                 <div className="absolute inset-0 bg-black flex items-center justify-center text-white retro-text z-50">

@@ -56,6 +56,8 @@ const players = new Map(); // playerId -> { id, name, room, position, rotation, 
 const rooms = new Map(); // roomId -> Set of playerIds
 const ipConnections = new Map(); // ip -> Set of playerIds
 const bannedIPs = new Set(); // Set of banned IP addresses
+const bannedIPLogTimes = new Map(); // ip -> timestamp of last log (for throttling repeated connection attempts)
+const BANNED_IP_LOG_INTERVAL = 60 * 1000; // Only log banned IP attempts once per minute
 
 // PvE Activity tracking (for spectator banners)
 // playerId -> { activity: 'fishing'|'blackjack', room, state, position, playerName }
@@ -98,6 +100,17 @@ let broadcastToRoom, sendToPlayer;
 
 // ==================== HTTP SERVER ====================
 const server = http.createServer((req, res) => {
+    // Block banned IPs FIRST - before anything else (silently - no logging since Render logs externally)
+    const forwarded = req.headers['x-forwarded-for'];
+    const httpClientIP = forwarded ? forwarded.split(',')[0].trim() : 
+                         (req.headers['x-real-ip'] || req.socket?.remoteAddress || 'unknown');
+    if (bannedIPs.has(httpClientIP)) {
+        // Immediately close connection with 403 - no CORS headers, no response body
+        res.writeHead(403);
+        res.end();
+        return;
+    }
+    
     // CORS headers for admin endpoints
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -686,6 +699,60 @@ setInterval(() => {
     }
 }, 3000);
 
+// ==================== TURNSTILE VERIFICATION ====================
+// Track verified players (playerId -> true) to avoid re-verification
+const turnstileVerified = new Map();
+
+/**
+ * Verify Cloudflare Turnstile token server-side
+ * @param {string} token - The turnstile token from client
+ * @param {string} clientIP - The client's IP address (optional but recommended)
+ * @returns {Promise<{success: boolean, error?: string}>}
+ */
+async function verifyTurnstileToken(token, clientIP = null) {
+    const secretKey = process.env.TURNSTILE_SECRET_KEY;
+    
+    // If no secret key configured, skip verification (dev mode)
+    if (!secretKey) {
+        console.log('⚠️ Turnstile: No secret key configured, skipping verification');
+        return { success: true };
+    }
+    
+    // Token is required when secret key is set
+    if (!token) {
+        return { success: false, error: 'TURNSTILE_REQUIRED' };
+    }
+    
+    try {
+        const formData = new URLSearchParams();
+        formData.append('secret', secretKey);
+        formData.append('response', token);
+        if (clientIP) {
+            formData.append('remoteip', clientIP);
+        }
+        
+        const response = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData.toString()
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            console.log('✅ Turnstile verification successful');
+            return { success: true };
+        } else {
+            console.warn('❌ Turnstile verification failed:', result['error-codes']);
+            return { success: false, error: 'TURNSTILE_INVALID', codes: result['error-codes'] };
+        }
+    } catch (error) {
+        console.error('Turnstile verification error:', error);
+        // Fail open in case of network issues (graceful degradation)
+        return { success: true, warning: 'VERIFICATION_UNAVAILABLE' };
+    }
+}
+
 // ==================== HELPER FUNCTIONS ====================
 function getClientIP(req) {
     const forwarded = req.headers['x-forwarded-for'];
@@ -707,7 +774,13 @@ function generateGuestName() {
 function canIPConnect(ip) {
     // Check if IP is banned (blocks all connections from this IP)
     if (bannedIPs.has(ip)) {
-        console.log(`🚫 Blocked connection attempt from banned IP: ${ip}`);
+        // Throttle logging to avoid log spam from repeated connection attempts
+        const now = Date.now();
+        const lastLogTime = bannedIPLogTimes.get(ip) || 0;
+        if (now - lastLogTime >= BANNED_IP_LOG_INTERVAL) {
+            console.log(`🚫 Blocked connection attempt from banned IP: ${ip}`);
+            bannedIPLogTimes.set(ip, now);
+        }
         return false;
     }
     
@@ -1042,7 +1115,13 @@ wss.on('connection', (ws, req) => {
     
     // Check if IP is banned first (before any other checks)
     if (bannedIPs.has(clientIP)) {
-        console.log(`🚫 Blocked connection from banned IP: ${clientIP}`);
+        // Throttle logging to avoid log spam from repeated connection attempts
+        const now = Date.now();
+        const lastLogTime = bannedIPLogTimes.get(clientIP) || 0;
+        if (now - lastLogTime >= BANNED_IP_LOG_INTERVAL) {
+            console.log(`🚫 Blocked connection from banned IP: ${clientIP}`);
+            bannedIPLogTimes.set(clientIP, now);
+        }
         ws.send(JSON.stringify({
             type: 'error',
             code: 'IP_BANNED',
@@ -1134,6 +1213,9 @@ wss.on('connection', (ws, req) => {
     ws.on('close', async () => {
         console.log(`[${ts()}] Player disconnected: ${playerId}`);
         const player = players.get(playerId);
+        
+        // Clean up turnstile verification (memory management)
+        turnstileVerified.delete(playerId);
         
         if (player) {
             // Handle slot disconnect (cancel any active spin)
@@ -1233,6 +1315,7 @@ wss.on('connection', (ws, req) => {
 async function handleMessage(playerId, message) {
     const player = players.get(playerId);
     if (!player) return;
+    
     
     // Handle igloo messages first (returns true if handled)
     if (message.type?.startsWith('igloo_')) {
@@ -1401,7 +1484,11 @@ async function handleMessage(playerId, message) {
                 player.walletAddress = walletAddress;
                 player.authToken = authResult.token;
                 player.name = authResult.user.username;
-                player.appearance = authResult.user.customization;
+                // Include characterType from top-level user field (not in customization subdoc)
+                player.appearance = {
+                    ...authResult.user.customization,
+                    characterType: authResult.user.characterType || 'penguin'
+                };
                 
                 // Associate wallet with inbox
                 inboxService.associateWallet(walletAddress, playerId);
@@ -1663,7 +1750,13 @@ async function handleMessage(playerId, message) {
                 player.walletAddress = walletAddress;
                 player.authToken = token;
                 player.name = user.username;
-                player.appearance = user.customization;
+                // Include characterType from top-level user field (not in customization subdoc)
+                const userObj = user.toObject();
+                player.appearance = {
+                    ...userObj.customization,
+                    characterType: userObj.characterType || 'penguin'
+                };
+                
                 
                 // Associate wallet with inbox
                 inboxService.associateWallet(walletAddress, playerId);
@@ -1703,9 +1796,32 @@ async function handleMessage(playerId, message) {
         
         // ==================== JOIN/MOVEMENT ====================
         case 'join': {
+            try {
+            // Verify Turnstile token on first join (if secret key is configured)
+            // Skip on localhost (dev mode)
+            const isLocalhost = player.ip === '::1' || player.ip === '127.0.0.1' || player.ip === '::ffff:127.0.0.1';
+            if (isLocalhost) {
+                turnstileVerified.set(playerId, true);
+            } else if (!turnstileVerified.has(playerId) && process.env.TURNSTILE_SECRET_KEY) {
+                const turnstileResult = await verifyTurnstileToken(message.turnstileToken, player.ip);
+                
+                if (!turnstileResult.success) {
+                    sendToPlayer(playerId, {
+                        type: 'join_error',
+                        error: turnstileResult.error || 'VERIFICATION_FAILED',
+                        message: 'Human verification required. Please complete the security check.'
+                    });
+                    return true;
+                }
+                
+                // Mark as verified so we don't re-verify on room changes
+                turnstileVerified.set(playerId, true);
+            }
+            
             player.name = message.name || player.name;
-            player.appearance = message.appearance || {};
             player.puffle = message.puffle || null;
+            
+            console.log(`[${ts()}] 📥 Join request: name=${player.name}, characterType=${message.appearance?.characterType || 'none'}, authenticated=${!!player.walletAddress}`);
             
             const roomId = message.room || 'town';
             joinRoom(playerId, roomId);
@@ -1734,13 +1850,51 @@ async function handleMessage(playerId, message) {
                 if (user) {
                     coins = user.coins || 0;
                     
+                    // IMPORTANT: For authenticated users, use database customization as the 
+                    // authoritative source. This ensures animated skins (rainbow, cosmic, etc.)
+                    // are properly synced to all clients. Merge with client data for fields
+                    // like mountEnabled and nametagStyle that aren't in the DB.
+                    // Convert to plain object to ensure Mongoose nested paths spread correctly
+                    const userPlain = user.toObject();
+                    const dbCustomization = userPlain.customization || {};
+                    const clientAppearance = message.appearance || {};
+                    
+                    // Start with DB customization, overlay non-cosmetic client fields
+                    // IMPORTANT: Use client's characterType if provided, because DB default is 'penguin' (always truthy)
+                    // The client sends characterType when the user changes it in the designer before joining
+                    const resolvedCharacterType = clientAppearance.characterType !== undefined 
+                        ? clientAppearance.characterType 
+                        : (userPlain.characterType || 'penguin');
+                    
+                    player.appearance = {
+                        skin: dbCustomization.skin || 'blue',
+                        hat: dbCustomization.hat || 'none',
+                        eyes: dbCustomization.eyes || 'normal',
+                        mouth: dbCustomization.mouth || 'beak',
+                        bodyItem: dbCustomization.bodyItem || 'none',
+                        mount: dbCustomization.mount || 'none',
+                        dogPrimaryColor: dbCustomization.dogPrimaryColor,
+                        dogSecondaryColor: dbCustomization.dogSecondaryColor,
+                        frogPrimaryColor: dbCustomization.frogPrimaryColor,
+                        frogSecondaryColor: dbCustomization.frogSecondaryColor,
+                        shrimpPrimaryColor: dbCustomization.shrimpPrimaryColor,
+                        characterType: resolvedCharacterType,
+                        // Preserve client-side settings that aren't stored in DB
+                        mountEnabled: clientAppearance.mountEnabled,
+                        nametagStyle: clientAppearance.nametagStyle
+                    };
+                    
+                    console.log(`[${ts()}] 🎨 Player appearance set: characterType=${resolvedCharacterType} (client=${clientAppearance.characterType}, db=${userPlain.characterType})`);
+                    
                     // Check if this is first entry (username not locked yet)
                     const isFirstEntry = !user.lastUsernameChangeAt && !user.isEstablishedUser();
                     
-                    // Only save customization if it actually changed AND all items are owned
+                    // Only save customization if client sends changes AND all items are owned
                     if (message.appearance) {
-                        const currentCustom = user.customization || {};
+                        const currentCustom = dbCustomization;
                         const newCustom = message.appearance;
+                        
+                        
                         const hasChanges = 
                             currentCustom.skin !== newCustom.skin ||
                             currentCustom.hat !== newCustom.hat ||
@@ -1752,56 +1906,86 @@ async function handleMessage(playerId, message) {
                             currentCustom.dogSecondaryColor !== newCustom.dogSecondaryColor ||
                             currentCustom.frogPrimaryColor !== newCustom.frogPrimaryColor ||
                             currentCustom.frogSecondaryColor !== newCustom.frogSecondaryColor ||
-                            user.characterType !== newCustom.characterType;
+                            currentCustom.shrimpPrimaryColor !== newCustom.shrimpPrimaryColor ||
+                            (newCustom.characterType !== undefined && user.characterType !== newCustom.characterType);
+                        
                         
                         if (hasChanges) {
+                            // TEMPORARY: Skip ownership validation when all cosmetics are unlocked
+                            // TODO: Remove this check when ready to enforce cosmetic ownership
+                            const UNLOCK_ALL_COSMETICS = true;
+                            
                             // Validate ownership of each cosmetic before applying
                             const validatedCustom = { ...newCustom };
                             let hadLockedItem = false;
                             
-                            // Check skin color
-                            if (newCustom.skin && !await userService.ownsCosmetic(player.walletAddress, newCustom.skin, 'skin')) {
-                                console.log(`🔒 Blocked locked skin color: ${newCustom.skin}`);
-                                validatedCustom.skin = 'blue'; // Reset to default
-                                hadLockedItem = true;
-                            }
-                            // Check hat
-                            if (newCustom.hat && !await userService.ownsCosmetic(player.walletAddress, newCustom.hat, 'hat')) {
-                                console.log(`🔒 Blocked locked hat: ${newCustom.hat}`);
-                                validatedCustom.hat = 'none';
-                                hadLockedItem = true;
-                            }
-                            // Check eyes
-                            if (newCustom.eyes && !await userService.ownsCosmetic(player.walletAddress, newCustom.eyes, 'eyes')) {
-                                console.log(`🔒 Blocked locked eyes: ${newCustom.eyes}`);
-                                validatedCustom.eyes = 'normal';
-                                hadLockedItem = true;
-                            }
-                            // Check mouth
-                            if (newCustom.mouth && !await userService.ownsCosmetic(player.walletAddress, newCustom.mouth, 'mouth')) {
-                                console.log(`🔒 Blocked locked mouth: ${newCustom.mouth}`);
-                                validatedCustom.mouth = 'beak';
-                                hadLockedItem = true;
-                            }
-                            // Check bodyItem
-                            if (newCustom.bodyItem && !await userService.ownsCosmetic(player.walletAddress, newCustom.bodyItem, 'bodyItem')) {
-                                console.log(`🔒 Blocked locked bodyItem: ${newCustom.bodyItem}`);
-                                validatedCustom.bodyItem = 'none';
-                                hadLockedItem = true;
-                            }
-                            // Check mount
-                            if (newCustom.mount && !await userService.ownsCosmetic(player.walletAddress, newCustom.mount, 'mount')) {
-                                console.log(`🔒 Blocked locked mount: ${newCustom.mount}`);
-                                validatedCustom.mount = 'none';
-                                hadLockedItem = true;
+                            if (!UNLOCK_ALL_COSMETICS) {
+                                // Check skin color
+                                if (newCustom.skin && !await userService.ownsCosmetic(player.walletAddress, newCustom.skin, 'skin')) {
+                                    console.log(`🔒 Blocked locked skin color: ${newCustom.skin}`);
+                                    validatedCustom.skin = 'blue'; // Reset to default
+                                    hadLockedItem = true;
+                                }
+                                // Check hat
+                                if (newCustom.hat && !await userService.ownsCosmetic(player.walletAddress, newCustom.hat, 'hat')) {
+                                    console.log(`🔒 Blocked locked hat: ${newCustom.hat}`);
+                                    validatedCustom.hat = 'none';
+                                    hadLockedItem = true;
+                                }
+                                // Check eyes
+                                if (newCustom.eyes && !await userService.ownsCosmetic(player.walletAddress, newCustom.eyes, 'eyes')) {
+                                    console.log(`🔒 Blocked locked eyes: ${newCustom.eyes}`);
+                                    validatedCustom.eyes = 'normal';
+                                    hadLockedItem = true;
+                                }
+                                // Check mouth
+                                if (newCustom.mouth && !await userService.ownsCosmetic(player.walletAddress, newCustom.mouth, 'mouth')) {
+                                    console.log(`🔒 Blocked locked mouth: ${newCustom.mouth}`);
+                                    validatedCustom.mouth = 'beak';
+                                    hadLockedItem = true;
+                                }
+                                // Check bodyItem
+                                if (newCustom.bodyItem && !await userService.ownsCosmetic(player.walletAddress, newCustom.bodyItem, 'bodyItem')) {
+                                    console.log(`🔒 Blocked locked bodyItem: ${newCustom.bodyItem}`);
+                                    validatedCustom.bodyItem = 'none';
+                                    hadLockedItem = true;
+                                }
+                                // Check mount
+                                if (newCustom.mount && !await userService.ownsCosmetic(player.walletAddress, newCustom.mount, 'mount')) {
+                                    console.log(`🔒 Blocked locked mount: ${newCustom.mount}`);
+                                    validatedCustom.mount = 'none';
+                                    hadLockedItem = true;
+                                }
                             }
                             
-                            // Apply validated customization
+                            // Apply validated customization (this updates user.characterType if provided)
                             user.updateCustomization(validatedCustom);
                             needsSave = true;
                             
-                            // Update player appearance with validated values
-                            player.appearance = validatedCustom;
+                            // Update player appearance with validated values, preserving non-DB fields
+                            // After updateCustomization, user.characterType should reflect the new value
+                            const finalCharacterType = validatedCustom.characterType !== undefined 
+                                ? validatedCustom.characterType 
+                                : user.characterType;
+                            
+                            player.appearance = {
+                                skin: validatedCustom.skin || dbCustomization.skin || 'blue',
+                                hat: validatedCustom.hat || dbCustomization.hat || 'none',
+                                eyes: validatedCustom.eyes || dbCustomization.eyes || 'normal',
+                                mouth: validatedCustom.mouth || dbCustomization.mouth || 'beak',
+                                bodyItem: validatedCustom.bodyItem || dbCustomization.bodyItem || 'none',
+                                mount: validatedCustom.mount || dbCustomization.mount || 'none',
+                                dogPrimaryColor: validatedCustom.dogPrimaryColor || dbCustomization.dogPrimaryColor,
+                                dogSecondaryColor: validatedCustom.dogSecondaryColor || dbCustomization.dogSecondaryColor,
+                                frogPrimaryColor: validatedCustom.frogPrimaryColor || dbCustomization.frogPrimaryColor,
+                                frogSecondaryColor: validatedCustom.frogSecondaryColor || dbCustomization.frogSecondaryColor,
+                                shrimpPrimaryColor: validatedCustom.shrimpPrimaryColor || dbCustomization.shrimpPrimaryColor,
+                                characterType: finalCharacterType,
+                                mountEnabled: clientAppearance.mountEnabled,
+                                nametagStyle: clientAppearance.nametagStyle
+                            };
+                            
+                            console.log(`[${ts()}] 🎨 Appearance updated: characterType=${finalCharacterType}`);
                             
                             // Notify player if items were locked
                             if (hadLockedItem) {
@@ -1859,6 +2043,27 @@ async function handleMessage(playerId, message) {
                     // Update player name from DB
                     player.name = user.username;
                 }
+            } else {
+                // Guest user - use client appearance directly
+                // Ensure all appearance fields including characterType are preserved
+                const guestAppearance = message.appearance || {};
+                player.appearance = {
+                    skin: guestAppearance.skin || 'blue',
+                    hat: guestAppearance.hat || 'none',
+                    eyes: guestAppearance.eyes || 'normal',
+                    mouth: guestAppearance.mouth || 'beak',
+                    bodyItem: guestAppearance.bodyItem || 'none',
+                    mount: guestAppearance.mount || 'none',
+                    characterType: guestAppearance.characterType || 'penguin',
+                    dogPrimaryColor: guestAppearance.dogPrimaryColor,
+                    dogSecondaryColor: guestAppearance.dogSecondaryColor,
+                    frogPrimaryColor: guestAppearance.frogPrimaryColor,
+                    frogSecondaryColor: guestAppearance.frogSecondaryColor,
+                    shrimpPrimaryColor: guestAppearance.shrimpPrimaryColor,
+                    mountEnabled: guestAppearance.mountEnabled,
+                    nametagStyle: guestAppearance.nametagStyle
+                };
+                console.log(`[${ts()}] 👤 Guest ${player.name} appearance set: characterType=${player.appearance.characterType}`);
             }
             
             const existingPlayers = getPlayersInRoom(roomId, playerId);
@@ -1882,6 +2087,9 @@ async function handleMessage(playerId, message) {
                 isAuthenticated: player.isAuthenticated,
                 userData // Include updated user data (with lastUsernameChangeAt)
             });
+            
+            // Log what we're about to broadcast for debugging
+            console.log(`[${ts()}] 📤 Broadcasting player_joined: name=${player.name}, characterType=${player.appearance?.characterType || 'undefined'}`);
             
             broadcastToRoom(roomId, {
                 type: 'player_joined',
@@ -1920,6 +2128,9 @@ async function handleMessage(playerId, message) {
             }
             
             console.log(`[${ts()}] ${player.name} joined ${roomId}${player.isAuthenticated ? ' (authenticated)' : ' (guest)'}`);
+            } catch (joinError) {
+                console.error(`[${ts()}] ❌ Join handler error:`, joinError.message);
+            }
             break;
         }
         
@@ -2408,7 +2619,14 @@ async function handleMessage(playerId, message) {
         }
         
         case 'update_appearance': {
-            player.appearance = message.appearance || player.appearance;
+            // Merge new appearance with existing, ensuring characterType is preserved
+            const newAppearance = message.appearance || {};
+            player.appearance = {
+                ...player.appearance,
+                ...newAppearance
+            };
+            
+            console.log(`[${ts()}] 🎨 Appearance update for ${player.name}: characterType=${player.appearance.characterType}`);
             
             // If authenticated, validate and save to DB
             if (player.walletAddress) {
@@ -2423,9 +2641,15 @@ async function handleMessage(playerId, message) {
                         code: 'COSMETIC_NOT_OWNED',
                         message: `You don't own: ${result.item}`
                     });
-                    // Reset appearance from DB
+                    // Reset appearance from DB, including characterType
                     const user = await userService.getUser(player.walletAddress);
-                    if (user) player.appearance = user.customization;
+                    if (user) {
+                        const userObj = user.toObject();
+                        player.appearance = {
+                            ...userObj.customization,
+                            characterType: userObj.characterType || 'penguin'
+                        };
+                    }
                     return;
                 }
             }
@@ -2437,7 +2661,7 @@ async function handleMessage(playerId, message) {
                     playerId,
                     appearance: player.appearance
                 }, playerId);
-                console.log(`🎨 Broadcasted appearance update for ${player.name} (${playerId}) to room ${player.room}`);
+                console.log(`[${ts()}] 🎨 Broadcasted appearance (characterType=${player.appearance.characterType}) for ${player.name} to room ${player.room}`);
             } else {
                 console.warn(`⚠️ Cannot broadcast appearance update - player ${player.name} (${playerId}) not in a room`);
             }
@@ -4706,96 +4930,6 @@ async function handleMessage(playerId, message) {
                     type: 'pebbles_error',
                     error: 'SERVER_ERROR',
                     message: 'Failed to process deposit'
-                });
-            }
-            break;
-        }
-        
-        case 'pebbles_deposit_waddle': {
-            // Player deposited $WADDLE and wants Pebbles (at 1.5x premium rate)
-            if (!player.isAuthenticated || !player.walletAddress) {
-                sendToPlayer(playerId, {
-                    type: 'pebbles_error',
-                    error: 'NOT_AUTHENTICATED',
-                    message: 'Must be authenticated to deposit'
-                });
-                break;
-            }
-            
-            // CRITICAL SECURITY: Validate all inputs
-            const walletValidation = validateWalletAddress(player.walletAddress);
-            if (!walletValidation.valid) {
-                console.error(`🚨 Security: Invalid wallet address in pebbles_deposit_waddle: ${walletValidation.error}`);
-                sendToPlayer(playerId, {
-                    type: 'pebbles_error',
-                    error: 'INVALID_WALLET',
-                    message: 'Invalid wallet address'
-                });
-                break;
-            }
-            
-            const { txSignature, waddleAmount } = message;
-            
-            // Validate transaction signature
-            const sigValidation = validateTransactionSignature(txSignature);
-            if (!sigValidation.valid) {
-                console.error(`🚨 Security: Invalid transaction signature: ${sigValidation.error}`);
-                sendToPlayer(playerId, {
-                    type: 'pebbles_error',
-                    error: 'INVALID_SIGNATURE',
-                    message: sigValidation.error || 'Invalid transaction signature'
-                });
-                break;
-            }
-            
-            // Validate WADDLE amount
-            const waddleValidation = validateAmount(waddleAmount, {
-                min: 0.001, // Minimum amount
-                max: 1000000, // Maximum reasonable amount
-                allowFloat: true,
-                allowZero: false
-            });
-            
-            if (!waddleValidation.valid) {
-                sendToPlayer(playerId, {
-                    type: 'pebbles_error',
-                    error: 'INVALID_AMOUNT',
-                    message: waddleValidation.error || 'Invalid $WADDLE amount'
-                });
-                break;
-            }
-            
-            const sanitizedWaddleAmount = waddleValidation.value;
-            
-            try {
-                const result = await pebbleService.depositPebblesWithWaddle(
-                    walletValidation.address, // Use sanitized address
-                    sigValidation.signature, // Use sanitized signature
-                    sanitizedWaddleAmount, // Use sanitized amount
-                    playerId
-                );
-                
-                if (result.success) {
-                    sendToPlayer(playerId, {
-                        type: 'pebbles_deposited',
-                        pebbles: result.newBalance,
-                        pebblesAwarded: result.pebblesReceived,
-                        waddleDeposited: result.waddleAmount,
-                        paymentMethod: 'WADDLE'
-                    });
-                } else {
-                    sendToPlayer(playerId, {
-                        type: 'pebbles_error',
-                        error: result.error,
-                        message: result.message || 'Deposit failed'
-                    });
-                }
-            } catch (error) {
-                console.error('🪨 Pebble $WADDLE deposit error:', error);
-                sendToPlayer(playerId, {
-                    type: 'pebbles_error',
-                    error: 'SERVER_ERROR',
-                    message: 'Failed to process $WADDLE deposit'
                 });
             }
             break;

@@ -128,6 +128,7 @@ class ChristmasTree extends BaseProp {
         const THREE = this.THREE;
         const lightColors = [0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00, 0xFF00FF, 0x00FFFF, 0xFF6600, 0xFF0066];
         
+        let globalLightIndex = 0;
         tierData.forEach((tier, tierIdx) => {
             const lightsOnTier = 8;
             for (let i = 0; i < lightsOnTier; i++) {
@@ -143,18 +144,32 @@ class ChristmasTree extends BaseProp {
                     roughness: 0.2,
                     emissive: color,
                     emissiveIntensity: 2.5
-                });
+                }).clone(); // Clone so each light can animate independently
+                
                 const bulbGeo = new THREE.SphereGeometry(0.14, 8, 8);
                 const bulb = new THREE.Mesh(bulbGeo, bulbMat);
                 bulb.position.set(ox, oy, oz);
+                
+                // Store animation parameters for twinkle effects
                 bulb.userData.baseEmissive = 2.5;
-                bulb.userData.phaseOffset = Math.random() * Math.PI * 2;
-                bulb.userData.speed = 0.5 + Math.random() * 0.8;
                 bulb.userData.color = color;
+                bulb.userData.lightIndex = globalLightIndex;
+                bulb.userData.tierIndex = tierIdx;
+                
+                // Deterministic animation parameters based on index
+                bulb.userData.twinkleSpeed = 2 + (globalLightIndex % 5) * 0.8; // Varied speeds
+                bulb.userData.twinklePhase = (globalLightIndex / 40) * Math.PI * 2; // Spread phases
+                bulb.userData.sparkleChance = 0.3 + (globalLightIndex % 3) * 0.1; // Random sparkle probability
+                bulb.userData.chaseOffset = globalLightIndex * 0.15; // For chase pattern
+                
                 this.addMesh(bulb, group);
                 this.ornamentMeshes.push(bulb);
+                this.materials.push(bulbMat); // Track for cleanup
+                globalLightIndex++;
             }
         });
+        
+        this.totalLights = globalLightIndex;
     }
     
     createBaubles(group, tierData) {
@@ -244,21 +259,65 @@ class ChristmasTree extends BaseProp {
     }
     
     update(time, delta, nightFactor = 0.5) {
-        // Twinkle Christmas lights
+        const baseBrightness = 0.5 + nightFactor * 0.5;
+        
+        // === TWINKLE CHRISTMAS LIGHTS ===
+        // Multiple layered effects for realistic twinkle
         this.ornamentMeshes.forEach(mesh => {
-            const twinkle = Math.sin(time * mesh.userData.speed + mesh.userData.phaseOffset);
-            const baseBrightness = 0.6 + nightFactor * 0.4;
-            const brightness = baseBrightness + twinkle * 0.3;
+            const idx = mesh.userData.lightIndex;
+            const tier = mesh.userData.tierIndex;
+            const speed = mesh.userData.twinkleSpeed;
+            const phase = mesh.userData.twinklePhase;
+            const chaseOffset = mesh.userData.chaseOffset;
+            
+            // 1. Base twinkle - smooth sine wave
+            const baseTwinkle = Math.sin(time * speed + phase);
+            
+            // 2. Chase pattern - lights turn on in sequence around the tree
+            const chasePhase = (time * 3 + chaseOffset) % (Math.PI * 2);
+            const chaseWave = Math.sin(chasePhase);
+            const isInChase = chaseWave > 0.3;
+            
+            // 3. Sparkle effect - occasional bright flashes
+            // Using deterministic "pseudo-random" based on time and index
+            const sparkleTime = Math.floor(time * 4 + idx * 0.7);
+            const sparkleHash = Math.sin(sparkleTime * 12.9898 + idx * 78.233) * 43758.5453;
+            const sparkle = (sparkleHash % 1) > 0.92 ? 1.5 : 0; // Occasional bright flash
+            
+            // 4. Tier wave - lights on each tier pulse together slightly
+            const tierWave = Math.sin(time * 1.5 + tier * 0.8) * 0.2;
+            
+            // 5. Rapid flicker for some lights (like old Christmas lights)
+            const flickerSpeed = 15 + (idx % 4) * 5;
+            const flicker = Math.sin(time * flickerSpeed + idx) > 0.7 ? 0.15 : 0;
+            
+            // Combine all effects
+            let brightness = baseBrightness;
+            brightness += baseTwinkle * 0.25; // Smooth wave
+            brightness += isInChase ? 0.3 : -0.1; // Chase highlight
+            brightness += sparkle; // Random sparkles
+            brightness += tierWave; // Tier sync
+            brightness += flicker; // Rapid flicker
+            
+            // Clamp and apply
+            brightness = Math.max(0.1, Math.min(brightness, 1.5));
+            
             if (mesh.material.emissiveIntensity !== undefined) {
                 mesh.material.emissiveIntensity = mesh.userData.baseEmissive * brightness;
             }
+            
+            // Subtle scale pulse on bright moments
+            const scalePulse = 1 + sparkle * 0.15 + (isInChase ? 0.05 : 0);
+            mesh.scale.setScalar(scalePulse);
         });
         
-        // Star glow pulse
+        // === STAR GLOW ===
+        // Majestic pulsing star with shimmer
         if (this.starGlow) {
-            const starPulse = Math.sin(time * 0.5) * 0.15 + 0.85;
-            const baseIntensity = 0.5 + nightFactor * 0.5;
-            this.starGlow.intensity = baseIntensity * starPulse;
+            const starPulse = Math.sin(time * 0.5) * 0.2 + 0.8;
+            const starShimmer = Math.sin(time * 8) * 0.1;
+            const baseIntensity = 0.6 + nightFactor * 0.6;
+            this.starGlow.intensity = baseIntensity * (starPulse + starShimmer);
         }
     }
     

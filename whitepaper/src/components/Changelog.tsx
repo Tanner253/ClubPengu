@@ -80,6 +80,72 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.1.2",
+    date: "January 23, 2026",
+    title: "🪵 Tung Tung Tung Sahur Character",
+    description: "New meme character - a tall cylindrical log creature with stick limbs and a baseball bat",
+    highlight: true,
+    stats: { filesChanged: 12, additions: 650, deletions: 50 },
+    changes: [
+      { type: "feature", text: "Tung Tung Tung Sahur - new playable character based on the viral meme (TungTungCharacter.js - 308 lines)" },
+      { type: "feature", text: "TUNG promo code unlocks the Tung Tung character" },
+      { type: "feature", text: "Tall cylindrical 'log' body design with customizable eyes and mouth" },
+      { type: "feature", text: "Stick arms and legs with unique animation handling" },
+      { type: "feature", text: "Baseball bat held in right hand (Bonk-style)" },
+      { type: "feature", text: "Character-specific animation overrides for Laugh and Headbang emotes (whole body rocks)" },
+      { type: "improvement", text: "Chat bubbles and nametags positioned correctly for tall character height" },
+      { type: "improvement", text: "VoxelPenguinDesigner updated with 🪵 log icon for character selection" },
+      { type: "fix", text: "Split head/body cylinder design for proper sitting and dancing animations" },
+      { type: "fix", text: "Leg positioning moved below body to prevent clipping" },
+    ],
+  },
+  {
+    version: "1.1.1",
+    date: "January 12, 2026",
+    title: "🏔️ Parkour Stage 6 & Performance",
+    description: "Expert parkour course with big drops, performance optimization for high-altitude gameplay, and critical fixes",
+    highlight: true,
+    stats: { filesChanged: 8, additions: 1200, deletions: 150 },
+    changes: [
+      { type: "feature", text: "Parkour Stage 6 'The Gauntlet' - expert difficulty course with 50+ platforms heading towards nightclub" },
+      { type: "feature", text: "Big drop jumps and spiral descents - significant vertical height changes for advanced players" },
+      { type: "feature", text: "The Needle Run - consecutive tiny 1.5x1.5 platforms requiring precision" },
+      { type: "feature", text: "The Frozen Throne - grand finale platform overlooking the nightclub area" },
+      { type: "feature", text: "/warp pk[1-6] commands - teleport to any parkour stage start for testing (dev mode)" },
+      { type: "performance", text: "Parkour Performance Mode - disables heavy animations when player Y >= 30 for better FPS" },
+      { type: "performance", text: "Campfire, Christmas tree, door glows, and building animations paused during high-altitude parkour" },
+      { type: "fix", text: "Player air momentum now correctly uses current frame delta - prevents excessive forward drift on lag spikes" },
+      { type: "fix", text: "Igloo public access now properly resets token gate and entry fee to defaults" },
+      { type: "fix", text: "Igloo settings clear all paid entry records when switching to public/private mode" },
+      { type: "backend", text: "IglooService resetEntryFees called automatically on public/private access change" },
+    ],
+  },
+  {
+    version: "1.1.0",
+    date: "January 10-11, 2026",
+    title: "🦐 Shrimp Character & Cosmetic Fixes",
+    description: "New playable shrimp character, cosmetic unlock system fixes, character preview improvements, and blackjack payout corrections",
+    highlight: true,
+    stats: { filesChanged: 16, additions: 2773, deletions: 1178 },
+    changes: [
+      { type: "feature", text: "Shrimp Character - new playable character type with unique animations (ShrimpCharacter.js - 466 lines)" },
+      { type: "feature", text: "SKRIMPS promo code unlocks the Shrimp character" },
+      { type: "feature", text: "PBR Slot Reels - realistic physically-based rendering for casino slots" },
+      { type: "feature", text: "Spectator wager banner - shows active wagers during match spectating" },
+      { type: "feature", text: "All character types now available in golden igloo wardrobe when cosmetics unlocked" },
+      { type: "fix", text: "Golden igloo preview now supports animated skins with proper materials and cosmic stars" },
+      { type: "fix", text: "Player profile preview correctly renders all character types (doginal, frog, shrimp, whales)" },
+      { type: "fix", text: "Cosmetic ownership checks now properly construct templateId with category prefix" },
+      { type: "fix", text: "Appearance data sync explicitly spreads all customization fields for proper Mongoose handling" },
+      { type: "fix", text: "Blackjack split hand payouts now calculate correctly" },
+      { type: "fix", text: "Blackjack push payout logic fixed - ties properly return wager" },
+      { type: "fix", text: "Blackjack only applies to 2-card hands, not split hands" },
+      { type: "fix", text: "Double down scenarios now pay out correctly" },
+      { type: "fix", text: "Busted players properly handled in payout calculations" },
+      { type: "security", text: "Banned IP connection logs throttled to once per minute to reduce spam" },
+    ],
+  },
+  {
     version: "1.0.3",
     date: "December 31, 2025",
     title: "🐛 Bug Fixes & Game Balance",
@@ -651,7 +717,7 @@ export default function Changelog() {
           </h2>
           <p className="text-slate-400 text-lg max-w-2xl mx-auto mb-8">
             Every line of code, every feature, every optimization documented. 
-            <span className="text-cyan-400 font-semibold"> 9 days of shipping.</span>
+            <span className="text-cyan-400 font-semibold"> 36 days of shipping.</span>
           </p>
           
           {/* Impressive stats */}

@@ -3,9 +3,7 @@
  * 
  * Pebbles are the in-game premium currency.
  * 
- * DEPOSIT OPTIONS:
- * - SOL: Base rate (1 SOL = 1000 Pebbles)
- * - $WADDLE: 1.5x more expensive (1 SOL worth of $WADDLE = 667 Pebbles)
+ * DEPOSIT: SOL only (1 SOL = 1000 Pebbles)
  * 
  * WITHDRAWAL:
  * - SOL ONLY (5% rake applied)
@@ -18,14 +16,11 @@ import SolanaTransaction from '../db/models/SolanaTransaction.js';
 import { validateWalletAddress, validateTransactionSignature, validateAmount } from '../utils/securityValidation.js';
 
 // ========== PEBBLE CONFIGURATION ==========
-const PEBBLES_PER_SOL = 1000;           // 1 SOL = 1000 Pebbles (base rate)
-const WADDLE_PREMIUM_MULTIPLIER = 1.5;  // $WADDLE costs 1.5x more (get fewer pebbles)
-const PEBBLES_PER_SOL_WADDLE = Math.floor(PEBBLES_PER_SOL / WADDLE_PREMIUM_MULTIPLIER); // ~667 Pebbles per SOL-equivalent of $WADDLE
-const WITHDRAWAL_RAKE_PERCENT = 5;       // 5% rake on withdrawals (SOL only)
+const PEBBLES_PER_SOL = 1000;           // 1 SOL = 1000 Pebbles
+const WITHDRAWAL_RAKE_PERCENT = 5;       // 5% rake on withdrawals
 const MIN_DEPOSIT_PEBBLES = 100;         // Minimum deposit
 const MIN_WITHDRAWAL_PEBBLES = 100;      // Minimum withdrawal
 const LAMPORTS_PER_SOL = 1_000_000_000;  // Solana constant
-const WADDLE_DECIMALS = 6;               // $WADDLE has 6 decimals
 
 class PebbleService {
     constructor(solanaPaymentService, custodialWalletService, sendToPlayer = null) {
@@ -187,167 +182,6 @@ class PebbleService {
             pebblesReceived: expectedPebbles,
             newBalance: creditResult.newBalance,
             solAmount: sanitizedSolAmount,
-            txSignature: sanitizedSignature
-        };
-    }
-    
-    /**
-     * Process a pebble deposit with $WADDLE token (1.5x premium rate)
-     * User gets fewer Pebbles when paying with $WADDLE vs SOL
-     */
-    async depositPebblesWithWaddle(walletAddress, txSignature, waddleAmount, playerId = null) {
-        this._ensureConfigured();
-        
-        // CRITICAL SECURITY: Validate all inputs at service level
-        const walletValidation = validateWalletAddress(walletAddress);
-        if (!walletValidation.valid) {
-            console.error(`🚨 Security: Invalid wallet address in depositPebblesWithWaddle: ${walletValidation.error}`);
-            return { success: false, error: 'INVALID_WALLET', message: walletValidation.error };
-        }
-        
-        const sigValidation = validateTransactionSignature(txSignature);
-        if (!sigValidation.valid) {
-            console.error(`🚨 Security: Invalid transaction signature in depositPebblesWithWaddle: ${sigValidation.error}`);
-            return { success: false, error: 'INVALID_SIGNATURE', message: sigValidation.error };
-        }
-        
-        const waddleValidation = validateAmount(waddleAmount, {
-            min: 0.001,
-            max: 1000000,
-            allowFloat: true,
-            allowZero: false
-        });
-        if (!waddleValidation.valid) {
-            console.error(`🚨 Security: Invalid WADDLE amount in depositPebblesWithWaddle: ${waddleValidation.error}`);
-            return { success: false, error: 'INVALID_AMOUNT', message: waddleValidation.error };
-        }
-        
-        // Use sanitized values
-        const sanitizedWallet = walletValidation.address;
-        const sanitizedSignature = sigValidation.signature;
-        const sanitizedWaddleAmount = waddleValidation.value;
-        
-        const waddleTokenAddress = process.env.CPW3_TOKEN_ADDRESS || 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump';
-        
-        console.log(`🪨 Pebble deposit ($WADDLE) requested: ${sanitizedWallet.slice(0, 8)}...`);
-        console.log(`   Tx: ${sanitizedSignature.slice(0, 16)}...`);
-        console.log(`   $WADDLE Amount: ${sanitizedWaddleAmount}`);
-        
-        if (!this.rakeWallet) {
-            return { success: false, error: 'SERVICE_NOT_CONFIGURED', message: 'RAKE_WALLET not set' };
-        }
-        
-        // Calculate pebbles at $WADDLE rate (1.5x more expensive)
-        // waddleAmount is the actual WADDLE token amount (e.g., 562,721.695165)
-        // We need to convert WADDLE tokens to SOL equivalent, then apply 1.5x premium
-        // Example: 0.1 SOL = 100 pebbles, so 0.15 SOL worth of WADDLE = 100 pebbles
-        
-        // Fetch current WADDLE price in SOL from DexScreener
-        let waddlePriceInSol = 0;
-        try {
-            const response = await fetch('https://api.dexscreener.com/latest/dex/tokens/BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump');
-            if (response.ok) {
-                const data = await response.json();
-                if (data.pairs && data.pairs.length > 0) {
-                    waddlePriceInSol = parseFloat(data.pairs[0].priceNative) || 0;
-                }
-            }
-        } catch (error) {
-            console.warn('   ⚠️ Failed to fetch WADDLE price, using fallback calculation');
-        }
-        
-        if (waddlePriceInSol <= 0) {
-            return { success: false, error: 'PRICE_FETCH_FAILED', message: 'Unable to fetch $WADDLE price. Please try again.' };
-        }
-        
-        // Convert WADDLE tokens to SOL equivalent
-        const solEquivalent = sanitizedWaddleAmount * waddlePriceInSol;
-        
-        // Calculate pebbles: (SOL equivalent / 1.5x premium) * PEBBLES_PER_SOL
-        // This ensures 0.15 SOL worth of WADDLE = 100 pebbles (same as 0.1 SOL base rate)
-        const expectedPebbles = Math.floor((solEquivalent / WADDLE_PREMIUM_MULTIPLIER) * PEBBLES_PER_SOL);
-        
-        console.log(`   📊 WADDLE price: ${waddlePriceInSol} SOL per WADDLE`);
-        console.log(`   📊 SOL equivalent: ${solEquivalent} SOL`);
-        console.log(`   📊 Expected pebbles: ${expectedPebbles} (after 1.5x premium)`);
-        
-        if (expectedPebbles < MIN_DEPOSIT_PEBBLES) {
-            const minWaddleAmount = (MIN_DEPOSIT_PEBBLES / PEBBLES_PER_SOL) * WADDLE_PREMIUM_MULTIPLIER;
-            return { success: false, error: 'BELOW_MINIMUM', message: `Min ${MIN_DEPOSIT_PEBBLES} Pebbles (need ~${minWaddleAmount.toFixed(3)} $WADDLE)` };
-        }
-        
-        // Check if tx already used (replay protection) - use sanitized signature
-        try {
-            const existsInDb = await SolanaTransaction.isSignatureUsed(sanitizedSignature);
-            if (existsInDb) {
-                console.log(`   ❌ Tx already used`);
-                return { success: false, error: 'TX_ALREADY_USED', message: 'Transaction already processed' };
-            }
-        } catch (e) {
-            console.warn('   ⚠️ DB check failed, continuing...');
-        }
-        
-        // Verify the SPL token transfer on-chain
-        try {
-            const verification = await this.solanaPaymentService.verifyTransaction(
-                sanitizedSignature,      // Use sanitized signature
-                sanitizedWallet,         // Use sanitized wallet
-                this.rakeWallet,         // recipient (rake wallet)
-                waddleTokenAddress,      // $WADDLE token
-                Math.floor(sanitizedWaddleAmount * Math.pow(10, WADDLE_DECIMALS)), // raw amount
-                { transactionType: 'pebble_deposit_waddle' }
-            );
-            
-            if (!verification.success) {
-                console.log(`   ❌ Verification failed: ${verification.error}`);
-                return { success: false, error: verification.error, message: verification.message };
-            }
-            
-            console.log(`   ✅ $WADDLE transfer verified`);
-            
-        } catch (error) {
-            console.error(`   ❌ Verification error:`, error.message);
-            return { success: false, error: 'VERIFICATION_FAILED', message: error.message };
-        }
-        
-        // Credit pebbles - use sanitized wallet
-        const creditResult = await this._creditPebbles(sanitizedWallet, expectedPebbles);
-        if (!creditResult.success) {
-            console.log(`   ❌ Credit failed: ${creditResult.error}`);
-            return creditResult;
-        }
-        
-        console.log(`   ✅ Credited ${expectedPebbles} Pebbles (balance: ${creditResult.newBalance})`);
-        const equivalentSol = sanitizedWaddleAmount / WADDLE_PREMIUM_MULTIPLIER;
-        console.log(`   📊 Rate: ${expectedPebbles} Pebbles for ${sanitizedWaddleAmount} $WADDLE (1.5x premium - same pebbles as ${equivalentSol.toFixed(3)} SOL)`);
-        
-        // Log transaction
-        try {
-            await Transaction.record({
-                type: 'pebble_deposit',
-                toWallet: walletAddress,
-                amount: expectedPebbles,
-                currency: 'pebbles',
-                toBalanceAfter: creditResult.newBalance,
-                relatedData: { 
-                    solTxSignature: txSignature, 
-                    waddleAmount,
-                    paymentMethod: 'WADDLE',
-                    premiumMultiplier: WADDLE_PREMIUM_MULTIPLIER
-                },
-                reason: `Deposited ${waddleAmount} $WADDLE for ${expectedPebbles} Pebbles (1.5x rate)`
-            });
-        } catch (e) {
-            console.warn('   ⚠️ Failed to log transaction:', e.message);
-        }
-        
-        return {
-            success: true,
-            pebblesReceived: expectedPebbles,
-            newBalance: creditResult.newBalance,
-            waddleAmount: sanitizedWaddleAmount,
-            paymentMethod: 'WADDLE',
-            rate: PEBBLES_PER_SOL_WADDLE,
             txSignature: sanitizedSignature
         };
     }
@@ -811,8 +645,6 @@ class PebbleService {
     static getConfig() {
         return {
             pebblesPerSol: PEBBLES_PER_SOL,
-            pebblesPerSolWaddle: PEBBLES_PER_SOL_WADDLE,
-            waddlePremiumMultiplier: WADDLE_PREMIUM_MULTIPLIER,
             withdrawalRakePercent: WITHDRAWAL_RAKE_PERCENT,
             minDepositPebbles: MIN_DEPOSIT_PEBBLES,
             minWithdrawalPebbles: MIN_WITHDRAWAL_PEBBLES,
@@ -825,8 +657,7 @@ class PebbleService {
             ...PebbleService.getConfig(), 
             bundles: PebbleService.getBundles(),
             paymentMethods: [
-                { id: 'SOL', name: 'Solana', rate: PEBBLES_PER_SOL, premium: 1.0 },
-                { id: 'WADDLE', name: '$WADDLE', rate: PEBBLES_PER_SOL_WADDLE, premium: WADDLE_PREMIUM_MULTIPLIER }
+                { id: 'SOL', name: 'Solana', rate: PEBBLES_PER_SOL, premium: 1.0 }
             ]
         };
     }
@@ -835,8 +666,6 @@ class PebbleService {
 export default PebbleService;
 export { 
     PEBBLES_PER_SOL, 
-    PEBBLES_PER_SOL_WADDLE,
-    WADDLE_PREMIUM_MULTIPLIER,
     WITHDRAWAL_RAKE_PERCENT, 
     MIN_DEPOSIT_PEBBLES, 
     MIN_WITHDRAWAL_PEBBLES 

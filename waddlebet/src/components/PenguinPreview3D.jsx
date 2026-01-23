@@ -21,7 +21,15 @@ import {
     SilverWhaleGenerators,
     SILVER_WHALE_PALETTE,
     GoldWhaleGenerators,
-    GOLD_WHALE_PALETTE
+    GOLD_WHALE_PALETTE,
+    ShrimpGenerators,
+    generateShrimpPalette,
+    DuckGenerators,
+    DUCK_PALETTE,
+    TungTungGenerators,
+    TUNG_PALETTE,
+    GakeGenerators,
+    GAKE_PALETTE
 } from '../characters';
 
 // Color palette for penguin skins
@@ -140,8 +148,13 @@ const PenguinPreview3D = ({
         if (!penguinGroupRef.current || !sceneRef.current) return;
         
         const rebuild = async () => {
-            const THREE = await import('three');
-            buildPenguin(THREE, penguinGroupRef.current, appearance);
+            try {
+                const THREE = await import('three');
+                console.log('🎨 Rebuilding penguin preview with appearance:', appearance);
+                buildPenguin(THREE, penguinGroupRef.current, appearance);
+            } catch (error) {
+                console.error('Error rebuilding penguin preview:', error);
+            }
         };
         
         rebuild();
@@ -213,25 +226,77 @@ function buildPenguin(THREE, group, appearance) {
             appearance.dogSecondaryColor || '#8B4513'
         );
         voxels = [
-            ...DoginalGenerators.generateDogBody(characterPalette),
-            ...DoginalGenerators.generateDogHead(characterPalette),
-            ...DoginalGenerators.generateDogFlipper(true, characterPalette),
-            ...DoginalGenerators.generateDogFlipper(false, characterPalette),
-            ...DoginalGenerators.generateDogFoot(true, characterPalette),
-            ...DoginalGenerators.generateDogFoot(false, characterPalette)
+            ...DoginalGenerators.head(),
+            ...DoginalGenerators.body(),
+            ...DoginalGenerators.armLeft(),
+            ...DoginalGenerators.armRight(),
+            ...DoginalGenerators.legLeft(),
+            ...DoginalGenerators.legRight(),
+            ...DoginalGenerators.tail(),
+            ...DoginalGenerators.earLeft(),
+            ...DoginalGenerators.earRight()
         ];
+        
+        // Doginal ALWAYS wears wizard hat - it's part of the character!
+        const doginalHat = ASSETS.HATS['wizardHat'] || [];
+        if (doginalHat.length > 0) {
+            // Offset hat voxels to sit on dog's head (Y+3 for head height, Z+3 for head forward offset)
+            const offsetHatVoxels = doginalHat.map(v => ({ ...v, y: v.y + 3, z: v.z + 3 }));
+            voxels = [...voxels, ...offsetHatVoxels];
+        }
     } else if (characterType === 'frog') {
         characterPalette = generateFrogPalette(
             appearance.frogPrimaryColor || '#6B8E23',
             appearance.frogSecondaryColor || '#556B2F'
         );
         voxels = [
-            ...FrogGenerators.generateFrogBody(characterPalette),
-            ...FrogGenerators.generateFrogHead(characterPalette),
-            ...FrogGenerators.generateFrogFlipper(true, characterPalette),
-            ...FrogGenerators.generateFrogFlipper(false, characterPalette),
-            ...FrogGenerators.generateFrogFoot(true, characterPalette),
-            ...FrogGenerators.generateFrogFoot(false, characterPalette)
+            ...FrogGenerators.head(),
+            ...FrogGenerators.body(),
+            ...FrogGenerators.flipperLeft(),
+            ...FrogGenerators.flipperRight(),
+            ...FrogGenerators.footLeft(),
+            ...FrogGenerators.footRight()
+        ];
+    } else if (characterType === 'shrimp') {
+        characterPalette = generateShrimpPalette(appearance.shrimpPrimaryColor || '#FF6B4A');
+        voxels = [
+            ...ShrimpGenerators.head(),
+            ...ShrimpGenerators.body(),
+            ...ShrimpGenerators.flipperLeft(),
+            ...ShrimpGenerators.flipperRight(),
+            ...ShrimpGenerators.tail(),
+            ...ShrimpGenerators.legs()
+        ];
+    } else if (characterType === 'duck') {
+        characterPalette = DUCK_PALETTE;
+        voxels = [
+            ...DuckGenerators.head(),
+            ...DuckGenerators.body(),
+            ...DuckGenerators.armLeft(),
+            ...DuckGenerators.armRight(),
+            ...DuckGenerators.legLeft(),
+            ...DuckGenerators.legRight(),
+            ...DuckGenerators.tail()
+        ];
+    } else if (characterType === 'tungTung') {
+        characterPalette = TUNG_PALETTE;
+        voxels = [
+            ...TungTungGenerators.head(),
+            ...TungTungGenerators.body(),
+            ...TungTungGenerators.armLeft(),
+            ...TungTungGenerators.armRight(),
+            ...TungTungGenerators.legLeft(),
+            ...TungTungGenerators.legRight()
+        ];
+    } else if (characterType === 'gake') {
+        characterPalette = GAKE_PALETTE;
+        voxels = [
+            ...GakeGenerators.head(),
+            ...GakeGenerators.body(),
+            ...GakeGenerators.armLeft(),
+            ...GakeGenerators.armRight(),
+            ...GakeGenerators.footLeft(),
+            ...GakeGenerators.footRight()
         ];
     } else if (characterType === 'marcus') {
         characterPalette = MARCUS_PALETTE;
@@ -368,32 +433,52 @@ function addCosmetics(THREE, group, appearance, characterType, paletteOrSkinColo
         ? paletteOrSkinColor 
         : PALETTE;
     
-    // Add hat
+    // Add hat - with offset for special characters
     if (appearance.hat && appearance.hat !== 'none' && ASSETS.HATS && ASSETS.HATS[appearance.hat]) {
-        const hatVoxels = ASSETS.HATS[appearance.hat];
+        let hatVoxels = ASSETS.HATS[appearance.hat];
         if (hatVoxels && hatVoxels.length > 0) {
+            // Apply offset for Gake (raised head, y+2)
+            if (characterType === 'gake') {
+                hatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + 2 }));
+            }
             const hatGroup = buildVoxelGroup(THREE, hatVoxels, cosmeticsPalette);
             hatGroup.name = 'hat';
             group.add(hatGroup);
         }
     }
     
-    // Add eyes
+    // Add eyes - with offset for TungTung and Gake characters
     const eyesKey = appearance.eyes && ASSETS.EYES && ASSETS.EYES[appearance.eyes] ? appearance.eyes : 'normal';
     if (ASSETS.EYES && ASSETS.EYES[eyesKey]) {
-        const eyesVoxels = ASSETS.EYES[eyesKey];
+        let eyesVoxels = ASSETS.EYES[eyesKey];
         if (eyesVoxels && eyesVoxels.length > 0) {
+            // Apply offset for TungTung (tall cylinder - face on upper half, y+21)
+            if (characterType === 'tungTung') {
+                eyesVoxels = eyesVoxels.map(v => ({ ...v, y: v.y + 21, z: v.z + 1 }));
+            }
+            // Apply offset for Gake (raised head, y+2)
+            if (characterType === 'gake') {
+                eyesVoxels = eyesVoxels.map(v => ({ ...v, y: v.y + 2 }));
+            }
             const eyesGroup = buildVoxelGroup(THREE, eyesVoxels, cosmeticsPalette);
             eyesGroup.name = 'eyes';
             group.add(eyesGroup);
         }
     }
     
-    // Add mouth (ASSETS.MOUTH is an alias for MOUTHS)
+    // Add mouth (ASSETS.MOUTH is an alias for MOUTHS) - with offset for TungTung and Gake characters
     const mouthKey = appearance.mouth && ASSETS.MOUTH && ASSETS.MOUTH[appearance.mouth] ? appearance.mouth : 'beak';
     if (ASSETS.MOUTH && ASSETS.MOUTH[mouthKey]) {
-        const mouthVoxels = ASSETS.MOUTH[mouthKey];
+        let mouthVoxels = ASSETS.MOUTH[mouthKey];
         if (mouthVoxels && mouthVoxels.length > 0) {
+            // Apply offset for TungTung (tall cylinder - face on upper half, y+21)
+            if (characterType === 'tungTung') {
+                mouthVoxels = mouthVoxels.map(v => ({ ...v, y: v.y + 21, z: v.z + 1 }));
+            }
+            // Apply offset for Gake (raised head, y+2)
+            if (characterType === 'gake') {
+                mouthVoxels = mouthVoxels.map(v => ({ ...v, y: v.y + 2 }));
+            }
             const mouthGroup = buildVoxelGroup(THREE, mouthVoxels, cosmeticsPalette);
             mouthGroup.name = 'mouth';
             group.add(mouthGroup);

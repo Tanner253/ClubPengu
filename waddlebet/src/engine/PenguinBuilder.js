@@ -24,8 +24,66 @@ import {
     FrogGenerators,
     FROG_PALETTE,
     FROG_PALETTES,
-    generateFrogPalette
+    generateFrogPalette,
+    ShrimpGenerators,
+    SHRIMP_PALETTE,
+    SHRIMP_PALETTES,
+    generateShrimpPalette,
+    DuckGenerators,
+    DUCK_PALETTE,
+    TungTungGenerators,
+    TUNG_PALETTE,
+    GakeGenerators,
+    GAKE_PALETTE
 } from '../characters';
+
+/**
+ * Animated skin color configurations
+ * Colors shift over time for various effects
+ */
+export const ANIMATED_SKIN_COLORS = {
+    cosmic: {
+        // Galaxy with shifting purples, deep blues, and magenta hints
+        colors: ['#0B0B45', '#1a0a3e', '#3d1a6e', '#6b2d8b', '#4a1259', '#2a0e4f', '#0B0B45'],
+        speed: 0.5,
+        emissive: 0.2,
+        hasStars: true,
+        usePhaseOffsets: true // Each part at different point in cycle
+    },
+    galaxy: {
+        // Darker, more mysterious space feel
+        colors: ['#1A0533', '#0a1628', '#2a1055', '#0f0f3f', '#1a0a3e', '#1A0533'],
+        speed: 0.4,
+        emissive: 0.15,
+        hasStars: true,
+        usePhaseOffsets: true
+    },
+    rainbow: {
+        // Full spectrum cycling - WHOLE penguin same color
+        colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0088ff', '#8800ff'],
+        speed: 0.8,
+        emissive: 0.25,
+        hasStars: false,
+        usePhaseOffsets: false // All parts same color
+    },
+    prismatic: {
+        // Each body part is a DIFFERENT color from the spectrum (like a prism splitting light)
+        colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#00ffff', '#0088ff', '#8800ff', '#ff00ff'],
+        speed: 0.6,
+        emissive: 0.3,
+        hasStars: false,
+        usePhaseOffsets: true, // Each part different color
+        phaseMultiplier: 1.2 // Larger offset between parts for more contrast
+    },
+    nebula: {
+        // Purple/violet nebula
+        colors: ['#9932CC', '#4B0082', '#8A2BE2', '#9400D3', '#6B238E', '#9932CC'],
+        speed: 0.6,
+        emissive: 0.2,
+        hasStars: true,
+        usePhaseOffsets: true
+    }
+};
 
 /**
  * Creates a PenguinBuilder factory with cached materials and geometry
@@ -68,8 +126,12 @@ export function createPenguinBuilder(THREE) {
     
     /**
      * Build a part from voxels, merged by color into InstancedMeshes
+     * @param {Array} voxels - Voxel data
+     * @param {Object} palette - Color palette
+     * @param {Object} pivot - Pivot point for rotation
+     * @param {Object} animatedSkinInfo - Optional: { skinHex, skinConfig, materials[] } for animated skins
      */
-    const buildPartMerged = (voxels, palette, pivot) => {
+    const buildPartMerged = (voxels, palette, pivot, animatedSkinInfo = null) => {
         const g = new THREE.Group();
         
         // Group voxels by color
@@ -105,10 +167,34 @@ export function createPenguinBuilder(THREE) {
                 matrices.push(tempMatrix.clone());
             });
             
+            // Check if this is an animated skin color that needs special material
+            let material;
+            const isAnimatedSkinColor = animatedSkinInfo && colorKey === animatedSkinInfo.skinHex;
+            
+            if (isAnimatedSkinColor) {
+                // Create unique material for animated skin (not cached - needs to animate)
+                material = new THREE.MeshStandardMaterial({ 
+                    color: new THREE.Color(colorKey),
+                    roughness: 0.3,
+                    metalness: 0.1,
+                    emissive: new THREE.Color(colorKey),
+                    emissiveIntensity: animatedSkinInfo.skinConfig?.emissive || 0.1
+                });
+                // Add phase offset for multi-color effect (only if usePhaseOffsets is true)
+                const useOffsets = animatedSkinInfo.skinConfig?.usePhaseOffsets ?? true;
+                const phaseMultiplier = animatedSkinInfo.skinConfig?.phaseMultiplier || 0.7;
+                const phaseOffset = useOffsets ? (animatedSkinInfo.materials.length * phaseMultiplier) : 0;
+                material.userData = { phaseOffset };
+                // Track this material for animation
+                animatedSkinInfo.materials.push(material);
+            } else {
+                material = getMaterial(colorKey);
+            }
+            
             // Use InstancedMesh for many voxels of same color
             const instancedMesh = new THREE.InstancedMesh(
                 sharedVoxelGeo,
-                getMaterial(colorKey),
+                material,
                 matrices.length
             );
             matrices.forEach((m, i) => instancedMesh.setMatrixAt(i, m));
@@ -838,6 +924,353 @@ export function createPenguinBuilder(THREE) {
         return group;
     };
     
+    /**
+     * Build Shrimp character mesh with tail flappers and antennae
+     */
+    const buildShrimpMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = ShrimpGenerators.pivots();
+        
+        // Use shrimpPrimaryColor first, then fall back to skin-based palette
+        let shrimpPalette;
+        
+        if (data.shrimpPrimaryColor) {
+            // Generate palette from custom color
+            shrimpPalette = generateShrimpPalette(data.shrimpPrimaryColor);
+        } else if (SHRIMP_PALETTES[data.skin]) {
+            // Use named palette if skin matches
+            shrimpPalette = SHRIMP_PALETTES[data.skin];
+        } else if (data.skin && PALETTE[data.skin]) {
+            // Generate palette from penguin skin color
+            shrimpPalette = generateShrimpPalette(PALETTE[data.skin]);
+        } else {
+            shrimpPalette = SHRIMP_PALETTE; // Default orange
+        }
+        
+        // Shrimp head with antennae and eye stalks
+        const headVoxels = ShrimpGenerators.head();
+        const head = buildPartMerged(headVoxels, shrimpPalette);
+        head.name = 'head';
+        
+        // Shrimp body (segmented)
+        const bodyVoxels = ShrimpGenerators.body();
+        const body = buildPartMerged(bodyVoxels, shrimpPalette);
+        body.name = 'body';
+        
+        // Arms/claws (flipper position for cosmetic compatibility)
+        const armLVoxels = ShrimpGenerators.flipperLeft();
+        const armL = buildPartMerged(armLVoxels, shrimpPalette, pivots.flipperLeft);
+        armL.name = 'flipper_l';
+        
+        const armRVoxels = ShrimpGenerators.flipperRight();
+        const armR = buildPartMerged(armRVoxels, shrimpPalette, pivots.flipperRight);
+        armR.name = 'flipper_r';
+        
+        // Tail fan (the distinctive shrimp tail flappers!)
+        const tailVoxels = ShrimpGenerators.tail();
+        const tail = buildPartMerged(tailVoxels, shrimpPalette, pivots.tail);
+        tail.name = 'tail';
+        tail.userData.isTailFlapper = true; // For animation
+        
+        // Walking legs
+        const legsVoxels = ShrimpGenerators.legs();
+        const legs = buildPartMerged(legsVoxels, shrimpPalette);
+        legs.name = 'legs';
+        
+        group.add(body, head, armL, armR, tail, legs);
+        
+        // Add hat support (no eyes/mouth for shrimp - has own eye stalks and rostrum)
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            if (hatVoxels && hatVoxels.length > 0) {
+                // Offset hat: Y+2, Z+2 (raised by 3 from -1, pushed back toward tail)
+                const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + 2, z: v.z + 2 }));
+                const hat = buildPartMerged(offsetHatVoxels, PALETTE);
+                hat.name = 'hat';
+                group.add(hat);
+                
+                // Propeller hat blades
+                if (data.hat === 'propeller') {
+                    const blades = new THREE.Group();
+                    blades.name = 'propeller_blades';
+                    blades.position.set(0, 16 * VOXEL_SIZE, 2 * VOXEL_SIZE);
+                    const bladeGeo = new THREE.BoxGeometry(4 * VOXEL_SIZE, 0.2 * VOXEL_SIZE, 0.5 * VOXEL_SIZE);
+                    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                    const b1 = new THREE.Mesh(bladeGeo, bladeMat);
+                    const b2 = new THREE.Mesh(bladeGeo, bladeMat);
+                    b2.rotation.y = Math.PI / 2;
+                    blades.add(b1, b2);
+                    group.add(blades);
+                }
+                
+                if (data.hat === 'wizardHat') {
+                    group.userData.hasWizardHat = true;
+                }
+            }
+        }
+        
+        // Add body item support
+        if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
+            const bodyItemData = ASSETS.BODY[data.bodyItem];
+            const bodyItemVoxels = bodyItemData?.voxels || bodyItemData || [];
+            if (bodyItemVoxels.length > 0) {
+                // Offset clothing for shrimp body: Y-2 (raised by 3 from -5)
+                const offsetBodyVoxels = bodyItemVoxels.map(v => ({ ...v, y: v.y - 2 }));
+                const bodyItemMesh = buildPartMerged(offsetBodyVoxels, PALETTE);
+                bodyItemMesh.name = 'bodyItem';
+                group.add(bodyItemMesh);
+            }
+        }
+        
+        group.scale.set(0.18, 0.18, 0.18);
+        group.position.y = 0.8;
+        
+        // Mark as shrimp for tail animation
+        group.userData.isShrimp = true;
+        
+        return group;
+    };
+    
+    /**
+     * Build Duck character mesh with orange bill and wings
+     */
+    const buildDuckMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = DuckGenerators.pivots();
+        
+        // Duck uses fixed yellow palette
+        const duckPalette = DUCK_PALETTE;
+        
+        // Duck head with bill
+        const headVoxels = DuckGenerators.head();
+        const head = buildPartMerged(headVoxels, duckPalette);
+        head.name = 'head';
+        
+        // Duck body
+        const bodyVoxels = DuckGenerators.body();
+        const body = buildPartMerged(bodyVoxels, duckPalette);
+        body.name = 'body';
+        
+        // Wings (like flippers)
+        const wingLVoxels = DuckGenerators.armLeft();
+        const wingL = buildPartMerged(wingLVoxels, duckPalette, pivots.armLeft);
+        wingL.name = 'flipper_l';
+        
+        const wingRVoxels = DuckGenerators.armRight();
+        const wingR = buildPartMerged(wingRVoxels, duckPalette, pivots.armRight);
+        wingR.name = 'flipper_r';
+        
+        // Orange webbed feet
+        const footLVoxels = DuckGenerators.legLeft();
+        const footL = buildPartMerged(footLVoxels, duckPalette, pivots.legLeft);
+        footL.name = 'foot_l';
+        
+        const footRVoxels = DuckGenerators.legRight();
+        const footR = buildPartMerged(footRVoxels, duckPalette, pivots.legRight);
+        footR.name = 'foot_r';
+        
+        // Tail (separate for animation - wagging!)
+        const tailVoxels = DuckGenerators.tail();
+        const tail = buildPartMerged(tailVoxels, duckPalette, pivots.tail);
+        tail.name = 'tail';
+        
+        group.add(body, head, wingL, wingR, footL, footR, tail);
+        
+        // Add hat support - raised by 5 for duck head height
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            if (hatVoxels && hatVoxels.length > 0) {
+                // Offset hat voxels up by 5 for duck's taller head
+                const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + 5 }));
+                const hat = buildPartMerged(offsetHatVoxels, PALETTE);
+                hat.name = 'hat';
+                group.add(hat);
+                
+                // Propeller hat blades - also raised
+                if (data.hat === 'propeller') {
+                    const blades = new THREE.Group();
+                    blades.name = 'propeller_blades';
+                    blades.position.set(0, 17 * VOXEL_SIZE, 0);  // 12 + 5 = 17
+                    const bladeGeo = new THREE.BoxGeometry(4 * VOXEL_SIZE, 0.2 * VOXEL_SIZE, 0.5 * VOXEL_SIZE);
+                    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                    const b1 = new THREE.Mesh(bladeGeo, bladeMat);
+                    const b2 = new THREE.Mesh(bladeGeo, bladeMat);
+                    b2.rotation.y = Math.PI / 2;
+                    blades.add(b1, b2);
+                    group.add(blades);
+                }
+                
+                if (data.hat === 'wizardHat') {
+                    group.userData.hasWizardHat = true;
+                }
+            }
+        }
+        
+        // Add body item support
+        if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
+            const bodyItemData = ASSETS.BODY[data.bodyItem];
+            const bodyItemVoxels = bodyItemData?.voxels || bodyItemData || [];
+            if (bodyItemVoxels.length > 0) {
+                const bodyItemMesh = buildPartMerged(bodyItemVoxels, PALETTE);
+                bodyItemMesh.name = 'bodyItem';
+                group.add(bodyItemMesh);
+            }
+        }
+        
+        group.scale.set(0.2, 0.2, 0.2);
+        group.position.y = 0.8;
+        
+        // Mark as duck for animations
+        group.userData.isDuck = true;
+        
+        return group;
+    };
+    
+    /**
+     * Build Tung Tung Tung Sahur (tall cylindrical log creature with bat)
+     */
+    const buildTungTungMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = TungTungGenerators.pivots();
+        
+        // Head - upper half of cylinder (y=10-20)
+        const headVoxels = TungTungGenerators.head();
+        const head = buildPartMerged(headVoxels, TUNG_PALETTE, pivots.head);
+        head.name = 'head';
+        
+        // Body - lower half of cylinder (y=0-10)
+        const bodyVoxels = TungTungGenerators.body();
+        const body = buildPartMerged(bodyVoxels, TUNG_PALETTE, pivots.body);
+        body.name = 'body';
+        
+        // Arms (right arm has the baseball bat built in)
+        const armLVoxels = TungTungGenerators.armLeft();
+        const armL = buildPartMerged(armLVoxels, TUNG_PALETTE, pivots.armLeft);
+        armL.name = 'flipper_l';
+        
+        const armRVoxels = TungTungGenerators.armRight();
+        const armR = buildPartMerged(armRVoxels, TUNG_PALETTE, pivots.armRight);
+        armR.name = 'flipper_r';
+        
+        // Legs
+        const legLVoxels = TungTungGenerators.legLeft();
+        const legL = buildPartMerged(legLVoxels, TUNG_PALETTE, pivots.legLeft);
+        legL.name = 'foot_l';
+        
+        const legRVoxels = TungTungGenerators.legRight();
+        const legR = buildPartMerged(legRVoxels, TUNG_PALETTE, pivots.legRight);
+        legR.name = 'foot_r';
+        
+        group.add(head, body, armL, armR, legL, legR);
+        
+        // Add eyes - offset for tall cylinder (face is on head, upper half)
+        // Head is y=15-30, face around y=27-29, standard eyes at y=6-8, offset +21
+        if (data.eyes && data.eyes !== 'none' && ASSETS.EYES[data.eyes]) {
+            const eyeVoxels = ASSETS.EYES[data.eyes];
+            const offsetEyeVoxels = eyeVoxels.map(v => ({ ...v, y: v.y + 8, z: v.z + 1 }));
+            const eyesMesh = buildPartMerged(offsetEyeVoxels, PALETTE);
+            eyesMesh.name = 'eyes';
+            group.add(eyesMesh);
+        }
+        
+        // Add mouth - offset for tall cylinder
+        if (data.mouth && data.mouth !== 'none' && ASSETS.MOUTH[data.mouth]) {
+            const mouthVoxels = ASSETS.MOUTH[data.mouth];
+            const offsetMouthVoxels = mouthVoxels.map(v => ({ ...v, y: v.y + 8, z: v.z + 1 }));
+            const mouthMesh = buildPartMerged(offsetMouthVoxels, PALETTE);
+            mouthMesh.name = 'mouth';
+            group.add(mouthMesh);
+        }
+        
+        // Slightly smaller scale due to tall body
+        group.scale.set(0.16, 0.16, 0.16);
+        group.position.y = 0.8;
+        
+        // Mark as Tung Tung for animations
+        group.userData.isTungTung = true;
+        
+        return group;
+    };
+    
+    /**
+     * Build Gake (Patrick Star style) mesh
+     * Uses same pivot points as penguin for proper animations
+     */
+    const buildGakeMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = GakeGenerators.pivots();
+        
+        // Head - same pivot as penguin
+        const headVoxels = GakeGenerators.head();
+        const head = buildPartMerged(headVoxels, GAKE_PALETTE);
+        head.name = 'head';
+        
+        // Body - same pivot as penguin
+        const bodyVoxels = GakeGenerators.body();
+        const body = buildPartMerged(bodyVoxels, GAKE_PALETTE);
+        body.name = 'body';
+        
+        // Flippers - same pivot as penguin
+        const armLVoxels = GakeGenerators.armLeft();
+        const armL = buildPartMerged(armLVoxels, GAKE_PALETTE, pivots.armLeft);
+        armL.name = 'flipper_l';
+        
+        const armRVoxels = GakeGenerators.armRight();
+        const armR = buildPartMerged(armRVoxels, GAKE_PALETTE, pivots.armRight);
+        armR.name = 'flipper_r';
+        
+        // Feet - same pivot as penguin
+        const footLVoxels = GakeGenerators.footLeft();
+        const footL = buildPartMerged(footLVoxels, GAKE_PALETTE, pivots.footLeft);
+        footL.name = 'foot_l';
+        
+        const footRVoxels = GakeGenerators.footRight();
+        const footR = buildPartMerged(footRVoxels, GAKE_PALETTE, pivots.footRight);
+        footR.name = 'foot_r';
+        
+        group.add(head, body, armL, armR, footL, footR);
+        
+        // Gake's face is raised by +2 compared to penguin
+        const GAKE_FACE_OFFSET = 2;
+        
+        // Add eyes - raised to match Gake's head position
+        if (data.eyes && data.eyes !== 'none' && ASSETS.EYES[data.eyes]) {
+            const eyeVoxels = ASSETS.EYES[data.eyes];
+            const offsetEyeVoxels = eyeVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+            const eyesMesh = buildPartMerged(offsetEyeVoxels, PALETTE);
+            eyesMesh.name = 'eyes';
+            group.add(eyesMesh);
+        }
+        
+        // Add mouth - raised to match Gake's head position
+        if (data.mouth && data.mouth !== 'none' && ASSETS.MOUTH[data.mouth]) {
+            const mouthVoxels = ASSETS.MOUTH[data.mouth];
+            const offsetMouthVoxels = mouthVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+            const mouthMesh = buildPartMerged(offsetMouthVoxels, PALETTE);
+            mouthMesh.name = 'mouth';
+            group.add(mouthMesh);
+        }
+        
+        // Add hat support - raised to match Gake's head position
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + GAKE_FACE_OFFSET }));
+            const hatMesh = buildPartMerged(offsetHatVoxels, PALETTE);
+            hatMesh.name = 'hat';
+            group.add(hatMesh);
+        }
+        
+        // Note: Gake does NOT support body items - only hat, eyes, and mouth/beak
+        
+        group.scale.set(0.16, 0.16, 0.16);
+        group.position.y = 0.8;
+        
+        // Mark as Gake for animations
+        group.userData.isGake = true;
+        
+        return group;
+    };
+    
     // Whale character configs
     const WHALE_CONFIGS = {
         whiteWhale: { generators: WhiteWhaleGenerators, palette: WHITE_WHALE_PALETTE },
@@ -948,10 +1381,10 @@ export function createPenguinBuilder(THREE) {
         whiteFlippersRight.name = 'flipper_r';
         
         whiteFlippersLeft.scale.set(0.9, 0.9, 0.9);
-        whiteFlippersLeft.position.set(6 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
+        whiteFlippersLeft.position.set(5 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
         
         whiteFlippersRight.scale.set(0.9, 0.9, 0.9);
-        whiteFlippersRight.position.set(-6 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
+        whiteFlippersRight.position.set(-5 * VOXEL_SIZE, 2 * VOXEL_SIZE, 3 * VOXEL_SIZE);
         
         group.userData.isJoeMode = true;
         group.add(whiteFlippersLeft, whiteFlippersRight, footL, footR);
@@ -969,17 +1402,26 @@ export function createPenguinBuilder(THREE) {
     const buildStandardPenguin = (data) => {
         const group = new THREE.Group();
         const skin = data.skin || 'blue';
+        const skinHex = PALETTE[skin] || skin;
         
-        const body = buildPartMerged(generateBaseBody(PALETTE[skin] || skin), PALETTE);
-        const head = buildPartMerged(generateHead(PALETTE[skin] || skin), PALETTE);
+        // Check if this is an animated skin (cosmic, galaxy, rainbow, nebula)
+        const skinConfig = ANIMATED_SKIN_COLORS[skin];
+        const animatedSkinInfo = skinConfig ? {
+            skinHex,
+            skinConfig,
+            materials: [] // Will be populated by buildPartMerged
+        } : null;
+        
+        const body = buildPartMerged(generateBaseBody(skinHex), PALETTE, null, animatedSkinInfo);
+        const head = buildPartMerged(generateHead(skinHex), PALETTE, null, animatedSkinInfo);
         
         const footL = buildPartMerged(generateFoot(3), PALETTE, {x:3, y:-6, z:1});
         footL.name = 'foot_l';
         const footR = buildPartMerged(generateFoot(-3), PALETTE, {x:-3, y:-6, z:1});
         footR.name = 'foot_r';
         
-        const flippersLeft = buildPartMerged(generateFlippers(PALETTE[skin] || skin, true), PALETTE, {x:5, y:0, z:0});
-        const flippersRight = buildPartMerged(generateFlippers(PALETTE[skin] || skin, false), PALETTE, {x:-5, y:0, z:0});
+        const flippersLeft = buildPartMerged(generateFlippers(skinHex, true), PALETTE, {x:5, y:0, z:0}, animatedSkinInfo);
+        const flippersRight = buildPartMerged(generateFlippers(skinHex, false), PALETTE, {x:-5, y:0, z:0}, animatedSkinInfo);
         
         flippersLeft.name = 'flipper_l';
         flippersRight.name = 'flipper_r';
@@ -1018,6 +1460,73 @@ export function createPenguinBuilder(THREE) {
         addMouth(group, data);
         addBodyItem(group, data);
         
+        // Add cosmic stars for animated skins
+        if (animatedSkinInfo && skinConfig?.hasStars) {
+            const starsGroup = new THREE.Group();
+            starsGroup.name = 'cosmic_stars';
+            
+            const starCount = 30;
+            const starGeometry = new THREE.SphereGeometry(VOXEL_SIZE * 0.12, 6, 6);
+            
+            for (let i = 0; i < starCount; i++) {
+                const starMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.8,
+                    emissive: new THREE.Color(0xaabbff),
+                    emissiveIntensity: 1.0,
+                    roughness: 0.2,
+                    metalness: 0.8
+                });
+                
+                const star = new THREE.Mesh(starGeometry, starMaterial);
+                
+                // Random position on the penguin surface
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI * 0.7 + 0.15;
+                const radius = 1.0 + Math.random() * 0.8;
+                
+                star.position.set(
+                    Math.sin(phi) * Math.cos(theta) * radius,
+                    Math.cos(phi) * radius + 0.3,
+                    Math.sin(phi) * Math.sin(theta) * radius
+                );
+                
+                // Store twinkle parameters
+                star.userData.twinkleSpeed = 0.8 + Math.random() * 1.2;
+                star.userData.twinkleOffset = Math.random() * Math.PI * 2;
+                star.userData.baseScale = 0.6 + Math.random() * 0.5;
+                star.userData.isCosmicStar = true;
+                
+                starsGroup.add(star);
+            }
+            
+            starsGroup.userData.isCosmicStars = true;
+            group.add(starsGroup);
+        }
+        
+        // Add subtle glow light for animated skins (reduced 80% from original)
+        if (animatedSkinInfo && animatedSkinInfo.materials.length > 0) {
+            const glowLight = new THREE.PointLight(
+                new THREE.Color(skinConfig.colors[0]), // Initial color
+                0.3, // Intensity (reduced 80% from 1.5)
+                5    // Distance (reduced from 8)
+            );
+            glowLight.position.set(0, 3 * VOXEL_SIZE, 0); // Center of penguin body
+            glowLight.name = 'animated_skin_glow';
+            glowLight.userData.isAnimatedSkinGlow = true;
+            group.add(glowLight);
+        }
+        
+        // Store animated skin data on the group for animation
+        if (animatedSkinInfo && animatedSkinInfo.materials.length > 0) {
+            group.userData.animatedSkin = {
+                skinName: skin,
+                config: skinConfig,
+                materials: animatedSkinInfo.materials
+            };
+        }
+        
         group.scale.set(0.2, 0.2, 0.2);
         group.position.y = 0.8;
         
@@ -1050,6 +1559,11 @@ export function createPenguinBuilder(THREE) {
         
         let group;
         
+        // Debug log for character type
+        if (data.characterType && data.characterType !== 'penguin') {
+            console.log(`🎭 Building ${data.characterType} character mesh`);
+        }
+        
         // Check for special character types
         if (data.characterType === 'marcus') {
             group = buildMarcusMesh(data);
@@ -1057,6 +1571,14 @@ export function createPenguinBuilder(THREE) {
             group = buildDoginalMesh(data);
         } else if (data.characterType === 'frog') {
             group = buildFrogMesh(data);
+        } else if (data.characterType === 'shrimp') {
+            group = buildShrimpMesh(data);
+        } else if (data.characterType === 'duck') {
+            group = buildDuckMesh(data);
+        } else if (data.characterType === 'tungTung') {
+            group = buildTungTungMesh(data);
+        } else if (data.characterType === 'gake') {
+            group = buildGakeMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {
@@ -1107,7 +1629,11 @@ export function cacheAnimatedParts(mesh) {
         fireEmitter: null,
         breathFire: null,
         breathIce: null,
-        bubblegum: null
+        bubblegum: null,
+        // Animated skin (cosmic, galaxy, rainbow, nebula)
+        animatedSkin: null,
+        cosmicStars: [],
+        animatedSkinGlow: null
     };
     
     mesh.traverse(child => {
@@ -1122,6 +1648,16 @@ export function cacheAnimatedParts(mesh) {
         if (child.userData?.isBreathFire) cache.breathFire = child;
         if (child.userData?.isBreathIce) cache.breathIce = child;
         if (child.userData?.isBubblegum) cache.bubblegum = child;
+        // Animated skin data
+        if (child.userData?.animatedSkin) cache.animatedSkin = child.userData.animatedSkin;
+        if (child.userData?.isCosmicStar) cache.cosmicStars.push(child);
+        if (child.userData?.isCosmicStars) {
+            // Traverse stars group
+            child.children.forEach(star => {
+                if (star.userData?.isCosmicStar) cache.cosmicStars.push(star);
+            });
+        }
+        if (child.userData?.isAnimatedSkinGlow) cache.animatedSkinGlow = child;
     });
     
     return cache;
@@ -1282,6 +1818,85 @@ export function animateCosmeticsFromCache(cache, time, delta, VOXEL_SIZE) {
             else if (cycleTime < 0.85) scale = 2.1 - (cycleTime - 0.8) * 30;
             else scale = 0.5;
             bubble.scale.setScalar(Math.max(0.3, scale));
+        }
+    }
+    
+    // Animated skin colors (cosmic, galaxy, rainbow, nebula)
+    // Each body part has a phase offset for a flowing galaxy effect
+    if (cache.animatedSkin && cache.animatedSkin.materials && cache.animatedSkin.materials.length > 0) {
+        const skinConfig = cache.animatedSkin.config;
+        if (skinConfig && skinConfig.colors) {
+            const baseT = time * skinConfig.speed;
+            const colorCount = skinConfig.colors.length;
+            
+            // Need THREE for color operations - get from window
+            const THREE = window.THREE;
+            if (THREE) {
+                cache.animatedSkin.materials.forEach((mat, idx) => {
+                    if (mat && mat.color) {
+                        // Each material has its own phase offset for galaxy flow effect
+                        // Use ?? instead of || so that phaseOffset=0 (for rainbow) is respected
+                        const phaseOffset = mat.userData?.phaseOffset ?? (idx * 0.7);
+                        const t = baseT + phaseOffset;
+                        
+                        // Interpolate between colors based on time + offset
+                        const colorIndex = Math.abs(t) % colorCount;
+                        const fromIdx = Math.floor(colorIndex) % colorCount;
+                        const toIdx = (fromIdx + 1) % colorCount;
+                        const blend = colorIndex - Math.floor(colorIndex);
+                        
+                        const fromColor = new THREE.Color(skinConfig.colors[fromIdx]);
+                        const toColor = new THREE.Color(skinConfig.colors[toIdx]);
+                        const currentColor = fromColor.clone().lerp(toColor, blend);
+                        
+                        mat.color.copy(currentColor);
+                        if (mat.emissive) {
+                            mat.emissive.copy(currentColor);
+                            mat.emissiveIntensity = (skinConfig.emissive || 0.1) + Math.sin(t * 2) * 0.05;
+                        }
+                    }
+                });
+            }
+        }
+    }
+    
+    // Cosmic stars twinkling
+    if (cache.cosmicStars && cache.cosmicStars.length > 0) {
+        cache.cosmicStars.forEach(star => {
+            if (star && star.material && star.userData) {
+                // Each star twinkles at its own rate
+                const twinkle = Math.sin(time * (star.userData.twinkleSpeed || 1) + (star.userData.twinkleOffset || 0));
+                const twinkleNorm = (twinkle + 1) / 2; // Normalize to 0-1
+                
+                // Opacity pulsing
+                star.material.opacity = 0.4 + twinkleNorm * 0.6;
+                
+                // Emissive intensity pulsing for glow effect
+                star.material.emissiveIntensity = 0.6 + twinkleNorm * 0.8;
+                
+                // Subtle color temperature shift (warmer when bright)
+                const warmth = twinkleNorm * 0.15;
+                if (star.material.emissive) {
+                    star.material.emissive.setRGB(0.7 + warmth, 0.75 + warmth * 0.5, 1.0);
+                }
+                
+                // Subtle size pulsing
+                const baseScale = star.userData.baseScale || 1;
+                const scale = baseScale * (0.8 + twinkleNorm * 0.4);
+                star.scale.setScalar(scale);
+            }
+        });
+    }
+    
+    // Animated skin glow light - follows the average color of animated materials
+    if (cache.animatedSkinGlow && cache.animatedSkin && cache.animatedSkin.materials.length > 0) {
+        // Get color from first material (they're all similar with slight offsets)
+        const firstMat = cache.animatedSkin.materials[0];
+        if (firstMat && firstMat.color) {
+            cache.animatedSkinGlow.color.copy(firstMat.color);
+            // Subtle pulse (reduced 80%)
+            const pulse = Math.sin(time * 2) * 0.06 + 0.06;
+            cache.animatedSkinGlow.intensity = 0.24 + pulse;
         }
     }
 }

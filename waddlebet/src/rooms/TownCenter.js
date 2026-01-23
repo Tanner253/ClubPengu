@@ -995,7 +995,8 @@ class TownCenter {
                     mesh = attachPropData(campfireProp, campfireProp.group);
                     if (campfireProp.getLight) mesh.userData.fireLight = campfireProp.getLight();
                     if (campfireProp.getParticles) mesh.userData.particles = campfireProp.getParticles();
-                    mesh.userData.campfireUpdate = (time) => campfireProp.update && campfireProp.update(time);
+                    // Store the Campfire instance directly for animation - this is the KEY reference
+                    mesh.userData.campfireInstance = campfireProp;
                     break;
                 }
                 case 'christmas_tree': {
@@ -1655,20 +1656,6 @@ class TownCenter {
         
         this.iglooInfoBoards = [iglooInfoBoardRight, iglooInfoBoardLeft];
         
-        // ==================== STATIC MESH OPTIMIZATION ====================
-        // CRITICAL: Disable matrixAutoUpdate for all static meshes
-        // This prevents Three.js from recalculating world matrices every frame
-        this.propMeshes.forEach(propMesh => {
-            propMesh.traverse(child => {
-                if (child.isMesh) {
-                    child.updateMatrix();
-                    child.matrixAutoUpdate = false;
-                }
-            });
-            propMesh.updateMatrixWorld(true);
-        });
-        console.log('🏘️ TownCenter: Applied static mesh optimization (matrixAutoUpdate=false)');
-        
         return { meshes: this.propMeshes, lights: this.lights, collisionSystem: this.collisionSystem };
     }
 
@@ -1768,6 +1755,9 @@ class TownCenter {
         // OPTIMIZED: Lower polygon bulbs (4 segments instead of 6)
         const bulbGeo = new THREE.SphereGeometry(0.12, 4, 4);
         
+        // Track bulbs for animation
+        const stringBulbs = [];
+        
         for (let i = 0; i < bulbCount; i++) {
             const t = (i + 0.5) / bulbCount;
             const x = from.x + dx * t;
@@ -1776,26 +1766,43 @@ class TownCenter {
             const y = height - sag - 0.1; // Slightly below wire
             
             const color = lightColors[i % lightColors.length];
-            // OPTIMIZED: Use MeshBasicMaterial with emissive look (no lighting calculations)
-            const bulbMat = new THREE.MeshBasicMaterial({
+            
+            // Use MeshStandardMaterial with emissive for GLOW effect
+            const bulbMat = new THREE.MeshStandardMaterial({
                 color: color,
+                emissive: color,
+                emissiveIntensity: 2.0, // Bright glow when "on"
+                roughness: 0.3,
+                metalness: 0.1
             });
             
             const bulb = new THREE.Mesh(bulbGeo, bulbMat);
             bulb.position.set(x, y, z);
+            
+            // Store animation data for twinkle effect
+            bulb.userData.isStreetLight = true;
+            bulb.userData.lightIndex = i;
+            bulb.userData.baseColor = color;
+            bulb.userData.twinklePhase = (i / bulbCount) * Math.PI * 2;
+            bulb.userData.twinkleSpeed = 2 + (i % 4) * 0.5;
+            
             group.add(bulb);
+            stringBulbs.push(bulb);
             
             // OPTIMIZED: Only add point light for 1st bulb per string (was every 3rd)
             // Apple (Mac + iOS) + Android: Skip point lights entirely (use emissive materials only)
             // The emissive bulbs provide visual glow, we only need 1 light per string for ambiance
             const skipLights = typeof window !== 'undefined' && (window._isAppleDevice || window._isAndroidDevice);
             if (!skipLights && i === Math.floor(bulbCount / 2)) {
-                const light = new THREE.PointLight(0xFFFFAA, 0.4, 6); // Warm white, merged color
+                const light = new THREE.PointLight(0xFFFFAA, 0.5, 8); // Warm white, slightly stronger
                 light.position.set(x, y, z);
                 group.add(light);
                 this.lights.push(light);
             }
         }
+        
+        // Store bulbs on group for animation access
+        group.userData.streetLightBulbs = stringBulbs;
         
         return group;
     }
@@ -2037,7 +2044,7 @@ class TownCenter {
 
     update(time, delta, nightFactor = 0.5, playerPos = null) {
         if (!this._animatedCache) {
-            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], wardrobeIgloos: [], frameCounter: 0 };
+            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], wardrobeIgloos: [], streetLightStrings: [], frameCounter: 0 };
             this.propMeshes.forEach(mesh => {
                 // Wardrobe/Personal igloo with floating cosmetics
                 if (mesh.userData.isPersonalIgloo && mesh.userData.floatingGroup) {
@@ -2048,10 +2055,9 @@ class TownCenter {
                     });
                 }
                 if (mesh.name === 'campfire') {
-                    const flames = [];
-                    mesh.traverse(child => { if (child.userData.isFlame) flames.push(child); });
+                    // Store the Campfire instance reference for clean single-point animation
                     this._animatedCache.campfires.push({
-                        flames, particles: mesh.userData.particles, light: mesh.userData.fireLight,
+                        instance: mesh.userData.campfireInstance, // The actual Campfire class instance
                         position: { x: mesh.position.x, z: mesh.position.z }
                     });
                 }
@@ -2072,6 +2078,12 @@ class TownCenter {
                         baseY: mesh.userData.floatingSignBaseY
                     });
                 }
+                // Street light strings (Christmas lights between lamp posts)
+                if (mesh.name === 'light_string' && mesh.userData.streetLightBulbs) {
+                    this._animatedCache.streetLightStrings.push({
+                        bulbs: mesh.userData.streetLightBulbs
+                    });
+                }
             });
             // SKNY Igloos stored separately during spawn
             if (this.sknyIgloos) {
@@ -2087,18 +2099,16 @@ class TownCenter {
         const px = playerPos?.x || 0;
         const pz = playerPos?.z || 0;
         
-        // OPTIMIZED: Nightclub speakers and neon - every 2nd frame (still smooth for bass pulse)
+        // Nightclub animations - ALWAYS run (major landmark, visible from far away)
+        // No distance culling - nightclub lasers and speakers should always animate
+        this._animatedCache.nightclubs.forEach(mesh => {
+            if (mesh.userData.nightclubUpdate) {
+                mesh.userData.nightclubUpdate(time);
+            }
+        });
+        
+        // Casino exterior animations - every 2nd frame with distance check
         if (frame % 2 === 0) {
-            this._animatedCache.nightclubs.forEach(mesh => {
-                if (mesh.userData.nightclubUpdate) {
-                    // Distance check for nightclub (positioned at center-north)
-                    const dx = px - mesh.position.x;
-                    const dz = pz - mesh.position.z;
-                    if (dx * dx + dz * dz < ANIMATION_DISTANCE_SQ) {
-                        mesh.userData.nightclubUpdate(time);
-                    }
-                }
-            });
             
             // Casino exterior animations - Vegas marquee, slot machines, searchlights, etc.
             this._animatedCache.casinos.forEach(mesh => {
@@ -2163,46 +2173,21 @@ class TownCenter {
             });
         }
         
-        // OPTIMIZED: Campfire flames - every 2nd frame, with distance culling
+        // CAMPFIRE ANIMATION - Single point of maintenance via Campfire.update()
+        // Distance-culled for performance
         if (frame % 2 === 0) {
-            const CAMPFIRE_ANIM_DIST_SQ = 60 * 60; // Campfire animations within 60 units
+            const CAMPFIRE_ANIM_DIST_SQ = 60 * 60;
             
-            this._animatedCache.campfires.forEach(({ flames, particles, light, position }) => {
-                // Distance check for campfire
+            this._animatedCache.campfires.forEach(({ instance, position }) => {
+                // Distance check
                 const cpos = position || { x: TownCenter.CENTER, z: TownCenter.CENTER };
                 const cdx = px - cpos.x;
                 const cdz = pz - cpos.z;
                 if (cdx * cdx + cdz * cdz > CAMPFIRE_ANIM_DIST_SQ) return;
                 
-                flames.forEach(flame => {
-                    const offset = flame.userData.offset || 0;
-                    flame.position.y = flame.userData.baseY + Math.sin(time * 8 + offset) * 0.1;
-                    flame.scale.x = 0.8 + Math.sin(time * 10 + offset) * 0.2;
-                    flame.scale.z = 0.8 + Math.cos(time * 10 + offset) * 0.2;
-                    flame.rotation.y = time * 2 + offset;
-                });
-                
-                // OPTIMIZED: Particles every 6th frame (was every 3rd)
-                if (particles && frame % 6 === 0) {
-                    const positions = particles.geometry.attributes.position.array;
-                    const len = positions.length / 3;
-                    for (let i = 0; i < len; i++) {
-                        const idx = i * 3;
-                        positions[idx + 1] += delta * 4 * (1 + Math.random() * 0.5); // Double speed to compensate
-                        positions[idx] += (Math.random() - 0.5) * delta * 2;
-                        positions[idx + 2] += (Math.random() - 0.5) * delta * 2;
-                        if (positions[idx + 1] > 3) {
-                            positions[idx] = (Math.random() - 0.5) * 0.8;
-                            positions[idx + 1] = 0.2;
-                            positions[idx + 2] = (Math.random() - 0.5) * 0.8;
-                        }
-                    }
-                    particles.geometry.attributes.position.needsUpdate = true;
-                }
-                
-                // OPTIMIZED: Light flicker every 6th frame
-                if (light && frame % 6 === 0) {
-                    light.intensity = 1.5 + Math.sin(time * 15) * 0.3 + Math.random() * 0.2;
+                // Call the Campfire's own update method - ONE source of truth
+                if (instance && instance.update) {
+                    instance.update(time, delta);
                 }
             });
         }
@@ -2222,6 +2207,40 @@ class TownCenter {
                 // Subtle scale pulse
                 const pulse = 1 + Math.sin(time * 2) * 0.02;
                 sprite.scale.set(10 * pulse, 2.5 * pulse, 1);
+            });
+        }
+        
+        // Street light strings - twinkle animation for Christmas ambiance
+        if (frame % 3 === 0 && this._animatedCache.streetLightStrings.length > 0) {
+            this._animatedCache.streetLightStrings.forEach(({ bulbs }) => {
+                bulbs.forEach(bulb => {
+                    const idx = bulb.userData.lightIndex;
+                    const phase = bulb.userData.twinklePhase;
+                    const speed = bulb.userData.twinkleSpeed;
+                    
+                    // Chase pattern - lights turn on/off in sequence
+                    const chasePhase = (time * 2 + phase) % (Math.PI * 2);
+                    const isOn = Math.sin(chasePhase) > -0.3;
+                    
+                    // Twinkle intensity variation
+                    const twinkle = Math.sin(time * speed + phase);
+                    
+                    // Occasional sparkle (deterministic pseudo-random)
+                    const sparkleTime = Math.floor(time * 3 + idx * 0.5);
+                    const sparkleHash = Math.sin(sparkleTime * 12.9898 + idx * 78.233) * 43758.5453;
+                    const sparkle = (sparkleHash % 1) > 0.9 ? 1.5 : 0;
+                    
+                    if (bulb.material && bulb.material.emissiveIntensity !== undefined) {
+                        if (isOn) {
+                            // Light is ON - glow with twinkle
+                            const baseGlow = 1.5 + nightFactor * 1.0;
+                            bulb.material.emissiveIntensity = baseGlow + twinkle * 0.5 + sparkle;
+                        } else {
+                            // Light is OFF - dim but not completely dark
+                            bulb.material.emissiveIntensity = 0.3;
+                        }
+                    }
+                });
             });
         }
     }

@@ -205,6 +205,35 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
             return;
         }
         
+        // DEV ONLY: Parkour warp commands /warp pk1, /warp pk2, etc.
+        const pkMatch = text.toLowerCase().match(/^\/warp\s+(pk[1-6])$/);
+        if (pkMatch && process.env.NODE_ENV === 'development') {
+            const stage = pkMatch[1];
+            const stageNames = {
+                pk1: 'Stage 1 (Blue)',
+                pk2: 'Stage 2 (Purple)',
+                pk3: 'Stage 3 (Green)',
+                pk4: 'Stage 4 (Orange)',
+                pk5: 'Stage 5 (Red)',
+                pk6: 'Stage 6 (Cyan) - The Gauntlet'
+            };
+            
+            window.dispatchEvent(new CustomEvent('chatCommand', { detail: { command: stage } }));
+            
+            setLocalMessages(prev => [...prev.slice(-100), {
+                id: Date.now(),
+                type: 'system',
+                name: 'System',
+                text: `🎮 Warping to Parkour ${stageNames[stage]}...`,
+                timestamp: Date.now()
+            }]);
+            
+            setInputValue('');
+            resetFadeTimer();
+            inputRef.current?.blur();
+            return;
+        }
+        
         // Regular chat message
         sendChat(text);
         setInputValue('');

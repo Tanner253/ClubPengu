@@ -142,14 +142,17 @@ const AppContent = () => {
     
     // Sync penguin data from server when authenticated (including session restore)
     // CRITICAL: Track wallet address to detect wallet switches
+    // NOTE: characterType is a top-level field in User model, NOT inside customization
     useEffect(() => {
         if (isAuthenticated && userData?.customization) {
             // Only sync if this is a NEW wallet or we haven't synced yet
             if (syncedWalletRef.current !== walletAddress) {
-                console.log('🐧 Loading customization from server:', userData.customization);
+                console.log('🐧 Loading customization from server:', userData.customization, 'characterType:', userData.characterType);
                 setPenguinData({
                     ...DEFAULT_PENGUIN,
-                    ...userData.customization
+                    ...userData.customization,
+                    // characterType is top-level in User model, merge it in
+                    characterType: userData.characterType || 'penguin'
                 });
                 syncedWalletRef.current = walletAddress;
             }
@@ -158,7 +161,7 @@ const AppContent = () => {
             syncedWalletRef.current = null;
             setPenguinData(DEFAULT_PENGUIN);
         }
-    }, [isAuthenticated, userData?.customization, isRestoringSession, walletAddress]);
+    }, [isAuthenticated, userData?.customization, userData?.characterType, isRestoringSession, walletAddress]);
     
     // Puffle state (shared across all rooms)
     const [playerPuffle, setPlayerPuffle] = useState(null);
@@ -207,8 +210,14 @@ const AppContent = () => {
         console.log('💰 Coins:', gm.getCoins());
     }, []);
     
+    // Turnstile token for bot protection
+    const [turnstileToken, setTurnstileToken] = useState(null);
+    
     // Enter the game world (from designer)
-    const handleEnterWorld = () => {
+    const handleEnterWorld = (token = null) => {
+        if (token) {
+            setTurnstileToken(token);
+        }
         GameManager.getInstance().setRoom('town');
         setCurrentRoom('town');
     };
@@ -288,6 +297,7 @@ const AppContent = () => {
                         onPuffleChange={setPlayerPuffle}
                         customSpawnPos={spawnPosition}
                         onPlayerClick={handlePlayerClick}
+                        turnstileToken={turnstileToken}
                         isInMatch={isInMatch}
                         activeMatches={activeMatches}
                         spectatingMatch={spectatingMatch}

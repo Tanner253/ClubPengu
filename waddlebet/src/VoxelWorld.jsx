@@ -47,7 +47,7 @@ import {
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './config';
-import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem } from './systems';
+import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem } from './systems';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
 import CasinoBlackjack from './components/CasinoBlackjack';
@@ -68,7 +68,8 @@ const VoxelWorld = ({
     activeMatches = [], // Active matches in the room (for spectator banners)
     spectatingMatch = {}, // Real-time match state data for spectating
     activePveActivities = {}, // PvE activity state for spectator banners (fishing, blackjack, etc.)
-    onRequestAuth    // Callback to redirect to penguin maker for auth
+    onRequestAuth,    // Callback to redirect to penguin maker for auth
+    turnstileToken = null // Cloudflare Turnstile verification token (for bot protection)
 }) => {
     const mountRef = useRef(null);
     const sceneRef = useRef(null);
@@ -94,6 +95,7 @@ const VoxelWorld = ({
     const matchBannersRef = useRef(new Map()); // matchId -> { sprite, canvas, ctx }
     const pveBannersRef = useRef(new Map()); // playerId -> { sprite, canvas, ctx } for PvE activities
     const wizardTrailSystemRef = useRef(null); // World-space wizard hat particle trail
+    const gakeCandleTrailSystemRef = useRef(null); // Gake character green candle trail
     const mountTrailSystemRef = useRef(null); // Mount trail system (icy trails, etc.)
     const mountEnabledRef = useRef(true); // Track if mount is equipped/enabled
     const mpUpdateAppearanceRef = useRef(null); // Ref for appearance update function
@@ -147,6 +149,24 @@ const VoxelWorld = ({
         
         window.addEventListener('mountToggled', handleMountToggle);
         return () => window.removeEventListener('mountToggled', handleMountToggle);
+    }, []);
+    
+    // Green candles toggle - listen for settings changes
+    useEffect(() => {
+        const handleGreenCandlesToggle = (e) => {
+            const enabled = e.detail?.enabled ?? false;
+            
+            // SYNC TO SERVER: Notify other players about green candles change
+            if (mpUpdateAppearanceRef.current && penguinDataRef.current) {
+                mpUpdateAppearanceRef.current({
+                    ...penguinDataRef.current,
+                    greenCandlesEnabled: enabled
+                });
+            }
+        };
+        
+        window.addEventListener('greenCandlesToggled', handleGreenCandlesToggle);
+        return () => window.removeEventListener('greenCandlesToggled', handleGreenCandlesToggle);
     }, []);
     
     
@@ -545,6 +565,9 @@ const VoxelWorld = ({
         // Initialize wizard trail particle system
         wizardTrailSystemRef.current = new WizardTrailSystem(THREE, scene);
         
+        // Initialize Gake candle trail system (green trading candles)
+        gakeCandleTrailSystemRef.current = new GakeCandleTrailSystem(THREE, scene);
+        
         // Initialize mount trail system (icy trails, etc.)
         mountTrailSystemRef.current = new MountTrailSystem(THREE, scene);
         
@@ -931,9 +954,9 @@ const VoxelWorld = ({
             
             const loreLines = [
                 'In the Great Thaw of Year 42, when the',
-                'Shark Armies besieged Pengu Island,',
+                'Shark Armies besieged Waddle Island,',
                 'Lord Fishnu rose from the depths to',
-                'defend our beloved island.',
+                'defend our beloved land.',
                 '',
                 'With his Divine Tail Slap, he scattered',
                 'a thousand predators. His golden eyes',
@@ -1332,7 +1355,11 @@ const VoxelWorld = ({
                 fireEmitter: null,
                 breathFire: null,
                 breathIce: null,
-                bubblegum: null
+                bubblegum: null,
+                // Animated skin colors (cosmic, galaxy, rainbow, nebula)
+                animatedSkin: null,
+                cosmicStars: [],
+                animatedSkinGlow: null
             };
             
             mesh.traverse(child => {
@@ -1347,6 +1374,16 @@ const VoxelWorld = ({
                 if (child.userData?.isBreathFire) cache.breathFire = child;
                 if (child.userData?.isBreathIce) cache.breathIce = child;
                 if (child.userData?.isBubblegum) cache.bubblegum = child;
+                // Animated skin data
+                if (child.userData?.animatedSkin) cache.animatedSkin = child.userData.animatedSkin;
+                if (child.userData?.isCosmicStar) cache.cosmicStars.push(child);
+                if (child.userData?.isCosmicStars) {
+                    // Traverse stars group
+                    child.children.forEach(star => {
+                        if (star.userData?.isCosmicStar) cache.cosmicStars.push(star);
+                    });
+                }
+                if (child.userData?.isAnimatedSkinGlow) cache.animatedSkinGlow = child;
             });
             
             return cache;
@@ -1501,6 +1538,81 @@ const VoxelWorld = ({
                     else if (cycleTime < 0.85) scale = 2.1 - (cycleTime - 0.8) * 30;
                     else scale = 0.5;
                     bubble.scale.setScalar(Math.max(0.3, scale));
+                }
+            }
+            
+            // Animated skin colors (cosmic, galaxy, rainbow, nebula)
+            // Each body part has a phase offset for a flowing galaxy effect
+            if (cache.animatedSkin && cache.animatedSkin.materials && cache.animatedSkin.materials.length > 0) {
+                const skinConfig = cache.animatedSkin.config;
+                if (skinConfig && skinConfig.colors) {
+                    const baseT = time * skinConfig.speed;
+                    const colorCount = skinConfig.colors.length;
+                    
+                    cache.animatedSkin.materials.forEach((mat, idx) => {
+                        if (mat && mat.color) {
+                            // Each material has its own phase offset for galaxy flow effect
+                            // Use ?? instead of || so that phaseOffset=0 (for rainbow) is respected
+                            const phaseOffset = mat.userData?.phaseOffset ?? (idx * 0.7);
+                            const t = baseT + phaseOffset;
+                            
+                            // Interpolate between colors based on time + offset
+                            const colorIndex = Math.abs(t) % colorCount;
+                            const fromIdx = Math.floor(colorIndex) % colorCount;
+                            const toIdx = (fromIdx + 1) % colorCount;
+                            const blend = colorIndex - Math.floor(colorIndex);
+                            
+                            const fromColor = new THREE.Color(skinConfig.colors[fromIdx]);
+                            const toColor = new THREE.Color(skinConfig.colors[toIdx]);
+                            const currentColor = fromColor.clone().lerp(toColor, blend);
+                            
+                            mat.color.copy(currentColor);
+                            if (mat.emissive) {
+                                mat.emissive.copy(currentColor);
+                                mat.emissiveIntensity = (skinConfig.emissive || 0.1) + Math.sin(t * 2) * 0.05;
+                            }
+                        }
+                    });
+                }
+            }
+            
+            // Cosmic stars twinkling
+            if (cache.cosmicStars && cache.cosmicStars.length > 0) {
+                cache.cosmicStars.forEach(star => {
+                    if (star && star.material && star.userData) {
+                        // Each star twinkles at its own rate
+                        const twinkle = Math.sin(time * (star.userData.twinkleSpeed || 1) + (star.userData.twinkleOffset || 0));
+                        const twinkleNorm = (twinkle + 1) / 2; // Normalize to 0-1
+                        
+                        // Opacity pulsing
+                        star.material.opacity = 0.4 + twinkleNorm * 0.6;
+                        
+                        // Emissive intensity pulsing for glow effect
+                        star.material.emissiveIntensity = 0.6 + twinkleNorm * 0.8;
+                        
+                        // Subtle color temperature shift (warmer when bright)
+                        const warmth = twinkleNorm * 0.15;
+                        if (star.material.emissive) {
+                            star.material.emissive.setRGB(0.7 + warmth, 0.75 + warmth * 0.5, 1.0);
+                        }
+                        
+                        // Subtle size pulsing
+                        const baseScale = star.userData.baseScale || 1;
+                        const starScale = baseScale * (0.8 + twinkleNorm * 0.4);
+                        star.scale.setScalar(starScale);
+                    }
+                });
+            }
+            
+            // Animated skin glow light - follows the average color of animated materials
+            if (cache.animatedSkinGlow && cache.animatedSkin && cache.animatedSkin.materials.length > 0) {
+                // Get color from first material (they're all similar with slight offsets)
+                const firstMat = cache.animatedSkin.materials[0];
+                if (firstMat && firstMat.color) {
+                    cache.animatedSkinGlow.color.copy(firstMat.color);
+                    // Subtle pulse (reduced 80%)
+                    const pulse = Math.sin(time * 2) * 0.06 + 0.06;
+                    cache.animatedSkinGlow.intensity = 0.24 + pulse;
                 }
             }
         };
@@ -1778,11 +1890,14 @@ const VoxelWorld = ({
         const isDev = import.meta.env.DEV || window.location.hostname === 'localhost';
         if (room === 'town' && isDev) {
             const wagerBotData = {
+                characterType: 'doginal',
                 skin: 'purple',
-                hat: 'tophat',
-                eyes: 'normal',
-                mouth: 'beak',
-                bodyItem: 'suit'
+                hat: 'none',
+                eyes: 'none',
+                mouth: 'none',
+                bodyItem: 'none',
+                dogPrimaryColor: '#D2691E',
+                dogSecondaryColor: '#8B4513'
             };
             const wagerBotMesh = buildPenguinMesh(wagerBotData);
             // Slightly bigger than normal penguins to stand out
@@ -2228,7 +2343,7 @@ const VoxelWorld = ({
                 }
                 }
                 // === AIR MOVEMENT ===
-                // In air: allow movement in facing direction (like ground, but same speed - no boost)
+                // In air: allow movement in facing direction with proper momentum
                 else {
                     // Mobile Joystick in air: same 2D plane movement with auto-facing
                     if (joystickMagnitude > 0.1 && !inMatch) {
@@ -2272,9 +2387,20 @@ const VoxelWorld = ({
                         velRef.current.z = -Math.cos(rotRef.current) * speed;
                         velRef.current.x = -Math.sin(rotRef.current) * speed;
                         moving = true;
+                    } else {
+                        // No input in air - apply air momentum with CURRENT delta
+                        // This prevents lag spikes from causing massive forward movement
+                        // Get the direction of current velocity and re-apply with current delta
+                        const currentVelMag = Math.sqrt(velRef.current.x * velRef.current.x + velRef.current.z * velRef.current.z);
+                        if (currentVelMag > 0.01) {
+                            // Normalize direction, apply BASE_SPEED * current delta
+                            // This maintains momentum direction but uses correct delta timing
+                            const airMomentumSpeed = BASE_SPEED * delta * 0.9; // 90% of ground speed for air drag
+                            velRef.current.x = (velRef.current.x / currentVelMag) * airMomentumSpeed;
+                            velRef.current.z = (velRef.current.z / currentVelMag) * airMomentumSpeed;
+                        }
+                        // If velocity was basically zero, keep it zero
                     }
-                    // No input in air - maintain momentum (don't reset to 0)
-                    // velocity stays as-is from last frame
                 }
             } else {
                 velRef.current.x = 0;
@@ -3243,6 +3369,15 @@ const VoxelWorld = ({
                     wizardTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
                 }
                 
+                // --- GREEN CANDLE TRAIL ---
+                // Triggers for Gake character OR when greenCandlesEnabled setting is on
+                const isGake = penguinData?.characterType === 'gake';
+                const greenCandlesEnabled = gameSettingsRef.current?.greenCandlesEnabled === true;
+                if ((isGake || greenCandlesEnabled) && gakeCandleTrailSystemRef.current) {
+                    gakeCandleTrailSystemRef.current.getOrCreatePool('localPlayer');
+                    gakeCandleTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
+                }
+                
                 // --- SLOT MACHINE SYSTEM (spectator bubbles) ---
                 if (slotMachineSystemRef.current) {
                     // Pass player position for distance-based culling optimization
@@ -3435,7 +3570,7 @@ const VoxelWorld = ({
                 
                 // Rebuild mesh if appearance changed
                 if (playerData.needsMeshRebuild && buildPenguinMeshRef.current) {
-                    console.log(`🔄 Rebuilding mesh for ${playerData.name} due to appearance change`);
+                    console.log(`🔄 Rebuilding mesh for ${playerData.name} due to appearance change (characterType=${playerData.appearance?.characterType || 'penguin'})`);
                     
                     // Store current position and rotation
                     const currentPos = meshData.mesh.position.clone();
@@ -3479,6 +3614,8 @@ const VoxelWorld = ({
                     
                     // Update animated cosmetics flag
                     const appearance = playerData.appearance || {};
+                    // Animated skin colors (cosmic, galaxy, rainbow, prismatic, nebula)
+                    const animatedSkins = ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula'];
                     meshData.hasAnimatedCosmetics = appearance.hat === 'propeller' || 
                                                      appearance.hat === 'flamingCrown' ||
                                                      appearance.mouth === 'cigarette' || 
@@ -3492,7 +3629,8 @@ const VoxelWorld = ({
                                                      appearance.bodyItem === 'angelWings' ||
                                                      appearance.bodyItem === 'demonWings' ||
                                                      appearance.bodyItem === 'fireAura' ||
-                                                     appearance.bodyItem === 'lightningAura';
+                                                     appearance.bodyItem === 'lightningAura' ||
+                                                     animatedSkins.includes(appearance.skin);
                     
                     // Clear the rebuild flag
                     playerData.needsMeshRebuild = false;
@@ -3723,6 +3861,15 @@ const VoxelWorld = ({
                     wizardTrailSystemRef.current.update(poolKey, meshData.mesh.position, isMoving, time, delta);
                 }
                 
+                // Green candle trail for other players (Gake character OR greenCandlesEnabled setting)
+                const otherIsGake = otherAppearance.characterType === 'gake';
+                const otherGreenCandlesEnabled = otherAppearance.greenCandlesEnabled === true;
+                if ((otherIsGake || otherGreenCandlesEnabled) && gakeCandleTrailSystemRef.current) {
+                    const poolKey = `player_${id}`;
+                    gakeCandleTrailSystemRef.current.getOrCreatePool(poolKey);
+                    gakeCandleTrailSystemRef.current.update(poolKey, meshData.mesh.position, isMoving, time, delta);
+                }
+                
                 // Dynamic name tag scaling based on camera distance
                 // Scale smaller when closer, max size when far (no scaling up beyond default)
                 if (meshData.nameSprite && camera) {
@@ -3855,8 +4002,15 @@ const VoxelWorld = ({
                 }
             }
 
+            // PARKOUR PERFORMANCE MODE: Skip heavy animations when player is high up (parkour course 4+)
+            // This significantly improves FPS during parkour challenges
+            // Note: Particles (snow, gold rain) are NOT affected - only prop animations
+            const PARKOUR_PERFORMANCE_Y_THRESHOLD = 30; // Stage 4 starts around Y=33
+            const inParkourPerformanceMode = roomRef.current === 'town' && posRef.current.y >= PARKOUR_PERFORMANCE_Y_THRESHOLD;
+            
             // Animate campfire (flames, embers, light flicker) and Christmas tree
-            if (townCenterRef.current && roomRef.current === 'town') {
+            // Skip when in parkour performance mode
+            if (townCenterRef.current && roomRef.current === 'town' && !inParkourPerformanceMode) {
                 const worldTime = serverWorldTimeRef?.current ?? 0.35;
                 const nightFactor = calculateNightFactor(worldTime);
                 // Pass player position for distance-based animation culling
@@ -3880,7 +4034,8 @@ const VoxelWorld = ({
             }
             
             // Animate building door glows (pulse for interactive doors, town only)
-            if (roomRef.current === 'town') {
+            // Skip door glow animations when in parkour performance mode
+            if (roomRef.current === 'town' && !inParkourPerformanceMode) {
                 portalsRef.current.forEach(building => {
                     if (building.mesh && building.gameId) {
                         const glow = building.mesh.getObjectByName(`door_glow_${building.id}`);
@@ -4061,6 +4216,11 @@ const VoxelWorld = ({
             if (wizardTrailSystemRef.current) {
                 wizardTrailSystemRef.current.dispose();
                 wizardTrailSystemRef.current = null;
+            }
+            // Cleanup Gake candle trail system
+            if (gakeCandleTrailSystemRef.current) {
+                gakeCandleTrailSystemRef.current.dispose();
+                gakeCandleTrailSystemRef.current = null;
             }
             // Cleanup Mount trail system
             if (mountTrailSystemRef.current) {
@@ -4505,15 +4665,19 @@ const VoxelWorld = ({
                     // Handle WagerBot NPC click (dev mode)
                     if (clickedPlayerId === 'dev_bot_wager') {
                         console.log('🖱️ Clicked on WagerBot NPC');
+                        // Use the same appearance as defined in server/services/DevBotService.js BOT_CONFIG
                         onPlayerClick({
                             id: 'dev_bot_wager',
                             name: '🤖 WagerBot',
                             appearance: {
+                                characterType: 'doginal',
                                 skin: 'purple',
-                                hat: 'tophat',
-                                eyes: 'normal',
-                                mouth: 'beak',
-                                bodyItem: 'suit'
+                                hat: 'none',
+                                eyes: 'none',
+                                mouth: 'none',
+                                bodyItem: 'none',
+                                dogPrimaryColor: '#D2691E',
+                                dogSecondaryColor: '#8B4513'
                             },
                             position: { x: 105, y: 0, z: 100 },
                             isAuthenticated: true, // Bot is "authenticated" so can accept wagers
@@ -5797,9 +5961,75 @@ const VoxelWorld = ({
     
     // ==================== CHAT COMMANDS ====================
     // Handle /spawn command to teleport to TOWN CENTER spawn (always)
+    // Handle /tp pk1-pk5 commands for parkour testing (DEV only)
     useEffect(() => {
         const handleChatCommand = (e) => {
             const { command } = e.detail;
+            
+            // Parkour teleport positions (DEV/QA only)
+            // Based on: CENTER = 100, DOJO_OFFSET = { x: 0, z: 70 }
+            // dojoX = 100, dojoZ = 170, mirrored = true
+            const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'qa';
+            
+            // Parkour stage start positions (approximate, for testing)
+            // Y values raised +3 to land on top of platforms with clearance
+            const parkourPositions = {
+                // Stage 1 (Blue) - Ground level start near dojo
+                pk1: { x: CENTER_X - 12, y: 4, z: CENTER_Z + 70 + 9, name: 'Stage 1 (Blue) Start' },
+                // Stage 2 (Purple) - Tier 1 platform (first roof)
+                pk2: { x: CENTER_X - 13, y: 14, z: CENTER_Z + 70, name: 'Stage 2 (Purple) Start' },
+                // Stage 3 (Green) - Tier 3 platform
+                pk3: { x: CENTER_X - 6, y: 25, z: CENTER_Z + 70 + 2, name: 'Stage 3 (Green) Start' },
+                // Stage 4 (Orange) - Near fishing area (end of stage 3)
+                pk4: { x: CENTER_X - 70.4 + 4, y: 37, z: CENTER_Z + 78.5 - 2, name: 'Stage 4 (Orange) Start' },
+                // Stage 5 (Red) - End of stage 4
+                pk5: { x: CENTER_X - 70.4 + 49 + 3, y: 48, z: CENTER_Z + 78.5 + 1 + 3, name: 'Stage 5 (Red) Start' },
+                // Stage 6 (Cyan) - The Gauntlet - Expert course
+                pk6: { x: CENTER_X - 70.4 + 49 + 48 - 3, y: 57, z: CENTER_Z + 78.5 + 1 + 2 - 3, name: 'Stage 6 (Cyan) - The Gauntlet' },
+            };
+            
+            // Handle parkour teleports (DEV only)
+            if (isDev && parkourPositions[command]) {
+                const pos = parkourPositions[command];
+                
+                // Clear any seated state first
+                if (seatedRef.current) {
+                    seatedRef.current = null;
+                    setSeatedOnBench(null);
+                    emoteRef.current.type = null;
+                    mpSendEmote(null);
+                }
+                
+                // If not in town, change room to town first
+                if (roomRef.current !== 'town') {
+                    if (onChangeRoom) {
+                        onChangeRoom('town', null);
+                    }
+                    // Teleport after room change
+                    setTimeout(() => {
+                        posRef.current.x = pos.x;
+                        posRef.current.y = pos.y;
+                        posRef.current.z = pos.z;
+                        velRef.current = { x: 0, y: 0, z: 0 };
+                        if (playerRef.current) {
+                            playerRef.current.position.set(pos.x, pos.y, pos.z);
+                        }
+                    }, 100);
+                } else {
+                    // Already in town - just teleport
+                    posRef.current.x = pos.x;
+                    posRef.current.y = pos.y;
+                    posRef.current.z = pos.z;
+                    velRef.current = { x: 0, y: 0, z: 0 };
+                    
+                    if (playerRef.current) {
+                        playerRef.current.position.set(pos.x, pos.y, pos.z);
+                    }
+                }
+                
+                console.log(`🎮 Teleported to ${pos.name}:`, { x: pos.x, y: pos.y, z: pos.z });
+                return;
+            }
             
             if (command === 'spawn') {
                 // ALWAYS teleport to town center spawn - no questions asked
@@ -6216,30 +6446,35 @@ const VoxelWorld = ({
     // Join room when connected and scene is ready
     useEffect(() => {
         if (connected && sceneRef.current && playerId) {
+            console.log(`🔗 Join room effect triggered - penguinData.characterType=${penguinData?.characterType || 'undefined'}`);
             const puffleData = playerPuffle ? {
                 id: playerPuffle.id,
                 color: playerPuffle.color,
                 name: playerPuffle.name
             } : null;
             
-            // Include current mount enabled state and nametag style from settings
+            // Include current mount enabled state, nametag style, and green candles from settings
             // Guests always get 'default' nametag style - only authenticated users get special styles
             let mountEnabled = true;
             let nametagStyle = 'default';
+            let greenCandlesEnabled = false;
             try {
                 const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
                 mountEnabled = settings.mountEnabled !== false;
                 // Only authenticated users can use non-default nametag styles
                 nametagStyle = isAuthenticated ? (settings.nametagStyle || 'day1') : 'default';
+                greenCandlesEnabled = settings.greenCandlesEnabled === true;
             } catch { /* use default */ }
             
             const appearanceWithMount = {
                 ...penguinData,
                 mountEnabled,
-                nametagStyle  // Broadcast nametag style to all players
+                nametagStyle,  // Broadcast nametag style to all players
+                greenCandlesEnabled  // Broadcast green candles setting to all players
             };
             
-            mpJoinRoom(room, appearanceWithMount, puffleData);
+            console.log(`🚀 Joining room ${room} with appearance: characterType=${appearanceWithMount.characterType || 'undefined'}`);
+            mpJoinRoom(room, appearanceWithMount, puffleData, turnstileToken);
             
             // Add player's own name tag (so they can see their username)
             if (playerRef.current && playerName && !playerNameSpriteRef.current) {
@@ -6482,7 +6717,7 @@ const VoxelWorld = ({
             const playerData = playersData.get(id);
             if (!playerData || !playerData.appearance) continue;
             
-            console.log(`🐧 Creating mesh for ${playerData.name}`, playerData.puffle ? `with ${playerData.puffle.color} puffle` : '(no puffle)');
+            console.log(`🐧 Creating mesh for ${playerData.name} (characterType=${playerData.appearance?.characterType || 'penguin'})`, playerData.puffle ? `with ${playerData.puffle.color} puffle` : '(no puffle)');
             
             const mesh = buildPenguinMeshRef.current(playerData.appearance);
             mesh.position.set(
@@ -6542,6 +6777,8 @@ const VoxelWorld = ({
             
             // OPTIMIZATION: Check if player has animated cosmetics
             const appearance = playerData.appearance || {};
+            // Animated skin colors (cosmic, galaxy, rainbow, prismatic, nebula)
+            const animatedSkins = ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula'];
             const hasAnimatedCosmetics = appearance.hat === 'propeller' || 
                                          appearance.hat === 'flamingCrown' ||
                                          appearance.mouth === 'cigarette' || 
@@ -6555,7 +6792,8 @@ const VoxelWorld = ({
                                          appearance.bodyItem === 'angelWings' ||
                                          appearance.bodyItem === 'demonWings' ||
                                          appearance.bodyItem === 'fireAura' ||
-                                         appearance.bodyItem === 'lightningAura';
+                                         appearance.bodyItem === 'lightningAura' ||
+                                         animatedSkins.includes(appearance.skin);
             
             meshes.set(id, { 
                 mesh, 

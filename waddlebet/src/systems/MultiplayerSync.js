@@ -11,7 +11,9 @@ const ANIMATED_COSMETICS = {
     hats: ['propeller', 'flamingCrown', 'wizardHat'],
     mouths: ['cigarette', 'pipe', 'cigar', 'fireBreath', 'iceBreath', 'bubblegum'],
     eyes: ['laser', 'fire'],
-    bodyItems: ['angelWings', 'demonWings', 'fireAura', 'lightningAura']
+    bodyItems: ['angelWings', 'demonWings', 'fireAura', 'lightningAura'],
+    // Animated skin colors (rainbow, cosmic, etc.) need per-frame color cycling
+    skins: ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula']
 };
 
 /**
@@ -25,7 +27,8 @@ export function hasAnimatedCosmetics(appearance) {
     return ANIMATED_COSMETICS.hats.includes(appearance.hat) ||
            ANIMATED_COSMETICS.mouths.includes(appearance.mouth) ||
            ANIMATED_COSMETICS.eyes.includes(appearance.eyes) ||
-           ANIMATED_COSMETICS.bodyItems.includes(appearance.bodyItem);
+           ANIMATED_COSMETICS.bodyItems.includes(appearance.bodyItem) ||
+           ANIMATED_COSMETICS.skins.includes(appearance.skin);
 }
 
 /**

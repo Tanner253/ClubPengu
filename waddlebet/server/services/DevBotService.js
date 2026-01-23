@@ -21,11 +21,14 @@ const BOT_CONFIG = {
     room: 'town',
     // Appearance matches client's expected format (see src/constants.js PALETTE)
     appearance: {
-        skin: 'purple',       // Purple penguin from PALETTE
-        hat: 'tophat',        // Fancy top hat
-        eyes: 'normal',       // Standard eyes
-        mouth: 'beak',        // Standard beak
-        bodyItem: 'suit'      // Fancy suit to look professional
+        characterType: 'doginal',  // Doginal character
+        skin: 'purple',            // Purple (not used for doginal but kept for compatibility)
+        hat: 'none',               // Doginal has built-in wizard hat
+        eyes: 'none',              // Doginal has its own eyes
+        mouth: 'none',             // Doginal has its own mouth
+        bodyItem: 'none',          // No body item for doginal
+        dogPrimaryColor: '#D2691E', // Brown fur color
+        dogSecondaryColor: '#8B4513' // Darker brown belly
     },
     // Bot uses the rent wallet (which should have tokens for testing)
     walletAddress: process.env.RENT_WALLET_ADDRESS || null

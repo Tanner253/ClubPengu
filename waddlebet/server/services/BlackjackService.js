@@ -153,6 +153,8 @@ class BlackjackService {
             status: 'waiting', // 'waiting' | 'betting' | 'playing' | 'stand' | 'bust' | 'blackjack' | 'surrender'
             result: null,
             payout: 0,
+            splitResult: null,
+            splitPayout: 0,
             turnStartedAt: null
         };
         
@@ -608,71 +610,130 @@ class BlackjackService {
         const dealerBlackjack = isBlackjack(table.dealerHand);
         
         for (const [, player] of table.players) {
-            if (player.bet === 0) continue;
+            if (player.bet === 0 && player.splitBet === 0) continue;
             
-            const playerScore = calculateScore(player.hand);
-            const playerBJ = player.status === 'blackjack';
-            
-            // Already handled: surrender, bust
-            if (player.result) {
+            const walletAddress = player.wallet;
+            if (!walletAddress) {
+                console.error(`🎰 ERROR: Cannot payout to ${player.name} (playerId: ${player.id}) - no wallet address`);
                 continue;
             }
             
-            // Calculate result
-            if (playerBJ && !dealerBlackjack) {
-                // Player blackjack beats dealer (3:2 payout)
-                player.result = 'blackjack';
-                player.payout = player.bet + Math.floor(player.bet * 1.5);
-            } else if (playerBJ && dealerBlackjack) {
-                // Push - both have blackjack
-                player.result = 'push';
-                player.payout = player.bet;
-            } else if (dealerBlackjack) {
-                // Dealer blackjack
-                player.result = 'lose';
-                player.payout = 0;
-            } else if (dealerBust) {
-                // Dealer bust, player wins
-                player.result = 'win';
-                player.payout = player.bet * 2;
-            } else if (playerScore > dealerScore) {
-                // Player higher score
-                player.result = 'win';
-                player.payout = player.bet * 2;
-            } else if (playerScore < dealerScore) {
-                // Dealer higher score
-                player.result = 'lose';
-                player.payout = 0;
-            } else {
-                // Push
-                player.result = 'push';
-                player.payout = player.bet;
+            if (!this.userService?.updateCoins) {
+                console.error(`🎰 ERROR: Cannot payout - userService.updateCoins not available`);
+                continue;
             }
             
-            // Pay out
-            if (player.payout > 0) {
-                // Ensure we have a wallet address (required for payouts)
-                const walletAddress = player.wallet;
-                if (!walletAddress) {
-                    console.error(`🎰 ERROR: Cannot payout to ${player.name} (playerId: ${player.id}) - no wallet address`);
-                    continue;
+            let totalPayout = 0;
+            
+            // Process main hand
+            if (player.bet > 0) {
+                const playerScore = calculateScore(player.hand);
+                // Blackjack can only occur with exactly 2 cards - if player doubled or hit, they can't have blackjack
+                const playerBJ = player.status === 'blackjack' && player.hand.length === 2;
+                
+                // Already handled: surrender, bust
+                if (!player.result) {
+                    // Calculate result for main hand
+                    if (playerBJ && !dealerBlackjack) {
+                        // Player blackjack beats dealer (3:2 payout)
+                        player.result = 'blackjack';
+                        player.payout = player.bet + Math.floor(player.bet * 1.5);
+                    } else if (playerBJ && dealerBlackjack) {
+                        // Push - both have blackjack
+                        player.result = 'push';
+                        player.payout = player.bet;
+                    } else if (dealerBlackjack) {
+                        // Dealer blackjack
+                        player.result = 'lose';
+                        player.payout = 0;
+                    } else if (dealerBust) {
+                        // Dealer bust, player wins
+                        player.result = 'win';
+                        player.payout = player.bet * 2;
+                    } else if (playerScore > dealerScore) {
+                        // Player higher score
+                        player.result = 'win';
+                        player.payout = player.bet * 2;
+                    } else if (playerScore < dealerScore) {
+                        // Dealer higher score
+                        player.result = 'lose';
+                        player.payout = 0;
+                    } else {
+                        // Push
+                        player.result = 'push';
+                        player.payout = player.bet;
+                    }
+                } else {
+                    // Result already set (bust, surrender) - ensure payout is 0 if not set
+                    if (player.payout === undefined || player.payout === null) {
+                        player.payout = 0;
+                    }
                 }
                 
-                if (!this.userService?.updateCoins) {
-                    console.error(`🎰 ERROR: Cannot payout - userService.updateCoins not available`);
-                    continue;
+                totalPayout += player.payout || 0;
+            }
+            
+            // Process split hand if it exists
+            if (player.splitHand && player.splitBet > 0) {
+                const splitScore = calculateScore(player.splitHand);
+                const splitBJ = player.splitHand.length === 2 && calculateScore(player.splitHand) === 21;
+                let splitResult = null;
+                let splitPayout = 0;
+                
+                // Calculate result for split hand
+                if (splitBJ && !dealerBlackjack) {
+                    // Split hand blackjack (3:2 payout)
+                    splitResult = 'blackjack';
+                    splitPayout = player.splitBet + Math.floor(player.splitBet * 1.5);
+                } else if (splitBJ && dealerBlackjack) {
+                    // Push - both have blackjack
+                    splitResult = 'push';
+                    splitPayout = player.splitBet;
+                } else if (dealerBlackjack) {
+                    // Dealer blackjack
+                    splitResult = 'lose';
+                    splitPayout = 0;
+                } else if (dealerBust) {
+                    // Dealer bust, split hand wins
+                    splitResult = 'win';
+                    splitPayout = player.splitBet * 2;
+                } else if (splitScore > dealerScore) {
+                    // Split hand higher score
+                    splitResult = 'win';
+                    splitPayout = player.splitBet * 2;
+                } else if (splitScore < dealerScore) {
+                    // Dealer higher score
+                    splitResult = 'lose';
+                    splitPayout = 0;
+                } else {
+                    // Push
+                    splitResult = 'push';
+                    splitPayout = player.splitBet;
                 }
                 
+                // Store split hand result (for display purposes)
+                player.splitResult = splitResult;
+                player.splitPayout = splitPayout;
+                totalPayout += splitPayout;
+            }
+            
+            // Pay out total (main hand + split hand if applicable)
+            if (totalPayout > 0) {
                 try {
                     // Credit the payout (payout already includes bet + winnings)
-                    const coinResult = await this.userService.updateCoins(walletAddress, player.payout);
+                    const coinResult = await this.userService.updateCoins(walletAddress, totalPayout);
                     
                     if (!coinResult.success) {
                         console.error(`🎰 ERROR: Payout failed for ${player.name}: ${coinResult.error}`);
                         continue;
                     }
                     
-                    console.log(`🎰 ${player.name}: ${player.result} - ${player.result === 'blackjack' ? 'BLACKJACK!' : ''} Bet: ${player.bet}, Payout: ${player.payout}, New Balance: ${coinResult.newBalance || 'unknown'}`);
+                    const mainResult = player.result || 'none';
+                    const splitResult = player.splitResult || '';
+                    const resultStr = splitResult ? `${mainResult}/${splitResult}` : mainResult;
+                    const isBlackjackWin = mainResult === 'blackjack' || splitResult === 'blackjack';
+                    
+                    console.log(`🎰 ${player.name}: ${resultStr}${isBlackjackWin ? ' - BLACKJACK!' : ''} Main Bet: ${player.bet}, Split Bet: ${player.splitBet || 0}, Total Payout: ${totalPayout}, New Balance: ${coinResult.newBalance || 'unknown'}`);
                     
                     // Send coins update to player
                     const newBalance = coinResult.newBalance || await this.userService.getUserCoins(walletAddress);
@@ -684,23 +745,9 @@ class BlackjackService {
                 } catch (error) {
                     console.error(`🎰 ERROR: Exception during payout for ${player.name}:`, error);
                 }
-            } else if (player.payout === 0 && player.result === 'push') {
-                // Push - refund bet (bet was already deducted, so add it back)
-                const walletAddress = player.wallet;
-                if (walletAddress && this.userService?.updateCoins) {
-                    try {
-                        await this.userService.updateCoins(walletAddress, player.bet);
-                        const newBalance = await this.userService.getUserCoins(walletAddress);
-                        this.sendToPlayer?.(player.id, {
-                            type: 'coins_update',
-                            coins: newBalance,
-                            isAuthenticated: true
-                        });
-                        console.log(`🎰 ${player.name}: Push - refunded bet ${player.bet}`);
-                    } catch (error) {
-                        console.error(`🎰 ERROR: Push refund failed for ${player.name}:`, error);
-                    }
-                }
+            } else {
+                // Loss - no payout (bet was already deducted)
+                console.log(`🎰 ${player.name}: Loss - Bet: ${player.bet}, Split Bet: ${player.splitBet || 0}, Payout: 0`);
             }
         }
         
@@ -732,6 +779,8 @@ class BlackjackService {
             player.status = 'waiting';
             player.result = null;
             player.payout = 0;
+            player.splitResult = null;
+            player.splitPayout = 0;
             player.turnStartedAt = null;
         }
         
@@ -759,6 +808,11 @@ class BlackjackService {
                 status: player.status,
                 result: player.result,
                 payout: player.payout,
+                splitHand: player.splitHand || null,
+                splitScore: player.splitHand ? calculateScore(player.splitHand) : null,
+                splitBet: player.splitBet || 0,
+                splitResult: player.splitResult || null,
+                splitPayout: player.splitPayout || 0,
                 isYou: player.id === playerId
             });
         }

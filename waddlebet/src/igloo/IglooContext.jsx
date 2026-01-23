@@ -411,21 +411,32 @@ export const IglooProvider = ({ children }) => {
     
     /**
      * Immediate kick when authentication changes while inside an igloo
-     * If user disconnects wallet while in an igloo, kick them immediately
+     * If user disconnects wallet while in an igloo that REQUIRES auth, kick them
+     * Public igloos allow guests - don't kick them!
      */
     useEffect(() => {
         // Only check if we're inside an igloo
         if (!currentIglooRoom) return;
         
-        // If user is no longer authenticated, kick them
+        // If user is no longer authenticated, check if igloo allows guests
         if (!isAuthenticated || !walletAddress) {
-            console.log('🚪 User lost authentication while in igloo, kicking to town...');
+            // Get igloo data to check access type
+            const igloo = igloos.find(i => i.iglooId === currentIglooRoom);
+            
+            // PUBLIC igloos allow guests - don't kick!
+            if (igloo?.accessType === 'public') {
+                console.log('🏠 Guest in public igloo - allowed to stay');
+                return;
+            }
+            
+            // Non-public igloos (private, token, fee, both) require authentication
+            console.log('🚪 User lost authentication while in restricted igloo, kicking to town...');
             if (onKickFromIglooRef.current) {
                 onKickFromIglooRef.current('AUTH_LOST');
             }
             setCurrentIglooRoom(null);
         }
-    }, [isAuthenticated, walletAddress, currentIglooRoom]);
+    }, [isAuthenticated, walletAddress, currentIglooRoom, igloos]);
     
     /**
      * Periodic eligibility check while inside an igloo

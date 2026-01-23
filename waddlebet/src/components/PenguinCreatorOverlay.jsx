@@ -16,12 +16,18 @@ import {
     DoginalGenerators,
     generateDogPalette,
     FrogGenerators,
-    generateFrogPalette
+    generateFrogPalette,
+    ShrimpGenerators,
+    generateShrimpPalette
 } from '../characters';
 
 // FREE items that are always available (not in database)
 const FREE_DEFAULT_COSMETICS = ['none', 'normal', 'beak'];
 const FREE_SKIN_COLORS = ['blue']; // Only blue is free by default
+
+// TEMPORARY: Unlock all cosmetics for everyone
+// TODO: Set to false when ready to enforce cosmetic ownership
+const UNLOCK_ALL_COSMETICS = true;
 
 // PREMIUM SKIN COLORS (gacha drops) - All colors except blue require unlock
 // This matches VoxelPenguinDesigner - used as fallback when database hasn't loaded
@@ -61,6 +67,46 @@ const PREMIUM_SKIN_COLORS = [
 // ALL skin colors (base + premium) - used for fallback when database not loaded
 const ALL_SKIN_COLORS = [...FREE_SKIN_COLORS, ...PREMIUM_SKIN_COLORS];
 
+// Animated skin color configurations (matching VoxelPenguinDesigner)
+const ANIMATED_SKIN_COLORS = {
+    cosmic: {
+        colors: ['#0B0B45', '#1a0a3e', '#3d1a6e', '#6b2d8b', '#4a1259', '#2a0e4f', '#0B0B45'],
+        speed: 0.5,
+        emissive: 0.2,
+        hasStars: true,
+        usePhaseOffsets: true
+    },
+    galaxy: {
+        colors: ['#1A0533', '#0a1628', '#2a1055', '#0f0f3f', '#1a0a3e', '#1A0533'],
+        speed: 0.4,
+        emissive: 0.15,
+        hasStars: true,
+        usePhaseOffsets: true
+    },
+    rainbow: {
+        colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0088ff', '#8800ff'],
+        speed: 0.8,
+        emissive: 0.25,
+        hasStars: false,
+        usePhaseOffsets: false
+    },
+    prismatic: {
+        colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#00ffff', '#0088ff', '#8800ff', '#ff00ff'],
+        speed: 0.6,
+        emissive: 0.3,
+        hasStars: false,
+        usePhaseOffsets: true,
+        phaseMultiplier: 1.2
+    },
+    nebula: {
+        colors: ['#9932CC', '#4B0082', '#8A2BE2', '#9400D3', '#6B238E', '#9932CC'],
+        speed: 0.6,
+        emissive: 0.2,
+        hasStars: true,
+        usePhaseOffsets: true
+    }
+};
+
 function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     const mountRef = useRef(null);
     const rendererRef = useRef(null);
@@ -70,6 +116,10 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     const animationRef = useRef(null);
     const threeRef = useRef(null);
     const controlsRef = useRef(null);
+    const animatedSkinMaterialsRef = useRef([]);
+    const cosmicStarsRef = useRef([]);
+    const timeRef = useRef(0);
+    const currentSkinRef = useRef('blue'); // Initialize with default, updated in useEffect
     
     // Get multiplayer context for unlocked items and cosmetics
     const { userData, isAuthenticated, redeemPromoCode, allCosmetics, fetchAllCosmetics } = useMultiplayer();
@@ -118,6 +168,9 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     const [frogPrimaryColor, setFrogPrimaryColor] = useState(currentData?.frogPrimaryColor || '#6B8E23');
     const [frogSecondaryColor, setFrogSecondaryColor] = useState(currentData?.frogSecondaryColor || '#556B2F');
     
+    // Shrimp color
+    const [shrimpPrimaryColor, setShrimpPrimaryColor] = useState(currentData?.shrimpPrimaryColor || '#FF6B4A');
+    
     // Show owned only toggle
     const [showOwnedOnly, setShowOwnedOnly] = useState(false);
     
@@ -140,6 +193,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             if (currentData.dogSecondaryColor) setDogSecondaryColor(currentData.dogSecondaryColor);
             if (currentData.frogPrimaryColor) setFrogPrimaryColor(currentData.frogPrimaryColor);
             if (currentData.frogSecondaryColor) setFrogSecondaryColor(currentData.frogSecondaryColor);
+            if (currentData.shrimpPrimaryColor) setShrimpPrimaryColor(currentData.shrimpPrimaryColor);
         }
     }, [currentData, isOpen]);
     
@@ -148,6 +202,9 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     
     // Check if a cosmetic is unlocked (or doesn't require unlock)
     const isCosmeticUnlocked = useCallback((itemName, category = null) => {
+        // TEMPORARY: Unlock all cosmetics for everyone
+        if (UNLOCK_ALL_COSMETICS) return true;
+        
         // Default items are always available
         if (FREE_DEFAULT_COSMETICS.includes(itemName)) return true;
         
@@ -173,13 +230,15 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
         
         // All non-free items require gacha unlock or promo code
         return false;
-    }, [isAuthenticated, gachaOwnedCosmetics, unlockedCosmetics]);
+    }, [isAuthenticated, gachaOwnedCosmetics, unlockedCosmetics, UNLOCK_ALL_COSMETICS]);
     
     // Check if mount is unlocked
     const isMountUnlocked = useCallback((mountName) => {
+        // TEMPORARY: Unlock all for everyone
+        if (UNLOCK_ALL_COSMETICS) return true;
         if (mountName === 'none') return true;
         return unlockedMounts.includes(mountName);
-    }, [unlockedMounts]);
+    }, [unlockedMounts, UNLOCK_ALL_COSMETICS]);
     
     // Get cosmetics from database, fallback to ASSETS + hardcoded colors for backwards compatibility
     const cosmeticsFromDB = useMemo(() => {
@@ -212,11 +271,13 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     
     // Check if skin color is unlocked
     const isSkinColorUnlocked = useCallback((color) => {
+        // TEMPORARY: Unlock all for everyone
+        if (UNLOCK_ALL_COSMETICS) return true;
         // Free colors are always unlocked
         if (FREE_SKIN_COLORS.includes(color)) return true;
         // Check if owned via gacha or promo
         return gachaOwnedCosmetics.includes(`skin_${color}`) || unlockedCosmetics.includes(`skin_${color}`);
-    }, [gachaOwnedCosmetics, unlockedCosmetics]);
+    }, [gachaOwnedCosmetics, unlockedCosmetics, UNLOCK_ALL_COSMETICS]);
     
     // Get available options based on showOwnedOnly - Loaded from database
     const options = useMemo(() => {
@@ -259,17 +320,45 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     
     // Available characters - match VoxelPenguinDesigner logic
     const availableCharacters = useMemo(() => {
+        // TEMPORARY: Show all characters when all cosmetics are unlocked
+        if (UNLOCK_ALL_COSMETICS) {
+            return [
+                { id: 'penguin', name: 'Penguin', emoji: '🐧' },
+                { id: 'doginal', name: 'Doginal', emoji: '🐕' },
+                { id: 'frog', name: 'PEPE Frog', emoji: '🐸' },
+                { id: 'shrimp', name: 'Shrimp', emoji: '🦐' },
+                { id: 'marcus', name: 'Marcus', emoji: '🦁' },
+                { id: 'duck', name: 'Duck', emoji: '🦆' },
+                { id: 'tungTung', name: 'Tung Tung', emoji: '🪵' },
+                { id: 'gake', name: 'Gake', emoji: '⭐' },
+                { id: 'whiteWhale', name: 'White Whale', emoji: '🐋' },
+                { id: 'blackWhale', name: 'Black Whale', emoji: '🐋' },
+                { id: 'silverWhale', name: 'Silver Whale', emoji: '🐋' },
+                { id: 'goldWhale', name: 'Gold Whale', emoji: '🐋' }
+            ];
+        }
+        
         const chars = [{ id: 'penguin', name: 'Penguin', emoji: '🐧' }];
         
         // Check if each character is unlocked
         unlockedCharacters.forEach(charId => {
-            if (charId === 'doginal') chars.push({ id: 'doginal', name: 'Doginal', emoji: '🐕' });
-            else if (charId === 'frog') chars.push({ id: 'frog', name: 'PEPE Frog', emoji: '🐸' });
-            else if (charId === 'marcus') chars.push({ id: 'marcus', name: 'Marcus', emoji: '🦁' });
-            else if (charId === 'white_whale') chars.push({ id: 'white_whale', name: 'White Whale', emoji: '🐋' });
-            else if (charId === 'black_whale') chars.push({ id: 'black_whale', name: 'Black Whale', emoji: '🐋' });
-            else if (charId === 'silver_whale') chars.push({ id: 'silver_whale', name: 'Silver Whale', emoji: '🐋' });
-            else if (charId === 'gold_whale') chars.push({ id: 'gold_whale', name: 'Gold Whale', emoji: '🐋' });
+            // Handle both camelCase (from DB) and snake_case (legacy) formats
+            const normalizedId = charId === 'white_whale' ? 'whiteWhale' :
+                                charId === 'black_whale' ? 'blackWhale' :
+                                charId === 'silver_whale' ? 'silverWhale' :
+                                charId === 'gold_whale' ? 'goldWhale' : charId;
+            
+            if (normalizedId === 'doginal') chars.push({ id: 'doginal', name: 'Doginal', emoji: '🐕' });
+            else if (normalizedId === 'frog') chars.push({ id: 'frog', name: 'PEPE Frog', emoji: '🐸' });
+            else if (normalizedId === 'shrimp') chars.push({ id: 'shrimp', name: 'Shrimp', emoji: '🦐' });
+            else if (normalizedId === 'marcus') chars.push({ id: 'marcus', name: 'Marcus', emoji: '🦁' });
+            else if (normalizedId === 'duck') chars.push({ id: 'duck', name: 'Duck', emoji: '🦆' });
+            else if (normalizedId === 'tungTung') chars.push({ id: 'tungTung', name: 'Tung Tung', emoji: '🪵' });
+            else if (normalizedId === 'gake') chars.push({ id: 'gake', name: 'Gake', emoji: '⭐' });
+            else if (normalizedId === 'whiteWhale') chars.push({ id: 'whiteWhale', name: 'White Whale', emoji: '🐋' });
+            else if (normalizedId === 'blackWhale') chars.push({ id: 'blackWhale', name: 'Black Whale', emoji: '🐋' });
+            else if (normalizedId === 'silverWhale') chars.push({ id: 'silverWhale', name: 'Silver Whale', emoji: '🐋' });
+            else if (normalizedId === 'goldWhale') chars.push({ id: 'goldWhale', name: 'Gold Whale', emoji: '🐋' });
         });
         
         return chars;
@@ -389,10 +478,56 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             scene.add(penguinGroup);
             penguinGroupRef.current = penguinGroup;
             
-            // Animation loop - update controls for smooth damping
+            // Animation loop - update controls, animated skins, and cosmic stars
             const animate = () => {
                 if (!mounted) return;
                 animationRef.current = requestAnimationFrame(animate);
+                
+                const delta = 0.016; // ~60fps
+                timeRef.current += delta;
+                
+                // Animate cosmic stars (twinkling effect)
+                if (cosmicStarsRef.current.length > 0) {
+                    cosmicStarsRef.current.forEach(star => {
+                        if (star && star.material) {
+                            const twinkle = Math.sin(timeRef.current * star.userData.twinkleSpeed + star.userData.twinkleOffset) * 0.3 + 0.7;
+                            star.material.opacity = twinkle * 0.8;
+                            star.material.emissiveIntensity = twinkle;
+                            const scale = star.userData.baseScale * (0.8 + twinkle * 0.4);
+                            star.scale.setScalar(scale);
+                        }
+                    });
+                }
+                
+                // Animate special skin colors (cosmic, galaxy, rainbow, nebula, prismatic)
+                const currentSkin = currentSkinRef.current;
+                const skinConfig = ANIMATED_SKIN_COLORS[currentSkin];
+                if (skinConfig && animatedSkinMaterialsRef.current.length > 0) {
+                    const t = timeRef.current * skinConfig.speed;
+                    const colorCount = skinConfig.colors.length;
+                    const useOffsets = skinConfig.usePhaseOffsets ?? true;
+                    const phaseMultiplier = skinConfig.phaseMultiplier || 0.7;
+                    
+                    animatedSkinMaterialsRef.current.forEach((mat, index) => {
+                        if (mat && mat.color) {
+                            const phaseOffset = useOffsets ? (index * phaseMultiplier) : 0;
+                            const colorIndex = Math.abs(t + phaseOffset) % colorCount;
+                            const fromIdx = Math.floor(colorIndex) % colorCount;
+                            const toIdx = (fromIdx + 1) % colorCount;
+                            const blend = colorIndex - Math.floor(colorIndex);
+                            
+                            const fromColor = new THREE.Color(skinConfig.colors[fromIdx]);
+                            const toColor = new THREE.Color(skinConfig.colors[toIdx]);
+                            const materialColor = fromColor.clone().lerp(toColor, blend);
+                            
+                            mat.color.copy(materialColor);
+                            if (mat.emissive && skinConfig.emissive) {
+                                mat.emissive.copy(materialColor);
+                                mat.emissiveIntensity = skinConfig.emissive + Math.sin(t * 2) * 0.05;
+                            }
+                        }
+                    });
+                }
                 
                 // Update controls (for damping) and render
                 if (controlsRef.current && cameraRef.current && sceneRef.current && rendererRef.current) {
@@ -419,6 +554,11 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
         };
     }, [isOpen]);
     
+    // Update skin ref when skinColor changes
+    useEffect(() => {
+        currentSkinRef.current = skinColor;
+    }, [skinColor]);
+    
     // Rebuild penguin when any appearance option changes or when opened
     useEffect(() => {
         if (!isOpen) return; // Don't rebuild if not open
@@ -435,6 +575,8 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             }
         
         // Clear existing
+        animatedSkinMaterialsRef.current = [];
+        cosmicStarsRef.current = [];
         while (group.children.length > 0) {
             const child = group.children[0];
             if (child.geometry) child.geometry.dispose();
@@ -447,6 +589,50 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             }
             group.remove(child);
         }
+        
+        // Check if current skin is animated
+        const isAnimatedSkin = ANIMATED_SKIN_COLORS[skinColor] !== undefined;
+        const skinConfig = ANIMATED_SKIN_COLORS[skinColor];
+        const currentSkinHex = PALETTE[skinColor] || skinColor;
+        
+        // Function to create cosmic stars for animated skins
+        const createCosmicStars = (targetGroup) => {
+            if (!skinConfig?.hasStars) return;
+            
+            const starCount = 30;
+            const starGeometry = new THREE.SphereGeometry(VOXEL_SIZE * 0.12, 6, 6);
+            
+            for (let i = 0; i < starCount; i++) {
+                const starMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.8,
+                    emissive: new THREE.Color(0xaabbff),
+                    emissiveIntensity: 1.0,
+                    roughness: 0.2,
+                    metalness: 0.8
+                });
+                
+                const star = new THREE.Mesh(starGeometry, starMaterial);
+                
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI * 0.7 + 0.15;
+                const radius = 1.0 + Math.random() * 0.8;
+                
+                star.position.set(
+                    Math.sin(phi) * Math.cos(theta) * radius,
+                    Math.cos(phi) * radius + 0.3,
+                    Math.sin(phi) * Math.sin(theta) * radius
+                );
+                
+                star.userData.twinkleSpeed = 0.8 + Math.random() * 1.2;
+                star.userData.twinkleOffset = Math.random() * Math.PI * 2;
+                star.userData.baseScale = 0.6 + Math.random() * 0.5;
+                
+                targetGroup.add(star);
+                cosmicStarsRef.current.push(star);
+            }
+        };
         
         // Generate voxels based on character type
         let voxels = [];
@@ -569,6 +755,36 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             }
             
             voxels = frogVoxels;
+        } else if (characterType === 'shrimp') {
+            // Shrimp character - segmented body with tail flappers and clawed arms
+            palette = generateShrimpPalette(shrimpPrimaryColor || '#FF6B4A');
+            const shrimpVoxels = [
+                ...ShrimpGenerators.head(),
+                ...ShrimpGenerators.body(),
+                ...ShrimpGenerators.flipperLeft(),
+                ...ShrimpGenerators.flipperRight(),
+                ...ShrimpGenerators.tail(),
+                ...ShrimpGenerators.legs()
+            ];
+            
+            // Add hat support for shrimp (offset for shrimp head position)
+            const shrimpHatVoxels = ASSETS.HATS[hat] || [];
+            if (shrimpHatVoxels.length > 0) {
+                // Offset hat voxels: Y+1, Z+2 (pushed back toward tail)
+                const offsetHatVoxels = shrimpHatVoxels.map(v => ({ ...v, y: v.y + 1, z: v.z + 2 }));
+                shrimpVoxels.push(...offsetHatVoxels);
+            }
+            
+            // Add body item for shrimp (lowered by 4 from previous)
+            const shrimpBodyItemData = ASSETS.BODY[bodyItem];
+            const shrimpBodyItemVoxels = shrimpBodyItemData?.voxels || shrimpBodyItemData || [];
+            if (shrimpBodyItemVoxels.length > 0) {
+                // Offset for shrimp body position: lowered by 4 (was +2, now -2)
+                const offsetBodyVoxels = shrimpBodyItemVoxels.map(v => ({ ...v, y: v.y - 2 }));
+                shrimpVoxels.push(...offsetBodyVoxels);
+            }
+            
+            voxels = shrimpVoxels;
         }
         
             // Create voxel meshes with proper color resolution
@@ -591,7 +807,22 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             
             // Create meshes for each color group
             colorGroups.forEach((voxelList, color) => {
-            const material = new THREE.MeshLambertMaterial({ color });
+                // Use MeshStandardMaterial for animated skins (supports emissive)
+                const isSkinColor = isAnimatedSkin && color === currentSkinHex;
+                const material = isSkinColor 
+                    ? new THREE.MeshStandardMaterial({ 
+                        color: new THREE.Color(color),
+                        roughness: 0.3,
+                        metalness: 0.1,
+                        emissive: new THREE.Color(color),
+                        emissiveIntensity: 0.1
+                    })
+                    : new THREE.MeshLambertMaterial({ color });
+                
+                // Track animated skin materials
+                if (isSkinColor) {
+                    animatedSkinMaterialsRef.current.push(material);
+                }
                 
                 voxelList.forEach(v => {
             const mesh = new THREE.Mesh(boxGeo, material);
@@ -599,6 +830,11 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             group.add(mesh);
         });
             });
+            
+            // Add cosmic stars for animated skins
+            if (isAnimatedSkin) {
+                createCosmicStars(group);
+            }
             
             // Add mount if equipped
             if (mount && mount !== 'none' && ASSETS.MOUNTS && ASSETS.MOUNTS[mount]) {
@@ -658,7 +894,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
         buildPenguin();
         
         // No cleanup needed - buildPenguin handles its own retries
-    }, [isOpen, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor]);
+    }, [isOpen, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor]);
     
     // Reset to default appearance
     const handleResetToDefault = useCallback(() => {
@@ -674,6 +910,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
         setDogSecondaryColor('#8B4513');
         setFrogPrimaryColor('#6B8E23');
         setFrogSecondaryColor('#556B2F');
+        setShrimpPrimaryColor('#FF6B4A');
     }, []);
     
     // Handle promo code submission
@@ -736,18 +973,22 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
     
     // Handle save
     const handleSave = useCallback(() => {
-        // Check if trying to save locked items
-        const isHatLocked = hat !== 'none' && !isCosmeticUnlocked(hat, 'hat');
-        // Skip eyes/mouth validation for frog character (they don't apply)
-        const isEyesLocked = characterType === 'frog' ? false : (eyes !== 'normal' && eyes !== 'none' && !isCosmeticUnlocked(eyes, 'eyes'));
-        const isMouthLocked = characterType === 'frog' ? false : (mouth !== 'beak' && mouth !== 'none' && !isCosmeticUnlocked(mouth, 'mouth'));
-        const isBodyLocked = bodyItem !== 'none' && !isCosmeticUnlocked(bodyItem, 'bodyItem');
-        const isMountLocked = mount !== 'none' && !isMountUnlocked(mount);
-        const isSkinLocked = !isSkinColorUnlocked(skinColor);
-        
-        if (isHatLocked || isEyesLocked || isMouthLocked || isBodyLocked || isMountLocked || isSkinLocked) {
-            alert('You cannot save with locked items! Please select only items you own.');
-            return;
+        // TEMPORARY: Skip ownership validation when all cosmetics are unlocked
+        // All items are available, so we can save anything
+        if (!UNLOCK_ALL_COSMETICS) {
+            // Check if trying to save locked items (only when ownership is enforced)
+            const isHatLocked = hat !== 'none' && !isCosmeticUnlocked(hat, 'hat');
+            // Skip eyes/mouth validation for frog character (they don't apply)
+            const isEyesLocked = characterType === 'frog' ? false : (eyes !== 'normal' && eyes !== 'none' && !isCosmeticUnlocked(eyes, 'eyes'));
+            const isMouthLocked = characterType === 'frog' ? false : (mouth !== 'beak' && mouth !== 'none' && !isCosmeticUnlocked(mouth, 'mouth'));
+            const isBodyLocked = bodyItem !== 'none' && !isCosmeticUnlocked(bodyItem, 'bodyItem');
+            const isMountLocked = mount !== 'none' && !isMountUnlocked(mount);
+            const isSkinLocked = !isSkinColorUnlocked(skinColor);
+            
+            if (isHatLocked || isEyesLocked || isMouthLocked || isBodyLocked || isMountLocked || isSkinLocked) {
+                alert('You cannot save with locked items! Please select only items you own.');
+                return;
+            }
         }
         
         const finalData = {
@@ -762,11 +1003,12 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             dogPrimaryColor,
             dogSecondaryColor,
             frogPrimaryColor,
-            frogSecondaryColor
+            frogSecondaryColor,
+            shrimpPrimaryColor
         };
         onSave(finalData);
         onClose();
-    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, onSave, onClose, isCosmeticUnlocked, isMountUnlocked, isSkinColorUnlocked]);
+    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, onSave, onClose, isCosmeticUnlocked, isMountUnlocked, isSkinColorUnlocked]);
     
     // Count all and unlocked items for display - Using database cosmetics
     // MUST be before early return to avoid hooks error
@@ -856,7 +1098,21 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                                     {availableCharacters.map(char => (
                                         <button
                                             key={char.id}
-                                            onClick={() => setCharacterType(char.id)}
+                                            onClick={() => {
+                                                setCharacterType(char.id);
+                                                // Character-specific cosmetic constraints
+                                                if (char.id === 'doginal') {
+                                                    setHat('none');
+                                                    setEyes('none');
+                                                    setMouth('none');
+                                                    setBodyItem('none');
+                                                } else if (char.id === 'duck') {
+                                                    setEyes('none');
+                                                    setMouth('none');
+                                                } else if (char.id === 'gake') {
+                                                    setBodyItem('none'); // Gake only supports hat, eyes, mouth
+                                                }
+                                            }}
                                             className={`px-4 py-2 rounded-lg font-semibold transition-all ${
                                                 characterType === char.id 
                                                     ? 'bg-cyan-500 text-white' 
@@ -1066,6 +1322,73 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                             </div>
                         )}
                         
+                        {/* Shrimp Colors */}
+                        {characterType === 'shrimp' && (
+                            <div className="mb-4 p-3 bg-gradient-to-br from-orange-900/50 to-red-900/50 rounded-xl border border-orange-500/30">
+                                <div className="text-center mb-4">
+                                    <span className="text-2xl">🦐</span>
+                                    <h3 className="text-white font-bold mt-2">Shrimp Colors</h3>
+                                    <p className="text-white/60 text-xs mt-1">
+                                        Pick your shrimp's shell color!
+                                    </p>
+                                </div>
+                                
+                                {/* Shell Color */}
+                                <div className="mb-3">
+                                    <label className="text-orange-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                        Shell Color
+                                    </label>
+                                    <div className="flex gap-2 items-center">
+                                        <input
+                                            type="color"
+                                            value={shrimpPrimaryColor}
+                                            onChange={(e) => setShrimpPrimaryColor(e.target.value)}
+                                            className="w-12 h-10 rounded cursor-pointer border-2 border-orange-500/50"
+                                        />
+                                        <input
+                                            type="text"
+                                            value={shrimpPrimaryColor}
+                                            onChange={(e) => setShrimpPrimaryColor(e.target.value)}
+                                            className="flex-1 bg-black/50 border border-orange-500/30 rounded px-2 py-1 text-white text-sm font-mono"
+                                            placeholder="#FF6B4A"
+                                        />
+                                    </div>
+                                </div>
+                                
+                                {/* Quick Presets */}
+                                <div>
+                                    <label className="text-orange-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                        Quick Presets
+                                    </label>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {[
+                                            { name: 'Cooked', color: '#FF6B4A', emoji: '🦐' },
+                                            { name: 'Raw', color: '#7A8A9A', emoji: '🥶' },
+                                            { name: 'Golden', color: '#FFB840', emoji: '✨' },
+                                            { name: 'Blue', color: '#4080C0', emoji: '💎' },
+                                            { name: 'Pink', color: '#FF9999', emoji: '💗' },
+                                            { name: 'Red', color: '#CC3333', emoji: '🔴' },
+                                            { name: 'Tiger', color: '#FF8844', emoji: '🐯' },
+                                            { name: 'Ghost', color: '#CCDDEE', emoji: '👻' },
+                                        ].map((preset) => (
+                                            <button
+                                                key={preset.name}
+                                                onClick={() => setShrimpPrimaryColor(preset.color)}
+                                                className="flex flex-col items-center p-2 rounded-lg bg-black/30 hover:bg-black/50 border border-orange-500/20 hover:border-orange-400 transition-all"
+                                                title={preset.name}
+                                            >
+                                                <div 
+                                                    className="w-6 h-6 rounded-full border border-white/30"
+                                                    style={{ backgroundColor: preset.color }}
+                                                />
+                                                <span className="text-white/70 text-[9px] mt-1">{preset.emoji} {preset.name}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
                         {/* Penguin Customization Options */}
                         {characterType === 'penguin' && (
                             <>
@@ -1078,6 +1401,59 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                                         {(showOwnedOnly ? options.skin : cosmeticsFromDB.skin).map(color => {
                                             const isUnlocked = isSkinColorUnlocked(color);
                                             const isSelected = skinColor === color;
+                                            // Special animated colors get gradient backgrounds (same as VoxelPenguinDesigner)
+                                            const isCosmicColor = color === 'cosmic';
+                                            const isGalaxyColor = color === 'galaxy';
+                                            const isRainbowColor = color === 'rainbow';
+                                            const isPrismaticColor = color === 'prismatic';
+                                            const isNebulaColor = color === 'nebula';
+                                            const isAnimatedColor = isCosmicColor || isGalaxyColor || isRainbowColor || isPrismaticColor || isNebulaColor;
+                                            
+                                            // Galaxy/cosmic gradient style (slow, gentle animations)
+                                            const getAnimatedStyle = () => {
+                                                if (isCosmicColor) {
+                                                    return {
+                                                        background: 'linear-gradient(135deg, #0B0B45 0%, #1a0a3e 20%, #3d1a6e 40%, #6b2d8b 50%, #3d1a6e 60%, #1a0a3e 80%, #0B0B45 100%)',
+                                                        backgroundSize: '400% 400%',
+                                                        animation: 'cosmicShift 12s ease infinite',
+                                                        boxShadow: isSelected ? '0 0 8px 2px rgba(107, 45, 139, 0.6)' : 'none'
+                                                    };
+                                                }
+                                                if (isGalaxyColor) {
+                                                    return {
+                                                        background: 'linear-gradient(135deg, #1A0533 0%, #2a1055 25%, #0a1628 50%, #1a0a3e 75%, #1A0533 100%)',
+                                                        backgroundSize: '400% 400%',
+                                                        animation: 'cosmicShift 15s ease infinite',
+                                                        boxShadow: isSelected ? '0 0 8px 2px rgba(26, 5, 51, 0.8)' : 'none'
+                                                    };
+                                                }
+                                                if (isRainbowColor) {
+                                                    return {
+                                                        background: 'linear-gradient(135deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff, #ff0000)',
+                                                        backgroundSize: '600% 600%',
+                                                        animation: 'rainbowShift 10s linear infinite',
+                                                        boxShadow: isSelected ? '0 0 8px 2px rgba(255, 255, 255, 0.5)' : 'none'
+                                                    };
+                                                }
+                                                if (isPrismaticColor) {
+                                                    // Multi-color prism effect - each section different color
+                                                    return {
+                                                        background: 'conic-gradient(from 0deg, #ff0000, #ff8800, #ffff00, #00ff00, #00ffff, #0088ff, #8800ff, #ff00ff, #ff0000)',
+                                                        animation: 'rainbowShift 8s linear infinite',
+                                                        boxShadow: isSelected ? '0 0 8px 2px rgba(255, 0, 255, 0.5)' : 'none'
+                                                    };
+                                                }
+                                                if (isNebulaColor) {
+                                                    return {
+                                                        background: 'linear-gradient(135deg, #9932CC 0%, #4B0082 30%, #8A2BE2 50%, #9400D3 70%, #9932CC 100%)',
+                                                        backgroundSize: '400% 400%',
+                                                        animation: 'cosmicShift 14s ease infinite',
+                                                        boxShadow: isSelected ? '0 0 8px 2px rgba(153, 50, 204, 0.6)' : 'none'
+                                                    };
+                                                }
+                                                return { backgroundColor: PALETTE[color] || color };
+                                            };
+                                            
                                             return (
                                                 <button
                                                     key={color}
@@ -1087,7 +1463,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                                                     className={`w-8 h-8 rounded-full border-2 transition-all relative ${
                                                         isSelected ? 'border-white scale-110 shadow-lg' : 'border-transparent'
                                                     } ${isUnlocked ? 'opacity-100 hover:scale-105' : 'opacity-30 cursor-not-allowed'}`}
-                                                    style={{ backgroundColor: PALETTE[color] || color }}
+                                                    style={isAnimatedColor ? getAnimatedStyle() : { backgroundColor: PALETTE[color] || color }}
                                                 >
                                                     {!isUnlocked && <span className="absolute inset-0 flex items-center justify-center text-white text-[8px]">🔒</span>}
                                                 </button>

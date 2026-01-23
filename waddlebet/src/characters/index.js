@@ -26,6 +26,10 @@ import WhiteWhaleGenerators, {
 } from './WhiteWhaleCharacter';
 import DoginalGenerators, { DOGINAL_PALETTE, DOG_PALETTES, generateDogPalette } from './DoginalCharacter';
 import FrogGenerators, { FROG_PALETTE, FROG_PALETTES, generateFrogPalette } from './FrogCharacter';
+import ShrimpGenerators, { SHRIMP_PALETTE, SHRIMP_PALETTES, generateShrimpPalette } from './ShrimpCharacter';
+import DuckGenerators, { DUCK_PALETTE, DUCK_PALETTES } from './DuckCharacter';
+import TungTungGenerators, { TUNG_PALETTE } from './TungTungCharacter';
+import GakeGenerators, { GAKE_PALETTE } from './GakeCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -149,6 +153,75 @@ characterRegistry.registerCharacter('frog', {
     }
 });
 
+characterRegistry.registerCharacter('shrimp', {
+    name: 'Shrimp',
+    description: 'A cute shrimp with tail flappers and antennae',
+    generators: ShrimpGenerators,
+    palette: SHRIMP_PALETTE,
+    palettes: SHRIMP_PALETTES,
+    isSecret: true,
+    previewScale: 0.8,
+    customizationOptions: {
+        disableSkinColor: false,  // Enable color variants (orange, raw, golden, blue)
+        disableHats: false,       // Allow hats
+        disableEyes: true,        // Shrimp has its own eye stalks
+        disableMouth: true,       // Shrimp has rostrum
+        disableBodyItems: false,  // Allow body items
+    }
+});
+
+characterRegistry.registerCharacter('duck', {
+    name: 'Duck',
+    description: 'A friendly duck with a bright orange bill',
+    generators: DuckGenerators,
+    palette: DUCK_PALETTE,
+    palettes: DUCK_PALETTES,
+    isSecret: true,
+    previewScale: 0.9,
+    customizationOptions: {
+        disableSkinColor: true,   // Duck has fixed yellow coloring
+        disableHats: false,       // Allow hats on the duck
+        disableEyes: true,        // Duck has its own eyes built into model
+        disableMouth: true,       // Duck has a bill built into model
+        disableBodyItems: false,  // Allow body items (shirts)
+        disableMounts: false,     // Allow mounts
+    }
+});
+
+characterRegistry.registerCharacter('tungTung', {
+    name: 'Tung Tung Tung Sahur',
+    description: 'The legendary log creature with a baseball bat - Tung Tung Tung Sahur!',
+    generators: TungTungGenerators,
+    palette: TUNG_PALETTE,
+    isSecret: true,
+    previewScale: 0.75,
+    customizationOptions: {
+        disableSkinColor: true,   // Fixed wood/tan coloring
+        disableHats: true,        // No hats - head is part of the log
+        disableEyes: false,       // Allow eyes customization
+        disableMouth: false,      // Allow mouth customization
+        disableBodyItems: true,   // Has bat already, no body items
+        disableMounts: false,     // Allow mounts
+    }
+});
+
+characterRegistry.registerCharacter('gake', {
+    name: 'Gake',
+    description: 'A lovable pink starfish with green shorts',
+    generators: GakeGenerators,
+    palette: GAKE_PALETTE,
+    isSecret: true,
+    previewScale: 0.85,
+    customizationOptions: {
+        disableSkinColor: true,   // Fixed pink coloring
+        disableHats: false,       // Allow hats
+        disableEyes: false,       // Allow eyes customization
+        disableMouth: false,      // Allow mouth customization
+        disableBodyItems: false,  // Allow body items
+        disableMounts: false,     // Allow mounts
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -169,6 +242,17 @@ export {
     FrogGenerators,
     FROG_PALETTE,
     FROG_PALETTES,
-    generateFrogPalette
+    generateFrogPalette,
+    ShrimpGenerators,
+    SHRIMP_PALETTE,
+    SHRIMP_PALETTES,
+    generateShrimpPalette,
+    DuckGenerators,
+    DUCK_PALETTE,
+    DUCK_PALETTES,
+    TungTungGenerators,
+    TUNG_PALETTE,
+    GakeGenerators,
+    GAKE_PALETTE
 };
 export default characterRegistry;

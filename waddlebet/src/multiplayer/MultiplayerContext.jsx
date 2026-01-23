@@ -798,7 +798,7 @@ export function MultiplayerProvider({ children }) {
                 
                 const ids = [];
                 message.players.forEach(p => {
-                    console.log(`  - ${p.name}`, p.puffle ? `with ${p.puffle.color} puffle` : '(no puffle)', p.emote ? `emoting: ${p.emote}` : '', p.isAfk ? '(AFK)' : '', p.isAuthenticated ? '✓' : '');
+                    console.log(`  - ${p.name} (${p.appearance?.characterType || 'penguin'})`, p.puffle ? `with ${p.puffle.color} puffle` : '(no puffle)', p.emote ? `emoting: ${p.emote}` : '', p.isAfk ? '(AFK)' : '', p.isAuthenticated ? '✓' : '');
                     const existingPlayer = playersDataRef.current.get(p.id);
                     const playerData = {
                         id: p.id,
@@ -828,7 +828,8 @@ export function MultiplayerProvider({ children }) {
                 break;
                 
             case 'player_joined':
-                console.log(`👋 ${message.player.name} joined`, message.player.isAuthenticated ? '✓' : '(guest)');
+                console.log(`👋 ${message.player.name} joined (characterType=${message.player.appearance?.characterType || 'penguin'})`, message.player.isAuthenticated ? '✓' : '(guest)');
+                console.log(`   📦 Full appearance received:`, JSON.stringify(message.player.appearance));
                 const joinedPlayerData = {
                     id: message.player.id,
                     name: message.player.name,
@@ -895,7 +896,7 @@ export function MultiplayerProvider({ children }) {
             case 'player_appearance':
                 const appearancePlayer = playersDataRef.current.get(message.playerId);
                 if (appearancePlayer) {
-                    console.log(`🎨 Received appearance update for ${appearancePlayer.name} (${message.playerId})`);
+                    console.log(`🎨 Received appearance update for ${appearancePlayer.name} (characterType=${message.appearance?.characterType || 'penguin'})`);
                     appearancePlayer.appearance = message.appearance;
                     appearancePlayer.needsMeshRebuild = true;
                 } else {
@@ -1182,13 +1183,14 @@ export function MultiplayerProvider({ children }) {
     }, [send]);
     
     // Join a room
-    const joinRoom = useCallback((room, appearance, puffle = null) => {
+    const joinRoom = useCallback((room, appearance, puffle = null, turnstileToken = null) => {
         send({
             type: 'join',
             room,
             name: playerName,
             appearance,
-            puffle
+            puffle,
+            turnstileToken // Cloudflare Turnstile verification token
         });
     }, [send, playerName]);
     
