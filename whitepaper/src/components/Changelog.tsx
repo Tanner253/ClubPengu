@@ -80,6 +80,26 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.1.2",
+    date: "January 23, 2026",
+    title: "🪵 Tung Tung Tung Sahur Character",
+    description: "New meme character - a tall cylindrical log creature with stick limbs and a baseball bat",
+    highlight: true,
+    stats: { filesChanged: 12, additions: 650, deletions: 50 },
+    changes: [
+      { type: "feature", text: "Tung Tung Tung Sahur - new playable character based on the viral meme (TungTungCharacter.js - 308 lines)" },
+      { type: "feature", text: "TUNG promo code unlocks the Tung Tung character" },
+      { type: "feature", text: "Tall cylindrical 'log' body design with customizable eyes and mouth" },
+      { type: "feature", text: "Stick arms and legs with unique animation handling" },
+      { type: "feature", text: "Baseball bat held in right hand (Bonk-style)" },
+      { type: "feature", text: "Character-specific animation overrides for Laugh and Headbang emotes (whole body rocks)" },
+      { type: "improvement", text: "Chat bubbles and nametags positioned correctly for tall character height" },
+      { type: "improvement", text: "VoxelPenguinDesigner updated with 🪵 log icon for character selection" },
+      { type: "fix", text: "Split head/body cylinder design for proper sitting and dancing animations" },
+      { type: "fix", text: "Leg positioning moved below body to prevent clipping" },
+    ],
+  },
+  {
     version: "1.1.1",
     date: "January 12, 2026",
     title: "🏔️ Parkour Stage 6 & Performance",
