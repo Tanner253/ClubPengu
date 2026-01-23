@@ -3551,7 +3551,7 @@ const VoxelWorld = ({
                 
                 // Rebuild mesh if appearance changed
                 if (playerData.needsMeshRebuild && buildPenguinMeshRef.current) {
-                    console.log(`🔄 Rebuilding mesh for ${playerData.name} due to appearance change`);
+                    console.log(`🔄 Rebuilding mesh for ${playerData.name} due to appearance change (characterType=${playerData.appearance?.characterType || 'penguin'})`);
                     
                     // Store current position and rotation
                     const currentPos = meshData.mesh.position.clone();
@@ -6426,6 +6426,7 @@ const VoxelWorld = ({
     // Join room when connected and scene is ready
     useEffect(() => {
         if (connected && sceneRef.current && playerId) {
+            console.log(`🔗 Join room effect triggered - penguinData.characterType=${penguinData?.characterType || 'undefined'}`);
             const puffleData = playerPuffle ? {
                 id: playerPuffle.id,
                 color: playerPuffle.color,
@@ -6449,6 +6450,7 @@ const VoxelWorld = ({
                 nametagStyle  // Broadcast nametag style to all players
             };
             
+            console.log(`🚀 Joining room ${room} with appearance: characterType=${appearanceWithMount.characterType || 'undefined'}`);
             mpJoinRoom(room, appearanceWithMount, puffleData, turnstileToken);
             
             // Add player's own name tag (so they can see their username)
@@ -6692,7 +6694,7 @@ const VoxelWorld = ({
             const playerData = playersData.get(id);
             if (!playerData || !playerData.appearance) continue;
             
-            console.log(`🐧 Creating mesh for ${playerData.name}`, playerData.puffle ? `with ${playerData.puffle.color} puffle` : '(no puffle)');
+            console.log(`🐧 Creating mesh for ${playerData.name} (characterType=${playerData.appearance?.characterType || 'penguin'})`, playerData.puffle ? `with ${playerData.puffle.color} puffle` : '(no puffle)');
             
             const mesh = buildPenguinMeshRef.current(playerData.appearance);
             mesh.position.set(

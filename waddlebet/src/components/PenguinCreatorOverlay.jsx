@@ -1098,7 +1098,21 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                                     {availableCharacters.map(char => (
                                         <button
                                             key={char.id}
-                                            onClick={() => setCharacterType(char.id)}
+                                            onClick={() => {
+                                                setCharacterType(char.id);
+                                                // Character-specific cosmetic constraints
+                                                if (char.id === 'doginal') {
+                                                    setHat('none');
+                                                    setEyes('none');
+                                                    setMouth('none');
+                                                    setBodyItem('none');
+                                                } else if (char.id === 'duck') {
+                                                    setEyes('none');
+                                                    setMouth('none');
+                                                } else if (char.id === 'gake') {
+                                                    setBodyItem('none'); // Gake only supports hat, eyes, mouth
+                                                }
+                                            }}
                                             className={`px-4 py-2 rounded-lg font-semibold transition-all ${
                                                 characterType === char.id 
                                                     ? 'bg-cyan-500 text-white' 

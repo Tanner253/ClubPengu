@@ -542,8 +542,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     
     // Handle character type change
     const handleCharacterTypeChange = (typeId) => {
+        console.log(`🎭 Character type change requested: ${typeId}`);
         // Check if character is unlocked (penguin always available, others from server)
         if (typeId === 'penguin' || unlockedCharactersList.includes(typeId)) {
+            console.log(`🎭 Setting character type to: ${typeId}`);
             setCharacterType(typeId);
             
             // Doginal has built-in wizard hat and doesn't use penguin cosmetics
@@ -558,6 +560,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             if (typeId === 'duck') {
                 setEyes('none');     // Duck has its own eyes
                 setMouth('none');    // Duck has a bill
+            }
+            
+            // Gake only supports hat, eyes, and mouth - no body items
+            if (typeId === 'gake') {
+                setBodyItem('none'); // Gake doesn't wear clothes
             }
         }
     };
@@ -586,7 +593,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharacters = unlockedCharactersList.filter(id => characterRegistry.getCharacter(id));
     
     useEffect(() => {
-        if(updateData) updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor});
+        if(updateData) {
+            console.log(`📦 Syncing appearance to parent: characterType=${characterType}`);
+            updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor});
+        }
     }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, updateData]);
 
     const sceneRef = useRef(null);

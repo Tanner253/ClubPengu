@@ -1260,13 +1260,7 @@ export function createPenguinBuilder(THREE) {
             group.add(hatMesh);
         }
         
-        // Add body item support
-        if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY_ITEMS[data.bodyItem]) {
-            const bodyItemVoxels = ASSETS.BODY_ITEMS[data.bodyItem];
-            const bodyItemMesh = buildPartMerged(bodyItemVoxels, PALETTE);
-            bodyItemMesh.name = 'bodyItem';
-            group.add(bodyItemMesh);
-        }
+        // Note: Gake does NOT support body items - only hat, eyes, and mouth/beak
         
         group.scale.set(0.16, 0.16, 0.16);
         group.position.y = 0.8;
@@ -1564,6 +1558,11 @@ export function createPenguinBuilder(THREE) {
         }
         
         let group;
+        
+        // Debug log for character type
+        if (data.characterType && data.characterType !== 'penguin') {
+            console.log(`🎭 Building ${data.characterType} character mesh`);
+        }
         
         // Check for special character types
         if (data.characterType === 'marcus') {
