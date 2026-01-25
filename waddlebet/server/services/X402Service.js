@@ -14,7 +14,7 @@ const SOLANA_NETWORK_ID = process.env.SOLANA_NETWORK || 'solana:5eykt4UsFv8P8NJd
 
 // Token addresses - read lazily to allow dotenv to load first
 // Fallbacks provided for when env vars haven't loaded yet due to ES module hoisting
-const getTokenAddress = () => process.env.CPW3_TOKEN_ADDRESS || 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump';
+const getTokenAddress = () => process.env.CPW3_TOKEN_ADDRESS || '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump';
 const getRentWallet = () => process.env.RENT_WALLET_ADDRESS || '466jab8XPyn5vXj3SgzCz8wuEkBKqVuQrUy4EtLiadxM';
 
 class X402Service {

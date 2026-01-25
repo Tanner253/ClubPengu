@@ -40,9 +40,9 @@ const BANNER_FONTS = [
 // Tokens for Token Gate (community/meme tokens that make sense for holder gating)
 const TOKEN_GATE_TOKENS = [
     { 
-        symbol: '$WADDLE', 
+        symbol: '$CP', 
         name: 'WaddleBet',
-        address: 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump'
+        address: '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump'
     },
     { 
         symbol: 'BONK', 
@@ -59,9 +59,9 @@ const TOKEN_GATE_TOKENS = [
 // Tokens for Entry Fee (includes stables and SOL for payments)
 const ENTRY_FEE_TOKENS = [
     { 
-        symbol: '$WADDLE', 
+        symbol: '$CP', 
         name: 'WaddleBet',
-        address: 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump'
+        address: '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump'
     },
     { 
         symbol: 'BONK', 
@@ -260,7 +260,7 @@ const IglooSettingsPanel = ({
         try {
             console.log('💰 Starting rent payment...');
             console.log(`   Igloo: ${iglooData.iglooId}`);
-            console.log(`   Amount: ${IGLOO_CONFIG.DAILY_RENT_CPW3} $WADDLE`);
+            console.log(`   Amount: ${IGLOO_CONFIG.DAILY_RENT_CPW3} $CP`);
             
             // Step 1: Send the Solana transaction
             const paymentResult = await payIglooRent(
@@ -913,7 +913,7 @@ const IglooSettingsPanel = ({
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-400">Total Rent Paid:</span>
                                     <span className="text-yellow-400 font-mono">
-                                        {iglooData?.stats?.totalRentPaid?.toLocaleString() || 0} $WADDLE
+                                        {iglooData?.stats?.totalRentPaid?.toLocaleString() || 0} $CP
                                     </span>
                                 </div>
                                 
@@ -973,7 +973,7 @@ const IglooSettingsPanel = ({
                                             ? '⏳ Processing Payment...' 
                                             : rentPaymentSuccess 
                                                 ? '✅ Payment Sent!'
-                                                : `💰 Pay Rent (${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $WADDLE)`}
+                                                : `💰 Pay Rent (${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $CP)`}
                                     </button>
                                 </div>
                             )}

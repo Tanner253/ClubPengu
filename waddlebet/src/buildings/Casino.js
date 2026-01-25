@@ -863,7 +863,7 @@ class Casino extends BaseBuilding {
             // Token ticker
             tvCtx.fillStyle = '#00ffff';
             tvCtx.font = 'bold 22px monospace';
-            tvCtx.fillText('$WADDLE / SOL', 15, 25);
+            tvCtx.fillText('$CP / SOL', 15, 25);
             
             // Current price
             const currentPrice = candleData[candleData.length - 1].close;
@@ -1304,8 +1304,8 @@ class Casino extends BaseBuilding {
             height: 5
         };
         
-        // DexScreener iframe URL for the TV ($WADDLE, candles, market cap, 1hr)
-        group.userData.tvIframeUrl = 'https://dexscreener.com/solana/BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump?embed=1&theme=dark&chartStyle=1&chartType=mc&interval=60';
+        // DexScreener iframe URL for the TV ($CP, candles, market cap, 1hr)
+        group.userData.tvIframeUrl = 'https://dexscreener.com/solana/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump?embed=1&theme=dark&chartStyle=1&chartType=mc&interval=60';
 
         // ==================== APPLE/MOBILE PERFORMANCE OPTIMIZATIONS ====================
         if (this.needsOptimization) {

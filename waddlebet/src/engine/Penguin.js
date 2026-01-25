@@ -272,8 +272,8 @@ class Penguin {
         }
         
         // Auto-end non-persistent emotes
-        // Continuous emotes: Sit, Breakdance, DJ, 67, Headbang - don't auto-end
-        const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang'];
+        // Continuous emotes: Sit, Breakdance, DJ, 67, Headbang, Sleep, Cry - don't auto-end
+        const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance', 'Sleep', 'Cry'];
         if (!continuousEmotes.includes(this.emote) && eTime > 3) {
             this.stopEmote();
         }

@@ -35,8 +35,8 @@ const IglooRentalGuide = ({
     
     // Rental information
     const rentInfo = [
-        { label: 'Daily Rent', value: '10,000 $WADDLE', color: 'text-yellow-400', icon: '💰' },
-        { label: 'Min Balance', value: '70,000 $WADDLE', color: 'text-red-400', icon: '⚠️' },
+        { label: 'Daily Rent', value: '10,000 $CP', color: 'text-yellow-400', icon: '💰' },
+        { label: 'Min Balance', value: '70,000 $CP', color: 'text-red-400', icon: '⚠️' },
         { label: 'Grace Period', value: '12 hours', color: 'text-cyan-400', icon: '⏰' },
         { label: 'Total Igloos', value: '10 available', color: 'text-green-400', icon: '🏠' },
     ];
@@ -45,7 +45,7 @@ const IglooRentalGuide = ({
         'Walk to igloo',
         'Press E',
         'Click Rent',
-        'Pay $WADDLE'
+        'Pay $CP'
     ];
     
     const ownerPerks = [

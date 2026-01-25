@@ -52,7 +52,7 @@ const TUTORIAL_SLIDES = [
                 <div className="bg-gradient-to-r from-green-500/20 to-cyan-500/20 rounded-lg p-3 border border-green-500/30">
                     <div className="text-green-400 font-bold text-center mb-2">🚀 WAGER ANY SPL TOKEN</div>
                     <p className="text-white/80 text-sm text-center">
-                        SOL, $WADDLE, memecoins, stablecoins - <strong>any Solana token</strong> can be wagered!
+                        SOL, $CP, memecoins, stablecoins - <strong>any Solana token</strong> can be wagered!
                     </p>
                     <p className="text-white/60 text-xs text-center mt-1">
                         First platform ever to enable wagering with any SPL token.
