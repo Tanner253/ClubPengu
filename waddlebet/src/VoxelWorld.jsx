@@ -52,6 +52,10 @@ import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, ge
 import IceFishingGame from './games/IceFishingGame';
 import CasinoBlackjack from './components/CasinoBlackjack';
 import BattleshipGame from './minigames/BattleshipGame';
+import FlappyPenguinGame from './minigames/FlappyPenguinGame';
+import SnakeGame from './minigames/SnakeGame';
+import PongGame from './minigames/PongGame';
+import MemoryMatchGame from './minigames/MemoryMatchGame';
 
 const VoxelWorld = ({ 
     penguinData, 
@@ -438,6 +442,12 @@ const VoxelWorld = ({
     const [arcadeGameActive, setArcadeGameActive] = useState(false); // True when arcade minigame is open
     const [arcadeGameType, setArcadeGameType] = useState(null); // 'battleship' etc
     const [arcadeInteraction, setArcadeInteraction] = useState(null); // { machine, prompt, gameType }
+    
+    // Ref to track arcade game state for input blocking in game loop
+    const arcadeGameActiveRef = useRef(false);
+    useEffect(() => {
+        arcadeGameActiveRef.current = arcadeGameActive;
+    }, [arcadeGameActive]);
     
     // Penguin Creator Overlay State (for in-game wardrobe)
     const [penguinCreatorOpen, setPenguinCreatorOpen] = useState(false);
@@ -1937,6 +1947,11 @@ const VoxelWorld = ({
 
         // --- INPUT HANDLING ---
         const handleDown = (e) => {
+            // Skip input processing when arcade game is active (games handle their own input)
+            if (arcadeGameActiveRef.current) {
+                return;
+            }
+            
             const activeElement = document.activeElement;
             const isInputFocused = activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA';
             
@@ -2024,6 +2039,12 @@ const VoxelWorld = ({
         };
         const handleUp = (e) => {
             keysRef.current[e.code] = false;
+            
+            // Skip emote wheel handling when arcade game is active
+            if (arcadeGameActiveRef.current) {
+                return;
+            }
+            
             if(e.code === 'KeyT') {
                 // T released - close wheel and play selection if any
                 emoteWheelKeyHeld.current = false;
@@ -2102,18 +2123,19 @@ const VoxelWorld = ({
             const JUMP_VELOCITY = 12;
             const GROUND_Y = 0;
             
-            // Check keyboard input (disabled during P2P match)
+            // Check keyboard input (disabled during P2P match or arcade game)
             const inMatch = isInMatchRef.current;
+            const inArcade = arcadeGameActiveRef.current;
             // WASD for player movement, Arrow keys for camera rotation
-            const keyForward = !inMatch && keysRef.current['KeyW'];
-            const keyBack = !inMatch && keysRef.current['KeyS'];
-            const keyLeft = !inMatch && keysRef.current['KeyA'];
-            const keyRight = !inMatch && keysRef.current['KeyD'];
-            const keyJump = !inMatch && keysRef.current['Space'];
+            const keyForward = !inMatch && !inArcade && keysRef.current['KeyW'];
+            const keyBack = !inMatch && !inArcade && keysRef.current['KeyS'];
+            const keyLeft = !inMatch && !inArcade && keysRef.current['KeyA'];
+            const keyRight = !inMatch && !inArcade && keysRef.current['KeyD'];
+            const keyJump = !inMatch && !inArcade && keysRef.current['Space'];
             
             // Arrow keys rotate camera (horizontal only)
-            const arrowLeft = !inMatch && keysRef.current['ArrowLeft'];
-            const arrowRight = !inMatch && keysRef.current['ArrowRight'];
+            const arrowLeft = !inMatch && !inArcade && keysRef.current['ArrowLeft'];
+            const arrowRight = !inMatch && !inArcade && keysRef.current['ArrowRight'];
             
             // Check mobile button input (legacy D-pad)
             const mobile = mobileControlsRef.current;
@@ -5363,7 +5385,7 @@ const VoxelWorld = ({
         }
     };
     
-    // Check for nearby arcade machines (town only) - PvE Battleship
+    // Check for nearby arcade machines (town only) - Multiple Games
     const checkArcadeMachines = () => {
         if (room !== 'town') {
             if (arcadeInteraction) setArcadeInteraction(null);
@@ -5371,20 +5393,38 @@ const VoxelWorld = ({
         }
         
         const playerPos = posRef.current;
-        // Arcade machine position from TownCenter.js: C + 21.5, C - 5.2 (where C = 110)
-        const arcadeX = 110 + 21.5;
-        const arcadeZ = 110 - 5.2;
-        const interactionRadius = 4; // Slightly larger than the collision radius
+        const C = 110; // TownCenter.CENTER
+        const interactionRadius = 4;
         
-        const dx = playerPos.x - arcadeX;
-        const dz = playerPos.z - arcadeZ;
-        const distance = Math.sqrt(dx * dx + dz * dz);
+        // All arcade machine positions and their game types
+        const arcadeMachines = [
+            { x: C + 21.5, z: C - 5.2, game: 'battleship', prompt: '🚢 Press E to play Battleship' },
+            { x: C + 26.5, z: C - 5.2, game: 'flappy_penguin', prompt: '🐧 Press E to play Flappy Penguin' },
+            { x: C + 31.5, z: C - 5.2, game: 'snake', prompt: '🐍 Press E to play Snake' },
+            { x: C + 36.5, z: C - 5.2, game: 'pong', prompt: '🏒 Press E to play Ice Pong' },
+            { x: C + 41.5, z: C - 5.2, game: 'memory', prompt: '🧠 Press E to play Memory Match' }
+        ];
         
-        if (distance < interactionRadius) {
-            if (!arcadeInteraction) {
+        // Find the closest arcade machine in range
+        let closestArcade = null;
+        let closestDistance = interactionRadius;
+        
+        for (const arcade of arcadeMachines) {
+            const dx = playerPos.x - arcade.x;
+            const dz = playerPos.z - arcade.z;
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            
+            if (distance < closestDistance) {
+                closestDistance = distance;
+                closestArcade = arcade;
+            }
+        }
+        
+        if (closestArcade) {
+            if (!arcadeInteraction || arcadeInteraction.gameType !== closestArcade.game) {
                 setArcadeInteraction({
-                    prompt: '🎮 Press E to play Battleship',
-                    gameType: 'battleship'
+                    prompt: closestArcade.prompt,
+                    gameType: closestArcade.game
                 });
             }
         } else if (arcadeInteraction) {
@@ -7164,9 +7204,29 @@ const VoxelWorld = ({
                 />
              )}
              
-             {/* Arcade Battleship PvE Game Overlay */}
+             {/* Arcade Games Overlays */}
              {arcadeGameActive && arcadeGameType === 'battleship' && (
                 <BattleshipGame
+                    onClose={handleArcadeGameClose}
+                />
+             )}
+             {arcadeGameActive && arcadeGameType === 'flappy_penguin' && (
+                <FlappyPenguinGame
+                    onClose={handleArcadeGameClose}
+                />
+             )}
+             {arcadeGameActive && arcadeGameType === 'snake' && (
+                <SnakeGame
+                    onClose={handleArcadeGameClose}
+                />
+             )}
+             {arcadeGameActive && arcadeGameType === 'pong' && (
+                <PongGame
+                    onClose={handleArcadeGameClose}
+                />
+             )}
+             {arcadeGameActive && arcadeGameType === 'memory' && (
+                <MemoryMatchGame
                     onClose={handleArcadeGameClose}
                 />
              )}
@@ -7565,10 +7625,34 @@ const VoxelWorld = ({
                 </div>
              )}
              
-             {/* Arcade Machine Interaction UI (Battleship PvE) */}
-             {arcadeInteraction && room === 'town' && !fishingInteraction && !nearbyPortal && !arcadeGameActive && (
+             {/* Arcade Machine Interaction UI (Various Games) */}
+             {arcadeInteraction && room === 'town' && !fishingInteraction && !nearbyPortal && !arcadeGameActive && (() => {
+                // Game-specific UI configs
+                const gameConfigs = {
+                    battleship: { icon: '🚢', name: 'Battleship', color: 'cyan' },
+                    flappy_penguin: { icon: '🐧', name: 'Flappy Penguin', color: 'green' },
+                    snake: { icon: '🐍', name: 'Snake', color: 'emerald' },
+                    pong: { icon: '🏒', name: 'Ice Pong', color: 'blue' },
+                    memory: { icon: '🧠', name: 'Memory Match', color: 'purple' }
+                };
+                const config = gameConfigs[arcadeInteraction.gameType] || gameConfigs.battleship;
+                const colorClasses = {
+                    cyan: 'border-cyan-500/50 shadow-cyan-500/20 text-cyan-300',
+                    green: 'border-green-500/50 shadow-green-500/20 text-green-300',
+                    emerald: 'border-emerald-500/50 shadow-emerald-500/20 text-emerald-300',
+                    blue: 'border-blue-500/50 shadow-blue-500/20 text-blue-300',
+                    purple: 'border-purple-500/50 shadow-purple-500/20 text-purple-300'
+                };
+                const buttonClasses = {
+                    cyan: 'from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500',
+                    green: 'from-green-400 to-emerald-600 hover:from-green-300 hover:to-emerald-500',
+                    emerald: 'from-emerald-400 to-teal-600 hover:from-emerald-300 hover:to-teal-500',
+                    blue: 'from-blue-400 to-indigo-600 hover:from-blue-300 hover:to-indigo-500',
+                    purple: 'from-purple-400 to-pink-600 hover:from-purple-300 hover:to-pink-500'
+                };
+                return (
                 <div 
-                    className={`absolute bg-gradient-to-b from-indigo-900/95 to-purple-900/95 backdrop-blur-sm rounded-xl border border-cyan-500/50 text-center z-20 shadow-lg shadow-cyan-500/20 ${
+                    className={`absolute bg-gradient-to-b from-indigo-900/95 to-purple-900/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${colorClasses[config.color]} ${
                         isMobile 
                             ? isLandscape 
                                 ? 'bottom-[180px] right-28 p-3' 
@@ -7576,16 +7660,16 @@ const VoxelWorld = ({
                             : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
                     }`}
                 >
-                    <div className="text-3xl mb-1">🚢</div>
-                    <p className="text-cyan-300 retro-text text-sm mb-2">
+                    <div className="text-3xl mb-1">{config.icon}</div>
+                    <p className={`retro-text text-sm mb-2 ${colorClasses[config.color].split(' ').pop()}`}>
                         {isMobile 
-                            ? '🎮 Tap to play Battleship'
+                            ? `🎮 Tap to play ${config.name}`
                             : arcadeInteraction.prompt
                         }
                     </p>
                     
                     <button
-                        className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm transition-all active:scale-95 shadow-lg bg-gradient-to-b from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500 text-white"
+                        className={`w-full px-6 py-2 font-bold rounded-lg retro-text text-sm transition-all active:scale-95 shadow-lg bg-gradient-to-b ${buttonClasses[config.color]} text-white`}
                         onClick={() => {
                             setArcadeGameType(arcadeInteraction.gameType || 'battleship');
                             setArcadeGameActive(true);
@@ -7600,7 +7684,8 @@ const VoxelWorld = ({
                         <p className="text-white/50 text-[10px] mt-1 retro-text">or press E</p>
                     )}
                 </div>
-             )}
+                );
+             })()}
              
              {/* Wardrobe Igloo Interaction UI (Penguin Creator) */}
              {wardrobeInteraction && room === 'town' && !fishingInteraction && !nearbyPortal && !penguinCreatorOpen && (

@@ -13,3 +13,9 @@ export { default as P2PUno } from './P2PUno';
 export { default as P2PBlackjack } from './P2PBlackjack';
 export { default as BattleshipGame } from './BattleshipGame';
 export { default as P2PBattleship } from './P2PBattleship';
+
+// Arcade Games (Single Player)
+export { default as FlappyPenguinGame } from './FlappyPenguinGame';
+export { default as SnakeGame } from './SnakeGame';
+export { default as PongGame } from './PongGame';
+export { default as MemoryMatchGame } from './MemoryMatchGame';
