@@ -99,6 +99,41 @@ export function animateMesh(
         // Raise player up to sit on mount - different heights for different mounts
         // Mount name is stored in userData.mount on the wrapper (meshInner's parent)
         const mountName = meshInner.parent?.userData?.mount || 'penguMount';
+        const mountData = meshInner.parent?.userData?.mountData;
+        
+        // === SKATEBOARD STANCE === 
+        // Rider stands SIDEWAYS on the board (90° rotated) - like a real skater
+        if (mountName === 'skateboard') {
+            const riderY = mountData?.riderOffset?.y ?? 1.8; // Configured in mounts.js
+            meshInner.position.y = riderY;
+            
+            // ROTATE 90 DEGREES - character faces sideways on board
+            meshInner.rotation.y = Math.PI / 2;
+            
+            // Get skateboard lean from userData (set by VoxelWorld animation)
+            const skateboardLean = meshInner.parent?.userData?.skateboardLean || 0;
+            const isSkating = meshInner.parent?.userData?.skateboardSpeed > 0;
+            
+            // Feet planted on board
+            if(footL) { footL.rotation.x = 0; footL.rotation.y = 0; footL.position.z = 0; }
+            if(footR) { footR.rotation.x = 0; footR.rotation.y = 0; footR.position.z = 0; }
+            
+            // Arms out for balance (adjusted for sideways stance)
+            if(flipperL) {
+                flipperL.rotation.z = 0.5 + skateboardLean * 1.5;
+                flipperL.rotation.x = isSkating ? -0.2 : 0;
+            }
+            if(flipperR) {
+                flipperR.rotation.z = -0.5 + skateboardLean * 1.5;
+                flipperR.rotation.x = isSkating ? -0.2 : 0;
+            }
+            
+            // Body lean (now on X axis since we're rotated 90°)
+            meshInner.rotation.x = skateboardLean * 0.3;
+            return;
+        }
+        
+        // Default mount pose (sitting)
         meshInner.position.y = mountName === 'minecraftBoat' ? 0.8 : 1.2;
         if(footL) {
             footL.rotation.x = -Math.PI / 2.5;
@@ -277,9 +312,212 @@ export function animateMesh(
             if(eyesPart) eyesPart.rotation.x = djHeadBob;
             if(mouthPart) mouthPart.rotation.x = djHeadBob;
         }
+        // ==================== NEW EMOTES ====================
+        else if (emoteType === 'Dab') {
+            // Classic dab pose - one arm up diagonal, head tucked into other arm
+            // Quick snap into position, then hold
+            const snapTime = Math.min(eTime * 8, 1); // Snap into pose over 0.125s
+            
+            // Right flipper goes UP and diagonal (the "dab arm")
+            if(flipperR) {
+                flipperR.rotation.z = -Math.PI * 0.7 * snapTime;  // Arm up diagonal
+                flipperR.rotation.x = -0.3 * snapTime;             // Slight forward
+            }
+            // Left flipper tucks across body (head goes here)
+            if(flipperL) {
+                flipperL.rotation.z = Math.PI * 0.4 * snapTime;   // Arm across body
+                flipperL.rotation.x = -0.5 * snapTime;             // Forward to "catch" head
+            }
+            // Head tucks into left arm
+            if(head) {
+                head.rotation.x = 0.4 * snapTime;   // Look down
+                head.rotation.z = 0.3 * snapTime;   // Tilt toward arm
+            }
+            if(hatPart) {
+                hatPart.rotation.x = 0.4 * snapTime;
+                hatPart.rotation.z = 0.3 * snapTime;
+            }
+            if(eyesPart) {
+                eyesPart.rotation.x = 0.4 * snapTime;
+                eyesPart.rotation.z = 0.3 * snapTime;
+            }
+            if(mouthPart) {
+                mouthPart.rotation.x = 0.4 * snapTime;
+                mouthPart.rotation.z = 0.3 * snapTime;
+            }
+            // Slight body lean into the dab
+            meshInner.rotation.z = 0.15 * snapTime;
+        }
+        else if (emoteType === 'Flex') {
+            // Bodybuilder flex pose - arms up showing muscles
+            const flexPulse = Math.sin(eTime * 4) * 0.1; // Subtle pulse
+            const flexPose = Math.min(eTime * 5, 1); // Quick pose setup
+            
+            // Both flippers up in classic flex pose
+            if(flipperL) {
+                flipperL.rotation.z = (Math.PI * 0.6 + flexPulse) * flexPose;
+                flipperL.rotation.x = (-0.8 - flexPulse * 0.5) * flexPose;
+            }
+            if(flipperR) {
+                flipperR.rotation.z = (-Math.PI * 0.6 - flexPulse) * flexPose;
+                flipperR.rotation.x = (-0.8 - flexPulse * 0.5) * flexPose;
+            }
+            // Puff out chest - lean back slightly
+            meshInner.rotation.x = -0.15 * flexPose;
+            // Slight bounce to show off
+            meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 6)) * 0.05;
+        }
+        else if (emoteType === 'Sleep') {
+            // Sleeping on the ground - lying down with Zzz motion
+            const breathe = Math.sin(eTime * 1.5) * 0.05; // Slow breathing
+            
+            // Lie down on side
+            meshInner.rotation.x = Math.PI * 0.4;  // Lean forward a lot
+            meshInner.rotation.z = Math.PI * 0.15; // Slight tilt
+            meshInner.position.y = 0.2;            // Lower to ground
+            
+            // Flippers relaxed at sides
+            if(flipperL) {
+                flipperL.rotation.z = 0.5 + breathe;
+                flipperL.rotation.x = 0.2;
+            }
+            if(flipperR) {
+                flipperR.rotation.z = -0.5 - breathe;
+                flipperR.rotation.x = 0.2;
+            }
+            // Feet tucked
+            if(footL) {
+                footL.rotation.x = -0.4;
+            }
+            if(footR) {
+                footR.rotation.x = -0.3;
+            }
+            // Head resting - gentle bob from breathing
+            const sleepyHead = breathe * 0.5;
+            if(head) head.rotation.x = 0.2 + sleepyHead;
+            if(hatPart) hatPart.rotation.x = 0.2 + sleepyHead;
+            if(eyesPart) eyesPart.rotation.x = 0.2 + sleepyHead;
+            if(mouthPart) mouthPart.rotation.x = 0.2 + sleepyHead;
+        }
+        else if (emoteType === 'Cry') {
+            // Sad crying animation - head down, shaking, arms to face
+            const sobSpeed = eTime * 8;
+            const sob = Math.sin(sobSpeed) * 0.08;
+            const shake = Math.sin(sobSpeed * 1.5) * 0.03;
+            
+            // Arms up to face (wiping tears)
+            if(flipperL) {
+                flipperL.rotation.z = Math.PI * 0.5;
+                flipperL.rotation.x = -0.6 + sob * 0.5;
+            }
+            if(flipperR) {
+                flipperR.rotation.z = -Math.PI * 0.5;
+                flipperR.rotation.x = -0.6 - sob * 0.5;
+            }
+            // Head down, shaking
+            if(head) {
+                head.rotation.x = 0.3 + sob;
+                head.rotation.z = shake;
+            }
+            if(hatPart) {
+                hatPart.rotation.x = 0.3 + sob;
+                hatPart.rotation.z = shake;
+            }
+            if(eyesPart) {
+                eyesPart.rotation.x = 0.3 + sob;
+                eyesPart.rotation.z = shake;
+            }
+            if(mouthPart) {
+                mouthPart.rotation.x = 0.3 + sob;
+                mouthPart.rotation.z = shake;
+            }
+            // Body shaking from sobs
+            meshInner.rotation.z = shake;
+            meshInner.position.y = 0.8 + Math.abs(sob) * 0.3;
+        }
+        else if (emoteType === 'Backflip') {
+            // Exciting backflip - full rotation!
+            const flipDuration = 1.2; // Full flip takes 1.2 seconds
+            const flipProgress = Math.min(eTime / flipDuration, 1);
+            
+            // Jump arc
+            const jumpHeight = Math.sin(flipProgress * Math.PI) * 3;
+            meshInner.position.y = 0.8 + jumpHeight;
+            
+            // Full backward rotation
+            meshInner.rotation.x = -flipProgress * Math.PI * 2;
+            
+            // Arms spread during flip
+            if(flipperL) {
+                flipperL.rotation.z = Math.PI * 0.6 * (1 - flipProgress * 0.5);
+            }
+            if(flipperR) {
+                flipperR.rotation.z = -Math.PI * 0.6 * (1 - flipProgress * 0.5);
+            }
+            // Tuck legs during flip
+            if(footL) footL.rotation.x = -0.8 * Math.sin(flipProgress * Math.PI);
+            if(footR) footR.rotation.x = -0.8 * Math.sin(flipProgress * Math.PI);
+        }
+        else if (emoteType === 'Clap') {
+            // Enthusiastic clapping
+            const clapSpeed = eTime * 12;
+            const clapPhase = Math.sin(clapSpeed);
+            const clapOpen = clapPhase > 0 ? clapPhase : 0; // Only positive phase
+            
+            // Flippers come together in front
+            if(flipperL) {
+                flipperL.rotation.z = Math.PI * 0.4 - clapOpen * 0.4;
+                flipperL.rotation.x = -Math.PI * 0.4;
+                flipperL.rotation.y = -0.3 + clapOpen * 0.3;
+            }
+            if(flipperR) {
+                flipperR.rotation.z = -Math.PI * 0.4 + clapOpen * 0.4;
+                flipperR.rotation.x = -Math.PI * 0.4;
+                flipperR.rotation.y = 0.3 - clapOpen * 0.3;
+            }
+            // Slight bounce with each clap
+            meshInner.position.y = 0.8 + (clapPhase > 0.8 ? 0.1 : 0);
+            // Happy head bob
+            if(head) head.rotation.x = Math.sin(clapSpeed * 0.5) * 0.1;
+            if(hatPart) hatPart.rotation.x = Math.sin(clapSpeed * 0.5) * 0.1;
+        }
+        else if (emoteType === 'Facepalm') {
+            // Classic facepalm - flipper to face, head down
+            const palmTime = Math.min(eTime * 4, 1); // Smooth transition
+            const headShake = Math.sin(eTime * 3) * 0.05; // Subtle disappointment shake
+            
+            // Right flipper to face
+            if(flipperR) {
+                flipperR.rotation.z = -Math.PI * 0.3 * palmTime;
+                flipperR.rotation.x = -Math.PI * 0.5 * palmTime;
+            }
+            // Left flipper relaxed/disappointed
+            if(flipperL) {
+                flipperL.rotation.z = 0.2 * palmTime;
+            }
+            // Head tilted down into flipper
+            if(head) {
+                head.rotation.x = 0.25 * palmTime;
+                head.rotation.z = headShake;
+            }
+            if(hatPart) {
+                hatPart.rotation.x = 0.25 * palmTime;
+                hatPart.rotation.z = headShake;
+            }
+            if(eyesPart) {
+                eyesPart.rotation.x = 0.25 * palmTime;
+                eyesPart.rotation.z = headShake;
+            }
+            if(mouthPart) {
+                mouthPart.rotation.x = 0.25 * palmTime;
+                mouthPart.rotation.z = headShake;
+            }
+            // Slight slouch of disappointment
+            meshInner.rotation.x = 0.1 * palmTime;
+        }
         
         // Auto-stop non-persistent emotes
-        const loopingEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang'];
+        const loopingEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance', 'Sleep', 'Cry'];
         if (!loopingEmotes.includes(emoteType) && eTime > 3) {
             if (onEmoteEnd) {
                 onEmoteEnd();
