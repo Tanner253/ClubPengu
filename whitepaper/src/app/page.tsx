@@ -206,14 +206,14 @@ function Navigation() {
             <div className="w-px h-6 bg-white/10" />
             
             <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-sm font-medium">
-              $WADDLE
+              $CP
             </span>
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex md:hidden items-center gap-3">
             <span className="px-2 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-medium">
-              $WADDLE
+              $CP
             </span>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -439,7 +439,7 @@ function HeroSection() {
           className="mt-16 inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20"
         >
           <Coins className="w-5 h-5 text-yellow-500" />
-          <span className="text-yellow-500 font-bold">$WADDLE</span>
+          <span className="text-yellow-500 font-bold">$CP</span>
           <span className="text-slate-400">•</span>
           <span className="text-slate-400 text-sm">Solana Native</span>
         </motion.div>
@@ -602,7 +602,7 @@ function BundleSection() {
             Demystifying the <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-cyan-400 to-emerald-400">Bundle</span>
           </h2>
           <p className="text-slate-400 text-lg max-w-3xl mx-auto mb-8">
-            We&apos;re migrating our community and holders to $WADDLE. 
+            We&apos;re migrating our community and holders to $CP. 
             The dev wallet will purchase ~40% of supply and distribute it to proven, battle-tested holders.
           </p>
 
@@ -1022,7 +1022,7 @@ function AboutSection() {
                 <span className="text-cyan-400 font-semibold"> Every Solana community, one arena.</span>
               </p>
               <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-6">
-                {["$SOL", "$BONK", "$WIF", "$PENGU", "$WADDLE", "Any Token"].map((token, i) => (
+                {["$SOL", "$BONK", "$WIF", "$PENGU", "$CP", "Any Token"].map((token, i) => (
                   <span
                     key={i}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium ${
@@ -1347,7 +1347,7 @@ function EconomySection() {
                     alt="WaddleBet" 
                     className="w-20 h-20 md:w-28 md:h-28 rounded-2xl object-cover mx-auto shadow-lg"
                   />
-                  <p className="text-2xl font-bold text-white mt-4">$WADDLE</p>
+                  <p className="text-2xl font-bold text-white mt-4">$CP</p>
                   <p className="text-sm text-yellow-100/80">Solana Native Token</p>
                 </div>
               </div>
@@ -2040,7 +2040,7 @@ function RoadmapSection() {
       title: "Rebranding",
       status: "complete",
       items: [
-        "✅ New Token Launch ($WADDLE)",
+        "✅ New Token Launch ($CP)",
         "✅ OG Holder Airdrop",
         "✅ Brand Refresh to WaddleBet",
         "✅ Shrimp Character & Feathers",
@@ -2355,7 +2355,7 @@ function Footer() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-white/5">
             <div className="flex flex-wrap items-center justify-center gap-4 text-slate-500 text-xs sm:text-sm">
               <span className="text-cyan-400 font-semibold">
-                $WADDLE
+                $CP
               </span>
               <span className="text-slate-700">•</span>
               <a href={SOCIAL_LINKS.github} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">

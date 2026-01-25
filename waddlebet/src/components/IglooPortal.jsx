@@ -53,8 +53,8 @@ const IglooPortal = ({
             return {
                 emoji: '🏷️',
                 title: 'IGLOO FOR RENT',
-                subtitle: `${IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString() || '10,000'} $WADDLE/day`,
-                description: `Min balance: ${IGLOO_CONFIG.MINIMUM_BALANCE_CPW3?.toLocaleString() || '70,000'} $WADDLE`,
+                subtitle: `${IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString() || '10,000'} $CP/day`,
+                description: `Min balance: ${IGLOO_CONFIG.MINIMUM_BALANCE_CPW3?.toLocaleString() || '70,000'} $CP`,
                 color: 'emerald',
                 canEnter: false,
                 actionText: 'VIEW DETAILS',
@@ -275,7 +275,7 @@ const IglooPortal = ({
                     <div className="bg-black/30 rounded-lg p-2 mb-2 text-xs">
                         <div className="flex items-center justify-center gap-2 text-emerald-300">
                             <span>📅 Daily:</span>
-                            <span className="font-mono">{IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString()} $WADDLE</span>
+                            <span className="font-mono">{IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString()} $CP</span>
                         </div>
                         <div className="text-white/50 mt-1">
                             Grace period: {IGLOO_CONFIG.GRACE_PERIOD_HOURS}h

@@ -60,7 +60,7 @@ class X402Service {
      * 
      * @param {Object} options - Payment options
      * @param {number} options.amount - Amount in token base units
-     * @param {string} options.token - Token address (defaults to $WADDLE)
+     * @param {string} options.token - Token address (defaults to $CP)
      * @param {string} options.recipient - Recipient wallet address
      * @param {string} options.memo - Transaction memo/reference
      * @param {number} options.validityMinutes - How long the payment is valid (default 30)
@@ -172,7 +172,7 @@ class X402Service {
      * 
      * @param {string} iglooId - The igloo being rented
      * @param {number} days - Number of days (usually 1)
-     * @param {number} dailyRentCpw3 - Daily rent in $WADDLE
+     * @param {number} dailyRentCpw3 - Daily rent in $CP
      * @returns {Promise<Object>}
      */
     async createRentPayment(iglooId, days, dailyRentCpw3) {
@@ -192,7 +192,7 @@ class X402Service {
      * @param {string} iglooId - The igloo to enter
      * @param {number} entryFee - Entry fee amount
      * @param {string} ownerWallet - Igloo owner's wallet (receives fee)
-     * @param {string} tokenAddress - Token address for the fee (defaults to $WADDLE)
+     * @param {string} tokenAddress - Token address for the fee (defaults to $CP)
      * @returns {Promise<Object>}
      */
     async createEntryFeePayment(iglooId, entryFee, ownerWallet, tokenAddress = null) {
@@ -214,7 +214,7 @@ class X402Service {
      * @param {string} wagerDetails.challengeId - Challenge identifier (for pre-match)
      * @param {string} wagerDetails.matchId - Match identifier (optional, set after accept)
      * @param {string} wagerDetails.opponentWallet - Opponent's wallet
-     * @param {string} wagerDetails.tokenAddress - SPL token mint address (defaults to $WADDLE)
+     * @param {string} wagerDetails.tokenAddress - SPL token mint address (defaults to $CP)
      * @param {string} wagerDetails.tokenSymbol - Token symbol for display
      * @returns {Promise<Object>}
      */
@@ -225,7 +225,7 @@ class X402Service {
             matchId, 
             opponentWallet,
             tokenAddress = CPW3_TOKEN_ADDRESS,
-            tokenSymbol = '$WADDLE'
+            tokenSymbol = '$CP'
         } = wagerDetails;
         
         // Use challengeId for pre-match, matchId once match starts

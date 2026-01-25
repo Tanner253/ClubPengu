@@ -44,7 +44,7 @@ class SKNYIgloo extends BaseProp {
         // SKNY GANG ticker sign
         this._createTickerSign(group, neonPink, neonCyan, goldMat);
         
-        // $WADDLE logo
+        // $CP logo
         this._createWADDLELogo(group, neonGreen, goldMat);
         
         // Entrance with VIP rope and lights
@@ -216,7 +216,7 @@ class SKNYIgloo extends BaseProp {
     _createWADDLELogo(group, neonGreen, goldMat) {
         const THREE = this.THREE;
         
-        // $WADDLE sign on side
+        // $CP sign on side
         const signGroup = new THREE.Group();
         
         // Dollar sign
