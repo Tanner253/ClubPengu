@@ -12,10 +12,16 @@ export const EMOTE_WHEEL_ITEMS = [
     { id: 'Sit', emoji: '🧘', label: 'Sit', color: 'bg-purple-500' },
     { id: '67', emoji: '⚖️', label: '67', color: 'bg-yellow-500' },
     { id: 'Headbang', emoji: '🎸', label: 'Rock', color: 'bg-pink-500' },
+    // New emotes 🎉
+    { id: 'Dab', emoji: '🙅', label: 'Dab', color: 'bg-indigo-500' },
+    { id: 'Flex', emoji: '💪', label: 'Flex', color: 'bg-amber-500' },
+    { id: 'Sleep', emoji: '😴', label: 'Sleep', color: 'bg-slate-500' },
+    { id: 'Backflip', emoji: '🔄', label: 'Flip', color: 'bg-cyan-500' },
+    { id: 'Facepalm', emoji: '🤦', label: 'Facepalm', color: 'bg-rose-500' },
 ];
 
 // Emotes that loop continuously (don't auto-end after 3 seconds)
-export const LOOPING_EMOTES = ['Sit', 'Breakdance', 'Dance', 'Headbang', 'DJ'];
+export const LOOPING_EMOTES = ['Sit', 'Breakdance', 'Dance', 'Headbang', 'DJ', 'Sleep'];
 
 // Emote to emoji mapping for multiplayer display
 export const EMOTE_EMOJI_MAP = {
@@ -27,6 +33,12 @@ export const EMOTE_EMOJI_MAP = {
     '67': '⚖️',
     'Headbang': '🎸',
     'DJ': '🎧',
+    // New emotes
+    'Dab': '🙅',
+    'Flex': '💪',
+    'Sleep': '😴',
+    'Backflip': '🔄',
+    'Facepalm': '🤦',
 };
 
 class EmoteSystem {
