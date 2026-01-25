@@ -410,7 +410,7 @@ export const IGLOO_BANNER_STYLES = [
 export const IGLOO_BANNER_CONTENT = [
     { title: "🌙 Moon Crew HQ", ticker: "$MOON", shill: "Private Alpha • DM for invite" },
     { title: "🔥 Degen's Den", ticker: "$DEGEN", shill: "100x gems daily • VIP access" },
-    { title: "🎧 SKNY GANG", ticker: "$WADDLE", shill: "VIP Access • The Rave Never Stops • Rent igloos for 100k $WADDLE/day" },
+    { title: "🎧 SKNY GANG", ticker: "$CP", shill: "VIP Access • The Rave Never Stops • Rent igloos for 100k $CP/day" },
     { title: "💎 Diamond Flippers", ticker: "$FLIP", shill: "We don't sell • Join the cult" },
     { title: "🚀 Launch Pad", ticker: "$PAD", shill: "Early access • Presale alerts" },
     { title: "🎰 Whale Watchers", ticker: "$WHALE", shill: "Track big wallets • Free signals" },

@@ -161,7 +161,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button
                         onClick={() => setShowTokenomics(true)}
                         className={`${compactBtn} bg-gradient-to-r from-purple-600/80 to-pink-600/80 relative`}
-                        title="$WADDLE Tokenomics"
+                        title="$CP Tokenomics"
                     >
                         ❗
                         <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-yellow-400 rounded-full animate-ping" />
@@ -169,7 +169,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     
                     {/* Chart */}
                     <a
-                        href="https://dexscreener.com/solana/BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump"
+                        href="https://dexscreener.com/solana/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump"
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`${compactBtn} bg-gradient-to-r from-green-600/80 to-emerald-600/80`}
@@ -299,7 +299,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 
                 {/* Chart Button - DEX Screener Link */}
                 <a
-                    href="https://dexscreener.com/solana/BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump"
+                    href="https://dexscreener.com/solana/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump"
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bg-gradient-to-r from-green-600/80 to-emerald-600/80 hover:from-green-500 hover:to-emerald-500 active:from-green-700 active:to-emerald-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center hover:scale-105 active:scale-95"

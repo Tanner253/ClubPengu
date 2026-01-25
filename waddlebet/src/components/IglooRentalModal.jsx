@@ -220,13 +220,13 @@ const IglooRentalModal = ({
                                     <div className="flex justify-between">
                                         <span>Daily Rent:</span>
                                         <span className="text-yellow-400 font-mono">
-                                            {IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $WADDLE
+                                            {IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $CP
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span>Minimum Balance Required:</span>
                                         <span className="text-yellow-400 font-mono">
-                                            {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} $WADDLE
+                                            {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} $CP
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
@@ -248,7 +248,7 @@ const IglooRentalModal = ({
                                 <ul className="text-sm text-slate-300 space-y-1">
                                     <li className="flex items-center gap-2">
                                         <span className="text-green-400">✓</span>
-                                        Hold {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} $WADDLE (7 days rent)
+                                        Hold {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} $CP (7 days rent)
                                     </li>
                                     <li className="flex items-center gap-2">
                                         <span className="text-green-400">✓</span>
@@ -274,7 +274,7 @@ const IglooRentalModal = ({
                                         </span>
                                     ) : (
                                         <span className="text-red-400 font-semibold">
-                                            ❌ Insufficient balance ({balanceInfo.current.toLocaleString()} / {balanceInfo.required.toLocaleString()} $WADDLE)
+                                            ❌ Insufficient balance ({balanceInfo.current.toLocaleString()} / {balanceInfo.required.toLocaleString()} $CP)
                                         </span>
                                     )}
                                 </div>
@@ -308,7 +308,7 @@ const IglooRentalModal = ({
                                 ) : !walletAddress ? (
                                     'Connect Wallet to Rent'
                                 ) : (
-                                    `🔑 Rent for ${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $WADDLE/day`
+                                    `🔑 Rent for ${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $CP/day`
                                 )}
                             </button>
                             

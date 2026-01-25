@@ -254,6 +254,191 @@ export const MOUNTS = {
         speedBoost: 1.05, // 5% movement speed buff
         scale: 0.3125, // 25% bigger again (0.25 * 1.25)
         positionY: 0.65 // Higher to compensate for larger size
+    },
+    
+    // EPIC: Skateboard - Ride with style and grind animations!
+    skateboard: {
+        voxels: (() => {
+            const voxelMap = new Map();
+            const addVoxel = (x, y, z, c) => {
+                const key = `${Math.round(x)},${Math.round(y)},${Math.round(z)}`;
+                if (!voxelMap.has(key)) {
+                    voxelMap.set(key, {x: Math.round(x), y: Math.round(y), z: Math.round(z), c});
+                }
+            };
+            
+            // Skateboard colors
+            const deckTop = '#1a1a1a';      // Black grip tape
+            const deckBottom = '#E63946';   // Red deck bottom (cool design)
+            const deckSide = '#8B4513';     // Wood sides visible
+            const truckMetal = '#A0A0A0';   // Silver trucks
+            const truckDark = '#606060';    // Darker truck parts
+            const wheelColor = '#F0F0F0';   // White wheels
+            const wheelCore = '#303030';    // Dark wheel core
+            const stripeYellow = '#FFD700'; // Racing stripe
+            const stripeWhite = '#FFFFFF';  // Accent stripe
+            
+            // === DECK (main board) ===
+            // Board dimensions: length 22, width 8, thickness 2
+            const boardLength = 11; // half-length
+            const boardWidth = 4;   // half-width
+            
+            // Top surface (grip tape - black with subtle design)
+            for(let x = -boardWidth; x <= boardWidth; x++) {
+                for(let z = -boardLength; z <= boardLength; z++) {
+                    // Taper at nose and tail
+                    const taper = Math.abs(z) > 8 ? (Math.abs(z) - 8) * 0.5 : 0;
+                    if(Math.abs(x) <= boardWidth - taper) {
+                        // Grip tape with subtle stripe
+                        const isStripe = Math.abs(x) <= 1 && Math.abs(z) < 7;
+                        addVoxel(x, 0, z, isStripe ? '#2a2a2a' : deckTop);
+                    }
+                }
+            }
+            
+            // Bottom surface (colored with design)
+            for(let x = -boardWidth; x <= boardWidth; x++) {
+                for(let z = -boardLength; z <= boardLength; z++) {
+                    const taper = Math.abs(z) > 8 ? (Math.abs(z) - 8) * 0.5 : 0;
+                    if(Math.abs(x) <= boardWidth - taper) {
+                        // Cool racing stripes on bottom
+                        let color = deckBottom;
+                        if(x === 0) color = stripeYellow; // Center gold stripe
+                        if(Math.abs(x) === 2 && Math.abs(z) < 6) color = stripeWhite; // Side stripes
+                        addVoxel(x, -2, z, color);
+                    }
+                }
+            }
+            
+            // Side edges (wood visible)
+            for(let z = -boardLength; z <= boardLength; z++) {
+                const taper = Math.abs(z) > 8 ? (Math.abs(z) - 8) * 0.5 : 0;
+                const w = boardWidth - taper;
+                if(w > 0) {
+                    addVoxel(-Math.ceil(w), -1, z, deckSide);
+                    addVoxel(Math.ceil(w), -1, z, deckSide);
+                }
+            }
+            
+            // Nose and tail kicks (curved up)
+            for(let x = -3; x <= 3; x++) {
+                // Nose kick
+                addVoxel(x, 1, -boardLength, deckTop);
+                addVoxel(x, 0, -boardLength - 1, deckBottom);
+                // Tail kick  
+                addVoxel(x, 1, boardLength, deckTop);
+                addVoxel(x, 0, boardLength + 1, deckBottom);
+            }
+            
+            return Array.from(voxelMap.values());
+        })(),
+        
+        // Front truck assembly (animated for grinding lean)
+        frontTruck: (() => {
+            const v = [];
+            const truckMetal = '#A0A0A0';
+            const truckDark = '#606060';
+            const wheelColor = '#F0F0F0';
+            const wheelCore = '#303030';
+            
+            const truckZ = -7; // Position toward front
+            
+            // Truck baseplate
+            for(let x = -2; x <= 2; x++) {
+                v.push({x, y: -3, z: truckZ, c: truckDark});
+            }
+            
+            // Truck hanger (T-shape)
+            for(let x = -4; x <= 4; x++) {
+                v.push({x, y: -4, z: truckZ, c: truckMetal});
+            }
+            v.push({x: 0, y: -3, z: truckZ, c: truckMetal}); // Kingpin area
+            
+            // Axle
+            for(let x = -5; x <= 5; x++) {
+                v.push({x, y: -5, z: truckZ, c: truckDark});
+            }
+            
+            // Wheels (left side)
+            for(let y = -6; y <= -4; y++) {
+                for(let z = truckZ - 1; z <= truckZ + 1; z++) {
+                    const isCore = y === -5 && z === truckZ;
+                    v.push({x: -6, y, z, c: isCore ? wheelCore : wheelColor});
+                    v.push({x: -7, y, z, c: isCore ? wheelCore : wheelColor});
+                }
+            }
+            
+            // Wheels (right side)
+            for(let y = -6; y <= -4; y++) {
+                for(let z = truckZ - 1; z <= truckZ + 1; z++) {
+                    const isCore = y === -5 && z === truckZ;
+                    v.push({x: 6, y, z, c: isCore ? wheelCore : wheelColor});
+                    v.push({x: 7, y, z, c: isCore ? wheelCore : wheelColor});
+                }
+            }
+            
+            return v;
+        })(),
+        
+        // Back truck assembly (animated for grinding lean)
+        backTruck: (() => {
+            const v = [];
+            const truckMetal = '#A0A0A0';
+            const truckDark = '#606060';
+            const wheelColor = '#F0F0F0';
+            const wheelCore = '#303030';
+            
+            const truckZ = 7; // Position toward back
+            
+            // Truck baseplate
+            for(let x = -2; x <= 2; x++) {
+                v.push({x, y: -3, z: truckZ, c: truckDark});
+            }
+            
+            // Truck hanger (T-shape)
+            for(let x = -4; x <= 4; x++) {
+                v.push({x, y: -4, z: truckZ, c: truckMetal});
+            }
+            v.push({x: 0, y: -3, z: truckZ, c: truckMetal}); // Kingpin area
+            
+            // Axle
+            for(let x = -5; x <= 5; x++) {
+                v.push({x, y: -5, z: truckZ, c: truckDark});
+            }
+            
+            // Wheels (left side)
+            for(let y = -6; y <= -4; y++) {
+                for(let z = truckZ - 1; z <= truckZ + 1; z++) {
+                    const isCore = y === -5 && z === truckZ;
+                    v.push({x: -6, y, z, c: isCore ? wheelCore : wheelColor});
+                    v.push({x: -7, y, z, c: isCore ? wheelCore : wheelColor});
+                }
+            }
+            
+            // Wheels (right side)
+            for(let y = -6; y <= -4; y++) {
+                for(let z = truckZ - 1; z <= truckZ + 1; z++) {
+                    const isCore = y === -5 && z === truckZ;
+                    v.push({x: 6, y, z, c: isCore ? wheelCore : wheelColor});
+                    v.push({x: 7, y, z, c: isCore ? wheelCore : wheelColor});
+                }
+            }
+            
+            return v;
+        })(),
+        
+        animated: true,
+        animationType: 'skateboard_grind', // Custom grinding animation
+        hidesFeet: false,  // Feet visible on the board
+        riderOffset: { y: 1.6 },  // Player height on board - ONLY place to edit this!
+        speedBoost: 1.25, // 15% speed boost - skateboards are fast!
+        scale: 0.22,
+        positionY: 0.8,  // Lift board higher (was 0.35)
+        // Rider stands sideways on skateboard
+        riderRotation: Math.PI / 2, // 90 degrees - sideways stance
+        
+        // Grinding spark colors for effects
+        sparkColors: ['#FFD700', '#FFA500', '#FF6600', '#FFFFFF']
     }
 };
 

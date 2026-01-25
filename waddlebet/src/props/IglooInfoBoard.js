@@ -253,8 +253,8 @@ function drawIglooInfoBoard(ctx, W, H) {
     ctx.textAlign = 'left';
     
     const rentInfo = [
-        { label: 'Daily Rent:', value: '10,000 $WADDLE', color: '#FFD700' },
-        { label: 'Min Balance:', value: '70,000 $WADDLE', color: '#FF6B6B' },
+        { label: 'Daily Rent:', value: '10,000 $CP', color: '#FFD700' },
+        { label: 'Min Balance:', value: '70,000 $CP', color: '#FF6B6B' },
         { label: 'Grace Period:', value: '12 hours', color: '#87CEEB' },
         { label: 'Total Igloos:', value: '10 available', color: '#98FB98' },
     ];
@@ -280,7 +280,7 @@ function drawIglooInfoBoard(ctx, W, H) {
         '1. Walk to igloo',
         '2. Press E',
         '3. Click Rent',
-        '4. Pay $WADDLE'
+        '4. Pay $CP'
     ];
     y += 85;
     steps.forEach(step => {
@@ -445,8 +445,8 @@ function drawIglooInfoBoardMobile(ctx, W, H) {
     ctx.textAlign = 'left';
     
     const rentInfo = [
-        { label: 'Daily Rent:', value: '10,000 $WADDLE', color: '#FFD700' },
-        { label: 'Min Balance:', value: '70,000 $WADDLE', color: '#FF6B6B' },
+        { label: 'Daily Rent:', value: '10,000 $CP', color: '#FFD700' },
+        { label: 'Min Balance:', value: '70,000 $CP', color: '#FF6B6B' },
         { label: 'Grace Period:', value: '12 hours', color: '#87CEEB' },
         { label: 'Total Igloos:', value: '10 available', color: '#98FB98' },
     ];
@@ -472,7 +472,7 @@ function drawIglooInfoBoardMobile(ctx, W, H) {
         '1. Walk to igloo',
         '2. Press E',
         '3. Click Rent',
-        '4. Pay $WADDLE'
+        '4. Pay $CP'
     ];
     steps.forEach(step => {
         ctx.fillText(step, padding, currentY);

@@ -3456,8 +3456,131 @@ const VoxelWorld = ({
                                 mountGroup.position.y = 0.65 + (mountGroup.position.y - 0.65) * 0.9;
                             }
                         }
+                        // Skateboard grinding animation - sick tricks! 🛹
+                        else if (mountData.animationType === 'skateboard_grind') {
+                            const frontTruck = mountGroup.getObjectByName('front_truck_pivot');
+                            const backTruck = mountGroup.getObjectByName('back_truck_pivot');
+                            
+                            // Get turning input for carving/grinding direction
+                            const turningLeft = keyLeft || mobileLeft || (joystickInputRef.current.x < -0.3);
+                            const turningRight = keyRight || mobileRight || (joystickInputRef.current.x > 0.3);
+                            const turningAmount = turningLeft ? -1 : turningRight ? 1 : 0;
+                            
+                            if (moving) {
+                                const grindSpeed = time * 15; // Fast oscillation for grinding effect
+                                
+                                // === GRINDING LEAN ===
+                                // When moving, skateboard leans into turns like real carving
+                                const targetLean = turningAmount * 0.25; // Lean into turn
+                                const currentLean = mountGroup.rotation.z || 0;
+                                mountGroup.rotation.z = currentLean + (targetLean - currentLean) * 0.15;
+                                
+                                // === NOSE DIPS (kickflip teaser when turning hard) ===
+                                const noseDip = turningAmount !== 0 ? Math.sin(grindSpeed) * 0.08 : 0;
+                                mountGroup.rotation.x = noseDip;
+                                
+                                // === ROAD VIBRATION (subtle shake from grinding) ===
+                                const vibration = Math.sin(grindSpeed * 3) * 0.015;
+                                mountGroup.position.y = (mountData.positionY || 0.8) + vibration;
+                                
+                                // === TRUCK TURNING (trucks turn when carving) ===
+                                if (frontTruck && backTruck) {
+                                    // Front truck turns more than back (like real skateboard)
+                                    const turnAngle = turningAmount * 0.15;
+                                    frontTruck.rotation.y = turnAngle * 1.2;  // Front turns more
+                                    backTruck.rotation.y = turnAngle * 0.6;   // Back follows less
+                                }
+                                
+                                // === GRINDING SPARKS === (simple particle effect)
+                                // Spawn spark particles near wheels when turning hard
+                                if (Math.abs(turningAmount) > 0 && Math.random() < 0.3) {
+                                    const sparkColors = mountData.sparkColors || ['#FFD700', '#FFA500', '#FF6600', '#FFFFFF'];
+                                    const sparkColor = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+                                    
+                                    // Create simple spark geometry
+                                    const sparkGeo = new THREE.SphereGeometry(0.02, 4, 4);
+                                    const sparkMat = new THREE.MeshBasicMaterial({ 
+                                        color: sparkColor,
+                                        transparent: true,
+                                        opacity: 1
+                                    });
+                                    const spark = new THREE.Mesh(sparkGeo, sparkMat);
+                                    
+                                    // Position at back wheels with some randomness
+                                    const playerPos = playerRef.current.position;
+                                    spark.position.set(
+                                        playerPos.x + (Math.random() - 0.5) * 0.3,
+                                        0.1 + Math.random() * 0.1,
+                                        playerPos.z + (Math.random() - 0.5) * 0.3
+                                    );
+                                    
+                                    // Random velocity (sparks fly out)
+                                    spark.userData.velocity = new THREE.Vector3(
+                                        (Math.random() - 0.5) * 2 * turningAmount,
+                                        Math.random() * 1.5 + 0.5,
+                                        (Math.random() - 0.5) * 2
+                                    );
+                                    spark.userData.life = 0.5 + Math.random() * 0.3; // 0.5-0.8 seconds
+                                    spark.userData.startTime = time;
+                                    
+                                    sceneRef.current.add(spark);
+                                    
+                                    // Store spark for cleanup (use existing array or create)
+                                    if (!playerRef.current.userData.sparks) {
+                                        playerRef.current.userData.sparks = [];
+                                    }
+                                    playerRef.current.userData.sparks.push(spark);
+                                }
+                                
+                                // Update existing sparks
+                                if (playerRef.current.userData.sparks) {
+                                    playerRef.current.userData.sparks = playerRef.current.userData.sparks.filter(spark => {
+                                        const age = time - spark.userData.startTime;
+                                        if (age > spark.userData.life) {
+                                            sceneRef.current.remove(spark);
+                                            spark.geometry.dispose();
+                                            spark.material.dispose();
+                                            return false;
+                                        }
+                                        // Update position with gravity
+                                        spark.position.x += spark.userData.velocity.x * delta;
+                                        spark.position.y += spark.userData.velocity.y * delta;
+                                        spark.position.z += spark.userData.velocity.z * delta;
+                                        spark.userData.velocity.y -= 9.8 * delta; // Gravity
+                                        // Fade out
+                                        spark.material.opacity = 1 - (age / spark.userData.life);
+                                        return true;
+                                    });
+                                }
+                                
+                                // === PLAYER LEAN ADJUSTMENT ===
+                                // Rider leans with the board (handled in AnimationSystem)
+                                playerRef.current.userData.skateboardLean = mountGroup.rotation.z;
+                                playerRef.current.userData.skateboardSpeed = 1.0;
+                                
+                            } else {
+                                // === IDLE - NO WOBBLE ===
+                                // Smooth return to neutral, board stays still
+                                mountGroup.rotation.z = (mountGroup.rotation.z || 0) * 0.9;
+                                mountGroup.rotation.x *= 0.9;
+                                mountGroup.position.y = mountData.positionY || 0.8;
+                                
+                                // Trucks return to center
+                                if (frontTruck) {
+                                    frontTruck.rotation.y *= 0.85;
+                                    frontTruck.rotation.z = 0;
+                                }
+                                if (backTruck) {
+                                    backTruck.rotation.y *= 0.85;
+                                    backTruck.rotation.z = 0;
+                                }
+                                
+                                playerRef.current.userData.skateboardLean = 0;
+                                playerRef.current.userData.skateboardSpeed = 0;
+                            }
+                        }
                         // Boat rowing animation
-                        else {
+                        else if (mountData.animationType === 'rowing' || mountData.leftOar) {
                             const leftOarPivot = mountGroup.getObjectByName('left_oar_pivot');
                             const rightOarPivot = mountGroup.getObjectByName('right_oar_pivot');
                         
@@ -3722,7 +3845,7 @@ const VoxelWorld = ({
                 }
                 
                 // Auto-end emotes after 3.5 seconds (continuous emotes don't auto-clear)
-                const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance'];
+                const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance', 'Sleep', 'Cry'];
                 if (meshData.currentEmote && !continuousEmotes.includes(meshData.currentEmote)) {
                     const emoteAge = (Date.now() - meshData.emoteStartTime) / 1000;
                     if (emoteAge > 3.5) {
@@ -3807,8 +3930,91 @@ const VoxelWorld = ({
                                 mountGroup.position.y = restY + (mountGroup.position.y - restY) * 0.9;
                             }
                         }
+                        // Skateboard grinding animation for other players 🛹
+                        else if (mountData.animationType === 'skateboard_grind') {
+                            const frontTruck = mountGroup.getObjectByName('front_truck_pivot');
+                            const backTruck = mountGroup.getObjectByName('back_truck_pivot');
+                            
+                            if (isMoving) {
+                                const grindSpeed = time * 15;
+                                
+                                // Simulate carving lean based on time
+                                const autoLean = Math.sin(time * 2.5 + id.charCodeAt(0)) * 0.15; // Unique per player
+                                mountGroup.rotation.z = autoLean;
+                                
+                                // Road vibration
+                                const vibration = Math.sin(grindSpeed * 3) * 0.015;
+                                mountGroup.position.y = (mountData.positionY || 0.8) + vibration;
+                                
+                                // Nose dip during carves
+                                mountGroup.rotation.x = Math.sin(grindSpeed) * 0.05;
+                                
+                                // Truck turning (no wobble)
+                                if (frontTruck && backTruck) {
+                                    frontTruck.rotation.y = autoLean * 0.8;
+                                    backTruck.rotation.y = autoLean * 0.4;
+                                }
+                                
+                                // === GRINDING SPARKS for other players ===
+                                if (Math.abs(autoLean) > 0.05 && Math.random() < 0.25) {
+                                    const sparkColors = mountData.sparkColors || ['#FFD700', '#FFA500', '#FF6600', '#FFFFFF'];
+                                    const sparkColor = sparkColors[Math.floor(Math.random() * sparkColors.length)];
+                                    
+                                    const sparkGeo = new THREE.SphereGeometry(0.02, 4, 4);
+                                    const sparkMat = new THREE.MeshBasicMaterial({ 
+                                        color: sparkColor, transparent: true, opacity: 1
+                                    });
+                                    const spark = new THREE.Mesh(sparkGeo, sparkMat);
+                                    
+                                    const otherPos = meshData.mesh.position;
+                                    spark.position.set(
+                                        otherPos.x + (Math.random() - 0.5) * 0.3,
+                                        0.1 + Math.random() * 0.1,
+                                        otherPos.z + (Math.random() - 0.5) * 0.3
+                                    );
+                                    spark.userData.velocity = new THREE.Vector3(
+                                        (Math.random() - 0.5) * 2,
+                                        Math.random() * 1.5 + 0.5,
+                                        (Math.random() - 0.5) * 2
+                                    );
+                                    spark.userData.life = 0.5 + Math.random() * 0.3;
+                                    spark.userData.startTime = time;
+                                    sceneRef.current.add(spark);
+                                    
+                                    if (!meshData.sparks) meshData.sparks = [];
+                                    meshData.sparks.push(spark);
+                                }
+                                
+                                // Update sparks for this other player
+                                if (meshData.sparks) {
+                                    meshData.sparks = meshData.sparks.filter(spark => {
+                                        const age = time - spark.userData.startTime;
+                                        if (age > spark.userData.life) {
+                                            sceneRef.current.remove(spark);
+                                            spark.geometry.dispose();
+                                            spark.material.dispose();
+                                            return false;
+                                        }
+                                        spark.position.x += spark.userData.velocity.x * delta;
+                                        spark.position.y += spark.userData.velocity.y * delta;
+                                        spark.position.z += spark.userData.velocity.z * delta;
+                                        spark.userData.velocity.y -= 9.8 * delta;
+                                        spark.material.opacity = 1 - (age / spark.userData.life);
+                                        return true;
+                                    });
+                                }
+                            } else {
+                                // === IDLE - NO WOBBLE ===
+                                mountGroup.rotation.z = (mountGroup.rotation.z || 0) * 0.9;
+                                mountGroup.rotation.x *= 0.9;
+                                mountGroup.position.y = mountData.positionY || 0.8;
+                                
+                                if (frontTruck) { frontTruck.rotation.y *= 0.85; }
+                                if (backTruck) { backTruck.rotation.y *= 0.85; }
+                            }
+                        }
                         // Boat rowing animation
-                        else {
+                        else if (mountData.animationType === 'rowing' || mountData.leftOar) {
                             const leftOarPivot = mountGroup.getObjectByName('left_oar_pivot');
                             const rightOarPivot = mountGroup.getObjectByName('right_oar_pivot');
                             

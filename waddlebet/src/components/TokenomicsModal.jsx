@@ -1,5 +1,5 @@
 /**
- * TokenomicsModal - $WADDLE Token Utility & Tokenomics Information
+ * TokenomicsModal - $CP Token Utility & Tokenomics Information
  */
 
 import React, { useRef } from 'react';
@@ -15,8 +15,8 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
     if (!isOpen) return null;
     
     const features = [
-        { emoji: '👑', title: 'Whale Status Nametags', description: 'Your $WADDLE balance = your clout. 6 tiers from Standard to Legendary with animated effects.' },
-        { emoji: '🎰', title: 'Casino & Slots', description: 'Spin slots with $WADDLE to win tradeable cosmetics. Common to Legendary drops.' },
+        { emoji: '👑', title: 'Whale Status Nametags', description: 'Your $CP balance = your clout. 6 tiers from Standard to Legendary with animated effects.' },
+        { emoji: '🎰', title: 'Casino & Slots', description: 'Spin slots with $CP to win tradeable cosmetics. Common to Legendary drops.' },
         { emoji: '🏠', title: 'Igloo Ownership', description: 'Own or rent igloos. Sell your property on the open market to other players.' },
         { emoji: '👕', title: 'Tradeable Cosmetics', description: 'Every cosmetic is tradeable. Win rare items in slots, flip for profit.' },
         { emoji: '🎮', title: 'Universal Wagering', description: 'Wager ANY Solana token on PvP games. Tic-tac-toe, Connect 4, Card Jitsu.' },
@@ -44,7 +44,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                         <div className="text-3xl sm:text-4xl animate-bounce-slow">🐧</div>
                         <div>
                             <h2 className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400">
-                                $WADDLE TOKENOMICS
+                                $CP TOKENOMICS
                             </h2>
                             <p className="text-white/50 text-xs sm:text-sm">The Future of WaddleBet on Solana</p>
                         </div>
@@ -78,7 +78,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                     <div>
                         <h3 className="text-white font-bold text-base sm:text-lg mb-3 flex items-center gap-2">
                             <span className="text-2xl">💎</span>
-                            <span>$WADDLE Utility</span>
+                            <span>$CP Utility</span>
                         </h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {features.map((feature, idx) => (
@@ -120,7 +120,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                             <span>Whale Status Tiers</span>
                         </h3>
                         <p className="text-white/60 text-sm mb-3">
-                            Your $WADDLE balance determines your in-game clout. Bigger bags = fancier nametags.
+                            Your $CP balance determines your in-game clout. Bigger bags = fancier nametags.
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {[

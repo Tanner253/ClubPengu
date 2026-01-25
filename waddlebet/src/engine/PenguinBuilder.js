@@ -664,6 +664,25 @@ export function createPenguinBuilder(THREE) {
             mountGroup.add(rightOarPivot);
         }
         
+        // Build skateboard trucks (for grinding animation)
+        if (mountData.frontTruck) {
+            const frontTruckMesh = buildPartMerged(mountData.frontTruck, PALETTE);
+            frontTruckMesh.name = 'front_truck';
+            const frontTruckPivot = new THREE.Group();
+            frontTruckPivot.name = 'front_truck_pivot';
+            frontTruckPivot.add(frontTruckMesh);
+            mountGroup.add(frontTruckPivot);
+        }
+        
+        if (mountData.backTruck) {
+            const backTruckMesh = buildPartMerged(mountData.backTruck, PALETTE);
+            backTruckMesh.name = 'back_truck';
+            const backTruckPivot = new THREE.Group();
+            backTruckPivot.name = 'back_truck_pivot';
+            backTruckPivot.add(backTruckMesh);
+            mountGroup.add(backTruckPivot);
+        }
+        
         // Use mount-specific scale if defined, otherwise default 0.2
         const mountScale = mountData.scale || 0.2;
         mountGroup.scale.set(mountScale, mountScale, mountScale);

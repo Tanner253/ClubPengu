@@ -200,7 +200,7 @@ class IglooService {
         }
         
         // Check balance eligibility using $WADDLE token
-        const cpw3TokenAddress = process.env.CPW3_TOKEN_ADDRESS || 'BDbMVbcc5hD5qiiGYwipeuUVMKDs16s9Nxk2hrhbpump';
+        const cpw3TokenAddress = process.env.CPW3_TOKEN_ADDRESS || '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump';
         const balanceCheck = await solanaPaymentService.checkMinimumBalance(
             walletAddress, 
             cpw3TokenAddress, 

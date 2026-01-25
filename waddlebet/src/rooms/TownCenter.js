@@ -1270,7 +1270,7 @@ class TownCenter {
                         casinoTVMesh.rotation.y = prop.rotation;
                         scene.add(casinoTVMesh);
                         this.casinoTVMesh = casinoTVMesh;
-                        console.log('📺 Casino TV created with real $WADDLE data');
+                        console.log('📺 Casino TV created with real $CP data');
                     });
                     break;
                     
