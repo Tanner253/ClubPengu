@@ -700,10 +700,28 @@ class TownCenter {
             { type: 'ice_fishing_hole', id: 'fishing_4', x: fishingPondX + 3, z: fishingPondZ + 9, rotation: Math.PI / 3 },
         );
         
-        // ==================== BATTLESHIP ARCADE MACHINE ====================
-        // Arcade machine near the center of town for playing Battleship vs AI
+        // ==================== ARCADE GAME ZONE ====================
+        // Multiple arcade machines for different minigames!
+        // Positioned in a small arcade area near the Gift Shop
+        const arcadeBaseX = C + 21.5;
+        const arcadeBaseZ = C - 5.2;
+        
         props.push(
-            { type: 'arcade_machine', id: 'battleship_arcade', x: C + 21.5, z: C - 5.2, game: 'battleship' }
+            // Battleship - classic naval combat
+            { type: 'arcade_machine', id: 'battleship_arcade', x: arcadeBaseX, z: arcadeBaseZ, game: 'battleship' },
+            // Flappy Penguin - tap to fly!
+            { type: 'arcade_machine', id: 'flappy_arcade', x: arcadeBaseX + 5, z: arcadeBaseZ, game: 'flappy_penguin' },
+            // Snake - eat fish and grow!
+            { type: 'arcade_machine', id: 'snake_arcade', x: arcadeBaseX + 10, z: arcadeBaseZ, game: 'snake' },
+            // Pong - classic ice hockey pong
+            { type: 'arcade_machine', id: 'pong_arcade', x: arcadeBaseX + 15, z: arcadeBaseZ, game: 'pong' },
+            // Memory Match - flip and match cards
+            { type: 'arcade_machine', id: 'memory_arcade', x: arcadeBaseX + 20, z: arcadeBaseZ, game: 'memory' }
+        );
+        
+        // Floating title for the arcade area
+        props.push(
+            { type: 'floating_title', x: arcadeBaseX + 10, z: arcadeBaseZ - 3, text: '🎮 ARCADE ZONE', height: 8 }
         );
         
         // Pond area decorations - snowy surroundings
@@ -1513,11 +1531,54 @@ class TownCenter {
                 
                 case 'arcade_machine': {
                     // Arcade machine for playing minigames vs AI
+                    const gameType = prop.game || 'battleship';
+                    
+                    // Game-specific configurations
+                    const arcadeConfigs = {
+                        battleship: {
+                            title: 'BATTLESHIP',
+                            message: '🚢 Press E to play Battleship',
+                            accentColor: 0x3498db,
+                            screenColor: 0x0a3d62
+                        },
+                        flappy_penguin: {
+                            title: 'FLAPPY PENGUIN',
+                            message: '🐧 Press E to play Flappy Penguin',
+                            accentColor: 0x00ff88,
+                            screenColor: 0x1a1a2e
+                        },
+                        snake: {
+                            title: 'SNAKE',
+                            message: '🐍 Press E to play Snake',
+                            accentColor: 0x2ecc71,
+                            screenColor: 0x0a3d62
+                        },
+                        pong: {
+                            title: 'ICE PONG',
+                            message: '🏒 Press E to play Ice Pong',
+                            accentColor: 0x00d4ff,
+                            screenColor: 0x0f5e7e
+                        },
+                        memory: {
+                            title: 'MEMORY MATCH',
+                            message: '🧠 Press E to play Memory Match',
+                            accentColor: 0x9b59b6,
+                            screenColor: 0x2c1654
+                        }
+                    };
+                    
+                    const config = arcadeConfigs[gameType] || arcadeConfigs.battleship;
+                    
                     const arcadeProp = new ArcadeMachine(this.THREE);
-                    arcadeProp.spawn(scene, prop.x, 0, prop.z, { gameType: prop.game || 'battleship' });
+                    arcadeProp.spawn(scene, prop.x, 0, prop.z, { 
+                        gameType: gameType,
+                        gameTitle: config.title,
+                        accentColor: config.accentColor,
+                        screenColor: config.screenColor
+                    });
                     mesh = arcadeProp.mesh;
                     mesh.name = prop.id || 'arcade_machine';
-                    mesh.userData.gameType = prop.game || 'battleship';
+                    mesh.userData.gameType = gameType;
                     mesh.userData.propInstance = arcadeProp;
                     
                     // Add collision (arcade machine is solid)
@@ -1535,13 +1596,13 @@ class TownCenter {
                             type: 'circle',
                             radius: 3.5,
                             action: 'play_arcade',
-                            message: '🎮 Press E to play Battleship',
-                            gameType: prop.game || 'battleship'
+                            message: config.message,
+                            gameType: gameType
                         },
                         (event) => this._handleInteraction(event, { 
                             action: 'play_arcade',
-                            message: '🎮 Press E to play Battleship',
-                            gameType: prop.game || 'battleship'
+                            message: config.message,
+                            gameType: gameType
                         }),
                         { name: `${prop.id}_trigger` }
                     );
