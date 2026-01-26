@@ -319,6 +319,11 @@ const VoxelWorld = ({
     const keysRef = useRef({});
     const isGroundedRef = useRef(true);
     const jumpRequestedRef = useRef(false);
+    // Skateboard double jump / trick state
+    const canDoubleJumpRef = useRef(false);
+    const isDoingTrickRef = useRef(false);
+    const trickProgressRef = useRef(0); // 0 to 1 for trick animation
+    const trickTypeRef = useRef('kickflip'); // 'kickflip' or 'spin360'
     
     // Store igloo entry spawn position (so exiting returns to correct igloo)
     const iglooEntrySpawnRef = useRef(null);
@@ -2176,11 +2181,30 @@ const VoxelWorld = ({
                 cameraRotationRef.current = { deltaX: 0, deltaY: 0 };
             }
             
-            // Handle jumping
-            if ((keyJump || mobileJump) && isGroundedRef.current && !inMatch) {
-                velRef.current.y = JUMP_VELOCITY;
-                isGroundedRef.current = false;
-                jumpRequestedRef.current = false;
+            // Handle jumping (with double jump/tricks for skateboard)
+            const isMounted = !!(playerRef.current?.userData?.mount && playerRef.current?.userData?.mountData && mountEnabledRef.current);
+            const isOnSkateboard = isMounted && playerRef.current?.userData?.mount === 'skateboard';
+            
+            if ((keyJump || mobileJump) && !inMatch) {
+                if (isGroundedRef.current) {
+                    // First jump
+                    velRef.current.y = JUMP_VELOCITY;
+                    isGroundedRef.current = false;
+                    jumpRequestedRef.current = false;
+                    // Enable double jump for skateboard
+                    if (isOnSkateboard) {
+                        canDoubleJumpRef.current = true;
+                    }
+                } else if (isOnSkateboard && canDoubleJumpRef.current && !isDoingTrickRef.current) {
+                    // Double jump on skateboard - random trick with full height! 🛹
+                    velRef.current.y = JUMP_VELOCITY; // Full jump height for sick air!
+                    canDoubleJumpRef.current = false;
+                    isDoingTrickRef.current = true;
+                    trickProgressRef.current = 0;
+                    // 50/50 chance: kickflip or 360 spin
+                    trickTypeRef.current = Math.random() < 0.5 ? 'kickflip' : 'spin360';
+                    jumpRequestedRef.current = false;
+                }
             }
             
             // ALWAYS apply gravity - this ensures player falls when walking off ledges
@@ -2578,6 +2602,9 @@ const VoxelWorld = ({
                                     posRef.current.y = colliderTop;
                                     velRef.current.y = 0;
                                     isGroundedRef.current = true;
+                                    // Reset trick state on landing
+                                    isDoingTrickRef.current = false;
+                                    canDoubleJumpRef.current = false;
                                 }
                                 // Don't block horizontal movement when on top
                             } else if (playerFeetY < colliderTop && playerY + 2 > colliderBottom) {
@@ -3319,6 +3346,9 @@ const VoxelWorld = ({
                 posRef.current.y = groundHeight;
                 velRef.current.y = 0;
                 isGroundedRef.current = true;
+                // Reset trick state on landing
+                isDoingTrickRef.current = false;
+                canDoubleJumpRef.current = false;
             } else if (posRef.current.y > GROUND_Y + 0.1) {
                 // Player is in the air - not grounded
                 isGroundedRef.current = false;
@@ -3494,7 +3524,48 @@ const VoxelWorld = ({
                             const turningRight = keyRight || mobileRight || (joystickInputRef.current.x > 0.3);
                             const turningAmount = turningLeft ? -1 : turningRight ? 1 : 0;
                             
-                            if (moving) {
+                            // === TRICK ANIMATIONS (Kickflip / 360 Spin) === 🛹✨
+                            if (isDoingTrickRef.current) {
+                                // Progress the trick (complete in ~0.4 seconds)
+                                trickProgressRef.current += delta * 2.5;
+                                
+                                if (trickProgressRef.current >= 1) {
+                                    // Trick complete - reset rotation to 0 (360° = 0°, clean loop!)
+                                    trickProgressRef.current = 0;
+                                    isDoingTrickRef.current = false;
+                                    mountGroup.rotation.z = 0;
+                                    mountGroup.rotation.y = 0;
+                                }
+                                
+                                // Progress from 0 to 1
+                                const trickProgress = trickProgressRef.current;
+                                
+                                // Smooth easing for arms/body (peaks in middle of trick)
+                                const armIntensity = Math.sin(trickProgress * Math.PI);
+                                
+                                if (trickTypeRef.current === 'kickflip') {
+                                    // KICKFLIP: 360° rotation on Z axis (board flips sideways)
+                                    mountGroup.rotation.z = trickProgress * Math.PI * 2;
+                                    mountGroup.rotation.y = 0;
+                                } else {
+                                    // 360 SPIN: Full rotation on Y axis (board spins flat)
+                                    mountGroup.rotation.y = trickProgress * Math.PI * 2;
+                                    mountGroup.rotation.z = 0;
+                                }
+                                
+                                // Add some height variation during trick
+                                const trickBounce = armIntensity * 0.3;
+                                mountGroup.position.y = (mountData.positionY || 0.8) + trickBounce;
+                                
+                                // Store trick state for AnimationSystem
+                                playerRef.current.userData.isDoingTrick = true;
+                                playerRef.current.userData.trickArmIntensity = armIntensity;
+                            } else {
+                                playerRef.current.userData.isDoingTrick = false;
+                                playerRef.current.userData.trickArmIntensity = 0;
+                            }
+                            
+                            if (moving && !isDoingTrickRef.current) {
                                 const grindSpeed = time * 15; // Fast oscillation for grinding effect
                                 
                                 // === GRINDING LEAN ===
@@ -3586,11 +3657,12 @@ const VoxelWorld = ({
                                 playerRef.current.userData.skateboardLean = mountGroup.rotation.z;
                                 playerRef.current.userData.skateboardSpeed = 1.0;
                                 
-                            } else {
+                            } else if (!isDoingTrickRef.current) {
                                 // === IDLE - NO WOBBLE ===
                                 // Smooth return to neutral, board stays still
                                 mountGroup.rotation.z = (mountGroup.rotation.z || 0) * 0.9;
                                 mountGroup.rotation.x *= 0.9;
+                                mountGroup.rotation.y = (mountGroup.rotation.y || 0) * 0.9;
                                 mountGroup.position.y = mountData.positionY || 0.8;
                                 
                                 // Trucks return to center

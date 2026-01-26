@@ -111,26 +111,48 @@ export function animateMesh(
             // ROTATE 90 DEGREES - character faces sideways on board
             meshInner.rotation.y = Math.PI / 2;
             
-            // Get skateboard lean from userData (set by VoxelWorld animation)
+            // Get skateboard lean and trick state from userData (set by VoxelWorld animation)
             const skateboardLean = meshInner.parent?.userData?.skateboardLean || 0;
             const isSkating = meshInner.parent?.userData?.skateboardSpeed > 0;
+            const isDoingTrick = meshInner.parent?.userData?.isDoingTrick || false;
+            const trickArmIntensity = meshInner.parent?.userData?.trickArmIntensity || 0;
             
-            // Feet planted on board
-            if(footL) { footL.rotation.x = 0; footL.rotation.y = 0; footL.position.z = 0; }
-            if(footR) { footR.rotation.x = 0; footR.rotation.y = 0; footR.position.z = 0; }
+            // Feet planted on board (tuck during tricks)
+            if(footL) { 
+                footL.rotation.x = isDoingTrick ? 0.5 * trickArmIntensity : 0;
+                footL.rotation.y = 0; 
+                footL.position.z = 0; 
+            }
+            if(footR) { 
+                footR.rotation.x = isDoingTrick ? 0.5 * trickArmIntensity : 0;
+                footR.rotation.y = 0; 
+                footR.position.z = 0; 
+            }
             
             // Arms out for balance (adjusted for sideways stance)
+            // During tricks, arms go UP for style! 🤙
             if(flipperL) {
-                flipperL.rotation.z = 0.5 + skateboardLean * 1.5;
-                flipperL.rotation.x = isSkating ? -0.2 : 0;
+                if (isDoingTrick) {
+                    flipperL.rotation.z = 0.5 + trickArmIntensity * 1.0; // Arms up!
+                    flipperL.rotation.x = -trickArmIntensity * 0.4;
+                } else {
+                    flipperL.rotation.z = 0.5 + skateboardLean * 1.5;
+                    flipperL.rotation.x = isSkating ? -0.2 : 0;
+                }
             }
             if(flipperR) {
-                flipperR.rotation.z = -0.5 + skateboardLean * 1.5;
-                flipperR.rotation.x = isSkating ? -0.2 : 0;
+                if (isDoingTrick) {
+                    flipperR.rotation.z = -0.5 - trickArmIntensity * 1.0; // Arms up!
+                    flipperR.rotation.x = -trickArmIntensity * 0.4;
+                } else {
+                    flipperR.rotation.z = -0.5 + skateboardLean * 1.5;
+                    flipperR.rotation.x = isSkating ? -0.2 : 0;
+                }
             }
             
             // Body lean (now on X axis since we're rotated 90°)
-            meshInner.rotation.x = skateboardLean * 0.3;
+            // During tricks, body stays more upright
+            meshInner.rotation.x = isDoingTrick ? 0 : skateboardLean * 0.3;
             return;
         }
         

@@ -90,6 +90,18 @@ export const translations = {
         ru: 'Войти в мир',
         ar: 'دخول العالم',
     },
+    'menu.signIn': {
+        en: 'Sign In',
+        zh: '登录',
+        es: 'Iniciar sesión',
+        pt: 'Entrar',
+        ko: '로그인',
+        ja: 'サインイン',
+        fr: 'Se connecter',
+        de: 'Anmelden',
+        ru: 'Войти',
+        ar: 'تسجيل الدخول',
+    },
 
     // ==================== PENGUIN CREATOR ====================
     'creator.title': {
