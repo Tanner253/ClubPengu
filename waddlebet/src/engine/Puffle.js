@@ -470,8 +470,9 @@ class Puffle {
         // Don't spam emotes
         if (this.showingEmote) return;
         
-        // Show emote based on need/mood every 10-20 seconds
-        if (Math.random() < 0.008) { // ~0.8% chance per tick - slightly more frequent
+        // Show emote based on need/mood roughly every 20-40 seconds
+        // 0.0008 = 0.08% per tick, at 60fps = ~4.8% per second = ~1 emote per 20 seconds
+        if (Math.random() < 0.0008) {
             // Urgent needs take priority
             if (this.urgentNeed) {
                 this.showEmote(this.urgentNeed.emoji);
