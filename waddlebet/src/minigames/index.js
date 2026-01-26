@@ -19,3 +19,5 @@ export { default as FlappyPenguinGame } from './FlappyPenguinGame';
 export { default as SnakeGame } from './SnakeGame';
 export { default as PongGame } from './PongGame';
 export { default as MemoryMatchGame } from './MemoryMatchGame';
+export { default as ThinIceGame } from './ThinIceGame';
+export { default as AvalancheRunGame } from './AvalancheRunGame';

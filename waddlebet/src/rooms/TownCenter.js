@@ -716,12 +716,16 @@ class TownCenter {
             // Pong - classic ice hockey pong
             { type: 'arcade_machine', id: 'pong_arcade', x: arcadeBaseX + 15, z: arcadeBaseZ, game: 'pong' },
             // Memory Match - flip and match cards
-            { type: 'arcade_machine', id: 'memory_arcade', x: arcadeBaseX + 20, z: arcadeBaseZ, game: 'memory' }
+            { type: 'arcade_machine', id: 'memory_arcade', x: arcadeBaseX + 20, z: arcadeBaseZ, game: 'memory' },
+            // Thin Ice - classic puffle puzzle game
+            { type: 'arcade_machine', id: 'thinice_arcade', x: arcadeBaseX + 25, z: arcadeBaseZ, game: 'thin_ice' },
+            // Avalanche Run - endless runner down a mountain
+            { type: 'arcade_machine', id: 'avalanche_arcade', x: arcadeBaseX + 30, z: arcadeBaseZ, game: 'avalanche_run' }
         );
         
         // Floating title for the arcade area
         props.push(
-            { type: 'floating_title', x: arcadeBaseX + 10, z: arcadeBaseZ - 3, text: '🎮 ARCADE ZONE', height: 8 }
+            { type: 'floating_title', x: arcadeBaseX + 15, z: arcadeBaseZ - 3, text: '🎮 ARCADE ZONE', height: 8 }
         );
         
         // Pond area decorations - snowy surroundings
@@ -1564,6 +1568,18 @@ class TownCenter {
                             message: '🧠 Press E to play Memory Match',
                             accentColor: 0x9b59b6,
                             screenColor: 0x2c1654
+                        },
+                        thin_ice: {
+                            title: 'THIN ICE',
+                            message: '❄️ Press E to play Thin Ice',
+                            accentColor: 0x00bcd4,
+                            screenColor: 0x0a4a5c
+                        },
+                        avalanche_run: {
+                            title: 'AVALANCHE RUN',
+                            message: '🏔️ Press E to play Avalanche Run',
+                            accentColor: 0xff6b35,
+                            screenColor: 0x2d1810
                         }
                     };
                     

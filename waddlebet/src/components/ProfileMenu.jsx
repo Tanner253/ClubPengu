@@ -8,6 +8,7 @@ import React, { useState, useRef, useCallback } from 'react';
 import { useChallenge } from '../challenge';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import { useDeviceDetection, useClickOutside, useEscapeKey } from '../hooks';
+import { useLanguage } from '../i18n';
 import TippingPanel from './TippingPanel';
 import GiftPanel from './GiftPanel';
 import PenguinPreview3D from './PenguinPreview3D';
@@ -24,6 +25,7 @@ const ProfileMenu = () => {
     
     // Get user data from multiplayer context for server-authoritative coin balance
     const { userData, isAuthenticated } = useMultiplayer();
+    const { t } = useLanguage();
     
     const [showGameDropdown, setShowGameDropdown] = useState(false);
     const [showTipPanel, setShowTipPanel] = useState(false);
@@ -343,7 +345,7 @@ const ProfileMenu = () => {
                         <div className="flex items-center justify-between text-[11px] sm:text-xs pb-1 mb-1 border-b border-white/10">
                             <span className="text-white/60">💰 Their Balance</span>
                             <span className="text-yellow-400 font-bold">
-                                {stats?.isGuest ? '(Guest)' : (stats?.coins ?? 0)}
+                                {stats?.isGuest ? t('profile.guestLabel') : (stats?.coins ?? 0)}
                             </span>
                         </div>
                         <div className="flex items-center justify-between text-[11px] sm:text-xs">

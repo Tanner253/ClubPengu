@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLanguage } from '../i18n';
 
 const BannerZoomOverlay = ({ 
     isOpen, 
@@ -11,6 +12,7 @@ const BannerZoomOverlay = ({
     bannerData,  // { type, title, imagePath, canvasContent, description }
     renderCanvas // Function to render custom canvas content
 }) => {
+    const { t } = useLanguage();
     const canvasRef = useRef(null);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
@@ -186,7 +188,7 @@ const BannerZoomOverlay = ({
                 
                 {/* Close hint - bottom center */}
                 <div className={`mt-3 text-white/50 text-center ${isPortraitMobile ? 'text-xs' : 'text-sm'}`}>
-                    {isPortraitMobile ? 'Tap to close' : 'Click anywhere or press ESC to close'}
+                    {isPortraitMobile ? t('ui.tapToClose') : t('ui.clickOrEscToClose')}
                 </div>
             </div>
         </div>

@@ -13,6 +13,7 @@ import GameManager from './engine/GameManager';
 import { MultiplayerProvider, useMultiplayer } from './multiplayer';
 import { ChallengeProvider, useChallenge } from './challenge';
 import { IglooProvider, useIgloo } from './igloo';
+import { LanguageProvider } from './i18n';
 import ProfileMenu from './components/ProfileMenu';
 import WagerModal from './components/WagerModal';
 import Inbox from './components/Inbox';
@@ -554,14 +555,16 @@ clearOldGameData();
  */
 const App = () => {
     return (
-        <MultiplayerProvider>
-            <IglooProvider>
-                <ChallengeProvider>
-                    <BackgroundMusic />
-                    <AppContent />
-                </ChallengeProvider>
-            </IglooProvider>
-        </MultiplayerProvider>
+        <LanguageProvider>
+            <MultiplayerProvider>
+                <IglooProvider>
+                    <ChallengeProvider>
+                        <BackgroundMusic />
+                        <AppContent />
+                    </ChallengeProvider>
+                </IglooProvider>
+            </MultiplayerProvider>
+        </LanguageProvider>
     );
 };
 

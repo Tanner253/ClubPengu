@@ -6,6 +6,7 @@
 
 import React, { useState } from 'react';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
+import { useLanguage } from '../i18n';
 
 function WalletButton({ className = '', onRequestAuth, compact = false }) {
     const { 
@@ -17,6 +18,7 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
         disconnectWallet,
         userData
     } = useMultiplayer();
+    const { t } = useLanguage();
     
     const [showDropdown, setShowDropdown] = useState(false);
     
@@ -48,7 +50,7 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
                 >
                     <div className={`bg-green-300 rounded-full animate-pulse ${compact ? 'w-1.5 h-1.5' : 'w-2 h-2'}`} />
                     {!compact && <span className="hidden sm:inline">{shortAddress}</span>}
-                    {!compact && <span className="sm:hidden">Connected</span>}
+                    {!compact && <span className="sm:hidden">{t('wallet.connected')}</span>}
                     {compact && <span>✓</span>}
                     {!compact && (
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -77,7 +79,7 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
                         
                         <div className="p-3 border-b border-slate-700">
                             <div className="flex justify-between text-sm">
-                                <span className="text-slate-400">Coins</span>
+                                <span className="text-slate-400">{t('wallet.coins')}</span>
                                 <span className="text-yellow-400 font-medium">
                                     💰 {userData?.coins?.toLocaleString() || 0}
                                 </span>
@@ -93,7 +95,7 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
                                       d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                             </svg>
-                            Disconnect Wallet
+                            {t('wallet.disconnect')}
                         </button>
                     </div>
                 )}
@@ -107,32 +109,32 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
             <div className={`flex items-center gap-2 ${className}`}>
                 <div className="flex items-center gap-2 px-3 py-2 bg-purple-900/50 rounded-lg 
                                border border-purple-500/30 text-purple-300 text-sm">
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" 
-                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    <span className="hidden sm:inline">Restoring session...</span>
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" 
+                                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span className="hidden sm:inline">{t('wallet.restoring')}</span>
+                    </div>
                 </div>
-            </div>
-        );
-    }
-    
-    // Guest state - show connect button with warning
-    return (
-        <div className={`flex items-center gap-1 ${compact ? '' : 'gap-2'} ${className}`}>
-            {/* Guest indicator - hide on compact */}
-            {!compact && (
-                <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-amber-900/50 rounded-lg 
-                                border border-amber-500/30 text-amber-300 text-xs">
-                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" 
-                              d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" 
-                              clipRule="evenodd" />
-                    </svg>
-                    <span>Guest Mode</span>
-                </div>
-            )}
+            );
+        }
+        
+        // Guest state - show connect button with warning
+        return (
+            <div className={`flex items-center gap-1 ${compact ? '' : 'gap-2'} ${className}`}>
+                {/* Guest indicator - hide on compact */}
+                {!compact && (
+                    <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-amber-900/50 rounded-lg 
+                                    border border-amber-500/30 text-amber-300 text-xs">
+                        <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" 
+                                  d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" 
+                                  clipRule="evenodd" />
+                        </svg>
+                        <span>{t('guest.title')}</span>
+                    </div>
+                )}
             
             {/* Connect button */}
             <button
@@ -152,7 +154,7 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
                             <path className="opacity-75" fill="currentColor" 
                                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                         </svg>
-                        {!compact && <span>Connecting...</span>}
+                        {!compact && <span>{t('wallet.connecting')}</span>}
                     </>
                 ) : (
                     <>
@@ -160,7 +162,7 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
                             <path d="M34.9 17.1c-.5-4.8-3.8-8.1-8.5-8.6-2.4-.3-4.8.4-6.7 1.9-1.9 1.4-3.1 3.5-3.5 5.8-.1.6-.1 1.2-.1 1.9 0 .1 0 .1-.1.1H5.8c-.7 0-1.3.6-1.3 1.3v.6c0 3.9 1.6 7.5 4.4 10.2 2.8 2.7 6.4 4.2 10.3 4.2h.5c7.9-.3 14.3-7 14.3-15 0-1-.1-2-.1-2.4z" 
                                   fill="currentColor"/>
                         </svg>
-                        <span>{compact ? 'Sign In' : 'Sign In'}</span>
+                        <span>{t('menu.signIn')}</span>
                     </>
                 )}
             </button>

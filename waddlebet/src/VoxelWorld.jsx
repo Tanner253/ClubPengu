@@ -27,6 +27,7 @@ import { generateSKNYIglooInterior } from './rooms/SKNYIglooInterior';
 import { useMultiplayer } from './multiplayer';
 import { useChallenge } from './challenge';
 import { useIgloo } from './igloo';
+import { useLanguage } from './i18n';
 import { EMOTE_WHEEL_ITEMS, LOOPING_EMOTES, EMOTE_EMOJI_MAP } from './systems';
 import { 
     CITY_SIZE, 
@@ -56,6 +57,8 @@ import FlappyPenguinGame from './minigames/FlappyPenguinGame';
 import SnakeGame from './minigames/SnakeGame';
 import PongGame from './minigames/PongGame';
 import MemoryMatchGame from './minigames/MemoryMatchGame';
+import ThinIceGame from './minigames/ThinIceGame';
+import AvalancheRunGame from './minigames/AvalancheRunGame';
 
 const VoxelWorld = ({ 
     penguinData, 
@@ -75,6 +78,9 @@ const VoxelWorld = ({
     onRequestAuth,    // Callback to redirect to penguin maker for auth
     turnstileToken = null // Cloudflare Turnstile verification token (for bot protection)
 }) => {
+    // Language context for translations
+    const { t } = useLanguage();
+    
     const mountRef = useRef(null);
     const sceneRef = useRef(null);
     const playerRef = useRef(null);
@@ -5398,11 +5404,13 @@ const VoxelWorld = ({
         
         // All arcade machine positions and their game types
         const arcadeMachines = [
-            { x: C + 21.5, z: C - 5.2, game: 'battleship', prompt: '🚢 Press E to play Battleship' },
-            { x: C + 26.5, z: C - 5.2, game: 'flappy_penguin', prompt: '🐧 Press E to play Flappy Penguin' },
-            { x: C + 31.5, z: C - 5.2, game: 'snake', prompt: '🐍 Press E to play Snake' },
-            { x: C + 36.5, z: C - 5.2, game: 'pong', prompt: '🏒 Press E to play Ice Pong' },
-            { x: C + 41.5, z: C - 5.2, game: 'memory', prompt: '🧠 Press E to play Memory Match' }
+            { x: C + 21.5, z: C - 5.2, game: 'battleship', gameKey: 'game.battleship', icon: '🚢' },
+            { x: C + 26.5, z: C - 5.2, game: 'flappy_penguin', gameKey: 'game.flappyPenguin', icon: '🐧' },
+            { x: C + 31.5, z: C - 5.2, game: 'snake', gameKey: 'game.snake', icon: '🐍' },
+            { x: C + 36.5, z: C - 5.2, game: 'pong', gameKey: 'game.icePong', icon: '🏒' },
+            { x: C + 41.5, z: C - 5.2, game: 'memory', gameKey: 'game.memoryMatch', icon: '🧠' },
+            { x: C + 46.5, z: C - 5.2, game: 'thin_ice', gameKey: 'game.thinIce', icon: '❄️' },
+            { x: C + 51.5, z: C - 5.2, game: 'avalanche_run', gameKey: 'game.avalancheRun', icon: '🏔️' }
         ];
         
         // Find the closest arcade machine in range
@@ -5422,9 +5430,14 @@ const VoxelWorld = ({
         
         if (closestArcade) {
             if (!arcadeInteraction || arcadeInteraction.gameType !== closestArcade.game) {
+                // Build translated prompt
+                const gameName = t(closestArcade.gameKey);
+                const prompt = `${closestArcade.icon} ${t('interact.pressE')} ${t('interact.toPlay')} ${gameName}`;
                 setArcadeInteraction({
-                    prompt: closestArcade.prompt,
-                    gameType: closestArcade.game
+                    prompt,
+                    gameType: closestArcade.game,
+                    gameKey: closestArcade.gameKey,
+                    icon: closestArcade.icon
                 });
             }
         } else if (arcadeInteraction) {
@@ -5455,7 +5468,7 @@ const VoxelWorld = ({
             if (!lordFishnuInteraction) {
                 setLordFishnuInteraction({
                     canPayRespects: true,
-                    prompt: '🐟 Press E to pay respects to Lord Fishnu'
+                    prompt: `🐟 ${t('interact.pressE')} ${t('interact.payRespects')}`
                 });
             }
         } else if (lordFishnuInteraction) {
@@ -5486,7 +5499,7 @@ const VoxelWorld = ({
         if (distance < interactionRadius) {
             if (!wardrobeInteraction) {
                 setWardrobeInteraction({
-                    prompt: '✨ Press E to customize your penguin',
+                    prompt: `✨ ${t('interact.pressE')} ${t('interact.toCustomize')}`,
                     type: 'wardrobe'
                 });
             }
@@ -5962,7 +5975,7 @@ const VoxelWorld = ({
                 // Pass bench data including snap points and world position
                 setNearbyInteraction({ 
                     action, 
-                    message: 'Press E to sit', 
+                    message: `${t('interact.pressE')} ${t('interact.toSit')}`, 
                     emote,
                     benchData: data // Contains snapPoints, seatHeight, etc.
                 });
@@ -5972,7 +5985,7 @@ const VoxelWorld = ({
                 // Pass DJ booth data
                 setNearbyInteraction({ 
                     action, 
-                    message: message || '🎧 Press E to DJ',
+                    message: `🎧 ${t('interact.pressE')} ${t('interact.toDJ')}`,
                     emote: emote || 'DJ',
                     benchData: data // Contains position, rotation, etc.
                 });
@@ -5980,7 +5993,7 @@ const VoxelWorld = ({
                 // Show ladder climb prompt
                 setNearbyInteraction({ 
                     action, 
-                    message: message || '🪜 Climb to Roof (Press E)',
+                    message: `🪜 ${t('interact.climbRoof')} (${t('interact.pressE')})`,
                     data: data
                 });
             } else if (action === 'interact_snowman') {
@@ -5990,21 +6003,21 @@ const VoxelWorld = ({
                 // Casino game room portal
                 setNearbyInteraction({ 
                     action, 
-                    message: message || '🎰 Enter Game Room (Press E)',
+                    message: `🎰 ${t('interact.enterGameRoom')} (${t('interact.pressE')})`,
                     targetRoom: data?.destination || 'casino_game_room'
                 });
             } else if (action === 'enter_nightclub') {
                 // Nightclub portal
                 setNearbyInteraction({ 
                     action, 
-                    message: message || '🎵 Enter Nightclub (Press E)',
+                    message: `🎵 ${t('interact.enterNightclub')} (${t('interact.pressE')})`,
                     targetRoom: data?.destination || 'nightclub'
                 });
             } else if (action === 'play_arcade') {
                 // Arcade machine interaction
                 setNearbyInteraction({ 
                     action, 
-                    message: message || '🎮 Press E to play',
+                    message: `🎮 ${t('interact.pressE')} ${t('interact.toPlay')}`,
                     gameType: data?.gameType || 'battleship'
                 });
             }
@@ -7230,6 +7243,16 @@ const VoxelWorld = ({
                     onClose={handleArcadeGameClose}
                 />
              )}
+             {arcadeGameActive && arcadeGameType === 'thin_ice' && (
+                <ThinIceGame
+                    onClose={handleArcadeGameClose}
+                />
+             )}
+             {arcadeGameActive && arcadeGameType === 'avalanche_run' && (
+                <AvalancheRunGame
+                    onClose={handleArcadeGameClose}
+                />
+             )}
              
              {/* Banner Zoom Overlay */}
              <BannerZoomOverlay
@@ -7550,10 +7573,10 @@ const VoxelWorld = ({
                             <span className={`text-xs font-bold ${
                                 fishingInteraction.currentState === 'bite' ? 'text-red-400' : 'text-blue-400'
                             }`}>
-                                {fishingInteraction.currentState === 'waiting' && '🎣 Waiting...'}
-                                {fishingInteraction.currentState === 'bite' && '🐟 FISH ON!'}
-                                {fishingInteraction.currentState === 'reeling' && '🎣 Reeling...'}
-                                {fishingInteraction.currentState === 'casting' && '🎣 Casting...'}
+                                {fishingInteraction.currentState === 'waiting' && `🎣 ${t('fishing.waiting')}`}
+                                {fishingInteraction.currentState === 'bite' && `🐟 ${t('fishing.fishOn')}`}
+                                {fishingInteraction.currentState === 'reeling' && `🎣 ${t('fishing.reeling')}`}
+                                {fishingInteraction.currentState === 'casting' && `🎣 ${t('fishing.casting')}`}
                             </span>
                         </div>
                     )}
@@ -7580,15 +7603,15 @@ const VoxelWorld = ({
                             onClick={handleFishingAction}
                         >
                             {fishingInteraction.isLocalFishing 
-                                ? (fishingInteraction.currentState === 'bite' ? '🐟 CATCH!' : '🎣 Fishing...')
-                                : (fishingInteraction.isDemo ? '🎁 TRY FREE!' : '🎣 FISH!')
+                                ? (fishingInteraction.currentState === 'bite' ? `🐟 ${t('fishing.catch')}` : `🎣 ${t('fishing.inProgress')}`)
+                                : (fishingInteraction.isDemo ? `🎁 ${t('fishing.tryFree')}` : `🎣 ${t('interact.fish')}`)
                             }
                         </button>
                     )}
                     
                     {/* FOMO hint for guests */}
                     {fishingInteraction.isDemo && (
-                        <p className="text-xs text-cyan-400/80 mt-2">🔑 Login to earn coins!</p>
+                        <p className="text-xs text-cyan-400/80 mt-2">🔑 {t('fishing.loginToEarn')}</p>
                     )}
                 </div>
              )}
@@ -7606,7 +7629,7 @@ const VoxelWorld = ({
                 >
                     <p className="text-yellow-300 retro-text text-sm mb-2">
                         {isMobile 
-                            ? '🐟 Tap to pay respects to Lord Fishnu'
+                            ? `🐟 ${t('interact.tapToPayRespects')}`
                             : lordFishnuInteraction.prompt
                         }
                     </p>
@@ -7633,7 +7656,9 @@ const VoxelWorld = ({
                     flappy_penguin: { icon: '🐧', name: 'Flappy Penguin', color: 'green' },
                     snake: { icon: '🐍', name: 'Snake', color: 'emerald' },
                     pong: { icon: '🏒', name: 'Ice Pong', color: 'blue' },
-                    memory: { icon: '🧠', name: 'Memory Match', color: 'purple' }
+                    memory: { icon: '🧠', name: 'Memory Match', color: 'purple' },
+                    thin_ice: { icon: '❄️', name: 'Thin Ice', color: 'sky' },
+                    avalanche_run: { icon: '🏔️', name: 'Avalanche Run', color: 'orange' }
                 };
                 const config = gameConfigs[arcadeInteraction.gameType] || gameConfigs.battleship;
                 const colorClasses = {
@@ -7641,14 +7666,18 @@ const VoxelWorld = ({
                     green: 'border-green-500/50 shadow-green-500/20 text-green-300',
                     emerald: 'border-emerald-500/50 shadow-emerald-500/20 text-emerald-300',
                     blue: 'border-blue-500/50 shadow-blue-500/20 text-blue-300',
-                    purple: 'border-purple-500/50 shadow-purple-500/20 text-purple-300'
+                    purple: 'border-purple-500/50 shadow-purple-500/20 text-purple-300',
+                    sky: 'border-sky-500/50 shadow-sky-500/20 text-sky-300',
+                    orange: 'border-orange-500/50 shadow-orange-500/20 text-orange-300'
                 };
                 const buttonClasses = {
                     cyan: 'from-cyan-400 to-blue-600 hover:from-cyan-300 hover:to-blue-500',
                     green: 'from-green-400 to-emerald-600 hover:from-green-300 hover:to-emerald-500',
                     emerald: 'from-emerald-400 to-teal-600 hover:from-emerald-300 hover:to-teal-500',
                     blue: 'from-blue-400 to-indigo-600 hover:from-blue-300 hover:to-indigo-500',
-                    purple: 'from-purple-400 to-pink-600 hover:from-purple-300 hover:to-pink-500'
+                    purple: 'from-purple-400 to-pink-600 hover:from-purple-300 hover:to-pink-500',
+                    sky: 'from-sky-400 to-blue-600 hover:from-sky-300 hover:to-blue-500',
+                    orange: 'from-orange-400 to-amber-600 hover:from-orange-300 hover:to-amber-500'
                 };
                 return (
                 <div 
@@ -7663,7 +7692,7 @@ const VoxelWorld = ({
                     <div className="text-3xl mb-1">{config.icon}</div>
                     <p className={`retro-text text-sm mb-2 ${colorClasses[config.color].split(' ').pop()}`}>
                         {isMobile 
-                            ? `🎮 Tap to play ${config.name}`
+                            ? `🎮 ${t('interact.tapToPlay')} ${arcadeInteraction.gameKey ? t(arcadeInteraction.gameKey) : config.name}`
                             : arcadeInteraction.prompt
                         }
                     </p>
@@ -7676,12 +7705,12 @@ const VoxelWorld = ({
                             setArcadeInteraction(null);
                         }}
                     >
-                        🎮 PLAY
+                        🎮 {t('interact.play')}
                     </button>
                     
                     {/* Desktop hint */}
                     {!isMobile && (
-                        <p className="text-white/50 text-[10px] mt-1 retro-text">or press E</p>
+                        <p className="text-white/50 text-[10px] mt-1 retro-text">{t('interact.orPressE')}</p>
                     )}
                 </div>
                 );
@@ -7701,7 +7730,7 @@ const VoxelWorld = ({
                     <div className="text-3xl mb-1">✨</div>
                     <p className="text-yellow-300 retro-text text-sm mb-2">
                         {isMobile 
-                            ? '👔 Tap to customize'
+                            ? `👔 ${t('interact.tapToCustomize')}`
                             : wardrobeInteraction.prompt
                         }
                     </p>
@@ -7713,12 +7742,12 @@ const VoxelWorld = ({
                             setWardrobeInteraction(null);
                         }}
                     >
-                        🐧 CUSTOMIZE
+                        🐧 {t('interact.customize')}
                     </button>
                     
                     {/* Desktop hint */}
                     {!isMobile && (
-                        <p className="text-white/50 text-[10px] mt-1 retro-text">or press E</p>
+                        <p className="text-white/50 text-[10px] mt-1 retro-text">{t('interact.orPressE')}</p>
                     )}
                 </div>
              )}
@@ -7889,16 +7918,16 @@ const VoxelWorld = ({
                             }
                         }}
                     >
-                        {nearbyInteraction.action === 'sit' ? '🪑 SIT' : 
-                         nearbyInteraction.action === 'dj' ? '🎧 DJ' :
-                         nearbyInteraction.action === 'climb_roof' ? '🪜 CLIMB' :
-                         nearbyInteraction.action === 'play_arcade' ? '🎮 PLAY' :
-                         '✓ OK'}
+                        {nearbyInteraction.action === 'sit' ? `🪑 ${t('interact.sit')}` : 
+                         nearbyInteraction.action === 'dj' ? `🎧 ${t('interact.dj')}` :
+                         nearbyInteraction.action === 'climb_roof' ? `🪜 ${t('interact.climb')}` :
+                         nearbyInteraction.action === 'play_arcade' ? `🎮 ${t('interact.play')}` :
+                         `✓ ${t('interact.ok')}`}
                     </button>
                     
                     {/* Desktop hint only */}
                     {!isMobile && (
-                        <p className="text-white/50 text-[10px] mt-1 retro-text">or press E</p>
+                        <p className="text-white/50 text-[10px] mt-1 retro-text">{t('interact.orPressE')}</p>
                     )}
                 </div>
              )}

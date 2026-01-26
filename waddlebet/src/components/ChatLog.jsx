@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer';
+import { useLanguage } from '../i18n';
 
 // Message type colors (MapleStory inspired)
 const MESSAGE_COLORS = {
@@ -22,6 +23,7 @@ const MESSAGE_COLORS = {
 
 const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = false, onNewMessage }) => {
     const { chatMessages, playerName, playerId, sendChat, wsRef } = useMultiplayer();
+    const { t } = useLanguage();
     const [isActive, setIsActive] = useState(false);
     const [inputValue, setInputValue] = useState('');
     const [localMessages, setLocalMessages] = useState([]); // Combined local + server messages
@@ -392,7 +394,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
                 <div className="p-2 space-y-0.5">
                     {localMessages.length === 0 ? (
                         <div className="text-white/30 text-xs py-2 text-center">
-                            Press Enter to chat • /w name msg to whisper
+                            {t('chat.enterToChat')} • {t('chat.whisperHint')}
                         </div>
                     ) : (
                         localMessages.map((msg, idx) => (
@@ -435,7 +437,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
                     onKeyDown={handleKeyDown}
                     onFocus={handleFocus}
                     onBlur={handleBlur}
-                    placeholder="Press Enter to chat..."
+                    placeholder={t('chat.placeholder')}
                     className="w-full bg-transparent text-white text-xs focus:outline-none placeholder-white/30 px-3 py-2"
                     maxLength={200}
                 />

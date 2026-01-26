@@ -5,11 +5,13 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../i18n';
 
 const GachaDropRatesGuide = ({ 
     isOpen, 
     onClose
 }) => {
+    const { t } = useLanguage();
     const [isMobile, setIsMobile] = useState(false);
     const [isPortrait, setIsPortrait] = useState(false);
     
@@ -410,7 +412,7 @@ const GachaDropRatesGuide = ({
                         onClick={onClose}
                         className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors"
                     >
-                        {isPortraitMobile ? 'Tap to close' : 'Click anywhere or press ESC to close'}
+                        {isPortraitMobile ? t('ui.tapToClose') : t('ui.clickOrEscToClose')}
                     </button>
                 </div>
             </div>

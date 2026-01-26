@@ -35,10 +35,15 @@ import {
     GAKE_PALETTE
 } from './characters';
 import WalletAuth from './components/WalletAuth';
+import LanguageToggle from './components/LanguageToggle';
+import { useLanguage } from './i18n';
 
 function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const mountRef = useRef(null);
     const [scriptsLoaded, setScriptsLoaded] = useState(false);
+    
+    // Language context
+    const { t, currentLanguage, cycleLanguage } = useLanguage();
     
     // Track layout for responsive design
     const [layoutState, setLayoutState] = useState(() => ({
@@ -1794,7 +1799,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             {/* Title - smaller on mobile portrait */}
             <div className={`absolute top-0 left-0 z-10 w-full pointer-events-none ${isPortrait && isMobileView ? 'p-3' : 'p-6'}`}>
                 <h1 className={`retro-text text-white drop-shadow-lg ${isPortrait && isMobileView ? 'text-2xl' : 'text-4xl'}`} style={{textShadow: '4px 4px 0px #000'}}>
-                    PENGUIN MAKER <span className={`text-yellow-400 align-top ${isPortrait && isMobileView ? 'text-xs' : 'text-sm'}`}>DELUXE</span>
+                    {t('creator.penguinMaker')} <span className={`text-yellow-400 align-top ${isPortrait && isMobileView ? 'text-xs' : 'text-sm'}`}>{t('creator.deluxe')}</span>
                 </h1>
             </div>
 
@@ -1810,7 +1815,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         : 'p-6 max-h-[80vh]'
                 }`}>
                     <h2 className={`text-white font-bold flex items-center gap-2 sticky top-0 bg-gray-900/50 p-2 rounded backdrop-blur-md z-20 ${isPortrait && isMobileView ? 'text-base mb-1' : 'text-lg mb-2'}`}>
-                        <IconSettings size={isPortrait && isMobileView ? 16 : 20} /> {characterType === 'penguin' ? 'Wardrobe' : currentCharacter?.name || 'Character'}
+                        <IconSettings size={isPortrait && isMobileView ? 16 : 20} /> {characterType === 'penguin' ? t('creator.title') : currentCharacter?.name || t('creator.character')}
                     </h2>
                     
                     {/* Wallet & Account Section - Collapsible, at top */}
@@ -1820,8 +1825,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             className="w-full flex items-center justify-between p-2 bg-purple-900/30 hover:bg-purple-900/50 rounded-lg border border-purple-500/30 transition-colors"
                         >
                             <span className="text-purple-300 font-semibold text-sm flex items-center gap-2">
-                                👛 Account & Promo
-                                {!isAuthenticated && <span className="text-xs text-amber-400">(Guest)</span>}
+                                👛 {t('creator.accountPromo')}
+                                {!isAuthenticated && <span className="text-xs text-amber-400">({t('creator.guest')})</span>}
                                 {isAuthenticated && <span className="text-xs text-green-400">✓</span>}
                             </span>
                             <span className="text-purple-400 text-xs">{walletExpanded ? '▼' : '▶'}</span>
@@ -1835,7 +1840,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 {isAuthenticated && (
                                     <div>
                                         <label className="block text-xs text-yellow-400 mb-1">
-                                            {isReturningUser ? '🔒 USERNAME' : '✏️ USERNAME'}
+                                            {isReturningUser ? '🔒 ' : '✏️ '}{t('creator.username')}
                                         </label>
                                         {isReturningUser ? (
                                             <div className="w-full px-3 py-2 bg-black/30 border border-gray-500/50 rounded-lg text-white text-sm">
@@ -1849,7 +1854,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                                     onChange={(e) => handleUsernameChange(e.target.value)}
                                                     maxLength={20}
                                                     minLength={3}
-                                                    placeholder="3-20 characters..."
+                                                    placeholder={t('creator.usernameLength')}
                                                     className={`w-full px-3 py-2 pr-20 bg-black/50 border rounded-lg text-white text-sm focus:outline-none placeholder-white/30 ${
                                                         usernameStatus === 'taken' ? 'border-red-500/50'
                                                             : usernameStatus === 'available' ? 'border-green-500/50'
@@ -1874,7 +1879,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 
                                 {/* Promo Code */}
                                 <div>
-                                    <label className="block text-xs text-purple-400 mb-1">PROMO CODE</label>
+                                    <label className="block text-xs text-purple-400 mb-1">{t('creator.promoCode')}</label>
                                     <div className="flex gap-2">
                                         <input
                                             type="text"
@@ -1882,7 +1887,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                             onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
                                             onKeyDown={(e) => e.key === 'Enter' && !promoLoading && handlePromoCodeSubmit()}
                                             maxLength={20}
-                                            placeholder={isAuthenticated ? "Enter code..." : "Login first"}
+                                            placeholder={isAuthenticated ? t('creator.enterCode') : t('creator.loginFirst')}
                                             disabled={promoLoading || !isAuthenticated}
                                             className={`flex-1 px-3 py-2 bg-black/50 border border-purple-500/50 rounded-lg text-white text-sm focus:outline-none placeholder-white/30 uppercase ${!isAuthenticated ? 'opacity-50' : ''}`}
                                         />
@@ -1916,8 +1921,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                     className="w-full flex items-center justify-between p-2 bg-cyan-900/30 hover:bg-cyan-900/50 rounded-lg border border-cyan-500/30 transition-colors"
                                 >
                                     <span className="text-cyan-300 font-semibold text-sm flex items-center gap-2">
-                                        🎨 Feathers
-                                        <span className="text-xs text-cyan-400/70">({options.skin.length} colors)</span>
+                                        🎨 {t('creator.feathers')}
+                                        <span className="text-xs text-cyan-400/70">({options.skin.length} {t('creator.colors')})</span>
                                         <span 
                                             className="w-4 h-4 rounded-full border border-white/50" 
                                             style={{ backgroundColor: PALETTE[skinColor] || skinColor }}
@@ -2009,11 +2014,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             </div>
 
                             {[
-                                { label: 'HEADWEAR', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
-                                { label: 'EYES', key: 'eyes', val: eyes, set: setEyes, list: options.eyes, defaultVal: 'normal' },
-                                { label: 'MOUTH', key: 'mouth', val: mouth, set: setMouth, list: options.mouth, defaultVal: 'beak' },
-                                { label: 'CLOTHING', key: 'body', val: bodyItem, set: setBodyItem, list: options.body, defaultVal: null },
-                                { label: 'MOUNTS', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                                { labelKey: 'creator.headwear', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
+                                { labelKey: 'creator.eyes', key: 'eyes', val: eyes, set: setEyes, list: options.eyes, defaultVal: 'normal' },
+                                { labelKey: 'creator.mouth', key: 'mouth', val: mouth, set: setMouth, list: options.mouth, defaultVal: 'beak' },
+                                { labelKey: 'creator.clothing', key: 'body', val: bodyItem, set: setBodyItem, list: options.body, defaultVal: null },
+                                { labelKey: 'creator.mounts', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
                             ].map((opt, i) => {
                                 const categoryForCheck = opt.key === 'head' ? 'hat' : opt.key === 'body' ? 'bodyItem' : opt.key;
                                 const isCurrentLocked = opt.isMount 
@@ -2025,7 +2030,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 
                                 // Display text - show default name instead of "none" only for eyes and mouth
                                 const displayText = (opt.val === 'none' && opt.defaultVal)
-                                    ? (opt.defaultVal === 'normal' ? 'Normal' : opt.defaultVal === 'beak' ? 'Beak' : 'Default')
+                                    ? (opt.defaultVal === 'normal' ? t('creator.normal') : opt.defaultVal === 'beak' ? t('creator.beak') : t('creator.none'))
                                     : opt.val.replace(/([A-Z])/g, ' $1').trim();
                                 
                                 // Only disable cycling for eyes/mouth when on "none" (which shows as default)
@@ -2034,11 +2039,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 return (
                                     <div key={i} className="flex flex-col gap-1">
                                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                            {opt.label} {showOwnedOnly 
-                                                ? <span className="text-green-400">({displayCount} owned)</span>
+                                            {t(opt.labelKey)} {showOwnedOnly 
+                                                ? <span className="text-green-400">({displayCount} {t('creator.owned')})</span>
                                                 : `(${unlockedCount}/${totalCount})`
                                             }
-                                            {opt.isMount && <span className="text-orange-400 ml-1">(PROMO)</span>}
+                                            {opt.isMount && <span className="text-orange-400 ml-1">({t('creator.promo')})</span>}
                                         </span>
                                         <div className={`flex items-center justify-between rounded-lg p-1 ${
                                             isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
@@ -2059,7 +2064,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                                 </span>
                                                 {isCurrentLocked && (
                                                     <span className="text-[9px] text-red-400/80">
-                                                        {opt.isMount ? 'Promo Only' : 'Unlock in Casino!'}
+                                                        {opt.isMount ? t('creator.promoOnly') : t('creator.unlockInCasino')}
                                                     </span>
                                                 )}
                                             </div>
@@ -2072,11 +2077,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                             </button>
                                         </div>
                                         {opt.isMount && !isMountUnlocked('minecraftBoat') && !isMountUnlocked('penguMount') && (
-                                            <p className="text-[10px] text-orange-400/80 text-center">Enter promo code to unlock mounts</p>
+                                            <p className="text-[10px] text-orange-400/80 text-center">{t('creator.enterPromoCode')}</p>
                                         )}
                                         {opt.isMount && opt.val === 'penguMount' && isMountUnlocked('penguMount') && (
                                             <div className="flex items-center justify-center gap-1 mt-1">
-                                                <span className="text-[10px] text-green-400 font-bold">⚡ +5% SPEED</span>
+                                                <span className="text-[10px] text-green-400 font-bold">⚡ {t('creator.speedBonus')}</span>
                                             </div>
                                         )}
                                     </div>
@@ -2088,16 +2093,16 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         <div className="bg-gradient-to-br from-amber-900/50 to-orange-900/50 rounded-xl p-4 border border-amber-500/30">
                             <div className="text-center mb-4">
                                 <span className="text-2xl">🐕</span>
-                                <h3 className="text-white font-bold mt-2">Doginal Colors</h3>
+                                <h3 className="text-white font-bold mt-2">{t('character.doginal')}</h3>
                                 <p className="text-white/60 text-xs mt-1">
-                                    Pick your dog's fur colors!
+                                    {t('character.doginalDesc')}
                                 </p>
                             </div>
                             
                             {/* Primary Color - Main Fur */}
                             <div className="mb-4">
                                 <label className="text-amber-300 text-xs font-bold uppercase tracking-wider block mb-2">
-                                    🎨 Primary Fur Color
+                                    🎨 {t('character.furColor')}
                                 </label>
                                 <div className="flex items-center gap-2">
                                     <input
@@ -2119,7 +2124,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             {/* Secondary Color - Belly */}
                             <div className="mb-4">
                                 <label className="text-amber-300 text-xs font-bold uppercase tracking-wider block mb-2">
-                                    🎨 Belly/Accent Color
+                                    🎨 {t('character.bellyColor')}
                                 </label>
                                 <div className="flex items-center gap-2">
                                     <input
@@ -2141,7 +2146,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             {/* Preset Colors */}
                             <div>
                                 <label className="text-amber-300 text-xs font-bold uppercase tracking-wider block mb-2">
-                                    Quick Presets
+                                    {t('character.quickPresets')}
                                 </label>
                                 <div className="grid grid-cols-4 gap-2">
                                     {[
@@ -2184,16 +2189,16 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         <div className="bg-gradient-to-br from-green-900/50 to-emerald-900/50 rounded-xl p-4 border border-green-500/30">
                             <div className="text-center mb-4">
                                 <span className="text-2xl">🐸</span>
-                                <h3 className="text-white font-bold mt-2">PEPE Colors</h3>
+                                <h3 className="text-white font-bold mt-2">{t('character.frog')}</h3>
                                 <p className="text-white/60 text-xs mt-1">
-                                    Pick your frog's skin colors!
+                                    {t('character.frogDesc')}
                                 </p>
                             </div>
                             
                             {/* Primary Color - Main Skin */}
                             <div className="mb-4">
                                 <label className="text-green-300 text-xs font-bold uppercase tracking-wider block mb-2">
-                                    🎨 Primary Skin Color
+                                    🎨 {t('character.skinColor')}
                                 </label>
                                 <div className="flex items-center gap-2">
                                     <input
@@ -2215,7 +2220,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             {/* Secondary Color - Belly */}
                             <div className="mb-4">
                                 <label className="text-green-300 text-xs font-bold uppercase tracking-wider block mb-2">
-                                    🎨 Belly Color
+                                    🎨 {t('character.bellyColor')}
                                 </label>
                                 <div className="flex items-center gap-2">
                                     <input
@@ -2237,7 +2242,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             {/* Preset Colors */}
                             <div>
                                 <label className="text-green-300 text-xs font-bold uppercase tracking-wider block mb-2">
-                                    Quick Presets
+                                    {t('character.quickPresets')}
                                 </label>
                                 <div className="grid grid-cols-4 gap-2">
                                     {[
@@ -2280,16 +2285,16 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         <div className="bg-gradient-to-br from-orange-900/50 to-red-900/50 rounded-xl p-4 border border-orange-500/30">
                             <div className="text-center mb-4">
                                 <span className="text-2xl">🦐</span>
-                                <h3 className="text-white font-bold mt-2">Shrimp Colors</h3>
+                                <h3 className="text-white font-bold mt-2">{t('character.shrimp')}</h3>
                                 <p className="text-white/60 text-xs mt-1">
-                                    Pick your shrimp's shell color!
+                                    {t('character.shrimpDesc')}
                                 </p>
                             </div>
                             
                             {/* Shell Color */}
                             <div className="mb-4">
                                 <label className="text-orange-300 text-xs font-bold uppercase tracking-wider block mb-2">
-                                    🎨 Shell Color
+                                    🎨 {t('character.shellColor')}
                                 </label>
                                 <div className="flex items-center gap-2">
                                     <input
@@ -2311,7 +2316,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             {/* Preset Colors */}
                             <div>
                                 <label className="text-orange-300 text-xs font-bold uppercase tracking-wider block mb-2">
-                                    Quick Presets
+                                    {t('character.quickPresets')}
                                 </label>
                                 <div className="grid grid-cols-4 gap-2">
                                     {[
@@ -2346,18 +2351,18 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             <div className="bg-gradient-to-br from-yellow-900/50 to-orange-900/50 rounded-xl p-4 border border-yellow-500/30">
                                 <div className="text-center">
                                     <span className="text-2xl">🦆</span>
-                                    <h3 className="text-white font-bold mt-2">Duck</h3>
+                                    <h3 className="text-white font-bold mt-2">{t('character.duck')}</h3>
                                     <p className="text-white/60 text-xs mt-1">
-                                        A friendly duck with a bright orange bill
+                                        {t('character.duckDesc')}
                                     </p>
                                 </div>
                             </div>
                             
                             {/* Duck Cosmetics - Hats, Clothing, Mounts */}
                             {[
-                                { label: 'HEADWEAR', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
-                                { label: 'CLOTHING', key: 'body', val: bodyItem, set: setBodyItem, list: options.body, defaultVal: null },
-                                { label: 'MOUNTS', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                                { labelKey: 'creator.headwear', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
+                                { labelKey: 'creator.clothing', key: 'body', val: bodyItem, set: setBodyItem, list: options.body, defaultVal: null },
+                                { labelKey: 'creator.mounts', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
                             ].map((opt, i) => {
                                 const categoryForCheck = opt.key === 'head' ? 'hat' : opt.key === 'body' ? 'bodyItem' : opt.key;
                                 const isCurrentLocked = opt.isMount 
@@ -2367,8 +2372,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 return (
                                     <div key={i} className="flex flex-col gap-1">
                                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                            {opt.label}
-                                            {opt.isMount && <span className="text-orange-400 ml-1">(PROMO)</span>}
+                                            {t(opt.labelKey)}
+                                            {opt.isMount && <span className="text-orange-400 ml-1">({t('creator.promo')})</span>}
                                         </span>
                                         <div className={`flex items-center justify-between rounded-lg p-1 ${
                                             isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
@@ -2400,23 +2405,23 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             <div className="bg-gradient-to-br from-amber-900/50 to-orange-900/50 rounded-xl p-4 border border-amber-500/30">
                                 <div className="text-center">
                                     <span className="text-3xl">🪵</span>
-                                    <h3 className="text-white font-bold mt-2">Tung Tung Tung Sahur</h3>
+                                    <h3 className="text-white font-bold mt-2">{t('character.tungTung')}</h3>
                                     <p className="text-white/60 text-xs mt-1">
-                                        The legendary log creature with a baseball bat!
+                                        {t('character.tungTungDesc')}
                                     </p>
                                 </div>
                             </div>
                             <div className="bg-black/30 rounded-lg p-3">
                                 <p className="text-amber-400 text-xs text-center italic">
-                                    🏏 Comes with a baseball bat permanently equipped
+                                    🏏 {t('character.tungTungBat')}
                                 </p>
                             </div>
                             
                             {/* Eyes, Mouth, and Mounts for Tung Tung */}
                             {[
-                                { label: 'EYES', key: 'eyes', val: eyes, set: setEyes, list: options.eyes, defaultVal: 'normal' },
-                                { label: 'MOUTH', key: 'mouth', val: mouth, set: setMouth, list: options.mouth, defaultVal: 'beak' },
-                                { label: 'MOUNTS', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                                { labelKey: 'creator.eyes', key: 'eyes', val: eyes, set: setEyes, list: options.eyes, defaultVal: 'normal' },
+                                { labelKey: 'creator.mouth', key: 'mouth', val: mouth, set: setMouth, list: options.mouth, defaultVal: 'beak' },
+                                { labelKey: 'creator.mounts', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
                             ].map((opt, i) => {
                                 const categoryForCheck = opt.key === 'mounts' ? 'mount' : opt.key;
                                 const isCurrentLocked = opt.isMount 
@@ -2426,8 +2431,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 return (
                                     <div key={i} className="flex flex-col gap-1">
                                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                                            {opt.label}
-                                            {opt.isMount && <span className="text-orange-400 ml-1">(PROMO)</span>}
+                                            {t(opt.labelKey)}
+                                            {opt.isMount && <span className="text-orange-400 ml-1">({t('creator.promo')})</span>}
                                         </span>
                                         <div className={`flex items-center justify-between rounded-lg p-1 ${
                                             isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
@@ -2458,12 +2463,12 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         <div className="bg-gradient-to-br from-purple-900/50 to-cyan-900/50 rounded-xl p-4 border border-purple-500/30">
                             <div className="text-center">
                                 <span className="text-2xl">🎭</span>
-                                <h3 className="text-white font-bold mt-2">{currentCharacter?.name || 'Special Character'}</h3>
+                                <h3 className="text-white font-bold mt-2">{currentCharacter?.name || t('creator.character')}</h3>
                                 <p className="text-white/60 text-xs mt-1">
-                                    {currentCharacter?.description || 'A unique character model'}
+                                    {currentCharacter?.description || t('character.specialNoCustom')}
                                 </p>
                                 <p className="text-purple-400 text-xs mt-3 italic">
-                                    Special characters cannot be customized
+                                    {t('character.specialNoCustom')}
                                 </p>
                             </div>
                         </div>
@@ -2481,9 +2486,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                             ? 'bg-green-600/30 border-green-500 text-green-300 hover:bg-green-600/40' 
                                             : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
                                     }`}
-                                    title="Show only cosmetics you own"
+                                    title={t('creator.showOwned')}
                                 >
-                                    {showOwnedOnly ? '✓ Owned Only' : '👁 Show All'}
+                                    {showOwnedOnly ? `✓ ${t('creator.ownedOnly')}` : `👁 ${t('creator.showAll')}`}
                                 </button>
                             )}
                             
@@ -2492,7 +2497,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 onClick={handleResetToDefault}
                                 className={`${isAuthenticated ? 'flex-1' : 'w-full'} py-2 bg-gray-700 hover:bg-gray-600 text-gray-300 text-xs font-medium rounded-lg transition-colors border border-gray-600`}
                             >
-                                ↺ Reset
+                                ↺ {t('creator.reset')}
                             </button>
                         </div>
                     )}
@@ -2561,7 +2566,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 <svg className="w-4 h-4 text-orange-500 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
                                     <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z"/>
                                 </svg>
-                                <span className="text-xs text-orange-400 font-medium">Human Verification Required</span>
+                                <span className="text-xs text-orange-400 font-medium">{t('creator.verification')}</span>
                             </div>
                             <div ref={turnstileContainerRef} className="flex justify-center" />
                             {turnstileError && (
@@ -2577,10 +2582,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 disabled
                                 className="w-full py-3 bg-gray-600 text-gray-400 font-bold rounded-lg retro-text text-xs border-b-4 border-gray-700 flex justify-center items-center gap-2 cursor-not-allowed"
                             >
-                                <IconWorld size={16} /> {usernameStatus === 'taken' ? 'USERNAME TAKEN' : 'CHOOSE A USERNAME'}
+                                <IconWorld size={16} /> {usernameStatus === 'taken' ? t('creator.usernameTaken') : t('creator.chooseUsername')}
                             </button>
                             <p className="text-xs text-amber-400 text-center mt-2">
-                                Pick an available username to continue
+                                {t('creator.pickUsername')}
                             </p>
                         </div>
                     ) : !isCustomizationValid ? (
@@ -2589,12 +2594,12 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 disabled
                                 className="w-full py-3 bg-red-900/50 text-red-400 font-bold rounded-lg retro-text text-xs border-b-4 border-red-900 flex justify-center items-center gap-2 cursor-not-allowed"
                             >
-                                <IconWorld size={16} /> 🔒 INVALID COSMETICS
+                                <IconWorld size={16} /> 🔒 {t('creator.invalidCosmetics')}
                             </button>
                             <p className="text-xs text-red-400 text-center mt-2">
                                 {isAuthenticated 
-                                    ? '⚠️ Unequip locked items or unlock them in the Casino!'
-                                    : '⚠️ Guests can only use default appearance'
+                                    ? `⚠️ ${t('creator.unequipLocked')}`
+                                    : `⚠️ ${t('creator.guestDefault')}`
                                 }
                             </p>
                         </div>
@@ -2604,10 +2609,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 disabled
                                 className="w-full py-3 bg-orange-900/50 text-orange-400 font-bold rounded-lg retro-text text-xs border-b-4 border-orange-900 flex justify-center items-center gap-2 cursor-not-allowed"
                             >
-                                <IconWorld size={16} /> ⏳ VERIFYING...
+                                <IconWorld size={16} /> ⏳ {t('creator.verifying')}
                             </button>
                             <p className="text-xs text-orange-400 text-center mt-2">
-                                Complete the security check above
+                                {t('creator.completeCheck')}
                             </p>
                         </div>
                     ) : (
@@ -2616,11 +2621,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 onClick={() => onEnterWorld(turnstileToken)}
                                 className="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg shadow-lg transform active:scale-95 transition-all retro-text text-xs border-b-4 border-yellow-700 flex justify-center items-center gap-2"
                             >
-                                <IconWorld size={16} /> {isAuthenticated ? 'ENTER WORLD' : 'PLAY AS GUEST'}
+                                <IconWorld size={16} /> {isAuthenticated ? t('menu.enterWorld') : t('creator.playAsGuest')}
                             </button>
                             {!isAuthenticated && (
                                 <p className="text-xs text-amber-400 text-center mt-2">
-                                    ⚠️ Guest mode: Progress won't be saved
+                                    ⚠️ {t('creator.guestWarning')}
                                 </p>
                             )}
                         </div>
@@ -2628,12 +2633,18 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 </div>
             </div>
             
-            {/* Help text - hide on mobile portrait to save space */}
-            {!(isPortrait && isMobileView) && (
-                <div className="absolute bottom-4 left-6 text-white/30 text-xs flex items-center gap-2">
-                    <IconCamera size={14} /> Click & Drag to Rotate • Scroll to Zoom
-                </div>
-            )}
+            {/* Bottom Left - Language Toggle and Help text */}
+            <div className={`absolute bottom-4 left-4 z-10 flex flex-col items-start gap-2 ${isPortrait && isMobileView ? 'bottom-[62vh]' : ''}`}>
+                {/* Language Toggle - cycles through languages on click */}
+                <LanguageToggle compact={true} />
+                
+                {/* Help text - hide on mobile portrait to save space */}
+                {!(isPortrait && isMobileView) && (
+                    <div className="text-white/30 text-xs flex items-center gap-2">
+                        <IconCamera size={14} /> {t('creator.dragRotate')} • {t('creator.scrollZoom')}
+                    </div>
+                )}
+            </div>
             
             {/* Cloudflare Badge - Centered at bottom */}
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
@@ -2647,13 +2658,13 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         <path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.2678-.2246-.2767-.5765-.4198-.9725-.4466l-8.5057-.1123a.1654.1654 0 0 1-.1328-.0615.141.141 0 0 1-.0236-.1388.1742.1742 0 0 1 .1535-.121l8.5858-.1102c.974-.0288 2.0298-.8037 2.3878-1.7598l.454-1.214a.27.27 0 0 0 .0147-.1964 5.0842 5.0842 0 0 0-9.8793-1.0239c-.5765-.4259-1.2998-.649-2.0676-.5592-1.2763.1496-2.3055 1.1608-2.4816 2.4398a2.6573 2.6573 0 0 0 .0103.8627 3.8782 3.8782 0 0 0-3.7637 3.8765c0 .1949.0143.3856.042.5718a.167.167 0 0 0 .1657.1423l15.5878.0037c.0738 0 .1393-.0493.1577-.121l.0004-.0001z"/>
                         <path d="M19.4846 10.0557a.1008.1008 0 0 0-.0996-.0234c-.3333.1015-.6872.1545-1.0517.1545-1.1328 0-2.1415-.5193-2.8042-1.3329a.1012.1012 0 0 0-.0996-.0234.1027.1027 0 0 0-.0722.0793c-.2139.9577-.8575 1.7673-1.7112 2.2298a.1.1 0 0 0-.0512.1244c.1076.3112.1638.6456.1638.9932 0 .0616-.0016.1229-.0048.1838a.1.1 0 0 0 .0996.1052l5.4023.0698c.0502 0 .0935-.0355.1017-.0856a3.2137 3.2137 0 0 0 .0417-.5142c0-1.3006-.7745-2.4221-1.8862-2.9347a.1003.1003 0 0 0-.0284-.0258z"/>
                     </svg>
-                    <span className="text-xs text-orange-400/90 font-medium group-hover:text-orange-300 transition-colors">Protected by Cloudflare</span>
+                    <span className="text-xs text-orange-400/90 font-medium group-hover:text-orange-300 transition-colors">{t('common.protectedBy')}</span>
                 </a>
             </div>
 
             {!scriptsLoaded && (
                 <div className="absolute inset-0 bg-black flex items-center justify-center text-white retro-text z-50">
-                    LOADING ENGINE...
+                    {t('common.loading')}...
                 </div>
             )}
         </div>
