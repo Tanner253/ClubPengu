@@ -2736,6 +2736,37 @@ async function handleMessage(playerId, message) {
             break;
         }
         
+        // ==================== SNOWBALL THROWING ====================
+        case 'snowball_throw': {
+            // Broadcast snowball throw to all players in the same room (except sender)
+            const room = player.room;
+            if (room) {
+                // Validate velocity is reasonable (anti-cheat)
+                const speed = Math.sqrt(
+                    (message.velocityX || 0) ** 2 + 
+                    (message.velocityY || 0) ** 2 + 
+                    (message.velocityZ || 0) ** 2
+                );
+                if (speed > 30) {
+                    console.warn(`⚠️ Player ${player.name} sent invalid snowball velocity: ${speed}`);
+                    break;
+                }
+                
+                broadcastToRoom(room, {
+                    type: 'snowball_thrown',
+                    playerId: playerId,
+                    playerName: player.name,
+                    startX: message.startX,
+                    startY: message.startY,
+                    startZ: message.startZ,
+                    velocityX: message.velocityX,
+                    velocityY: message.velocityY,
+                    velocityZ: message.velocityZ
+                }, playerId); // Exclude sender
+            }
+            break;
+        }
+        
         // ==================== COINS & ECONOMY ====================
         case 'coins_sync': {
             // Return server-authoritative coin balance

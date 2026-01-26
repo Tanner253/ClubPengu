@@ -97,7 +97,8 @@ export function MultiplayerProvider({ children }) {
         onAuthSuccess: null,
         onAuthFailure: null,
         onPromoResult: null,
-        onAllCosmeticsLoaded: null
+        onAllCosmeticsLoaded: null,
+        onSnowballThrown: null
     });
     
     // All cosmetics loaded from database
@@ -1050,6 +1051,20 @@ export function MultiplayerProvider({ children }) {
                 }
                 break;
                 
+            case 'snowball_thrown':
+                // Another player threw a snowball - trigger callback for VoxelWorld to render it
+                callbacksRef.current.onSnowballThrown?.({
+                    playerId: message.playerId,
+                    playerName: message.playerName,
+                    startX: message.startX,
+                    startY: message.startY,
+                    startZ: message.startZ,
+                    velocityX: message.velocityX,
+                    velocityY: message.velocityY,
+                    velocityZ: message.velocityZ
+                });
+                break;
+                
             case 'error':
                 console.error(`❌ Server error: ${message.code} - ${message.message}`);
                 setConnectionError({ code: message.code, message: message.message });
@@ -1277,6 +1292,22 @@ export function MultiplayerProvider({ children }) {
     
     const requestBallSync = useCallback(() => {
         send({ type: 'ball_sync' });
+    }, [send]);
+    
+    /**
+     * Send a snowball throw to the server
+     * @param {object} data - Snowball data { startX, startY, startZ, velocityX, velocityY, velocityZ }
+     */
+    const sendSnowball = useCallback((data) => {
+        send({ 
+            type: 'snowball_throw',
+            startX: data.startX,
+            startY: data.startY,
+            startZ: data.startZ,
+            velocityX: data.velocityX,
+            velocityY: data.velocityY,
+            velocityZ: data.velocityZ
+        });
     }, [send]);
     
     const syncCoins = useCallback(() => {
@@ -1658,6 +1689,7 @@ export function MultiplayerProvider({ children }) {
         updatePuffle,
         sendBallKick,
         requestBallSync,
+        sendSnowball,
         registerCallbacks,
         syncCoins,
         updateUserCoins,

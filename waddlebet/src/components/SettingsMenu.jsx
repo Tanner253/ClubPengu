@@ -1,481 +1,578 @@
 /**
- * SettingsMenu - Game settings panel
- * Left/right handed mode and camera sensitivity
+ * SettingsMenu - Modern Game Settings Panel (2026 Edition)
+ * Features tabbed navigation, keybind settings, and snowball controls
  */
 
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
+import { useLanguage } from '../i18n';
+
+// Default keybinds
+const DEFAULT_KEYBINDS = {
+    snowballThrow: 'ShiftLeft',
+    emoteWheel: 'KeyT',
+    chat: 'Enter',
+    jump: 'Space'
+};
+
+// Friendly key names for display
+const KEY_DISPLAY_NAMES = {
+    'ShiftLeft': 'Left Shift',
+    'ShiftRight': 'Right Shift',
+    'ControlLeft': 'Left Ctrl',
+    'ControlRight': 'Right Ctrl',
+    'AltLeft': 'Left Alt',
+    'AltRight': 'Right Alt',
+    'Space': 'Space',
+    'Enter': 'Enter',
+    'KeyT': 'T',
+    'KeyE': 'E',
+    'KeyQ': 'Q',
+    'KeyR': 'R',
+    'KeyF': 'F',
+    'KeyG': 'G',
+    'Tab': 'Tab',
+    'CapsLock': 'Caps Lock',
+    'Backquote': '`',
+};
+
+const getKeyDisplayName = (code) => {
+    if (KEY_DISPLAY_NAMES[code]) return KEY_DISPLAY_NAMES[code];
+    if (code.startsWith('Key')) return code.slice(3);
+    if (code.startsWith('Digit')) return code.slice(5);
+    return code;
+};
 
 const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChangelog, isAuthenticated }) => {
+    const { t } = useLanguage();
     const menuRef = useRef(null);
+    const [activeTab, setActiveTab] = useState('general');
+    const [rebindingKey, setRebindingKey] = useState(null); // Which keybind is being rebound
     
     // Use shared hooks for click outside and escape key
-    useClickOutside(menuRef, onClose, isOpen);
-    useEscapeKey(onClose, isOpen);
+    useClickOutside(menuRef, onClose, isOpen && !rebindingKey);
+    useEscapeKey(() => {
+        if (rebindingKey) {
+            setRebindingKey(null);
+        } else {
+            onClose();
+        }
+    }, isOpen);
+    
+    // Listen for key press when rebinding
+    useEffect(() => {
+        if (!rebindingKey) return;
+        
+        const handleKeyDown = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Cancel rebinding on Escape
+            if (e.code === 'Escape') {
+                setRebindingKey(null);
+                return;
+            }
+            
+            // Set the new keybind
+            const newKeybinds = { ...settings.keybinds, [rebindingKey]: e.code };
+            onSettingsChange({ ...settings, keybinds: newKeybinds });
+            setRebindingKey(null);
+        };
+        
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [rebindingKey, settings, onSettingsChange]);
     
     if (!isOpen) return null;
     
+    const keybinds = settings.keybinds || DEFAULT_KEYBINDS;
+    
     const handleToggle = (key) => {
-        // Some toggles default to true (soundEnabled, snowEnabled), others to false (leftHanded, musicMuted)
-        const defaultsToTrue = ['soundEnabled', 'snowEnabled'];
+        const defaultsToTrue = ['soundEnabled', 'snowEnabled', 'mountEnabled'];
         const currentValue = defaultsToTrue.includes(key) 
-            ? settings[key] !== false  // For default-true: undefined = true
-            : settings[key] === true;  // For default-false: undefined = false
+            ? settings[key] !== false
+            : settings[key] === true;
         const newSettings = { ...settings, [key]: !currentValue };
         onSettingsChange(newSettings);
-        // Dispatch event for music player
         window.dispatchEvent(new CustomEvent('settingsChanged'));
     };
     
     const handleSlider = (key, value) => {
         const newSettings = { ...settings, [key]: value };
         onSettingsChange(newSettings);
-        // Dispatch event for music player
         window.dispatchEvent(new CustomEvent('settingsChanged'));
     };
     
+    const tabs = [
+        { id: 'general', icon: '⚙️', label: t('settings.title') || 'General' },
+        { id: 'controls', icon: '🎮', label: t('settings.controls') || 'Controls' },
+        { id: 'audio', icon: '🔊', label: t('settings.sound') || 'Audio' },
+        { id: 'display', icon: '✨', label: t('settings.graphics') || 'Display' },
+        { id: 'info', icon: '📋', label: 'Info' },
+    ];
+    
+    // Toggle component
+    const Toggle = ({ enabled, onChange, color = 'cyan' }) => {
+        const colorClasses = {
+            cyan: enabled ? 'bg-cyan-500' : 'bg-white/10',
+            green: enabled ? 'bg-green-500' : 'bg-white/10',
+            orange: enabled ? 'bg-orange-500' : 'bg-white/10',
+            purple: enabled ? 'bg-purple-500' : 'bg-white/10',
+            red: enabled ? 'bg-red-500' : 'bg-white/10',
+        };
+        
+        return (
+            <button
+                onClick={onChange}
+                className={`relative w-12 h-6 rounded-full transition-all duration-300 shrink-0 ${colorClasses[color]} border border-white/10`}
+            >
+                <div 
+                    className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-lg transition-transform duration-300 ${
+                        enabled ? 'translate-x-6' : 'translate-x-0.5'
+                    }`}
+                />
+            </button>
+        );
+    };
+    
+    // Setting Row component
+    const SettingRow = ({ icon, title, description, children, noPadding = false }) => (
+        <div className={`flex items-center justify-between gap-3 ${noPadding ? '' : 'py-3'} border-b border-white/5 last:border-b-0`}>
+            <div className="flex items-center gap-3 min-w-0">
+                {icon && <span className="text-lg shrink-0">{icon}</span>}
+                <div className="min-w-0">
+                    <div className="text-white text-sm font-medium truncate">{title}</div>
+                    {description && <div className="text-white/40 text-xs truncate">{description}</div>}
+                </div>
+            </div>
+            <div className="shrink-0">{children}</div>
+        </div>
+    );
+    
+    // Keybind Button component
+    const KeybindButton = ({ action, label }) => {
+        const currentKey = keybinds[action] || DEFAULT_KEYBINDS[action];
+        const isRebinding = rebindingKey === action;
+        
+        return (
+            <button
+                onClick={() => setRebindingKey(action)}
+                className={`px-4 py-2 rounded-lg font-mono text-sm transition-all min-w-[100px] ${
+                    isRebinding
+                        ? 'bg-cyan-500 text-white animate-pulse border-2 border-cyan-300'
+                        : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
+                }`}
+            >
+                {isRebinding ? 'Press key...' : getKeyDisplayName(currentKey)}
+            </button>
+        );
+    };
+    
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-2 sm:p-4">
             <div 
                 ref={menuRef}
-                className="bg-gradient-to-br from-gray-900/95 to-gray-800/95 rounded-2xl border border-white/10 shadow-2xl w-full max-w-[320px] landscape:max-w-[400px] max-h-[85vh] landscape:max-h-[90vh] flex flex-col animate-fade-in"
+                className="bg-gradient-to-br from-slate-900/98 via-slate-800/98 to-slate-900/98 rounded-3xl border border-white/10 shadow-2xl w-full max-w-[480px] max-h-[90vh] flex flex-col overflow-hidden animate-fade-in"
+                style={{
+                    boxShadow: '0 0 60px rgba(0, 200, 255, 0.1), 0 0 100px rgba(100, 50, 200, 0.05)'
+                }}
                 onClick={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
             >
-                {/* Header - Fixed */}
-                <div className="flex items-center justify-between p-4 pb-2 shrink-0">
-                    <h2 className="text-base font-bold text-white flex items-center gap-2">
-                        <span>⚙️</span>
-                        <span>Settings</span>
-                    </h2>
-                    <button 
-                        onClick={onClose}
-                        className="text-white/50 hover:text-white active:text-white transition-colors w-10 h-10 flex items-center justify-center text-lg touch-manipulation select-none rounded-full hover:bg-white/10 active:bg-white/20"
-                    >
-                        ✕
-                    </button>
+                {/* Header */}
+                <div className="relative px-6 pt-5 pb-3 border-b border-white/5">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg">
+                                <span className="text-lg">⚙️</span>
+                            </div>
+                            <span className="bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
+                                {t('settings.title') || 'Settings'}
+                            </span>
+                        </h2>
+                        <button 
+                            onClick={onClose}
+                            className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all"
+                        >
+                            ✕
+                        </button>
+                    </div>
+                    
+                    {/* Tab Bar */}
+                    <div className="flex gap-1 mt-4 p-1 bg-white/5 rounded-2xl">
+                        {tabs.map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-medium transition-all ${
+                                    activeTab === tab.id
+                                        ? 'bg-gradient-to-r from-cyan-500 to-blue-500 text-white shadow-lg'
+                                        : 'text-white/50 hover:text-white hover:bg-white/5'
+                                }`}
+                            >
+                                <span className="block text-base mb-0.5">{tab.icon}</span>
+                                <span className="hidden sm:block">{tab.label}</span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
                 
-                {/* Settings List - Scrollable */}
-                <div className="flex-1 overflow-y-auto px-4 pb-2 space-y-3 overscroll-contain">
-                    {/* Controls Guide */}
-                    <div className="bg-black/30 rounded-xl p-3">
-                        <h3 className="text-white font-medium text-sm mb-2">Controls</h3>
-                        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-                            <div className="text-white/50">Move</div>
-                            <div className="text-white/80">WASD / Joystick</div>
-                            <div className="text-white/50">Camera</div>
-                            <div className="text-white/80">Mouse / Touch</div>
-                            <div className="text-white/50">Jump</div>
-                            <div className="text-white/80">Space</div>
-                            <div className="text-white/50">Chat</div>
-                            <div className="text-white/80">Enter</div>
-                            <div className="text-white/50">Emotes</div>
-                            <div className="text-white/80">Hold T</div>
-                            <div className="text-white/50">Whisper</div>
-                            <div className="text-white/80">/w name msg</div>
-                            <div className="text-white/50">AFK</div>
-                            <div className="text-white/80">/afk message</div>
-                            <div className="text-white/50">Unstuck</div>
-                            <div className="text-white/80">/spawn</div>
-                        </div>
-                    </div>
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto px-6 py-4 space-y-1 overscroll-contain">
                     
-                    {/* Left-Handed Mode */}
-                    <div className="bg-black/30 rounded-xl p-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex-1 mr-3">
-                                <h3 className="text-white font-medium text-sm">Left-Handed Mode</h3>
-                                <p className="text-white/50 text-[11px] mt-0.5">
-                                    Swap joystick to right side
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => handleToggle('leftHanded')}
-                                className={`relative w-14 h-8 rounded-full transition-colors duration-200 shrink-0 touch-manipulation select-none ${
-                                    settings.leftHanded ? 'bg-green-500' : 'bg-gray-600'
-                                }`}
+                    {/* General Tab */}
+                    {activeTab === 'general' && (
+                        <>
+                            <SettingRow
+                                icon="🖐️"
+                                title="Left-Handed Mode"
+                                description="Swap joystick to right side"
                             >
-                                <div 
-                                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
-                                        settings.leftHanded ? 'translate-x-7' : 'translate-x-1'
-                                    }`}
+                                <Toggle 
+                                    enabled={settings.leftHanded === true} 
+                                    onChange={() => handleToggle('leftHanded')}
+                                    color="purple"
                                 />
-                            </button>
-                        </div>
-                        
-                        {/* Visual preview */}
-                        <div className="mt-2 flex items-center justify-center gap-3 py-2 bg-black/20 rounded-lg">
-                            <div className={`flex flex-col items-center transition-opacity ${settings.leftHanded ? 'opacity-40' : 'opacity-100'}`}>
-                                <div className="w-7 h-7 rounded-full border-2 border-cyan-400/60 flex items-center justify-center">
-                                    <div className="w-3 h-3 rounded-full bg-cyan-400/80" />
-                                </div>
-                                <span className="text-[9px] text-white/50 mt-1">Move</span>
-                            </div>
-                            <div className="text-white/20 text-[10px]">⟷</div>
-                            <div className={`flex flex-col items-center transition-opacity ${settings.leftHanded ? 'opacity-100' : 'opacity-40'}`}>
-                                <div className="w-7 h-7 rounded-full border-2 border-cyan-400/60 flex items-center justify-center">
-                                    <div className="w-3 h-3 rounded-full bg-cyan-400/80" />
-                                </div>
-                                <span className="text-[9px] text-white/50 mt-1">Move</span>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    {/* Camera Sensitivity */}
-                    <div className="bg-black/30 rounded-xl p-3">
-                        <div className="flex items-center justify-between mb-2">
-                            <h3 className="text-white font-medium text-sm">Camera Sensitivity</h3>
-                            <span className="text-yellow-400 text-xs font-mono bg-black/30 px-2 py-0.5 rounded">
-                                {(settings.cameraSensitivity || 0.3).toFixed(1)}
-                            </span>
-                        </div>
-                        <input
-                            type="range"
-                            min="0.1"
-                            max="1.0"
-                            step="0.1"
-                            value={settings.cameraSensitivity || 0.3}
-                            onChange={(e) => handleSlider('cameraSensitivity', parseFloat(e.target.value))}
-                            className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-yellow-400"
-                        />
-                        <div className="flex justify-between text-[10px] text-white/40 mt-1">
-                            <span>Slow</span>
-                            <span>Fast</span>
-                        </div>
-                    </div>
-                    
-                    {/* Particle Effects Toggle */}
-                    <div className="bg-black/30 rounded-xl p-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex-1 mr-3">
-                                <h3 className="text-white font-medium text-sm">✨ Particle Effects</h3>
-                                <p className="text-white/50 text-[11px] mt-0.5">
-                                    Snow & nametag particles
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => handleToggle('snowEnabled')}
-                                className={`relative w-14 h-8 rounded-full transition-colors duration-200 shrink-0 touch-manipulation select-none ${
-                                    settings.snowEnabled !== false ? 'bg-cyan-500' : 'bg-gray-600'
-                                }`}
+                            </SettingRow>
+                            
+                            <SettingRow
+                                icon="🚣"
+                                title="Mount"
+                                description="Show your equipped mount"
                             >
-                                <div 
-                                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
-                                        settings.snowEnabled !== false ? 'translate-x-7' : 'translate-x-1'
-                                    }`}
-                                />
-                            </button>
-                        </div>
-                    </div>
-                    
-                    {/* Mount Equip Toggle - Equip/Unequip your mount */}
-                    <div className="bg-black/30 rounded-xl p-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex-1 mr-3">
-                                <h3 className="text-white font-medium text-sm">🚣 Mount</h3>
-                                <p className="text-white/50 text-[11px] mt-0.5">
-                                    Equip or unequip your mount
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    handleToggle('mountEnabled');
-                                    // Dispatch event to notify VoxelWorld of mount toggle
-                                    window.dispatchEvent(new CustomEvent('mountToggled', { 
-                                        detail: { enabled: settings.mountEnabled === false } 
-                                    }));
-                                }}
-                                className={`relative w-14 h-8 rounded-full transition-colors duration-200 shrink-0 touch-manipulation select-none ${
-                                    settings.mountEnabled !== false ? 'bg-orange-500' : 'bg-gray-600'
-                                }`}
-                            >
-                                <div 
-                                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
-                                        settings.mountEnabled !== false ? 'translate-x-7' : 'translate-x-1'
-                                    }`}
-                                />
-                            </button>
-                        </div>
-                        <p className="text-[10px] text-orange-400/70 mt-2">
-                            {settings.mountEnabled !== false ? '✓ Mount equipped (visible to all)' : '✗ Mount unequipped'}
-                        </p>
-                    </div>
-                    
-                    {/* Green Candles Trail Effect */}
-                    <div className="bg-black/30 rounded-xl p-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex-1 mr-3">
-                                <h3 className="text-white font-medium text-sm">📈 Green Candles</h3>
-                                <p className="text-white/50 text-[11px] mt-0.5">
-                                    Trading candle trail effect (visible to all)
-                                </p>
-                            </div>
-                            <button
-                                onClick={() => {
-                                    handleToggle('greenCandlesEnabled');
-                                    // Dispatch event to notify VoxelWorld of green candles toggle
-                                    window.dispatchEvent(new CustomEvent('greenCandlesToggled', { 
-                                        detail: { enabled: !settings.greenCandlesEnabled } 
-                                    }));
-                                }}
-                                className={`relative w-14 h-8 rounded-full transition-colors duration-200 shrink-0 touch-manipulation select-none ${
-                                    settings.greenCandlesEnabled ? 'bg-green-500' : 'bg-gray-600'
-                                }`}
-                            >
-                                <div 
-                                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
-                                        settings.greenCandlesEnabled ? 'translate-x-7' : 'translate-x-1'
-                                    }`}
-                                />
-                            </button>
-                        </div>
-                        <p className="text-[10px] text-green-400/70 mt-2">
-                            {settings.greenCandlesEnabled ? '📊 Candles sprouting when you walk!' : '💤 Off - No candle trail'}
-                        </p>
-                    </div>
-                    
-                    {/* Nametag Style Selection - Only show options for authenticated users */}
-                    <div className="bg-black/30 rounded-xl p-3">
-                        <h3 className="text-white font-medium text-sm mb-2">🏷️ Nametag Style</h3>
-                        <p className="text-white/50 text-[11px] mb-3">
-                            {isAuthenticated 
-                                ? 'Choose how your name appears to others'
-                                : 'Connect wallet to unlock nametag styles'
-                            }
-                        </p>
-                        
-                        <div className="space-y-2">
-                            {/* Day 1 Supporter - Only for authenticated users */}
-                            {isAuthenticated && (
-                                <button
-                                    onClick={() => {
-                                        const newSettings = { ...settings, nametagStyle: 'day1' };
-                                        onSettingsChange(newSettings);
-                                        window.dispatchEvent(new CustomEvent('nametagChanged', { 
-                                            detail: { style: 'day1' } 
+                                <Toggle 
+                                    enabled={settings.mountEnabled !== false} 
+                                    onChange={() => {
+                                        handleToggle('mountEnabled');
+                                        window.dispatchEvent(new CustomEvent('mountToggled', { 
+                                            detail: { enabled: settings.mountEnabled === false } 
                                         }));
                                     }}
-                                    className={`w-full p-2.5 rounded-lg border-2 transition-all touch-manipulation select-none text-left ${
-                                        (settings.nametagStyle || 'day1') === 'day1'
-                                            ? 'border-amber-500 bg-amber-500/10'
-                                            : 'border-white/10 bg-black/20 hover:border-white/20'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-lg">⭐</span>
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-amber-400 font-bold text-sm">DAY 1</span>
-                                                <span className="text-white/70 text-xs">Supporter</span>
-                                            </div>
-                                            <p className="text-white/40 text-[10px]">Golden badge with floating animation</p>
-                                        </div>
-                                        {(settings.nametagStyle || 'day1') === 'day1' && (
-                                            <span className="text-amber-400 text-sm">✓</span>
-                                        )}
-                                    </div>
-                                </button>
-                            )}
+                                    color="orange"
+                                />
+                            </SettingRow>
                             
-                            {/* Whale Status - Only for authenticated users */}
-                            {isAuthenticated && (
-                                <button
-                                    onClick={() => {
-                                        const newSettings = { ...settings, nametagStyle: 'whale' };
-                                        onSettingsChange(newSettings);
-                                        window.dispatchEvent(new CustomEvent('nametagChanged', { 
-                                            detail: { style: 'whale' } 
+                            <SettingRow
+                                icon="📈"
+                                title="Green Candles Trail"
+                                description="Trading candle trail effect"
+                            >
+                                <Toggle 
+                                    enabled={settings.greenCandlesEnabled === true} 
+                                    onChange={() => {
+                                        handleToggle('greenCandlesEnabled');
+                                        window.dispatchEvent(new CustomEvent('greenCandlesToggled', { 
+                                            detail: { enabled: !settings.greenCandlesEnabled } 
                                         }));
                                     }}
-                                    className={`w-full p-2.5 rounded-lg border-2 transition-all touch-manipulation select-none text-left ${
-                                        settings.nametagStyle === 'whale'
-                                            ? 'border-cyan-500 bg-cyan-500/10'
-                                            : 'border-white/10 bg-black/20 hover:border-white/20'
-                                    }`}
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-lg">🐳</span>
-                                        <div className="flex-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 font-bold text-sm">WHALE</span>
-                                                <span className="text-white/70 text-xs">Status</span>
-                                            </div>
-                                            <p className="text-white/40 text-[10px]">Premium gradient with cyan/purple glow</p>
-                                        </div>
-                                        {settings.nametagStyle === 'whale' && (
-                                            <span className="text-cyan-400 text-sm">✓</span>
-                                        )}
-                                    </div>
-                                </button>
-                            )}
+                                    color="green"
+                                />
+                            </SettingRow>
                             
-                            {/* Default - Always available */}
-                            <button
-                                onClick={() => {
-                                    const newSettings = { ...settings, nametagStyle: 'default' };
-                                    onSettingsChange(newSettings);
-                                    window.dispatchEvent(new CustomEvent('nametagChanged', { 
-                                        detail: { style: 'default' } 
-                                    }));
-                                }}
-                                className={`w-full p-2.5 rounded-lg border-2 transition-all touch-manipulation select-none text-left ${
-                                    settings.nametagStyle === 'default' || !isAuthenticated
-                                        ? 'border-white/50 bg-white/10'
-                                        : 'border-white/10 bg-black/20 hover:border-white/20'
-                                }`}
-                            >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg">📛</span>
-                                    <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-white font-bold text-sm">DEFAULT</span>
-                                            <span className="text-white/70 text-xs">Classic</span>
+                            {/* Nametag Style */}
+                            <div className="py-3 border-b border-white/5">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <span className="text-lg">🏷️</span>
+                                    <div>
+                                        <div className="text-white text-sm font-medium">Nametag Style</div>
+                                        <div className="text-white/40 text-xs">
+                                            {isAuthenticated ? 'Choose your style' : 'Connect wallet to unlock'}
                                         </div>
-                                        <p className="text-white/40 text-[10px]">Simple clean nametag</p>
                                     </div>
-                                    {(settings.nametagStyle === 'default' || !isAuthenticated) && (
-                                        <span className="text-white text-sm">✓</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2">
+                                    {isAuthenticated && (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    onSettingsChange({ ...settings, nametagStyle: 'day1' });
+                                                    window.dispatchEvent(new CustomEvent('nametagChanged', { detail: { style: 'day1' } }));
+                                                }}
+                                                className={`p-3 rounded-xl border-2 transition-all ${
+                                                    (settings.nametagStyle || 'day1') === 'day1'
+                                                        ? 'border-amber-500 bg-amber-500/10'
+                                                        : 'border-white/10 bg-white/5 hover:border-white/20'
+                                                }`}
+                                            >
+                                                <span className="text-2xl block mb-1">⭐</span>
+                                                <span className="text-amber-400 text-xs font-bold">DAY 1</span>
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    onSettingsChange({ ...settings, nametagStyle: 'whale' });
+                                                    window.dispatchEvent(new CustomEvent('nametagChanged', { detail: { style: 'whale' } }));
+                                                }}
+                                                className={`p-3 rounded-xl border-2 transition-all ${
+                                                    settings.nametagStyle === 'whale'
+                                                        ? 'border-cyan-500 bg-cyan-500/10'
+                                                        : 'border-white/10 bg-white/5 hover:border-white/20'
+                                                }`}
+                                            >
+                                                <span className="text-2xl block mb-1">🐳</span>
+                                                <span className="text-cyan-400 text-xs font-bold">WHALE</span>
+                                            </button>
+                                        </>
                                     )}
+                                    <button
+                                        onClick={() => {
+                                            onSettingsChange({ ...settings, nametagStyle: 'default' });
+                                            window.dispatchEvent(new CustomEvent('nametagChanged', { detail: { style: 'default' } }));
+                                        }}
+                                        className={`p-3 rounded-xl border-2 transition-all ${
+                                            settings.nametagStyle === 'default' || !isAuthenticated
+                                                ? 'border-white/50 bg-white/10'
+                                                : 'border-white/10 bg-white/5 hover:border-white/20'
+                                        }`}
+                                    >
+                                        <span className="text-2xl block mb-1">📛</span>
+                                        <span className="text-white text-xs font-bold">DEFAULT</span>
+                                    </button>
                                 </div>
-                            </button>
-                        </div>
-                        
-                        <p className="text-[10px] text-cyan-400/70 mt-2">
-                            {isAuthenticated 
-                                ? '✨ Your nametag style is visible to all players'
-                                : '🔒 Connect wallet to unlock premium styles'
-                            }
-                        </p>
-                    </div>
-                    
-                    {/* Master Sound Toggle */}
-                    <div className="bg-black/30 rounded-xl p-3">
-                        <div className="flex items-center justify-between">
-                            <div className="flex-1 mr-3">
-                                <h3 className="text-white font-medium text-sm">🔊 Master Sound</h3>
-                                <p className="text-white/50 text-[11px] mt-0.5">
-                                    Toggle all game audio
-                                </p>
                             </div>
-                            <button
-                                onClick={() => handleToggle('soundEnabled')}
-                                className={`relative w-14 h-8 rounded-full transition-colors duration-200 shrink-0 touch-manipulation select-none ${
-                                    settings.soundEnabled !== false ? 'bg-green-500' : 'bg-gray-600'
-                                }`}
+                        </>
+                    )}
+                    
+                    {/* Controls Tab */}
+                    {activeTab === 'controls' && (
+                        <>
+                            {/* Quick Reference */}
+                            <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-2xl p-4 border border-cyan-500/20 mb-4">
+                                <div className="text-cyan-400 text-sm font-bold mb-3 flex items-center gap-2">
+                                    <span>📖</span> Quick Controls
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">Move</span>
+                                        <span className="text-white/80 font-mono">WASD</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">Camera</span>
+                                        <span className="text-white/80 font-mono">Mouse</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">Jump</span>
+                                        <span className="text-white/80 font-mono">Space</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">Chat</span>
+                                        <span className="text-white/80 font-mono">Enter</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">Emotes</span>
+                                        <span className="text-white/80 font-mono">Hold T</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">Whisper</span>
+                                        <span className="text-white/80 font-mono">/w name</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">AFK</span>
+                                        <span className="text-white/80 font-mono">/afk msg</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">Unstuck</span>
+                                        <span className="text-white/80 font-mono">/spawn</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            {/* Snowball Keybind */}
+                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/10 rounded-2xl p-4 border border-blue-500/20 mb-4">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-white to-blue-200 flex items-center justify-center shadow-lg">
+                                            <span className="text-lg">❄️</span>
+                                        </div>
+                                        <div>
+                                            <div className="text-white text-sm font-bold">Snowball Throw</div>
+                                            <div className="text-white/40 text-xs">Hold key + click to throw</div>
+                                        </div>
+                                    </div>
+                                    <KeybindButton action="snowballThrow" label="Snowball" />
+                                </div>
+                                <div className="text-white/30 text-xs pl-[52px]">
+                                    • 3 second cooldown between throws<br/>
+                                    • Visible to all players in room
+                                </div>
+                            </div>
+                            
+                            {/* Camera Sensitivity */}
+                            <div className="py-3">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-lg">📷</span>
+                                        <div>
+                                            <div className="text-white text-sm font-medium">Camera Sensitivity</div>
+                                            <div className="text-white/40 text-xs">Adjust look speed</div>
+                                        </div>
+                                    </div>
+                                    <span className="text-cyan-400 text-sm font-mono bg-cyan-500/10 px-3 py-1 rounded-lg">
+                                        {(settings.cameraSensitivity || 0.3).toFixed(1)}
+                                    </span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0.1"
+                                    max="1.0"
+                                    step="0.1"
+                                    value={settings.cameraSensitivity || 0.3}
+                                    onChange={(e) => handleSlider('cameraSensitivity', parseFloat(e.target.value))}
+                                    className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                                />
+                                <div className="flex justify-between text-[10px] text-white/30 mt-1 px-1">
+                                    <span>Slow</span>
+                                    <span>Fast</span>
+                                </div>
+                            </div>
+                        </>
+                    )}
+                    
+                    {/* Audio Tab */}
+                    {activeTab === 'audio' && (
+                        <>
+                            <SettingRow
+                                icon="🔊"
+                                title="Master Sound"
+                                description="Toggle all game audio"
                             >
-                                <div 
-                                    className={`absolute top-1 w-6 h-6 bg-white rounded-full shadow transition-transform duration-200 ${
-                                        settings.soundEnabled !== false ? 'translate-x-7' : 'translate-x-1'
+                                <Toggle 
+                                    enabled={settings.soundEnabled !== false} 
+                                    onChange={() => handleToggle('soundEnabled')}
+                                    color="green"
+                                />
+                            </SettingRow>
+                            
+                            {/* Music Volume */}
+                            <div className="py-3 border-b border-white/5">
+                                <div className="flex items-center justify-between mb-3">
+                                    <div className="flex items-center gap-3">
+                                        <span className="text-lg">🎵</span>
+                                        <div>
+                                            <div className="text-white text-sm font-medium">Music Volume</div>
+                                            <div className="text-white/40 text-xs">Background music level</div>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button
+                                            onClick={() => handleToggle('musicMuted')}
+                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
+                                                settings.musicMuted 
+                                                    ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
+                                                    : 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                            }`}
+                                        >
+                                            {settings.musicMuted ? '🔇' : '🔊'}
+                                        </button>
+                                        <span className="text-purple-400 text-sm font-mono bg-purple-500/10 px-3 py-1 rounded-lg min-w-[50px] text-center">
+                                            {Math.round((settings.musicVolume ?? 0.3) * 100)}%
+                                        </span>
+                                    </div>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.05"
+                                    value={settings.musicVolume ?? 0.3}
+                                    onChange={(e) => handleSlider('musicVolume', parseFloat(e.target.value))}
+                                    disabled={settings.musicMuted}
+                                    className={`w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-purple-500 ${
+                                        settings.musicMuted ? 'opacity-40' : ''
                                     }`}
                                 />
-                            </button>
-                        </div>
-                    </div>
-                    
-                    {/* Music Volume with Mute Toggle */}
-                    <div className="bg-black/30 rounded-xl p-3">
-                        <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-2">
-                                <h3 className="text-white font-medium text-sm">🎵 Music</h3>
-                                <button
-                                    onClick={() => handleToggle('musicMuted')}
-                                    className={`px-3 py-1 text-[11px] font-medium rounded-lg transition-colors touch-manipulation select-none active:scale-95 ${
-                                        settings.musicMuted 
-                                            ? 'bg-red-500/80 text-white' 
-                                            : 'bg-green-500/80 text-white'
-                                    }`}
-                                >
-                                    {settings.musicMuted ? '🔇 MUTED' : '🔊 ON'}
-                                </button>
                             </div>
-                            <span className="text-purple-400 text-xs font-mono bg-black/30 px-2 py-0.5 rounded">
-                                {Math.round((settings.musicVolume ?? 0.3) * 100)}%
-                            </span>
-                        </div>
-                        <input
-                            type="range"
-                            min="0"
-                            max="1"
-                            step="0.05"
-                            value={settings.musicVolume ?? 0.3}
-                            onChange={(e) => handleSlider('musicVolume', parseFloat(e.target.value))}
-                            disabled={settings.musicMuted}
-                            className={`w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-400 ${
-                                settings.musicMuted ? 'opacity-50' : ''
-                            }`}
-                        />
-                        <div className="flex justify-between text-[10px] text-white/40 mt-1">
-                            <span>Off</span>
-                            <span>Max</span>
-                        </div>
-                    </div>
+                        </>
+                    )}
                     
-                    {/* Changelog & Info Section */}
-                    <div className="bg-black/30 rounded-xl p-3">
-                        <h3 className="text-white font-medium text-sm mb-2">📋 Info & Updates</h3>
-                        <div className="space-y-2">
-                            {/* Tutorial Button */}
+                    {/* Display Tab */}
+                    {activeTab === 'display' && (
+                        <>
+                            <SettingRow
+                                icon="❄️"
+                                title="Particle Effects"
+                                description="Snow & nametag particles"
+                            >
+                                <Toggle 
+                                    enabled={settings.snowEnabled !== false} 
+                                    onChange={() => handleToggle('snowEnabled')}
+                                    color="cyan"
+                                />
+                            </SettingRow>
+                        </>
+                    )}
+                    
+                    {/* Info Tab */}
+                    {activeTab === 'info' && (
+                        <div className="space-y-3">
                             <button
                                 onClick={() => {
                                     onClose();
-                                    // Dispatch event to open tutorial (handled by GameHUD)
                                     window.dispatchEvent(new CustomEvent('openTutorial'));
                                 }}
-                                className="w-full p-2.5 rounded-lg border border-purple-500/30 bg-purple-500/10 hover:bg-purple-500/20 transition-all text-left touch-manipulation select-none"
+                                className="w-full p-4 rounded-2xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 hover:border-purple-500/40 transition-all text-left group"
                             >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg">❓</span>
-                                    <div className="flex-1">
-                                        <div className="text-purple-400 font-bold text-sm">Help & Tutorial</div>
-                                        <p className="text-white/40 text-[10px]">Learn how to play waddle.bet</p>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <span className="text-xl">❓</span>
                                     </div>
-                                    <span className="text-white/30">→</span>
+                                    <div className="flex-1">
+                                        <div className="text-white font-bold">Help & Tutorial</div>
+                                        <p className="text-white/40 text-xs">Learn how to play WaddleBet</p>
+                                    </div>
+                                    <span className="text-white/30 group-hover:text-white/60 transition-colors">→</span>
                                 </div>
                             </button>
+                            
                             <button
                                 onClick={() => {
                                     onClose();
                                     onOpenChangelog?.();
                                 }}
-                                className="w-full p-2.5 rounded-lg border border-green-500/30 bg-green-500/10 hover:bg-green-500/20 transition-all text-left touch-manipulation select-none"
+                                className="w-full p-4 rounded-2xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 hover:border-green-500/40 transition-all text-left group"
                             >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg">📋</span>
-                                    <div className="flex-1">
-                                        <div className="text-green-400 font-bold text-sm">Changelog</div>
-                                        <p className="text-white/40 text-[10px]">See what's new in WaddleBet</p>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <span className="text-xl">📋</span>
                                     </div>
-                                    <span className="text-white/30">→</span>
+                                    <div className="flex-1">
+                                        <div className="text-white font-bold">Changelog</div>
+                                        <p className="text-white/40 text-xs">See what's new in WaddleBet</p>
+                                    </div>
+                                    <span className="text-white/30 group-hover:text-white/60 transition-colors">→</span>
                                 </div>
                             </button>
+                            
                             <a
                                 href="https://whitepaper.waddle.bet"
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="block w-full p-2.5 rounded-lg border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 transition-all text-left touch-manipulation select-none"
+                                className="w-full p-4 rounded-2xl bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 hover:border-cyan-500/40 transition-all text-left group block"
                             >
-                                <div className="flex items-center gap-2">
-                                    <span className="text-lg">📄</span>
-                                    <div className="flex-1">
-                                        <div className="text-cyan-400 font-bold text-sm">Whitepaper</div>
-                                        <p className="text-white/40 text-[10px]">Read the full documentation</p>
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <span className="text-xl">📄</span>
                                     </div>
-                                    <span className="text-white/30">↗</span>
+                                    <div className="flex-1">
+                                        <div className="text-white font-bold">Whitepaper</div>
+                                        <p className="text-white/40 text-xs">Read the full documentation</p>
+                                    </div>
+                                    <span className="text-white/30 group-hover:text-white/60 transition-colors">↗</span>
                                 </div>
                             </a>
+                            
+                            {/* Version Info */}
+                            <div className="text-center text-white/20 text-xs pt-4">
+                                WaddleBet v2.0 • © 2026
+                            </div>
                         </div>
-                    </div>
-                    
-                    {/* Spacer for scroll padding */}
-                    <div className="h-2" />
+                    )}
                 </div>
                 
-                {/* Close Button - Fixed at bottom */}
-                <div className="p-4 pt-2 shrink-0">
+                {/* Footer */}
+                <div className="p-4 border-t border-white/5">
                     <button
                         onClick={onClose}
-                        className="w-full py-2.5 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 active:from-cyan-600 active:to-blue-600 text-white rounded-xl font-medium text-sm transition-all"
+                        className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white rounded-2xl font-bold text-sm transition-all shadow-lg hover:shadow-cyan-500/25"
                     >
                         Done
                     </button>
@@ -486,4 +583,3 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
 };
 
 export default SettingsMenu;
-
