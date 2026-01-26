@@ -111,6 +111,9 @@ class GameManager {
         this.gameStats = userData.gameStats || null;
         this.appearance = userData.customization || {};
         
+        // Store puffles from server (critical for persistence)
+        this.puffles = userData.puffles || [];
+        
         // Merge server stats
         if (userData.stats) {
             this.stats = {
@@ -126,9 +129,14 @@ class GameManager {
             this.clearMigrationData();
         }
         
-        console.log(`📦 GameManager synced from server: ${this.coins} coins`);
+        console.log(`📦 GameManager synced from server: ${this.coins} coins, ${this.puffles?.length || 0} puffles`);
         this.emit('serverSync', { userData });
         this.emit('coinsChanged', { coins: this.coins, delta: 0, reason: 'sync' });
+        
+        // Emit puffle update event
+        if (this.puffles?.length > 0) {
+            this.emit('pufflesLoaded', { puffles: this.puffles });
+        }
     }
     
     /**
@@ -178,6 +186,7 @@ class GameManager {
         this.stamps = [];
         this.unlockedItems = ['none'];
         this.gameStats = null;
+        this.puffles = [];
         this.stats = {
             gamesPlayed: 0,
             gamesWon: 0,
@@ -190,6 +199,46 @@ class GameManager {
         
         this.emit('serverSync', { userData: null });
         this.emit('dataCleared', {});
+        this.emit('pufflesLoaded', { puffles: [] });
+    }
+    
+    // ==================== PUFFLES ====================
+    
+    /**
+     * Get user's puffles
+     */
+    getPuffles() {
+        return this.puffles || [];
+    }
+    
+    /**
+     * Get active puffle
+     */
+    getActivePuffle() {
+        return this.puffles?.find(p => p.isActive) || null;
+    }
+    
+    /**
+     * Update puffles list (after server operation)
+     */
+    updatePuffles(puffles) {
+        this.puffles = puffles;
+        if (this.serverData) {
+            this.serverData.puffles = puffles;
+        }
+        this.emit('pufflesLoaded', { puffles });
+    }
+    
+    /**
+     * Add a new puffle to the list
+     */
+    addPuffle(puffle) {
+        if (!this.puffles) this.puffles = [];
+        this.puffles.push(puffle);
+        if (this.serverData) {
+            this.serverData.puffles = this.puffles;
+        }
+        this.emit('pufflesLoaded', { puffles: this.puffles });
     }
     
     // ==================== COINS ====================

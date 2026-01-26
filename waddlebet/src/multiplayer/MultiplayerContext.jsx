@@ -730,6 +730,48 @@ export function MultiplayerProvider({ children }) {
                 }
                 break;
             }
+            
+            case 'puffle_interaction_reward': {
+                // Puffle social interaction reward - gold earned!
+                console.log(`🐾 Puffle interaction reward: +${message.goldEarned} gold`);
+                // Coins update will come via coins_update message
+                break;
+            }
+            
+            case 'puffle_interaction_failed': {
+                // Interaction failed (cooldown, no puffle, etc)
+                console.log(`🐾 Puffle interaction failed: ${message.error}`);
+                break;
+            }
+            
+            // Puffle update responses - sync data back from server
+            case 'puffle_fed':
+            case 'puffle_food_used':
+            case 'puffle_food_bought':
+            case 'puffle_played':
+            case 'puffle_toy_bought':
+            case 'puffle_accessory_bought':
+            case 'puffle_accessory_equipped':
+            case 'puffle_toy_equipped':
+            case 'puffle_rest_started':
+            case 'puffle_rest_stopped':
+            case 'puffle_trained': {
+                if (message.success && message.puffle) {
+                    console.log(`🐾 Puffle updated from server:`, message.puffle?.name);
+                    callbacksRef.current.onPuffleUpdated?.(message.puffle);
+                } else if (!message.success) {
+                    console.warn(`🐾 Puffle operation failed:`, message.error);
+                }
+                break;
+            }
+            
+            case 'puffle_rest_status': {
+                if (message.success) {
+                    console.log(`🐾 Puffle rest status:`, message);
+                    callbacksRef.current.onPuffleRestStatus?.(message.puffleId, message);
+                }
+                break;
+            }
                 
             case 'stats_update':
                 // Update local stats from server
@@ -920,6 +962,34 @@ export function MultiplayerProvider({ children }) {
                     pufflePlayer.needsPuffleUpdate = true;
                 }
                 break;
+            
+            // Puffle emote - visible to all players
+            case 'puffle_emote': {
+                const emotePlayer = playersDataRef.current.get(message.playerId);
+                if (emotePlayer) {
+                    // Set puffle emote data that VoxelWorld will render
+                    emotePlayer.puffleEmote = message.emoji;
+                    emotePlayer.puffleEmoteTime = Date.now();
+                    emotePlayer.puffleEmoteDuration = message.duration || 3000;
+                    console.log(`🐾 ${emotePlayer.name}'s puffle emoted: ${message.emoji}`);
+                }
+                break;
+            }
+            
+            // Puffle state sync - update accessories, mood, etc.
+            case 'puffle_state_update': {
+                const statePlayer = playersDataRef.current.get(message.playerId);
+                if (statePlayer && message.puffle) {
+                    const wasUpdated = JSON.stringify(statePlayer.puffle) !== JSON.stringify(message.puffle);
+                    statePlayer.puffle = message.puffle;
+                    statePlayer.pufflePosition = message.pufflePosition || statePlayer.pufflePosition;
+                    if (wasUpdated) {
+                        statePlayer.needsPuffleUpdate = true;
+                        console.log(`🐾 ${statePlayer.name}'s puffle state updated (accessories: ${message.puffle.equippedAccessories ? Object.keys(message.puffle.equippedAccessories).join(', ') : 'none'})`);
+                    }
+                }
+                break;
+            }
                 
             case 'player_renamed':
                 const renamedPlayer = playersDataRef.current.get(message.playerId);
@@ -1249,6 +1319,31 @@ export function MultiplayerProvider({ children }) {
     
     const updatePuffle = useCallback((puffle) => {
         send({ type: 'update_puffle', puffle });
+    }, [send]);
+    
+    // Send puffle emote visible to all players
+    const sendPuffleEmote = useCallback((emoji, duration = 3000) => {
+        send({ type: 'puffle_emote', emoji, duration });
+    }, [send]);
+    
+    // Sync puffle state (accessories, mood, etc.) to all players
+    const syncPuffleState = useCallback((puffleState) => {
+        send({ type: 'puffle_state_sync', puffleState });
+    }, [send]);
+    
+    // Equip puffle accessory via server (persists to DB)
+    const equipPuffleAccessory = useCallback((puffleId, category, accessoryId) => {
+        send({ type: 'puffle_equip_accessory', puffleId, category, accessoryId });
+    }, [send]);
+    
+    // Unequip puffle accessory via server (persists to DB)
+    const unequipPuffleAccessory = useCallback((puffleId, category) => {
+        send({ type: 'puffle_equip_accessory', puffleId, category, accessoryId: 'none' });
+    }, [send]);
+    
+    // Equip puffle toy via server (persists to DB)
+    const equipPuffleToy = useCallback((puffleId, toyType) => {
+        send({ type: 'puffle_equip_toy', puffleId, toyType });
     }, [send]);
     
     // Puffle adoption state
@@ -1687,6 +1782,11 @@ export function MultiplayerProvider({ children }) {
         changeRoom,
         updateAppearance,
         updatePuffle,
+        sendPuffleEmote,
+        syncPuffleState,
+        equipPuffleAccessory,
+        unequipPuffleAccessory,
+        equipPuffleToy,
         sendBallKick,
         requestBallSync,
         sendSnowball,

@@ -42,5 +42,8 @@ export { default as IceFishingHole } from './IceFishingHole';
 // Arcade/Gaming
 export { default as ArcadeMachine } from './ArcadeMachine';
 
+// Vending Machines
+export { default as PuffleFoodVendingMachine } from './PuffleFoodVendingMachine';
+
 // Prop registry for factory pattern
 export { createProp, PROP_TYPES } from './PropRegistry';

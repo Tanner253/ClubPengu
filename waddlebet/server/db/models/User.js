@@ -642,14 +642,14 @@ userSchema.methods.getFullData = function() {
 };
 
 /**
- * Get full user data including gacha-owned cosmetic IDs
- * Call this when you need to include owned gacha items
+ * Get full user data including gacha-owned cosmetic IDs and puffles
+ * Call this when you need to include owned gacha items and puffles
  */
 userSchema.methods.getFullDataAsync = async function() {
     const baseData = this.getFullData();
     
-    // Fetch gacha-owned cosmetic template IDs
     try {
+        // Fetch gacha-owned cosmetic template IDs
         const OwnedCosmetic = mongoose.model('OwnedCosmetic');
         const ownedGacha = await OwnedCosmetic.find(
             { ownerId: this.walletAddress, convertedToGold: false },
@@ -659,15 +659,29 @@ userSchema.methods.getFullDataAsync = async function() {
         // Get unique template IDs
         const gachaOwnedIds = [...new Set(ownedGacha.map(c => c.templateId))];
         
+        // Fetch user's puffles and update their stats based on time passed
+        const Puffle = mongoose.model('Puffle');
+        const puffles = await Puffle.find({ ownerWallet: this.walletAddress });
+        
+        // Update stats for each puffle based on time decay and save
+        const puffleData = [];
+        for (const puffle of puffles) {
+            puffle.updateStats();
+            await puffle.save();
+            puffleData.push(puffle.toClientData());
+        }
+        
         return {
             ...baseData,
-            gachaOwnedCosmetics: gachaOwnedIds
+            gachaOwnedCosmetics: gachaOwnedIds,
+            puffles: puffleData
         };
     } catch (error) {
-        console.error('Error fetching gacha-owned cosmetics:', error);
+        console.error('Error fetching user async data:', error);
         return {
             ...baseData,
-            gachaOwnedCosmetics: []
+            gachaOwnedCosmetics: [],
+            puffles: []
         };
     }
 };

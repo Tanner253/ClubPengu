@@ -415,7 +415,7 @@ export function animateMesh(
             // Lie down on side
             meshInner.rotation.x = Math.PI * 0.4;  // Lean forward a lot
             meshInner.rotation.z = Math.PI * 0.15; // Slight tilt
-            meshInner.position.y = 0.2;            // Lower to ground
+            meshInner.position.y = 0.6;            // Raised position
             
             // Flippers relaxed at sides
             if(flipperL) {

@@ -3,6 +3,32 @@
  * Simplified: Uses sine wave for smooth transitions
  */
 
+// Day/Night duration configuration
+// DAY_LENGTH_RATIO: 0.5 = equal day/night, 0.7 = 70% daylight, etc.
+const DAY_LENGTH_RATIO = 0.7; // 70% of cycle is daylight, 30% is night
+
+/**
+ * Remap time to create longer days and shorter nights
+ * @param {number} t - Raw normalized time (0-1)
+ * @returns {number} Remapped time for sine wave calculation
+ */
+function remapTimeForLongerDays(t) {
+    const nightHalf = (1 - DAY_LENGTH_RATIO) / 2;
+    const nightStart = nightHalf;     // When sunrise happens (e.g., 0.15 for 70% day)
+    const dayEnd = 1 - nightHalf;     // When sunset happens (e.g., 0.85 for 70% day)
+    
+    if (t < nightStart) {
+        // First night portion (0 to nightStart) -> maps to original (0 to 0.25)
+        return (t / nightStart) * 0.25;
+    } else if (t < dayEnd) {
+        // Day portion (nightStart to dayEnd) -> maps to original (0.25 to 0.75)
+        return 0.25 + ((t - nightStart) / (dayEnd - nightStart)) * 0.5;
+    } else {
+        // Second night portion (dayEnd to 1) -> maps to original (0.75 to 1)
+        return 0.75 + ((t - dayEnd) / (1 - dayEnd)) * 0.25;
+    }
+}
+
 /**
  * Update day/night cycle lighting
  * @param {Object} params - All required parameters
@@ -23,9 +49,12 @@ export function updateDayNightCycle({
 }) {
     if (!sunLight || !ambientLight) return;
     
+    // Remap time for longer days
+    const remappedT = remapTimeForLongerDays(t);
+    
     // Smooth sun arc using sine wave
-    // t=0 midnight, t=0.25 sunrise, t=0.5 noon, t=0.75 sunset
-    const sunAngle = (t - 0.25) * Math.PI * 2;
+    // remappedT=0 midnight, remappedT=0.25 sunrise, remappedT=0.5 noon, remappedT=0.75 sunset
+    const sunAngle = (remappedT - 0.25) * Math.PI * 2;
     const sunHeight = Math.sin(sunAngle); // -1 at midnight, +1 at noon
     
     // Sun position - arc across the sky
@@ -96,8 +125,10 @@ export function updateDayNightCycle({
  * @returns {number} Night factor (0-1)
  */
 export function calculateNightFactor(t) {
-    // Sine wave: t=0 midnight (night=1), t=0.5 noon (night=0)
-    const sunAngle = (t - 0.25) * Math.PI * 2;
+    // Remap time for longer days
+    const remappedT = remapTimeForLongerDays(t);
+    // Sine wave: remappedT=0 midnight (night=1), remappedT=0.5 noon (night=0)
+    const sunAngle = (remappedT - 0.25) * Math.PI * 2;
     const sunHeight = Math.sin(sunAngle);
     return Math.max(0, -sunHeight); // 0 during day, peaks at 1 at midnight
 }

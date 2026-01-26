@@ -361,6 +361,414 @@ class UserService {
         return { success: true };
     }
 
+    /**
+     * Feed puffle with specific food
+     */
+    async feedPuffle(walletAddress, puffleId, foodType) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const foodInfo = Puffle.getFoodInfo(foodType);
+        if (!foodInfo) return { success: false, error: 'INVALID_FOOD' };
+
+        const user = await this.getUser(walletAddress);
+        if (!user || user.coins < foodInfo.price) {
+            return { success: false, error: 'INSUFFICIENT_FUNDS', required: foodInfo.price };
+        }
+
+        // Deduct coins
+        await this.addCoins(walletAddress, -foodInfo.price, 'puffle_food', { puffleId, foodType }, `Fed puffle ${foodType}`);
+
+        // Update puffle stats
+        const result = puffle.feed(foodType);
+        await puffle.save();
+
+        return { success: true, puffle: puffle.toClientData(), ...result };
+    }
+
+    /**
+     * Play with puffle using a toy
+     */
+    async playWithPuffle(walletAddress, puffleId, toyType = null) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const result = puffle.play(toyType);
+        if (!result.success && result.error) {
+            return result;
+        }
+
+        await puffle.save();
+        return { success: true, puffle: puffle.toClientData(), ...result };
+    }
+
+    /**
+     * Buy a toy for puffle
+     */
+    async buyPuffleToy(walletAddress, puffleId, toyType) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const toyInfo = Puffle.getToyInfo(toyType);
+        if (!toyInfo) return { success: false, error: 'INVALID_TOY' };
+
+        if (puffle.ownedToys.includes(toyType)) {
+            return { success: false, error: 'ALREADY_OWNED' };
+        }
+
+        const user = await this.getUser(walletAddress);
+        if (!user || user.coins < toyInfo.price) {
+            return { success: false, error: 'INSUFFICIENT_FUNDS', required: toyInfo.price };
+        }
+
+        // Deduct coins
+        await this.addCoins(walletAddress, -toyInfo.price, 'puffle_toy', { puffleId, toyType }, `Bought ${toyType} toy`);
+
+        // Add toy to puffle
+        puffle.ownedToys.push(toyType);
+        await puffle.save();
+
+        return { success: true, puffle: puffle.toClientData() };
+    }
+
+    /**
+     * Buy food for puffle inventory (doesn't feed immediately)
+     */
+    async buyPuffleFood(walletAddress, puffleId, foodType, quantity = 1) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const foodInfo = Puffle.getFoodInfo(foodType);
+        if (!foodInfo) return { success: false, error: 'INVALID_FOOD' };
+
+        const totalCost = foodInfo.price * quantity;
+        const user = await this.getUser(walletAddress);
+        if (!user || user.coins < totalCost) {
+            return { success: false, error: 'INSUFFICIENT_FUNDS', required: totalCost };
+        }
+
+        // Deduct coins
+        await this.addCoins(walletAddress, -totalCost, 'puffle_food_buy', { puffleId, foodType, quantity }, `Bought ${quantity}x ${foodType}`);
+
+        // Add food to inventory
+        puffle.addFood(foodType, quantity);
+        await puffle.save();
+
+        return { success: true, puffle: puffle.toClientData(), newBalance: user.coins - totalCost };
+    }
+
+    /**
+     * Use food from puffle inventory
+     */
+    async usePuffleFood(walletAddress, puffleId, foodType) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const result = puffle.useFood(foodType);
+        if (!result.success) return result;
+
+        await puffle.save();
+        return { success: true, puffle: puffle.toClientData(), ...result };
+    }
+
+    /**
+     * Buy accessory for puffle
+     */
+    async buyPuffleAccessory(walletAddress, puffleId, category, itemId, price) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        // Check if already owned
+        const categoryMap = { hat: 'hats', glasses: 'glasses', neckwear: 'neckwear' };
+        const arrayKey = categoryMap[category] || category;
+        if (puffle.ownedAccessories[arrayKey]?.includes(itemId)) {
+            return { success: false, error: 'ALREADY_OWNED' };
+        }
+
+        const user = await this.getUser(walletAddress);
+        if (!user || user.coins < price) {
+            return { success: false, error: 'INSUFFICIENT_FUNDS', required: price };
+        }
+
+        // Deduct coins
+        await this.addCoins(walletAddress, -price, 'puffle_accessory', { puffleId, category, itemId }, `Bought ${itemId} ${category}`);
+
+        // Add accessory
+        puffle.addAccessory(category, itemId);
+        await puffle.save();
+
+        return { success: true, puffle: puffle.toClientData() };
+    }
+
+    /**
+     * Equip puffle accessory
+     */
+    async equipPuffleAccessory(walletAddress, puffleId, category, itemId) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const result = puffle.equipAccessory(category, itemId);
+        if (!result.success) return result;
+
+        await puffle.save();
+        return { success: true, puffle: puffle.toClientData() };
+    }
+
+    /**
+     * Equip puffle toy
+     */
+    async equipPuffleToy(walletAddress, puffleId, toyType) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const result = puffle.equipToy(toyType);
+        if (!result.success) return result;
+
+        await puffle.save();
+        return { success: true, puffle: puffle.toClientData() };
+    }
+
+    /**
+     * Start puffle rest
+     */
+    async restPuffle(walletAddress, puffleId) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const result = puffle.startRest();
+        if (!result.success) {
+            return result;
+        }
+        await puffle.save();
+        return { success: true, puffle: puffle.toClientData(), ...result };
+    }
+
+    /**
+     * Stop puffle rest (interrupt or complete)
+     */
+    async stopRestPuffle(walletAddress, puffleId) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const result = puffle.stopRest();
+        if (!result.success) {
+            return result;
+        }
+        await puffle.save();
+        return { success: true, puffle: puffle.toClientData(), ...result };
+    }
+
+    /**
+     * Get current rest status
+     */
+    async getPuffleRestStatus(walletAddress, puffleId) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        return { success: true, ...puffle.getRestStatus() };
+    }
+
+    /**
+     * Train puffle in a specific stat
+     */
+    async trainPuffle(walletAddress, puffleId, statType, amount) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const result = puffle.train(statType, amount);
+        if (!result.success) return result;
+
+        await puffle.save();
+        return { success: true, puffle: puffle.toClientData(), ...result };
+    }
+
+    /**
+     * Record puffle-to-puffle interaction (proximity dance)
+     * Returns gold reward if successful
+     */
+    async recordPuffleInteraction(walletAddress, otherWalletAddress) {
+        if (walletAddress === otherWalletAddress) {
+            return { success: false, error: 'SAME_OWNER' };
+        }
+
+        const puffle = await Puffle.findActiveForOwner(walletAddress);
+        const otherPuffle = await Puffle.findActiveForOwner(otherWalletAddress);
+
+        if (!puffle || !otherPuffle) {
+            return { success: false, error: 'NO_ACTIVE_PUFFLE' };
+        }
+
+        // Check cooldown (1 hour between interactions with same player)
+        if (!puffle.canInteractWith(otherWalletAddress)) {
+            return { success: false, error: 'COOLDOWN', message: 'Can only interact once per hour' };
+        }
+
+        // Record interaction on both puffles
+        puffle.recordInteraction(otherWalletAddress);
+        otherPuffle.recordInteraction(walletAddress);
+
+        await puffle.save();
+        await otherPuffle.save();
+
+        // Award gold to both players
+        const goldReward = 10;
+        await this.addCoins(walletAddress, goldReward, 'puffle_social', { otherWallet: otherWalletAddress }, 'Puffle social bonus');
+        await this.addCoins(otherWalletAddress, goldReward, 'puffle_social', { otherWallet: walletAddress }, 'Puffle social bonus');
+
+        return { 
+            success: true, 
+            goldEarned: goldReward,
+            puffle: puffle.toClientData(),
+            otherPuffle: otherPuffle.toClientData()
+        };
+    }
+
+    /**
+     * Start puffle daycare
+     */
+    async startPuffleDaycare(walletAddress, puffleId, hours = 24) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        // Cost: 5 gold per hour
+        const cost = hours * 5;
+        const user = await this.getUser(walletAddress);
+        if (!user || user.coins < cost) {
+            return { success: false, error: 'INSUFFICIENT_FUNDS', required: cost };
+        }
+
+        // Deduct coins
+        await this.addCoins(walletAddress, -cost, 'puffle_daycare', { puffleId, hours }, `Puffle daycare for ${hours}h`);
+
+        puffle.startDaycare();
+        await puffle.save();
+
+        return { success: true, puffle: puffle.toClientData(), cost };
+    }
+
+    /**
+     * End puffle daycare
+     */
+    async endPuffleDaycare(walletAddress, puffleId) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        puffle.endDaycare();
+        await puffle.save();
+
+        return { success: true, puffle: puffle.toClientData() };
+    }
+
+    /**
+     * Get puffle shop items (food, toys, accessories)
+     */
+    getPuffleShopItems() {
+        return Puffle.getShopItems();
+    }
+
+    /**
+     * Buy food for puffle inventory
+     */
+    async buyPuffleFood(walletAddress, puffleId, foodType, quantity = 1) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const foodInfo = Puffle.getFoodInfo(foodType);
+        if (!foodInfo) return { success: false, error: 'INVALID_FOOD' };
+
+        const totalCost = foodInfo.price * quantity;
+        const user = await this.getUser(walletAddress);
+        if (!user || user.coins < totalCost) {
+            return { success: false, error: 'INSUFFICIENT_FUNDS', required: totalCost, have: user?.coins || 0 };
+        }
+
+        // Deduct coins
+        await this.addCoins(walletAddress, -totalCost, 'puffle_food_purchase', { puffleId, foodType, quantity }, `Bought ${quantity}x ${foodType}`);
+
+        // Add to puffle's food inventory
+        puffle.addFood(foodType, quantity);
+        await puffle.save();
+
+        return { success: true, puffle: puffle.toClientData(), foodType, quantity, newInventory: puffle.foodInventory };
+    }
+
+    /**
+     * Feed puffle using food from inventory
+     * @param {boolean} useInventory - if true, use food from inventory; if false, buy on-the-fly
+     */
+    async feedPuffleFromInventory(walletAddress, puffleId, foodType) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const foodInfo = Puffle.getFoodInfo(foodType);
+        if (!foodInfo) return { success: false, error: 'INVALID_FOOD' };
+
+        // Try to use from inventory
+        const useResult = puffle.useFood(foodType);
+        if (!useResult.success) {
+            return { success: false, error: 'NO_FOOD_IN_INVENTORY', message: 'You need to buy more food!' };
+        }
+
+        // Apply feeding effects
+        const feedResult = puffle.feed(foodType);
+        await puffle.save();
+
+        return { success: true, puffle: puffle.toClientData(), ...feedResult, usedFromInventory: true };
+    }
+
+    /**
+     * Buy accessory for puffle
+     */
+    async buyPuffleAccessory(walletAddress, puffleId, category, accessoryId, price) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const user = await this.getUser(walletAddress);
+        if (!user || user.coins < price) {
+            return { success: false, error: 'INSUFFICIENT_FUNDS', required: price, have: user?.coins || 0 };
+        }
+
+        // Check if already owned
+        const result = puffle.addAccessory(category, accessoryId);
+        if (!result.success) {
+            return result;
+        }
+
+        // Deduct coins
+        await this.addCoins(walletAddress, -price, 'puffle_accessory', { puffleId, category, accessoryId }, `Bought ${accessoryId} for puffle`);
+        await puffle.save();
+
+        return { success: true, puffle: puffle.toClientData(), category, accessoryId };
+    }
+
+    /**
+     * Equip toy on puffle
+     */
+    async equipPuffleToy(walletAddress, puffleId, toyType) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const result = puffle.equipToy(toyType);
+        if (!result.success) return result;
+
+        await puffle.save();
+        return { success: true, puffle: puffle.toClientData(), equippedToy: toyType };
+    }
+
+    /**
+     * Equip accessory on puffle
+     */
+    async equipPuffleAccessory(walletAddress, puffleId, category, accessoryId) {
+        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
+        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
+
+        const result = puffle.equipAccessory(category, accessoryId);
+        if (!result.success) return result;
+
+        await puffle.save();
+        return { success: true, puffle: puffle.toClientData(), accessories: puffle.accessories };
+    }
+
     // ==================== COSMETIC OPERATIONS ====================
 
     /**

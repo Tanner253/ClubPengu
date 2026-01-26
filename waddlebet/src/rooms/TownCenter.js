@@ -1,5 +1,5 @@
 import CollisionSystem from '../engine/CollisionSystem';
-import { createProp, PROP_TYPES, Billboard, IceFishingHole, ArcadeMachine, createIglooInfoBoard } from '../props';
+import { createProp, PROP_TYPES, Billboard, IceFishingHole, ArcadeMachine, PuffleFoodVendingMachine, createIglooInfoBoard } from '../props';
 import { createNightclubExterior } from '../props/NightclubExterior';
 import { createDojoParkour } from '../props/DojoParkour';
 import { createCasino } from '../buildings';
@@ -49,7 +49,7 @@ function attachPropData(prop, mesh) {
  * T-STREET LAYOUT:
  * - Dojo at the base of the T (south)
  * - Campfire at the T intersection
- * - Pizza & Gift Shop on sides of the stem
+ * - Pizza & Puffle Shop on sides of the stem
  * - Nightclub at the top of the T (north)
  * - Igloos in the "armpits" of the T
  */
@@ -74,8 +74,8 @@ class TownCenter {
             rotation: 0, // Door faces north (toward campfire)
         },
         { 
-            id: 'market', 
-            name: 'GIFT SHOP', 
+            id: 'puffle_shop', 
+            name: 'PUFFLE SHOP', 
             position: { x: 45, z: 35 },  // East side of T stem
             size: { w: 10, h: 6, d: 10 },
             rotation: -Math.PI / 2, // Door faces west (toward street)
@@ -160,12 +160,12 @@ class TownCenter {
                 { text: 'DOJO', direction: -90 },      // South
                 { text: 'NIGHT CLUB', direction: 90 }, // North
                 { text: 'PIZZA', direction: 180 },     // West
-                { text: 'GIFT SHOP', direction: 0 },   // East
+                { text: 'PUFFLE SHOP', direction: 0 },   // East
             ]
         });
         
         // ==================== CHRISTMAS TREE ====================
-        // Positioned near the Gift Shop
+        // Positioned near the Puffle Shop
         const treeX = C + 43.2;
         const treeZ = C + 6.8;
         props.push({ type: 'christmas_tree', x: treeX, z: treeZ });
@@ -298,13 +298,13 @@ class TownCenter {
             depth: 18,
         });
         
-        // Path to Gift Shop (east branch from stem)
-        // Starts at edge of stem (x = C + 14) and goes to gift shop (x = C + 45)
+        // Path to Puffle Shop (east branch from stem)
+        // Starts at edge of stem (x = C + 14) and goes to puffle shop (x = C + 45)
         props.push({
             type: 'gravel_path',
             x: C + 30,    // Center: (14 + 45) / 2 = 29.5 ≈ 30
             z: C + 35,
-            width: 32,    // From stem edge to gift shop
+            width: 32,    // From stem edge to puffle shop
             depth: 18,
         });
         
@@ -369,10 +369,10 @@ class TownCenter {
             { type: 'bench', x: C + 65, z: C - 68, rotation: 0 },
         );
         
-        // Benches near buildings (outside pizza and gift shop paths)
+        // Benches near buildings (outside pizza and puffle shop paths)
         props.push(
             { type: 'bench', x: C - 55, z: C + 48, rotation: -Math.PI / 2 },  // Near pizza
-            { type: 'bench', x: C + 55, z: C + 48, rotation: Math.PI / 2 },   // Near gift shop
+            { type: 'bench', x: C + 55, z: C + 48, rotation: Math.PI / 2 },   // Near puffle shop
         );
         
         // ==================== PINE TREES - FULL MAP PERIMETER ====================
@@ -427,7 +427,7 @@ class TownCenter {
         // Interior accent trees (between areas)
         const interiorTrees = [
             { x: C - 70, z: C + 10, size: 'medium' },   // West of pizza
-            { x: C + 70, z: C + 10, size: 'medium' },   // East of gift shop
+            { x: C + 70, z: C + 10, size: 'medium' },   // East of puffle shop
             { x: C - 25, z: C + 60, size: 'small' },    // Near dojo west
             { x: C + 25, z: C + 60, size: 'small' },    // Near dojo east
             // Removed tree at C - 60, C - 15 (was blocking casino area)
@@ -533,7 +533,7 @@ class TownCenter {
             // Pizza entrance (west side, door faces east) - UPDATED POSITION
             { type: 'building_light', x: C - 38, z: C + 35, color: 0xFFAA55, intensity: 3.5, distance: 15, height: 4 },
             
-            // Gift Shop entrance (east side, door faces west) - UPDATED POSITION
+            // Puffle Shop entrance (east side, door faces west) - UPDATED POSITION
             { type: 'building_light', x: C + 38, z: C + 35, color: 0xFFE4B5, intensity: 3.5, distance: 15, height: 4 },
             
             // Dojo entrance (south, door faces north) - UPDATED POSITION
@@ -594,7 +594,7 @@ class TownCenter {
             { type: 'mailbox', x: C + 80, z: C - 70, rotation: 0, style: 'classic' },      // Near igloo6
             // Removed mailbox at C - 65, C - 10 (was blocking casino area)
             { type: 'mailbox', x: C + 75, z: C - 10, rotation: Math.PI, style: 'classic' }, // Near igloo10
-            { type: 'mailbox', x: C + 52, z: C + 28, rotation: -Math.PI / 2, style: 'modern' }, // Near gift shop
+            { type: 'mailbox', x: C + 52, z: C + 28, rotation: -Math.PI / 2, style: 'modern' }, // Near puffle shop
         );
         
         // ==================== TRASH CANS - NEAR PUBLIC AREAS ====================
@@ -607,7 +607,7 @@ class TownCenter {
             { type: 'trash_can', x: C - 32, z: C - 66 },    // Near T-bar bench north (below path)
             { type: 'trash_can', x: C + 32, z: C - 66 },    // Near T-bar bench north (below path)
             { type: 'trash_can', x: C - 50, z: C + 48 },    // Near pizza (outside path)
-            { type: 'trash_can', x: C + 50, z: C + 48 },    // Near gift shop (outside path)
+            { type: 'trash_can', x: C + 50, z: C + 48 },    // Near puffle shop (outside path)
             { type: 'trash_can', x: C + 18, z: C + 12 },    // Near campfire (outside stem)
             { type: 'trash_can', x: C + 18, z: C - 66 },    // Nightclub corner (outside path)
         );
@@ -630,7 +630,7 @@ class TownCenter {
         // Positioned along path edges, NOT on the gravel
         props.push(
             { type: 'fire_hydrant', x: C - 48, z: C + 48, color: 0xCC2222 },  // Near pizza (outside path)
-            { type: 'fire_hydrant', x: C + 48, z: C + 48, color: 0xCC2222 },  // Near gift shop (outside path)
+            { type: 'fire_hydrant', x: C + 48, z: C + 48, color: 0xCC2222 },  // Near puffle shop (outside path)
             { type: 'fire_hydrant', x: C - 18, z: C - 26, color: 0xFFD700 },  // T-junction west (outside paths)
             { type: 'fire_hydrant', x: C + 18, z: C - 26, color: 0xFFD700 },  // T-junction east (outside paths)
             { type: 'fire_hydrant', x: C - 50, z: C - 26, color: 0xCC2222 },  // T-bar west (above path)
@@ -643,7 +643,7 @@ class TownCenter {
         // Lord Fishnu (the holy fish) is in the northwest, penguin in the northeast
         props.push(
             { type: 'ice_sculpture', x: C - 52.5, z: C + 54.7, sculptureType: 'fish', isLordFishnu: true, rotation: Math.PI }, // Northwest - LORD FISHNU (rotated 180°)
-            { type: 'ice_sculpture', x: C + 52.7, z: C + 56.6, sculptureType: 'penguin' }, // Northeast open area (near gift shop)
+            { type: 'ice_sculpture', x: C + 52.7, z: C + 56.6, sculptureType: 'penguin' }, // Northeast open area (near puffle shop)
             { type: 'ice_sculpture', x: C - 85, z: C - 45, sculptureType: 'heart', rotation: Math.PI / 2 },   // Far west - rotated 90°
             { type: 'ice_sculpture', x: C + 85, z: C - 45, sculptureType: 'star', rotation: Math.PI / 2 },    // Far east - rotated 90°
         );
@@ -653,7 +653,7 @@ class TownCenter {
             // Pizza supplies
             { type: 'crate', x: C - 56, z: C + 32, size: 'medium' },
             { type: 'crate', x: C - 58, z: C + 34, size: 'small' },
-            // Gift shop merchandise
+            // Puffle shop merchandise
             { type: 'crate', x: C + 56, z: C + 32, size: 'large' },
             { type: 'crate', x: C + 58, z: C + 30, size: 'medium' },
             { type: 'crate', x: C + 54, z: C + 30, size: 'small' },
@@ -682,7 +682,7 @@ class TownCenter {
             { type: 'wooden_post', x: C + 18, z: C + 50, style: 'plain' },
             // Near buildings (outside pizza/gift paths: C-46 to C-14 and C+14 to C+46)
             { type: 'wooden_post', x: C - 48, z: C + 28, style: 'topped' },  // Outside pizza path
-            { type: 'wooden_post', x: C + 48, z: C + 28, style: 'topped' },  // Outside gift shop path
+            { type: 'wooden_post', x: C + 48, z: C + 28, style: 'topped' },  // Outside puffle shop path
         );
         
         // ==================== ICE FISHING POND ====================
@@ -702,7 +702,7 @@ class TownCenter {
         
         // ==================== ARCADE GAME ZONE ====================
         // Multiple arcade machines for different minigames!
-        // Positioned in a small arcade area near the Gift Shop
+        // Positioned in a small arcade area near the Puffle Shop
         const arcadeBaseX = C + 21.5;
         const arcadeBaseZ = C - 5.2;
         
@@ -1624,6 +1624,42 @@ class TownCenter {
                     );
                     break;
                 }
+                
+                case 'puffle_food_vending': {
+                    // Puffle food vending machine - gold sink for feeding puffles
+                    const vendingProp = new PuffleFoodVendingMachine(this.THREE);
+                    vendingProp.spawn(scene, prop.x, 0, prop.z, {
+                        interactionRadius: 4
+                    });
+                    mesh = vendingProp.mesh;
+                    mesh.name = prop.id || 'puffle_food_vending';
+                    mesh.userData.propInstance = vendingProp;
+                    
+                    // Add collision (vending machine is solid)
+                    this.collisionSystem.addCollider(
+                        prop.x, prop.z,
+                        { type: 'box', size: { x: 2.5, y: 4.5, z: 1.5 } },
+                        CollisionSystem.TYPES.SOLID,
+                        { name: prop.id || 'puffle_food_vending' }
+                    );
+                    
+                    // Add interaction trigger zone
+                    this.collisionSystem.addTrigger(
+                        prop.x, prop.z,
+                        {
+                            type: 'circle',
+                            radius: 4,
+                            action: 'puffle_food_vending',
+                            message: '🐾 Press E to buy Puffle Food'
+                        },
+                        (event) => this._handleInteraction(event, { 
+                            action: 'puffle_food_vending',
+                            message: '🐾 Press E to buy Puffle Food'
+                        }),
+                        { name: `${prop.id}_trigger` }
+                    );
+                    break;
+                }
             }
             
             if (mesh) {
@@ -1688,22 +1724,22 @@ class TownCenter {
                 }
             }
             
-            // Gift shop roof
-            if (building.id === 'market') {
+            // Puffle Shop roof
+            if (building.id === 'puffle_shop') {
                 const w = building.size.w, h = building.size.h, d = building.size.d;
                 const roofEdgeY = h + 1;
                 
                 this.collisionSystem.addCollider(bx - w/4, bz,
                     { type: 'box', size: { x: w/2 + 1, y: 0.3, z: d + 2 }, height: 0.3 },
-                    CollisionSystem.TYPES.SOLID, { name: 'gift_shop_roof_left', isRoof: true },
+                    CollisionSystem.TYPES.SOLID, { name: 'puffle_shop_roof_left', isRoof: true },
                     0, roofEdgeY + 0.8);
                 this.collisionSystem.addCollider(bx + w/4, bz,
                     { type: 'box', size: { x: w/2 + 1, y: 0.3, z: d + 2 }, height: 0.3 },
-                    CollisionSystem.TYPES.SOLID, { name: 'gift_shop_roof_right', isRoof: true },
+                    CollisionSystem.TYPES.SOLID, { name: 'puffle_shop_roof_right', isRoof: true },
                     0, roofEdgeY + 0.8);
                 this.collisionSystem.addCollider(bx, bz,
                     { type: 'box', size: { x: 1, y: 0.4, z: d + 2.4 }, height: 0.4 },
-                    CollisionSystem.TYPES.SOLID, { name: 'gift_shop_roof_ridge', isRoof: true },
+                    CollisionSystem.TYPES.SOLID, { name: 'puffle_shop_roof_ridge', isRoof: true },
                     0, h + 3);
             }
         });

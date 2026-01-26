@@ -27,10 +27,10 @@ export const BUILDINGS = [
         rotation: Math.PI  // Door faces north toward campfire
     },
     { 
-        id: 'market', 
-        name: 'GIFT SHOP', 
-        emoji: '🛒', 
-        description: 'Browse hats & items (coming soon)',
+        id: 'puffle_shop', 
+        name: 'PUFFLE SHOP', 
+        emoji: '🐾', 
+        description: 'Adopt puffles & buy supplies',
         gameId: null,
         color: 0xf39c12, // Gold roof
         wallColor: 0xecf0f1,
@@ -225,12 +225,13 @@ export const ROOM_PORTALS = {
             exitSpawnPos: { x: 70, z: -28 }
         },
         { 
-            id: 'market', 
-            name: 'GIFT SHOP', 
-            emoji: '🛒', 
-            description: 'Coming Soon',
+            id: 'puffle_shop', 
+            name: 'PUFFLE SHOP', 
+            emoji: '🐾', 
+            description: 'Adopt puffles & buy supplies',
             targetRoom: null,
-            // Gift Shop at (45, 35), door faces west
+            action: 'puffle_shop', // Opens Puffle Shop modal instead of room transition
+            // Puffle Shop at (45, 35), door faces west
             position: { x: 38, z: 35 },
             doorRadius: 3
         },

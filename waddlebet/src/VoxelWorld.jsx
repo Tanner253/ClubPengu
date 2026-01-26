@@ -11,6 +11,7 @@ import IglooRentalGuide from './components/IglooRentalGuide';
 import GachaDropRatesGuide from './components/GachaDropRatesGuide';
 import PenguinCreatorOverlay from './components/PenguinCreatorOverlay';
 import PufflePanel from './components/PufflePanel';
+import PuffleShopModal from './components/PuffleShopModal';
 import VirtualJoystick from './components/VirtualJoystick';
 import TouchCameraControl from './components/TouchCameraControl';
 import SettingsMenu from './components/SettingsMenu';
@@ -198,6 +199,8 @@ const VoxelWorld = ({
         changeRoom: mpChangeRoom,
         updateAppearance: mpUpdateAppearance,
         updatePuffle: mpUpdatePuffle,
+        sendPuffleEmote,      // Broadcast puffle emote to all players
+        syncPuffleState,      // Sync puffle accessories/state to all players
         sendBallKick: mpSendBallKick,
         requestBallSync: mpRequestBallSync,
         sendSnowball: mpSendSnowball,
@@ -366,6 +369,9 @@ const VoxelWorld = ({
     const emoteRef = useRef({ type: null, startTime: 0 });
     const [showPufflePanel, setShowPufflePanel] = useState(false);
     const playerPuffleRef = useRef(null);
+    const puffleInteractionsRef = useRef(new Map()); // Track player -> last interaction time
+    const puffleInteractionActiveRef = useRef(null); // Currently active interaction {playerId, startTime}
+    const [puffleInteractionReward, setPuffleInteractionReward] = useState(null); // Show reward notification
     
     // Banner Zoom Overlay State
     const [bannerZoomOpen, setBannerZoomOpen] = useState(false);
@@ -1235,6 +1241,48 @@ const VoxelWorld = ({
             return mesh;
         };
         
+        // Helper function to update puffle emote bubble texture
+        const updatePuffleEmoteBubble = (sprite, emoji) => {
+            const canvas = document.createElement('canvas');
+            canvas.width = 128;
+            canvas.height = 128;
+            const ctx = canvas.getContext('2d');
+            
+            // Draw bubble background
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(64, 54, 50, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw bubble pointer
+            ctx.beginPath();
+            ctx.moveTo(50, 95);
+            ctx.lineTo(64, 115);
+            ctx.lineTo(78, 95);
+            ctx.fill();
+            
+            // Draw border
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.arc(64, 54, 50, 0, Math.PI * 2);
+            ctx.stroke();
+            
+            // Draw emoji
+            ctx.font = '48px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(emoji, 64, 54);
+            
+            // Update texture
+            const texture = new THREE.CanvasTexture(canvas);
+            sprite.material.map = texture;
+            sprite.material.needsUpdate = true;
+        };
+        
+        // Store the helper function in a ref for use in the game loop
+        window._updatePuffleEmoteBubble = updatePuffleEmoteBubble;
+        
         // --- PORTAL MARKERS (Town only) ---
         const centerX = CENTER_X;
         const centerZ = CENTER_Z;
@@ -1282,7 +1330,7 @@ const VoxelWorld = ({
             // Use standalone building classes for high-quality building generation
             if (building.id === 'dojo') {
                 buildingGroup = createDojo(THREE, { w, h, d });
-            } else if (building.id === 'market') {
+            } else if (building.id === 'puffle_shop') {
                 buildingGroup = createGiftShop(THREE, { w, h, d });
             } else if (building.id === 'plaza') {
                 buildingGroup = createPizzaParlor(THREE, { w, h, d });
@@ -3411,6 +3459,65 @@ const VoxelWorld = ({
                 if (typeof playerPuffleRef.current.animate === 'function') {
                     playerPuffleRef.current.animate(time);
                 }
+                
+                // Trigger mood-based emotes periodically
+                if (typeof playerPuffleRef.current.maybeShowEmote === 'function') {
+                    playerPuffleRef.current.maybeShowEmote();
+                }
+                
+                // Update puffle mood periodically (every ~5 seconds)
+                if (!playerPuffleRef.current._lastMoodUpdate || time - playerPuffleRef.current._lastMoodUpdate > 5) {
+                    if (typeof playerPuffleRef.current.updateMood === 'function') {
+                        playerPuffleRef.current.updateMood();
+                    }
+                    playerPuffleRef.current._lastMoodUpdate = time;
+                }
+                
+                // --- MOOD-BASED EMOTE BROADCASTING ---
+                // Broadcast puffle's mood emotes to other players periodically
+                if (playerPuffleRef.current.showingEmote && playerPuffleRef.current.currentEmote) {
+                    const lastBroadcast = playerPuffleRef.current._lastEmoteBroadcast || 0;
+                    const currentEmoteTime = playerPuffleRef.current.emoteStartTime || 0;
+                    // Only broadcast if this is a new emote (within 100ms of start)
+                    if (currentEmoteTime > lastBroadcast && (Date.now() - currentEmoteTime) < 100) {
+                        playerPuffleRef.current._lastEmoteBroadcast = currentEmoteTime;
+                        sendPuffleEmote?.(playerPuffleRef.current.currentEmote, playerPuffleRef.current.emoteDuration || 2500);
+                    }
+                }
+                
+                // --- PUFFLE EMOTE BUBBLE RENDERING ---
+                const puffleMesh = playerPuffleRef.current.mesh;
+                const showingEmote = playerPuffleRef.current.showingEmote;
+                const currentEmote = playerPuffleRef.current.currentEmote;
+                
+                // Get or create emote bubble sprite
+                let emoteBubble = puffleMesh.getObjectByName('puffleEmoteBubble');
+                
+                if (showingEmote && currentEmote) {
+                    // Create emote bubble if needed
+                    if (!emoteBubble) {
+                        emoteBubble = playerPuffleRef.current.createEmoteBubble(THREE);
+                        emoteBubble.name = 'puffleEmoteBubble';
+                        emoteBubble.position.y = 1.8;
+                        puffleMesh.add(emoteBubble);
+                    }
+                    
+                    // Update emote bubble content if emoji changed
+                    if (emoteBubble.userData.currentEmoji !== currentEmote) {
+                        if (window._updatePuffleEmoteBubble) {
+                            window._updatePuffleEmoteBubble(emoteBubble, currentEmote);
+                        }
+                        emoteBubble.userData.currentEmoji = currentEmote;
+                    }
+                    
+                    emoteBubble.visible = true;
+                } else if (emoteBubble) {
+                    // Hide bubble when not emoting
+                    emoteBubble.visible = false;
+                }
+                
+                // Check proximity to other player puffles for social interaction
+                checkPuffleProximity(time);
             }
             
             if (playerRef.current) {
@@ -3932,15 +4039,23 @@ const VoxelWorld = ({
                     if (meshData.puffleMesh) {
                         scene.remove(meshData.puffleMesh);
                         meshData.puffleMesh = null;
+                        meshData.puffleInstance = null;
                     }
                     
-                    // Create new puffle if player has one
+                    // Create new puffle if player has one - include full data for accessories
                     if (playerData.puffle) {
-                        console.log(`🐾 Creating puffle for ${playerData.name}: ${playerData.puffle.color}`);
+                        console.log(`🐾 Creating puffle for ${playerData.name}: ${playerData.puffle.color}`, 
+                            playerData.puffle.equippedAccessories ? `with accessories: ${Object.keys(playerData.puffle.equippedAccessories).join(', ')}` : '');
                         const puffleInstance = new Puffle({
                             color: playerData.puffle.color,
-                            name: playerData.puffle.name
+                            name: playerData.puffle.name,
+                            // Include full puffle state for accessories, stats, etc.
+                            equippedAccessories: playerData.puffle.equippedAccessories || {},
+                            hunger: playerData.puffle.hunger,
+                            happiness: playerData.puffle.happiness,
+                            energy: playerData.puffle.energy
                         });
+                        meshData.puffleInstance = puffleInstance;
                         meshData.puffleMesh = puffleInstance.createMesh(THREE);
                         const pufflePos = playerData.pufflePosition || {
                             x: (playerData.position?.x || 0) + 1.5,
@@ -3957,9 +4072,84 @@ const VoxelWorld = ({
                         x: (playerData.position?.x || 0) + 1.5,
                         z: (playerData.position?.z || 0) + 1.5
                     };
-                    meshData.puffleMesh.position.x = lerp(meshData.puffleMesh.position.x, targetPufflePos.x, lerpFactor);
-                    meshData.puffleMesh.position.z = lerp(meshData.puffleMesh.position.z, targetPufflePos.z, lerpFactor);
-                    meshData.puffleMesh.position.y = 0.5;
+                    
+                    // Store previous position for movement detection
+                    const prevX = meshData.puffleMesh.position.x;
+                    const prevZ = meshData.puffleMesh.position.z;
+                    
+                    // Smooth position update
+                    meshData.puffleMesh.position.x = lerp(prevX, targetPufflePos.x, lerpFactor);
+                    meshData.puffleMesh.position.z = lerp(prevZ, targetPufflePos.z, lerpFactor);
+                    
+                    // Detect if puffle is moving
+                    const dx = meshData.puffleMesh.position.x - prevX;
+                    const dz = meshData.puffleMesh.position.z - prevZ;
+                    const isMoving = Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001;
+                    
+                    // Apply bouncing animation (always active, more bounce when moving)
+                    const bounceSpeed = isMoving ? 8 : 3;
+                    const bounceAmount = isMoving ? 0.15 : 0.05;
+                    meshData.puffleMesh.position.y = 0.5 + Math.abs(Math.sin(time * bounceSpeed)) * bounceAmount;
+                    
+                    // Apply rotation to face direction of movement
+                    if (isMoving) {
+                        const targetRotation = Math.atan2(dx, dz);
+                        // Smooth rotation
+                        let currentRot = meshData.puffleMesh.rotation.y;
+                        let diff = targetRotation - currentRot;
+                        // Normalize angle difference
+                        while (diff > Math.PI) diff -= Math.PI * 2;
+                        while (diff < -Math.PI) diff += Math.PI * 2;
+                        meshData.puffleMesh.rotation.y += diff * 0.15;
+                    }
+                    
+                    // Apply squash/stretch based on movement
+                    const squashAmount = isMoving ? 0.95 : 1;
+                    const stretchAmount = isMoving ? 1.05 : 1;
+                    meshData.puffleMesh.scale.set(
+                        0.6 * squashAmount,
+                        0.6 * stretchAmount * (1 + Math.sin(time * bounceSpeed) * 0.05),
+                        0.6 * squashAmount
+                    );
+                    
+                    // Handle puffle emotes for other players
+                    if (playerData.puffleEmote && playerData.puffleEmoteTime) {
+                        const emoteAge = Date.now() - playerData.puffleEmoteTime;
+                        const emoteDuration = playerData.puffleEmoteDuration || 3000;
+                        
+                        if (emoteAge < emoteDuration) {
+                            // Show emote bubble
+                            if (!meshData.puffleEmoteBubble) {
+                                meshData.puffleEmoteBubble = meshData.puffleInstance?.createEmoteBubble?.(THREE);
+                                if (meshData.puffleEmoteBubble) {
+                                    meshData.puffleEmoteBubble.position.y = 1.5;
+                                    meshData.puffleMesh.add(meshData.puffleEmoteBubble);
+                                }
+                            }
+                            
+                            if (meshData.puffleEmoteBubble) {
+                                meshData.puffleEmoteBubble.visible = true;
+                                // Update emoji if changed
+                                if (meshData.puffleEmoteBubble.userData.currentEmoji !== playerData.puffleEmote) {
+                                    if (window._updatePuffleEmoteBubble) {
+                                        window._updatePuffleEmoteBubble(meshData.puffleEmoteBubble, playerData.puffleEmote);
+                                    }
+                                    meshData.puffleEmoteBubble.userData.currentEmoji = playerData.puffleEmote;
+                                }
+                                // Animate bubble
+                                const bobOffset = Math.sin(time * 3) * 0.05;
+                                meshData.puffleEmoteBubble.position.y = 1.5 + bobOffset;
+                            }
+                        } else {
+                            // Hide emote bubble after duration
+                            if (meshData.puffleEmoteBubble) {
+                                meshData.puffleEmoteBubble.visible = false;
+                            }
+                            playerData.puffleEmote = null;
+                        }
+                    } else if (meshData.puffleEmoteBubble) {
+                        meshData.puffleEmoteBubble.visible = false;
+                    }
                 }
                 
                 // Handle emotes - sync with playerData
@@ -5515,6 +5705,17 @@ const VoxelWorld = ({
             mesh.position.set(posRef.current.x + 1.5, 0.35, posRef.current.z + 1.5);
             sceneRef.current.add(mesh);
             puffleToEquip.mesh = mesh;
+            
+            // Sync puffle state to server (accessories, stats) so other players can see
+            if (syncPuffleState) {
+                syncPuffleState({
+                    equippedAccessories: puffleToEquip.equippedAccessories,
+                    happiness: puffleToEquip.happiness,
+                    energy: puffleToEquip.energy,
+                    hunger: puffleToEquip.hunger,
+                    mood: puffleToEquip.mood
+                });
+            }
         }
     };
     
@@ -5537,6 +5738,106 @@ const VoxelWorld = ({
         
         // Also update in owned puffles list
         setOwnedPuffles(prev => prev.map(p => p.id === updatedPuffle.id ? updatedPuffle : p));
+        
+        // Sync puffle state to server (accessories, stats) so other players can see
+        if (updatedPuffle && syncPuffleState) {
+            syncPuffleState({
+                equippedAccessories: updatedPuffle.equippedAccessories,
+                happiness: updatedPuffle.happiness,
+                energy: updatedPuffle.energy,
+                hunger: updatedPuffle.hunger,
+                mood: updatedPuffle.mood
+            });
+        }
+    };
+    
+    // Check for puffle proximity interactions (hearts animation + gold reward)
+    const checkPuffleProximity = (time) => {
+        if (!playerPuffleRef.current || !isAuthenticated || !walletAddress) return;
+        
+        const playersData = playersDataRef.current;
+        if (!playersData || playersData.size === 0) return;
+        
+        const myPufflePos = playerPuffleRef.current.position;
+        if (!myPufflePos) return;
+        
+        const PROXIMITY_DISTANCE = 4; // Units to trigger interaction
+        const INTERACTION_DURATION = 5000; // 5 seconds of hearts
+        const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown per player
+        
+        // Check if we're in an active interaction
+        if (puffleInteractionActiveRef.current) {
+            const elapsed = Date.now() - puffleInteractionActiveRef.current.startTime;
+            if (elapsed >= INTERACTION_DURATION) {
+                // Interaction complete - trigger reward
+                const otherPlayerId = puffleInteractionActiveRef.current.playerId;
+                const otherPlayerData = playersData.get(otherPlayerId);
+                
+                if (otherPlayerData?.walletAddress) {
+                    // Send interaction to server for gold reward
+                    send({
+                        type: 'puffle_interaction',
+                        otherWalletAddress: otherPlayerData.walletAddress
+                    });
+                }
+                
+                // Clear active interaction
+                puffleInteractionActiveRef.current = null;
+            }
+            return; // Don't start new interaction while one is active
+        }
+        
+        // Look for nearby puffles
+        for (const [otherId, otherData] of playersData) {
+            if (!otherData.puffle || !otherData.pufflePosition) continue;
+            if (otherId === playerId) continue; // Skip self
+            
+            // Check cooldown
+            const lastInteraction = puffleInteractionsRef.current.get(otherId);
+            if (lastInteraction && (Date.now() - lastInteraction) < COOLDOWN_MS) {
+                continue; // On cooldown with this player
+            }
+            
+            // Check distance
+            const dx = myPufflePos.x - otherData.pufflePosition.x;
+            const dz = myPufflePos.z - otherData.pufflePosition.z;
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            
+            if (distance < PROXIMITY_DISTANCE) {
+                // Start interaction!
+                puffleInteractionActiveRef.current = {
+                    playerId: otherId,
+                    startTime: Date.now()
+                };
+                
+                // Record interaction time
+                puffleInteractionsRef.current.set(otherId, Date.now());
+                
+                // Show hearts on our puffle locally
+                if (playerPuffleRef.current.showHearts) {
+                    playerPuffleRef.current.showHearts();
+                }
+                
+                // Broadcast love emote to all players so they see the hearts
+                const loveEmojis = ['💕', '💖', '💗', '💓', '💞', '💝', '❤️'];
+                const loveEmoji = loveEmojis[Math.floor(Math.random() * loveEmojis.length)];
+                sendPuffleEmote?.(loveEmoji, 4000);
+                
+                // Show notification
+                setPuffleInteractionReward({
+                    type: 'hearts',
+                    otherPuffle: otherData.puffle.name || 'Puffle',
+                    startTime: Date.now()
+                });
+                
+                // Hide notification after interaction completes
+                setTimeout(() => {
+                    setPuffleInteractionReward(null);
+                }, INTERACTION_DURATION + 1000);
+                
+                break; // Only one interaction at a time
+            }
+        }
     };
     
     // Check for nearby portals (room-specific)
@@ -5913,6 +6214,9 @@ const VoxelWorld = ({
     // State for wardrobe igloo interaction
     const [wardrobeInteraction, setWardrobeInteraction] = useState(null);
     
+    // State for puffle shop modal (opened via portal interaction)
+    const [showPuffleShop, setShowPuffleShop] = useState(false);
+    
     // Check for wardrobe/personal igloo proximity (town only)
     const checkWardrobeIgloo = () => {
         if (room !== 'town' || penguinCreatorOpen) {
@@ -5954,11 +6258,18 @@ const VoxelWorld = ({
             checkWardrobeIgloo();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, wardrobeInteraction, penguinCreatorOpen, userData?.coins, isAuthenticated]);
+    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, wardrobeInteraction, showPuffleShop, penguinCreatorOpen, userData?.coins, isAuthenticated]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
         if (!nearbyPortal) return;
+        
+        // Special action portals (no room transition)
+        if (nearbyPortal.action === 'puffle_shop') {
+            setShowPuffleShop(true);
+            setNearbyPortal(null); // Clear portal state
+            return;
+        }
         
         // Teleport to roof (ladder climb)
         if (nearbyPortal.teleportToRoof) {
@@ -6091,7 +6402,7 @@ const VoxelWorld = ({
     useEffect(() => {
         const handleKeyPress = (e) => {
             if (e.code === 'KeyE' && nearbyPortal && !emoteWheelOpen) {
-                if (nearbyPortal.targetRoom || nearbyPortal.minigame || nearbyPortal.teleportToRoof) {
+                if (nearbyPortal.targetRoom || nearbyPortal.minigame || nearbyPortal.teleportToRoof || nearbyPortal.action) {
                     handlePortalEnter();
                 }
             }
@@ -7402,6 +7713,18 @@ const VoxelWorld = ({
                 });
                 
                 console.log(`❄️ ${data.playerName} threw a snowball!`);
+            },
+            // Puffle update callback - sync puffle data from server responses
+            onPuffleUpdated: (serverPuffleData) => {
+                // Find and update the local puffle instance
+                if (playerPuffleRef.current && playerPuffleRef.current.id === serverPuffleData.id) {
+                    playerPuffleRef.current.syncFromServer(serverPuffleData);
+                    console.log('🐾 Puffle synced from server:', serverPuffleData.name);
+                }
+                // Also update in owned puffles list
+                setOwnedPuffles(prev => prev.map(p => 
+                    p.id === serverPuffleData.id ? { ...p, ...serverPuffleData } : p
+                ));
             }
         });
     }, [registerCallbacks, playerId, playerName]);
@@ -7928,8 +8251,8 @@ const VoxelWorld = ({
                     description={nearbyPortal?.description}
                     isNearby={!!nearbyPortal}
                     onEnter={handlePortalEnter}
-                    color={nearbyPortal?.targetRoom || nearbyPortal?.minigame || nearbyPortal?.teleportToRoof ? 'green' : 'gray'}
-                    hasGame={!!(nearbyPortal?.targetRoom || nearbyPortal?.minigame || nearbyPortal?.teleportToRoof)}
+                    color={nearbyPortal?.targetRoom || nearbyPortal?.minigame || nearbyPortal?.teleportToRoof || nearbyPortal?.action ? 'green' : 'gray'}
+                    hasGame={!!(nearbyPortal?.targetRoom || nearbyPortal?.minigame || nearbyPortal?.teleportToRoof || nearbyPortal?.action)}
                 />
              )}
              
@@ -8443,6 +8766,35 @@ const VoxelWorld = ({
                 />
              )}
              
+             {/* Puffle Shop Modal */}
+             {showPuffleShop && (
+                <PuffleShopModal
+                    equippedPuffle={puffle}
+                    onClose={() => setShowPuffleShop(false)}
+                    onPurchase={(type, item) => {
+                        // Update local puffle state after purchases
+                        if (puffle) {
+                            handleUpdatePuffle(puffle);
+                        }
+                    }}
+                />
+             )}
+             
+             {/* Puffle Interaction Reward Notification */}
+             {puffleInteractionReward && (
+                <div className="fixed top-1/4 left-1/2 transform -translate-x-1/2 z-50 animate-bounce">
+                    <div className="bg-gradient-to-r from-pink-500/90 to-purple-500/90 px-6 py-4 rounded-2xl shadow-2xl border border-white/30">
+                        <div className="text-4xl text-center mb-2 animate-pulse">💕💕💕</div>
+                        <div className="text-white text-center font-bold">
+                            Your puffle met {puffleInteractionReward.otherPuffle}!
+                        </div>
+                        <div className="text-yellow-300 text-center text-sm mt-1">
+                            +10 Gold incoming... 🪙
+                        </div>
+                    </div>
+                </div>
+             )}
+             
              {/* Title & Controls - Top Left */}
              <div className={`absolute retro-text text-white drop-shadow-md z-10 pointer-events-none ${
                  isMobile && !isLandscape ? 'top-2 left-2' : 'top-4 left-4'
@@ -8513,7 +8865,7 @@ const VoxelWorld = ({
                              <div className="flex justify-between items-center">
                                  <span className="text-white/70 text-[10px]">Time:</span>
                                  <span className="text-yellow-300 text-[10px]">
-                                     {dayTime < 0.2 ? '🌙 Night' : dayTime < 0.3 ? '🌅 Sunrise' : dayTime < 0.7 ? '☀️ Day' : dayTime < 0.8 ? '🌇 Sunset' : '🌙 Night'}
+                                     {dayTime < 0.12 ? '🌙 Night' : dayTime < 0.18 ? '🌅 Sunrise' : dayTime < 0.82 ? '☀️ Day' : dayTime < 0.88 ? '🌇 Sunset' : '🌙 Night'}
                                      {' '}({(dayTime * 24).toFixed(1)}h)
                                  </span>
                              </div>

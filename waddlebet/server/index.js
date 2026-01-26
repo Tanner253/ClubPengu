@@ -2692,6 +2692,39 @@ async function handleMessage(playerId, message) {
             break;
         }
         
+        // Puffle emote broadcast - visible to all players
+        case 'puffle_emote': {
+            if (player.room && message.emoji) {
+                broadcastToRoomAll(player.room, {
+                    type: 'puffle_emote',
+                    playerId,
+                    emoji: message.emoji,
+                    duration: message.duration || 3000
+                });
+            }
+            break;
+        }
+        
+        // Puffle state sync - broadcast full puffle state to all players
+        case 'puffle_state_sync': {
+            if (player.room && player.puffle) {
+                // Update stored puffle state
+                player.puffle = {
+                    ...player.puffle,
+                    ...message.puffleState
+                };
+                
+                // Broadcast to all players in room (including sender for confirmation)
+                broadcastToRoomAll(player.room, {
+                    type: 'puffle_state_update',
+                    playerId,
+                    puffle: player.puffle,
+                    pufflePosition: player.pufflePosition
+                });
+            }
+            break;
+        }
+        
         case 'ping': {
             sendToPlayer(playerId, { type: 'pong' });
             break;
@@ -3948,6 +3981,432 @@ async function handleMessage(playerId, message) {
                     puffle: null
                 }, playerId);
             }
+            break;
+        }
+        
+        case 'puffle_feed': {
+            if (!player.walletAddress) break;
+            
+            const feedResult = await userService.feedPuffle(
+                player.walletAddress,
+                message.puffleId,
+                message.foodType || 'cookie'
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_fed',
+                ...feedResult
+            });
+            
+            if (feedResult.success) {
+                // Update coins
+                const user = await userService.getUser(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: user.coins,
+                    isAuthenticated: true
+                });
+            }
+            break;
+        }
+        
+        case 'puffle_play': {
+            if (!player.walletAddress) break;
+            
+            const playResult = await userService.playWithPuffle(
+                player.walletAddress,
+                message.puffleId,
+                message.toyType || null
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_played',
+                ...playResult
+            });
+            break;
+        }
+        
+        case 'puffle_buy_toy': {
+            if (!player.walletAddress) break;
+            
+            const toyResult = await userService.buyPuffleToy(
+                player.walletAddress,
+                message.puffleId,
+                message.toyType
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_toy_bought',
+                ...toyResult
+            });
+            
+            if (toyResult.success) {
+                const user = await userService.getUser(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: user.coins,
+                    isAuthenticated: true
+                });
+            }
+            break;
+        }
+        
+        case 'puffle_train': {
+            if (!player.walletAddress) break;
+            
+            const trainResult = await userService.trainPuffle(
+                player.walletAddress,
+                message.puffleId,
+                message.statType,
+                message.amount || 1
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_trained',
+                ...trainResult
+            });
+            break;
+        }
+        
+        case 'puffle_buy_food': {
+            if (!player.walletAddress) break;
+            
+            const buyFoodResult = await userService.buyPuffleFood(
+                player.walletAddress,
+                message.puffleId,
+                message.foodType,
+                message.quantity || 1
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_food_bought',
+                ...buyFoodResult
+            });
+            
+            if (buyFoodResult.success) {
+                const user = await userService.getUser(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: user.coins,
+                    isAuthenticated: true
+                });
+            }
+            break;
+        }
+        
+        case 'puffle_use_food': {
+            if (!player.walletAddress) break;
+            
+            const useFoodResult = await userService.usePuffleFood(
+                player.walletAddress,
+                message.puffleId,
+                message.foodType
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_food_used',
+                ...useFoodResult
+            });
+            break;
+        }
+        
+        case 'puffle_buy_accessory': {
+            if (!player.walletAddress) break;
+            
+            const buyAccResult = await userService.buyPuffleAccessory(
+                player.walletAddress,
+                message.puffleId,
+                message.category,
+                message.itemId,
+                message.price
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_accessory_bought',
+                ...buyAccResult
+            });
+            
+            if (buyAccResult.success) {
+                const user = await userService.getUser(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: user.coins,
+                    isAuthenticated: true
+                });
+            }
+            break;
+        }
+        
+        case 'puffle_equip_accessory': {
+            if (!player.walletAddress) break;
+            
+            // Support both itemId and accessoryId for backwards compatibility
+            const accessoryId = message.accessoryId || message.itemId;
+            const equipAccResult = await userService.equipPuffleAccessory(
+                player.walletAddress,
+                message.puffleId,
+                message.category,
+                accessoryId
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_accessory_equipped',
+                ...equipAccResult
+            });
+            
+            // Broadcast to other players so they see the accessory change
+            if (equipAccResult.success && player.room) {
+                player.puffle = equipAccResult.puffle;
+                broadcastToRoom(player.room, {
+                    type: 'puffle_state_update',
+                    playerId,
+                    puffle: player.puffle,
+                    pufflePosition: player.pufflePosition
+                }, playerId);
+            }
+            break;
+        }
+        
+        case 'puffle_equip_toy': {
+            if (!player.walletAddress) break;
+            
+            const equipToyResult = await userService.equipPuffleToy(
+                player.walletAddress,
+                message.puffleId,
+                message.toyType
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_toy_equipped',
+                ...equipToyResult
+            });
+            break;
+        }
+        
+        case 'puffle_rest': {
+            if (!player.walletAddress) break;
+            
+            const restResult = await userService.restPuffle(
+                player.walletAddress,
+                message.puffleId
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_rest_started',
+                ...restResult
+            });
+            break;
+        }
+        
+        case 'puffle_stop_rest': {
+            if (!player.walletAddress) break;
+            
+            const stopRestResult = await userService.stopRestPuffle(
+                player.walletAddress,
+                message.puffleId
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_rest_stopped',
+                ...stopRestResult
+            });
+            break;
+        }
+        
+        case 'puffle_rest_status': {
+            if (!player.walletAddress) break;
+            
+            const statusResult = await userService.getPuffleRestStatus(
+                player.walletAddress,
+                message.puffleId
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_rest_status',
+                puffleId: message.puffleId,
+                ...statusResult
+            });
+            break;
+        }
+        
+        case 'puffle_interaction': {
+            // Two puffles in proximity - award gold
+            if (!player.walletAddress || !message.otherWalletAddress) break;
+            
+            const interactResult = await userService.recordPuffleInteraction(
+                player.walletAddress,
+                message.otherWalletAddress
+            );
+            
+            if (interactResult.success) {
+                // Notify both players
+                sendToPlayer(playerId, {
+                    type: 'puffle_interaction_reward',
+                    goldEarned: interactResult.goldEarned,
+                    puffle: interactResult.puffle
+                });
+                
+                // Find other player and notify them
+                const otherPlayer = [...players.values()].find(
+                    p => p.walletAddress === message.otherWalletAddress
+                );
+                if (otherPlayer) {
+                    sendToPlayer(otherPlayer.id, {
+                        type: 'puffle_interaction_reward',
+                        goldEarned: interactResult.goldEarned,
+                        puffle: interactResult.otherPuffle
+                    });
+                }
+                
+                // Update coins for both
+                const user = await userService.getUser(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: user.coins,
+                    isAuthenticated: true
+                });
+            } else {
+                sendToPlayer(playerId, {
+                    type: 'puffle_interaction_failed',
+                    error: interactResult.error,
+                    message: interactResult.message
+                });
+            }
+            break;
+        }
+        
+        case 'puffle_daycare_start': {
+            if (!player.walletAddress) break;
+            
+            const daycareResult = await userService.startPuffleDaycare(
+                player.walletAddress,
+                message.puffleId,
+                message.hours || 24
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_daycare_started',
+                ...daycareResult
+            });
+            
+            if (daycareResult.success) {
+                const user = await userService.getUser(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: user.coins,
+                    isAuthenticated: true
+                });
+            }
+            break;
+        }
+        
+        case 'puffle_daycare_end': {
+            if (!player.walletAddress) break;
+            
+            const endResult = await userService.endPuffleDaycare(
+                player.walletAddress,
+                message.puffleId
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_daycare_ended',
+                ...endResult
+            });
+            break;
+        }
+        
+        case 'puffle_shop_items': {
+            // Get puffle food, toys, accessories prices
+            const items = userService.getPuffleShopItems();
+            sendToPlayer(playerId, {
+                type: 'puffle_shop_items',
+                items
+            });
+            break;
+        }
+        
+        case 'puffle_buy_food': {
+            if (!player.walletAddress) break;
+            
+            const foodResult = await userService.buyPuffleFood(
+                player.walletAddress,
+                message.puffleId,
+                message.foodType,
+                message.quantity || 1
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_food_bought',
+                ...foodResult
+            });
+            
+            if (foodResult.success) {
+                const user = await userService.getUser(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: user.coins,
+                    isAuthenticated: true
+                });
+            }
+            break;
+        }
+        
+        case 'puffle_feed_from_inventory': {
+            if (!player.walletAddress) break;
+            
+            const feedInvResult = await userService.feedPuffleFromInventory(
+                player.walletAddress,
+                message.puffleId,
+                message.foodType
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_fed',
+                ...feedInvResult
+            });
+            break;
+        }
+        
+        case 'puffle_buy_accessory': {
+            if (!player.walletAddress) break;
+            
+            const accessoryResult = await userService.buyPuffleAccessory(
+                player.walletAddress,
+                message.puffleId,
+                message.category,
+                message.accessoryId,
+                message.price
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_accessory_bought',
+                ...accessoryResult
+            });
+            
+            if (accessoryResult.success) {
+                const user = await userService.getUser(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: user.coins,
+                    isAuthenticated: true
+                });
+            }
+            break;
+        }
+        
+        case 'puffle_equip_toy': {
+            if (!player.walletAddress) break;
+            
+            const equipToyResult = await userService.equipPuffleToy(
+                player.walletAddress,
+                message.puffleId,
+                message.toyType
+            );
+            
+            sendToPlayer(playerId, {
+                type: 'puffle_toy_equipped',
+                ...equipToyResult
+            });
             break;
         }
         

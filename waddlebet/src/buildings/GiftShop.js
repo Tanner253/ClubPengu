@@ -9,7 +9,7 @@ class GiftShop extends BaseBuilding {
     build({ w = 10, h = 6, d = 10 } = {}) {
         const THREE = this.THREE;
         const group = this.group;
-        group.name = 'gift_shop_building';
+        group.name = 'puffle_shop_building';
 
         // Colors
         const wallPink = 0xFFB6C1;

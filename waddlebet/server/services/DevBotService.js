@@ -30,6 +30,28 @@ const BOT_CONFIG = {
         dogPrimaryColor: '#D2691E', // Brown fur color
         dogSecondaryColor: '#8B4513' // Darker brown belly
     },
+    // Bot's puffle for testing proximity interactions
+    puffle: {
+        id: 'bot_puffle_001',
+        name: 'BotPuffle',
+        color: 'gold',  // Gold puffle - epic tier!
+        happiness: 100,
+        energy: 100,
+        hunger: 0,
+        level: 5,
+        experience: 450,
+        xpForNextLevel: 500,
+        trainingStats: { running: 50, swimming: 50, flying: 50, climbing: 50 },
+        totalPlays: 100,
+        unlockedTricks: ['spin', 'jump', 'backflip'],
+        foodInventory: { cookie: 10, fish: 5, cake: 2 },
+        ownedToys: ['ball', 'frisbee'],
+        equippedToy: 'ball',
+        equippedAccessories: { hat: 'crown', glasses: 'none', neckwear: 'bowtie' },
+        ownedAccessories: { hats: ['crown', 'party'], glasses: [], neckwear: ['bowtie'] },
+        mood: 'happy',
+        tier: 'epic'
+    },
     // Bot uses the rent wallet (which should have tokens for testing)
     walletAddress: process.env.RENT_WALLET_ADDRESS || null
 };
@@ -77,7 +99,14 @@ class DevBotService {
             walletAddress: BOT_CONFIG.walletAddress,
             isAuthenticated: true,
             isBot: true,
-            lastHeartbeat: Date.now()
+            lastHeartbeat: Date.now(),
+            // Bot's puffle for testing proximity interactions
+            puffle: BOT_CONFIG.puffle ? { ...BOT_CONFIG.puffle } : null,
+            pufflePosition: BOT_CONFIG.puffle ? {
+                x: BOT_CONFIG.position.x + 1.5,
+                y: 0,
+                z: BOT_CONFIG.position.z + 1.5
+            } : null
         };
         
         console.log('🤖 DevBotService: Initialized');
