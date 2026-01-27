@@ -25,6 +25,7 @@ import IceSculpture from './IceSculpture';
 import Crate from './Crate';
 import StreetSign from './StreetSign';
 import WoodenPost from './WoodenPost';
+import Lighthouse from './Lighthouse';
 
 /**
  * Available prop types
@@ -53,6 +54,7 @@ export const PROP_TYPES = {
     CRATE: 'crate',
     STREET_SIGN: 'streetSign',
     WOODEN_POST: 'woodenPost',
+    LIGHTHOUSE: 'lighthouse',
 };
 
 /**
@@ -81,6 +83,7 @@ const propClasses = {
     [PROP_TYPES.CRATE]: Crate,
     [PROP_TYPES.STREET_SIGN]: StreetSign,
     [PROP_TYPES.WOODEN_POST]: WoodenPost,
+    [PROP_TYPES.LIGHTHOUSE]: Lighthouse,
 };
 
 /**
@@ -184,6 +187,10 @@ export const createProp = (THREE, scene, type, x, y, z, options = {}) => {
             
         case PROP_TYPES.WOODEN_POST:
             prop = new PropClass(THREE, options.style || 'plain');
+            break;
+            
+        case PROP_TYPES.LIGHTHOUSE:
+            prop = new PropClass(THREE, options.beaconOn !== false);
             break;
             
         default:

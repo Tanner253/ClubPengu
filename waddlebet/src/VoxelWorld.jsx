@@ -1109,6 +1109,30 @@ const VoxelWorld = ({
                 });
             }
             
+            // Garden park benches (4 benches in circle around fountain, facing inward)
+            // Matches TownCenter.js garden_park placement: x: C + 36, z: C + 81, radius: 10
+            const gardenParkX = C + 36;
+            const gardenParkZ = C + 81;
+            const gardenParkRadius = 10;
+            const gardenBenchRadius = gardenParkRadius - 1.8; // Same as Park.js
+            const gardenBenchCount = 4;
+            for (let i = 0; i < gardenBenchCount; i++) {
+                const angle = (i / gardenBenchCount) * Math.PI * 2 + Math.PI / gardenBenchCount;
+                const benchX = gardenParkX + Math.cos(angle) * gardenBenchRadius;
+                const benchZ = gardenParkZ + Math.sin(angle) * gardenBenchRadius;
+                // Rotate 180 degrees from original to face inward toward fountain
+                const benchRotation = -angle + Math.PI / 2 + Math.PI;
+                parkBenches.push({
+                    type: 'bench',
+                    position: { x: benchX, z: benchZ },
+                    rotation: benchRotation,
+                    seatHeight: 0.8,
+                    platformHeight: 0,
+                    snapPoints: benchSnapPoints,
+                    interactionRadius: 2.5
+                });
+            }
+            
             // Campfire log seats (6 logs in circle around campfire, facing inward)
             const campfireX = C;
             const campfireZ = C + 10;
@@ -5974,28 +5998,43 @@ const VoxelWorld = ({
                     return false;
                 };
                 
+                // POI names that should show the "?" cursor (explorable/interactable locations)
+                const poiNames = [
+                    'lighthouse', 'dojo', 'nightclub', 'casino', 'puffle', 'pizza', 'plaza',
+                    'arcade', 'fishing', 'bench', 'parkour', 'skatepark', 'park', 'fountain',
+                    'signpost', 'mailbox', 'vending', 'slot', 'roulette', 'blackjack'
+                ];
+                
                 sceneRef.current.traverse(obj => {
                     if (obj.isMesh || obj.isSprite) {
+                        // Skip if already mapped
+                        if (objectTypeMap.has(obj)) return;
+                        
                         // Check for clickable interaction markers
                         if (obj.userData?.isInteractive || obj.userData?.isBanner || obj.name?.includes('interaction')) {
                             interactiveObjects.push(obj);
-                            objectTypeMap.set(obj, 'interactive');
+                            objectTypeMap.set(obj, 'poi');
                         }
                         // Check for igloo markers (check entire hierarchy for "igloo" name)
-                        if (hasNameInHierarchy(obj, 'igloo') && !objectTypeMap.has(obj)) {
+                        else if (hasNameInHierarchy(obj, 'igloo')) {
                             interactiveObjects.push(obj);
                             objectTypeMap.set(obj, 'igloo');
                         }
                         // Check for portal markers
-                        if (obj.name?.includes('portal') || obj.userData?.isPortal) {
+                        else if (obj.name?.includes('portal') || obj.userData?.isPortal) {
                             interactiveObjects.push(obj);
-                            objectTypeMap.set(obj, 'portal');
+                            objectTypeMap.set(obj, 'poi');
+                        }
+                        // Check for POIs - buildings, props, interactables that show "?" cursor
+                        else if (poiNames.some(poi => hasNameInHierarchy(obj, poi))) {
+                            interactiveObjects.push(obj);
+                            objectTypeMap.set(obj, 'poi');
                         }
                         // Check for shop/building entrances
-                        if (obj.name?.includes('shop') || obj.name?.includes('building') || 
+                        else if (obj.name?.includes('shop') || obj.name?.includes('building') || 
                             obj.name?.includes('entrance') || obj.userData?.isClickable) {
                             interactiveObjects.push(obj);
-                            objectTypeMap.set(obj, 'interactive');
+                            objectTypeMap.set(obj, 'poi');
                         }
                     }
                 });
@@ -6054,10 +6093,12 @@ const VoxelWorld = ({
             
             // Set cursor based on hovered object type
             if (hovered) {
-                if (hoveredType === 'igloo') {
-                    setHoverCursor('help'); // ? cursor for igloos (exploration)
+                if (hoveredType === 'igloo' || hoveredType === 'poi') {
+                    setHoverCursor('help'); // ? cursor for igloos and POIs (exploration/interaction)
+                } else if (hoveredType === 'player' || hoveredType === 'puffle' || hoveredType === 'banner') {
+                    setHoverCursor('pointer'); // Pointer for clickable entities
                 } else {
-                    setHoverCursor('pointer'); // Pointer for clickable objects
+                    setHoverCursor('help'); // Default to help for other interactive objects
                 }
             } else {
                 setHoverCursor('default');
@@ -7171,7 +7212,17 @@ const VoxelWorld = ({
             // Handle exit events - clear the interaction prompt (but not if seated)
             if (action === 'exit') {
                 if (!seatedRef.current) {
-                    setNearbyInteraction(null);
+                    // If exitedZone is specified (from trigger system), only clear if it matches current action
+                    // If no exitedZone (from furniture system), only clear furniture-type interactions
+                    if (exitedZone) {
+                        // Trigger system exit - only clear if we're exiting the same trigger
+                        setNearbyInteraction(prev => prev?.action === exitedZone ? null : prev);
+                    } else {
+                        // Furniture system exit - only clear furniture interactions (sit, dj)
+                        setNearbyInteraction(prev => 
+                            (prev?.action === 'sit' || prev?.action === 'dj') ? null : prev
+                        );
+                    }
                 }
                 return;
             }
@@ -7201,6 +7252,14 @@ const VoxelWorld = ({
                 setNearbyInteraction({ 
                     action, 
                     message: `🪜 ${t('interact.climbRoof')} (${t('interact.pressE')})`,
+                    data: data
+                });
+            } else if (action === 'climb_lighthouse') {
+                // Show lighthouse climb prompt
+                console.log('🔦 Setting nearbyInteraction for climb_lighthouse');
+                setNearbyInteraction({ 
+                    action, 
+                    message: `🔦 Climb to Beacon (${t('interact.pressE')})`,
                     data: data
                 });
             } else if (action === 'interact_snowman') {
@@ -7238,6 +7297,36 @@ const VoxelWorld = ({
     // Handle interaction with E key
     useEffect(() => {
         const handleInteract = (e) => {
+            // Prevent E from interacting when typing in chat or any input field
+            const activeEl = document.activeElement;
+            if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable)) {
+                return;
+            }
+            
+            // Check if player is on lighthouse deck and wants to descend (no UI needed)
+            if (e.code === 'KeyE' && roomRef.current === 'town') {
+                const playerY = posRef.current.y;
+                const playerX = posRef.current.x;
+                const playerZ = posRef.current.z;
+                const lighthouseX = CENTER_X + 80.5;
+                const lighthouseZ = CENTER_Z + 52.7;
+                const distToLighthouse = Math.sqrt((playerX - lighthouseX) ** 2 + (playerZ - lighthouseZ) ** 2);
+                
+                // If on lighthouse deck (Y > 10 and near lighthouse center)
+                if (playerY > 10 && distToLighthouse < 6) {
+                    // Teleport back down to ground level in front of lighthouse
+                    posRef.current.x = lighthouseX;
+                    posRef.current.z = lighthouseZ + 7; // In front of lighthouse
+                    posRef.current.y = 0.5;
+                    velRef.current.y = 0;
+                    
+                    if (playerRef.current) {
+                        playerRef.current.position.set(lighthouseX, 0.5, lighthouseZ + 7);
+                    }
+                    return;
+                }
+            }
+            
             if (e.code === 'KeyE' && nearbyInteraction && !nearbyPortal) {
                 // Handle bench sitting with snap points
                 if (nearbyInteraction.action === 'sit' && nearbyInteraction.benchData) {
@@ -7391,6 +7480,24 @@ const VoxelWorld = ({
                     
                     if (playerRef.current) {
                         playerRef.current.position.set(roofX, roofY, roofZ);
+                    }
+                    
+                    setNearbyInteraction(null);
+                }
+                else if (nearbyInteraction.action === 'climb_lighthouse') {
+                    // Teleport to lighthouse observation deck
+                    // Lighthouse is at (CENTER + 80.5, CENTER + 52.7), deck height is ~12.5
+                    const lighthouseX = CENTER_X + 80.5;
+                    const lighthouseZ = CENTER_Z + 52.7;
+                    const deckY = 12.5 + 5; // Deck height + 5 to ensure landing above floor
+                    
+                    posRef.current.x = lighthouseX;
+                    posRef.current.z = lighthouseZ;
+                    posRef.current.y = deckY;
+                    velRef.current.y = 0;
+                    
+                    if (playerRef.current) {
+                        playerRef.current.position.set(lighthouseX, deckY, lighthouseZ);
                     }
                     
                     setNearbyInteraction(null);
@@ -9185,6 +9292,23 @@ const VoxelWorld = ({
                                 
                                 setNearbyInteraction(null);
                             }
+                            else if (nearbyInteraction.action === 'climb_lighthouse') {
+                                // Teleport to lighthouse observation deck
+                                const lighthouseX = CENTER_X + 80.5;
+                                const lighthouseZ = CENTER_Z + 52.7;
+                                const deckY = 12.5 + 5;
+                                
+                                posRef.current.x = lighthouseX;
+                                posRef.current.z = lighthouseZ;
+                                posRef.current.y = deckY;
+                                velRef.current.y = 0;
+                                
+                                if (playerRef.current) {
+                                    playerRef.current.position.set(lighthouseX, deckY, lighthouseZ);
+                                }
+                                
+                                setNearbyInteraction(null);
+                            }
                             else if (nearbyInteraction.action === 'play_arcade') {
                                 // Open arcade minigame (PvE Battleship)
                                 const gameType = nearbyInteraction.gameType || 'battleship';
@@ -9204,6 +9328,7 @@ const VoxelWorld = ({
                         {nearbyInteraction.action === 'sit' ? `🪑 ${t('interact.sit')}` : 
                          nearbyInteraction.action === 'dj' ? `🎧 ${t('interact.dj')}` :
                          nearbyInteraction.action === 'climb_roof' ? `🪜 ${t('interact.climb')}` :
+                         nearbyInteraction.action === 'climb_lighthouse' ? `🔦 ${t('interact.climb')}` :
                          nearbyInteraction.action === 'play_arcade' ? `🎮 ${t('interact.play')}` :
                          `✓ ${t('interact.ok')}`}
                     </button>

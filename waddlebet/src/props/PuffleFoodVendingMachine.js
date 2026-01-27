@@ -266,3 +266,4 @@ class PuffleFoodVendingMachine extends BaseProp {
 
 export default PuffleFoodVendingMachine;
 
+

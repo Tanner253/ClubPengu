@@ -2,6 +2,9 @@ import CollisionSystem from '../engine/CollisionSystem';
 import { createProp, PROP_TYPES, Billboard, IceFishingHole, ArcadeMachine, PuffleFoodVendingMachine, createIglooInfoBoard } from '../props';
 import { createNightclubExterior } from '../props/NightclubExterior';
 import { createDojoParkour } from '../props/DojoParkour';
+import { createSkatePark } from '../props/SkatePark';
+import { createPark } from '../props/Park';
+import Lighthouse from '../props/Lighthouse';
 import { createCasino } from '../buildings';
 import { createCasinoTVSprite, updateCasinoTVSprite } from '../systems/CasinoTVSystem';
 
@@ -211,6 +214,66 @@ class TownCenter {
             rotation: Math.PI / 2  // Door faces east (toward street like pizza)
         });
         
+        // ==================== SKATE PARK ====================
+        // Behind the casino - half pipes, rails, and ramps for skateboarding
+        // Positioned further west to avoid clipping with casino
+        props.push({
+            type: 'skate_park',
+            x: C - 90,      // Further west, away from casino
+            z: C + 30,      // South of T-bar street
+            width: 30,      // Park width (smaller to fit)
+            depth: 25,      // Park depth
+            withLights: true
+        });
+        
+        // ==================== GARDEN PARK ====================
+        // Cozy green park with fountain, benches, flowers, and butterflies
+        props.push({
+            type: 'garden_park',
+            x: C + 36,      // East side of map
+            z: C + 81,      // Near dojo area
+            radius: 10,     // Park size
+            benchCount: 4,
+            withFountain: true,
+            withButterflies: true
+        });
+        
+        // Garden park street lights (4 lamp posts around the park perimeter)
+        const gardenParkX = C + 36;
+        const gardenParkZ = C + 81;
+        const gardenLampRadius = 13; // Just outside the park radius of 10
+        props.push(
+            { type: 'lamp_post', x: gardenParkX + gardenLampRadius, z: gardenParkZ, isOn: true, castShadow: false },  // East
+            { type: 'lamp_post', x: gardenParkX - gardenLampRadius, z: gardenParkZ, isOn: true, castShadow: false },  // West
+            { type: 'lamp_post', x: gardenParkX, z: gardenParkZ + gardenLampRadius, isOn: true, castShadow: false },  // South
+            { type: 'lamp_post', x: gardenParkX, z: gardenParkZ - gardenLampRadius, isOn: true, castShadow: false }   // North
+        );
+        
+        // ==================== LIGHTHOUSE ====================
+        // Classic Club Penguin lighthouse with beacon and observation deck
+        const lighthouseX = C + 80.5;
+        const lighthouseZ = C + 52.7;
+        props.push({
+            type: 'lighthouse',
+            x: lighthouseX,
+            z: lighthouseZ,
+            beaconOn: true
+        });
+        
+        // Lighthouse entrance trigger (teleport to observation deck)
+        // Centered on lighthouse with radius larger than collision (4) so players can interact from any side
+        props.push({
+            type: 'lighthouse_entrance',
+            x: lighthouseX,
+            z: lighthouseZ,  // Centered on lighthouse
+        });
+        
+        // Lamp posts around lighthouse
+        props.push(
+            { type: 'lamp_post', x: lighthouseX - 8, z: lighthouseZ + 4, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: lighthouseX + 8, z: lighthouseZ + 4, isOn: true, castShadow: false }
+        );
+        
         // Nightclub entrance trigger (in front of the building)
         props.push({
             type: 'nightclub_entrance',
@@ -396,7 +459,8 @@ class TownCenter {
             { x: C - 95, z: C - 70, size: 'large' },
             { x: C - 92, z: C - 40, size: 'medium' },
             { x: C - 95, z: C - 10, size: 'large' },
-            { x: C - 90, z: C + 20, size: 'medium' },
+            // Moved this tree to avoid skate park overlap
+            { x: C - 100, z: C + 15, size: 'medium' },
             { x: C - 95, z: C + 50, size: 'large' },
             { x: C - 92, z: C + 75, size: 'medium' },
             { x: C - 95, z: C + 95, size: 'large' },
@@ -1295,6 +1359,153 @@ class TownCenter {
                         console.log('📺 Casino TV created with real $CP data');
                     });
                     break;
+                
+                case 'skate_park':
+                    // Skate park with half pipes, rails, and ramps
+                    const skateParkMesh = createSkatePark(this.THREE, {
+                        width: prop.width || 30,
+                        depth: prop.depth || 25,
+                        withLights: prop.withLights !== false,
+                        x: prop.x,
+                        y: 0,
+                        z: prop.z
+                    });
+                    mesh = skateParkMesh;
+                    mesh.name = 'skate_park';
+                    
+                    // Add collision for all skate park elements
+                    const skateColliders = skateParkMesh.userData.colliders || [];
+                    let colliderCount = 0;
+                    
+                    skateColliders.forEach((collider, idx) => {
+                        const rot = collider.rotation || 0;
+                        const cos = Math.cos(rot);
+                        const sin = Math.sin(rot);
+                        
+                        // Transform local position to world position
+                        const localX = collider.x;
+                        const localZ = collider.z;
+                        const worldX = prop.x + localX;
+                        const worldZ = prop.z + localZ;
+                        
+                        // Determine collision shape based on type
+                        let collisionWidth = collider.width || 4;
+                        let collisionDepth = collider.depth || 4;
+                        let collisionHeight = collider.height || 2;
+                        
+                        if (collider.type === 'halfpipe') {
+                            // Half pipe - wider collision box for the full structure
+                            this.collisionSystem.addCollider(
+                                worldX, worldZ,
+                                { type: 'box', size: { x: collisionWidth, z: collisionDepth }, height: collisionHeight },
+                                1, // SOLID - can't walk through the ramp walls
+                                { name: `skatepark_halfpipe_${idx}` }
+                            );
+                            colliderCount++;
+                        } else if (collider.type === 'quarterpipe') {
+                            // Quarter pipe - account for rotation
+                            const rotatedWidth = Math.abs(cos * collisionWidth) + Math.abs(sin * collisionDepth);
+                            const rotatedDepth = Math.abs(sin * collisionWidth) + Math.abs(cos * collisionDepth);
+                            
+                            this.collisionSystem.addCollider(
+                                worldX, worldZ,
+                                { type: 'box', size: { x: rotatedWidth, z: rotatedDepth }, height: collisionHeight },
+                                1, // SOLID
+                                { name: `skatepark_qp_${idx}` }
+                            );
+                            colliderCount++;
+                        } else if (collider.type === 'funbox') {
+                            // Fun box - solid obstacle
+                            this.collisionSystem.addCollider(
+                                worldX, worldZ,
+                                { type: 'box', size: { x: collisionWidth, z: collisionDepth }, height: collisionHeight },
+                                1, // SOLID
+                                { name: `skatepark_funbox_${idx}` }
+                            );
+                            colliderCount++;
+                        } else if (collider.type === 'kicker') {
+                            // Kicker ramps - smaller collision
+                            const kickerRot = collider.rotation || 0;
+                            const kCos = Math.cos(kickerRot);
+                            const kSin = Math.sin(kickerRot);
+                            const kRotatedW = Math.abs(kCos * collisionWidth) + Math.abs(kSin * collisionDepth);
+                            const kRotatedD = Math.abs(kSin * collisionWidth) + Math.abs(kCos * collisionDepth);
+                            
+                            this.collisionSystem.addCollider(
+                                worldX, worldZ,
+                                { type: 'box', size: { x: kRotatedW + 0.5, z: kRotatedD + 0.5 }, height: collisionHeight },
+                                1, // SOLID
+                                { name: `skatepark_kicker_${idx}` }
+                            );
+                            colliderCount++;
+                        }
+                    });
+                    
+                    // Add light pole colliders (4 corners)
+                    const parkW = prop.width || 30;
+                    const parkD = prop.depth || 25;
+                    [
+                        [-parkW/2 + 2, -parkD/2 + 2],
+                        [parkW/2 - 2, -parkD/2 + 2],
+                        [-parkW/2 + 2, parkD/2 - 2],
+                        [parkW/2 - 2, parkD/2 - 2]
+                    ].forEach(([lx, lz], i) => {
+                        this.collisionSystem.addCollider(
+                            prop.x + lx, prop.z + lz,
+                            { type: 'circle', radius: 0.3, height: 5 },
+                            1, // SOLID
+                            { name: `skatepark_light_${i}` }
+                        );
+                        colliderCount++;
+                    });
+                    
+                    console.log(`🛹 Skate park created with ${colliderCount} colliders`);
+                    break;
+                
+                case 'garden_park':
+                    // Cozy garden park with fountain, benches, flowers, butterflies
+                    // Benches use unified Bench prop and sitting is handled via VoxelWorld.jsx furniture array
+                    const parkMesh = createPark(this.THREE, {
+                        radius: prop.radius || 10,
+                        benchCount: prop.benchCount || 4,
+                        withFountain: prop.withFountain !== false,
+                        withButterflies: prop.withButterflies !== false,
+                        x: prop.x,
+                        y: 0,
+                        z: prop.z
+                    });
+                    mesh = parkMesh;
+                    mesh.name = 'garden_park';
+                    
+                    // Store park instance for animation
+                    this.parkInstance = parkMesh.userData.parkInstance;
+                    
+                    // Add collision for fountain (center)
+                    if (prop.withFountain !== false) {
+                        this.collisionSystem.addCollider(
+                            prop.x, prop.z,
+                            { type: 'circle', radius: 2.8, height: 2.5 },
+                            1, // SOLID
+                            { name: 'park_fountain' }
+                        );
+                    }
+                    
+                    // Add ambient light over the fountain for a warm evening glow
+                    // Skip on mobile devices for performance
+                    const skipParkLight = typeof window !== 'undefined' && (window._isAppleDevice || window._isAndroidDevice);
+                    if (!skipParkLight) {
+                        const parkAmbientLight = new this.THREE.PointLight(0xFFE4B5, 1.5, 18); // Warm white
+                        parkAmbientLight.position.set(0, 3.5, 0); // Above fountain
+                        mesh.add(parkAmbientLight);
+                        this.lights.push(parkAmbientLight);
+                        mesh.userData.parkLight = parkAmbientLight;
+                    }
+                    
+                    // Note: Bench sitting interactions are handled in VoxelWorld.jsx furniture array
+                    // using the same format as other town benches for consistency
+                    
+                    console.log(`🌳 Garden park created with fountain and ${prop.benchCount || 4} benches`);
+                    break;
                     
                 case 'billboard':
                     // Highway-style billboard with lit-up advertisement (using new Billboard prop)
@@ -1364,6 +1575,66 @@ class TownCenter {
                     // No mesh for this - ladder is part of nightclub building
                     mesh = null;
                     break;
+                    
+                case 'lighthouse':
+                    // Classic Club Penguin lighthouse with beacon
+                    const lighthouseProp = new Lighthouse(this.THREE, prop.beaconOn !== false);
+                    lighthouseProp.spawn(null, 0, 0, 0); // Spawn at origin, position set by generic code below
+                    mesh = lighthouseProp.group;
+                    mesh.name = 'lighthouse';
+                    
+                    // Store lighthouse instance for beacon animation
+                    this.lighthouseInstance = lighthouseProp;
+                    if (lighthouseProp.getLight) {
+                        const beaconLight = lighthouseProp.getLight();
+                        if (beaconLight) this.lights.push(beaconLight);
+                    }
+                    
+                    // Add collision for lighthouse tower (cylinder)
+                    this.collisionSystem.addCollider(
+                        prop.x, prop.z,
+                        { type: 'cylinder', radius: 4, height: 18 },
+                        1, // SOLID
+                        { name: 'lighthouse_tower' }
+                    );
+                    
+                    // Add collision for observation deck (landing surface)
+                    this.collisionSystem.addCollider(
+                        prop.x, prop.z,
+                        { type: 'cylinder', radius: 3.5, height: 0.5 },
+                        1, // SOLID (landing surface)
+                        { name: 'lighthouse_deck' },
+                        0,
+                        12.5 // Deck height (towerHeight + 0.5)
+                    );
+                    
+                    console.log(`🔦 Lighthouse created at (${prop.x}, ${prop.z})`);
+                    break;
+                    
+                case 'lighthouse_entrance':
+                    // Trigger zone for teleporting to lighthouse observation deck
+                    // Sphere trigger centered on lighthouse, radius 6 > collision radius 4
+                    // This allows interaction from ANY side of the lighthouse
+                    this.collisionSystem.addTrigger(
+                        prop.x, prop.z,
+                        {
+                            type: 'sphere',
+                            radius: 6, // Larger than collision radius (4) so player can reach from any side
+                            action: 'climb_lighthouse',
+                            message: '🔦 Climb to Beacon (Press E)',
+                            destination: 'lighthouse_deck'
+                        },
+                        (event) => this._handleInteraction(event, {
+                            action: 'climb_lighthouse',
+                            message: '🔦 Climb to Beacon (Press E)',
+                            destination: 'lighthouse_deck'
+                        }),
+                        { name: 'lighthouse_entrance' }
+                    );
+                    console.log(`🔦 Lighthouse entrance trigger at (${prop.x}, ${prop.z}) with radius 6`);
+                    mesh = null;
+                    break;
+                    
                 case 'light_string':
                     // Christmas light string connecting two points
                     mesh = this._createLightString(prop.from, prop.to, prop.height);
@@ -2006,10 +2277,12 @@ class TownCenter {
 
     _handleInteraction(event, zone) {
         if (event.type === 'enter') {
+            console.log(`🎯 Trigger ENTER: ${zone.action} at player (${event.playerX?.toFixed(1)}, ${event.playerZ?.toFixed(1)})`);
             window.dispatchEvent(new CustomEvent('townInteraction', {
                 detail: { action: zone.action, message: zone.message, emote: zone.emote, data: zone }
             }));
         } else if (event.type === 'exit') {
+            console.log(`🎯 Trigger EXIT: ${zone.action}`);
             window.dispatchEvent(new CustomEvent('townInteraction', {
                 detail: { action: 'exit', exitedZone: zone.action, message: null, emote: null, data: zone }
             }));
@@ -2310,6 +2583,11 @@ class TownCenter {
             this._animatedCache.christmasTrees.forEach(mesh => {
                 if (mesh.userData.treeUpdate) mesh.userData.treeUpdate(time, nightFactor);
             });
+        }
+        
+        // Garden park animations (butterflies, fountain) every 2nd frame
+        if (frame % 2 === 0 && this.parkInstance) {
+            this.parkInstance.animate(delta);
         }
         
         // Floating signs - gentle bobbing animation every 2nd frame

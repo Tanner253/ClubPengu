@@ -33,7 +33,6 @@ class LampPost extends BaseProp {
         group.position.set(x, y, z);
         
         const metalMat = this.matManager.get(PropColors.metalDark, { roughness: 0.5, metalness: 0.4 });
-        const snowMat = this.matManager.get(PropColors.snowLight);
         
         // Base plate - ornate Victorian style (CACHED)
         const base = new THREE.Mesh(geo.cylinder(0.35, 0.45, 0.25, 8), metalMat);
@@ -118,12 +117,6 @@ class LampPost extends BaseProp {
             
             this.addLight(this.light, group);
         }
-        
-        // Snow on top (CACHED)
-        const snowCap = new THREE.Mesh(geo.sphere(0.28, 8, 8), snowMat);
-        snowCap.position.y = this.postHeight + 1.15;
-        snowCap.scale.set(1.4, 0.35, 1.4);
-        this.addMesh(snowCap, group);
         
         return this;
     }
