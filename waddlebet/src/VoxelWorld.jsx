@@ -5492,14 +5492,23 @@ const VoxelWorld = ({
                         const PUFFLE_PET_COOLDOWN = 5 * 60 * 1000; // 5 minutes
                         const now = Date.now();
                         
-                        // Check proximity (must be within 8 units to pet)
+                        // Check proximity (must be within 15 units to pet - generous to account for position lag)
+                        // Use the MESH position (actual rendered position) not puffleInstance.position
                         const playerPos = posRef.current;
-                        const pufflePos = puffleInstance?.position || clickedPuffleData.puffleMesh.position;
+                        const puffleMesh = clickedPuffleData.puffleMesh;
+                        const pufflePos = puffleMesh.position; // Always use the rendered mesh position
                         const dx = playerPos.x - pufflePos.x;
                         const dz = playerPos.z - pufflePos.z;
                         const distance = Math.sqrt(dx * dx + dz * dz);
                         
-                        if (distance > 8) {
+                        console.log('🐾 Pet proximity check:', { 
+                            playerPos: { x: playerPos.x.toFixed(1), z: playerPos.z.toFixed(1) },
+                            pufflePos: { x: pufflePos.x.toFixed(1), z: pufflePos.z.toFixed(1) },
+                            distance: distance.toFixed(1),
+                            ownerId
+                        });
+                        
+                        if (distance > 15) {
                             setPufflePetNotification({
                                 type: 'too_far',
                                 message: 'Move closer to pet the puffle!',
