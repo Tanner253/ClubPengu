@@ -4,7 +4,7 @@
  */
 
 // Emotes that don't auto-end (continuous/looping)
-const CONTINUOUS_EMOTES = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance', 'Sleep', 'Cry'];
+const CONTINUOUS_EMOTES = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance', 'Sleep', 'Cry', 'Flex'];
 
 // Cosmetics that need per-frame animation
 const ANIMATED_COSMETICS = {

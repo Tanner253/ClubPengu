@@ -769,6 +769,23 @@ class UserService {
         return { success: true, puffle: puffle.toClientData(), accessories: puffle.accessories };
     }
 
+    /**
+     * Pet a puffle (increases happiness by 10)
+     * @param {string} walletAddress - User's wallet
+     * @param {string} puffleId - Puffle's ID
+     * @returns {Promise<Object>} Result with updated puffle
+     */
+    async petPuffle(walletAddress, puffleId) {
+        const puffle = await this.getActivePuffle(walletAddress);
+        if (!puffle) return { success: false, error: 'No active puffle' };
+        
+        // Increase happiness by 10 (max 100)
+        puffle.happiness = Math.min(100, (puffle.happiness || 50) + 10);
+        
+        await puffle.save();
+        return { success: true, puffle: puffle.toClientData() };
+    }
+
     // ==================== COSMETIC OPERATIONS ====================
 
     /**

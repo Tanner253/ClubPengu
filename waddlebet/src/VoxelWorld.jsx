@@ -102,6 +102,7 @@ const VoxelWorld = ({
     const raycasterRef = useRef(null); // For player click detection
     const mouseRef = useRef({ x: 0, y: 0 }); // Mouse position for raycasting
     const wagerBotMeshRef = useRef(null); // WagerBot NPC mesh (dev mode only)
+    const wagerBotPuffleRef = useRef(null); // WagerBot's puffle {mesh, instance} (dev mode only)
     const isInMatchRef = useRef(isInMatch); // Track match state for game loop
     const matchBannersRef = useRef(new Map()); // matchId -> { sprite, canvas, ctx }
     const pveBannersRef = useRef(new Map()); // playerId -> { sprite, canvas, ctx } for PvE activities
@@ -334,6 +335,7 @@ const VoxelWorld = ({
     const snowballCooldownRef = useRef(0); // Timestamp when cooldown ends
     const isSnowballModeRef = useRef(false); // True when holding snowball throw key
     const [isSnowballMode, setIsSnowballMode] = useState(false); // For cursor change
+    const [hoverCursor, setHoverCursor] = useState('default'); // Cursor based on hovered object
     const SNOWBALL_COOLDOWN_MS = 1000; // 1 second cooldown
     const SNOWBALL_GRAVITY = -15; // Gravity acceleration
     const SNOWBALL_LIFETIME_MS = 5000; // Remove snowballs after 5 seconds
@@ -372,6 +374,8 @@ const VoxelWorld = ({
     const puffleInteractionsRef = useRef(new Map()); // Track player -> last interaction time
     const puffleInteractionActiveRef = useRef(null); // Currently active interaction {playerId, startTime}
     const [puffleInteractionReward, setPuffleInteractionReward] = useState(null); // Show reward notification
+    const pufflePetCooldownsRef = useRef(new Map()); // Track puffle -> last pet time (5 min cooldown)
+    const [pufflePetNotification, setPufflePetNotification] = useState(null); // Show pet notification
     
     // Banner Zoom Overlay State
     const [bannerZoomOpen, setBannerZoomOpen] = useState(false);
@@ -1988,6 +1992,24 @@ const VoxelWorld = ({
             scene.add(wagerBotMesh);
             wagerBotMeshRef.current = wagerBotMesh; // Store ref for click detection
             
+            // Create WagerBot's puffle (gold puffle with crown!)
+            const botPuffleInstance = new Puffle({
+                id: 'bot_puffle_001',
+                name: 'BotPuffle',
+                color: 'gold',
+                happiness: 100,
+                energy: 100,
+                hunger: 0
+            });
+            // Set equipped accessories
+            botPuffleInstance.equippedAccessories = { hat: 'crown', glasses: 'none', neckwear: 'bowtie' };
+            const botPuffleMesh = botPuffleInstance.createMesh(THREE);
+            botPuffleMesh.position.set(106.5, 0.5, 101.5); // Near WagerBot
+            botPuffleMesh.name = 'wagerbot_puffle';
+            scene.add(botPuffleMesh);
+            wagerBotPuffleRef.current = { mesh: botPuffleMesh, instance: botPuffleInstance };
+            console.log('🐾 WagerBot puffle spawned (gold with crown)');
+            
             // Add floating name tag above bot
             const canvas = document.createElement('canvas');
             canvas.width = 256;
@@ -2012,6 +2034,7 @@ const VoxelWorld = ({
             console.log('🤖 WagerBot NPC spawned at (105, 0, 100) in town - DEV MODE');
         } else {
             wagerBotMeshRef.current = null; // Clear ref if not in town/dev
+            wagerBotPuffleRef.current = null; // Clear puffle ref too
         }
 
         // --- INPUT HANDLING ---
@@ -4159,7 +4182,7 @@ const VoxelWorld = ({
                 }
                 
                 // Auto-end emotes after 3.5 seconds (continuous emotes don't auto-clear)
-                const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance', 'Sleep', 'Cry'];
+                const continuousEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance', 'Sleep', 'Cry', 'Flex'];
                 if (meshData.currentEmote && !continuousEmotes.includes(meshData.currentEmote)) {
                     const emoteAge = (Date.now() - meshData.emoteStartTime) / 1000;
                     if (emoteAge > 3.5) {
@@ -5119,6 +5142,10 @@ const VoxelWorld = ({
             const playerMeshes = [];
             const meshToPlayerMap = new Map();
             
+            // Also collect puffle meshes for petting
+            const puffleMeshes = [];
+            const meshToPuffleOwnerMap = new Map();
+            
             for (const [id, data] of otherPlayerMeshesRef.current) {
                 if (data.mesh) {
                     playerMeshes.push(data.mesh);
@@ -5130,6 +5157,29 @@ const VoxelWorld = ({
                     });
                     meshToPlayerMap.set(data.mesh, id);
                 }
+                
+                // Add puffle mesh for petting (if player has a puffle)
+                if (data.puffleMesh) {
+                    puffleMeshes.push(data.puffleMesh);
+                    data.puffleMesh.traverse(child => {
+                        if (child.isMesh) {
+                            meshToPuffleOwnerMap.set(child, { ownerId: id, puffleMesh: data.puffleMesh, puffleInstance: data.puffleInstance });
+                        }
+                    });
+                    meshToPuffleOwnerMap.set(data.puffleMesh, { ownerId: id, puffleMesh: data.puffleMesh, puffleInstance: data.puffleInstance });
+                }
+            }
+            
+            // Add local player's puffle for self-petting
+            if (playerPuffleRef.current?.mesh) {
+                const localPuffleMesh = playerPuffleRef.current.mesh;
+                puffleMeshes.push(localPuffleMesh);
+                localPuffleMesh.traverse(child => {
+                    if (child.isMesh) {
+                        meshToPuffleOwnerMap.set(child, { ownerId: 'self', puffleMesh: localPuffleMesh, puffleInstance: playerPuffleRef.current });
+                    }
+                });
+                meshToPuffleOwnerMap.set(localPuffleMesh, { ownerId: 'self', puffleMesh: localPuffleMesh, puffleInstance: playerPuffleRef.current });
             }
             
             // Add WagerBot NPC to clickable meshes (dev mode)
@@ -5142,6 +5192,19 @@ const VoxelWorld = ({
                     }
                 });
                 meshToPlayerMap.set(botMesh, 'dev_bot_wager');
+            }
+            
+            // Add WagerBot's puffle for petting (dev mode)
+            if (wagerBotPuffleRef.current?.mesh) {
+                const botPuffleMesh = wagerBotPuffleRef.current.mesh;
+                const botPuffleInstance = wagerBotPuffleRef.current.instance;
+                puffleMeshes.push(botPuffleMesh);
+                botPuffleMesh.traverse(child => {
+                    if (child.isMesh) {
+                        meshToPuffleOwnerMap.set(child, { ownerId: 'dev_bot_wager', puffleMesh: botPuffleMesh, puffleInstance: botPuffleInstance });
+                    }
+                });
+                meshToPuffleOwnerMap.set(botPuffleMesh, { ownerId: 'dev_bot_wager', puffleMesh: botPuffleMesh, puffleInstance: botPuffleInstance });
             }
             
             // Collect banner sprites for click detection
@@ -5400,6 +5463,174 @@ const VoxelWorld = ({
                     }
                 }
             }
+            
+            // Check for puffle clicks (petting) - only if no player was clicked
+            if (puffleMeshes.length > 0) {
+                const allPuffleMeshChildren = [];
+                puffleMeshes.forEach(m => m.traverse(child => { if (child.isMesh) allPuffleMeshChildren.push(child); }));
+                
+                const puffleIntersects = raycaster.intersectObjects(allPuffleMeshChildren, false);
+                
+                if (puffleIntersects.length > 0) {
+                    // Find which puffle was clicked
+                    let clickedPuffleData = null;
+                    
+                    for (const intersect of puffleIntersects) {
+                        let obj = intersect.object;
+                        while (obj && !meshToPuffleOwnerMap.has(obj)) {
+                            obj = obj.parent;
+                        }
+                        
+                        if (obj && meshToPuffleOwnerMap.has(obj)) {
+                            clickedPuffleData = meshToPuffleOwnerMap.get(obj);
+                            break;
+                        }
+                    }
+                    
+                    if (clickedPuffleData) {
+                        const { ownerId, puffleInstance } = clickedPuffleData;
+                        const PUFFLE_PET_COOLDOWN = 5 * 60 * 1000; // 5 minutes
+                        const now = Date.now();
+                        
+                        // Check proximity (must be within 8 units to pet)
+                        const playerPos = posRef.current;
+                        const pufflePos = puffleInstance?.position || clickedPuffleData.puffleMesh.position;
+                        const dx = playerPos.x - pufflePos.x;
+                        const dz = playerPos.z - pufflePos.z;
+                        const distance = Math.sqrt(dx * dx + dz * dz);
+                        
+                        if (distance > 8) {
+                            setPufflePetNotification({
+                                type: 'too_far',
+                                message: 'Move closer to pet the puffle!',
+                                startTime: now
+                            });
+                            setTimeout(() => setPufflePetNotification(null), 2000);
+                            return;
+                        }
+                        
+                        // Create unique key for this puffle
+                        const puffleKey = ownerId === 'self' ? 'self_puffle' : `${ownerId}_puffle`;
+                        const lastPetTime = pufflePetCooldownsRef.current.get(puffleKey) || 0;
+                        
+                        if (now - lastPetTime < PUFFLE_PET_COOLDOWN) {
+                            // On cooldown
+                            const remainingSeconds = Math.ceil((PUFFLE_PET_COOLDOWN - (now - lastPetTime)) / 1000);
+                            const remainingMinutes = Math.floor(remainingSeconds / 60);
+                            const remainingSecs = remainingSeconds % 60;
+                            
+                            setPufflePetNotification({
+                                type: 'cooldown',
+                                message: `Wait ${remainingMinutes}m ${remainingSecs}s to pet again`,
+                                startTime: now
+                            });
+                            setTimeout(() => setPufflePetNotification(null), 2000);
+                            return;
+                        }
+                        
+                        // Pet the puffle!
+                        console.log('🐾 Petting puffle! Owner:', ownerId, 'Instance:', puffleInstance);
+                        pufflePetCooldownsRef.current.set(puffleKey, now);
+                        
+                        // Get puffle name and current happiness
+                        let puffleName = 'Puffle';
+                        let currentHappiness = puffleInstance?.happiness || 80;
+                        
+                        if (ownerId === 'self') {
+                            puffleName = puffleInstance?.name || 'your puffle';
+                        } else if (ownerId === 'dev_bot_wager') {
+                            puffleName = 'BotPuffle';
+                        } else {
+                            const ownerData = playersDataRef.current.get(ownerId);
+                            puffleName = ownerData?.puffle?.name || 'the puffle';
+                            currentHappiness = ownerData?.puffle?.happiness || 80;
+                        }
+                        
+                        // Increase happiness
+                        const newHappiness = Math.min(100, currentHappiness + 10);
+                        
+                        // Show hearts emote on the puffle
+                        if (puffleInstance?.showEmote) {
+                            puffleInstance.showEmote('💕');
+                            console.log('🐾 Triggered hearts emote on puffle');
+                        }
+                        
+                        // Trigger a "pet" animation - make puffle do a happy jump
+                        if (puffleInstance?.mesh) {
+                            const puffleMesh = puffleInstance.mesh;
+                            const originalY = puffleMesh.position.y;
+                            const originalScale = puffleMesh.scale.clone();
+                            
+                            // Quick jump animation
+                            let jumpTime = 0;
+                            const jumpAnimation = () => {
+                                jumpTime += 16;
+                                const progress = jumpTime / 500; // 500ms animation
+                                
+                                if (progress < 1) {
+                                    // Jump up and squash/stretch
+                                    const jumpHeight = Math.sin(progress * Math.PI) * 0.8;
+                                    puffleMesh.position.y = originalY + jumpHeight;
+                                    
+                                    // Squash on land, stretch on jump
+                                    const squash = 1 + Math.sin(progress * Math.PI * 2) * 0.2;
+                                    puffleMesh.scale.set(
+                                        originalScale.x * (1 / squash),
+                                        originalScale.y * squash,
+                                        originalScale.z * (1 / squash)
+                                    );
+                                    
+                                    // Spin slightly
+                                    puffleMesh.rotation.y += 0.15;
+                                    
+                                    requestAnimationFrame(jumpAnimation);
+                                } else {
+                                    // Reset
+                                    puffleMesh.position.y = originalY;
+                                    puffleMesh.scale.copy(originalScale);
+                                }
+                            };
+                            jumpAnimation();
+                        }
+                        
+                        // If it's our own puffle, increase happiness directly AND persist to server/database
+                        if (ownerId === 'self' && puffleInstance) {
+                            puffleInstance.happiness = newHappiness;
+                            puffleInstance.updateMood?.();
+                            console.log('🐾 Petted own puffle! Happiness:', puffleInstance.happiness);
+                            
+                            // Send to server so happiness persists to database
+                            send?.({
+                                type: 'puffle_pet_self',
+                                puffleId: puffleInstance.puffleId
+                            });
+                        } else if (ownerId === 'dev_bot_wager' && puffleInstance) {
+                            // Update WagerBot's puffle happiness (local only - bot doesn't persist)
+                            puffleInstance.happiness = newHappiness;
+                            console.log('🐾 Petted WagerBot puffle! Happiness:', puffleInstance.happiness);
+                        } else if (ownerId !== 'self' && ownerId !== 'dev_bot_wager') {
+                            // Send to server for other players' puffles
+                            send?.({
+                                type: 'puffle_pet',
+                                targetOwnerId: ownerId,
+                                puffleName: puffleName
+                            });
+                        }
+                        
+                        // Show enhanced notification with happiness
+                        setPufflePetNotification({
+                            type: 'success',
+                            message: `You petted ${puffleName}! +10 😊`,
+                            happiness: newHappiness,
+                            startTime: now
+                        });
+                        setTimeout(() => setPufflePetNotification(null), 3000);
+                        
+                        console.log('🐾 Petted puffle:', puffleName, 'New Happiness:', newHappiness);
+                        return; // Don't process other clicks
+                    }
+                }
+            }
         };
         
         // Helper function to throw snowball to target location (Club Penguin style)
@@ -5608,6 +5839,228 @@ const VoxelWorld = ({
             }
         };
     }, [onPlayerClick, playerId]);
+    
+    // ==================== HOVER CURSOR DETECTION ====================
+    // Change cursor based on what's being hovered over (clickable objects, igloos, etc.)
+    useEffect(() => {
+        if (!rendererRef.current || !cameraRef.current || !raycasterRef.current) return;
+        
+        const renderer = rendererRef.current;
+        const camera = cameraRef.current;
+        const raycaster = raycasterRef.current;
+        
+        const handleMouseMove = (event) => {
+            // Skip if any UI element is being hovered
+            const elementsAtPoint = document.elementsFromPoint(event.clientX, event.clientY);
+            const isOverUI = elementsAtPoint.some(el => {
+                if (el === renderer.domElement || el === renderer.domElement.parentElement) {
+                    return false;
+                }
+                const zIndex = window.getComputedStyle(el).zIndex;
+                if (zIndex && parseInt(zIndex) >= 30) {
+                    return true;
+                }
+                if (el.tagName === 'BUTTON' || el.tagName === 'INPUT' || 
+                    el.closest('button') || el.closest('[role="button"]')) {
+                    return true;
+                }
+                return false;
+            });
+            
+            if (isOverUI) {
+                setHoverCursor('default');
+                return;
+            }
+            
+            // Calculate mouse position in normalized device coordinates
+            const rect = renderer.domElement.getBoundingClientRect();
+            const mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            const mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+            
+            raycaster.setFromCamera({ x: mouseX, y: mouseY }, camera);
+            
+            // Collect all interactive objects
+            const interactiveObjects = [];
+            const objectTypeMap = new Map();
+            
+            // Add other player meshes (clickable)
+            for (const [id, data] of otherPlayerMeshesRef.current) {
+                if (data.mesh) {
+                    data.mesh.traverse(child => {
+                        if (child.isMesh) {
+                            interactiveObjects.push(child);
+                            objectTypeMap.set(child, 'player');
+                        }
+                    });
+                }
+            }
+            
+            // Add WagerBot (clickable)
+            if (wagerBotMeshRef.current) {
+                wagerBotMeshRef.current.traverse(child => {
+                    if (child.isMesh) {
+                        interactiveObjects.push(child);
+                        objectTypeMap.set(child, 'player');
+                    }
+                });
+            }
+            
+            // Add puffles (clickable for petting)
+            for (const [id, data] of otherPlayerMeshesRef.current) {
+                if (data.puffleMesh) {
+                    data.puffleMesh.traverse(child => {
+                        if (child.isMesh) {
+                            interactiveObjects.push(child);
+                            objectTypeMap.set(child, 'puffle');
+                        }
+                    });
+                }
+            }
+            
+            // Add local player's puffle (clickable for self-petting)
+            if (playerPuffleRef.current?.mesh) {
+                playerPuffleRef.current.mesh.traverse(child => {
+                    if (child.isMesh) {
+                        interactiveObjects.push(child);
+                        objectTypeMap.set(child, 'puffle');
+                    }
+                });
+            }
+            
+            // Add igloo occupancy sprites (explore/help cursor)
+            iglooOccupancySpritesRef.current.forEach((sprite, iglooId) => {
+                if (sprite.visible) {
+                    interactiveObjects.push(sprite);
+                    objectTypeMap.set(sprite, 'igloo');
+                }
+            });
+            
+            // Add banners (clickable)
+            if (matchBannersRef.current) {
+                matchBannersRef.current.forEach((bannerData) => {
+                    if (bannerData.sprite && bannerData.sprite.visible) {
+                        interactiveObjects.push(bannerData.sprite);
+                        objectTypeMap.set(bannerData.sprite, 'banner');
+                    }
+                });
+            }
+            
+            // Add Lord Fishnu sprite (clickable)
+            if (lordFishnuSpriteRef.current && lordFishnuSpriteRef.current.visible) {
+                interactiveObjects.push(lordFishnuSpriteRef.current);
+                objectTypeMap.set(lordFishnuSpriteRef.current, 'banner');
+            }
+            
+            // Check scene for interactive props/buildings
+            if (sceneRef.current) {
+                // Helper to check if obj or any parent has a name containing the search string
+                const hasNameInHierarchy = (obj, search) => {
+                    let current = obj;
+                    while (current) {
+                        if (current.name?.toLowerCase().includes(search.toLowerCase())) {
+                            return true;
+                        }
+                        current = current.parent;
+                    }
+                    return false;
+                };
+                
+                sceneRef.current.traverse(obj => {
+                    if (obj.isMesh || obj.isSprite) {
+                        // Check for clickable interaction markers
+                        if (obj.userData?.isInteractive || obj.userData?.isBanner || obj.name?.includes('interaction')) {
+                            interactiveObjects.push(obj);
+                            objectTypeMap.set(obj, 'interactive');
+                        }
+                        // Check for igloo markers (check entire hierarchy for "igloo" name)
+                        if (hasNameInHierarchy(obj, 'igloo') && !objectTypeMap.has(obj)) {
+                            interactiveObjects.push(obj);
+                            objectTypeMap.set(obj, 'igloo');
+                        }
+                        // Check for portal markers
+                        if (obj.name?.includes('portal') || obj.userData?.isPortal) {
+                            interactiveObjects.push(obj);
+                            objectTypeMap.set(obj, 'portal');
+                        }
+                        // Check for shop/building entrances
+                        if (obj.name?.includes('shop') || obj.name?.includes('building') || 
+                            obj.name?.includes('entrance') || obj.userData?.isClickable) {
+                            interactiveObjects.push(obj);
+                            objectTypeMap.set(obj, 'interactive');
+                        }
+                    }
+                });
+            }
+            
+            // Check for intersections
+            const meshObjects = interactiveObjects.filter(o => o.isMesh);
+            const spriteObjects = interactiveObjects.filter(o => o.isSprite);
+            
+            let hovered = null;
+            let hoveredType = null;
+            
+            // Check mesh intersections
+            if (meshObjects.length > 0) {
+                const intersects = raycaster.intersectObjects(meshObjects, false);
+                if (intersects.length > 0) {
+                    let obj = intersects[0].object;
+                    while (obj && !objectTypeMap.has(obj)) {
+                        obj = obj.parent;
+                    }
+                    if (obj) {
+                        hovered = obj;
+                        hoveredType = objectTypeMap.get(obj);
+                    }
+                }
+            }
+            
+            // Check sprite intersections (sprites need special handling)
+            if (!hovered && spriteObjects.length > 0) {
+                const THREE = window.THREE;
+                const ray = raycaster.ray;
+                
+                for (const sprite of spriteObjects) {
+                    if (!sprite.visible) continue;
+                    
+                    const spriteWorldPos = new THREE.Vector3();
+                    sprite.getWorldPosition(spriteWorldPos);
+                    
+                    const rayToSprite = new THREE.Vector3().subVectors(spriteWorldPos, ray.origin);
+                    const rayDir = ray.direction.clone().normalize();
+                    const projectionLength = rayToSprite.dot(rayDir);
+                    
+                    if (projectionLength < 0) continue; // Behind camera
+                    
+                    const closestPointOnRay = ray.origin.clone().add(rayDir.clone().multiplyScalar(projectionLength));
+                    const distanceToRay = closestPointOnRay.distanceTo(spriteWorldPos);
+                    const spriteSize = Math.max(sprite.scale.x, sprite.scale.y) / 2;
+                    
+                    if (distanceToRay < spriteSize) {
+                        hovered = sprite;
+                        hoveredType = objectTypeMap.get(sprite);
+                        break;
+                    }
+                }
+            }
+            
+            // Set cursor based on hovered object type
+            if (hovered) {
+                if (hoveredType === 'igloo') {
+                    setHoverCursor('help'); // ? cursor for igloos (exploration)
+                } else {
+                    setHoverCursor('pointer'); // Pointer for clickable objects
+                }
+            } else {
+                setHoverCursor('default');
+            }
+        };
+        
+        renderer.domElement.addEventListener('mousemove', handleMouseMove);
+        
+        return () => {
+            renderer.domElement.removeEventListener('mousemove', handleMouseMove);
+        };
+    }, []);
     
     useEffect(() => {
         if (!activeBubble || !playerRef.current) return;
@@ -7961,7 +8414,7 @@ const VoxelWorld = ({
     };
     
     return (
-        <div className="relative w-full h-full bg-black" style={{ cursor: isSnowballMode ? 'crosshair' : 'default' }}>
+        <div className="relative w-full h-full bg-black select-none" style={{ cursor: isSnowballMode ? 'crosshair' : hoverCursor }}>
              <div ref={mountRef} className="absolute inset-0" />
              
              {/* Connection Error Display */}
@@ -8196,7 +8649,7 @@ const VoxelWorld = ({
              
              {/* Snowball Mode Indicator */}
              {isSnowballMode && (
-                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 pointer-events-none">
+                <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 pointer-events-none select-none">
                     <div className="bg-gradient-to-r from-blue-500/95 to-cyan-500/95 backdrop-blur-sm px-5 py-3 rounded-2xl border border-white/30 shadow-xl flex flex-col items-center gap-1 animate-pulse">
                         <div className="flex items-center gap-2">
                             <span className="text-2xl">❄️</span>
@@ -8782,7 +9235,7 @@ const VoxelWorld = ({
              
              {/* Puffle Interaction Reward Notification */}
              {puffleInteractionReward && (
-                <div className="fixed top-1/4 left-1/2 transform -translate-x-1/2 z-50 animate-bounce">
+                <div className="fixed top-1/4 left-1/2 transform -translate-x-1/2 z-50 animate-bounce select-none pointer-events-none">
                     <div className="bg-gradient-to-r from-pink-500/90 to-purple-500/90 px-6 py-4 rounded-2xl shadow-2xl border border-white/30">
                         <div className="text-4xl text-center mb-2 animate-pulse">💕💕💕</div>
                         <div className="text-white text-center font-bold">
@@ -8795,8 +9248,45 @@ const VoxelWorld = ({
                 </div>
              )}
              
+             {/* Puffle Pet Notification */}
+             {pufflePetNotification && (
+                <div className="fixed top-1/3 left-1/2 transform -translate-x-1/2 z-50 select-none pointer-events-none animate-fade-in">
+                    <div className={`px-5 py-3 rounded-2xl shadow-2xl border ${
+                        pufflePetNotification.type === 'success' 
+                            ? 'bg-gradient-to-r from-pink-500/95 to-rose-500/95 border-white/30' 
+                            : pufflePetNotification.type === 'cooldown'
+                                ? 'bg-gradient-to-r from-orange-500/95 to-amber-500/95 border-white/30'
+                                : 'bg-gradient-to-r from-gray-500/95 to-slate-500/95 border-white/30'
+                    }`}>
+                        <div className="flex items-center gap-3">
+                            <span className="text-3xl">
+                                {pufflePetNotification.type === 'success' ? '🐾💕' : 
+                                 pufflePetNotification.type === 'cooldown' ? '⏳' : '📍'}
+                            </span>
+                            <div className="flex flex-col">
+                                <span className="text-white font-bold text-sm">
+                                    {pufflePetNotification.message}
+                                </span>
+                                {pufflePetNotification.type === 'success' && pufflePetNotification.happiness !== undefined && (
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className="text-white/80 text-xs">Happiness:</span>
+                                        <div className="w-20 h-2 bg-black/30 rounded-full overflow-hidden">
+                                            <div 
+                                                className="h-full bg-gradient-to-r from-yellow-400 to-pink-400 transition-all"
+                                                style={{ width: `${pufflePetNotification.happiness}%` }}
+                                            />
+                                        </div>
+                                        <span className="text-yellow-300 text-xs font-bold">{pufflePetNotification.happiness}%</span>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+             )}
+             
              {/* Title & Controls - Top Left */}
-             <div className={`absolute retro-text text-white drop-shadow-md z-10 pointer-events-none ${
+             <div className={`absolute retro-text text-white drop-shadow-md z-10 pointer-events-none select-none ${
                  isMobile && !isLandscape ? 'top-2 left-2' : 'top-4 left-4'
              }`}>
                  <h2 className={`drop-shadow-lg ${

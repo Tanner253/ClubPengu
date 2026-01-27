@@ -21,7 +21,7 @@ export const EMOTE_WHEEL_ITEMS = [
 ];
 
 // Emotes that loop continuously (don't auto-end after 3 seconds)
-export const LOOPING_EMOTES = ['Sit', 'Breakdance', 'Dance', 'Headbang', 'DJ', 'Sleep'];
+export const LOOPING_EMOTES = ['Sit', 'Breakdance', 'Dance', 'Headbang', 'DJ', 'Sleep', 'Flex'];
 
 // Emote to emoji mapping for multiplayer display
 export const EMOTE_EMOJI_MAP = {

@@ -4229,6 +4229,79 @@ async function handleMessage(playerId, message) {
             break;
         }
         
+        case 'puffle_pet': {
+            // Player petted another player's puffle
+            if (!message.targetOwnerId) break;
+            
+            const targetPlayer = players.get(message.targetOwnerId);
+            if (targetPlayer && targetPlayer.puffle) {
+                // Increase target puffle's happiness
+                if (typeof targetPlayer.puffle.happiness === 'number') {
+                    targetPlayer.puffle.happiness = Math.min(100, targetPlayer.puffle.happiness + 10);
+                }
+                
+                // Notify target player that their puffle was petted
+                sendToPlayer(message.targetOwnerId, {
+                    type: 'puffle_petted',
+                    petterName: player.name || 'Someone',
+                    puffleName: targetPlayer.puffle.name || 'Puffle',
+                    newHappiness: targetPlayer.puffle.happiness
+                });
+                
+                // Broadcast puffle emote (hearts) to all players in room
+                if (player.room) {
+                    broadcastToRoomAll(player.room, {
+                        type: 'puffle_emote',
+                        playerId: message.targetOwnerId,
+                        emoji: '💕',
+                        duration: 3000
+                    });
+                }
+                
+                console.log(`🐾 ${player.name} petted ${targetPlayer.name}'s puffle`);
+            }
+            break;
+        }
+        
+        case 'puffle_pet_self': {
+            // Player petted their OWN puffle - persist to database
+            if (!player.walletAddress || !player.puffle) break;
+            
+            try {
+                const petResult = await userService.petPuffle(player.walletAddress, player.puffle.puffleId);
+                
+                if (petResult.success) {
+                    // Update in-memory state
+                    player.puffle = {
+                        ...player.puffle,
+                        happiness: petResult.puffle.happiness
+                    };
+                    
+                    // Broadcast puffle emote (hearts) to all players in room
+                    if (player.room) {
+                        broadcastToRoomAll(player.room, {
+                            type: 'puffle_emote',
+                            playerId,
+                            emoji: '💕',
+                            duration: 3000
+                        });
+                    }
+                    
+                    // Send confirmation to player
+                    sendToPlayer(playerId, {
+                        type: 'puffle_petted_self',
+                        newHappiness: petResult.puffle.happiness,
+                        puffle: petResult.puffle
+                    });
+                    
+                    console.log(`🐾 ${player.name} petted their own puffle! Happiness: ${petResult.puffle.happiness}`);
+                }
+            } catch (error) {
+                console.error('Error petting own puffle:', error);
+            }
+            break;
+        }
+        
         case 'puffle_interaction': {
             // Two puffles in proximity - award gold
             if (!player.walletAddress || !message.otherWalletAddress) break;

@@ -976,6 +976,14 @@ export function MultiplayerProvider({ children }) {
                 break;
             }
             
+            // Puffle was petted by another player
+            case 'puffle_petted': {
+                console.log(`🐾💕 ${message.petterName} petted your ${message.puffleName}!`);
+                // Callback to notify VoxelWorld/UI
+                callbacksRef.current.onPufflePetted?.(message);
+                break;
+            }
+            
             // Puffle state sync - update accessories, mood, etc.
             case 'puffle_state_update': {
                 const statePlayer = playersDataRef.current.get(message.playerId);

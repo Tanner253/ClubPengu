@@ -401,12 +401,13 @@ export function animateMesh(
             meshInner.rotation.x = -0.15 * flexPose;
             // Slight bounce to show off
             meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 6)) * 0.05;
-            // Proud head tilt - looking to the side showing off
+            // Proud head tilt - looking to the side showing off, head pushed forward
             const proudTilt = -0.15 * flexPose;
-            if(head) { head.rotation.x = proudTilt; head.rotation.z = Math.sin(eTime * 2) * 0.1; }
-            if(hatPart) { hatPart.rotation.x = proudTilt; hatPart.rotation.z = Math.sin(eTime * 2) * 0.1; }
-            if(eyesPart) { eyesPart.rotation.x = proudTilt; eyesPart.rotation.z = Math.sin(eTime * 2) * 0.1; }
-            if(mouthPart) { mouthPart.rotation.x = proudTilt; mouthPart.rotation.z = Math.sin(eTime * 2) * 0.1; }
+            const headForward = 1.5 * flexPose; // Move head forward slightly
+            if(head) { head.rotation.x = proudTilt; head.rotation.z = Math.sin(eTime * 2) * 0.1; head.position.z = headForward; }
+            if(hatPart) { hatPart.rotation.x = proudTilt; hatPart.rotation.z = Math.sin(eTime * 2) * 0.1; hatPart.position.z = headForward; }
+            if(eyesPart) { eyesPart.rotation.x = proudTilt; eyesPart.rotation.z = Math.sin(eTime * 2) * 0.1; eyesPart.position.z = headForward; }
+            if(mouthPart) { mouthPart.rotation.x = proudTilt; mouthPart.rotation.z = Math.sin(eTime * 2) * 0.1; mouthPart.position.z = headForward; }
         }
         else if (emoteType === 'Sleep') {
             // Sleeping on the ground - lying down with Zzz motion
@@ -535,7 +536,7 @@ export function animateMesh(
         }
         
         // Auto-stop non-persistent emotes
-        const loopingEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance', 'Sleep', 'Cry'];
+        const loopingEmotes = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance', 'Sleep', 'Cry', 'Flex'];
         if (!loopingEmotes.includes(emoteType) && eTime > 3) {
             if (onEmoteEnd) {
                 onEmoteEnd();

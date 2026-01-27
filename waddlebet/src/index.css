@@ -23,6 +23,35 @@ html, body, #root {
   overflow: hidden;
 }
 
+/* Disable text selection in the game - prevents accidental UI text highlighting */
+body {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection only in actual text inputs */
+input, textarea {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Cursor styles for game interactions */
+.cursor-pointer-game {
+  cursor: pointer !important;
+}
+
+.cursor-help-game {
+  cursor: help !important;
+}
+
+.cursor-crosshair-game {
+  cursor: crosshair !important;
+}
+
 /* iOS Safari specific fullscreen fixes */
 /* Using @supports to target WebKit only - prevents Android issues */
 @supports (-webkit-touch-callout: none) {
