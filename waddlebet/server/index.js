@@ -41,6 +41,7 @@ import rentScheduler from './schedulers/RentScheduler.js';
 import solanaPaymentService from './services/SolanaPaymentService.js';
 import devBotService, { BOT_CONFIG } from './services/DevBotService.js';
 import wagerSettlementService from './services/WagerSettlementService.js';
+import dailyBonusService from './services/DailyBonusService.js';
 import { validateWalletAddress, validateTransactionSignature, validateAmount } from './utils/securityValidation.js';
 
 const PORT = process.env.PORT || 3001;
@@ -1222,6 +1223,11 @@ wss.on('connection', (ws, req) => {
             slotService.handleDisconnect(playerId);
             fishingService.handleDisconnect(playerId);
             
+            // End daily bonus session tracking
+            if (player.walletAddress) {
+                dailyBonusService.endSession(player.walletAddress);
+            }
+            
             // End any PvE activities
             if (activePveActivities.has(playerId)) {
                 endPveActivity(playerId, { result: 'disconnected' });
@@ -1503,6 +1509,9 @@ async function handleMessage(playerId, message) {
                 
                 console.log(`🔐 ${authResult.user.username} authenticated (${walletAddress.slice(0, 8)}...)`);
                 
+                // Start daily bonus session tracking
+                dailyBonusService.startSession(walletAddress);
+                
                 // If player is already in a room, notify others of the auth status
                 if (player.room) {
                     broadcastToRoom(player.room, {
@@ -1783,6 +1792,9 @@ async function handleMessage(playerId, message) {
                 });
                 
                 console.log(`[${ts()}] 🔄 Session restored: ${user.username} (${walletAddress.slice(0, 8)}...)`);
+                
+                // Start daily bonus session tracking
+                dailyBonusService.startSession(walletAddress);
             } catch (error) {
                 console.error('Session restore error:', error);
                 sendToPlayer(playerId, {
@@ -5707,6 +5719,88 @@ async function handleMessage(playerId, message) {
                 type: 'pebbles_info',
                 info: PebbleService.getExchangeInfo()
             });
+            break;
+        }
+        
+        // ==================== DAILY BONUS ====================
+        case 'daily_bonus_status': {
+            // Get daily bonus eligibility status
+            if (!player.isAuthenticated || !player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'daily_bonus_status',
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Must be authenticated to check daily bonus'
+                });
+                break;
+            }
+            
+            try {
+                const status = await dailyBonusService.getStatus(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'daily_bonus_status',
+                    ...status
+                });
+            } catch (error) {
+                console.error('🎁 Daily bonus status error:', error);
+                sendToPlayer(playerId, {
+                    type: 'daily_bonus_status',
+                    error: 'STATUS_ERROR',
+                    message: 'Failed to check daily bonus status'
+                });
+            }
+            break;
+        }
+        
+        case 'daily_bonus_claim': {
+            // Claim the daily bonus (sends WADDLE tokens)
+            if (!player.isAuthenticated || !player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'daily_bonus_result',
+                    success: false,
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Must be authenticated to claim daily bonus'
+                });
+                break;
+            }
+            
+            const { nonce } = message;
+            if (!nonce) {
+                sendToPlayer(playerId, {
+                    type: 'daily_bonus_result',
+                    success: false,
+                    error: 'NO_NONCE',
+                    message: 'Request nonce required for security'
+                });
+                break;
+            }
+            
+            try {
+                console.log(`🎁 Daily bonus claim request from ${player.walletAddress.slice(0, 8)}...`);
+                
+                const result = await dailyBonusService.claim(player.walletAddress, nonce);
+                
+                sendToPlayer(playerId, {
+                    type: 'daily_bonus_result',
+                    ...result
+                });
+                
+                // If successful, also send updated status
+                if (result.success) {
+                    const status = await dailyBonusService.getStatus(player.walletAddress);
+                    sendToPlayer(playerId, {
+                        type: 'daily_bonus_status',
+                        ...status
+                    });
+                }
+            } catch (error) {
+                console.error('🎁 Daily bonus claim error:', error);
+                sendToPlayer(playerId, {
+                    type: 'daily_bonus_result',
+                    success: false,
+                    error: 'CLAIM_ERROR',
+                    message: 'Failed to process daily bonus claim'
+                });
+            }
             break;
         }
         

@@ -50,7 +50,9 @@ const transactionSchema = new mongoose.Schema({
             // ========== GIFTING TYPES ==========
             'gift_gold',         // Gold/coins gifted to another player
             'gift_pebbles',      // Pebbles gifted to another player
-            'gift_item'          // Item gifted to another player
+            'gift_item',         // Item gifted to another player
+            // ========== DAILY BONUS TYPES ==========
+            'daily_bonus'        // Daily login bonus WADDLE reward
         ],
         index: true
     },

@@ -8,6 +8,7 @@ import PebblesPurchaseModal from './PebblesPurchaseModal';
 import InventoryModal from './InventoryModal';
 import MarketplaceModal from './MarketplaceModal';
 import TutorialModal, { shouldShowTutorial } from './TutorialModal';
+import DailyBonusModal from './DailyBonusModal';
 import { useMultiplayer } from '../multiplayer';
 
 /**
@@ -23,6 +24,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     const [showInventory, setShowInventory] = useState(false);
     const [showMarketplace, setShowMarketplace] = useState(false);
     const [showTutorial, setShowTutorial] = useState(false);
+    const [showDailyBonus, setShowDailyBonus] = useState(false);
     
     // Get pebbles from multiplayer context
     const { userData, isAuthenticated } = useMultiplayer();
@@ -178,6 +180,18 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                         📈
                     </a>
                     
+                    {/* Daily Bonus */}
+                    {isAuthenticated && (
+                        <button
+                            onClick={() => setShowDailyBonus(true)}
+                            className={`${compactBtn} bg-gradient-to-r from-amber-600/80 to-orange-600/80 relative`}
+                            title="Daily Login Bonus"
+                        >
+                            🎁
+                            <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
+                        </button>
+                    )}
+                    
                     {/* Inbox */}
                     {showInbox && <InboxButton compact={true} />}
                     
@@ -266,6 +280,12 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     isOpen={showTutorial}
                     onClose={() => setShowTutorial(false)}
                 />
+                
+                {/* Daily Bonus Modal (Portrait) */}
+                <DailyBonusModal
+                    isOpen={showDailyBonus}
+                    onClose={() => setShowDailyBonus(false)}
+                />
             </>
         );
     }
@@ -307,6 +327,18 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 >
                     📈
                 </a>
+                
+                {/* Daily Bonus Button */}
+                {isAuthenticated && (
+                    <button
+                        onClick={() => setShowDailyBonus(true)}
+                        className="relative bg-gradient-to-r from-amber-600/80 to-orange-600/80 hover:from-amber-500 hover:to-orange-500 active:from-amber-700 active:to-orange-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center hover:scale-105 active:scale-95"
+                        title="Daily Login Bonus - Earn $WADDLE!"
+                    >
+                        🎁
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                    </button>
+                )}
                 
                 {/* Settings Button */}
                 {onOpenSettings && (
@@ -450,6 +482,12 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
             <TutorialModal
                 isOpen={showTutorial}
                 onClose={() => setShowTutorial(false)}
+            />
+            
+            {/* Daily Bonus Modal */}
+            <DailyBonusModal
+                isOpen={showDailyBonus}
+                onClose={() => setShowDailyBonus(false)}
             />
         </>
     );

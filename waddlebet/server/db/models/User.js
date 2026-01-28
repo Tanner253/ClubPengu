@@ -363,7 +363,17 @@ const userSchema = new mongoose.Schema({
 
     // ========== MIGRATION TRACKING ==========
     migrationSource: { type: String, default: null },
-    migratedAt: { type: Date, default: null }
+    migratedAt: { type: Date, default: null },
+
+    // ========== DAILY LOGIN BONUS ==========
+    dailyBonus: {
+        lastClaimAt: { type: Date, default: null },              // Last successful claim timestamp
+        sessionStartTime: { type: Date, default: null },         // When current session started
+        currentSessionMinutes: { type: Number, default: 0 },     // Minutes accumulated this session
+        totalClaimed: { type: Number, default: 0 },              // Total bonuses claimed ever
+        totalWaddleEarned: { type: Number, default: 0 },         // Total $WADDLE earned from daily bonus
+        claimNonce: { type: String, default: null }              // Unique nonce to prevent replay attacks
+    }
 
 }, {
     timestamps: true  // Adds createdAt and updatedAt

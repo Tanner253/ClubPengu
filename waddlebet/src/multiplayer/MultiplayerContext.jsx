@@ -343,6 +343,23 @@ export function MultiplayerProvider({ children }) {
                 callbacksRef.current.onPebblesError?.(message);
                 break;
                 
+            // ==================== DAILY BONUS MESSAGES ====================
+            case 'daily_bonus_status':
+                // Daily bonus eligibility status
+                console.log(`🎁 Daily bonus status:`, message.canClaim ? 'Can claim!' : 'Not ready');
+                callbacksRef.current.onDailyBonusStatus?.(message);
+                break;
+                
+            case 'daily_bonus_result':
+                // Daily bonus claim result
+                if (message.success) {
+                    console.log(`🎁 Daily bonus claimed! ${message.amount} ${message.tokenSymbol}`);
+                } else {
+                    console.warn(`🎁 Daily bonus claim failed: ${message.error}`);
+                }
+                callbacksRef.current.onDailyBonusResult?.(message);
+                break;
+                
             // ==================== INVENTORY MESSAGES ====================
             case 'inventory_data':
                 // Full inventory data with pagination
