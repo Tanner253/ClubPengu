@@ -49,7 +49,7 @@ import {
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './config';
-import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem } from './systems';
+import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem, createMountainBackground, performanceManager, PERFORMANCE_PRESETS } from './systems';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
 import CasinoBlackjack from './components/CasinoBlackjack';
@@ -109,6 +109,7 @@ const VoxelWorld = ({
     const wizardTrailSystemRef = useRef(null); // World-space wizard hat particle trail
     const gakeCandleTrailSystemRef = useRef(null); // Gake character green candle trail
     const mountTrailSystemRef = useRef(null); // Mount trail system (icy trails, etc.)
+    const mountainBackgroundRef = useRef(null); // Mountain background system
     const mountEnabledRef = useRef(true); // Track if mount is equipped/enabled
     const mpUpdateAppearanceRef = useRef(null); // Ref for appearance update function
     const cameraControllerRef = useRef(null); // Smooth third-person camera controller
@@ -179,6 +180,26 @@ const VoxelWorld = ({
         
         window.addEventListener('greenCandlesToggled', handleGreenCandlesToggle);
         return () => window.removeEventListener('greenCandlesToggled', handleGreenCandlesToggle);
+    }, []);
+    
+    // Performance preset change listener - apply dynamic settings
+    useEffect(() => {
+        const handlePresetChange = (e) => {
+            const { preset, settings } = e.detail;
+            console.log(`🎮 Performance preset changed to: ${settings.name}`);
+            
+            // Note: Renderer settings (DPR, antialias, shadows) require page refresh
+            // But distance-based LOD and update throttling apply immediately via performanceManager
+            
+            // Update snowfall if system exists
+            if (snowfallSystemRef.current && settings.snowParticles) {
+                // Snowfall will use new settings on next respawn cycle
+                console.log(`❄️ Snow particles will update: ${settings.snowParticles}`);
+            }
+        };
+        
+        window.addEventListener('performancePresetChanged', handlePresetChange);
+        return () => window.removeEventListener('performancePresetChanged', handlePresetChange);
     }, []);
     
     
@@ -603,6 +624,14 @@ const VoxelWorld = ({
         tempVec3Ref.current = new THREE.Vector3();
         tempOffsetRef.current = new THREE.Vector3();
         
+        // OPTIMIZATION: Cache commonly used geometries/materials to avoid creating in render loop
+        if (!window._cachedSparkGeo) {
+            window._cachedSparkGeo = new THREE.SphereGeometry(0.02, 4, 4);
+            window._cachedSnowballGeoLarge = new THREE.SphereGeometry(0.18, 8, 8); // Local player snowballs
+            window._cachedSnowballGeoSmall = new THREE.SphereGeometry(0.15, 8, 8); // Other player snowballs
+            console.log('⚡ Cached spark and snowball geometries');
+        }
+        
         // Initialize wizard trail particle system
         wizardTrailSystemRef.current = new WizardTrailSystem(THREE, scene);
         
@@ -642,34 +671,23 @@ const VoxelWorld = ({
         console.log('🖥️ Platform:', navigator.platform, '| isApple:', isAppleDevice, '| isIOS:', isIOSDevice, '| isAndroid:', isAndroidDevice, '| isMobileGPU:', isMobileGPU);
         
         // ==================== RENDERER SETTINGS ====================
-        // Apple devices (Mac + iOS) need optimizations for WebGL-via-Metal issues on Safari
-        // Android gets mobile optimizations too
-        // Windows/Linux desktop can handle full quality
-        const needsOptimization = isAppleDevice || isAndroidDevice;
+        // Mobile devices (Apple/Android) always use optimized settings
+        // PC uses performance manager preset (can be changed by user)
+        const isMobile = isAppleDevice || isAndroidDevice;
+        const needsOptimization = isMobile; // Keep for backward compat
         
-        const rendererOptions = {
-            antialias: !needsOptimization, // Apple/Android: false (big perf gain), PC: true
-            powerPreference: 'high-performance',
-            depth: true
-        };
-        
-        // Apple/Android: lower precision for faster shader math and Metal compatibility
-        if (needsOptimization) {
-            rendererOptions.precision = 'mediump';
-            rendererOptions.stencil = false;
-        }
+        // Get renderer options from performance manager
+        const rendererOptions = performanceManager.getRendererOptions(isAppleDevice, isAndroidDevice);
         
         const renderer = new THREE.WebGLRenderer(rendererOptions);
         
-        // Apple/Android: DPR capped at 1.0 (renders at native resolution, not 2x/3x)
-        // This is the BIGGEST performance win - Retina/high-DPR renders 4-9x more pixels
-        // PC: allow up to 2x for crisp visuals
-        const dpr = needsOptimization ? Math.min(window.devicePixelRatio, 1.0) : Math.min(window.devicePixelRatio, 2);
+        // DPR from performance manager (mobile always 1.0, PC based on preset)
+        const dpr = performanceManager.getDPR(isMobile);
         renderer.setPixelRatio(dpr);
         renderer.setSize(window.innerWidth, window.innerHeight);
         
-        // Apple/Android: flat rendering (faster), fixes Metal rendering issues
-        if (needsOptimization) {
+        // Mobile: flat rendering (faster), fixes Metal rendering issues
+        if (isMobile) {
             renderer.toneMapping = THREE.NoToneMapping;
             renderer.outputColorSpace = THREE.SRGBColorSpace;
             if (isAndroidDevice) {
@@ -679,15 +697,17 @@ const VoxelWorld = ({
             } else {
                 console.log('🍎 iOS device detected - applied GPU optimizations: antialias=false, dpr=1.0, mediump precision');
             }
+        } else {
+            const preset = performanceManager.getPreset();
+            const settings = performanceManager.getSettings();
+            console.log(`🎮 PC Performance: "${settings.name}" preset (DPR=${dpr}, antialias=${settings.antialias}, shadows=${settings.shadowType})`);
         }
         
-        // Shadows: Apple/Android gets BasicShadowMap (fastest), PC gets PCFShadowMap (better quality)
+        // Shadows from performance manager
         renderer.shadowMap.enabled = true;
-        if (needsOptimization) {
-            renderer.shadowMap.type = THREE.BasicShadowMap;
-            console.log('📱 Apple/Android: Using BasicShadowMap for better performance');
-        } else {
-            renderer.shadowMap.type = THREE.PCFShadowMap;
+        renderer.shadowMap.type = performanceManager.getShadowMapType(THREE, isMobile);
+        if (isMobile) {
+            console.log('📱 Mobile: Using BasicShadowMap for better performance');
         }
         mountRef.current.appendChild(renderer.domElement);
         rendererRef.current = renderer;
@@ -819,6 +839,25 @@ const VoxelWorld = ({
             icePlane.position.set(CITY_SIZE/2 * BUILDING_SCALE, 0, CITY_SIZE/2 * BUILDING_SCALE);
             icePlane.receiveShadow = true;
             scene.add(icePlane);
+            
+            // ==================== MOUNTAIN BACKGROUND ====================
+            // Create low-poly mountain range surrounding the map (3 rows for depth)
+            try {
+                mountainBackgroundRef.current = createMountainBackground(THREE, scene, {
+                    mapSize: CITY_SIZE * BUILDING_SCALE, // 220 units
+                    offset: 35,                    // Distance outside map bounds for first row
+                    mountainRows: 3,               // 3 rows of mountains for depth
+                    rowSpacing: 50,                // Distance between rows
+                    mountainsPerRow: [20, 28, 36], // Peaks per row (back to front)
+                    baseHeight: -10,               // Below ground for seamless base
+                    minPeakHeight: 45,             // Minimum peak height
+                    maxPeakHeight: 90,             // Maximum peak height
+                    baseWidth: 38,                 // Width of each mountain base
+                    snowLineRatio: 0.5,            // Snow starts at 50% of peak height
+                });
+            } catch (err) {
+                console.warn('Failed to create mountain background:', err);
+            }
             
             // No water ring - walls handle boundaries now
             
@@ -3774,8 +3813,8 @@ const VoxelWorld = ({
                                     const sparkColors = mountData.sparkColors || ['#FFD700', '#FFA500', '#FF6600', '#FFFFFF'];
                                     const sparkColor = sparkColors[Math.floor(Math.random() * sparkColors.length)];
                                     
-                                    // Create simple spark geometry
-                                    const sparkGeo = new THREE.SphereGeometry(0.02, 4, 4);
+                                    // Use cached geometry for performance
+                                    const sparkGeo = window._cachedSparkGeo || new THREE.SphereGeometry(0.02, 4, 4);
                                     const sparkMat = new THREE.MeshBasicMaterial({ 
                                         color: sparkColor,
                                         transparent: true,
@@ -3963,7 +4002,9 @@ const VoxelWorld = ({
             // OPTIMIZATION: Cache local player position for distance checks
             const localPosX = posRef.current?.x || 0;
             const localPosZ = posRef.current?.z || 0;
-            const DISTANT_PLAYER_THRESHOLD_SQ = 50 * 50; // 50 units = distant
+            
+            // Tick performance manager for frame-based throttling
+            performanceManager.tick();
             
             for (const [id, meshData] of otherMeshes) {
                 const playerData = playersData.get(id);
@@ -4042,11 +4083,43 @@ const VoxelWorld = ({
                     }
                 }
                 
-                // OPTIMIZATION: Calculate distance to local player
+                // OPTIMIZATION: Calculate distance to local player for LOD
                 const dx = (playerData.position?.x || 0) - localPosX;
                 const dz = (playerData.position?.z || 0) - localPosZ;
                 const distSq = dx * dx + dz * dz;
-                const isDistant = distSq > DISTANT_PLAYER_THRESHOLD_SQ;
+                
+                // Use performance manager for distance-based update throttling
+                const shouldUpdateThisPlayer = performanceManager.shouldUpdatePlayer(distSq);
+                if (!shouldUpdateThisPlayer) continue; // Skip this player's update this frame
+                
+                // ==================== DISTANCE-BASED LOD ====================
+                // Apply visual LOD based on distance (saves GPU/CPU)
+                // LOD thresholds: 50 units = full, 100 = high, 200 = medium, beyond = low
+                
+                // Shadow LOD - only close players cast shadows (MAJOR performance save)
+                const shouldCastShadow = performanceManager.shouldCastShadow(distSq);
+                if (meshData.mesh.userData._lastShadowState !== shouldCastShadow) {
+                    meshData.mesh.userData._lastShadowState = shouldCastShadow;
+                    meshData.mesh.traverse((child) => {
+                        if (child.isMesh) child.castShadow = shouldCastShadow;
+                    });
+                }
+                
+                // Puffle LOD - hide puffles for distant players
+                if (meshData.puffleMesh) {
+                    const shouldShowPuffle = performanceManager.shouldShowPuffle(distSq);
+                    if (meshData.puffleMesh.visible !== shouldShowPuffle) {
+                        meshData.puffleMesh.visible = shouldShowPuffle;
+                    }
+                }
+                
+                // Nametag LOD - hide nametags for very distant players
+                if (meshData.nameSprite) {
+                    const shouldShowNametag = performanceManager.shouldShowNametag(distSq);
+                    if (meshData.nameSprite.visible !== shouldShowNametag) {
+                        meshData.nameSprite.visible = shouldShowNametag;
+                    }
+                }
                 
                 // Check if player is seated - if so, handle position differently
                 const isSeated = playerData.seatedOnFurniture || 
@@ -4226,8 +4299,8 @@ const VoxelWorld = ({
                     }
                 }
                 
-                // OPTIMIZATION: Distant players only animate every 3rd frame (saves ~66% CPU on animations)
-                const shouldAnimateThisFrame = !isDistant || (frameCount % 3 === 0);
+                // OPTIMIZATION: Use performance manager for animation LOD
+                const shouldAnimateThisFrame = performanceManager.shouldAnimatePlayer(distSq);
                 
                 // Calculate isMoving OUTSIDE the animation block so it's available for mount trails and wizard trails
                 // If seated on furniture, never consider as "moving" (prevents walk animation overriding sit)
@@ -4243,8 +4316,8 @@ const VoxelWorld = ({
                     const otherIsAirborne = (playerData.position?.y ?? 0) > 0.1;
                     animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted, otherIsAirborne, time);
                     
-                    // Animate cosmetics for other players with animated items
-                    if (meshData.hasAnimatedCosmetics) {
+                    // Animate cosmetics for other players with animated items (distance-based LOD)
+                    if (meshData.hasAnimatedCosmetics && performanceManager.shouldAnimateCosmetics(distSq)) {
                         if (!meshData.mesh.userData._animatedPartsCache) {
                             meshData.mesh.userData._animatedPartsCache = cacheAnimatedParts(meshData.mesh);
                         }
@@ -4316,12 +4389,13 @@ const VoxelWorld = ({
                                     backTruck.rotation.y = autoLean * 0.4;
                                 }
                                 
-                                // === GRINDING SPARKS for other players ===
-                                if (Math.abs(autoLean) > 0.05 && Math.random() < 0.25) {
+                                // === GRINDING SPARKS for other players (LOD: only close players) ===
+                                if (Math.abs(autoLean) > 0.05 && Math.random() < 0.25 && performanceManager.shouldShowParticlesForDistance(distSq)) {
                                     const sparkColors = mountData.sparkColors || ['#FFD700', '#FFA500', '#FF6600', '#FFFFFF'];
                                     const sparkColor = sparkColors[Math.floor(Math.random() * sparkColors.length)];
                                     
-                                    const sparkGeo = new THREE.SphereGeometry(0.02, 4, 4);
+                                    // Use cached geometry for performance
+                                    const sparkGeo = window._cachedSparkGeo || new THREE.SphereGeometry(0.02, 4, 4);
                                     const sparkMat = new THREE.MeshBasicMaterial({ 
                                         color: sparkColor, transparent: true, opacity: 1
                                     });
@@ -4469,9 +4543,12 @@ const VoxelWorld = ({
                     
                     
                     // Update gold rain particle system for Day 1 nametag (other players)
-                    // Nametag particle rain - controlled by same setting as snow
+                    // Nametag particle rain - controlled by same setting as snow AND distance LOD
                     if (meshData.goldRainSystem && camera) {
-                        if (gameSettingsRef.current.snowEnabled !== false) {
+                        // LOD: Only show particles for close players (within 100 units)
+                        const shouldShowParticles = performanceManager.shouldShowParticlesForDistance(distSq) && 
+                                                    gameSettingsRef.current.snowEnabled !== false;
+                        if (shouldShowParticles) {
                             const pos = meshData.mesh.position;
                             const camPos = camera.position;
                             meshData.goldRainSystem.update(time, delta, 
@@ -4938,6 +5015,11 @@ const VoxelWorld = ({
             if (townCenterRef.current) {
                 townCenterRef.current.dispose();
                 townCenterRef.current = null;
+            }
+            // Cleanup Mountain Background
+            if (mountainBackgroundRef.current) {
+                mountainBackgroundRef.current.dispose();
+                mountainBackgroundRef.current = null;
             }
             // Cleanup Nightclub
             if (nightclubRef.current) {
@@ -5732,8 +5814,8 @@ const VoxelWorld = ({
             // Set cooldown
             snowballCooldownRef.current = now + SNOWBALL_COOLDOWN_MS;
             
-            // Create snowball mesh
-            const snowballGeom = new THREE.SphereGeometry(0.18, 8, 8);
+            // Create snowball mesh (use cached geometry)
+            const snowballGeom = window._cachedSnowballGeoLarge || new THREE.SphereGeometry(0.18, 8, 8);
             const snowballMat = new THREE.MeshStandardMaterial({
                 color: 0xffffff,
                 roughness: 0.6,
@@ -8256,8 +8338,8 @@ const VoxelWorld = ({
                 
                 const THREE = window.THREE;
                 
-                // Create snowball mesh at received position
-                const snowballGeom = new THREE.SphereGeometry(0.15, 8, 8);
+                // Create snowball mesh at received position (use cached geometry)
+                const snowballGeom = window._cachedSnowballGeoSmall || new THREE.SphereGeometry(0.15, 8, 8);
                 const snowballMat = new THREE.MeshStandardMaterial({
                     color: 0xffffff,
                     roughness: 0.8,
@@ -8344,6 +8426,20 @@ const VoxelWorld = ({
                 playerData.position?.z || 0
             );
             mesh.rotation.y = playerData.rotation || 0;
+            
+            // LOD: Calculate initial distance and set shadow state accordingly
+            // This prevents all players from having shadows enabled on spawn
+            const localPos = posRef.current || { x: 0, z: 0 };
+            const playerPos = playerData.position || { x: 0, z: 0 };
+            const initDx = playerPos.x - localPos.x;
+            const initDz = playerPos.z - localPos.z;
+            const initDistSq = initDx * initDx + initDz * initDz;
+            const shouldCastShadow = performanceManager.shouldCastShadow(initDistSq);
+            mesh.userData._lastShadowState = shouldCastShadow;
+            mesh.traverse((child) => {
+                if (child.isMesh) child.castShadow = shouldCastShadow;
+            });
+            
             scene.add(mesh);
             
             // Hide mount if player has mountEnabled set to false

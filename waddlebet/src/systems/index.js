@@ -81,3 +81,10 @@ export { default as JackpotCelebration } from './JackpotCelebration';
 // Ice fishing system (catch bubble display)
 export { default as IceFishingSystem, FISHING_COST } from './IceFishingSystem';
 
+// Mountain background system (performant low-poly mountains around the map)
+export { createMountainBackground, createBillboardMountains } from './MountainBackground';
+
+// Performance management system (presets, LOD, distance-based optimizations)
+export { default as performanceManager, PERFORMANCE_PRESETS, PerformanceManager } from './PerformanceManager';
+export { LOD_THRESHOLDS, LOD_THRESHOLDS_SQ, LOD_LEVEL } from './PerformanceManager';
+

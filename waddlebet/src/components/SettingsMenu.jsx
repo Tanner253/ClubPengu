@@ -6,6 +6,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useLanguage } from '../i18n';
+import { performanceManager, PERFORMANCE_PRESETS } from '../systems';
 
 // Default keybinds
 const DEFAULT_KEYBINDS = {
@@ -487,6 +488,57 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                     {/* Display Tab */}
                     {activeTab === 'display' && (
                         <>
+                            {/* Performance Preset - Only show on PC */}
+                            {!window._isMobileGPU && (
+                                <div className="py-3 border-b border-white/5">
+                                    <div className="flex items-center gap-3 mb-3">
+                                        <span className="text-lg">🎮</span>
+                                        <div>
+                                            <div className="text-white text-sm font-medium">Performance Mode</div>
+                                            <div className="text-white/40 text-xs">Adjust quality vs FPS</div>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-5 gap-1">
+                                        {Object.entries(PERFORMANCE_PRESETS).map(([key, preset]) => {
+                                            const isActive = performanceManager.getPreset() === key;
+                                            const colors = {
+                                                ultra: 'from-purple-500 to-pink-500',
+                                                high: 'from-blue-500 to-cyan-500',
+                                                medium: 'from-green-500 to-emerald-500',
+                                                low: 'from-yellow-500 to-orange-500',
+                                                potato: 'from-red-500 to-orange-500',
+                                            };
+                                            return (
+                                                <button
+                                                    key={key}
+                                                    onClick={() => {
+                                                        performanceManager.setPreset(key);
+                                                        // Force re-render
+                                                        onSettingsChange({ ...settings, _perfUpdate: Date.now() });
+                                                        // Show toast notification
+                                                        alert(`Performance set to ${preset.name}. Refresh page to apply renderer changes.`);
+                                                    }}
+                                                    className={`px-2 py-2 rounded-lg text-xs font-bold transition-all ${
+                                                        isActive 
+                                                            ? `bg-gradient-to-r ${colors[key]} text-white shadow-lg scale-105` 
+                                                            : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
+                                                    }`}
+                                                >
+                                                    {preset.name}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <div className="mt-2 text-white/30 text-[10px] text-center">
+                                        {performanceManager.getPreset() === 'ultra' && '⚠️ Ultra: Best quality, may cause FPS drops on some PCs'}
+                                        {performanceManager.getPreset() === 'high' && '✓ High: Good balance for most PCs'}
+                                        {performanceManager.getPreset() === 'medium' && '✓ Medium: Balanced quality & performance'}
+                                        {performanceManager.getPreset() === 'low' && '⚡ Low: Optimized for smooth gameplay'}
+                                        {performanceManager.getPreset() === 'potato' && '🥔 Potato: Maximum FPS, minimal effects'}
+                                    </div>
+                                </div>
+                            )}
+                            
                             <SettingRow
                                 icon="❄️"
                                 title="Particle Effects"
