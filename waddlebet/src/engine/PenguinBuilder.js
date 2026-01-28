@@ -34,7 +34,9 @@ import {
     TungTungGenerators,
     TUNG_PALETTE,
     GakeGenerators,
-    GAKE_PALETTE
+    GAKE_PALETTE,
+    PumpGenerators,
+    PUMP_PALETTE
 } from '../characters';
 
 /**
@@ -1290,6 +1292,91 @@ export function createPenguinBuilder(THREE) {
         return group;
     };
     
+    /**
+     * Build Pump (Pump.fun pill) mesh
+     * Uses same pivot points as penguin for proper animations
+     */
+    const buildPumpMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = PumpGenerators.pivots();
+        
+        // Head - cream/beige face
+        const headVoxels = PumpGenerators.head();
+        const head = buildPartMerged(headVoxels, PUMP_PALETTE);
+        head.name = 'head';
+        
+        // Body - green pill body
+        const bodyVoxels = PumpGenerators.body();
+        const body = buildPartMerged(bodyVoxels, PUMP_PALETTE);
+        body.name = 'body';
+        
+        // Arms - green stubby arms
+        const armLVoxels = PumpGenerators.armLeft();
+        const armL = buildPartMerged(armLVoxels, PUMP_PALETTE, pivots.armLeft);
+        armL.name = 'flipper_l';
+        
+        const armRVoxels = PumpGenerators.armRight();
+        const armR = buildPartMerged(armRVoxels, PUMP_PALETTE, pivots.armRight);
+        armR.name = 'flipper_r';
+        
+        // Feet - green stubby feet
+        const footLVoxels = PumpGenerators.footLeft();
+        const footL = buildPartMerged(footLVoxels, PUMP_PALETTE, pivots.footLeft);
+        footL.name = 'foot_l';
+        
+        const footRVoxels = PumpGenerators.footRight();
+        const footR = buildPartMerged(footRVoxels, PUMP_PALETTE, pivots.footRight);
+        footR.name = 'foot_r';
+        
+        group.add(head, body, armL, armR, footL, footR);
+        
+        // Pump's face is raised compared to penguin (pill head is higher)
+        const PUMP_FACE_OFFSET = 5;
+        
+        // Add eyes - raised and forward for pump head (z+2)
+        if (data.eyes && data.eyes !== 'none' && ASSETS.EYES[data.eyes]) {
+            const eyeVoxels = ASSETS.EYES[data.eyes];
+            const offsetEyeVoxels = eyeVoxels.map(v => ({ ...v, y: v.y + PUMP_FACE_OFFSET, z: v.z + 2 }));
+            const eyesMesh = buildPartMerged(offsetEyeVoxels, PALETTE);
+            eyesMesh.name = 'eyes';
+            group.add(eyesMesh);
+        }
+        
+        // Add mouth/beak - raised and forward for pump head (z+2)
+        if (data.mouth && data.mouth !== 'none' && ASSETS.MOUTH[data.mouth]) {
+            const mouthVoxels = ASSETS.MOUTH[data.mouth];
+            const offsetMouthVoxels = mouthVoxels.map(v => ({ ...v, y: v.y + PUMP_FACE_OFFSET, z: v.z + 2 }));
+            const mouthMesh = buildPartMerged(offsetMouthVoxels, PALETTE);
+            mouthMesh.name = 'mouth';
+            group.add(mouthMesh);
+        }
+        
+        // Add hat support - raised to match Pump's head position
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + PUMP_FACE_OFFSET }));
+            const hatMesh = buildPartMerged(offsetHatVoxels, PALETTE);
+            hatMesh.name = 'hat';
+            group.add(hatMesh);
+        }
+        
+        // Add body item support
+        if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
+            const bodyItemVoxels = ASSETS.BODY[data.bodyItem].voxels || ASSETS.BODY[data.bodyItem];
+            const bodyMesh = buildPartMerged(bodyItemVoxels, PALETTE);
+            bodyMesh.name = 'bodyItem';
+            group.add(bodyMesh);
+        }
+        
+        group.scale.set(0.16, 0.16, 0.16);
+        group.position.y = 0.8;
+        
+        // Mark as Pump for animations
+        group.userData.isPump = true;
+        
+        return group;
+    };
+    
     // Whale character configs
     const WHALE_CONFIGS = {
         whiteWhale: { generators: WhiteWhaleGenerators, palette: WHITE_WHALE_PALETTE },
@@ -1598,6 +1685,8 @@ export function createPenguinBuilder(THREE) {
             group = buildTungTungMesh(data);
         } else if (data.characterType === 'gake') {
             group = buildGakeMesh(data);
+        } else if (data.characterType === 'pump') {
+            group = buildPumpMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {

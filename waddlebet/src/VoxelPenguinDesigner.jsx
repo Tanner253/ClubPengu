@@ -32,7 +32,9 @@ import {
     TungTungGenerators,
     TUNG_PALETTE,
     GakeGenerators,
-    GAKE_PALETTE
+    GAKE_PALETTE,
+    PumpGenerators,
+    PUMP_PALETTE
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 import LanguageToggle from './components/LanguageToggle';
@@ -205,6 +207,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         duck: '🦆',
         tungTung: '🪵',
         gake: '⭐',
+        pump: '💊',
         whiteWhale: '🐋',
         blackWhale: '🖤',
         silverWhale: '🩶',
@@ -582,7 +585,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharactersList = useMemo(() => {
         // TEMPORARY: Unlock all characters for everyone (matches cosmetics unlock)
         if (UNLOCK_ALL_COSMETICS) {
-            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
+            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'pump', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
         }
         
         const chars = ['penguin']; // Penguin always unlocked
@@ -1330,6 +1333,45 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             if (gakeBodyItemVoxels.length > 0) {
                 addPart(gakeBodyItemVoxels, 'bodyItem');
             }
+        } else if (characterType === 'pump') {
+            // Build Pump - Pump.fun pill character
+            addPart(PumpGenerators.head(), 'head', PUMP_PALETTE);
+            addPart(PumpGenerators.body(), 'body', PUMP_PALETTE);
+            addPart(PumpGenerators.armLeft(), 'flipper_l', PUMP_PALETTE);
+            addPart(PumpGenerators.armRight(), 'flipper_r', PUMP_PALETTE);
+            addPart(PumpGenerators.footLeft(), 'foot_l', PUMP_PALETTE);
+            addPart(PumpGenerators.footRight(), 'foot_r', PUMP_PALETTE);
+            
+            // Pump's face is raised compared to penguin
+            const PUMP_FACE_OFFSET = 5;
+            
+            // Add eyes - raised and forward for pump head (z+2)
+            const pumpEyeVoxels = ASSETS.EYES[eyes] || [];
+            if (pumpEyeVoxels.length > 0) {
+                const offsetEyes = pumpEyeVoxels.map(v => ({ ...v, y: v.y + PUMP_FACE_OFFSET, z: v.z + 2 }));
+                addPart(offsetEyes, 'eyes');
+            }
+            
+            // Add mouth/beak - raised and forward for pump head (z+2)
+            const pumpMouthVoxels = ASSETS.MOUTH[mouth] || [];
+            if (pumpMouthVoxels.length > 0) {
+                const offsetMouth = pumpMouthVoxels.map(v => ({ ...v, y: v.y + PUMP_FACE_OFFSET, z: v.z + 2 }));
+                addPart(offsetMouth, 'mouth');
+            }
+            
+            // Add hat - raised to match Pump's head position
+            const pumpHatVoxels = ASSETS.HATS[hat] || [];
+            if (pumpHatVoxels.length > 0) {
+                const offsetHat = pumpHatVoxels.map(v => ({ ...v, y: v.y + PUMP_FACE_OFFSET }));
+                addPart(offsetHat, 'hat');
+            }
+            
+            // Add body item
+            const pumpBodyItemData = ASSETS.BODY[bodyItem];
+            const pumpBodyItemVoxels = pumpBodyItemData?.voxels || pumpBodyItemData || [];
+            if (pumpBodyItemVoxels.length > 0) {
+                addPart(pumpBodyItemVoxels, 'bodyItem');
+            }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body
             const WHALE_CONFIGS = {
@@ -1911,10 +1953,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         )}
                     </div>
 
-                    {/* Customization options - ONLY for penguin character */}
-                    {characterType === 'penguin' ? (
+                    {/* Customization options - for penguin and pump characters */}
+                    {(characterType === 'penguin' || characterType === 'pump') ? (
                         <>
-                            {/* Feathers (Colors) - Collapsible */}
+                            {/* Feathers (Colors) - Collapsible - Only for penguin */}
+                            {characterType === 'penguin' && (
                             <div className="mb-2">
                                 <button
                                     onClick={() => setColorsExpanded(!colorsExpanded)}
@@ -2012,6 +2055,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                     </div>
                                 )}
                             </div>
+                            )}
 
                             {[
                                 { labelKey: 'creator.headwear', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
@@ -2475,7 +2519,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     )}
                     
                     {/* Show Owned Only Toggle + Reset Button */}
-                    {characterType === 'penguin' && (
+                    {(characterType === 'penguin' || characterType === 'pump') && (
                         <div className="flex gap-2 mt-2">
                             {/* Owned Only Toggle */}
                             {isAuthenticated && (

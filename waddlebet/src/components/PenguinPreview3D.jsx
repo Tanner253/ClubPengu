@@ -29,7 +29,9 @@ import {
     TungTungGenerators,
     TUNG_PALETTE,
     GakeGenerators,
-    GAKE_PALETTE
+    GAKE_PALETTE,
+    PumpGenerators,
+    PUMP_PALETTE
 } from '../characters';
 
 // Color palette for penguin skins
@@ -298,6 +300,29 @@ function buildPenguin(THREE, group, appearance) {
             ...GakeGenerators.footLeft(),
             ...GakeGenerators.footRight()
         ];
+    } else if (characterType === 'pump') {
+        characterPalette = PUMP_PALETTE;
+        voxels = [
+            ...PumpGenerators.head(),
+            ...PumpGenerators.body(),
+            ...PumpGenerators.armLeft(),
+            ...PumpGenerators.armRight(),
+            ...PumpGenerators.footLeft(),
+            ...PumpGenerators.footRight()
+        ];
+        
+        // Add eyes with offset for pump head (y+5, z+2)
+        const PUMP_FACE_OFFSET = 5;
+        const pumpEyes = appearance.eyes && appearance.eyes !== 'none' ? ASSETS.EYES[appearance.eyes] : ASSETS.EYES['normal'];
+        if (pumpEyes) {
+            voxels = [...voxels, ...pumpEyes.map(v => ({ ...v, y: v.y + PUMP_FACE_OFFSET, z: v.z + 2 }))];
+        }
+        
+        // Add mouth with offset (y+5, z+2)
+        const pumpMouth = appearance.mouth && appearance.mouth !== 'none' ? ASSETS.MOUTH[appearance.mouth] : ASSETS.MOUTH['beak'];
+        if (pumpMouth) {
+            voxels = [...voxels, ...pumpMouth.map(v => ({ ...v, y: v.y + PUMP_FACE_OFFSET, z: v.z + 2 }))];
+        }
     } else if (characterType === 'marcus') {
         characterPalette = MARCUS_PALETTE;
         voxels = [

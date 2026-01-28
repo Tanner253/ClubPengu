@@ -331,6 +331,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                 { id: 'duck', name: 'Duck', emoji: '🦆' },
                 { id: 'tungTung', name: 'Tung Tung', emoji: '🪵' },
                 { id: 'gake', name: 'Gake', emoji: '⭐' },
+                { id: 'pump', name: 'PUMP', emoji: '💊' },
                 { id: 'whiteWhale', name: 'White Whale', emoji: '🐋' },
                 { id: 'blackWhale', name: 'Black Whale', emoji: '🐋' },
                 { id: 'silverWhale', name: 'Silver Whale', emoji: '🐋' },
@@ -355,6 +356,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
             else if (normalizedId === 'duck') chars.push({ id: 'duck', name: 'Duck', emoji: '🦆' });
             else if (normalizedId === 'tungTung') chars.push({ id: 'tungTung', name: 'Tung Tung', emoji: '🪵' });
             else if (normalizedId === 'gake') chars.push({ id: 'gake', name: 'Gake', emoji: '⭐' });
+            else if (normalizedId === 'pump') chars.push({ id: 'pump', name: 'PUMP', emoji: '💊' });
             else if (normalizedId === 'whiteWhale') chars.push({ id: 'whiteWhale', name: 'White Whale', emoji: '🐋' });
             else if (normalizedId === 'blackWhale') chars.push({ id: 'blackWhale', name: 'Black Whale', emoji: '🐋' });
             else if (normalizedId === 'silverWhale') chars.push({ id: 'silverWhale', name: 'Silver Whale', emoji: '🐋' });
@@ -1389,10 +1391,11 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                             </div>
                         )}
                         
-                        {/* Penguin Customization Options */}
-                        {characterType === 'penguin' && (
+                        {/* Penguin/Pump Customization Options */}
+                        {(characterType === 'penguin' || characterType === 'pump') && (
                             <>
-                                {/* Feathers (Skin Color) */}
+                                {/* Feathers (Skin Color) - Only for penguin */}
+                                {characterType === 'penguin' && (
                                 <div className="mb-4">
                                     <h3 className="text-white font-semibold mb-2 text-sm uppercase tracking-wider">
                                         Feathers ({showOwnedOnly ? options.skin.length : allCounts.skin}/{allCounts.skin})
@@ -1471,8 +1474,9 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                                         })}
                                     </div>
                                 </div>
+                                )}
                                 
-                                <hr className="border-slate-700 my-3" />
+                                {characterType === 'penguin' && <hr className="border-slate-700 my-3" />}
                                 
                                 {/* Cosmetic Selectors */}
                                 {[
@@ -1549,7 +1553,7 @@ function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {
                         )}
                         
                         {/* Show Owned Only Toggle + Reset Button */}
-                        {characterType === 'penguin' && (
+                        {(characterType === 'penguin' || characterType === 'pump') && (
                             <div className="flex gap-2 mt-4">
                                 {/* Owned Only Toggle */}
                                 {isAuthenticated && (

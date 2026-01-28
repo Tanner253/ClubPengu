@@ -30,6 +30,7 @@ import ShrimpGenerators, { SHRIMP_PALETTE, SHRIMP_PALETTES, generateShrimpPalett
 import DuckGenerators, { DUCK_PALETTE, DUCK_PALETTES } from './DuckCharacter';
 import TungTungGenerators, { TUNG_PALETTE } from './TungTungCharacter';
 import GakeGenerators, { GAKE_PALETTE } from './GakeCharacter';
+import PumpGenerators, { PUMP_PALETTE } from './PumpCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -222,6 +223,23 @@ characterRegistry.registerCharacter('gake', {
     }
 });
 
+characterRegistry.registerCharacter('pump', {
+    name: 'PUMP',
+    description: 'The legendary Pump.fun pill - to the moon!',
+    generators: PumpGenerators,
+    palette: PUMP_PALETTE,
+    isSecret: true,
+    previewScale: 0.85,
+    customizationOptions: {
+        disableSkinColor: true,   // Fixed green/beige coloring
+        disableHats: false,       // Allow hats
+        disableEyes: false,       // Allow eye customization
+        disableMouth: false,      // Allow mouth/beak customization
+        disableBodyItems: false,  // Allow body items
+        disableMounts: false,     // Allow mounts
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -253,6 +271,8 @@ export {
     TungTungGenerators,
     TUNG_PALETTE,
     GakeGenerators,
-    GAKE_PALETTE
+    GAKE_PALETTE,
+    PumpGenerators,
+    PUMP_PALETTE
 };
 export default characterRegistry;
