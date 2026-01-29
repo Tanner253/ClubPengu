@@ -17,6 +17,7 @@ import CosmeticTemplate from '../db/models/CosmeticTemplate.js';
 import OwnedCosmetic from '../db/models/OwnedCosmetic.js';
 import GachaRoll from '../db/models/GachaRoll.js';
 import { Transaction, User } from '../db/models/index.js';
+import { getReferralService } from './ReferralService.js';
 
 // ========== RARITY CONFIGURATION ==========
 // Total weight: 10000 for precision
@@ -519,6 +520,15 @@ class GachaService {
                 message: `Need ${amount} Pebbles, have ${user?.pebbles || 0}`,
                 balance: user?.pebbles || 0
             };
+        }
+        
+        // Track revenue contribution for referral system
+        // This runs async - don't await to avoid slowing down the roll
+        const referralService = getReferralService();
+        if (referralService) {
+            referralService.recordRevenueContribution(walletAddress, amount).catch(err => {
+                console.error('[Gacha] Referral tracking error:', err.message);
+            });
         }
         
         return { 

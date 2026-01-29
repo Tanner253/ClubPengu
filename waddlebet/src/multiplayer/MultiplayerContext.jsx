@@ -101,6 +101,39 @@ export function MultiplayerProvider({ children }) {
         onSnowballThrown: null
     });
     
+    // Generic message handlers for components to subscribe to
+    const messageHandlersRef = useRef(new Set());
+    
+    // Referral code from URL (parsed on mount)
+    const [referralCode, setReferralCode] = useState(() => {
+        // Check URL for /ref/USERNAME pattern
+        const pathname = window.location.pathname;
+        const refMatch = pathname.match(/^\/ref\/([^\/]+)/i);
+        if (refMatch) {
+            const code = decodeURIComponent(refMatch[1]);
+            console.log(`🔗 Referral code from URL: ${code}`);
+            // Store in sessionStorage so it persists until auth
+            sessionStorage.setItem('pending_referral', code);
+            // Clean the URL without page reload
+            window.history.replaceState({}, '', '/');
+            return code;
+        }
+        // Check query params as fallback (?ref=USERNAME)
+        const params = new URLSearchParams(window.location.search);
+        const refParam = params.get('ref');
+        if (refParam) {
+            console.log(`🔗 Referral code from query: ${refParam}`);
+            sessionStorage.setItem('pending_referral', refParam);
+            // Clean the URL
+            params.delete('ref');
+            const newUrl = params.toString() ? `?${params.toString()}` : '/';
+            window.history.replaceState({}, '', newUrl);
+            return refParam;
+        }
+        // Check sessionStorage for pending referral
+        return sessionStorage.getItem('pending_referral') || null;
+    });
+    
     // All cosmetics loaded from database
     const [allCosmetics, setAllCosmetics] = useState(null);
     
@@ -213,8 +246,32 @@ export function MultiplayerProvider({ children }) {
         }
     }, []);
     
+    // ==================== GENERIC MESSAGE HANDLERS ====================
+    // Allow components to subscribe to all messages
+    const addMessageHandler = useCallback((handler) => {
+        messageHandlersRef.current.add(handler);
+    }, []);
+    
+    const removeMessageHandler = useCallback((handler) => {
+        messageHandlersRef.current.delete(handler);
+    }, []);
+    
+    // Dispatch message to all subscribed handlers
+    const dispatchToHandlers = useCallback((message) => {
+        messageHandlersRef.current.forEach(handler => {
+            try {
+                handler(message);
+            } catch (e) {
+                console.error('Message handler error:', e);
+            }
+        });
+    }, []);
+    
     // ==================== MESSAGE HANDLER ====================
     const handleMessage = useCallback((message) => {
+        // Dispatch to all subscribed handlers first
+        dispatchToHandlers(message);
+        
         switch (message.type) {
             // ==================== AUTH MESSAGES ====================
             case 'connected':
@@ -235,6 +292,9 @@ export function MultiplayerProvider({ children }) {
                 
             case 'auth_success':
                 console.log(`🔐 ${message.restored ? 'Session restored' : 'Authenticated'} as ${message.user.username}`);
+                if (message.referralApplied) {
+                    console.log(`🔗 Referral applied successfully!`);
+                }
                 setIsAuthenticated(true);
                 setWalletAddress(message.user.walletAddress);
                 setAuthToken(message.token);
@@ -243,6 +303,10 @@ export function MultiplayerProvider({ children }) {
                 setAuthError(null);
                 setIsAuthenticating(false);
                 setIsRestoringSession(false);
+                
+                // Clear pending referral after successful auth
+                sessionStorage.removeItem('pending_referral');
+                setReferralCode(null);
                 
                 // Update player name from user data
                 setPlayerName(message.user.username);
@@ -1165,7 +1229,7 @@ export function MultiplayerProvider({ children }) {
                 setConnectionError({ code: message.code, message: message.message });
                 break;
         }
-    }, []);
+    }, [dispatchToHandlers]);
     
     // Send message to server
     const send = useCallback((message) => {
@@ -1246,6 +1310,9 @@ export function MultiplayerProvider({ children }) {
         // Only include migration data for genuinely new users (localStorage data from before any auth)
         const migrationData = gm.getMigrationData();
         
+        // Get pending referral code (from URL or sessionStorage)
+        const pendingReferral = referralCode || sessionStorage.getItem('pending_referral');
+        
         send({
             type: 'auth_verify',
             walletAddress: connectResult.publicKey,
@@ -1255,13 +1322,15 @@ export function MultiplayerProvider({ children }) {
                 // Server will assign a default "Penguin..." name that they can change
                 // Only send migration data for first-time users migrating from localStorage
                 migrateFrom: migrationData ? 'localStorage' : null,
-                migrationData: migrationData
+                migrationData: migrationData,
+                // Include referral code if user came from a referral link
+                referralCode: pendingReferral || undefined
             }
         });
         
         // Auth response will be handled by message handler
         return { success: true, pending: true };
-    }, [send, playerName]);
+    }, [send, playerName, referralCode]);
     
     /**
      * Disconnect wallet and logout
@@ -1826,7 +1895,14 @@ export function MultiplayerProvider({ children }) {
         checkUsername,
         
         // Raw send for ChallengeContext
-        send
+        send,
+        
+        // Alias for send (used by some components)
+        sendMessage: send,
+        
+        // Generic message handlers for component subscriptions
+        addMessageHandler,
+        removeMessageHandler
     };
     
     return (

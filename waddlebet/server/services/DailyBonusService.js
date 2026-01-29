@@ -12,6 +12,7 @@ import { User, Transaction } from '../db/models/index.js';
 import { isDBConnected } from '../db/connection.js';
 import custodialWalletService from './CustodialWalletService.js';
 import crypto from 'crypto';
+import { getReferralService } from './ReferralService.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -93,11 +94,26 @@ class DailyBonusService {
         const now = new Date();
         const minutesSinceLastUpdate = (now - session.lastUpdate) / (1000 * 60);
         
+        // Track if we just crossed the 60-minute threshold
+        const wasBelow60 = session.accumulatedMinutes < 60;
+        
         // Only count if reasonable (< 2 minutes since last update - prevents manipulation)
         if (minutesSinceLastUpdate < 2) {
             session.accumulatedMinutes += minutesSinceLastUpdate;
         }
         session.lastUpdate = now;
+        
+        // Check if user just crossed 60 minutes (for referral promo)
+        const isNow60OrMore = session.accumulatedMinutes >= 60;
+        if (wasBelow60 && isNow60OrMore) {
+            // User just completed 1 hour - check for referral promo reward
+            const referralService = getReferralService();
+            if (referralService) {
+                referralService.checkAndAwardPromoReward(walletAddress, session.accumulatedMinutes).catch(err => {
+                    console.error('[DailyBonus] Referral promo check error:', err.message);
+                });
+            }
+        }
         
         // Update DB periodically (every 5 minutes)
         if (session.accumulatedMinutes % 5 < 1) {

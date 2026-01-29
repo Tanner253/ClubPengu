@@ -42,6 +42,7 @@ import solanaPaymentService from './services/SolanaPaymentService.js';
 import devBotService, { BOT_CONFIG } from './services/DevBotService.js';
 import wagerSettlementService from './services/WagerSettlementService.js';
 import dailyBonusService from './services/DailyBonusService.js';
+import { initializeReferralService, getReferralService } from './services/ReferralService.js';
 import { validateWalletAddress, validateTransactionSignature, validateAmount } from './utils/securityValidation.js';
 
 const PORT = process.env.PORT || 3001;
@@ -346,6 +347,9 @@ const fishingService = new FishingService(userService, broadcastToRoom, sendToPl
 const blackjackService = new BlackjackService(userService, broadcastToRoom, sendToPlayer);
 const gachaService = new GachaService(userService, broadcastToRoom, sendToPlayer, broadcastToAll);
 const pebbleService = new PebbleService(solanaPaymentService, custodialWalletService, sendToPlayer);
+
+// Initialize ReferralService with DailyBonusService for playtime tracking
+const referralService = initializeReferralService(dailyBonusService);
 
 // Link GachaService to SlotService for cosmetic gacha rolls
 slotService.setGachaService(gachaService);
@@ -1504,10 +1508,11 @@ async function handleMessage(playerId, message) {
                     type: 'auth_success',
                     token: authResult.token,
                     user: authResult.user,
-                    isNewUser: authResult.isNewUser
+                    isNewUser: authResult.isNewUser,
+                    referralApplied: authResult.referralApplied || false
                 });
                 
-                console.log(`🔐 ${authResult.user.username} authenticated (${walletAddress.slice(0, 8)}...)`);
+                console.log(`🔐 ${authResult.user.username} authenticated (${walletAddress.slice(0, 8)}...)${authResult.referralApplied ? ' [REFERRED]' : ''}`);
                 
                 // Start daily bonus session tracking
                 dailyBonusService.startSession(walletAddress);
@@ -5799,6 +5804,136 @@ async function handleMessage(playerId, message) {
                     success: false,
                     error: 'CLAIM_ERROR',
                     message: 'Failed to process daily bonus claim'
+                });
+            }
+            break;
+        }
+        
+        // ==================== REFERRAL SYSTEM ====================
+        case 'referral_info': {
+            // Get user's referral code, link, stats, and earnings
+            if (!player.isAuthenticated || !player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'referral_info',
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Must be authenticated to view referral info'
+                });
+                break;
+            }
+            
+            try {
+                const info = await referralService.getReferralInfo(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'referral_info',
+                    ...info
+                });
+            } catch (error) {
+                console.error('🔗 Referral info error:', error);
+                sendToPlayer(playerId, {
+                    type: 'referral_info',
+                    success: false,
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to fetch referral info'
+                });
+            }
+            break;
+        }
+        
+        case 'referral_payout': {
+            // Request payout of accumulated referral earnings (requires 0.5 SOL minimum)
+            if (!player.isAuthenticated || !player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'referral_payout_result',
+                    success: false,
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Must be authenticated to request payout'
+                });
+                break;
+            }
+            
+            try {
+                console.log(`🔗 Referral payout request from ${player.walletAddress.slice(0, 8)}...`);
+                const result = await referralService.requestPayout(player.walletAddress);
+                
+                sendToPlayer(playerId, {
+                    type: 'referral_payout_result',
+                    ...result
+                });
+                
+                // If successful, also send updated referral info
+                if (result.success) {
+                    const info = await referralService.getReferralInfo(player.walletAddress);
+                    sendToPlayer(playerId, {
+                        type: 'referral_info',
+                        ...info
+                    });
+                }
+            } catch (error) {
+                console.error('🔗 Referral payout error:', error);
+                sendToPlayer(playerId, {
+                    type: 'referral_payout_result',
+                    success: false,
+                    error: 'PAYOUT_ERROR',
+                    message: 'Failed to process payout'
+                });
+            }
+            break;
+        }
+        
+        case 'referral_list': {
+            // Get list of users this player has referred
+            if (!player.isAuthenticated || !player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'referral_list',
+                    referrals: []
+                });
+                break;
+            }
+            
+            try {
+                const { limit = 50 } = message;
+                const referrals = await referralService.getReferredUsers(player.walletAddress, limit);
+                sendToPlayer(playerId, {
+                    type: 'referral_list',
+                    referrals
+                });
+            } catch (error) {
+                console.error('🔗 Referral list error:', error);
+                sendToPlayer(playerId, {
+                    type: 'referral_list',
+                    referrals: [],
+                    error: 'SERVER_ERROR'
+                });
+            }
+            break;
+        }
+        
+        case 'referral_lookup': {
+            // Look up if a referral code is valid (for UI validation before signup)
+            const { code } = message;
+            
+            if (!code) {
+                sendToPlayer(playerId, {
+                    type: 'referral_lookup',
+                    valid: false,
+                    error: 'NO_CODE'
+                });
+                break;
+            }
+            
+            try {
+                const referrer = await referralService.lookupReferralCode(code);
+                sendToPlayer(playerId, {
+                    type: 'referral_lookup',
+                    valid: !!referrer,
+                    referrer: referrer ? { username: referrer.username } : null
+                });
+            } catch (error) {
+                console.error('🔗 Referral lookup error:', error);
+                sendToPlayer(playerId, {
+                    type: 'referral_lookup',
+                    valid: false,
+                    error: 'LOOKUP_ERROR'
                 });
             }
             break;

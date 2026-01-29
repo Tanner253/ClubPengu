@@ -7,6 +7,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useLanguage } from '../i18n';
 import { performanceManager, PERFORMANCE_PRESETS } from '../systems';
+import ReferralPanel from './ReferralPanel';
 
 // Default keybinds
 const DEFAULT_KEYBINDS = {
@@ -109,6 +110,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
         { id: 'controls', icon: '🎮', label: t('settings.controls') || 'Controls' },
         { id: 'audio', icon: '🔊', label: t('settings.sound') || 'Audio' },
         { id: 'display', icon: '✨', label: t('settings.graphics') || 'Display' },
+        { id: 'referral', icon: '🔗', label: 'Referral' },
         { id: 'info', icon: '📋', label: 'Info' },
     ];
     
@@ -551,6 +553,11 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                 />
                             </SettingRow>
                         </>
+                    )}
+                    
+                    {/* Referral Tab */}
+                    {activeTab === 'referral' && (
+                        <ReferralPanel isAuthenticated={isAuthenticated} />
                     )}
                     
                     {/* Info Tab */}

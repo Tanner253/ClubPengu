@@ -7,6 +7,7 @@ import jwt from 'jsonwebtoken';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { User, AuthSession } from '../db/models/index.js';
+import { getReferralService } from './ReferralService.js';
 
 // JWT configuration
 const IS_DEV = process.env.NODE_ENV !== 'production';
@@ -157,13 +158,14 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
      * @param {string} playerId - Session player ID
      * @param {object} clientData - Optional client data for migration
      * @param {string} ipAddress - Client IP
-     * @returns {Promise<{ token: string, user: object, isNewUser: boolean }>}
+     * @returns {Promise<{ token: string, user: object, isNewUser: boolean, referralApplied?: boolean }>}
      */
     async authenticateUser(walletAddress, playerId, clientData = {}, ipAddress = null) {
         try {
             // Find or create user
             let user = await User.findOne({ walletAddress });
             let isNewUser = false;
+            let referralApplied = false;
 
             if (!user) {
                 isNewUser = true;
@@ -189,7 +191,11 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
                     coins: 100, // Starting bonus
                     // Migration data if provided
                     migrationSource: clientData.migrateFrom ? 'localStorage' : null,
-                    migratedAt: clientData.migrateFrom ? new Date() : null
+                    migratedAt: clientData.migrateFrom ? new Date() : null,
+                    // Initialize referral fields
+                    referral: {
+                        referralCode: username  // Default referral code is username
+                    }
                 });
 
                 // If migrating, apply localStorage data
@@ -198,6 +204,20 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
                 }
 
                 await user.save();
+                
+                // Process referral code if provided (only for new users)
+                if (clientData.referralCode) {
+                    const referralService = getReferralService();
+                    if (referralService) {
+                        const referralResult = await referralService.registerReferral(walletAddress, clientData.referralCode);
+                        if (referralResult.success) {
+                            referralApplied = true;
+                            console.log(`🔗 Referral applied: ${username} referred by ${referralResult.referrer.username}`);
+                        } else {
+                            console.log(`🔗 Referral failed: ${referralResult.error}`);
+                        }
+                    }
+                }
                 
                 // Record starting bonus transaction
                 const Transaction = (await import('../db/models/Transaction.js')).default;
@@ -266,7 +286,8 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
             return {
                 token,
                 user: await user.getFullDataAsync(),
-                isNewUser
+                isNewUser,
+                referralApplied
             };
         } catch (error) {
             console.error('Authentication error:', error);

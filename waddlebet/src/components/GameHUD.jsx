@@ -52,22 +52,39 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
         return () => window.removeEventListener('openTutorial', handleOpenTutorial);
     }, []);
     
-    // Detect portrait mode for responsive layout
-    const [isPortrait, setIsPortrait] = useState(() => 
-        typeof window !== 'undefined' && window.innerWidth < window.innerHeight && window.innerWidth < 600
+    // Detect narrow/portrait mode for responsive layout
+    // Now triggers on PC when window is narrow (<768px) OR mobile portrait
+    const [isNarrow, setIsNarrow] = useState(() => 
+        typeof window !== 'undefined' && (
+            // Mobile portrait
+            (window.innerWidth < window.innerHeight && window.innerWidth < 600) ||
+            // PC narrow window
+            window.innerWidth < 768
+        )
+    );
+    
+    // Also track if it's ultra narrow (vertical sidebar mode)
+    const [isUltraNarrow, setIsUltraNarrow] = useState(() =>
+        typeof window !== 'undefined' && window.innerWidth < 500
     );
     
     useEffect(() => {
-        const checkOrientation = () => {
-            setIsPortrait(window.innerWidth < window.innerHeight && window.innerWidth < 600);
+        const checkLayout = () => {
+            const isPortraitMobile = window.innerWidth < window.innerHeight && window.innerWidth < 600;
+            const isNarrowWindow = window.innerWidth < 768;
+            setIsNarrow(isPortraitMobile || isNarrowWindow);
+            setIsUltraNarrow(window.innerWidth < 500);
         };
-        window.addEventListener('resize', checkOrientation);
-        window.addEventListener('orientationchange', () => setTimeout(checkOrientation, 100));
+        window.addEventListener('resize', checkLayout);
+        window.addEventListener('orientationchange', () => setTimeout(checkLayout, 100));
         return () => {
-            window.removeEventListener('resize', checkOrientation);
-            window.removeEventListener('orientationchange', checkOrientation);
+            window.removeEventListener('resize', checkLayout);
+            window.removeEventListener('orientationchange', checkLayout);
         };
     }, []);
+    
+    // Legacy alias for existing code
+    const isPortrait = isUltraNarrow;
     
     useEffect(() => {
         const gm = GameManager.getInstance();
@@ -290,11 +307,15 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
         );
     }
     
-    // Landscape/Desktop: Horizontal top bar
+    // Landscape/Desktop: Horizontal or wrapped layout based on width
+    // isNarrow (but not isUltraNarrow/isPortrait) = wrapped horizontal
+    // !isNarrow = full horizontal
     return (
         <>
-            {/* HUD Bar - Top Right */}
-            <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 sm:gap-2">
+            {/* HUD Bar - Top Right - Responsive wrap on narrow windows */}
+            <div className={`absolute top-4 right-4 z-20 flex items-center gap-1.5 sm:gap-2 ${
+                isNarrow && !isPortrait ? 'flex-wrap justify-end max-w-xs' : ''
+            }`}>
                 {/* Whitepaper - NEW */}
                 <a
                     href="https://whitepaper.waddle.bet"
