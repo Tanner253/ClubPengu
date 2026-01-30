@@ -164,6 +164,81 @@ const TUTORIAL_SLIDES = [
         )
     },
     {
+        id: 'buy-cp',
+        title: '🐧 Get $CP - The WaddleBet Token',
+        icon: '🚀',
+        content: (
+            <div className="space-y-3">
+                <p className="text-white/90 text-sm">
+                    <strong className="text-cyan-400">$CP</strong> is the official WaddleBet token on Solana!
+                </p>
+                
+                {/* Why buy $CP */}
+                <div className="space-y-2">
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2 border border-amber-500/30">
+                        <span className="text-lg">👑</span>
+                        <div>
+                            <div className="text-amber-400 font-bold text-sm">Whale Status</div>
+                            <p className="text-white/60 text-xs">Hold $CP for exclusive nametag tiers (Bronze → Legendary)</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2 border border-cyan-500/30">
+                        <span className="text-lg">⚔️</span>
+                        <div>
+                            <div className="text-cyan-400 font-bold text-sm">Default Wager Token</div>
+                            <p className="text-white/60 text-xs">$CP is the native token for P2P wagers</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2 border border-purple-500/30">
+                        <span className="text-lg">🤝</span>
+                        <div>
+                            <div className="text-purple-400 font-bold text-sm">Support the Game</div>
+                            <p className="text-white/60 text-xs">Help grow the WaddleBet community!</p>
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Buy buttons */}
+                <div className="flex gap-2">
+                    <a 
+                        href="https://jup.ag/swap/SOL-9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-lg font-bold text-sm text-center transition-all hover:scale-105 active:scale-95"
+                    >
+                        🪐 Buy on Jupiter
+                    </a>
+                    <a 
+                        href="https://dexscreener.com/solana/5yfmefzrompokc2r9j8b1mzqututhywr9vrqmsxhzd3r"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 py-2 bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-400 hover:to-cyan-500 text-white rounded-lg font-bold text-sm text-center transition-all hover:scale-105 active:scale-95"
+                    >
+                        📈 View Chart
+                    </a>
+                </div>
+                
+                {/* Contract Address */}
+                <div className="bg-black/40 rounded-lg p-2 border border-white/10">
+                    <div className="text-white/50 text-[10px] uppercase tracking-wider mb-1">Contract Address (CA)</div>
+                    <div className="flex items-center gap-2">
+                        <code className="text-cyan-400 text-[10px] break-all flex-1 font-mono">
+                            9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump
+                        </code>
+                        <button 
+                            onClick={() => {
+                                navigator.clipboard.writeText('9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump');
+                            }}
+                            className="text-white/50 hover:text-white text-xs px-2 py-1 bg-white/10 rounded hover:bg-white/20 transition-colors"
+                        >
+                            📋
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )
+    },
+    {
         id: 'pebbles',
         title: '🪨 Pebbles - Premium Currency',
         icon: '💎',
