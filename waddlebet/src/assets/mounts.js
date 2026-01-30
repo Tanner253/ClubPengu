@@ -176,7 +176,7 @@ export const MOUNTS = {
         animated: true,
         animationType: 'cart_wobble',
         hidesFeet: false,
-        riderOffset: { y: 2 },
+        riderOffset: { y: 1.1 },
         speedBoost: 1.1,  // 10% speed boost
         scale: 0.18,
         positionY: 0.45,
