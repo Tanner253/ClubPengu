@@ -33,10 +33,100 @@ const TUTORIAL_SLIDES = [
                 </p>
                 <div className="bg-gradient-to-r from-cyan-500/20 to-purple-500/20 rounded-lg p-3 border border-white/10">
                     <p className="text-sm text-white/80">
-                        💡 <strong>Pro tip:</strong> Use <kbd className="px-1.5 py-0.5 bg-black/50 rounded text-xs">WASD</kbd> or arrow keys to move, 
-                        <kbd className="px-1.5 py-0.5 bg-black/50 rounded text-xs mx-1">Enter</kbd> to chat!
+                        💡 Swipe through this guide to learn everything you need to know!
                     </p>
                 </div>
+            </div>
+        )
+    },
+    {
+        id: 'controls',
+        title: '🎮 Controls & Movement',
+        icon: '⌨️',
+        content: (
+            <div className="space-y-3">
+                <p className="text-white/90 text-sm">
+                    Master these controls to navigate the world:
+                </p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="bg-black/40 rounded-lg p-2 border border-cyan-500/30">
+                        <div className="text-cyan-400 font-bold mb-1">🚶 Movement</div>
+                        <div className="text-white/70 space-y-0.5">
+                            <div><kbd className="px-1 bg-black/50 rounded text-[10px]">WASD</kbd> Move around</div>
+                            <div><kbd className="px-1 bg-black/50 rounded text-[10px]">Space</kbd> Jump</div>
+                            <div><kbd className="px-1 bg-black/50 rounded text-[10px]">Mouse</kbd> Rotate camera</div>
+                        </div>
+                    </div>
+                    <div className="bg-black/40 rounded-lg p-2 border border-pink-500/30">
+                        <div className="text-pink-400 font-bold mb-1">❄️ Snowballs</div>
+                        <div className="text-white/70 space-y-0.5">
+                            <div><kbd className="px-1 bg-black/50 rounded text-[10px]">Shift</kbd> Hold to aim</div>
+                            <div>Release to throw!</div>
+                            <div className="text-white/50 italic">Hit other penguins!</div>
+                        </div>
+                    </div>
+                    <div className="bg-black/40 rounded-lg p-2 border border-amber-500/30">
+                        <div className="text-amber-400 font-bold mb-1">💬 Social</div>
+                        <div className="text-white/70 space-y-0.5">
+                            <div><kbd className="px-1 bg-black/50 rounded text-[10px]">Enter</kbd> Open chat</div>
+                            <div><kbd className="px-1 bg-black/50 rounded text-[10px]">T</kbd> Emote wheel</div>
+                            <div><kbd className="px-1 bg-black/50 rounded text-[10px]">1-7</kbd> Quick emotes</div>
+                        </div>
+                    </div>
+                    <div className="bg-black/40 rounded-lg p-2 border border-green-500/30">
+                        <div className="text-green-400 font-bold mb-1">🎯 Interact</div>
+                        <div className="text-white/70 space-y-0.5">
+                            <div><kbd className="px-1 bg-black/50 rounded text-[10px]">Click</kbd> on players</div>
+                            <div><kbd className="px-1 bg-black/50 rounded text-[10px]">Click</kbd> on objects</div>
+                            <div><kbd className="px-1 bg-black/50 rounded text-[10px]">E</kbd> Enter portals</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+    },
+    {
+        id: 'earn-gold',
+        title: '💰 Ways to Earn Gold',
+        icon: '🪙',
+        content: (
+            <div className="space-y-3">
+                <p className="text-white/90 text-sm">
+                    <strong className="text-amber-400">Gold</strong> is the in-game currency. Here's how to earn it:
+                </p>
+                <div className="space-y-2">
+                    <div className="flex items-center gap-2 bg-black/30 rounded-lg p-2 border border-blue-500/30">
+                        <span className="text-lg">🎣</span>
+                        <div className="flex-1">
+                            <div className="text-blue-400 font-bold text-sm">Ice Fishing</div>
+                            <p className="text-white/60 text-xs">Catch fish at fishing holes - earn 10-500 gold per catch!</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-black/30 rounded-lg p-2 border border-purple-500/30">
+                        <span className="text-lg">🎰</span>
+                        <div className="flex-1">
+                            <div className="text-purple-400 font-bold text-sm">Slot Machines</div>
+                            <p className="text-white/60 text-xs">Try your luck at the Casino - hit jackpots!</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-black/30 rounded-lg p-2 border border-green-500/30">
+                        <span className="text-lg">📅</span>
+                        <div className="flex-1">
+                            <div className="text-green-400 font-bold text-sm">Daily Bonus</div>
+                            <p className="text-white/60 text-xs">Login daily for free gold - streaks give more!</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-black/30 rounded-lg p-2 border border-cyan-500/30">
+                        <span className="text-lg">⚔️</span>
+                        <div className="flex-1">
+                            <div className="text-cyan-400 font-bold text-sm">Win Wagers</div>
+                            <p className="text-white/60 text-xs">Challenge players to gold wagers and win!</p>
+                        </div>
+                    </div>
+                </div>
+                <p className="text-xs text-white/50 text-center italic">
+                    Gold has no real value - it's for fun and practice!
+                </p>
             </div>
         )
     },
@@ -47,30 +137,29 @@ const TUTORIAL_SLIDES = [
         content: (
             <div className="space-y-3">
                 <p className="text-white/90">
-                    <strong className="text-cyan-400">Click on any player</strong> to challenge them to games - and here's the innovation:
+                    <strong className="text-cyan-400">Click on any player</strong> to challenge them to games!
                 </p>
                 <div className="bg-gradient-to-r from-green-500/20 to-cyan-500/20 rounded-lg p-3 border border-green-500/30">
                     <div className="text-green-400 font-bold text-center mb-2">🚀 WAGER ANY SPL TOKEN</div>
                     <p className="text-white/80 text-sm text-center">
-                        SOL, $CP, memecoins, stablecoins - <strong>any Solana token</strong> can be wagered!
-                    </p>
-                    <p className="text-white/60 text-xs text-center mt-1">
-                        First platform ever to enable wagering with any SPL token.
+                        SOL, $CP, memecoins, stablecoins - <strong>any Solana token</strong>!
                     </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="bg-black/30 rounded-lg p-2 border border-amber-500/30">
                         <div className="text-amber-400 font-bold mb-1">🪙 Gold Wagers</div>
-                        <p className="text-white/70 text-xs">Practice with in-game gold - no real value at stake!</p>
+                        <p className="text-white/70 text-xs">Practice with in-game gold - no real value!</p>
                     </div>
                     <div className="bg-black/30 rounded-lg p-2 border border-purple-500/30">
                         <div className="text-purple-400 font-bold mb-1">🎰 SPL Wagers</div>
-                        <p className="text-white/70 text-xs">Wager real tokens - SOL, memes, anything on Solana!</p>
+                        <p className="text-white/70 text-xs">Wager real tokens - play for keeps!</p>
                     </div>
                 </div>
-                <p className="text-xs text-white/50 italic text-center">
-                    All SPL wagers are provably fair with on-chain verification.
-                </p>
+                <div className="bg-black/30 rounded-lg p-2 text-center">
+                    <p className="text-white/60 text-xs">
+                        🎲 Games: <span className="text-white/80">Rock Paper Scissors</span> • <span className="text-white/80">Blackjack</span> • <span className="text-white/80">Coin Flip</span> • <span className="text-white/80">Higher/Lower</span>
+                    </p>
+                </div>
             </div>
         )
     },
@@ -80,71 +169,167 @@ const TUTORIAL_SLIDES = [
         icon: '💎',
         content: (
             <div className="space-y-3">
-                <p className="text-white/90">
-                    <strong className="text-purple-400">Pebbles</strong> are the premium currency that powers the economy!
+                <p className="text-white/90 text-sm">
+                    <strong className="text-purple-400">Pebbles</strong> are the premium currency backed by real SOL!
                 </p>
                 <div className="space-y-2">
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
+                        <span className="text-lg">💳</span>
+                        <div>
+                            <div className="text-cyan-400 font-bold text-sm">Deposit SOL</div>
+                            <p className="text-white/60 text-xs">Convert SOL to Pebbles (1 SOL = 1,000 Pebbles)</p>
+                        </div>
+                    </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
                         <span className="text-lg">🎰</span>
                         <div>
                             <div className="text-amber-400 font-bold text-sm">Gacha Rolls</div>
-                            <p className="text-white/60 text-xs">Spend 100 Pebbles per roll for rare cosmetics!</p>
+                            <p className="text-white/60 text-xs">100 Pebbles per roll - win rare cosmetics!</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
                         <span className="text-lg">🏪</span>
                         <div>
-                            <div className="text-cyan-400 font-bold text-sm">Marketplace Trading</div>
-                            <p className="text-white/60 text-xs">Buy and sell cosmetics with other players!</p>
+                            <div className="text-pink-400 font-bold text-sm">Marketplace</div>
+                            <p className="text-white/60 text-xs">Buy & sell cosmetics with other players!</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
                         <span className="text-lg">💸</span>
                         <div>
-                            <div className="text-green-400 font-bold text-sm">Cash Out Anytime</div>
-                            <p className="text-white/60 text-xs">Convert Pebbles back to SOL (5% withdrawal fee)</p>
+                            <div className="text-green-400 font-bold text-sm">Withdraw Anytime</div>
+                            <p className="text-white/60 text-xs">Cash out to SOL (5% fee) - real value!</p>
                         </div>
                     </div>
                 </div>
-                <p className="text-xs text-center text-purple-300/80 font-medium">
-                    1 SOL = 1,000 Pebbles • Trade smart, profit real!
-                </p>
             </div>
         )
     },
     {
         id: 'cosmetics',
-        title: '✨ Cosmetics & Marketplace',
+        title: '✨ Cosmetics & Gacha',
         icon: '👗',
         content: (
             <div className="space-y-3">
-                <p className="text-white/90">
-                    Collect <strong className="text-pink-400">unique cosmetics</strong> through gacha rolls and trade them on the open market!
+                <p className="text-white/90 text-sm">
+                    Collect <strong className="text-pink-400">unique cosmetics</strong> through gacha rolls!
                 </p>
                 <div className="grid grid-cols-3 gap-1 text-center text-xs">
-                    <div className="bg-gray-500/20 rounded p-1.5 border border-gray-500/30">
-                        <div className="text-gray-400">Common</div>
+                    <div className="bg-gray-500/20 rounded p-1 border border-gray-500/30">
+                        <div className="text-gray-400 text-[10px]">Common</div>
                     </div>
-                    <div className="bg-green-500/20 rounded p-1.5 border border-green-500/30">
-                        <div className="text-green-400">Uncommon</div>
+                    <div className="bg-green-500/20 rounded p-1 border border-green-500/30">
+                        <div className="text-green-400 text-[10px]">Uncommon</div>
                     </div>
-                    <div className="bg-blue-500/20 rounded p-1.5 border border-blue-500/30">
-                        <div className="text-blue-400">Rare</div>
+                    <div className="bg-blue-500/20 rounded p-1 border border-blue-500/30">
+                        <div className="text-blue-400 text-[10px]">Rare</div>
                     </div>
-                    <div className="bg-purple-500/20 rounded p-1.5 border border-purple-500/30">
-                        <div className="text-purple-400">Epic</div>
+                    <div className="bg-purple-500/20 rounded p-1 border border-purple-500/30">
+                        <div className="text-purple-400 text-[10px]">Epic</div>
                     </div>
-                    <div className="bg-amber-500/20 rounded p-1.5 border border-amber-500/30">
-                        <div className="text-amber-400">Legendary</div>
+                    <div className="bg-amber-500/20 rounded p-1 border border-amber-500/30">
+                        <div className="text-amber-400 text-[10px]">Legendary</div>
                     </div>
-                    <div className="bg-pink-500/20 rounded p-1.5 border border-pink-500/30">
-                        <div className="text-pink-400">Mythic</div>
+                    <div className="bg-pink-500/20 rounded p-1 border border-pink-500/30">
+                        <div className="text-pink-400 text-[10px]">Mythic</div>
                     </div>
                 </div>
-                <div className="bg-gradient-to-r from-amber-500/20 to-pink-500/20 rounded-lg p-2 border border-white/10">
-                    <p className="text-xs text-white/80">
-                        🏆 <strong>First Edition</strong> items (Serial #1-3) have <span className="text-amber-400">2x burn value</span> and are highly collectible!
+                <div className="bg-gradient-to-r from-amber-500/20 to-pink-500/20 rounded-lg p-2 border border-white/10 text-xs">
+                    <p className="text-white/80">
+                        🏆 <strong>First Edition</strong> (Serial #1-3) = <span className="text-amber-400">2x burn value</span>
                     </p>
+                    <p className="text-white/60 mt-1">
+                        💡 Equip cosmetics from your inventory to customize your penguin!
+                    </p>
+                </div>
+                <div className="bg-black/30 rounded-lg p-2 text-center">
+                    <p className="text-white/60 text-xs">
+                        🎁 <span className="text-white/80">Hats</span> • <span className="text-white/80">Faces</span> • <span className="text-white/80">Necks</span> • <span className="text-white/80">Bodies</span> • <span className="text-white/80">Hands</span> • <span className="text-white/80">Feet</span>
+                    </p>
+                </div>
+            </div>
+        )
+    },
+    {
+        id: 'puffles',
+        title: '🐾 Puffles - Your Pet Companion',
+        icon: '🟣',
+        content: (
+            <div className="space-y-3">
+                <p className="text-white/90 text-sm">
+                    <strong className="text-pink-400">Puffles</strong> are adorable pets that follow you around!
+                </p>
+                <div className="space-y-2">
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
+                        <span className="text-lg">🏪</span>
+                        <div>
+                            <div className="text-cyan-400 font-bold text-sm">Puffle Shop</div>
+                            <p className="text-white/60 text-xs">Buy puffles of different colors and rarities</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
+                        <span className="text-lg">🏋️</span>
+                        <div>
+                            <div className="text-amber-400 font-bold text-sm">Train Your Puffle</div>
+                            <p className="text-white/60 text-xs">Play minigames to level up your puffle!</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
+                        <span className="text-lg">🍎</span>
+                        <div>
+                            <div className="text-green-400 font-bold text-sm">Feed & Care</div>
+                            <p className="text-white/60 text-xs">Keep your puffle happy with food from vending machines</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
+                        <span className="text-lg">👑</span>
+                        <div>
+                            <div className="text-purple-400 font-bold text-sm">Rare Puffles</div>
+                            <p className="text-white/60 text-xs">Collect legendary puffles for status!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+    },
+    {
+        id: 'minigames',
+        title: '🎮 Mini-Games & Casino',
+        icon: '🎲',
+        content: (
+            <div className="space-y-3">
+                <p className="text-white/90 text-sm">
+                    Explore the world and find fun activities everywhere!
+                </p>
+                <div className="space-y-2">
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
+                        <span className="text-lg">🎣</span>
+                        <div>
+                            <div className="text-blue-400 font-bold text-sm">Ice Fishing</div>
+                            <p className="text-white/60 text-xs">Click fishing holes - catch fish for gold!</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
+                        <span className="text-lg">🎰</span>
+                        <div>
+                            <div className="text-purple-400 font-bold text-sm">Casino Slots</div>
+                            <p className="text-white/60 text-xs">Spin for gold - match symbols for jackpots!</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
+                        <span className="text-lg">🃏</span>
+                        <div>
+                            <div className="text-green-400 font-bold text-sm">Card Games</div>
+                            <p className="text-white/60 text-xs">Blackjack tables in the Casino - wager gold or tokens!</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
+                        <span className="text-lg">🕹️</span>
+                        <div>
+                            <div className="text-amber-400 font-bold text-sm">Arcade Games</div>
+                            <p className="text-white/60 text-xs">Click arcade machines - Thin Ice, Pong & more!</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         )
@@ -155,36 +340,36 @@ const TUTORIAL_SLIDES = [
         icon: '🏔️',
         content: (
             <div className="space-y-3">
-                <p className="text-white/90">
-                    <strong className="text-cyan-400">Igloos</strong> are premium spaces you can rent or own - and monetize!
+                <p className="text-white/90 text-sm">
+                    <strong className="text-cyan-400">Igloos</strong> are premium spaces you can own and monetize!
                 </p>
                 <div className="space-y-2">
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
                         <span className="text-lg">🏷️</span>
                         <div>
                             <div className="text-green-400 font-bold text-sm">Rent or Own</div>
-                            <p className="text-white/60 text-xs">Secure your own igloo space in the metaverse</p>
+                            <p className="text-white/60 text-xs">Secure your own igloo in the metaverse</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
                         <span className="text-lg">🎟️</span>
                         <div>
                             <div className="text-amber-400 font-bold text-sm">Set Entry Fees</div>
-                            <p className="text-white/60 text-xs">Charge visitors to enter - passive income!</p>
+                            <p className="text-white/60 text-xs">Charge visitors - passive income!</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
                         <span className="text-lg">📺</span>
                         <div>
-                            <div className="text-purple-400 font-bold text-sm">Banner Advertising</div>
-                            <p className="text-white/60 text-xs">Shill your project with custom banners</p>
+                            <div className="text-purple-400 font-bold text-sm">Advertising</div>
+                            <p className="text-white/60 text-xs">Display custom banners for your project</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
                         <span className="text-lg">🔒</span>
                         <div>
-                            <div className="text-cyan-400 font-bold text-sm">Paywall Content</div>
-                            <p className="text-white/60 text-xs">Create exclusive paid experiences</p>
+                            <div className="text-cyan-400 font-bold text-sm">Exclusive Content</div>
+                            <p className="text-white/60 text-xs">Create paywalled experiences</p>
                         </div>
                     </div>
                 </div>
@@ -192,8 +377,46 @@ const TUTORIAL_SLIDES = [
         )
     },
     {
+        id: 'referrals',
+        title: '🔗 Referral Program',
+        icon: '💸',
+        content: (
+            <div className="space-y-3">
+                <p className="text-white/90 text-sm">
+                    <strong className="text-green-400">Earn real SOL</strong> by inviting friends!
+                </p>
+                <div className="bg-gradient-to-r from-green-500/20 to-cyan-500/20 rounded-lg p-3 border border-green-500/30">
+                    <div className="text-center">
+                        <div className="text-green-400 font-bold">💰 15% Revenue Share</div>
+                        <p className="text-white/70 text-xs mt-1">
+                            Earn 15% of the Pebbles your friends spend on gacha!
+                        </p>
+                    </div>
+                </div>
+                <div className="space-y-2 text-xs">
+                    <div className="flex justify-between bg-black/30 rounded-lg p-2">
+                        <span className="text-white/60">Tier 1 (Direct)</span>
+                        <span className="text-green-400 font-bold">15% earnings</span>
+                    </div>
+                    <div className="flex justify-between bg-black/30 rounded-lg p-2">
+                        <span className="text-white/60">Tier 2 (Indirect)</span>
+                        <span className="text-cyan-400 font-bold">3% earnings</span>
+                    </div>
+                </div>
+                <div className="bg-amber-500/20 rounded-lg p-2 border border-amber-500/30 text-center">
+                    <p className="text-amber-400 text-xs font-bold">
+                        🎁 LIMITED TIME: Both you and your friend get 1,000 $CP!
+                    </p>
+                    <p className="text-white/60 text-[10px] mt-1">
+                        (Friend must connect wallet & play 1 hour)
+                    </p>
+                </div>
+            </div>
+        )
+    },
+    {
         id: 'tips',
-        title: '🚀 Tips for Success',
+        title: '🚀 Ready to Waddle!',
         icon: '💡',
         content: (
             <div className="space-y-3">
@@ -201,31 +424,39 @@ const TUTORIAL_SLIDES = [
                     <div className="flex items-start gap-2 bg-gradient-to-r from-green-500/20 to-transparent rounded-lg p-2">
                         <span className="text-lg">💰</span>
                         <div>
-                            <div className="text-green-400 font-bold text-sm">Start Small</div>
-                            <p className="text-white/60 text-xs">Practice with gold wagers before going for SOL!</p>
+                            <div className="text-green-400 font-bold text-sm">Start with Gold</div>
+                            <p className="text-white/60 text-xs">Practice wagers with gold before real tokens!</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-gradient-to-r from-purple-500/20 to-transparent rounded-lg p-2">
                         <span className="text-lg">🎰</span>
                         <div>
-                            <div className="text-purple-400 font-bold text-sm">Roll Smart</div>
-                            <p className="text-white/60 text-xs">Watch for rare drops - they can sell for big Pebbles!</p>
+                            <div className="text-purple-400 font-bold text-sm">Roll Gacha Smart</div>
+                            <p className="text-white/60 text-xs">Rare drops sell for big Pebbles on marketplace!</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-gradient-to-r from-cyan-500/20 to-transparent rounded-lg p-2">
                         <span className="text-lg">🤝</span>
                         <div>
                             <div className="text-cyan-400 font-bold text-sm">Be Social</div>
-                            <p className="text-white/60 text-xs">Make friends, find trading partners, build your reputation!</p>
+                            <p className="text-white/60 text-xs">Make friends, trade, throw snowballs!</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-gradient-to-r from-amber-500/20 to-transparent rounded-lg p-2">
                         <span className="text-lg">📈</span>
                         <div>
-                            <div className="text-amber-400 font-bold text-sm">Trade to Profit</div>
-                            <p className="text-white/60 text-xs">Buy low, sell high - the marketplace is your playground!</p>
+                            <div className="text-amber-400 font-bold text-sm">Invite Friends</div>
+                            <p className="text-white/60 text-xs">Share your referral link and earn SOL!</p>
                         </div>
                     </div>
+                </div>
+                <div className="bg-gradient-to-r from-cyan-500/10 to-pink-500/10 rounded-lg p-2 text-center border border-white/10">
+                    <p className="text-white/80 text-sm font-bold">
+                        🐧 Have fun and waddle on!
+                    </p>
+                    <p className="text-white/50 text-xs mt-1">
+                        Settings → Tutorial to view this again anytime
+                    </p>
                 </div>
             </div>
         )
@@ -238,14 +469,19 @@ export default function TutorialModal({ isOpen, onClose, forceShow = false }) {
     const [shouldShow, setShouldShow] = useState(false);
     const modalRef = useRef(null);
     
-    // Check localStorage on mount
+    // Check localStorage and determine if should show
     useEffect(() => {
         const dismissed = localStorage.getItem(TUTORIAL_STORAGE_KEY);
-        if (forceShow) {
+        if (forceShow && isOpen) {
+            // Force show from settings - always show
             setShouldShow(true);
+            setCurrentSlide(0); // Reset to first slide
         } else if (!dismissed && isOpen) {
+            // First time user - auto show
             setShouldShow(true);
-        } else {
+            setCurrentSlide(0);
+        } else if (!isOpen) {
+            // Modal was closed
             setShouldShow(false);
         }
     }, [isOpen, forceShow]);

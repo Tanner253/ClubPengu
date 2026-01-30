@@ -24,6 +24,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     const [showInventory, setShowInventory] = useState(false);
     const [showMarketplace, setShowMarketplace] = useState(false);
     const [showTutorial, setShowTutorial] = useState(false);
+    const [forceTutorial, setForceTutorial] = useState(false); // Force show even if dismissed
     const [showDailyBonus, setShowDailyBonus] = useState(false);
     
     // Get pebbles from multiplayer context
@@ -47,7 +48,10 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     
     // Listen for openTutorial event from settings
     useEffect(() => {
-        const handleOpenTutorial = () => setShowTutorial(true);
+        const handleOpenTutorial = () => {
+            setForceTutorial(true); // Force show even if previously dismissed
+            setShowTutorial(true);
+        };
         window.addEventListener('openTutorial', handleOpenTutorial);
         return () => window.removeEventListener('openTutorial', handleOpenTutorial);
     }, []);
@@ -295,7 +299,11 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 {/* Tutorial Modal (Portrait) */}
                 <TutorialModal
                     isOpen={showTutorial}
-                    onClose={() => setShowTutorial(false)}
+                    onClose={() => {
+                        setShowTutorial(false);
+                        setForceTutorial(false);
+                    }}
+                    forceShow={forceTutorial}
                 />
                 
                 {/* Daily Bonus Modal (Portrait) */}
@@ -502,7 +510,11 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
             {/* Tutorial Modal - shows on first login */}
             <TutorialModal
                 isOpen={showTutorial}
-                onClose={() => setShowTutorial(false)}
+                onClose={() => {
+                    setShowTutorial(false);
+                    setForceTutorial(false);
+                }}
+                forceShow={forceTutorial}
             />
             
             {/* Daily Bonus Modal */}
