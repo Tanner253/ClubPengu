@@ -13,7 +13,7 @@ const ANIMATED_COSMETICS = {
     eyes: ['laser', 'fire'],
     bodyItems: ['angelWings', 'demonWings', 'fireAura', 'lightningAura'],
     // Animated skin colors (rainbow, cosmic, etc.) need per-frame color cycling
-    skins: ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula']
+    skins: ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula', 'lava', 'ocean', 'sunset', 'frost', 'matrix', 'glitch', 'chromatic', 'holographic']
 };
 
 /**

@@ -156,8 +156,98 @@ export function animateMesh(
             return;
         }
         
-        // Default mount pose (sitting)
-        meshInner.position.y = mountName === 'minecraftBoat' ? 0.8 : 1.2;
+        // === BOUNCY/HOVER MOUNTS (puffle, duck, cart, ufo, jetpack, all dragons) ===
+        // Sync player with mount bouncing and apply rider offsets
+        const isDragon = mountName === 'iceDragon' || mountName === 'fireDragon' || mountName === 'voidDragon' || 
+                         mountName === 'babyIceDragon' || mountName === 'babyFireDragon' || mountName === 'babyVoidDragon';
+        if (mountName === 'giantPuffle' || mountName === 'rubberDuck' || mountName === 'shoppingCart' || mountName === 'ufoDisc' || mountName === 'rocketJetpack' || isDragon) {
+            const riderY = mountData?.riderOffset?.y ?? 2;
+            const riderZ = mountData?.riderOffset?.z ?? 0;
+            
+            // Get mount bounce offset from userData (set by VoxelWorld)
+            const mountBounceY = meshInner.parent?.userData?.mountBounceY || 0;
+            
+            meshInner.position.y = riderY + mountBounceY;
+            meshInner.position.z = riderZ;
+            meshInner.rotation.y = 0; // Face forward
+            
+            // Different poses for different mounts
+            if (mountName === 'shoppingCart') {
+                // Standing behind cart, pushing it
+                if(footL) { footL.rotation.x = 0; footL.position.z = 0; }
+                if(footR) { footR.rotation.x = 0; footR.position.z = 0; }
+                if(flipperL) flipperL.rotation.z = 0.5;  // Arms forward on handle
+                if(flipperR) flipperR.rotation.z = -0.5;
+            } else if (mountName === 'ufoDisc') {
+                // Sitting in UFO cockpit - more upright, hands on controls
+                if(footL) { footL.rotation.x = -Math.PI / 4; footL.position.z = 1.5; }
+                if(footR) { footR.rotation.x = -Math.PI / 4; footR.position.z = 1.5; }
+                if(flipperL) { flipperL.rotation.z = 0.3; flipperL.rotation.x = -0.3; }
+                if(flipperR) { flipperR.rotation.z = -0.3; flipperR.rotation.x = -0.3; }
+            } else if (mountName === 'rocketJetpack') {
+                // === FULL BODY LEAN WITH MOVEMENT ===
+                const jetpackLeanZ = meshInner.parent?.userData?.jetpackLeanZ || 0;
+                const jetpackLeanX = meshInner.parent?.userData?.jetpackLeanX || 0;
+                
+                // Store current lean for smooth interpolation
+                if (!meshInner.userData) meshInner.userData = {};
+                const currentLeanZ = meshInner.userData.smoothLeanZ || 0;
+                const currentLeanX = meshInner.userData.smoothLeanX || 0;
+                
+                // Smoothly interpolate the ENTIRE body lean
+                const targetLeanZ = jetpackLeanZ;
+                const targetLeanX = jetpackLeanX;
+                meshInner.userData.smoothLeanZ = currentLeanZ + (targetLeanZ - currentLeanZ) * 0.12;
+                meshInner.userData.smoothLeanX = currentLeanX + (targetLeanX - currentLeanX) * 0.12;
+                
+                // Apply lean to entire meshInner (rotates head, body, eyes, beak, everything!)
+                meshInner.rotation.z = meshInner.userData.smoothLeanZ;
+                meshInner.rotation.x = meshInner.userData.smoothLeanX;
+                
+                // Flying with jetpack - feet dangle, arms out for balance
+                if(footL) { footL.rotation.x = 0.2; footL.position.z = 0.5; }
+                if(footR) { footR.rotation.x = 0.3; footR.position.z = 0.3; }
+                if(flipperL) { flipperL.rotation.z = 0.6; flipperL.rotation.x = -0.2; }
+                if(flipperR) { flipperR.rotation.z = -0.6; flipperR.rotation.x = -0.2; }
+                
+                // Arms react to lean direction (additional rotation on top of body lean)
+                if (meshInner.userData.smoothLeanZ > 0.1) {
+                    // Leaning left - left arm down, right arm up for balance
+                    if(flipperL) flipperL.rotation.z = 0.2;
+                    if(flipperR) flipperR.rotation.z = -1.0;
+                } else if (meshInner.userData.smoothLeanZ < -0.1) {
+                    // Leaning right - right arm down, left arm up
+                    if(flipperL) flipperL.rotation.z = 1.0;
+                    if(flipperR) flipperR.rotation.z = -0.2;
+                }
+                
+                // Feet trail behind when moving forward
+                if (meshInner.userData.smoothLeanX > 0.1) {
+                    if(footL) { footL.rotation.x = 0.6; footL.position.z = 1.2; }
+                    if(footR) { footR.rotation.x = 0.7; footR.position.z = 1.0; }
+                }
+            } else if (isDragon) {
+                // Riding dragon - heroic pose, leaning forward, gripping reins
+                if(footL) { footL.rotation.x = -Math.PI / 4; footL.position.z = 1.5; } // Legs bent for riding
+                if(footR) { footR.rotation.x = -Math.PI / 4; footR.position.z = 1.5; }
+                if(flipperL) { flipperL.rotation.z = 0.4; flipperL.rotation.x = -0.4; } // Holding reins
+                if(flipperR) { flipperR.rotation.z = -0.4; flipperR.rotation.x = -0.4; }
+                
+                // Slight forward lean while riding
+                meshInner.rotation.x = 0.15;
+            } else {
+                // Sitting on puffle/duck
+                if(footL) { footL.rotation.x = -Math.PI / 3; footL.position.z = 2; }
+                if(footR) { footR.rotation.x = -Math.PI / 3; footR.position.z = 2; }
+                if(flipperL) flipperL.rotation.z = 0.4;
+                if(flipperR) flipperR.rotation.z = -0.4;
+            }
+            return;
+        }
+        
+        // Default mount pose (sitting) - boat, pengu mount, etc
+        const defaultRiderY = mountData?.riderOffset?.y ?? (mountName === 'minecraftBoat' ? 0.8 : 1.2);
+        meshInner.position.y = defaultRiderY;
         if(footL) {
             footL.rotation.x = -Math.PI / 2.5;
             footL.position.z = 2.5;

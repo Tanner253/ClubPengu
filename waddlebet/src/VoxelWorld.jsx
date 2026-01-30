@@ -643,7 +643,8 @@ const VoxelWorld = ({
         
         const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 300);
         cameraRef.current = camera;
-        camera.position.set(0, 15, -15);
+        // Default 50% more zoomed in (was 15, -15 which is ~21.2 distance, now ~11.3)
+        camera.position.set(0, 8, -8);
         
         // ==================== DEVICE DETECTION ====================
         // Detect device types for performance optimizations
@@ -1520,6 +1521,10 @@ const VoxelWorld = ({
                 if (child.userData?.isBreathFire) cache.breathFire = child;
                 if (child.userData?.isBreathIce) cache.breathIce = child;
                 if (child.userData?.isBubblegum) cache.bubblegum = child;
+                // Animated feathers
+                if (child.userData?.isAuroraEmitter) cache.auroraEmitter = child;
+                if (child.userData?.isCrystalEmitter) cache.crystalEmitter = child;
+                if (child.userData?.isVoidEmitter) cache.voidEmitter = child;
                 // Animated skin data
                 if (child.userData?.animatedSkin) cache.animatedSkin = child.userData.animatedSkin;
                 if (child.userData?.isCosmicStar) cache.cosmicStars.push(child);
@@ -1685,6 +1690,128 @@ const VoxelWorld = ({
                     else scale = 0.5;
                     bubble.scale.setScalar(Math.max(0.3, scale));
                 }
+            }
+            
+            // ========== ANIMATED FEATHERS (ENHANCED) ==========
+            
+            // Aurora Feathers - Intense northern lights with trails
+            if (cache.auroraEmitter) {
+                cache.auroraEmitter.children.forEach((particle, i) => {
+                    if (particle.userData.isRibbon) {
+                        const angle = particle.userData.angle || 0;
+                        const phase = particle.userData.phaseOffset || 0;
+                        const baseY = particle.userData.baseY || 0;
+                        const speed = particle.userData.speed || 1;
+                        const wave = Math.sin(time * speed + phase) * 1.5;
+                        particle.position.x = Math.cos(angle + time * 0.3) * (2 + wave * 0.5) * VOXEL_SIZE;
+                        particle.position.z = Math.sin(angle + time * 0.3) * (1.5 + wave * 0.3) * VOXEL_SIZE - VOXEL_SIZE;
+                        particle.position.y = baseY + Math.sin(time * speed * 1.5 + phase) * 1.2 * VOXEL_SIZE;
+                        particle.rotation.y = time * 0.5 + phase;
+                        particle.rotation.z = Math.sin(time * 2 + phase) * 0.3;
+                        if (particle.material) {
+                            const hue = (time * 0.15 + phase * 0.1) % 1;
+                            particle.material.color.setHSL(hue * 0.3 + 0.35, 0.9, 0.55);
+                            particle.material.opacity = 0.7 + Math.sin(time * 4 + phase) * 0.25;
+                        }
+                    } else if (particle.userData.isTrail) {
+                        particle.userData.life += delta * particle.userData.speed;
+                        const lifeRatio = particle.userData.life / particle.userData.maxLife;
+                        if (lifeRatio >= 1) {
+                            particle.userData.life = 0;
+                            particle.position.x = particle.userData.baseX + (Math.random() - 0.5) * 2 * VOXEL_SIZE;
+                            particle.position.y = 0;
+                            particle.position.z = particle.userData.baseZ + (Math.random() - 0.5) * 2 * VOXEL_SIZE;
+                        } else {
+                            particle.position.y += delta * 3 * VOXEL_SIZE;
+                            particle.position.x += Math.sin(time * 3 + i) * delta * 0.5 * VOXEL_SIZE;
+                            if (particle.material) {
+                                particle.material.opacity = (1 - lifeRatio) * 0.8;
+                                const hue = (time * 0.2 + i * 0.05) % 1;
+                                particle.material.color.setHSL(hue * 0.3 + 0.35, 0.85, 0.6);
+                            }
+                            particle.scale.setScalar(1 - lifeRatio * 0.5);
+                        }
+                    }
+                });
+            }
+            
+            // Crystal Feathers - Brilliant sparkle bursts
+            if (cache.crystalEmitter) {
+                cache.crystalEmitter.children.forEach((particle, i) => {
+                    if (particle.userData.isShard) {
+                        const twinkle = Math.sin(time * particle.userData.twinkleSpeed + particle.userData.twinkleOffset);
+                        const twinkleNorm = (twinkle + 1) / 2;
+                        const angle = particle.userData.angle || 0;
+                        particle.position.x = Math.cos(angle + time * 0.2) * 1.5 * VOXEL_SIZE;
+                        particle.position.z = Math.sin(angle + time * 0.2) * 1 * VOXEL_SIZE;
+                        particle.position.y = particle.userData.baseY + Math.sin(time * 2 + i) * 0.3 * VOXEL_SIZE;
+                        particle.rotation.y = time + angle;
+                        particle.rotation.x = Math.sin(time * 1.5 + i) * 0.2;
+                        if (particle.material) {
+                            const hue = (time * 0.1 + particle.userData.twinkleOffset * 0.1) % 1;
+                            particle.material.color.setHSL(hue, 0.2 + twinkleNorm * 0.3, 0.85 + twinkleNorm * 0.15);
+                            particle.material.opacity = 0.7 + twinkleNorm * 0.3;
+                        }
+                        particle.scale.setScalar(0.8 + twinkleNorm * 0.4);
+                    } else if (particle.userData.isSparkle) {
+                        particle.userData.life += delta * 2;
+                        const lifeRatio = particle.userData.life / particle.userData.maxLife;
+                        if (lifeRatio >= 1) {
+                            particle.userData.life = 0;
+                            particle.position.set(0, VOXEL_SIZE, 0);
+                            particle.userData.velocity = { x: (Math.random() - 0.5) * 3, y: 2 + Math.random() * 3, z: (Math.random() - 0.5) * 3 };
+                        } else {
+                            particle.position.x += particle.userData.velocity.x * delta * VOXEL_SIZE;
+                            particle.position.y += particle.userData.velocity.y * delta * VOXEL_SIZE;
+                            particle.position.z += particle.userData.velocity.z * delta * VOXEL_SIZE;
+                            particle.userData.velocity.y -= delta * 2;
+                            if (particle.material) {
+                                particle.material.opacity = (1 - lifeRatio) * 0.9;
+                                const hue = (time * 0.5 + i * 0.1) % 1;
+                                particle.material.color.setHSL(hue, 0.5, 0.9);
+                            }
+                            particle.scale.setScalar(1 - lifeRatio * 0.7);
+                        }
+                    }
+                });
+            }
+            
+            // Void Feathers - Intense dark vortex
+            if (cache.voidEmitter) {
+                cache.voidEmitter.children.forEach((particle, i) => {
+                    if (particle.userData.isTendril) {
+                        const angle = particle.userData.angle || 0;
+                        const baseY = particle.userData.baseY || 0;
+                        const speed = particle.userData.speed || 1;
+                        const currentAngle = angle + time * speed;
+                        const radius = particle.userData.radius + Math.sin(time * 2) * 0.5;
+                        particle.position.x = Math.cos(currentAngle) * radius * VOXEL_SIZE;
+                        particle.position.z = Math.sin(currentAngle) * radius * VOXEL_SIZE - VOXEL_SIZE;
+                        particle.position.y = baseY + Math.sin(time * speed + angle) * 1.5 * VOXEL_SIZE;
+                        particle.rotation.y = currentAngle;
+                        particle.rotation.x = Math.sin(time * 3) * 0.4;
+                        if (particle.material) {
+                            const pulse = Math.sin(time * 4 + angle) * 0.5 + 0.5;
+                            particle.material.color.setHSL(0.78 + pulse * 0.08, 0.9, 0.25 + pulse * 0.15);
+                            particle.material.opacity = 0.7 + pulse * 0.25;
+                        }
+                    } else if (particle.userData.isVortex) {
+                        particle.userData.life += delta * particle.userData.spiralSpeed;
+                        const lifeRatio = particle.userData.life % 1;
+                        const angle = particle.userData.angle + time * particle.userData.speed;
+                        const baseRadius = particle.userData.radius;
+                        const currentRadius = baseRadius * (1 - lifeRatio * 0.8);
+                        particle.position.x = Math.cos(angle + lifeRatio * Math.PI * 4) * currentRadius * VOXEL_SIZE;
+                        particle.position.z = Math.sin(angle + lifeRatio * Math.PI * 4) * currentRadius * VOXEL_SIZE - VOXEL_SIZE;
+                        particle.position.y = particle.userData.baseY + lifeRatio * 4 * VOXEL_SIZE;
+                        if (particle.material) {
+                            particle.material.opacity = (1 - lifeRatio * 0.7) * 0.8;
+                            const hue = 0.75 + Math.sin(time * 2 + i) * 0.1;
+                            particle.material.color.setHSL(hue, 0.85, 0.2 + lifeRatio * 0.2);
+                        }
+                        particle.scale.setScalar(1 - lifeRatio * 0.6);
+                    }
+                });
             }
             
             // Animated skin colors (cosmic, galaxy, rainbow, nebula)
@@ -3896,6 +4023,592 @@ const VoxelWorld = ({
                                 playerRef.current.userData.skateboardSpeed = 0;
                             }
                         }
+                        // UFO Disc hover animation 🛸
+                        else if (mountData.animationType === 'ufo_hover') {
+                            const spinRing = mountGroup.getObjectByName('spin_ring_pivot');
+                            const abductionRay = mountGroup.getObjectByName('abduction_ray');
+                            const abductionRayInner = mountGroup.getObjectByName('abduction_ray_inner');
+                            const abductionLight = mountGroup.getObjectByName('abduction_light');
+                            
+                            const hoverSpeed = mountData.hoverSpeed || 3;
+                            const hoverIntensity = mountData.hoverIntensity || 0.12;
+                            const ringSpinSpeed = mountData.ringSpinSpeed || 2;
+                            const tiltAmount = mountData.tiltAmount || 0.35;
+                            
+                            // === CONTINUOUS RING SPIN ===
+                            // Ring always spins, faster when moving
+                            if (spinRing) {
+                                const spinMultiplier = moving ? 1.5 : 1;
+                                spinRing.rotation.y += delta * ringSpinSpeed * spinMultiplier;
+                            }
+                            
+                            // === ABDUCTION RAY ANIMATION ===
+                            if (abductionRay && abductionRay.material) {
+                                const rayPulse = 0.2 + Math.sin(time * 4) * 0.1;
+                                abductionRay.material.opacity = rayPulse;
+                                abductionRay.rotation.y += delta * 0.5; // Slow rotation
+                            }
+                            if (abductionRayInner && abductionRayInner.material) {
+                                const innerPulse = 0.3 + Math.sin(time * 4 + 0.5) * 0.15;
+                                abductionRayInner.material.opacity = innerPulse;
+                                abductionRayInner.rotation.y -= delta * 0.3; // Counter-rotate
+                            }
+                            if (abductionLight) {
+                                abductionLight.intensity = 0.4 + Math.sin(time * 4) * 0.2;
+                            }
+                            
+                            if (moving) {
+                                // === HOVER WOBBLE ===
+                                const hoverTime = time * hoverSpeed;
+                                const hover = Math.sin(hoverTime) * hoverIntensity;
+                                mountGroup.position.y = (mountData.positionY || 1.4) + hover + 0.05; // Slight lift when moving
+                                
+                                // Store for player sync
+                                playerRef.current.userData.mountBounceY = hover;
+                                
+                                // === TILT INTO MOVEMENT ===
+                                const turningLeft = keyLeft || mobileLeft || (joystickInputRef.current.x < -0.3);
+                                const turningRight = keyRight || mobileRight || (joystickInputRef.current.x > 0.3);
+                                const movingForward = keyForward || mobileForward || (joystickInputRef.current.y < -0.1);
+                                const movingBack = keyBack || mobileBack || (joystickInputRef.current.y > 0.1);
+                                
+                                // Bank into turns - more aggressive lean
+                                const targetRollZ = turningLeft ? tiltAmount : turningRight ? -tiltAmount : 0;
+                                mountGroup.rotation.z += (targetRollZ - mountGroup.rotation.z) * 0.15;
+                                
+                                // Pitch forward/back
+                                const targetPitchX = movingForward ? tiltAmount * 0.6 : movingBack ? -tiltAmount * 0.4 : 0;
+                                mountGroup.rotation.x += (targetPitchX - mountGroup.rotation.x) * 0.15;
+                                
+                            } else {
+                                // === IDLE HOVER ===
+                                const idleHover = Math.sin(time * 2) * 0.06;
+                                mountGroup.position.y = (mountData.positionY || 1.4) + idleHover;
+                                
+                                // Store for player sync
+                                playerRef.current.userData.mountBounceY = idleHover;
+                                
+                                // Gentle return to level
+                                mountGroup.rotation.z *= 0.92;
+                                mountGroup.rotation.x *= 0.92;
+                                
+                                // Slight idle wobble
+                                mountGroup.rotation.z += Math.sin(time * 1.5) * 0.008;
+                            }
+                        }
+                        // Giant Puffle bounce animation 🐾
+                        else if (mountData.animationType === 'puffle_bounce') {
+                            const tuftPivot = mountGroup.getObjectByName('tuft_pivot');
+                            
+                            const bounceIntensity = mountData.bounceIntensity || 0.25;
+                            const bounceSpeed = mountData.bounceSpeed || 10;
+                            const squishFactor = mountData.squishFactor || 0.12;
+                            const tuftWiggleSpeed = mountData.tuftWiggleSpeed || 15;
+                            const tuftWiggleAmount = mountData.tuftWiggleAmount || 0.3;
+                            
+                            if (moving) {
+                                const bounceTime = time * bounceSpeed;
+                                
+                                // === BOUNCY BALL PHYSICS ===
+                                // Big exaggerated bounces like a rubber ball
+                                const bounce = Math.abs(Math.sin(bounceTime)) * bounceIntensity;
+                                mountGroup.position.y = (mountData.positionY || 0.6) + bounce;
+                                
+                                // Store bounce offset for player to follow
+                                playerRef.current.userData.mountBounceY = bounce;
+                                
+                                // === SQUISH ON LANDING ===
+                                // Puffle squishes when hitting ground, stretches in air
+                                const squishPhase = Math.sin(bounceTime);
+                                const scaleY = (mountData.scale || 0.16) * (1 - Math.abs(squishPhase) * squishFactor);
+                                const scaleXZ = (mountData.scale || 0.16) * (1 + Math.abs(squishPhase) * squishFactor * 0.5);
+                                mountGroup.scale.set(scaleXZ, scaleY, scaleXZ);
+                                
+                                // === WOBBLE (ball rolling feel) ===
+                                mountGroup.rotation.z = Math.sin(bounceTime * 0.7) * 0.08;
+                                mountGroup.rotation.x = Math.sin(bounceTime * 0.9) * 0.05;
+                                
+                                // === TUFT WIGGLE ===
+                                if (tuftPivot) {
+                                    tuftPivot.rotation.z = Math.sin(time * tuftWiggleSpeed) * tuftWiggleAmount;
+                                    tuftPivot.rotation.x = Math.cos(time * tuftWiggleSpeed * 0.8) * tuftWiggleAmount * 0.7;
+                                }
+                                
+                                // === TURN LEAN ===
+                                const turningLeft = keyLeft || mobileLeft || (joystickInputRef.current.x < -0.3);
+                                const turningRight = keyRight || mobileRight || (joystickInputRef.current.x > 0.3);
+                                if (turningLeft) {
+                                    mountGroup.rotation.z -= 0.12;
+                                } else if (turningRight) {
+                                    mountGroup.rotation.z += 0.12;
+                                }
+                                
+                            } else {
+                                // === IDLE - Gentle breathing/bobbing ===
+                                const idleBob = Math.sin(time * 2) * 0.03;
+                                mountGroup.position.y = (mountData.positionY || 0.6) + idleBob;
+                                
+                                // Store bounce offset for player to follow
+                                playerRef.current.userData.mountBounceY = idleBob;
+                                
+                                // Gentle scale pulse (breathing)
+                                const breathe = 1 + Math.sin(time * 1.5) * 0.02;
+                                const baseScale = mountData.scale || 0.16;
+                                mountGroup.scale.set(baseScale * breathe, baseScale * breathe, baseScale * breathe);
+                                
+                                // Smooth return to neutral
+                                mountGroup.rotation.z *= 0.9;
+                                mountGroup.rotation.x *= 0.9;
+                                
+                                // Tuft gentle sway
+                                if (tuftPivot) {
+                                    tuftPivot.rotation.z = Math.sin(time * 3) * 0.1;
+                                    tuftPivot.rotation.x *= 0.9;
+                                }
+                            }
+                        }
+                        // Rocket Jetpack thrust animation 🚀
+                        else if (mountData.animationType === 'jetpack_thrust') {
+                            const fireTrail = mountGroup.getObjectByName('fire_trail');
+                            const leftLight = mountGroup.getObjectByName('exhaust_light_left');
+                            const rightLight = mountGroup.getObjectByName('exhaust_light_right');
+                            
+                            const hoverSpeed = mountData.hoverSpeed || 5;
+                            const hoverIntensity = mountData.hoverIntensity || 0.06;
+                            const thrustWobble = mountData.thrustWobble || 0.04;
+                            const VOXEL_SIZE = 0.125;
+                            
+                            // === FIRE PARTICLE ANIMATION ===
+                            if (fireTrail && fireTrail.geometry) {
+                                const positions = fireTrail.geometry.attributes.position.array;
+                                const colors = fireTrail.geometry.attributes.color.array;
+                                const particleCount = fireTrail.userData.particleCount || 30;
+                                
+                                for (let i = 0; i < particleCount; i++) {
+                                    const idx = i * 3;
+                                    const side = i % 2 === 0 ? -1 : 1;
+                                    
+                                    // Move particles downward (thrust)
+                                    positions[idx + 1] -= delta * (moving ? 3 : 1.5);
+                                    
+                                    // Add some spread
+                                    positions[idx] += (Math.random() - 0.5) * delta * 0.5;
+                                    positions[idx + 2] += (Math.random() - 0.5) * delta * 0.3;
+                                    
+                                    // Reset particles that go too far
+                                    if (positions[idx + 1] < -7 * VOXEL_SIZE - (moving ? 1.2 : 0.4)) {
+                                        positions[idx] = side * 3 * VOXEL_SIZE + (Math.random() - 0.5) * 0.1;
+                                        positions[idx + 1] = -7 * VOXEL_SIZE;
+                                        positions[idx + 2] = (Math.random() - 0.5) * 0.1;
+                                        
+                                        // Randomize color on reset
+                                        const colorChoice = Math.random();
+                                        if (colorChoice < 0.4) {
+                                            colors[idx] = 1.0; colors[idx + 1] = 0.3; colors[idx + 2] = 0.0;
+                                        } else if (colorChoice < 0.7) {
+                                            colors[idx] = 1.0; colors[idx + 1] = 0.1; colors[idx + 2] = 0.0;
+                                        } else {
+                                            colors[idx] = 1.0; colors[idx + 1] = 0.8; colors[idx + 2] = 0.0;
+                                        }
+                                    }
+                                    
+                                    // Fade out as particles fall
+                                    const dist = Math.abs(positions[idx + 1] + 7 * VOXEL_SIZE);
+                                    colors[idx + 1] *= 0.98; // Fade orange to red
+                                }
+                                
+                                fireTrail.geometry.attributes.position.needsUpdate = true;
+                                fireTrail.geometry.attributes.color.needsUpdate = true;
+                                
+                                // Particle opacity based on movement
+                                fireTrail.material.opacity = moving ? 0.95 : 0.5;
+                            }
+                            
+                            // === EXHAUST LIGHTS ===
+                            const lightIntensity = moving ? 1.0 + Math.sin(time * 20) * 0.3 : 0.4 + Math.sin(time * 8) * 0.1;
+                            if (leftLight) leftLight.intensity = lightIntensity;
+                            if (rightLight) rightLight.intensity = lightIntensity;
+                            
+                            if (moving) {
+                                // === THRUST HOVER ===
+                                const hoverTime = time * hoverSpeed;
+                                const hover = Math.sin(hoverTime) * hoverIntensity + 0.1; // Always slightly elevated
+                                mountGroup.position.y = (mountData.positionY || 0.6) + hover;
+                                
+                                // Store for player sync
+                                playerRef.current.userData.mountBounceY = hover;
+                                
+                                // === THRUST WOBBLE (engine vibration) ===
+                                mountGroup.rotation.z = Math.sin(time * 25) * thrustWobble;
+                                mountGroup.rotation.x = Math.sin(time * 20) * thrustWobble * 0.5;
+                                
+                                // === TILT INTO MOVEMENT ===
+                                const turningLeft = keyLeft || mobileLeft || (joystickInputRef.current.x < -0.3);
+                                const turningRight = keyRight || mobileRight || (joystickInputRef.current.x > 0.3);
+                                const movingForward = keyForward || mobileForward || (joystickInputRef.current.y < -0.1);
+                                const movingBack = keyBack || mobileBack || (joystickInputRef.current.y > 0.1);
+                                
+                                // Bank into turns (mount)
+                                if (turningLeft) mountGroup.rotation.z -= 0.2;
+                                if (turningRight) mountGroup.rotation.z += 0.2;
+                                
+                                // Pitch forward when moving (mount)
+                                if (movingForward) mountGroup.rotation.x += 0.15;
+                                
+                                // === PLAYER BODY LEAN ===
+                                // Store lean values for AnimationSystem to apply to ENTIRE player body
+                                let playerLeanZ = 0;
+                                let playerLeanX = 0;
+                                if (turningLeft) playerLeanZ = 0.5;   // Lean into left turn (more dramatic)
+                                if (turningRight) playerLeanZ = -0.5;  // Lean into right turn
+                                if (movingForward) playerLeanX = 0.4;  // Lean forward significantly
+                                if (movingBack) playerLeanX = -0.3;    // Lean back
+                                
+                                // Combine forward lean with turn lean for diagonal movement
+                                if ((turningLeft || turningRight) && movingForward) {
+                                    playerLeanX = 0.3; // Slightly less forward lean when also turning
+                                }
+                                
+                                playerRef.current.userData.jetpackLeanZ = playerLeanZ;
+                                playerRef.current.userData.jetpackLeanX = playerLeanX;
+                                
+                            } else {
+                                // === IDLE HOVER ===
+                                const idleHover = Math.sin(time * 2) * 0.03;
+                                mountGroup.position.y = (mountData.positionY || 0.6) + idleHover;
+                                
+                                // Store for player sync
+                                playerRef.current.userData.mountBounceY = idleHover;
+                                
+                                // Clear lean values
+                                playerRef.current.userData.jetpackLeanZ = 0;
+                                playerRef.current.userData.jetpackLeanX = 0;
+                                
+                                // Gentle idle sway
+                                mountGroup.rotation.z = Math.sin(time * 1.5) * 0.02;
+                                mountGroup.rotation.x *= 0.95;
+                            }
+                        }
+                        // Dragon flying animation 🐉 (All dragon types!)
+                        else if (mountData.animationType === 'dragon_fly') {
+                            const leftWing = mountGroup.getObjectByName('left_wing_pivot');
+                            const rightWing = mountGroup.getObjectByName('right_wing_pivot');
+                            const dragonBreath = mountGroup.getObjectByName('dragon_breath');
+                            const breathGlow = mountGroup.getObjectByName('breath_glow');
+                            
+                            const flapSpeed = mountData.flapSpeed || 3;
+                            const flapIntensity = mountData.flapIntensity || 0.7;
+                            const bodyBobSpeed = mountData.bodyBobSpeed || 2;
+                            const bodyBobIntensity = mountData.bodyBobIntensity || 0.12;
+                            const tailSwaySpeed = mountData.tailSwaySpeed || 1.5;
+                            const tailSwayIntensity = mountData.tailSwayIntensity || 0.2;
+                            const breathInterval = mountData.breathInterval || 4;
+                            const breathDuration = mountData.breathDuration || 1.5;
+                            const VOXEL_SIZE = 0.125;
+                            
+                            // Initialize dragon state if needed
+                            if (!mountGroup.userData.dragonState) {
+                                mountGroup.userData.dragonState = {
+                                    lastBreathTime: time - breathInterval + 2, // Breath soon after mounting
+                                    isBreathing: false,
+                                    breathStartTime: 0
+                                };
+                            }
+                            const dragonState = mountGroup.userData.dragonState;
+                            
+                            // === RANDOM ICE BREATH BURSTS ===
+                            // Check if it's time for a breath attack
+                            if (!dragonState.isBreathing && time - dragonState.lastBreathTime > breathInterval) {
+                                // Random chance to breathe (or always when moving fast)
+                                if (Math.random() < 0.3 || moving) {
+                                    dragonState.isBreathing = true;
+                                    dragonState.breathStartTime = time;
+                                    dragonState.lastBreathTime = time;
+                                }
+                            }
+                            
+                            // Check if breath should end
+                            if (dragonState.isBreathing && time - dragonState.breathStartTime > breathDuration) {
+                                dragonState.isBreathing = false;
+                            }
+                            
+                            const breathIntensity = dragonState.isBreathing ? 1.0 : 0.15;
+                            
+                            // === MAJESTIC WING FLAPPING ===
+                            const baseFlap = moving ? flapSpeed * 1.8 : flapSpeed;
+                            const flapAngle = Math.sin(time * baseFlap) * flapIntensity * (moving ? 1.3 : 0.8);
+                            // Add secondary motion for more realistic wings
+                            const secondaryFlap = Math.sin(time * baseFlap * 2) * 0.15;
+                            
+                            if (leftWing) {
+                                leftWing.rotation.z = flapAngle + secondaryFlap;
+                                leftWing.rotation.x = Math.sin(time * baseFlap + 0.5) * 0.2;
+                                // Wing flex (slight bend at tips feel)
+                                leftWing.rotation.y = Math.sin(time * baseFlap) * 0.1;
+                            }
+                            if (rightWing) {
+                                rightWing.rotation.z = -flapAngle - secondaryFlap;
+                                rightWing.rotation.x = Math.sin(time * baseFlap + 0.5) * 0.2;
+                                rightWing.rotation.y = -Math.sin(time * baseFlap) * 0.1;
+                            }
+                            
+                            // === DRAGON BREATH PARTICLES (ice, fire, or void) ===
+                            if (dragonBreath && dragonBreath.geometry) {
+                                const positions = dragonBreath.geometry.attributes.position.array;
+                                const colors = dragonBreath.geometry.attributes.color.array;
+                                const particleCount = dragonBreath.userData.particleCount || 50;
+                                const breathType = dragonBreath.userData.breathType || 'ice';
+                                const mouthZ = dragonBreath.userData.mouthZ || -16;
+                                const mouthY = dragonBreath.userData.mouthY || 1.5;
+                                
+                                for (let i = 0; i < particleCount; i++) {
+                                    const idx = i * 3;
+                                    
+                                    // Move particles forward - EPIC breath when active
+                                    const breathSpeed = dragonState.isBreathing ? 6.0 : 1.0;
+                                    positions[idx + 2] -= delta * breathSpeed;
+                                    
+                                    // Spread out as they travel
+                                    const spread = dragonState.isBreathing ? 2.5 : 0.4;
+                                    positions[idx] += (Math.random() - 0.5) * delta * spread;
+                                    positions[idx + 1] += (Math.random() - 0.5) * delta * spread * 0.6;
+                                    
+                                    // Fire rises, ice/void drifts down
+                                    if (dragonState.isBreathing) {
+                                        if (breathType === 'fire') positions[idx + 1] += delta * 0.2;
+                                        else positions[idx + 1] -= delta * 0.3;
+                                    }
+                                    
+                                    // Reset distance based on breath state
+                                    const maxDist = dragonState.isBreathing ? 5.0 : 1.0;
+                                    if (positions[idx + 2] < mouthZ * VOXEL_SIZE - maxDist) {
+                                        positions[idx] = (Math.random() - 0.5) * 0.2;
+                                        positions[idx + 1] = mouthY * VOXEL_SIZE + (Math.random() - 0.5) * 0.15;
+                                        positions[idx + 2] = mouthZ * VOXEL_SIZE;
+                                        
+                                        // Colors based on breath type
+                                        const colorChoice = Math.random();
+                                        if (breathType === 'ice') {
+                                            if (colorChoice < 0.3) { colors[idx] = 1.0; colors[idx + 1] = 1.0; colors[idx + 2] = 1.0; }
+                                            else if (colorChoice < 0.6) { colors[idx] = 0.7; colors[idx + 1] = 0.9; colors[idx + 2] = 1.0; }
+                                            else { colors[idx] = 0.0; colors[idx + 1] = 0.95; colors[idx + 2] = 1.0; }
+                                        } else if (breathType === 'fire') {
+                                            if (colorChoice < 0.3) { colors[idx] = 1.0; colors[idx + 1] = 1.0; colors[idx + 2] = 0.0; }
+                                            else if (colorChoice < 0.6) { colors[idx] = 1.0; colors[idx + 1] = 0.5; colors[idx + 2] = 0.0; }
+                                            else { colors[idx] = 1.0; colors[idx + 1] = 0.2; colors[idx + 2] = 0.0; }
+                                        } else { // void
+                                            if (colorChoice < 0.3) { colors[idx] = 0.9; colors[idx + 1] = 0.3; colors[idx + 2] = 1.0; }
+                                            else if (colorChoice < 0.6) { colors[idx] = 0.6; colors[idx + 1] = 0.2; colors[idx + 2] = 0.8; }
+                                            else { colors[idx] = 0.2; colors[idx + 1] = 0.0; colors[idx + 2] = 0.3; }
+                                        }
+                                    }
+                                }
+                                
+                                dragonBreath.geometry.attributes.position.needsUpdate = true;
+                                dragonBreath.geometry.attributes.color.needsUpdate = true;
+                                dragonBreath.material.opacity = dragonState.isBreathing ? 0.95 : 0.3;
+                                dragonBreath.material.size = dragonState.isBreathing ? 0.2 : 0.08;
+                            }
+                            
+                            // Breath glow pulses during breath
+                            if (breathGlow) {
+                                const baseGlow = dragonState.isBreathing ? 2.5 : 0.5;
+                                const pulse = dragonState.isBreathing ? Math.sin(time * 12) * 0.8 : Math.sin(time * 2) * 0.15;
+                                breathGlow.intensity = baseGlow + pulse;
+                            }
+                            
+                            // Eye glows
+                            const leftEyeGlow = mountGroup.getObjectByName('left_eye_glow');
+                            const rightEyeGlow = mountGroup.getObjectByName('right_eye_glow');
+                            if (leftEyeGlow && rightEyeGlow) {
+                                const eyeBase = dragonState.isBreathing ? 0.8 : 0.4;
+                                const eyePulse = Math.sin(time * 3) * 0.2;
+                                leftEyeGlow.intensity = eyeBase + eyePulse;
+                                rightEyeGlow.intensity = eyeBase + eyePulse;
+                            }
+                            
+                            if (moving) {
+                                // === POWERFUL FLYING MOTION ===
+                                const bobTime = time * bodyBobSpeed;
+                                const bob = Math.sin(bobTime) * bodyBobIntensity;
+                                // Add slight undulation
+                                const undulate = Math.sin(time * 1.2) * 0.03;
+                                mountGroup.position.y = (mountData.positionY || 1.8) + bob + undulate + 0.15;
+                                
+                                playerRef.current.userData.mountBounceY = bob + undulate;
+                                
+                                // === EPIC BANKING INTO TURNS ===
+                                const turningLeft = keyLeft || mobileLeft || (joystickInputRef.current.x < -0.3);
+                                const turningRight = keyRight || mobileRight || (joystickInputRef.current.x > 0.3);
+                                const movingForward = keyForward || mobileForward || (joystickInputRef.current.y < -0.1);
+                                const movingBack = keyBack || mobileBack || (joystickInputRef.current.y > 0.1);
+                                
+                                // Dramatic banking (like a real flying creature)
+                                let targetRoll = 0;
+                                if (turningLeft) targetRoll = 0.4;
+                                if (turningRight) targetRoll = -0.4;
+                                mountGroup.rotation.z += (targetRoll - mountGroup.rotation.z) * 0.08;
+                                
+                                // Pitch based on movement
+                                let targetPitch = 0;
+                                if (movingForward) targetPitch = 0.2;
+                                if (movingBack) targetPitch = -0.15;
+                                mountGroup.rotation.x += (targetPitch - mountGroup.rotation.x) * 0.08;
+                                
+                                // Subtle yaw wiggle (serpentine flight)
+                                const yawWiggle = Math.sin(time * 1.5) * 0.03;
+                                mountGroup.rotation.y = (mountData.mountRotation || 0) + yawWiggle;
+                                
+                            } else {
+                                // === MAJESTIC IDLE ANIMATIONS ===
+                                // Gentle hovering bob
+                                const idleBob = Math.sin(time * 1.2) * 0.06;
+                                // Breathing motion (expand/contract)
+                                const breathe = Math.sin(time * 0.8) * 0.02;
+                                mountGroup.position.y = (mountData.positionY || 1.8) + idleBob + breathe;
+                                
+                                playerRef.current.userData.mountBounceY = idleBob;
+                                
+                                // Idle swaying (looking around)
+                                const idleSway = Math.sin(time * 0.5) * 0.05;
+                                mountGroup.rotation.z = idleSway;
+                                
+                                // Occasional head turn (simulated via slight yaw)
+                                const lookAround = Math.sin(time * 0.3) * 0.08;
+                                mountGroup.rotation.y = (mountData.mountRotation || 0) + lookAround;
+                                
+                                // Gentle pitch (nodding)
+                                mountGroup.rotation.x = Math.sin(time * 0.7) * 0.03;
+                            }
+                        }
+                        // Giant Rubber Duck bounce animation 🦆
+                        else if (mountData.animationType === 'duck_bounce') {
+                            const bounceIntensity = mountData.bounceIntensity || 0.15;
+                            const waddleSpeed = mountData.waddleSpeed || 8;
+                            const waddleIntensity = mountData.waddleIntensity || 0.12;
+                            
+                            if (moving) {
+                                // === BOUNCY MOVEMENT ===
+                                // Duck bounces up and down like a rubber toy
+                                const bounceTime = time * waddleSpeed;
+                                const bounce = Math.abs(Math.sin(bounceTime)) * bounceIntensity;
+                                mountGroup.position.y = (mountData.positionY || 0.5) + bounce;
+                                
+                                // Store bounce offset for player to follow
+                                playerRef.current.userData.mountBounceY = bounce;
+                                
+                                // === WADDLE (side to side tilt) ===
+                                // Classic duck waddle motion
+                                mountGroup.rotation.z = Math.sin(bounceTime) * waddleIntensity;
+                                
+                                // === FORWARD/BACK BOB ===
+                                // Head bobs forward when "stepping"
+                                mountGroup.rotation.x = Math.sin(bounceTime * 2) * 0.05;
+                                
+                                // === TURN LEAN ===
+                                const turningLeft = keyLeft || mobileLeft || (joystickInputRef.current.x < -0.3);
+                                const turningRight = keyRight || mobileRight || (joystickInputRef.current.x > 0.3);
+                                if (turningLeft) {
+                                    mountGroup.rotation.z -= 0.1;
+                                } else if (turningRight) {
+                                    mountGroup.rotation.z += 0.1;
+                                }
+                                
+                                // === SQUISH EFFECT ===
+                                // Duck squishes slightly on landing
+                                const squish = 1 - Math.abs(Math.sin(bounceTime)) * 0.08;
+                                mountGroup.scale.y = (mountData.scale || 0.2) * squish;
+                                
+                            } else {
+                                // === IDLE - Gentle bob ===
+                                // Duck floats/bobs gently when stationary
+                                const idleBob = Math.sin(time * 2) * 0.02;
+                                mountGroup.position.y = (mountData.positionY || 0.5) + idleBob;
+                                
+                                // Store bounce offset for player to follow
+                                playerRef.current.userData.mountBounceY = idleBob;
+                                
+                                // Slow return to neutral rotation
+                                mountGroup.rotation.z *= 0.92;
+                                mountGroup.rotation.x *= 0.92;
+                                
+                                // Reset scale
+                                const targetScale = mountData.scale || 0.2;
+                                mountGroup.scale.y += (targetScale - mountGroup.scale.y) * 0.1;
+                            }
+                        }
+                        // Shopping Cart wobble animation 🛒
+                        else if (mountData.animationType === 'cart_wobble') {
+                            const wheelFL = mountGroup.getObjectByName('wheel_fl_pivot');
+                            const wheelFR = mountGroup.getObjectByName('wheel_fr_pivot');
+                            const wheelBL = mountGroup.getObjectByName('wheel_bl_pivot');
+                            const wheelBR = mountGroup.getObjectByName('wheel_br_pivot');
+                            
+                            const wobbleIntensity = mountData.wobbleIntensity || 0.08;
+                            const wheelSpinSpeed = mountData.wheelSpinSpeed || 25;
+                            
+                            if (moving) {
+                                // === WHEEL SPINNING ===
+                                // All wheels spin based on movement speed
+                                const spinAmount = delta * wheelSpinSpeed;
+                                if (wheelFL) wheelFL.rotation.x += spinAmount;
+                                if (wheelFR) wheelFR.rotation.x += spinAmount;
+                                if (wheelBL) wheelBL.rotation.x += spinAmount;
+                                if (wheelBR) wheelBR.rotation.x += spinAmount;
+                                
+                                // === CART WOBBLE ===
+                                // Realistic shopping cart shake/rattle
+                                const wobbleTime = time * 12;
+                                
+                                // Primary wobble (side to side)
+                                mountGroup.rotation.z = Math.sin(wobbleTime) * wobbleIntensity;
+                                
+                                // Secondary wobble (front to back, less intense)
+                                mountGroup.rotation.x = Math.sin(wobbleTime * 1.3) * wobbleIntensity * 0.5;
+                                
+                                // Vertical bounce (bumpy wheels)
+                                const bounce = Math.abs(Math.sin(wobbleTime * 2)) * 0.03;
+                                mountGroup.position.y = (mountData.positionY || 0.45) + bounce;
+                                
+                                // Store bounce offset for player to follow
+                                playerRef.current.userData.mountBounceY = bounce;
+                                
+                                // === TURNING LEAN ===
+                                const turningLeft = keyLeft || mobileLeft || (joystickInputRef.current.x < -0.3);
+                                const turningRight = keyRight || mobileRight || (joystickInputRef.current.x > 0.3);
+                                const turnLean = turningLeft ? -0.1 : turningRight ? 0.1 : 0;
+                                mountGroup.rotation.z += turnLean;
+                                
+                                // Back wheels swivel when turning (shopping cart physics!)
+                                if (wheelBL && wheelBR) {
+                                    const swivelAngle = turningLeft ? -0.3 : turningRight ? 0.3 : 0;
+                                    wheelBL.rotation.y = swivelAngle;
+                                    wheelBR.rotation.y = swivelAngle;
+                                }
+                                
+                            } else {
+                                // === IDLE - Settle down ===
+                                // Smooth return to rest
+                                mountGroup.rotation.z *= 0.9;
+                                mountGroup.rotation.x *= 0.9;
+                                mountGroup.position.y = mountData.positionY || 0.45;
+                                
+                                // Store bounce offset for player
+                                playerRef.current.userData.mountBounceY = 0;
+                                
+                                // Wheels stop gradually
+                                if (wheelFL) wheelFL.rotation.x *= 0.95;
+                                if (wheelFR) wheelFR.rotation.x *= 0.95;
+                                if (wheelBL) {
+                                    wheelBL.rotation.x *= 0.95;
+                                    wheelBL.rotation.y *= 0.9;
+                                }
+                                if (wheelBR) {
+                                    wheelBR.rotation.x *= 0.95;
+                                    wheelBR.rotation.y *= 0.9;
+                                }
+                            }
+                        }
                         // Boat rowing animation
                         else if (mountData.animationType === 'rowing' || mountData.leftOar) {
                             const leftOarPivot = mountGroup.getObjectByName('left_oar_pivot');
@@ -4056,10 +4769,11 @@ const VoxelWorld = ({
                     
                     // Update animated cosmetics flag
                     const appearance = playerData.appearance || {};
-                    // Animated skin colors (cosmic, galaxy, rainbow, prismatic, nebula)
-                    const animatedSkins = ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula'];
-                    meshData.hasAnimatedCosmetics = appearance.hat === 'propeller' || 
-                                                     appearance.hat === 'flamingCrown' ||
+                    // Animated skin colors (all animated skins from PenguinBuilder)
+                    const animatedSkins = ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula', 'lava', 'ocean', 'sunset', 'frost', 'matrix', 'glitch', 'chromatic', 'holographic'];
+                    // Animated feathers
+                    const animatedHats = ['propeller', 'flamingCrown', 'auroraFeathers', 'crystalFeathers', 'voidFeathers'];
+                    meshData.hasAnimatedCosmetics = animatedHats.includes(appearance.hat) ||
                                                      appearance.mouth === 'cigarette' || 
                                                      appearance.mouth === 'pipe' ||
                                                      appearance.mouth === 'cigar' ||
@@ -4448,6 +5162,368 @@ const VoxelWorld = ({
                                 if (backTruck) { backTruck.rotation.y *= 0.85; }
                             }
                         }
+                        // UFO Disc hover animation for other players 🛸
+                        else if (mountData.animationType === 'ufo_hover') {
+                            const spinRing = mountGroup.getObjectByName('spin_ring_pivot');
+                            const abductionRay = mountGroup.getObjectByName('abduction_ray');
+                            const abductionRayInner = mountGroup.getObjectByName('abduction_ray_inner');
+                            const abductionLight = mountGroup.getObjectByName('abduction_light');
+                            
+                            const hoverSpeed = mountData.hoverSpeed || 3;
+                            const hoverIntensity = mountData.hoverIntensity || 0.12;
+                            const ringSpinSpeed = mountData.ringSpinSpeed || 2;
+                            const tiltAmount = mountData.tiltAmount || 0.35;
+                            
+                            // Ring always spins
+                            if (spinRing) {
+                                const spinMultiplier = isMoving ? 1.5 : 1;
+                                spinRing.rotation.y += delta * ringSpinSpeed * spinMultiplier;
+                            }
+                            
+                            // Abduction ray animation
+                            if (abductionRay && abductionRay.material) {
+                                abductionRay.material.opacity = 0.2 + Math.sin(time * 4) * 0.1;
+                                abductionRay.rotation.y += delta * 0.5;
+                            }
+                            if (abductionRayInner && abductionRayInner.material) {
+                                abductionRayInner.material.opacity = 0.3 + Math.sin(time * 4 + 0.5) * 0.15;
+                                abductionRayInner.rotation.y -= delta * 0.3;
+                            }
+                            if (abductionLight) {
+                                abductionLight.intensity = 0.4 + Math.sin(time * 4) * 0.2;
+                            }
+                            
+                            if (isMoving) {
+                                const hoverTime = time * hoverSpeed;
+                                const hover = Math.sin(hoverTime) * hoverIntensity;
+                                mountGroup.position.y = (mountData.positionY || 1.4) + hover + 0.05;
+                                
+                                // Simulate banking based on time
+                                const autoBank = Math.sin(time * 2 + id.charCodeAt(0)) * tiltAmount * 0.6;
+                                mountGroup.rotation.z = autoBank;
+                                mountGroup.rotation.x = Math.sin(time * 1.5) * tiltAmount * 0.3;
+                            } else {
+                                const idleHover = Math.sin(time * 2) * 0.06;
+                                mountGroup.position.y = (mountData.positionY || 1.4) + idleHover;
+                                mountGroup.rotation.z *= 0.92;
+                                mountGroup.rotation.x *= 0.92;
+                            }
+                        }
+                        // Giant Puffle bounce animation for other players 🐾
+                        else if (mountData.animationType === 'puffle_bounce') {
+                            const tuftPivot = mountGroup.getObjectByName('tuft_pivot');
+                            const bounceIntensity = mountData.bounceIntensity || 0.25;
+                            const bounceSpeed = mountData.bounceSpeed || 10;
+                            const squishFactor = mountData.squishFactor || 0.12;
+                            
+                            if (isMoving) {
+                                const bounceTime = time * bounceSpeed;
+                                const bounce = Math.abs(Math.sin(bounceTime)) * bounceIntensity;
+                                mountGroup.position.y = (mountData.positionY || 0.6) + bounce;
+                                
+                                const squishPhase = Math.sin(bounceTime);
+                                const scaleY = (mountData.scale || 0.16) * (1 - Math.abs(squishPhase) * squishFactor);
+                                const scaleXZ = (mountData.scale || 0.16) * (1 + Math.abs(squishPhase) * squishFactor * 0.5);
+                                mountGroup.scale.set(scaleXZ, scaleY, scaleXZ);
+                                
+                                mountGroup.rotation.z = Math.sin(bounceTime * 0.7) * 0.08;
+                                mountGroup.rotation.x = Math.sin(bounceTime * 0.9) * 0.05;
+                                
+                                if (tuftPivot) {
+                                    tuftPivot.rotation.z = Math.sin(time * 15) * 0.3;
+                                    tuftPivot.rotation.x = Math.cos(time * 12) * 0.2;
+                                }
+                            } else {
+                                const idleBob = Math.sin(time * 2) * 0.03;
+                                mountGroup.position.y = (mountData.positionY || 0.6) + idleBob;
+                                const breathe = 1 + Math.sin(time * 1.5) * 0.02;
+                                const baseScale = mountData.scale || 0.16;
+                                mountGroup.scale.set(baseScale * breathe, baseScale * breathe, baseScale * breathe);
+                                mountGroup.rotation.z *= 0.9;
+                                mountGroup.rotation.x *= 0.9;
+                                if (tuftPivot) {
+                                    tuftPivot.rotation.z = Math.sin(time * 3) * 0.1;
+                                }
+                            }
+                        }
+                        // Rocket Jetpack thrust animation for other players 🚀
+                        else if (mountData.animationType === 'jetpack_thrust') {
+                            const fireTrail = mountGroup.getObjectByName('fire_trail');
+                            const leftLight = mountGroup.getObjectByName('exhaust_light_left');
+                            const rightLight = mountGroup.getObjectByName('exhaust_light_right');
+                            
+                            const hoverSpeed = mountData.hoverSpeed || 5;
+                            const hoverIntensity = mountData.hoverIntensity || 0.06;
+                            const thrustWobble = mountData.thrustWobble || 0.04;
+                            const VOXEL_SIZE = 0.125;
+                            
+                            // Fire particle animation
+                            if (fireTrail && fireTrail.geometry) {
+                                const positions = fireTrail.geometry.attributes.position.array;
+                                const colors = fireTrail.geometry.attributes.color.array;
+                                const particleCount = fireTrail.userData.particleCount || 30;
+                                
+                                for (let i = 0; i < particleCount; i++) {
+                                    const idx = i * 3;
+                                    const side = i % 2 === 0 ? -1 : 1;
+                                    
+                                    positions[idx + 1] -= delta * (isMoving ? 3 : 1.5);
+                                    positions[idx] += (Math.random() - 0.5) * delta * 0.5;
+                                    positions[idx + 2] += (Math.random() - 0.5) * delta * 0.3;
+                                    
+                                    if (positions[idx + 1] < -7 * VOXEL_SIZE - (isMoving ? 1.2 : 0.4)) {
+                                        positions[idx] = side * 3 * VOXEL_SIZE + (Math.random() - 0.5) * 0.1;
+                                        positions[idx + 1] = -7 * VOXEL_SIZE;
+                                        positions[idx + 2] = (Math.random() - 0.5) * 0.1;
+                                        
+                                        const colorChoice = Math.random();
+                                        if (colorChoice < 0.4) {
+                                            colors[idx] = 1.0; colors[idx + 1] = 0.3; colors[idx + 2] = 0.0;
+                                        } else if (colorChoice < 0.7) {
+                                            colors[idx] = 1.0; colors[idx + 1] = 0.1; colors[idx + 2] = 0.0;
+                                        } else {
+                                            colors[idx] = 1.0; colors[idx + 1] = 0.8; colors[idx + 2] = 0.0;
+                                        }
+                                    }
+                                    colors[idx + 1] *= 0.98;
+                                }
+                                
+                                fireTrail.geometry.attributes.position.needsUpdate = true;
+                                fireTrail.geometry.attributes.color.needsUpdate = true;
+                                fireTrail.material.opacity = isMoving ? 0.95 : 0.5;
+                            }
+                            
+                            const lightIntensity = isMoving ? 1.0 + Math.sin(time * 20) * 0.3 : 0.4 + Math.sin(time * 8) * 0.1;
+                            if (leftLight) leftLight.intensity = lightIntensity;
+                            if (rightLight) rightLight.intensity = lightIntensity;
+                            
+                            if (isMoving) {
+                                const hoverTime = time * hoverSpeed;
+                                const hover = Math.sin(hoverTime) * hoverIntensity + 0.1;
+                                mountGroup.position.y = (mountData.positionY || 0.6) + hover;
+                                
+                                mountGroup.rotation.z = Math.sin(time * 25) * thrustWobble;
+                                mountGroup.rotation.x = Math.sin(time * 20) * thrustWobble * 0.5;
+                                
+                                // Simulate tilt based on time
+                                const autoTilt = Math.sin(time * 2 + id.charCodeAt(0)) * 0.15;
+                                mountGroup.rotation.z += autoTilt;
+                                
+                                // Simulate FULL player body lean for multiplayer
+                                // Find the meshInner which contains all body parts
+                                wrapper.traverse((child) => {
+                                    if (child.name === 'meshInner') {
+                                        // Full body lean into movement
+                                        child.rotation.z = autoTilt * 2.0;  // Side-to-side lean
+                                        child.rotation.x = 0.3 + Math.sin(time * 1.5) * 0.1; // Forward lean while moving
+                                    }
+                                });
+                            } else {
+                                const idleHover = Math.sin(time * 2) * 0.03;
+                                mountGroup.position.y = (mountData.positionY || 0.6) + idleHover;
+                                mountGroup.rotation.z = Math.sin(time * 1.5) * 0.02;
+                                mountGroup.rotation.x *= 0.95;
+                            }
+                        }
+                        // Dragon flying animation for other players 🐉 (All types!)
+                        else if (mountData.animationType === 'dragon_fly') {
+                            const leftWing = mountGroup.getObjectByName('left_wing_pivot');
+                            const rightWing = mountGroup.getObjectByName('right_wing_pivot');
+                            const dragonBreath = mountGroup.getObjectByName('dragon_breath');
+                            const breathGlow = mountGroup.getObjectByName('breath_glow');
+                            
+                            const flapSpeed = mountData.flapSpeed || 3;
+                            const flapIntensity = mountData.flapIntensity || 0.7;
+                            const bodyBobSpeed = mountData.bodyBobSpeed || 2;
+                            const bodyBobIntensity = mountData.bodyBobIntensity || 0.12;
+                            const breathInterval = mountData.breathInterval || 4;
+                            const VOXEL_SIZE = 0.125;
+                            
+                            // Dragon state for breath timing
+                            if (!mountGroup.userData.dragonState) {
+                                mountGroup.userData.dragonState = {
+                                    lastBreathTime: time - breathInterval + 2,
+                                    isBreathing: false,
+                                    breathStartTime: 0
+                                };
+                            }
+                            const dragonState = mountGroup.userData.dragonState;
+                            
+                            // Random breath bursts
+                            if (!dragonState.isBreathing && time - dragonState.lastBreathTime > breathInterval) {
+                                if (Math.random() < 0.3 || isMoving) {
+                                    dragonState.isBreathing = true;
+                                    dragonState.breathStartTime = time;
+                                    dragonState.lastBreathTime = time;
+                                }
+                            }
+                            if (dragonState.isBreathing && time - dragonState.breathStartTime > 1.5) {
+                                dragonState.isBreathing = false;
+                            }
+                            
+                            // Majestic wing flapping
+                            const baseFlap = isMoving ? flapSpeed * 1.8 : flapSpeed;
+                            const flapAngle = Math.sin(time * baseFlap) * flapIntensity * (isMoving ? 1.3 : 0.8);
+                            const secondaryFlap = Math.sin(time * baseFlap * 2) * 0.15;
+                            
+                            if (leftWing) {
+                                leftWing.rotation.z = flapAngle + secondaryFlap;
+                                leftWing.rotation.x = Math.sin(time * baseFlap + 0.5) * 0.2;
+                                leftWing.rotation.y = Math.sin(time * baseFlap) * 0.1;
+                            }
+                            if (rightWing) {
+                                rightWing.rotation.z = -flapAngle - secondaryFlap;
+                                rightWing.rotation.x = Math.sin(time * baseFlap + 0.5) * 0.2;
+                                rightWing.rotation.y = -Math.sin(time * baseFlap) * 0.1;
+                            }
+                            
+                            // Dragon breath particles (all types)
+                            if (dragonBreath && dragonBreath.geometry) {
+                                const positions = dragonBreath.geometry.attributes.position.array;
+                                const colors = dragonBreath.geometry.attributes.color.array;
+                                const particleCount = dragonBreath.userData.particleCount || 50;
+                                const breathType = dragonBreath.userData.breathType || 'ice';
+                                const mouthZ = dragonBreath.userData.mouthZ || -16;
+                                const mouthY = dragonBreath.userData.mouthY || 1.5;
+                                
+                                const breathSpeed = dragonState.isBreathing ? 6.0 : 1.0;
+                                const spread = dragonState.isBreathing ? 2.5 : 0.4;
+                                const maxDist = dragonState.isBreathing ? 5.0 : 1.0;
+                                
+                                for (let i = 0; i < particleCount; i++) {
+                                    const idx = i * 3;
+                                    positions[idx + 2] -= delta * breathSpeed;
+                                    positions[idx] += (Math.random() - 0.5) * delta * spread;
+                                    positions[idx + 1] += (Math.random() - 0.5) * delta * spread * 0.6;
+                                    
+                                    if (dragonState.isBreathing) {
+                                        if (breathType === 'fire') positions[idx + 1] += delta * 0.2;
+                                        else positions[idx + 1] -= delta * 0.3;
+                                    }
+                                    
+                                    if (positions[idx + 2] < mouthZ * VOXEL_SIZE - maxDist) {
+                                        positions[idx] = (Math.random() - 0.5) * 0.2;
+                                        positions[idx + 1] = mouthY * VOXEL_SIZE + (Math.random() - 0.5) * 0.15;
+                                        positions[idx + 2] = mouthZ * VOXEL_SIZE;
+                                        
+                                        const colorChoice = Math.random();
+                                        if (breathType === 'ice') {
+                                            if (colorChoice < 0.3) { colors[idx] = 1.0; colors[idx + 1] = 1.0; colors[idx + 2] = 1.0; }
+                                            else if (colorChoice < 0.6) { colors[idx] = 0.7; colors[idx + 1] = 0.9; colors[idx + 2] = 1.0; }
+                                            else { colors[idx] = 0.0; colors[idx + 1] = 0.95; colors[idx + 2] = 1.0; }
+                                        } else if (breathType === 'fire') {
+                                            if (colorChoice < 0.3) { colors[idx] = 1.0; colors[idx + 1] = 1.0; colors[idx + 2] = 0.0; }
+                                            else if (colorChoice < 0.6) { colors[idx] = 1.0; colors[idx + 1] = 0.5; colors[idx + 2] = 0.0; }
+                                            else { colors[idx] = 1.0; colors[idx + 1] = 0.2; colors[idx + 2] = 0.0; }
+                                        } else {
+                                            if (colorChoice < 0.3) { colors[idx] = 0.9; colors[idx + 1] = 0.3; colors[idx + 2] = 1.0; }
+                                            else if (colorChoice < 0.6) { colors[idx] = 0.6; colors[idx + 1] = 0.2; colors[idx + 2] = 0.8; }
+                                            else { colors[idx] = 0.2; colors[idx + 1] = 0.0; colors[idx + 2] = 0.3; }
+                                        }
+                                    }
+                                }
+                                dragonBreath.geometry.attributes.position.needsUpdate = true;
+                                dragonBreath.geometry.attributes.color.needsUpdate = true;
+                                dragonBreath.material.opacity = dragonState.isBreathing ? 0.95 : 0.3;
+                                dragonBreath.material.size = dragonState.isBreathing ? 0.2 : 0.08;
+                            }
+                            
+                            if (breathGlow) {
+                                const baseGlow = dragonState.isBreathing ? 2.5 : 0.5;
+                                const pulse = dragonState.isBreathing ? Math.sin(time * 12) * 0.8 : Math.sin(time * 2) * 0.15;
+                                breathGlow.intensity = baseGlow + pulse;
+                            }
+                            
+                            // Eye glows
+                            const leftEyeGlow = mountGroup.getObjectByName('left_eye_glow');
+                            const rightEyeGlow = mountGroup.getObjectByName('right_eye_glow');
+                            if (leftEyeGlow && rightEyeGlow) {
+                                const eyeBase = dragonState.isBreathing ? 0.8 : 0.4;
+                                const eyePulse = Math.sin(time * 3) * 0.2;
+                                leftEyeGlow.intensity = eyeBase + eyePulse;
+                                rightEyeGlow.intensity = eyeBase + eyePulse;
+                            }
+                            
+                            if (isMoving) {
+                                const bobTime = time * bodyBobSpeed;
+                                const bob = Math.sin(bobTime) * bodyBobIntensity;
+                                const undulate = Math.sin(time * 1.2) * 0.03;
+                                mountGroup.position.y = (mountData.positionY || 1.8) + bob + undulate + 0.15;
+                                
+                                // Epic banking
+                                const autoBank = Math.sin(time * 2 + id.charCodeAt(0)) * 0.35;
+                                mountGroup.rotation.z = autoBank;
+                                mountGroup.rotation.x = 0.15;
+                                mountGroup.rotation.y = (mountData.mountRotation || 0) + Math.sin(time * 1.5) * 0.03;
+                            } else {
+                                const idleBob = Math.sin(time * 1.2) * 0.06;
+                                const breathe = Math.sin(time * 0.8) * 0.02;
+                                mountGroup.position.y = (mountData.positionY || 1.8) + idleBob + breathe;
+                                
+                                // Idle swaying
+                                mountGroup.rotation.z = Math.sin(time * 0.5) * 0.05;
+                                mountGroup.rotation.y = (mountData.mountRotation || 0) + Math.sin(time * 0.3) * 0.08;
+                                mountGroup.rotation.x = Math.sin(time * 0.7) * 0.03;
+                            }
+                        }
+                        // Giant Rubber Duck bounce animation for other players 🦆
+                        else if (mountData.animationType === 'duck_bounce') {
+                            const bounceIntensity = mountData.bounceIntensity || 0.15;
+                            const waddleSpeed = mountData.waddleSpeed || 8;
+                            const waddleIntensity = mountData.waddleIntensity || 0.12;
+                            
+                            if (isMoving) {
+                                const bounceTime = time * waddleSpeed;
+                                const bounce = Math.abs(Math.sin(bounceTime)) * bounceIntensity;
+                                mountGroup.position.y = (mountData.positionY || 0.5) + bounce;
+                                mountGroup.rotation.z = Math.sin(bounceTime) * waddleIntensity;
+                                mountGroup.rotation.x = Math.sin(bounceTime * 2) * 0.05;
+                                const squish = 1 - Math.abs(Math.sin(bounceTime)) * 0.08;
+                                mountGroup.scale.y = (mountData.scale || 0.2) * squish;
+                            } else {
+                                const idleBob = Math.sin(time * 2) * 0.02;
+                                mountGroup.position.y = (mountData.positionY || 0.5) + idleBob;
+                                mountGroup.rotation.z *= 0.92;
+                                mountGroup.rotation.x *= 0.92;
+                                const targetScale = mountData.scale || 0.2;
+                                mountGroup.scale.y += (targetScale - mountGroup.scale.y) * 0.1;
+                            }
+                        }
+                        // Shopping Cart wobble animation for other players 🛒
+                        else if (mountData.animationType === 'cart_wobble') {
+                            const wheelFL = mountGroup.getObjectByName('wheel_fl_pivot');
+                            const wheelFR = mountGroup.getObjectByName('wheel_fr_pivot');
+                            const wheelBL = mountGroup.getObjectByName('wheel_bl_pivot');
+                            const wheelBR = mountGroup.getObjectByName('wheel_br_pivot');
+                            
+                            const wobbleIntensity = mountData.wobbleIntensity || 0.08;
+                            const wheelSpinSpeed = mountData.wheelSpinSpeed || 25;
+                            
+                            if (isMoving) {
+                                // Wheels spin
+                                const spinAmount = delta * wheelSpinSpeed;
+                                if (wheelFL) wheelFL.rotation.x += spinAmount;
+                                if (wheelFR) wheelFR.rotation.x += spinAmount;
+                                if (wheelBL) wheelBL.rotation.x += spinAmount;
+                                if (wheelBR) wheelBR.rotation.x += spinAmount;
+                                
+                                // Cart wobble
+                                const wobbleTime = time * 12;
+                                mountGroup.rotation.z = Math.sin(wobbleTime) * wobbleIntensity;
+                                mountGroup.rotation.x = Math.sin(wobbleTime * 1.3) * wobbleIntensity * 0.5;
+                                const bounce = Math.abs(Math.sin(wobbleTime * 2)) * 0.03;
+                                mountGroup.position.y = (mountData.positionY || 0.45) + bounce;
+                            } else {
+                                // Settle
+                                mountGroup.rotation.z *= 0.9;
+                                mountGroup.rotation.x *= 0.9;
+                                mountGroup.position.y = mountData.positionY || 0.45;
+                                if (wheelFL) wheelFL.rotation.x *= 0.95;
+                                if (wheelFR) wheelFR.rotation.x *= 0.95;
+                                if (wheelBL) wheelBL.rotation.x *= 0.95;
+                                if (wheelBR) wheelBR.rotation.x *= 0.95;
+                            }
+                        }
                         // Boat rowing animation
                         else if (mountData.animationType === 'rowing' || mountData.leftOar) {
                             const leftOarPivot = mountGroup.getObjectByName('left_oar_pivot');
@@ -4768,18 +5844,29 @@ const VoxelWorld = ({
             // (not in the game loop, since activeMatches/spectatingMatch are props that change)
 
             // ==================== SMOOTH CAMERA UPDATE ====================
+            // Calculate mount Y offset for elevated mounts (UFO, jetpack, etc)
+            let mountYOffset = 0;
+            if (mountEnabledRef.current && playerRef.current?.userData?.mountData) {
+                const mountData = playerRef.current.userData.mountData;
+                // Use positionY as the base elevation, plus any bounce offset
+                const mountBaseY = mountData.positionY || 0;
+                const bounceY = playerRef.current.userData.mountBounceY || 0;
+                mountYOffset = mountBaseY + bounceY;
+            }
+            
             // Update camera controller with player state
             if (cameraControllerRef.current) {
                 cameraControllerRef.current.setPlayerState(
                     posRef.current,
                     rotRef.current,
-                    moving // True when player is actively moving
+                    moving, // True when player is actively moving
+                    mountYOffset // Pass mount elevation to camera
                 );
                 cameraControllerRef.current.update(delta);
             } else {
                 // Fallback: simple camera follow if controller not initialized
                 const offset = tempOffsetRef.current.copy(camera.position).sub(controls.target);
-                const playerY = posRef.current.y + 1.2;
+                const playerY = posRef.current.y + 1.2 + mountYOffset;
                 const targetPos = tempVec3Ref.current.set(posRef.current.x, playerY, posRef.current.z);
                 camera.position.copy(targetPos).add(offset);
                 controls.target.copy(targetPos);
@@ -8491,10 +9578,11 @@ const VoxelWorld = ({
             
             // OPTIMIZATION: Check if player has animated cosmetics
             const appearance = playerData.appearance || {};
-            // Animated skin colors (cosmic, galaxy, rainbow, prismatic, nebula)
-            const animatedSkins = ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula'];
-            const hasAnimatedCosmetics = appearance.hat === 'propeller' || 
-                                         appearance.hat === 'flamingCrown' ||
+            // Animated skin colors (all animated skins from PenguinBuilder)
+            const animatedSkins = ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula', 'lava', 'ocean', 'sunset', 'frost', 'matrix', 'glitch', 'chromatic', 'holographic'];
+            // Animated feathers
+            const animatedHats = ['propeller', 'flamingCrown', 'auroraFeathers', 'crystalFeathers', 'voidFeathers'];
+            const hasAnimatedCosmetics = animatedHats.includes(appearance.hat) ||
                                          appearance.mouth === 'cigarette' || 
                                          appearance.mouth === 'pipe' ||
                                          appearance.mouth === 'cigar' ||

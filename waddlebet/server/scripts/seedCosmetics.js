@@ -160,6 +160,11 @@ const GACHA_SKIN_COLORS = {
     ice: { rarity: 'epic', name: 'Ice', duplicateGold: 500, isAnimated: true, hasGlow: true, hexColor: '#B8DBF0', description: 'Frozen crystal shimmer' },
     prismatic: { rarity: 'epic', name: 'Prismatic', duplicateGold: 500, isAnimated: true, hexColor: '#FFFFFF', description: 'Light refraction effect' },
     
+    // NEW animated skins
+    frost: { rarity: 'epic', name: 'Frost', duplicateGold: 500, isAnimated: true, hasGlow: true, hexColor: '#E0FFFF', description: 'Ice crystal shimmer effect' },
+    matrix: { rarity: 'epic', name: 'Matrix', duplicateGold: 500, isAnimated: true, hasGlow: true, hexColor: '#00FF00', description: 'Digital code cascade' },
+    glitch: { rarity: 'epic', name: 'Glitch', duplicateGold: 500, isAnimated: true, hexColor: '#FF00FF', description: 'RGB corruption effect' },
+    
     // Special metallics with glow
     roseGold: { rarity: 'epic', name: 'Rose Gold', duplicateGold: 500, hasGlow: true, hexColor: '#B76E79' },
     champagne: { rarity: 'epic', name: 'Champagne', duplicateGold: 500, hasGlow: true, hexColor: '#F7E7CE' },
@@ -246,6 +251,14 @@ const HATS = {
     wizardHat: { rarity: 'legendary', name: 'Wizard Hat', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true },
     flamingCrown: { rarity: 'legendary', name: 'Flaming Crown', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true },
     phoenixFeathers: { rarity: 'legendary', name: 'Phoenix Feathers', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true },
+    
+    // NEW Animated Feathers
+    auroraFeathers: { rarity: 'legendary', name: 'Aurora Feathers', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true, 
+        description: 'Northern lights shimmer and dance across these magical feathers.' },
+    crystalFeathers: { rarity: 'legendary', name: 'Crystal Feathers', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true,
+        description: 'Prismatic crystals that sparkle with an inner light.' },
+    voidFeathers: { rarity: 'legendary', name: 'Void Feathers', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true,
+        description: 'Dark feathers with swirling purple energy from beyond.' },
     
     // Mythic
     voidCrown: { rarity: 'mythic', name: 'Void Crown', duplicateGold: 10000, hasGlow: true, hasFx: true, isAnimated: true,
@@ -432,12 +445,38 @@ const BODY_ITEMS = {
 
 // ========== MOUNTS ==========
 const MOUNTS = {
+    // Rare
+    shoppingCart: { rarity: 'rare', name: 'Shopping Cart', duplicateGold: 150, isAnimated: true,
+        description: 'Roll through town in style. Wheels may be wobbly!' },
+    
     // Epic
     skateboard: { rarity: 'epic', name: 'Skateboard', duplicateGold: 500, description: 'Classic wooden skateboard with custom grip tape' },
+    rubberDuck: { rarity: 'epic', name: 'Giant Rubber Duck', duplicateGold: 500, isAnimated: true,
+        description: 'Quack quack! Bouncy yellow duck ride with adorable waddle.' },
     snowboard: { rarity: 'epic', name: 'Snowboard', duplicateGold: 500, description: 'Sleek snowboard for mountain adventures' },
     scooter: { rarity: 'epic', name: 'Scooter', duplicateGold: 500, description: 'Electric scooter with LED underlights' },
     
     // Legendary
+    giantPuffle: { rarity: 'legendary', name: 'Giant Puffle', duplicateGold: 2500, hasGlow: true, isAnimated: true,
+        description: 'Your puffle grew up! Bouncy ride with wiggling tuft.' },
+    ufoDisc: { rarity: 'legendary', name: 'UFO Disc', duplicateGold: 2500, hasGlow: true, isAnimated: true,
+        description: 'Flying saucer with spinning ring and alien lights!' },
+    rocketJetpack: { rarity: 'mythic', name: 'Rocket Jetpack', duplicateGold: 5000, hasGlow: true, hasFx: true, isAnimated: true,
+        description: 'Blast off with twin rocket boosters and fire trail!' },
+    // Baby Dragons (Legendary)
+    babyIceDragon: { rarity: 'legendary', name: 'Baby Ice Dragon', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true,
+        description: 'Adorable ice dragon hatchling with tiny frost breath!' },
+    babyFireDragon: { rarity: 'legendary', name: 'Baby Fire Dragon', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true,
+        description: 'Fierce little fire breather - cute but fiery!' },
+    babyVoidDragon: { rarity: 'legendary', name: 'Baby Void Dragon', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true,
+        description: 'Mysterious shadow hatchling from the void!' },
+    // Adult Dragons (Mythic)
+    iceDragon: { rarity: 'mythic', name: 'Ice Dragon', duplicateGold: 5000, hasGlow: true, hasFx: true, isAnimated: true,
+        description: 'Majestic ice dragon with flapping wings and frost breath!' },
+    fireDragon: { rarity: 'mythic', name: 'Fire Dragon', duplicateGold: 5000, hasGlow: true, hasFx: true, isAnimated: true,
+        description: 'Blazing inferno dragon with devastating fire breath!' },
+    voidDragon: { rarity: 'mythic', name: 'Void Dragon', duplicateGold: 5000, hasGlow: true, hasFx: true, isAnimated: true,
+        description: 'Eldritch terror from the abyss - reality bends around it!' },
     hoverboard: { rarity: 'legendary', name: 'Hoverboard', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true, 
         description: 'Floating hoverboard with particle trail' },
     jetski: { rarity: 'legendary', name: 'Jet Ski', duplicateGold: 2500, hasGlow: true, hasFx: true, isAnimated: true,

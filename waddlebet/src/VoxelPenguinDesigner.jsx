@@ -373,6 +373,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         // EPIC - Special colors (animated)
         'rainbow', 'galaxy', 'aurora', 'sunset', 'ocean', 'lava', 'ice', 'prismatic',
         'roseGold', 'champagne', 'neonCyan', 'neonPurple', 'neonRed',
+        'frost', 'matrix', 'glitch',  // NEW animated skins
         
         // LEGENDARY - Animated + glow
         'chromatic', 'holographic', 'starlight', 'nebula', 'plasma', 'inferno', 'arctic',
@@ -632,45 +633,57 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     // Animated skin color configurations
     const ANIMATED_SKIN_COLORS = {
         cosmic: {
-            // Galaxy with shifting purples, deep blues, and magenta hints
             colors: ['#0B0B45', '#1a0a3e', '#3d1a6e', '#6b2d8b', '#4a1259', '#2a0e4f', '#0B0B45'],
-            speed: 0.5,
-            emissive: 0.2,
-            hasStars: true,
-            usePhaseOffsets: true
+            speed: 0.5, emissive: 0.2, hasStars: true, usePhaseOffsets: true
         },
         galaxy: {
-            // Darker, more mysterious space feel
             colors: ['#1A0533', '#0a1628', '#2a1055', '#0f0f3f', '#1a0a3e', '#1A0533'],
-            speed: 0.4,
-            emissive: 0.15,
-            hasStars: true,
-            usePhaseOffsets: true
+            speed: 0.4, emissive: 0.15, hasStars: true, usePhaseOffsets: true
         },
         rainbow: {
-            // Full spectrum cycling - WHOLE penguin same color
             colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0088ff', '#8800ff'],
-            speed: 0.8,
-            emissive: 0.25,
-            hasStars: false,
-            usePhaseOffsets: false // All parts same color
+            speed: 0.8, emissive: 0.25, hasStars: false, usePhaseOffsets: false
         },
         prismatic: {
-            // Each body part is a DIFFERENT color (like a prism)
             colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#00ffff', '#0088ff', '#8800ff', '#ff00ff'],
-            speed: 0.6,
-            emissive: 0.3,
-            hasStars: false,
-            usePhaseOffsets: true,
-            phaseMultiplier: 1.2
+            speed: 0.6, emissive: 0.3, hasStars: false, usePhaseOffsets: true, phaseMultiplier: 1.2
         },
         nebula: {
-            // Purple/violet nebula
             colors: ['#9932CC', '#4B0082', '#8A2BE2', '#9400D3', '#6B238E', '#9932CC'],
-            speed: 0.6,
-            emissive: 0.2,
-            hasStars: true,
-            usePhaseOffsets: true
+            speed: 0.6, emissive: 0.2, hasStars: true, usePhaseOffsets: true
+        },
+        // ========== NEW ANIMATED SKINS ==========
+        lava: {
+            colors: ['#FF4500', '#FF6600', '#CC3300', '#8B0000', '#1a0000', '#FF4500'],
+            speed: 0.7, emissive: 0.4, hasStars: false, usePhaseOffsets: true
+        },
+        ocean: {
+            colors: ['#006994', '#0077B6', '#00B4D8', '#48CAE4', '#90E0EF', '#006994'],
+            speed: 0.5, emissive: 0.15, hasStars: false, usePhaseOffsets: true
+        },
+        sunset: {
+            colors: ['#FF6B35', '#F7931A', '#FF5E78', '#C71585', '#9B59B6', '#FF6B35'],
+            speed: 0.4, emissive: 0.2, hasStars: false, usePhaseOffsets: true
+        },
+        frost: {
+            colors: ['#E0FFFF', '#B0E0E6', '#87CEEB', '#ADD8E6', '#F0FFFF', '#E0FFFF'],
+            speed: 0.3, emissive: 0.25, hasStars: true, usePhaseOffsets: true
+        },
+        matrix: {
+            colors: ['#001100', '#003300', '#00FF00', '#00CC00', '#009900', '#001100'],
+            speed: 1.0, emissive: 0.3, hasStars: true, usePhaseOffsets: false
+        },
+        glitch: {
+            colors: ['#FF0000', '#00FF00', '#0000FF', '#FF00FF', '#00FFFF', '#FFFF00'],
+            speed: 0.6, emissive: 0.3, hasStars: false, usePhaseOffsets: false
+        },
+        chromatic: {
+            colors: ['#C0C0C0', '#A8A8A8', '#D4AF37', '#E6E6FA', '#B8B8B8', '#C0C0C0'],
+            speed: 0.6, emissive: 0.35, hasStars: false, usePhaseOffsets: true
+        },
+        holographic: {
+            colors: ['#FF69B4', '#00CED1', '#FFD700', '#9370DB', '#00FA9A', '#FF69B4'],
+            speed: 0.4, emissive: 0.4, hasStars: true, usePhaseOffsets: true, phaseMultiplier: 0.8
         }
     };
 
@@ -1708,7 +1721,41 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 mountGroup.add(oarGroup);
             }
             
+            // Build dragon left wing
+            if (mountData.leftWing && mountData.leftWing.length > 0) {
+                const wingGroup = new THREE.Group();
+                mountData.leftWing.forEach(voxel => {
+                    const geo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+                    const mat = new THREE.MeshStandardMaterial({ color: voxel.c, transparent: true, opacity: 0.9 });
+                    const cube = new THREE.Mesh(geo, mat);
+                    cube.position.set(voxel.x * VOXEL_SIZE, voxel.y * VOXEL_SIZE, voxel.z * VOXEL_SIZE);
+                    wingGroup.add(cube);
+                });
+                wingGroup.name = 'left_wing';
+                mountGroup.add(wingGroup);
+            }
+            
+            // Build dragon right wing
+            if (mountData.rightWing && mountData.rightWing.length > 0) {
+                const wingGroup = new THREE.Group();
+                mountData.rightWing.forEach(voxel => {
+                    const geo = new THREE.BoxGeometry(VOXEL_SIZE, VOXEL_SIZE, VOXEL_SIZE);
+                    const mat = new THREE.MeshStandardMaterial({ color: voxel.c, transparent: true, opacity: 0.9 });
+                    const cube = new THREE.Mesh(geo, mat);
+                    cube.position.set(voxel.x * VOXEL_SIZE, voxel.y * VOXEL_SIZE, voxel.z * VOXEL_SIZE);
+                    wingGroup.add(cube);
+                });
+                wingGroup.name = 'right_wing';
+                mountGroup.add(wingGroup);
+            }
+            
             mountGroup.position.y = -3; // Mount sits lower on the platform
+            
+            // Apply mount rotation if specified (dragons need 180° rotation in preview)
+            if (mountData.mountRotation) {
+                mountGroup.rotation.y = mountData.mountRotation;
+            }
+            
             group.add(mountGroup);
             
             // Also adjust penguin position based on mount's seat offset
@@ -1979,72 +2026,64 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                             {options.skin.map(c => {
                                                 const isUnlocked = isSkinColorUnlocked(c);
                                                 const isSelected = skinColor === c;
-                                                // Special animated colors get gradient backgrounds
-                                                const isCosmicColor = c === 'cosmic';
-                                                const isGalaxyColor = c === 'galaxy';
-                                                const isRainbowColor = c === 'rainbow';
-                                                const isPrismaticColor = c === 'prismatic';
-                                                const isNebulaColor = c === 'nebula';
-                                                const isAnimatedColor = isCosmicColor || isGalaxyColor || isRainbowColor || isPrismaticColor || isNebulaColor;
+                                                // Check if this is an animated color (has config in ANIMATED_SKIN_COLORS)
+                                                const isAnimatedColor = ANIMATED_SKIN_COLORS[c] !== undefined;
                                                 
-                                                // Galaxy/cosmic gradient style (slow, gentle animations)
+                                                // Get animated style based on color
                                                 const getAnimatedStyle = () => {
-                                                    if (isCosmicColor) {
-                                                        return {
-                                                            background: 'linear-gradient(135deg, #0B0B45 0%, #1a0a3e 20%, #3d1a6e 40%, #6b2d8b 50%, #3d1a6e 60%, #1a0a3e 80%, #0B0B45 100%)',
-                                                            backgroundSize: '400% 400%',
-                                                            animation: 'cosmicShift 12s ease infinite',
-                                                            boxShadow: isSelected ? '0 0 8px 2px rgba(107, 45, 139, 0.6)' : 'none'
-                                                        };
-                                                    }
-                                                    if (isGalaxyColor) {
-                                                        return {
-                                                            background: 'linear-gradient(135deg, #1A0533 0%, #2a1055 25%, #0a1628 50%, #1a0a3e 75%, #1A0533 100%)',
-                                                            backgroundSize: '400% 400%',
-                                                            animation: 'cosmicShift 15s ease infinite',
-                                                            boxShadow: isSelected ? '0 0 8px 2px rgba(26, 5, 51, 0.8)' : 'none'
-                                                        };
-                                                    }
-                                                    if (isRainbowColor) {
-                                                        return {
-                                                            background: 'linear-gradient(135deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff, #ff0000)',
-                                                            backgroundSize: '600% 600%',
-                                                            animation: 'rainbowShift 10s linear infinite',
-                                                            boxShadow: isSelected ? '0 0 8px 2px rgba(255, 255, 255, 0.5)' : 'none'
-                                                        };
-                                                    }
-                                                    if (isPrismaticColor) {
-                                                        // Multi-color prism effect - each section different color
-                                                        return {
-                                                            background: 'conic-gradient(from 0deg, #ff0000, #ff8800, #ffff00, #00ff00, #00ffff, #0088ff, #8800ff, #ff00ff, #ff0000)',
-                                                            animation: 'rainbowShift 8s linear infinite',
-                                                            boxShadow: isSelected ? '0 0 8px 2px rgba(255, 0, 255, 0.5)' : 'none'
-                                                        };
-                                                    }
-                                                    if (isNebulaColor) {
-                                                        return {
-                                                            background: 'linear-gradient(135deg, #9932CC 0%, #4B0082 30%, #8A2BE2 50%, #9400D3 70%, #9932CC 100%)',
-                                                            backgroundSize: '400% 400%',
-                                                            animation: 'cosmicShift 14s ease infinite',
-                                                            boxShadow: isSelected ? '0 0 8px 2px rgba(153, 50, 204, 0.6)' : 'none'
-                                                        };
-                                                    }
-                                                    return { backgroundColor: PALETTE[c] || c };
+                                                    const styles = {
+                                                        cosmic: { background: 'linear-gradient(135deg, #0B0B45, #3d1a6e, #6b2d8b, #0B0B45)', glowColor: 'rgba(107, 45, 139, 0.8)' },
+                                                        galaxy: { background: 'linear-gradient(135deg, #1A0533, #2a1055, #0a1628, #1A0533)', glowColor: 'rgba(42, 16, 85, 0.8)' },
+                                                        rainbow: { background: 'linear-gradient(135deg, #ff0000, #ff8800, #ffff00, #00ff00, #0088ff, #8800ff)', glowColor: 'rgba(255, 255, 255, 0.6)' },
+                                                        prismatic: { background: 'conic-gradient(from 0deg, #ff0000, #ff8800, #ffff00, #00ff00, #00ffff, #0088ff, #8800ff, #ff00ff, #ff0000)', glowColor: 'rgba(255, 0, 255, 0.6)' },
+                                                        nebula: { background: 'linear-gradient(135deg, #9932CC, #4B0082, #8A2BE2, #9932CC)', glowColor: 'rgba(153, 50, 204, 0.8)' },
+                                                        lava: { background: 'linear-gradient(135deg, #FF4500, #CC3300, #8B0000, #FF4500)', glowColor: 'rgba(255, 69, 0, 0.8)' },
+                                                        ocean: { background: 'linear-gradient(135deg, #006994, #00B4D8, #48CAE4, #006994)', glowColor: 'rgba(0, 180, 216, 0.8)' },
+                                                        sunset: { background: 'linear-gradient(135deg, #FF6B35, #FF5E78, #C71585, #FF6B35)', glowColor: 'rgba(255, 107, 53, 0.8)' },
+                                                        frost: { background: 'linear-gradient(135deg, #E0FFFF, #87CEEB, #ADD8E6, #E0FFFF)', glowColor: 'rgba(135, 206, 235, 0.8)' },
+                                                        matrix: { background: 'linear-gradient(135deg, #001100, #00FF00, #00CC00, #001100)', glowColor: 'rgba(0, 255, 0, 0.8)' },
+                                                        glitch: { background: 'linear-gradient(135deg, #FF0000, #00FF00, #0000FF, #FF00FF)', glowColor: 'rgba(255, 0, 255, 0.8)' },
+                                                        chromatic: { background: 'linear-gradient(135deg, #C0C0C0, #D4AF37, #E6E6FA, #C0C0C0)', glowColor: 'rgba(212, 175, 55, 0.8)' },
+                                                        holographic: { background: 'linear-gradient(135deg, #FF69B4, #00CED1, #FFD700, #9370DB, #FF69B4)', glowColor: 'rgba(255, 105, 180, 0.8)' }
+                                                    };
+                                                    const style = styles[c];
+                                                    if (!style) return { backgroundColor: PALETTE[c] || c, glowColor: null };
+                                                    const animationName = c === 'glitch' ? 'rainbowShift 6s linear infinite' : 
+                                                                   c === 'matrix' ? 'rainbowShift 4s linear infinite' :
+                                                                   c === 'rainbow' || c === 'prismatic' ? 'rainbowShift 8s linear infinite' : 
+                                                                   c === 'holographic' ? 'rainbowShift 10s ease infinite' :
+                                                                   'cosmicShift 12s ease infinite';
+                                                    return {
+                                                        background: style.background,
+                                                        backgroundSize: '400% 400%',
+                                                        animation: animationName,
+                                                        glowColor: style.glowColor
+                                                    };
                                                 };
                                                 
                                                 return (
                                                     <button 
                                                         key={c}
                                                         onClick={() => isUnlocked && setSkinColor(c)}
-                                                        title={c}
+                                                        title={`${c}${isAnimatedColor ? ' ✨ Animated' : ''}`}
                                                         disabled={!isUnlocked}
                                                         className={`rounded-full border-2 relative ${
                                                             isSelected ? 'border-white scale-110 shadow-lg' : 'border-transparent'
                                                         } ${
                                                             isUnlocked ? 'opacity-100 hover:scale-105 cursor-pointer' : 'opacity-30 cursor-not-allowed'
                                                         } transition-all w-6 h-6`}
-                                                        style={isAnimatedColor ? getAnimatedStyle() : {backgroundColor: PALETTE[c] || c}}
+                                                        style={{
+                                                            ...(isAnimatedColor ? getAnimatedStyle() : {backgroundColor: PALETTE[c] || c}),
+                                                            // Add pulsing glow ring for animated colors
+                                                            ...(isAnimatedColor && isUnlocked ? {
+                                                                boxShadow: `0 0 6px 2px ${getAnimatedStyle().glowColor || 'rgba(255,255,255,0.5)'}, 0 0 10px 4px rgba(255,255,255,0.3)`,
+                                                                animation: `${getAnimatedStyle().animation?.split(' ')[0] || 'cosmicShift'} 12s ease infinite, pulseGlow 1.5s ease-in-out infinite`
+                                                            } : {})
+                                                        }}
                                                     >
+                                                        {isAnimatedColor && isUnlocked && (
+                                                            <span className="absolute -top-1 -right-1 text-[8px]">✨</span>
+                                                        )}
                                                         {!isUnlocked && (
                                                             <span className="absolute inset-0 flex items-center justify-center text-white text-[6px]">🔒</span>
                                                         )}

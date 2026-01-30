@@ -143,7 +143,21 @@ export function createChatSprite(THREE, message, height = BUBBLE_HEIGHT_PENGUIN)
     
     const scale = baseScale * scaleFactor;
     sprite.scale.set(w * scale, h * scale, 1);
-    sprite.position.set(0, height, 0);
+    
+    // Raise bubble higher for multi-line messages to prevent nametag clipping
+    // At 3+ lines, the nametag would clip into the bubble without this offset
+    let heightOffset = 0;
+    if (lineCount >= 5) {
+        heightOffset = 1.5;
+    } else if (lineCount >= 4) {
+        heightOffset = 1.0;
+    } else if (lineCount >= 3) {
+        heightOffset = 0.6;
+    } else if (lineCount >= 2) {
+        heightOffset = 0.3;
+    }
+    
+    sprite.position.set(0, height + heightOffset, 0);
     sprite.renderOrder = 999;
     
     return sprite;

@@ -50,9 +50,15 @@ class CameraController {
     
     /**
      * Update player state - call every frame before update()
+     * @param {Object} position - Player position {x, y, z}
+     * @param {number} facingAngle - Player facing direction in radians
+     * @param {boolean} isMoving - True if player is actively moving
+     * @param {number} mountYOffset - Additional Y offset from mount (default 0)
      */
-    setPlayerState(position, facingAngle, isMoving) {
-        this.playerPosition.set(position.x, position.y + 1.2, position.z);
+    setPlayerState(position, facingAngle, isMoving, mountYOffset = 0) {
+        // Base offset (1.2) + mount offset for elevated mounts like UFO/jetpack
+        const totalYOffset = 1.2 + mountYOffset;
+        this.playerPosition.set(position.x, position.y + totalYOffset, position.z);
         this.playerFacingAngle = facingAngle;
         this.playerIsMoving = isMoving;
     }

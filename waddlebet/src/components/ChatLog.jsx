@@ -22,11 +22,13 @@ const MESSAGE_COLORS = {
 };
 
 const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = false, onNewMessage }) => {
-    const { chatMessages, playerName, playerId, sendChat, wsRef } = useMultiplayer();
+    const { chatMessages, playerName, playerId, sendChat, wsRef, getPlayersData } = useMultiplayer();
     const { t } = useLanguage();
     const [isActive, setIsActive] = useState(false);
     const [inputValue, setInputValue] = useState('');
     const [localMessages, setLocalMessages] = useState([]); // Combined local + server messages
+    const [autocompleteIndex, setAutocompleteIndex] = useState(0); // Track which suggestion we're on
+    const [lastTabInput, setLastTabInput] = useState(''); // Track input when tab was first pressed
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
     const containerRef = useRef(null);
@@ -245,15 +247,94 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         inputRef.current?.blur();
     };
     
+    // Get online player names for autocomplete
+    const getOnlinePlayerNames = useCallback(() => {
+        const playersData = getPlayersData?.();
+        if (!playersData) return [];
+        
+        const names = [];
+        playersData.forEach((player) => {
+            if (player.name && player.name !== playerName) {
+                names.push(player.name);
+            }
+        });
+        return names.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    }, [getPlayersData, playerName]);
+    
+    // Handle tab completion for /tp command
+    const handleTabCompletion = useCallback(() => {
+        const input = inputValue.toLowerCase();
+        
+        // Check if input is a /tp command
+        const tpMatch = input.match(/^\/tp\s+(\S*)\s*(\S*)$/);
+        if (!tpMatch) return false;
+        
+        const [, firstArg, secondArg] = tpMatch;
+        const onlinePlayers = getOnlinePlayerNames();
+        
+        if (onlinePlayers.length === 0) return false;
+        
+        // Determine which argument we're completing (first or second)
+        const isCompletingSecond = firstArg && !secondArg.includes(' ') && input.includes(' ' + firstArg + ' ');
+        const partialName = isCompletingSecond ? secondArg : firstArg;
+        
+        // Filter players matching partial input
+        const matches = onlinePlayers.filter(name => 
+            name.toLowerCase().startsWith(partialName.toLowerCase())
+        );
+        
+        if (matches.length === 0) return false;
+        
+        // Track if this is a new tab press or cycling through options
+        const baseInput = inputValue.substring(0, inputValue.lastIndexOf(partialName) || inputValue.length);
+        
+        // If input changed since last tab, reset index
+        if (lastTabInput !== baseInput + partialName) {
+            setAutocompleteIndex(0);
+            setLastTabInput(baseInput + partialName);
+        }
+        
+        // Get the match at current index (cycle through)
+        const matchIndex = autocompleteIndex % matches.length;
+        const completedName = matches[matchIndex];
+        
+        // Build the completed input
+        let newInput;
+        if (isCompletingSecond) {
+            // Completing second argument (destination player)
+            const firstPart = inputValue.substring(0, inputValue.lastIndexOf(' ') + 1);
+            newInput = firstPart + completedName;
+        } else {
+            // Completing first argument (player to teleport)
+            newInput = '/tp ' + completedName + ' ';
+        }
+        
+        setInputValue(newInput);
+        setAutocompleteIndex(prev => prev + 1);
+        
+        return true;
+    }, [inputValue, getOnlinePlayerNames, autocompleteIndex, lastTabInput]);
+    
     // Handle key press
     const handleKeyDown = (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
             e.stopPropagation();
             handleSend();
+            // Reset autocomplete state
+            setAutocompleteIndex(0);
+            setLastTabInput('');
+        }
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            e.stopPropagation();
+            handleTabCompletion();
         }
         if (e.key === 'Escape') {
             inputRef.current?.blur();
+            // Reset autocomplete state
+            setAutocompleteIndex(0);
+            setLastTabInput('');
         }
     };
     

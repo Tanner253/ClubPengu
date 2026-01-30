@@ -538,6 +538,69 @@ export const HATS = {
             v.push({x, y:8, z:5, c: hairMid});
         }
         return v;
+    })(),
+    
+    // ========== ANIMATED FEATHERS ==========
+    
+    // Aurora Feathers - Northern lights shimmer effect
+    auroraFeathers: (() => {
+        let v = [];
+        const colors = ['#00FF7F', '#00CED1', '#9370DB', '#00FA9A', '#48D1CC'];
+        for(let y = 10; y < 18; y++) {
+            const spread = (y - 10) * 0.6;
+            const colorIdx = (y - 10) % colors.length;
+            // Center feather
+            v.push({x: 0, y, z: -spread * 0.5, c: colors[colorIdx], glow: true, fx: 'aurora'});
+            // Side feathers
+            v.push({x: Math.floor(spread * 0.8), y, z: -spread * 0.3, c: colors[(colorIdx + 1) % colors.length], glow: true, fx: 'aurora'});
+            v.push({x: -Math.floor(spread * 0.8), y, z: -spread * 0.3, c: colors[(colorIdx + 2) % colors.length], glow: true, fx: 'aurora'});
+        }
+        // Extra sparkle tips
+        v.push({x: 0, y: 18, z: -5, c: '#FFFFFF', glow: true, fx: 'aurora'});
+        v.push({x: 3, y: 17, z: -4, c: '#ADFF2F', glow: true, fx: 'aurora'});
+        v.push({x: -3, y: 17, z: -4, c: '#7FFFD4', glow: true, fx: 'aurora'});
+        return v;
+    })(),
+    
+    // Crystal Feathers - Transparent prismatic effect
+    crystalFeathers: (() => {
+        let v = [];
+        const colors = ['#E0FFFF', '#B0E0E6', '#ADD8E6', '#87CEEB', '#F0FFFF'];
+        for(let y = 10; y < 17; y++) {
+            const spread = (y - 10) * 0.5;
+            const colorIdx = (y - 10) % colors.length;
+            // Crystalline center
+            v.push({x: 0, y, z: -spread * 0.4, c: colors[colorIdx], glow: true, fx: 'crystal', transparent: true});
+            // Faceted sides
+            if (y > 11) {
+                v.push({x: Math.floor(spread * 0.7), y, z: -spread * 0.2, c: colors[(colorIdx + 1) % colors.length], glow: true, fx: 'crystal', transparent: true});
+                v.push({x: -Math.floor(spread * 0.7), y, z: -spread * 0.2, c: colors[(colorIdx + 2) % colors.length], glow: true, fx: 'crystal', transparent: true});
+            }
+        }
+        // Crystal tips with high glow
+        v.push({x: 0, y: 17, z: -4, c: '#FFFFFF', glow: true, fx: 'crystal', transparent: true});
+        v.push({x: 2, y: 16, z: -3, c: '#E6E6FA', glow: true, fx: 'crystal', transparent: true});
+        v.push({x: -2, y: 16, z: -3, c: '#E6E6FA', glow: true, fx: 'crystal', transparent: true});
+        return v;
+    })(),
+    
+    // Void Feathers - Black with purple particle effect
+    voidFeathers: (() => {
+        let v = [];
+        const colors = ['#1a0a2e', '#2d1b4e', '#4a1a6b', '#3d0f5c', '#0d0d0d'];
+        for(let y = 10; y < 18; y++) {
+            const spread = (y - 10) * 0.55;
+            const colorIdx = (y - 10) % colors.length;
+            // Dark core feathers
+            v.push({x: 0, y, z: -spread * 0.5, c: colors[colorIdx], glow: true, fx: 'void'});
+            v.push({x: Math.floor(spread * 0.75), y, z: -spread * 0.35, c: colors[(colorIdx + 1) % colors.length], glow: true, fx: 'void'});
+            v.push({x: -Math.floor(spread * 0.75), y, z: -spread * 0.35, c: colors[(colorIdx + 2) % colors.length], glow: true, fx: 'void'});
+        }
+        // Purple energy tips
+        v.push({x: 0, y: 18, z: -5, c: '#8B008B', glow: true, fx: 'void'});
+        v.push({x: 2, y: 17, z: -4, c: '#9400D3', glow: true, fx: 'void'});
+        v.push({x: -2, y: 17, z: -4, c: '#9400D3', glow: true, fx: 'void'});
+        return v;
     })()
 };
 

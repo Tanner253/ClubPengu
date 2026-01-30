@@ -48,6 +48,37 @@ const SKIN_COLORS = {
     cyan: { color: '#06B6D4', highlight: '#22D3EE', shadow: '#0891B2' },
     teal: { color: '#14B8A6', highlight: '#2DD4BF', shadow: '#0D9488' },
     gold: { color: '#F59E0B', highlight: '#FBBF24', shadow: '#D97706' },
+    // Animated skins - show first color as base
+    cosmic: { color: '#0B0B45', highlight: '#3d1a6e', shadow: '#1a0a3e', animated: true },
+    galaxy: { color: '#1A0533', highlight: '#2a1055', shadow: '#0a1628', animated: true },
+    rainbow: { color: '#ff0000', highlight: '#ff8800', shadow: '#ffff00', animated: true },
+    prismatic: { color: '#ff00ff', highlight: '#00ffff', shadow: '#ffff00', animated: true },
+    nebula: { color: '#9932CC', highlight: '#8A2BE2', shadow: '#4B0082', animated: true },
+    lava: { color: '#FF4500', highlight: '#FF6600', shadow: '#CC3300', animated: true },
+    ocean: { color: '#006994', highlight: '#00B4D8', shadow: '#0077B6', animated: true },
+    sunset: { color: '#FF6B35', highlight: '#FF5E78', shadow: '#C71585', animated: true },
+    frost: { color: '#E0FFFF', highlight: '#87CEEB', shadow: '#ADD8E6', animated: true },
+    matrix: { color: '#00FF00', highlight: '#00CC00', shadow: '#003300', animated: true },
+    glitch: { color: '#FF00FF', highlight: '#00FFFF', shadow: '#FFFF00', animated: true },
+    chromatic: { color: '#C0C0C0', highlight: '#D4AF37', shadow: '#E6E6FA', animated: true },
+    holographic: { color: '#FF69B4', highlight: '#00CED1', shadow: '#FFD700', animated: true },
+};
+
+// Animated skin configurations for preview animation
+const ANIMATED_SKIN_CONFIGS = {
+    cosmic: { colors: ['#0B0B45', '#3d1a6e', '#6b2d8b'], speed: 0.5 },
+    galaxy: { colors: ['#1A0533', '#2a1055', '#0a1628'], speed: 0.4 },
+    rainbow: { colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0088ff', '#8800ff'], speed: 0.8 },
+    prismatic: { colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#00ffff', '#8800ff'], speed: 0.6 },
+    nebula: { colors: ['#9932CC', '#4B0082', '#8A2BE2'], speed: 0.6 },
+    lava: { colors: ['#FF4500', '#CC3300', '#8B0000'], speed: 0.7 },
+    ocean: { colors: ['#006994', '#00B4D8', '#48CAE4'], speed: 0.5 },
+    sunset: { colors: ['#FF6B35', '#FF5E78', '#C71585'], speed: 0.4 },
+    frost: { colors: ['#E0FFFF', '#87CEEB', '#ADD8E6'], speed: 0.3 },
+    matrix: { colors: ['#001100', '#00FF00', '#00CC00'], speed: 1.0 },
+    glitch: { colors: ['#FF0000', '#00FF00', '#0000FF'], speed: 0.6 },
+    chromatic: { colors: ['#C0C0C0', '#D4AF37', '#E6E6FA'], speed: 0.6 },
+    holographic: { colors: ['#FF69B4', '#00CED1', '#FFD700'], speed: 0.4 },
 };
 
 const PenguinPreview3D = ({ 
@@ -116,15 +147,41 @@ const PenguinPreview3D = ({
             penguinGroupRef.current = penguinGroup;
             
             // Build the penguin
-            buildPenguin(THREE, penguinGroup, appearance);
+            const skinMaterials = buildPenguin(THREE, penguinGroup, appearance);
             
             // Animation loop
+            let time = 0;
             const animate = () => {
                 if (!mounted) return;
                 animationRef.current = requestAnimationFrame(animate);
+                time += 0.016; // ~60fps
                 
                 if (autoRotate && penguinGroupRef.current) {
                     penguinGroupRef.current.rotation.y += rotationSpeed;
+                }
+                
+                // Animate skin colors for animated skins
+                const skinName = appearance?.skin || 'blue';
+                const animConfig = ANIMATED_SKIN_CONFIGS[skinName];
+                if (animConfig && skinMaterials && skinMaterials.length > 0) {
+                    const t = time * animConfig.speed;
+                    const colorIdx = Math.floor(t) % animConfig.colors.length;
+                    const nextColorIdx = (colorIdx + 1) % animConfig.colors.length;
+                    const blend = t % 1;
+                    
+                    const fromColor = new THREE.Color(animConfig.colors[colorIdx]);
+                    const toColor = new THREE.Color(animConfig.colors[nextColorIdx]);
+                    const currentColor = fromColor.clone().lerp(toColor, blend);
+                    
+                    skinMaterials.forEach(mat => {
+                        if (mat && mat.color) {
+                            mat.color.copy(currentColor);
+                            if (mat.emissive) {
+                                mat.emissive.copy(currentColor);
+                                mat.emissiveIntensity = 0.15 + Math.sin(t * 2) * 0.05;
+                            }
+                        }
+                    });
                 }
                 
                 renderer.render(scene, camera);
@@ -431,9 +488,29 @@ function buildPenguin(THREE, group, appearance) {
         colorGroups.get(color).push(v);
     });
     
+    // Track skin materials for animation
+    const skinMaterials = [];
+    const isAnimatedSkin = skinColor.animated === true;
+    
     // Create meshes for each color group
     colorGroups.forEach((voxelList, color) => {
-        const material = new THREE.MeshLambertMaterial({ color: color });
+        // Check if this is the main skin color
+        const isSkinColor = color === skinColor.color || color === skinColor.highlight || color === skinColor.shadow;
+        
+        let material;
+        if (isAnimatedSkin && isSkinColor) {
+            // Use StandardMaterial for animated skins (supports emissive)
+            material = new THREE.MeshStandardMaterial({ 
+                color: color,
+                roughness: 0.3,
+                metalness: 0.1,
+                emissive: new THREE.Color(color),
+                emissiveIntensity: 0.15
+            });
+            skinMaterials.push(material);
+        } else {
+            material = new THREE.MeshLambertMaterial({ color: color });
+        }
         
         voxelList.forEach(v => {
             const mesh = new THREE.Mesh(boxGeo, material);
@@ -448,6 +525,9 @@ function buildPenguin(THREE, group, appearance) {
     
     // Add mount if present
     addMount(THREE, group, appearance);
+    
+    // Return skin materials for animation
+    return skinMaterials;
 }
 
 // Add cosmetics to the penguin
@@ -556,7 +636,53 @@ function addMount(THREE, group, appearance) {
         mountGroup.add(rightOarMesh);
     }
     
+    // Build wheels for shopping cart
+    if (mountData.wheelFL) {
+        const wheelMesh = buildVoxelGroup(THREE, mountData.wheelFL, PALETTE);
+        wheelMesh.name = 'wheel_fl';
+        mountGroup.add(wheelMesh);
+    }
+    if (mountData.wheelFR) {
+        const wheelMesh = buildVoxelGroup(THREE, mountData.wheelFR, PALETTE);
+        wheelMesh.name = 'wheel_fr';
+        mountGroup.add(wheelMesh);
+    }
+    if (mountData.wheelBL) {
+        const wheelMesh = buildVoxelGroup(THREE, mountData.wheelBL, PALETTE);
+        wheelMesh.name = 'wheel_bl';
+        mountGroup.add(wheelMesh);
+    }
+    if (mountData.wheelBR) {
+        const wheelMesh = buildVoxelGroup(THREE, mountData.wheelBR, PALETTE);
+        wheelMesh.name = 'wheel_br';
+        mountGroup.add(wheelMesh);
+    }
+    
+    // Build trucks for skateboard
+    if (mountData.frontTruck) {
+        const truckMesh = buildVoxelGroup(THREE, mountData.frontTruck, PALETTE);
+        truckMesh.name = 'front_truck';
+        mountGroup.add(truckMesh);
+    }
+    if (mountData.backTruck) {
+        const truckMesh = buildVoxelGroup(THREE, mountData.backTruck, PALETTE);
+        truckMesh.name = 'back_truck';
+        mountGroup.add(truckMesh);
+    }
+    
     if (mountGroup.children.length > 0) {
+        // Apply scale if specified
+        const mountScale = mountData.scale || 0.2;
+        mountGroup.scale.set(mountScale, mountScale, mountScale);
+        
+        // Apply position offset
+        mountGroup.position.y = mountData.positionY ?? 0.4;
+        
+        // Apply rotation if specified (e.g., shopping cart)
+        if (mountData.mountRotation) {
+            mountGroup.rotation.y = mountData.mountRotation;
+        }
+        
         group.add(mountGroup);
     }
 }

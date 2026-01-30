@@ -53,6 +53,7 @@ const PREMIUM_SKIN_COLORS = [
     // EPIC - Special colors (animated)
     'rainbow', 'galaxy', 'aurora', 'sunset', 'ocean', 'lava', 'ice', 'prismatic',
     'roseGold', 'champagne', 'neonCyan', 'neonPurple', 'neonRed',
+    'frost', 'matrix', 'glitch',  // NEW animated skins
     
     // LEGENDARY - Animated + glow
     'chromatic', 'holographic', 'starlight', 'nebula', 'plasma', 'inferno', 'arctic',
@@ -67,44 +68,22 @@ const PREMIUM_SKIN_COLORS = [
 // ALL skin colors (base + premium) - used for fallback when database not loaded
 const ALL_SKIN_COLORS = [...FREE_SKIN_COLORS, ...PREMIUM_SKIN_COLORS];
 
-// Animated skin color configurations (matching VoxelPenguinDesigner)
+// Animated skin color configurations (matching VoxelPenguinDesigner & PenguinBuilder)
 const ANIMATED_SKIN_COLORS = {
-    cosmic: {
-        colors: ['#0B0B45', '#1a0a3e', '#3d1a6e', '#6b2d8b', '#4a1259', '#2a0e4f', '#0B0B45'],
-        speed: 0.5,
-        emissive: 0.2,
-        hasStars: true,
-        usePhaseOffsets: true
-    },
-    galaxy: {
-        colors: ['#1A0533', '#0a1628', '#2a1055', '#0f0f3f', '#1a0a3e', '#1A0533'],
-        speed: 0.4,
-        emissive: 0.15,
-        hasStars: true,
-        usePhaseOffsets: true
-    },
-    rainbow: {
-        colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0088ff', '#8800ff'],
-        speed: 0.8,
-        emissive: 0.25,
-        hasStars: false,
-        usePhaseOffsets: false
-    },
-    prismatic: {
-        colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#00ffff', '#0088ff', '#8800ff', '#ff00ff'],
-        speed: 0.6,
-        emissive: 0.3,
-        hasStars: false,
-        usePhaseOffsets: true,
-        phaseMultiplier: 1.2
-    },
-    nebula: {
-        colors: ['#9932CC', '#4B0082', '#8A2BE2', '#9400D3', '#6B238E', '#9932CC'],
-        speed: 0.6,
-        emissive: 0.2,
-        hasStars: true,
-        usePhaseOffsets: true
-    }
+    cosmic: { colors: ['#0B0B45', '#1a0a3e', '#3d1a6e', '#6b2d8b', '#4a1259', '#2a0e4f', '#0B0B45'], speed: 0.5, emissive: 0.2, hasStars: true, usePhaseOffsets: true },
+    galaxy: { colors: ['#1A0533', '#0a1628', '#2a1055', '#0f0f3f', '#1a0a3e', '#1A0533'], speed: 0.4, emissive: 0.15, hasStars: true, usePhaseOffsets: true },
+    rainbow: { colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#0088ff', '#8800ff'], speed: 0.8, emissive: 0.25, hasStars: false, usePhaseOffsets: false },
+    prismatic: { colors: ['#ff0000', '#ff8800', '#ffff00', '#00ff00', '#00ffff', '#0088ff', '#8800ff', '#ff00ff'], speed: 0.6, emissive: 0.3, hasStars: false, usePhaseOffsets: true, phaseMultiplier: 1.2 },
+    nebula: { colors: ['#9932CC', '#4B0082', '#8A2BE2', '#9400D3', '#6B238E', '#9932CC'], speed: 0.6, emissive: 0.2, hasStars: true, usePhaseOffsets: true },
+    // ========== NEW ANIMATED SKINS ==========
+    lava: { colors: ['#FF4500', '#FF6600', '#CC3300', '#8B0000', '#1a0000', '#FF4500'], speed: 0.7, emissive: 0.4, hasStars: false, usePhaseOffsets: true },
+    ocean: { colors: ['#006994', '#0077B6', '#00B4D8', '#48CAE4', '#90E0EF', '#006994'], speed: 0.5, emissive: 0.15, hasStars: false, usePhaseOffsets: true },
+    sunset: { colors: ['#FF6B35', '#F7931A', '#FF5E78', '#C71585', '#9B59B6', '#FF6B35'], speed: 0.4, emissive: 0.2, hasStars: false, usePhaseOffsets: true },
+    frost: { colors: ['#E0FFFF', '#B0E0E6', '#87CEEB', '#ADD8E6', '#F0FFFF', '#E0FFFF'], speed: 0.3, emissive: 0.25, hasStars: true, usePhaseOffsets: true },
+    matrix: { colors: ['#001100', '#003300', '#00FF00', '#00CC00', '#009900', '#001100'], speed: 1.0, emissive: 0.3, hasStars: true, usePhaseOffsets: false },
+    glitch: { colors: ['#FF0000', '#00FF00', '#0000FF', '#FF00FF', '#00FFFF', '#FFFF00'], speed: 0.6, emissive: 0.3, hasStars: false, usePhaseOffsets: false },
+    chromatic: { colors: ['#C0C0C0', '#A8A8A8', '#D4AF37', '#E6E6FA', '#B8B8B8', '#C0C0C0'], speed: 0.6, emissive: 0.35, hasStars: false, usePhaseOffsets: true },
+    holographic: { colors: ['#FF69B4', '#00CED1', '#FFD700', '#9370DB', '#00FA9A', '#FF69B4'], speed: 0.4, emissive: 0.4, hasStars: true, usePhaseOffsets: true, phaseMultiplier: 0.8 }
 };
 
 function PenguinCreatorOverlay({ isOpen, onClose, currentData, onSave }) {

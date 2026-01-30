@@ -84,6 +84,72 @@ export const ANIMATED_SKIN_COLORS = {
         emissive: 0.2,
         hasStars: true,
         usePhaseOffsets: true
+    },
+    // ========== NEW ANIMATED SKINS ==========
+    lava: {
+        // Molten lava - orange/red/black flowing
+        colors: ['#FF4500', '#FF6600', '#CC3300', '#8B0000', '#1a0000', '#FF4500'],
+        speed: 0.7,
+        emissive: 0.4,
+        hasStars: false,
+        usePhaseOffsets: true
+    },
+    ocean: {
+        // Deep ocean - blue/teal wave ripple
+        colors: ['#006994', '#0077B6', '#00B4D8', '#48CAE4', '#90E0EF', '#006994'],
+        speed: 0.5,
+        emissive: 0.15,
+        hasStars: false,
+        usePhaseOffsets: true
+    },
+    sunset: {
+        // Warm sunset - orange → pink → purple gradient
+        colors: ['#FF6B35', '#F7931A', '#FF5E78', '#C71585', '#9B59B6', '#FF6B35'],
+        speed: 0.4,
+        emissive: 0.2,
+        hasStars: false,
+        usePhaseOffsets: true
+    },
+    frost: {
+        // Ice frost - pale blue with white shimmer
+        colors: ['#E0FFFF', '#B0E0E6', '#87CEEB', '#ADD8E6', '#F0FFFF', '#E0FFFF'],
+        speed: 0.3,
+        emissive: 0.25,
+        hasStars: true, // Repurpose as ice crystals
+        usePhaseOffsets: true
+    },
+    matrix: {
+        // Digital matrix - green code effect
+        colors: ['#001100', '#003300', '#00FF00', '#00CC00', '#009900', '#001100'],
+        speed: 1.0, // Fast like falling code
+        emissive: 0.3,
+        hasStars: true, // Repurpose as "code bits"
+        usePhaseOffsets: false
+    },
+    glitch: {
+        // RGB glitch - color split effect
+        colors: ['#FF0000', '#00FF00', '#0000FF', '#FF00FF', '#00FFFF', '#FFFF00'],
+        speed: 0.6, // Slower, more subtle glitch
+        emissive: 0.3,
+        hasStars: false,
+        usePhaseOffsets: false // Uniform glitch
+    },
+    chromatic: {
+        // Metallic chrome - color shifting metal
+        colors: ['#C0C0C0', '#A8A8A8', '#D4AF37', '#E6E6FA', '#B8B8B8', '#C0C0C0'],
+        speed: 0.6,
+        emissive: 0.35,
+        hasStars: false,
+        usePhaseOffsets: true
+    },
+    holographic: {
+        // Holographic - oily rainbow shimmer
+        colors: ['#FF69B4', '#00CED1', '#FFD700', '#9370DB', '#00FA9A', '#FF69B4'],
+        speed: 0.4, // Slower, smoother shimmer
+        emissive: 0.4,
+        hasStars: true, // Sparkle effect
+        usePhaseOffsets: true,
+        phaseMultiplier: 0.8
     }
 };
 
@@ -271,6 +337,197 @@ export function createPenguinBuilder(THREE) {
         // Wizard Hat - mark for world-space trail
         if (data.hat === 'wizardHat') {
             group.userData.hasWizardHat = true;
+        }
+        
+        // ========== ANIMATED FEATHERS ==========
+        
+        // Aurora Feathers - Intense northern lights with trails
+        if (data.hat === 'auroraFeathers') {
+            const auroraGroup = new THREE.Group();
+            auroraGroup.name = 'aurora_particles';
+            auroraGroup.position.set(0, 14 * VOXEL_SIZE, -2 * VOXEL_SIZE);
+            
+            // Main aurora ribbons (larger, more visible)
+            const ribbonCount = 8;
+            const colors = [0x00FF7F, 0x00CED1, 0x9370DB, 0x00FA9A, 0x48D1CC, 0x7FFFD4];
+            for (let i = 0; i < ribbonCount; i++) {
+                const size = (0.3 + Math.random() * 0.25) * VOXEL_SIZE;
+                const pGeo = new THREE.BoxGeometry(size * 2, size, size * 0.5);
+                const pMat = new THREE.MeshBasicMaterial({ 
+                    color: colors[i % colors.length], 
+                    transparent: true, 
+                    opacity: 0.85 
+                });
+                const pMesh = new THREE.Mesh(pGeo, pMat);
+                const angle = (i / ribbonCount) * Math.PI * 2;
+                pMesh.position.set(
+                    Math.cos(angle) * 2 * VOXEL_SIZE,
+                    i * 0.6 * VOXEL_SIZE,
+                    Math.sin(angle) * 1.5 * VOXEL_SIZE - VOXEL_SIZE
+                );
+                pMesh.userData.isRibbon = true;
+                pMesh.userData.angle = angle;
+                pMesh.userData.baseY = pMesh.position.y;
+                pMesh.userData.speed = 0.8 + Math.random() * 0.4;
+                pMesh.userData.phaseOffset = i * 0.5;
+                auroraGroup.add(pMesh);
+            }
+            
+            // Trailing sparkle particles
+            const trailCount = 25;
+            for (let i = 0; i < trailCount; i++) {
+                const size = (0.1 + Math.random() * 0.15) * VOXEL_SIZE;
+                const pGeo = new THREE.BoxGeometry(size, size, size);
+                const pMat = new THREE.MeshBasicMaterial({ 
+                    color: colors[Math.floor(Math.random() * colors.length)], 
+                    transparent: true, 
+                    opacity: 0.6 
+                });
+                const pMesh = new THREE.Mesh(pGeo, pMat);
+                pMesh.position.set(
+                    (Math.random() - 0.5) * 5 * VOXEL_SIZE,
+                    Math.random() * 6 * VOXEL_SIZE,
+                    (Math.random() - 0.5) * 4 * VOXEL_SIZE
+                );
+                pMesh.userData.isTrail = true;
+                pMesh.userData.baseY = pMesh.position.y;
+                pMesh.userData.baseX = pMesh.position.x;
+                pMesh.userData.baseZ = pMesh.position.z;
+                pMesh.userData.life = Math.random();
+                pMesh.userData.maxLife = 2 + Math.random() * 2;
+                pMesh.userData.speed = 1.5 + Math.random();
+                auroraGroup.add(pMesh);
+            }
+            auroraGroup.userData.isAuroraEmitter = true;
+            group.add(auroraGroup);
+        }
+        
+        // Crystal Feathers - Brilliant prismatic sparkles with burst effect
+        if (data.hat === 'crystalFeathers') {
+            const crystalGroup = new THREE.Group();
+            crystalGroup.name = 'crystal_particles';
+            crystalGroup.position.set(0, 13 * VOXEL_SIZE, -1.5 * VOXEL_SIZE);
+            
+            // Core crystal shards (larger, more defined)
+            const shardCount = 10;
+            const shardColors = [0xE0FFFF, 0xFFFFFF, 0xB0E0E6, 0x87CEEB, 0xADD8E6];
+            for (let i = 0; i < shardCount; i++) {
+                const size = (0.2 + Math.random() * 0.2) * VOXEL_SIZE;
+                const pGeo = new THREE.BoxGeometry(size, size * 1.5, size * 0.3);
+                const pMat = new THREE.MeshBasicMaterial({ 
+                    color: shardColors[i % shardColors.length], 
+                    transparent: true, 
+                    opacity: 0.9 
+                });
+                const pMesh = new THREE.Mesh(pGeo, pMat);
+                const angle = (i / shardCount) * Math.PI * 2;
+                pMesh.position.set(
+                    Math.cos(angle) * 1.5 * VOXEL_SIZE,
+                    1 + i * 0.4 * VOXEL_SIZE,
+                    Math.sin(angle) * 1 * VOXEL_SIZE
+                );
+                pMesh.rotation.z = angle;
+                pMesh.userData.isShard = true;
+                pMesh.userData.angle = angle;
+                pMesh.userData.baseY = pMesh.position.y;
+                pMesh.userData.twinkleSpeed = 3 + Math.random() * 4;
+                pMesh.userData.twinkleOffset = Math.random() * Math.PI * 2;
+                crystalGroup.add(pMesh);
+            }
+            
+            // Sparkle burst particles (small, fast moving)
+            const sparkleCount = 30;
+            for (let i = 0; i < sparkleCount; i++) {
+                const size = (0.08 + Math.random() * 0.1) * VOXEL_SIZE;
+                const pGeo = new THREE.BoxGeometry(size, size, size);
+                const pMat = new THREE.MeshBasicMaterial({ 
+                    color: 0xFFFFFF, 
+                    transparent: true, 
+                    opacity: 0.7 
+                });
+                const pMesh = new THREE.Mesh(pGeo, pMat);
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * 3;
+                pMesh.position.set(
+                    Math.cos(angle) * radius * VOXEL_SIZE,
+                    Math.random() * 5 * VOXEL_SIZE,
+                    Math.sin(angle) * radius * VOXEL_SIZE
+                );
+                pMesh.userData.isSparkle = true;
+                pMesh.userData.velocity = {
+                    x: (Math.random() - 0.5) * 2,
+                    y: 1 + Math.random() * 2,
+                    z: (Math.random() - 0.5) * 2
+                };
+                pMesh.userData.life = Math.random();
+                pMesh.userData.maxLife = 1 + Math.random() * 1.5;
+                crystalGroup.add(pMesh);
+            }
+            crystalGroup.userData.isCrystalEmitter = true;
+            group.add(crystalGroup);
+        }
+        
+        // Void Feathers - Intense dark vortex with energy tendrils
+        if (data.hat === 'voidFeathers') {
+            const voidGroup = new THREE.Group();
+            voidGroup.name = 'void_particles';
+            voidGroup.position.set(0, 14 * VOXEL_SIZE, -2 * VOXEL_SIZE);
+            
+            // Energy tendrils (larger, more visible)
+            const tendrilCount = 6;
+            const tendrilColors = [0x8B008B, 0x9400D3, 0x4B0082, 0x800080];
+            for (let i = 0; i < tendrilCount; i++) {
+                const size = (0.25 + Math.random() * 0.2) * VOXEL_SIZE;
+                const pGeo = new THREE.BoxGeometry(size, size * 2, size * 0.4);
+                const pMat = new THREE.MeshBasicMaterial({ 
+                    color: tendrilColors[i % tendrilColors.length], 
+                    transparent: true, 
+                    opacity: 0.85 
+                });
+                const pMesh = new THREE.Mesh(pGeo, pMat);
+                const angle = (i / tendrilCount) * Math.PI * 2;
+                pMesh.position.set(
+                    Math.cos(angle) * 2 * VOXEL_SIZE,
+                    i * 0.7 * VOXEL_SIZE,
+                    Math.sin(angle) * 2 * VOXEL_SIZE - VOXEL_SIZE
+                );
+                pMesh.userData.isTendril = true;
+                pMesh.userData.angle = angle;
+                pMesh.userData.baseY = pMesh.position.y;
+                pMesh.userData.radius = 2;
+                pMesh.userData.speed = 1.2 + Math.random() * 0.5;
+                voidGroup.add(pMesh);
+            }
+            
+            // Vortex particles (swirling inward)
+            const vortexCount = 35;
+            for (let i = 0; i < vortexCount; i++) {
+                const size = (0.1 + Math.random() * 0.15) * VOXEL_SIZE;
+                const pGeo = new THREE.BoxGeometry(size, size, size);
+                const pMat = new THREE.MeshBasicMaterial({ 
+                    color: tendrilColors[Math.floor(Math.random() * tendrilColors.length)], 
+                    transparent: true, 
+                    opacity: 0.7 
+                });
+                const pMesh = new THREE.Mesh(pGeo, pMat);
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 1 + Math.random() * 3;
+                pMesh.position.set(
+                    Math.cos(angle) * radius * VOXEL_SIZE,
+                    Math.random() * 6 * VOXEL_SIZE,
+                    Math.sin(angle) * radius * VOXEL_SIZE - VOXEL_SIZE
+                );
+                pMesh.userData.isVortex = true;
+                pMesh.userData.angle = angle;
+                pMesh.userData.radius = radius;
+                pMesh.userData.baseY = pMesh.position.y;
+                pMesh.userData.speed = 1.5 + Math.random() * 0.8;
+                pMesh.userData.life = Math.random();
+                pMesh.userData.spiralSpeed = 0.5 + Math.random() * 0.5;
+                voidGroup.add(pMesh);
+            }
+            voidGroup.userData.isVoidEmitter = true;
+            group.add(voidGroup);
         }
     };
     
@@ -685,10 +942,290 @@ export function createPenguinBuilder(THREE) {
             mountGroup.add(backTruckPivot);
         }
         
+        // Build shopping cart wheels (for spin animation)
+        if (mountData.wheelFL) {
+            const wheelMesh = buildPartMerged(mountData.wheelFL, PALETTE);
+            wheelMesh.name = 'wheel_fl_mesh';
+            const wheelPivot = new THREE.Group();
+            wheelPivot.name = 'wheel_fl_pivot';
+            wheelPivot.position.set(-7 * VOXEL_SIZE, -2 * VOXEL_SIZE, -8 * VOXEL_SIZE);
+            wheelMesh.position.set(7 * VOXEL_SIZE, 2 * VOXEL_SIZE, 8 * VOXEL_SIZE); // Offset to center
+            wheelPivot.add(wheelMesh);
+            mountGroup.add(wheelPivot);
+        }
+        if (mountData.wheelFR) {
+            const wheelMesh = buildPartMerged(mountData.wheelFR, PALETTE);
+            wheelMesh.name = 'wheel_fr_mesh';
+            const wheelPivot = new THREE.Group();
+            wheelPivot.name = 'wheel_fr_pivot';
+            wheelPivot.position.set(7 * VOXEL_SIZE, -2 * VOXEL_SIZE, -8 * VOXEL_SIZE);
+            wheelMesh.position.set(-7 * VOXEL_SIZE, 2 * VOXEL_SIZE, 8 * VOXEL_SIZE);
+            wheelPivot.add(wheelMesh);
+            mountGroup.add(wheelPivot);
+        }
+        if (mountData.wheelBL) {
+            const wheelMesh = buildPartMerged(mountData.wheelBL, PALETTE);
+            wheelMesh.name = 'wheel_bl_mesh';
+            const wheelPivot = new THREE.Group();
+            wheelPivot.name = 'wheel_bl_pivot';
+            wheelPivot.position.set(-7 * VOXEL_SIZE, -2 * VOXEL_SIZE, 8 * VOXEL_SIZE);
+            wheelMesh.position.set(7 * VOXEL_SIZE, 2 * VOXEL_SIZE, -8 * VOXEL_SIZE);
+            wheelPivot.add(wheelMesh);
+            mountGroup.add(wheelPivot);
+        }
+        if (mountData.wheelBR) {
+            const wheelMesh = buildPartMerged(mountData.wheelBR, PALETTE);
+            wheelMesh.name = 'wheel_br_mesh';
+            const wheelPivot = new THREE.Group();
+            wheelPivot.name = 'wheel_br_pivot';
+            wheelPivot.position.set(7 * VOXEL_SIZE, -2 * VOXEL_SIZE, 8 * VOXEL_SIZE);
+            wheelMesh.position.set(-7 * VOXEL_SIZE, 2 * VOXEL_SIZE, -8 * VOXEL_SIZE);
+            wheelPivot.add(wheelMesh);
+            mountGroup.add(wheelPivot);
+        }
+        
+        // Build puffle tuft (for wiggle animation)
+        if (mountData.tuft) {
+            const tuftMesh = buildPartMerged(mountData.tuft, PALETTE);
+            tuftMesh.name = 'tuft_mesh';
+            const tuftPivot = new THREE.Group();
+            tuftPivot.name = 'tuft_pivot';
+            tuftPivot.position.set(0, 9 * VOXEL_SIZE, 0); // Position at top of puffle
+            tuftMesh.position.set(0, -9 * VOXEL_SIZE, 0); // Offset mesh to pivot from base
+            tuftPivot.add(tuftMesh);
+            mountGroup.add(tuftPivot);
+        }
+        
+        // Build UFO spin ring (for rotation animation)
+        if (mountData.spinRing) {
+            const ringMesh = buildPartMerged(mountData.spinRing, PALETTE);
+            ringMesh.name = 'spin_ring_mesh';
+            const ringPivot = new THREE.Group();
+            ringPivot.name = 'spin_ring_pivot';
+            // Ring rotates around center
+            ringPivot.add(ringMesh);
+            mountGroup.add(ringPivot);
+        }
+        
+        // Build UFO abduction ray (green cone of light)
+        if (mountData.hasAbductionRay) {
+            // Create cone geometry pointing downward
+            const coneGeom = new THREE.ConeGeometry(0.8, 2.5, 16, 1, true);
+            const coneMat = new THREE.MeshBasicMaterial({
+                color: 0x00FF00,
+                transparent: true,
+                opacity: 0.25,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const abductionRay = new THREE.Mesh(coneGeom, coneMat);
+            abductionRay.name = 'abduction_ray';
+            abductionRay.rotation.x = Math.PI; // Point downward
+            abductionRay.position.y = -0.6; // Below the UFO
+            
+            // Add inner brighter core
+            const innerConeGeom = new THREE.ConeGeometry(0.4, 2.2, 12, 1, true);
+            const innerConeMat = new THREE.MeshBasicMaterial({
+                color: 0x44FF44,
+                transparent: true,
+                opacity: 0.35,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
+            const innerRay = new THREE.Mesh(innerConeGeom, innerConeMat);
+            innerRay.name = 'abduction_ray_inner';
+            innerRay.rotation.x = Math.PI;
+            innerRay.position.y = -0.55;
+            
+            // Add point light for glow effect
+            const rayLight = new THREE.PointLight(0x00FF00, 0.5, 3);
+            rayLight.name = 'abduction_light';
+            rayLight.position.y = -0.3;
+            
+            mountGroup.add(abductionRay);
+            mountGroup.add(innerRay);
+            mountGroup.add(rayLight);
+        }
+        
+        // Build jetpack fire trail particle system
+        if (mountData.hasFireTrail) {
+            // Create particle geometry for fire/thrust
+            const particleCount = 30;
+            const particleGeom = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            const sizes = new Float32Array(particleCount);
+            
+            // Initialize particles at exhaust positions
+            for (let i = 0; i < particleCount; i++) {
+                // Alternate between left and right exhaust
+                const side = i % 2 === 0 ? -1 : 1;
+                positions[i * 3] = side * 3 * VOXEL_SIZE; // x - left or right tank
+                positions[i * 3 + 1] = -7 * VOXEL_SIZE - Math.random() * 0.5; // y - below exhaust
+                positions[i * 3 + 2] = 0; // z
+                
+                // Fire colors: orange to red to yellow
+                const colorChoice = Math.random();
+                if (colorChoice < 0.4) {
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 0.0; // Orange
+                } else if (colorChoice < 0.7) {
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.1; colors[i * 3 + 2] = 0.0; // Red-orange
+                } else {
+                    colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.8; colors[i * 3 + 2] = 0.0; // Yellow
+                }
+                
+                sizes[i] = 0.08 + Math.random() * 0.06;
+            }
+            
+            particleGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            particleGeom.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            
+            const particleMat = new THREE.PointsMaterial({
+                size: 0.1,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.9,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            
+            const fireParticles = new THREE.Points(particleGeom, particleMat);
+            fireParticles.name = 'fire_trail';
+            fireParticles.userData.particleCount = particleCount;
+            fireParticles.userData.isFireEmitter = true;
+            mountGroup.add(fireParticles);
+            
+            // Add glow lights at exhausts
+            const leftGlow = new THREE.PointLight(0xFF4500, 0.8, 2);
+            leftGlow.name = 'exhaust_light_left';
+            leftGlow.position.set(-3 * VOXEL_SIZE, -7 * VOXEL_SIZE, 0);
+            mountGroup.add(leftGlow);
+            
+            const rightGlow = new THREE.PointLight(0xFF4500, 0.8, 2);
+            rightGlow.name = 'exhaust_light_right';
+            rightGlow.position.set(3 * VOXEL_SIZE, -7 * VOXEL_SIZE, 0);
+            mountGroup.add(rightGlow);
+        }
+        
+        // Build dragon wings (for flapping animation)
+        if (mountData.leftWing) {
+            const leftWingMesh = buildPartMerged(mountData.leftWing, PALETTE);
+            leftWingMesh.name = 'left_wing_mesh';
+            const leftWingPivot = new THREE.Group();
+            leftWingPivot.name = 'left_wing_pivot';
+            leftWingPivot.position.set(-3 * VOXEL_SIZE, 3 * VOXEL_SIZE, 0); // Pivot at wing joint
+            leftWingMesh.position.set(3 * VOXEL_SIZE, -3 * VOXEL_SIZE, 0);  // Offset mesh
+            leftWingPivot.add(leftWingMesh);
+            mountGroup.add(leftWingPivot);
+        }
+        
+        if (mountData.rightWing) {
+            const rightWingMesh = buildPartMerged(mountData.rightWing, PALETTE);
+            rightWingMesh.name = 'right_wing_mesh';
+            const rightWingPivot = new THREE.Group();
+            rightWingPivot.name = 'right_wing_pivot';
+            rightWingPivot.position.set(3 * VOXEL_SIZE, 3 * VOXEL_SIZE, 0);  // Pivot at wing joint
+            rightWingMesh.position.set(-3 * VOXEL_SIZE, -3 * VOXEL_SIZE, 0); // Offset mesh
+            rightWingPivot.add(rightWingMesh);
+            mountGroup.add(rightWingPivot);
+        }
+        
+        // Build dragon breath particle system (ice, fire, or void)
+        const hasBreath = mountData.hasIceBreath || mountData.hasFireBreath || mountData.hasVoidBreath;
+        if (hasBreath) {
+            const isBaby = data.mount && data.mount.startsWith('baby');
+            const particleCount = isBaby ? 25 : 50;
+            const particleGeom = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+            const sizes = new Float32Array(particleCount);
+            
+            // Mouth position (smaller for baby dragons)
+            const mouthZ = isBaby ? -12 : -16;
+            const mouthY = isBaby ? 2 : 1.5;
+            
+            // Determine breath type and colors
+            let breathType = 'ice';
+            let glowColor = 0x00FFFF;
+            if (mountData.hasFireBreath) { breathType = 'fire'; glowColor = 0xFF4500; }
+            if (mountData.hasVoidBreath) { breathType = 'void'; glowColor = 0x9B59B6; }
+            
+            for (let i = 0; i < particleCount; i++) {
+                positions[i * 3] = (Math.random() - 0.5) * 0.2;
+                positions[i * 3 + 1] = mouthY * VOXEL_SIZE;
+                positions[i * 3 + 2] = mouthZ * VOXEL_SIZE - Math.random() * 0.4;
+                
+                // Colors based on breath type
+                const colorChoice = Math.random();
+                if (breathType === 'ice') {
+                    if (colorChoice < 0.3) { colors[i * 3] = 1.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0; }
+                    else if (colorChoice < 0.6) { colors[i * 3] = 0.7; colors[i * 3 + 1] = 0.9; colors[i * 3 + 2] = 1.0; }
+                    else { colors[i * 3] = 0.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 1.0; }
+                } else if (breathType === 'fire') {
+                    if (colorChoice < 0.3) { colors[i * 3] = 1.0; colors[i * 3 + 1] = 1.0; colors[i * 3 + 2] = 0.0; } // Yellow
+                    else if (colorChoice < 0.6) { colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.5; colors[i * 3 + 2] = 0.0; } // Orange
+                    else { colors[i * 3] = 1.0; colors[i * 3 + 1] = 0.2; colors[i * 3 + 2] = 0.0; } // Red
+                } else { // void
+                    if (colorChoice < 0.3) { colors[i * 3] = 0.9; colors[i * 3 + 1] = 0.3; colors[i * 3 + 2] = 1.0; } // Pink-purple
+                    else if (colorChoice < 0.6) { colors[i * 3] = 0.6; colors[i * 3 + 1] = 0.2; colors[i * 3 + 2] = 0.8; } // Purple
+                    else { colors[i * 3] = 0.2; colors[i * 3 + 1] = 0.0; colors[i * 3 + 2] = 0.3; } // Dark void
+                }
+                
+                sizes[i] = (isBaby ? 0.05 : 0.08) + Math.random() * 0.06;
+            }
+            
+            particleGeom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            particleGeom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            particleGeom.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+            
+            const particleMat = new THREE.PointsMaterial({
+                size: isBaby ? 0.08 : 0.12,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.85,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false
+            });
+            
+            const breathParticles = new THREE.Points(particleGeom, particleMat);
+            breathParticles.name = 'dragon_breath';
+            breathParticles.userData.particleCount = particleCount;
+            breathParticles.userData.breathType = breathType;
+            breathParticles.userData.mouthZ = mouthZ;
+            breathParticles.userData.mouthY = mouthY;
+            mountGroup.add(breathParticles);
+            
+            // Add breath glow at mouth
+            const breathGlow = new THREE.PointLight(glowColor, isBaby ? 0.6 : 1.0, isBaby ? 2 : 4);
+            breathGlow.name = 'breath_glow';
+            breathGlow.position.set(0, mouthY * VOXEL_SIZE, (mouthZ + 1) * VOXEL_SIZE);
+            mountGroup.add(breathGlow);
+            
+            // Add eye glows
+            const eyeZ = isBaby ? -8 : -11;
+            const eyeY = isBaby ? 3 : 4;
+            const leftEyeGlow = new THREE.PointLight(glowColor, 0.4, 1.5);
+            leftEyeGlow.name = 'left_eye_glow';
+            leftEyeGlow.position.set(-3 * VOXEL_SIZE, eyeY * VOXEL_SIZE, eyeZ * VOXEL_SIZE);
+            mountGroup.add(leftEyeGlow);
+            
+            const rightEyeGlow = new THREE.PointLight(glowColor, 0.4, 1.5);
+            rightEyeGlow.name = 'right_eye_glow';
+            rightEyeGlow.position.set(3 * VOXEL_SIZE, eyeY * VOXEL_SIZE, eyeZ * VOXEL_SIZE);
+            mountGroup.add(rightEyeGlow);
+        }
+        
         // Use mount-specific scale if defined, otherwise default 0.2
         const mountScale = mountData.scale || 0.2;
         mountGroup.scale.set(mountScale, mountScale, mountScale);
         mountGroup.position.y = mountData.positionY ?? 0.4;
+        
+        // Apply mount rotation if specified (e.g., shopping cart faces backward)
+        if (mountData.mountRotation) {
+            mountGroup.rotation.y = mountData.mountRotation;
+        }
+        
         wrapper.add(mountGroup);
         
         wrapper.userData.mount = data.mount;
@@ -1878,6 +2415,172 @@ export function animateCosmeticsFromCache(cache, time, delta, VOXEL_SIZE) {
                 particle.position.y = particle.userData.baseY || 0;
                 particle.scale.setScalar(1);
                 if (particle.material) particle.material.opacity = 0.9;
+            }
+        });
+    }
+    
+    // ========== ANIMATED FEATHERS (ENHANCED) ==========
+    
+    // Aurora Feathers - Intense northern lights with trails
+    if (cache.auroraEmitter) {
+        cache.auroraEmitter.children.forEach((particle, i) => {
+            if (particle.userData.isRibbon) {
+                // Main ribbons - flowing wave motion
+                const angle = particle.userData.angle || 0;
+                const phase = particle.userData.phaseOffset || 0;
+                const baseY = particle.userData.baseY || 0;
+                const speed = particle.userData.speed || 1;
+                
+                // Serpentine motion
+                const wave = Math.sin(time * speed + phase) * 1.5;
+                particle.position.x = Math.cos(angle + time * 0.3) * (2 + wave * 0.5) * VOXEL_SIZE;
+                particle.position.z = Math.sin(angle + time * 0.3) * (1.5 + wave * 0.3) * VOXEL_SIZE - VOXEL_SIZE;
+                particle.position.y = baseY + Math.sin(time * speed * 1.5 + phase) * 1.2 * VOXEL_SIZE;
+                
+                // Rotation follows motion
+                particle.rotation.y = time * 0.5 + phase;
+                particle.rotation.z = Math.sin(time * 2 + phase) * 0.3;
+                
+                // Vivid color cycling
+                if (particle.material) {
+                    const hue = (time * 0.15 + phase * 0.1) % 1;
+                    particle.material.color.setHSL(hue * 0.3 + 0.35, 0.9, 0.55);
+                    particle.material.opacity = 0.7 + Math.sin(time * 4 + phase) * 0.25;
+                }
+            } else if (particle.userData.isTrail) {
+                // Trail particles - rising and fading
+                particle.userData.life += delta * particle.userData.speed;
+                const lifeRatio = particle.userData.life / particle.userData.maxLife;
+                
+                if (lifeRatio >= 1) {
+                    // Reset particle
+                    particle.userData.life = 0;
+                    particle.position.x = particle.userData.baseX + (Math.random() - 0.5) * 2 * VOXEL_SIZE;
+                    particle.position.y = 0;
+                    particle.position.z = particle.userData.baseZ + (Math.random() - 0.5) * 2 * VOXEL_SIZE;
+                } else {
+                    // Rise and drift
+                    particle.position.y += delta * 3 * VOXEL_SIZE;
+                    particle.position.x += Math.sin(time * 3 + i) * delta * 0.5 * VOXEL_SIZE;
+                    
+                    // Fade out
+                    if (particle.material) {
+                        particle.material.opacity = (1 - lifeRatio) * 0.8;
+                        const hue = (time * 0.2 + i * 0.05) % 1;
+                        particle.material.color.setHSL(hue * 0.3 + 0.35, 0.85, 0.6);
+                    }
+                    particle.scale.setScalar(1 - lifeRatio * 0.5);
+                }
+            }
+        });
+    }
+    
+    // Crystal Feathers - Brilliant sparkle bursts
+    if (cache.crystalEmitter) {
+        cache.crystalEmitter.children.forEach((particle, i) => {
+            if (particle.userData.isShard) {
+                // Crystal shards - pulsing and rotating
+                const twinkle = Math.sin(time * particle.userData.twinkleSpeed + particle.userData.twinkleOffset);
+                const twinkleNorm = (twinkle + 1) / 2;
+                const angle = particle.userData.angle || 0;
+                
+                // Subtle orbit
+                particle.position.x = Math.cos(angle + time * 0.2) * 1.5 * VOXEL_SIZE;
+                particle.position.z = Math.sin(angle + time * 0.2) * 1 * VOXEL_SIZE;
+                particle.position.y = particle.userData.baseY + Math.sin(time * 2 + i) * 0.3 * VOXEL_SIZE;
+                
+                // Rotation
+                particle.rotation.y = time + angle;
+                particle.rotation.x = Math.sin(time * 1.5 + i) * 0.2;
+                
+                // Brilliant color shift
+                if (particle.material) {
+                    const hue = (time * 0.1 + particle.userData.twinkleOffset * 0.1) % 1;
+                    particle.material.color.setHSL(hue, 0.2 + twinkleNorm * 0.3, 0.85 + twinkleNorm * 0.15);
+                    particle.material.opacity = 0.7 + twinkleNorm * 0.3;
+                }
+                particle.scale.setScalar(0.8 + twinkleNorm * 0.4);
+            } else if (particle.userData.isSparkle) {
+                // Sparkle particles - burst outward and fade
+                particle.userData.life += delta * 2;
+                const lifeRatio = particle.userData.life / particle.userData.maxLife;
+                
+                if (lifeRatio >= 1) {
+                    // Reset at center
+                    particle.userData.life = 0;
+                    particle.position.set(0, VOXEL_SIZE, 0);
+                    particle.userData.velocity = {
+                        x: (Math.random() - 0.5) * 3,
+                        y: 2 + Math.random() * 3,
+                        z: (Math.random() - 0.5) * 3
+                    };
+                } else {
+                    // Burst outward
+                    particle.position.x += particle.userData.velocity.x * delta * VOXEL_SIZE;
+                    particle.position.y += particle.userData.velocity.y * delta * VOXEL_SIZE;
+                    particle.position.z += particle.userData.velocity.z * delta * VOXEL_SIZE;
+                    particle.userData.velocity.y -= delta * 2; // Gravity
+                    
+                    // Fade and shrink
+                    if (particle.material) {
+                        particle.material.opacity = (1 - lifeRatio) * 0.9;
+                        // Rainbow sparkle
+                        const hue = (time * 0.5 + i * 0.1) % 1;
+                        particle.material.color.setHSL(hue, 0.5, 0.9);
+                    }
+                    particle.scale.setScalar((1 - lifeRatio * 0.7));
+                }
+            }
+        });
+    }
+    
+    // Void Feathers - Intense dark vortex
+    if (cache.voidEmitter) {
+        cache.voidEmitter.children.forEach((particle, i) => {
+            if (particle.userData.isTendril) {
+                // Energy tendrils - swirling upward
+                const angle = particle.userData.angle || 0;
+                const baseY = particle.userData.baseY || 0;
+                const speed = particle.userData.speed || 1;
+                
+                // Spiral motion
+                const currentAngle = angle + time * speed;
+                const radius = particle.userData.radius + Math.sin(time * 2) * 0.5;
+                particle.position.x = Math.cos(currentAngle) * radius * VOXEL_SIZE;
+                particle.position.z = Math.sin(currentAngle) * radius * VOXEL_SIZE - VOXEL_SIZE;
+                particle.position.y = baseY + Math.sin(time * speed + angle) * 1.5 * VOXEL_SIZE;
+                
+                // Tendril rotation
+                particle.rotation.y = currentAngle;
+                particle.rotation.x = Math.sin(time * 3) * 0.4;
+                
+                // Pulsing purple energy
+                if (particle.material) {
+                    const pulse = Math.sin(time * 4 + angle) * 0.5 + 0.5;
+                    particle.material.color.setHSL(0.78 + pulse * 0.08, 0.9, 0.25 + pulse * 0.15);
+                    particle.material.opacity = 0.7 + pulse * 0.25;
+                }
+            } else if (particle.userData.isVortex) {
+                // Vortex particles - spiraling inward then resetting
+                particle.userData.life += delta * particle.userData.spiralSpeed;
+                const lifeRatio = particle.userData.life % 1;
+                
+                // Spiral inward
+                const angle = particle.userData.angle + time * particle.userData.speed;
+                const baseRadius = particle.userData.radius;
+                const currentRadius = baseRadius * (1 - lifeRatio * 0.8);
+                
+                particle.position.x = Math.cos(angle + lifeRatio * Math.PI * 4) * currentRadius * VOXEL_SIZE;
+                particle.position.z = Math.sin(angle + lifeRatio * Math.PI * 4) * currentRadius * VOXEL_SIZE - VOXEL_SIZE;
+                particle.position.y = particle.userData.baseY + lifeRatio * 4 * VOXEL_SIZE;
+                
+                // Fade as it spirals in
+                if (particle.material) {
+                    particle.material.opacity = (1 - lifeRatio * 0.7) * 0.8;
+                    const hue = 0.75 + Math.sin(time * 2 + i) * 0.1;
+                    particle.material.color.setHSL(hue, 0.85, 0.2 + lifeRatio * 0.2);
+                }
+                particle.scale.setScalar(1 - lifeRatio * 0.6);
             }
         });
     }

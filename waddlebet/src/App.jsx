@@ -608,6 +608,11 @@ const Styles = () => (
         }
         .animate-pulse-glow { animation: pulse-glow 1.5s ease-in-out infinite; }
         
+        @keyframes pulseGlow {
+            0%, 100% { filter: brightness(1); }
+            50% { filter: brightness(1.3); }
+        }
+        
         @keyframes bounce-hud {
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-3px); }
