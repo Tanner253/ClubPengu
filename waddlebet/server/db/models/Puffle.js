@@ -11,7 +11,8 @@ const PUFFLE_TIERS = {
     uncommon: ['pink', 'yellow', 'orange'],     // 100 coins
     rare: ['purple', 'white', 'brown'],         // 200 coins
     epic: ['black', 'gold'],                    // 500 coins
-    legendary: ['rainbow', 'ghost']             // 1000 coins
+    legendary: ['rainbow', 'ghost'],            // 1000 coins
+    mythic: ['barkingDog', 'babyShrimp', 'babyDuck', 'babyPenguin']  // 2000 coins
 };
 
 const PUFFLE_PRICES = {
@@ -19,7 +20,8 @@ const PUFFLE_PRICES = {
     pink: 100, yellow: 100, orange: 100,
     purple: 200, white: 200, brown: 200,
     black: 500, gold: 500,
-    rainbow: 1000, ghost: 1000
+    rainbow: 1000, ghost: 1000,
+    barkingDog: 2000, babyShrimp: 2000, babyDuck: 2000, babyPenguin: 2000
 };
 
 // Food definitions (matches Puffle.js)

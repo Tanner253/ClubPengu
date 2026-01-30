@@ -335,7 +335,7 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
                             
                             {/* Puffle Shop Grid */}
                             <div className="grid grid-cols-1 gap-2">
-                                {['common', 'uncommon', 'rare', 'epic', 'legendary'].map(tier => {
+                                {['common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic'].map(tier => {
                                     const tierColors = sortedColors.filter(c => Puffle.COLORS[c].tier === tier);
                                     if (tierColors.length === 0) return null;
                                     
@@ -384,6 +384,18 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
                                                         >
                                                             {colorData.special === 'rainbow' && (
                                                                 <span className="absolute inset-0 bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-blue-500 to-purple-500 opacity-80 rounded-lg" />
+                                                            )}
+                                                            {colorData.special === 'dog' && (
+                                                                <span className="absolute inset-0 flex items-center justify-center text-2xl">🐕</span>
+                                                            )}
+                                                            {colorData.special === 'shrimp' && (
+                                                                <span className="absolute inset-0 flex items-center justify-center text-2xl">🦐</span>
+                                                            )}
+                                                            {colorData.special === 'duck' && (
+                                                                <span className="absolute inset-0 flex items-center justify-center text-2xl">🦆</span>
+                                                            )}
+                                                            {colorData.special === 'babyPenguin' && (
+                                                                <span className="absolute inset-0 flex items-center justify-center text-2xl">🐧</span>
                                                             )}
                                                             {owned && (
                                                                 <span className="absolute -top-1 -right-1 text-xs">✓</span>

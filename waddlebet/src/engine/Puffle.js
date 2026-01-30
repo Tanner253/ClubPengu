@@ -26,7 +26,13 @@ class Puffle {
         
         // Legendary tier - $1000 (special effects)
         rainbow: { hex: '#FF0000', name: 'Rainbow', personality: 'Magical', price: 1000, tier: 'legendary', special: 'rainbow' },
-        ghost: { hex: '#AADDFF', name: 'Ghost', personality: 'Spooky', price: 1000, tier: 'legendary', special: 'glow' }
+        ghost: { hex: '#AADDFF', name: 'Ghost', personality: 'Spooky', price: 1000, tier: 'legendary', special: 'glow' },
+        
+        // Mythic tier - $2000 (special models)
+        barkingDog: { hex: '#D4A04A', name: 'Barking Dog', personality: 'Loyal', price: 2000, tier: 'mythic', special: 'dog', model: 'dog' },
+        babyShrimp: { hex: '#FF6B4A', name: 'Baby Shrimp', personality: 'Curious', price: 2000, tier: 'mythic', special: 'shrimp', model: 'shrimp' },
+        babyDuck: { hex: '#FFD93D', name: 'Baby Duck', personality: 'Cheerful', price: 2000, tier: 'mythic', special: 'duck', model: 'duck' },
+        babyPenguin: { hex: '#2A2A2A', name: 'Baby Penguin', personality: 'Playful', price: 2000, tier: 'mythic', special: 'babyPenguin', model: 'babyPenguin' }
     };
     
     static TIER_COLORS = {
@@ -34,7 +40,8 @@ class Puffle {
         uncommon: '#44CC44',
         rare: '#4488FF',
         epic: '#AA44FF',
-        legendary: '#FFAA00'
+        legendary: '#FFAA00',
+        mythic: '#FF4488'
     };
     
     // Available puffle food
@@ -188,7 +195,15 @@ class Puffle {
         // Nature emotes
         nature: ['🌸', '🌺', '🌻', '🌼', '🌷', '🌱', '🍀', '🌈', '☀️', '🌙'],
         // Action emotes
-        action: ['💪', '🏃', '🏊', '✈️', '🧗', '🎯', '🏆', '🥇', '⚡', '💨']
+        action: ['💪', '🏃', '🏊', '✈️', '🧗', '🎯', '🏆', '🥇', '⚡', '💨'],
+        // Dog-specific emotes (for barking dog puffle)
+        dog: ['🐕', '🦴', '🐾', '🐶', '🎾', '🌭', '🏃', '💕', '🐩', '🦮'],
+        // Shrimp-specific emotes (for baby shrimp puffle)
+        shrimp: ['🦐', '🌊', '🫧', '🏊', '💦', '🐚', '🎣', '🌅', '🦑', '🐠'],
+        // Duck-specific emotes (for baby duck puffle)
+        duck: ['🦆', '🐤', '🐣', '💛', '🌾', '🌻', '🪺', '🍞', '💕', '🏊'],
+        // Baby penguin-specific emotes
+        babyPenguin: ['🐧', '🐣', '❄️', '🧊', '⛄', '🎿', '🐟', '💙', '🌊', '🥶']
     };
     
     // Urgent need emojis
@@ -533,6 +548,17 @@ class Puffle {
             
             // Pick random emote from set
             if (emoteSet && emoteSet.length > 0) {
+                // Special puffles occasionally use their own emotes
+                const colorData = Puffle.COLORS[this.color];
+                if (colorData?.model === 'dog' && Math.random() > 0.5) {
+                    emoteSet = Puffle.RANDOM_EMOTES.dog;
+                } else if (colorData?.model === 'shrimp' && Math.random() > 0.5) {
+                    emoteSet = Puffle.RANDOM_EMOTES.shrimp;
+                } else if (colorData?.model === 'duck' && Math.random() > 0.5) {
+                    emoteSet = Puffle.RANDOM_EMOTES.duck;
+                } else if (colorData?.model === 'babyPenguin' && Math.random() > 0.5) {
+                    emoteSet = Puffle.RANDOM_EMOTES.babyPenguin;
+                }
                 this.showEmote(emoteSet[Math.floor(Math.random() * emoteSet.length)]);
             }
         }
@@ -1104,10 +1130,143 @@ class Puffle {
             if (body && body.material) {
                 body.material.emissiveIntensity = glowIntensity;
             }
+        } else if (this.mesh.userData.special === 'dog') {
+            // Dog puffle animations
+            this._animateDogPuffle(time, baseY);
+        } else if (this.mesh.userData.special === 'shrimp') {
+            // Shrimp puffle animations
+            this._animateShrimpPuffle(time, baseY);
+        } else if (this.mesh.userData.special === 'duck') {
+            // Duck puffle animations
+            this._animateDuckPuffle(time, baseY);
+        } else if (this.mesh.userData.special === 'babyPenguin') {
+            // Baby penguin puffle animations (same as duck)
+            this._animateBabyPenguinPuffle(time, baseY);
         }
         
         // Update emote bubble
         this.updateEmoteBubble(time);
+    }
+    
+    // Dog puffle specific animations
+    _animateDogPuffle(time, baseY) {
+        if (!this.mesh) return;
+        
+        const isMoving = this.state === 'following';
+        const isPlaying = this.state === 'playing';
+        const isExcited = this.mood === 'excited' || this.mood === 'ecstatic' || this.mood === 'playful';
+        
+        // === TAIL WAGGING ===
+        const tail = this.mesh.getObjectByName('dogTail');
+        if (tail) {
+            // Wag speed varies by state
+            const wagSpeed = isMoving ? 12 : isPlaying ? 15 : isExcited ? 10 : 4;
+            const wagIntensity = isMoving ? 0.6 : isPlaying ? 0.8 : isExcited ? 0.5 : 0.2;
+            
+            // Side-to-side wag
+            tail.rotation.y = Math.sin(time * wagSpeed) * wagIntensity;
+            // Slight up-down movement
+            tail.rotation.x = -0.5 + Math.sin(time * wagSpeed * 0.5) * 0.15;
+        }
+        
+        // === EAR ANIMATION ===
+        const leftEar = this.mesh.getObjectByName('leftEar');
+        const rightEar = this.mesh.getObjectByName('rightEar');
+        
+        if (leftEar && rightEar) {
+            // Floppy ear bounce when moving
+            const earBounce = isMoving ? Math.sin(time * 8) * 0.15 : Math.sin(time * 2) * 0.05;
+            leftEar.rotation.z = 0.3 + earBounce;
+            rightEar.rotation.z = -0.3 - earBounce;
+            
+            // Ears perk up when excited
+            if (isExcited || isPlaying) {
+                const perkUp = 0.2 + Math.sin(time * 4) * 0.1;
+                leftEar.rotation.x = -perkUp;
+                rightEar.rotation.x = -perkUp;
+            } else {
+                leftEar.rotation.x = 0;
+                rightEar.rotation.x = 0;
+            }
+        }
+        
+        // === HEAD BOB ===
+        const head = this.mesh.getObjectByName('dogHead');
+        if (head) {
+            // Slight head tilt when curious/thinking
+            if (this.mood === 'curious' || this.mood === 'thinking') {
+                head.rotation.z = Math.sin(time * 0.5) * 0.2;
+            } else {
+                head.rotation.z *= 0.9; // Smooth return to center
+            }
+            
+            // Head bob when moving
+            if (isMoving) {
+                head.position.y = 0.45 + Math.abs(Math.sin(time * 8)) * 0.05;
+            }
+            
+            // Panting animation (tongue visible when happy/playing)
+            const tongue = head.getObjectByName('tongue');
+            if (tongue && (isPlaying || isMoving || isExcited)) {
+                tongue.scale.y = 0.5 + Math.sin(time * 6) * 0.3;
+                tongue.position.y = -0.12 - Math.sin(time * 6) * 0.02;
+            }
+        }
+        
+        // === LEG ANIMATION ===
+        // Front legs
+        const frontLeg0 = this.mesh.getObjectByName('frontLeg0');
+        const frontLeg1 = this.mesh.getObjectByName('frontLeg1');
+        // Back legs
+        const backLeg0 = this.mesh.getObjectByName('backLeg0');
+        const backLeg1 = this.mesh.getObjectByName('backLeg1');
+        
+        if (isMoving && frontLeg0 && frontLeg1 && backLeg0 && backLeg1) {
+            // Trot animation - diagonal pairs move together
+            const trotSpeed = 8;
+            const trotAmount = 0.4;
+            
+            // Front left + Back right
+            frontLeg0.rotation.x = Math.sin(time * trotSpeed) * trotAmount;
+            backLeg1.rotation.x = Math.sin(time * trotSpeed) * trotAmount;
+            
+            // Front right + Back left (opposite phase)
+            frontLeg1.rotation.x = Math.sin(time * trotSpeed + Math.PI) * trotAmount;
+            backLeg0.rotation.x = Math.sin(time * trotSpeed + Math.PI) * trotAmount;
+        } else if (frontLeg0 && frontLeg1 && backLeg0 && backLeg1) {
+            // Return to neutral
+            [frontLeg0, frontLeg1, backLeg0, backLeg1].forEach(leg => {
+                leg.rotation.x *= 0.9;
+            });
+        }
+        
+        // === PLAY ANIMATION ===
+        if (isPlaying) {
+            // Play bow - front down, butt up
+            this.mesh.rotation.x = Math.sin(time * 3) * 0.15;
+            
+            // Extra excited bouncing
+            const extraBounce = Math.abs(Math.sin(time * 6)) * 0.1;
+            this.mesh.position.y = baseY + extraBounce;
+        }
+        
+        // === BARK ANIMATION (random when excited) ===
+        if (!this._lastBarkTime) this._lastBarkTime = 0;
+        if (isExcited && time - this._lastBarkTime > 3 + Math.random() * 5) {
+            this._lastBarkTime = time;
+            // Quick head jerk for bark
+            if (head) {
+                const originalY = head.position.y;
+                head.position.y += 0.1;
+                setTimeout(() => {
+                    if (head) head.position.y = originalY;
+                }, 100);
+            }
+            // Show bark emote occasionally
+            if (Math.random() > 0.7) {
+                this.showEmote('🐕');
+            }
+        }
     }
     
     // Update emote bubble visibility and content
@@ -1206,6 +1365,20 @@ class Puffle {
         const baseColor = new THREE.Color(colorData.hex);
         const darkerColor = baseColor.clone().multiplyScalar(0.7);
         const isSpecial = colorData.special;
+        
+        // Check if this is a special model type (like barking dog, shrimp, duck, baby penguin)
+        if (colorData.model === 'dog') {
+            return this._createDogMesh(THREE, colorData);
+        }
+        if (colorData.model === 'shrimp') {
+            return this._createShrimpMesh(THREE, colorData);
+        }
+        if (colorData.model === 'duck') {
+            return this._createDuckMesh(THREE, colorData);
+        }
+        if (colorData.model === 'babyPenguin') {
+            return this._createBabyPenguinMesh(THREE, colorData);
+        }
         
         const group = new THREE.Group();
         group.userData.special = isSpecial;
@@ -1866,6 +2039,1082 @@ class Puffle {
         );
         pendant.position.set(0, -0.15, 0.2);
         group.add(pendant);
+    }
+    
+    // --- BABY DOG PUFFLE MESH ---
+    _createDogMesh(THREE, colorData) {
+        const group = new THREE.Group();
+        group.userData.special = 'dog';
+        group.userData.colorData = colorData;
+        group.userData.isDogPuffle = true;
+        
+        // Dog color palette
+        const mainColor = new THREE.Color(colorData.hex);
+        const lightColor = mainColor.clone().multiplyScalar(1.2);
+        const darkColor = mainColor.clone().multiplyScalar(0.7);
+        const bellyColor = new THREE.Color('#F0D890');
+        const noseColor = new THREE.Color('#2A2020');
+        const tongueColor = new THREE.Color('#E87080');
+        
+        // Materials
+        const mainMat = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.9 });
+        const lightMat = new THREE.MeshStandardMaterial({ color: lightColor, roughness: 0.9 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: darkColor, roughness: 0.9 });
+        const bellyMat = new THREE.MeshStandardMaterial({ color: bellyColor, roughness: 0.9 });
+        const noseMat = new THREE.MeshStandardMaterial({ color: noseColor, roughness: 0.5 });
+        const tongueMat = new THREE.MeshStandardMaterial({ color: tongueColor, roughness: 0.7 });
+        const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1 });
+        const pupilMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        
+        // === BODY (round puppy body) ===
+        const bodyGeo = new THREE.SphereGeometry(0.45, 16, 12);
+        const body = new THREE.Mesh(bodyGeo, mainMat);
+        body.scale.set(1.1, 0.9, 1);
+        body.position.y = 0;
+        body.castShadow = true;
+        body.name = 'body';
+        group.add(body);
+        
+        // Belly patch
+        const bellyGeo = new THREE.SphereGeometry(0.3, 12, 8);
+        const belly = new THREE.Mesh(bellyGeo, bellyMat);
+        belly.position.set(0, -0.1, 0.25);
+        belly.scale.set(0.8, 0.7, 0.5);
+        group.add(belly);
+        
+        // === HEAD (round puppy head with snout) ===
+        const headGroup = new THREE.Group();
+        headGroup.name = 'dogHead';
+        
+        // Main head sphere
+        const headGeo = new THREE.SphereGeometry(0.35, 16, 12);
+        const head = new THREE.Mesh(headGeo, mainMat.clone());
+        head.position.y = 0.1;
+        headGroup.add(head);
+        
+        // Snout
+        const snoutGeo = new THREE.SphereGeometry(0.18, 10, 8);
+        const snout = new THREE.Mesh(snoutGeo, lightMat);
+        snout.scale.set(0.9, 0.7, 1.2);
+        snout.position.set(0, -0.05, 0.28);
+        headGroup.add(snout);
+        
+        // Nose
+        const noseGeo = new THREE.SphereGeometry(0.06, 8, 6);
+        const nose = new THREE.Mesh(noseGeo, noseMat);
+        nose.position.set(0, 0, 0.42);
+        headGroup.add(nose);
+        
+        // Tongue (small, sticking out)
+        const tongueGeo = new THREE.SphereGeometry(0.04, 6, 4);
+        const tongue = new THREE.Mesh(tongueGeo, tongueMat);
+        tongue.scale.set(1.2, 0.5, 1.5);
+        tongue.position.set(0, -0.12, 0.35);
+        tongue.name = 'tongue';
+        headGroup.add(tongue);
+        
+        // Eyes (big puppy eyes)
+        [-0.12, 0.12].forEach((offset, idx) => {
+            // Eye white
+            const eyeGeo = new THREE.SphereGeometry(0.1, 10, 10);
+            const eye = new THREE.Mesh(eyeGeo, eyeWhiteMat);
+            eye.position.set(offset, 0.12, 0.22);
+            eye.scale.set(1, 1.1, 0.6);
+            headGroup.add(eye);
+            
+            // Pupil (big for cute effect)
+            const pupilGeo = new THREE.SphereGeometry(0.06, 8, 8);
+            const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+            const lookOffset = idx === 0 ? 0.01 : -0.01;
+            pupil.position.set(offset + lookOffset, 0.12, 0.28);
+            headGroup.add(pupil);
+            
+            // Eye shine
+            const shineGeo = new THREE.SphereGeometry(0.02, 6, 6);
+            const shineMat = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 
+            });
+            const shine = new THREE.Mesh(shineGeo, shineMat);
+            shine.position.set(offset + 0.03, 0.16, 0.29);
+            headGroup.add(shine);
+        });
+        
+        // Eyebrows (for expression)
+        [-0.12, 0.12].forEach(offset => {
+            const browGeo = new THREE.BoxGeometry(0.1, 0.02, 0.02);
+            const brow = new THREE.Mesh(browGeo, darkMat);
+            brow.position.set(offset, 0.24, 0.2);
+            brow.rotation.z = offset > 0 ? -0.2 : 0.2;
+            headGroup.add(brow);
+        });
+        
+        headGroup.position.set(0, 0.45, 0.15);
+        group.add(headGroup);
+        
+        // === EARS (floppy puppy ears) ===
+        const leftEarGroup = new THREE.Group();
+        leftEarGroup.name = 'leftEar';
+        const rightEarGroup = new THREE.Group();
+        rightEarGroup.name = 'rightEar';
+        
+        [-1, 1].forEach(side => {
+            const earGroup = side === -1 ? leftEarGroup : rightEarGroup;
+            
+            // Ear base
+            const earGeo = new THREE.SphereGeometry(0.12, 8, 6);
+            const ear = new THREE.Mesh(earGeo, mainMat.clone());
+            ear.scale.set(0.6, 1.5, 0.4);
+            ear.rotation.z = side * 0.3;
+            earGroup.add(ear);
+            
+            // Inner ear
+            const innerEarGeo = new THREE.SphereGeometry(0.06, 6, 4);
+            const innerEarMat = new THREE.MeshStandardMaterial({ color: '#E0A080', roughness: 0.8 });
+            const innerEar = new THREE.Mesh(innerEarGeo, innerEarMat);
+            innerEar.scale.set(0.5, 1.2, 0.3);
+            innerEar.position.set(-side * 0.02, -0.05, 0.02);
+            earGroup.add(innerEar);
+            
+            earGroup.position.set(side * 0.25, 0.55, 0.1);
+            group.add(earGroup);
+        });
+        
+        // === TAIL (wagging puppy tail) ===
+        const tailGroup = new THREE.Group();
+        tailGroup.name = 'dogTail';
+        
+        // Tail segments
+        for (let i = 0; i < 4; i++) {
+            const segGeo = new THREE.SphereGeometry(0.06 - i * 0.01, 6, 4);
+            const seg = new THREE.Mesh(segGeo, mainMat.clone());
+            seg.position.set(0, i * 0.08, -i * 0.05);
+            tailGroup.add(seg);
+        }
+        
+        // Fluffy tail tip
+        const tipGeo = new THREE.SphereGeometry(0.08, 8, 6);
+        const tip = new THREE.Mesh(tipGeo, lightMat);
+        tip.position.set(0, 0.35, -0.15);
+        tailGroup.add(tip);
+        
+        tailGroup.position.set(0, 0, -0.4);
+        tailGroup.rotation.x = -0.5; // Tail curves up
+        group.add(tailGroup);
+        
+        // === LEGS (stubby puppy legs) ===
+        const legPositions = [
+            { x: -0.25, z: 0.2 },  // Front left
+            { x: 0.25, z: 0.2 },   // Front right
+            { x: -0.22, z: -0.25 }, // Back left
+            { x: 0.22, z: -0.25 },  // Back right
+        ];
+        
+        legPositions.forEach((pos, idx) => {
+            const legGroup = new THREE.Group();
+            legGroup.name = idx < 2 ? `frontLeg${idx}` : `backLeg${idx - 2}`;
+            
+            // Leg
+            const legGeo = new THREE.CylinderGeometry(0.06, 0.07, 0.2, 8);
+            const leg = new THREE.Mesh(legGeo, mainMat.clone());
+            leg.position.y = -0.1;
+            legGroup.add(leg);
+            
+            // Paw
+            const pawGeo = new THREE.SphereGeometry(0.08, 8, 6);
+            const paw = new THREE.Mesh(pawGeo, lightMat);
+            paw.scale.set(1, 0.6, 1.2);
+            paw.position.set(0, -0.22, 0.02);
+            legGroup.add(paw);
+            
+            legGroup.position.set(pos.x, -0.25, pos.z);
+            group.add(legGroup);
+        });
+        
+        // === EMOTE BUBBLE ===
+        const emoteBubble = this.createEmoteBubble(THREE);
+        emoteBubble.position.set(0, 1.0, 0);
+        emoteBubble.visible = false;
+        group.add(emoteBubble);
+        this.emoteBubble = emoteBubble;
+        
+        // === ACCESSORIES GROUP (positioned for dog head) ===
+        const accessoriesGroup = new THREE.Group();
+        accessoriesGroup.name = 'accessories';
+        accessoriesGroup.position.set(0, 0.15, 0.15); // Offset for dog head position
+        group.add(accessoriesGroup);
+        this._rebuildAccessories(THREE, accessoriesGroup);
+        
+        // Scale and position
+        group.scale.set(0.6, 0.6, 0.6);
+        group.position.set(this.position.x, 0.5, this.position.z);
+        
+        this.mesh = group;
+        return group;
+    }
+    
+    // --- BABY SHRIMP PUFFLE MESH ---
+    _createShrimpMesh(THREE, colorData) {
+        const group = new THREE.Group();
+        group.userData.special = 'shrimp';
+        group.userData.colorData = colorData;
+        group.userData.isShrimpPuffle = true;
+        
+        // Shrimp color palette (coral/orange)
+        const mainColor = new THREE.Color(colorData.hex);
+        const lightColor = mainColor.clone().multiplyScalar(1.3);
+        const darkColor = mainColor.clone().multiplyScalar(0.7);
+        const bellyColor = new THREE.Color('#FFAA8A');
+        const eyeColor = new THREE.Color('#1A1A1A');
+        const antennaColor = mainColor.clone().multiplyScalar(1.15);
+        
+        // Materials
+        const mainMat = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.6 });
+        const lightMat = new THREE.MeshStandardMaterial({ color: lightColor, roughness: 0.6 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: darkColor, roughness: 0.6 });
+        const bellyMat = new THREE.MeshStandardMaterial({ color: bellyColor, roughness: 0.7 });
+        const antennaMat = new THREE.MeshStandardMaterial({ color: antennaColor, roughness: 0.7 });
+        const eyeMat = new THREE.MeshStandardMaterial({ color: eyeColor, roughness: 0.3 });
+        const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1 });
+        
+        // === BODY (curved shrimp body - segmented) ===
+        const bodyGroup = new THREE.Group();
+        bodyGroup.name = 'shrimpBody';
+        
+        // Main body (slightly elongated, curved)
+        const bodyGeo = new THREE.SphereGeometry(0.35, 16, 12);
+        const body = new THREE.Mesh(bodyGeo, mainMat);
+        body.scale.set(1, 0.8, 1.3);
+        body.castShadow = true;
+        body.name = 'body';
+        bodyGroup.add(body);
+        
+        // Belly (lighter underside)
+        const bellyGeo = new THREE.SphereGeometry(0.25, 10, 8);
+        const belly = new THREE.Mesh(bellyGeo, bellyMat);
+        belly.scale.set(0.8, 0.5, 1);
+        belly.position.set(0, -0.15, 0.1);
+        bodyGroup.add(belly);
+        
+        // Segment lines (darker bands across body)
+        for (let i = 0; i < 3; i++) {
+            const segGeo = new THREE.TorusGeometry(0.32 - i * 0.03, 0.02, 8, 16);
+            const seg = new THREE.Mesh(segGeo, darkMat);
+            seg.rotation.x = Math.PI / 2;
+            seg.position.set(0, -0.05, -0.1 + i * 0.15);
+            bodyGroup.add(seg);
+        }
+        
+        group.add(bodyGroup);
+        
+        // === HEAD (with rostrum/beak) ===
+        const headGroup = new THREE.Group();
+        headGroup.name = 'shrimpHead';
+        
+        // Main head
+        const headGeo = new THREE.SphereGeometry(0.22, 12, 10);
+        const head = new THREE.Mesh(headGeo, mainMat.clone());
+        headGroup.add(head);
+        
+        // Rostrum (pointy nose)
+        const rostrumGeo = new THREE.ConeGeometry(0.06, 0.25, 8);
+        const rostrum = new THREE.Mesh(rostrumGeo, darkMat);
+        rostrum.rotation.x = -Math.PI / 2;
+        rostrum.position.set(0, 0.05, 0.3);
+        headGroup.add(rostrum);
+        
+        // Eye stalks and eyes
+        [-0.12, 0.12].forEach((offset, idx) => {
+            const stalkGroup = new THREE.Group();
+            stalkGroup.name = idx === 0 ? 'leftEyeStalk' : 'rightEyeStalk';
+            
+            // Eye stalk
+            const stalkGeo = new THREE.CylinderGeometry(0.03, 0.04, 0.12, 8);
+            const stalk = new THREE.Mesh(stalkGeo, lightMat);
+            stalk.rotation.z = offset > 0 ? -0.4 : 0.4;
+            stalkGroup.add(stalk);
+            
+            // Eye (dark sphere at end)
+            const eyeGeo = new THREE.SphereGeometry(0.06, 8, 8);
+            const eye = new THREE.Mesh(eyeGeo, eyeMat);
+            eye.position.set(offset > 0 ? 0.06 : -0.06, 0.07, 0);
+            stalkGroup.add(eye);
+            
+            // Eye highlight
+            const shineGeo = new THREE.SphereGeometry(0.02, 6, 6);
+            const shineMat = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 
+            });
+            const shine = new THREE.Mesh(shineGeo, shineMat);
+            shine.position.set(offset > 0 ? 0.08 : -0.08, 0.09, 0.02);
+            stalkGroup.add(shine);
+            
+            stalkGroup.position.set(offset, 0.12, 0.08);
+            headGroup.add(stalkGroup);
+        });
+        
+        headGroup.position.set(0, 0.15, 0.35);
+        group.add(headGroup);
+        
+        // === ANTENNAE (long whiskers) ===
+        const antennaGroup = new THREE.Group();
+        antennaGroup.name = 'antennae';
+        
+        [-0.08, 0.08].forEach((offset, idx) => {
+            const antennaSubGroup = new THREE.Group();
+            antennaSubGroup.name = idx === 0 ? 'leftAntenna' : 'rightAntenna';
+            
+            // Long main antenna (curves back)
+            for (let i = 0; i < 5; i++) {
+                const segGeo = new THREE.CylinderGeometry(0.015 - i * 0.002, 0.02 - i * 0.002, 0.12, 6);
+                const seg = new THREE.Mesh(segGeo, antennaMat);
+                seg.position.set(0, 0, -i * 0.1);
+                seg.rotation.x = 0.3;
+                antennaSubGroup.add(seg);
+            }
+            
+            antennaSubGroup.position.set(offset, 0.3, 0.4);
+            antennaSubGroup.rotation.x = -0.5;
+            antennaSubGroup.rotation.z = offset > 0 ? 0.3 : -0.3;
+            antennaGroup.add(antennaSubGroup);
+        });
+        
+        group.add(antennaGroup);
+        
+        // === TAIL FAN ===
+        const tailGroup = new THREE.Group();
+        tailGroup.name = 'shrimpTail';
+        
+        // Tail segments
+        for (let i = 0; i < 3; i++) {
+            const tailSegGeo = new THREE.SphereGeometry(0.12 - i * 0.02, 8, 6);
+            const tailSeg = new THREE.Mesh(tailSegGeo, mainMat.clone());
+            tailSeg.scale.set(1, 0.6, 0.8);
+            tailSeg.position.set(0, 0, -0.12 * i);
+            tailGroup.add(tailSeg);
+        }
+        
+        // Tail fan (fan shape)
+        const fanGeo = new THREE.CircleGeometry(0.15, 8, 0, Math.PI);
+        const fanMat = new THREE.MeshStandardMaterial({ 
+            color: darkColor, roughness: 0.6, side: THREE.DoubleSide 
+        });
+        const fan = new THREE.Mesh(fanGeo, fanMat);
+        fan.rotation.x = -Math.PI / 2;
+        fan.position.set(0, 0, -0.4);
+        tailGroup.add(fan);
+        
+        // Outer fan pieces
+        [-0.12, 0.12].forEach(offset => {
+            const outerFanGeo = new THREE.CircleGeometry(0.1, 6, 0, Math.PI * 0.7);
+            const outerFan = new THREE.Mesh(outerFanGeo, fanMat.clone());
+            outerFan.rotation.x = -Math.PI / 2;
+            outerFan.rotation.z = offset > 0 ? 0.4 : -0.4;
+            outerFan.position.set(offset, 0, -0.35);
+            tailGroup.add(outerFan);
+        });
+        
+        tailGroup.position.set(0, -0.1, -0.3);
+        group.add(tailGroup);
+        
+        // === TINY LEGS (swimmerets) ===
+        for (let i = 0; i < 3; i++) {
+            [-0.08, 0.08].forEach(offset => {
+                const legGeo = new THREE.CylinderGeometry(0.015, 0.02, 0.1, 6);
+                const leg = new THREE.Mesh(legGeo, lightMat);
+                leg.position.set(offset, -0.25, 0.1 - i * 0.1);
+                leg.rotation.x = 0.2;
+                group.add(leg);
+            });
+        }
+        
+        // === EMOTE BUBBLE ===
+        const emoteBubble = this.createEmoteBubble(THREE);
+        emoteBubble.position.set(0, 0.8, 0);
+        emoteBubble.visible = false;
+        group.add(emoteBubble);
+        this.emoteBubble = emoteBubble;
+        
+        // === ACCESSORIES GROUP (positioned for shrimp head) ===
+        const accessoriesGroup = new THREE.Group();
+        accessoriesGroup.name = 'accessories';
+        accessoriesGroup.position.set(0, -0.15, 0.35); // Offset for shrimp head position
+        group.add(accessoriesGroup);
+        this._rebuildAccessories(THREE, accessoriesGroup);
+        
+        // Scale and position
+        group.scale.set(0.7, 0.7, 0.7);
+        group.position.set(this.position.x, 0.5, this.position.z);
+        
+        this.mesh = group;
+        return group;
+    }
+    
+    // --- BABY DUCK PUFFLE MESH ---
+    _createDuckMesh(THREE, colorData) {
+        const group = new THREE.Group();
+        group.userData.special = 'duck';
+        group.userData.colorData = colorData;
+        group.userData.isDuckPuffle = true;
+        
+        // Duck color palette (yellow duckling)
+        const mainColor = new THREE.Color(colorData.hex);
+        const lightColor = mainColor.clone().multiplyScalar(1.2);
+        const darkColor = mainColor.clone().multiplyScalar(0.8);
+        const beakColor = new THREE.Color('#FF8C00');
+        const feetColor = new THREE.Color('#FF7700');
+        
+        // Materials
+        const mainMat = new THREE.MeshStandardMaterial({ color: mainColor, roughness: 0.9 });
+        const lightMat = new THREE.MeshStandardMaterial({ color: lightColor, roughness: 0.9 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: darkColor, roughness: 0.9 });
+        const beakMat = new THREE.MeshStandardMaterial({ color: beakColor, roughness: 0.5 });
+        const feetMat = new THREE.MeshStandardMaterial({ color: feetColor, roughness: 0.6 });
+        const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1 });
+        const pupilMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        
+        // === BODY (fluffy round duckling body) ===
+        const bodyGeo = new THREE.SphereGeometry(0.4, 16, 12);
+        const body = new THREE.Mesh(bodyGeo, mainMat);
+        body.scale.set(1.1, 0.85, 1);
+        body.castShadow = true;
+        body.name = 'body';
+        group.add(body);
+        
+        // Fluffy chest tuft
+        const chestGeo = new THREE.SphereGeometry(0.25, 10, 8);
+        const chest = new THREE.Mesh(chestGeo, lightMat);
+        chest.scale.set(0.9, 0.8, 0.6);
+        chest.position.set(0, -0.05, 0.25);
+        group.add(chest);
+        
+        // === HEAD (cute round head) ===
+        const headGroup = new THREE.Group();
+        headGroup.name = 'duckHead';
+        
+        // Main head
+        const headGeo = new THREE.SphereGeometry(0.28, 16, 12);
+        const head = new THREE.Mesh(headGeo, mainMat.clone());
+        headGroup.add(head);
+        
+        // Fluffy head tuft (baby duckling fluff)
+        const tuftGroup = new THREE.Group();
+        tuftGroup.name = 'headTuft';
+        for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 2;
+            const tuftGeo = new THREE.ConeGeometry(0.04, 0.15, 6);
+            const tuft = new THREE.Mesh(tuftGeo, lightMat);
+            tuft.position.set(
+                Math.cos(angle) * 0.08,
+                0.25,
+                Math.sin(angle) * 0.08
+            );
+            tuft.rotation.x = Math.sin(angle) * 0.3;
+            tuft.rotation.z = Math.cos(angle) * 0.3;
+            tuftGroup.add(tuft);
+        }
+        headGroup.add(tuftGroup);
+        
+        // Big cute eyes
+        [-0.1, 0.1].forEach((offset, idx) => {
+            // Eye white
+            const eyeGeo = new THREE.SphereGeometry(0.09, 10, 10);
+            const eye = new THREE.Mesh(eyeGeo, eyeWhiteMat);
+            eye.position.set(offset, 0.05, 0.2);
+            eye.scale.set(1, 1.1, 0.7);
+            headGroup.add(eye);
+            
+            // Pupil (big for cute effect)
+            const pupilGeo = new THREE.SphereGeometry(0.05, 8, 8);
+            const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+            const lookOffset = idx === 0 ? 0.01 : -0.01;
+            pupil.position.set(offset + lookOffset, 0.05, 0.25);
+            headGroup.add(pupil);
+            
+            // Eye shine
+            const shineGeo = new THREE.SphereGeometry(0.015, 6, 6);
+            const shineMat = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 
+            });
+            const shine = new THREE.Mesh(shineGeo, shineMat);
+            shine.position.set(offset + 0.025, 0.08, 0.26);
+            headGroup.add(shine);
+        });
+        
+        // Beak (flat duck beak)
+        const beakGroup = new THREE.Group();
+        beakGroup.name = 'beak';
+        
+        // Upper beak
+        const upperBeakGeo = new THREE.SphereGeometry(0.1, 8, 6);
+        const upperBeak = new THREE.Mesh(upperBeakGeo, beakMat);
+        upperBeak.scale.set(1.4, 0.4, 1.5);
+        upperBeak.position.set(0, -0.02, 0.05);
+        beakGroup.add(upperBeak);
+        
+        // Lower beak
+        const lowerBeakGeo = new THREE.SphereGeometry(0.08, 8, 6);
+        const lowerBeak = new THREE.Mesh(lowerBeakGeo, beakMat.clone());
+        lowerBeak.scale.set(1.2, 0.3, 1.3);
+        lowerBeak.position.set(0, -0.06, 0.03);
+        beakGroup.add(lowerBeak);
+        
+        beakGroup.position.set(0, -0.03, 0.25);
+        headGroup.add(beakGroup);
+        
+        headGroup.position.set(0, 0.4, 0.12);
+        group.add(headGroup);
+        
+        // === WINGS (tiny duckling wings) ===
+        const leftWingGroup = new THREE.Group();
+        leftWingGroup.name = 'leftWing';
+        const rightWingGroup = new THREE.Group();
+        rightWingGroup.name = 'rightWing';
+        
+        [-1, 1].forEach(side => {
+            const wingGroup = side === -1 ? leftWingGroup : rightWingGroup;
+            
+            const wingGeo = new THREE.SphereGeometry(0.15, 8, 6);
+            const wing = new THREE.Mesh(wingGeo, mainMat.clone());
+            wing.scale.set(0.4, 0.8, 1.2);
+            wingGroup.add(wing);
+            
+            // Wing tip
+            const tipGeo = new THREE.SphereGeometry(0.08, 6, 4);
+            const tip = new THREE.Mesh(tipGeo, darkMat);
+            tip.scale.set(0.4, 0.6, 1);
+            tip.position.set(0, -0.08, -0.08);
+            wingGroup.add(tip);
+            
+            wingGroup.position.set(side * 0.38, 0, -0.05);
+            wingGroup.rotation.z = side * 0.3;
+            group.add(wingGroup);
+        });
+        
+        // === TAIL (tiny duck tail, curves up) ===
+        const tailGroup = new THREE.Group();
+        tailGroup.name = 'duckTail';
+        
+        // Tail feathers
+        for (let i = 0; i < 3; i++) {
+            const tailGeo = new THREE.ConeGeometry(0.04, 0.12, 6);
+            const tail = new THREE.Mesh(tailGeo, darkMat);
+            const angle = (i - 1) * 0.3;
+            tail.position.set(Math.sin(angle) * 0.05, 0.05, 0);
+            tail.rotation.x = -0.8;
+            tail.rotation.z = angle;
+            tailGroup.add(tail);
+        }
+        
+        tailGroup.position.set(0, 0.1, -0.35);
+        group.add(tailGroup);
+        
+        // === FEET (webbed duck feet) ===
+        const leftFootGroup = new THREE.Group();
+        leftFootGroup.name = 'leftFoot';
+        const rightFootGroup = new THREE.Group();
+        rightFootGroup.name = 'rightFoot';
+        
+        [-0.15, 0.15].forEach((offset, idx) => {
+            const footGroup = idx === 0 ? leftFootGroup : rightFootGroup;
+            
+            // Webbed foot (flat triangle-ish)
+            const footGeo = new THREE.SphereGeometry(0.08, 8, 6);
+            const foot = new THREE.Mesh(footGeo, feetMat);
+            foot.scale.set(1.5, 0.3, 2);
+            footGroup.add(foot);
+            
+            // Toe details (three webbed toes)
+            for (let t = 0; t < 3; t++) {
+                const toeGeo = new THREE.SphereGeometry(0.03, 6, 4);
+                const toe = new THREE.Mesh(toeGeo, feetMat.clone());
+                toe.scale.set(1, 0.5, 1.5);
+                toe.position.set((t - 1) * 0.05, 0, 0.1);
+                footGroup.add(toe);
+            }
+            
+            footGroup.position.set(offset, -0.35, 0.1);
+            group.add(footGroup);
+        });
+        
+        // === EMOTE BUBBLE ===
+        const emoteBubble = this.createEmoteBubble(THREE);
+        emoteBubble.position.set(0, 0.9, 0);
+        emoteBubble.visible = false;
+        group.add(emoteBubble);
+        this.emoteBubble = emoteBubble;
+        
+        // === ACCESSORIES GROUP (positioned for duck head) ===
+        const accessoriesGroup = new THREE.Group();
+        accessoriesGroup.name = 'accessories';
+        accessoriesGroup.position.set(0, 0.1, 0.12); // Offset for duck head position
+        group.add(accessoriesGroup);
+        this._rebuildAccessories(THREE, accessoriesGroup);
+        
+        // Scale and position
+        group.scale.set(0.6, 0.6, 0.6);
+        group.position.set(this.position.x, 0.5, this.position.z);
+        
+        this.mesh = group;
+        return group;
+    }
+    
+    // Shrimp puffle specific animations
+    _animateShrimpPuffle(time, baseY) {
+        if (!this.mesh) return;
+        
+        const isMoving = this.state === 'following';
+        const isPlaying = this.state === 'playing';
+        const isExcited = this.mood === 'excited' || this.mood === 'ecstatic' || this.mood === 'playful';
+        
+        // === ANTENNA WIGGLE ===
+        const antennae = this.mesh.getObjectByName('antennae');
+        if (antennae) {
+            const wiggleSpeed = isExcited ? 8 : 4;
+            antennae.children.forEach((antenna, idx) => {
+                antenna.rotation.x = -0.5 + Math.sin(time * wiggleSpeed + idx * Math.PI) * 0.15;
+                antenna.rotation.z = (idx === 0 ? -0.3 : 0.3) + Math.sin(time * 3 + idx) * 0.1;
+            });
+        }
+        
+        // === EYE STALK MOVEMENT ===
+        const head = this.mesh.getObjectByName('shrimpHead');
+        if (head) {
+            const leftStalk = head.getObjectByName('leftEyeStalk');
+            const rightStalk = head.getObjectByName('rightEyeStalk');
+            
+            if (leftStalk && rightStalk) {
+                // Eyes move independently for curious look
+                leftStalk.rotation.z = 0.4 + Math.sin(time * 2) * 0.1;
+                rightStalk.rotation.z = -0.4 + Math.sin(time * 2.3) * 0.1;
+            }
+            
+            // Head bob
+            head.rotation.x = Math.sin(time * 3) * 0.05;
+        }
+        
+        // === TAIL FLUTTER ===
+        const tail = this.mesh.getObjectByName('shrimpTail');
+        if (tail) {
+            const flutterSpeed = isMoving ? 10 : 4;
+            const flutterIntensity = isMoving ? 0.3 : 0.1;
+            tail.rotation.x = Math.sin(time * flutterSpeed) * flutterIntensity;
+            tail.rotation.z = Math.sin(time * 3) * 0.05;
+        }
+        
+        // === BODY WIGGLE (swimming motion) ===
+        const bodyGroup = this.mesh.getObjectByName('shrimpBody');
+        if (bodyGroup && isMoving) {
+            bodyGroup.rotation.z = Math.sin(time * 8) * 0.1;
+        }
+        
+        // === VERTICAL POSITION ===
+        const bounce = Math.sin(time * 4) * 0.03;
+        const swimBob = isMoving ? Math.sin(time * 6) * 0.05 : 0;
+        this.mesh.position.y = baseY + bounce + swimBob;
+    }
+    
+    // Duck puffle specific animations
+    _animateDuckPuffle(time, baseY) {
+        if (!this.mesh) return;
+        
+        const isMoving = this.state === 'following';
+        const isPlaying = this.state === 'playing';
+        const isExcited = this.mood === 'excited' || this.mood === 'ecstatic' || this.mood === 'playful';
+        
+        // === WING FLAP ===
+        const leftWing = this.mesh.getObjectByName('leftWing');
+        const rightWing = this.mesh.getObjectByName('rightWing');
+        
+        if (leftWing && rightWing) {
+            const flapSpeed = isExcited ? 12 : isMoving ? 6 : 2;
+            const flapIntensity = isExcited ? 0.5 : isMoving ? 0.3 : 0.1;
+            
+            leftWing.rotation.z = 0.3 + Math.sin(time * flapSpeed) * flapIntensity;
+            rightWing.rotation.z = -0.3 - Math.sin(time * flapSpeed) * flapIntensity;
+        }
+        
+        // === HEAD BOB ===
+        const head = this.mesh.getObjectByName('duckHead');
+        if (head) {
+            // Classic duck head bob when moving
+            const bobSpeed = isMoving ? 8 : 2;
+            head.rotation.x = Math.sin(time * bobSpeed) * (isMoving ? 0.15 : 0.05);
+            head.position.z = 0.12 + Math.sin(time * bobSpeed) * (isMoving ? 0.03 : 0.01);
+            
+            // Head tuft wiggle
+            const tuft = head.getObjectByName('headTuft');
+            if (tuft) {
+                tuft.rotation.x = Math.sin(time * 4) * 0.1;
+            }
+            
+            // Beak open/close occasionally
+            const beak = head.getObjectByName('beak');
+            if (beak && Math.random() < 0.01) {
+                // Quack animation trigger
+                this._duckQuacking = true;
+                this._quackEndTime = time + 0.3;
+            }
+            if (beak && this._duckQuacking) {
+                const quackProgress = 1 - ((this._quackEndTime - time) / 0.3);
+                beak.scale.y = 1 + Math.sin(quackProgress * Math.PI) * 0.3;
+                if (time > this._quackEndTime) {
+                    this._duckQuacking = false;
+                    beak.scale.y = 1;
+                }
+            }
+        }
+        
+        // === TAIL WAG ===
+        const tail = this.mesh.getObjectByName('duckTail');
+        if (tail) {
+            const wagSpeed = isExcited ? 10 : 4;
+            tail.rotation.z = Math.sin(time * wagSpeed) * (isExcited ? 0.4 : 0.2);
+            tail.rotation.x = -0.2 + Math.sin(time * 2) * 0.1;
+        }
+        
+        // === FEET PADDLE (swimming motion when moving) ===
+        const leftFoot = this.mesh.getObjectByName('leftFoot');
+        const rightFoot = this.mesh.getObjectByName('rightFoot');
+        
+        if (leftFoot && rightFoot) {
+            if (isMoving) {
+                // Alternating paddle motion
+                leftFoot.rotation.x = Math.sin(time * 6) * 0.4;
+                rightFoot.rotation.x = Math.sin(time * 6 + Math.PI) * 0.4;
+                leftFoot.position.z = 0.1 + Math.sin(time * 6) * 0.05;
+                rightFoot.position.z = 0.1 + Math.sin(time * 6 + Math.PI) * 0.05;
+            } else {
+                // Gentle idle foot motion
+                leftFoot.rotation.x = Math.sin(time * 2) * 0.1;
+                rightFoot.rotation.x = Math.sin(time * 2 + Math.PI) * 0.1;
+            }
+        }
+        
+        // === WADDLE (body sway when moving) ===
+        if (isMoving) {
+            this.mesh.rotation.z = Math.sin(time * 6) * 0.08;
+        } else {
+            this.mesh.rotation.z = Math.sin(time * 2) * 0.02;
+        }
+        
+        // === VERTICAL POSITION (bouncy waddle) ===
+        const idleBob = Math.sin(time * 3) * 0.02;
+        const waddleBounce = isMoving ? Math.abs(Math.sin(time * 6)) * 0.04 : 0;
+        this.mesh.position.y = baseY + idleBob + waddleBounce;
+    }
+    
+    // --- BABY PENGUIN PUFFLE MESH (same as duck but black/white) ---
+    _createBabyPenguinMesh(THREE, colorData) {
+        const group = new THREE.Group();
+        group.userData.special = 'babyPenguin';
+        group.userData.colorData = colorData;
+        group.userData.isBabyPenguinPuffle = true;
+        
+        // Penguin color palette (black and white with orange accents)
+        const blackColor = new THREE.Color('#1A1A1A');
+        const darkGrayColor = new THREE.Color('#2A2A2A');
+        const whiteColor = new THREE.Color('#FFFFFF');
+        const creamColor = new THREE.Color('#F5F5F0');
+        const beakColor = new THREE.Color('#FF8C00');
+        const feetColor = new THREE.Color('#FF7700');
+        
+        // Materials
+        const blackMat = new THREE.MeshStandardMaterial({ color: blackColor, roughness: 0.8 });
+        const darkGrayMat = new THREE.MeshStandardMaterial({ color: darkGrayColor, roughness: 0.8 });
+        const whiteMat = new THREE.MeshStandardMaterial({ color: whiteColor, roughness: 0.7 });
+        const creamMat = new THREE.MeshStandardMaterial({ color: creamColor, roughness: 0.7 });
+        const beakMat = new THREE.MeshStandardMaterial({ color: beakColor, roughness: 0.5 });
+        const feetMat = new THREE.MeshStandardMaterial({ color: feetColor, roughness: 0.6 });
+        const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1 });
+        const pupilMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+        
+        // === BODY (fluffy round baby penguin body) ===
+        const bodyGeo = new THREE.SphereGeometry(0.4, 16, 12);
+        const body = new THREE.Mesh(bodyGeo, blackMat);
+        body.scale.set(1.1, 0.85, 1);
+        body.castShadow = true;
+        body.name = 'body';
+        group.add(body);
+        
+        // White belly (front)
+        const bellyGeo = new THREE.SphereGeometry(0.35, 12, 10);
+        const belly = new THREE.Mesh(bellyGeo, whiteMat);
+        belly.scale.set(0.8, 0.9, 0.5);
+        belly.position.set(0, -0.02, 0.22);
+        group.add(belly);
+        
+        // Fluffy chest tuft
+        const chestGeo = new THREE.SphereGeometry(0.2, 10, 8);
+        const chest = new THREE.Mesh(chestGeo, creamMat);
+        chest.scale.set(0.8, 0.7, 0.5);
+        chest.position.set(0, 0.08, 0.28);
+        group.add(chest);
+        
+        // === HEAD (cute round head) ===
+        const headGroup = new THREE.Group();
+        headGroup.name = 'penguinHead';
+        
+        // Main head (black)
+        const headGeo = new THREE.SphereGeometry(0.28, 16, 12);
+        const head = new THREE.Mesh(headGeo, blackMat.clone());
+        headGroup.add(head);
+        
+        // White face patch
+        const facePatchGeo = new THREE.SphereGeometry(0.22, 12, 10);
+        const facePatch = new THREE.Mesh(facePatchGeo, whiteMat.clone());
+        facePatch.scale.set(0.7, 0.8, 0.5);
+        facePatch.position.set(0, -0.02, 0.12);
+        headGroup.add(facePatch);
+        
+        // Fluffy head tuft (baby penguin fluff - dark gray)
+        const tuftGroup = new THREE.Group();
+        tuftGroup.name = 'headTuft';
+        for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 2;
+            const tuftGeo = new THREE.ConeGeometry(0.04, 0.12, 6);
+            const tuft = new THREE.Mesh(tuftGeo, darkGrayMat);
+            tuft.position.set(
+                Math.cos(angle) * 0.08,
+                0.25,
+                Math.sin(angle) * 0.08
+            );
+            tuft.rotation.x = Math.sin(angle) * 0.3;
+            tuft.rotation.z = Math.cos(angle) * 0.3;
+            tuftGroup.add(tuft);
+        }
+        headGroup.add(tuftGroup);
+        
+        // Big cute eyes
+        [-0.1, 0.1].forEach((offset, idx) => {
+            // Eye white
+            const eyeGeo = new THREE.SphereGeometry(0.09, 10, 10);
+            const eye = new THREE.Mesh(eyeGeo, eyeWhiteMat);
+            eye.position.set(offset, 0.05, 0.2);
+            eye.scale.set(1, 1.1, 0.7);
+            headGroup.add(eye);
+            
+            // Pupil (big for cute effect)
+            const pupilGeo = new THREE.SphereGeometry(0.05, 8, 8);
+            const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+            const lookOffset = idx === 0 ? 0.01 : -0.01;
+            pupil.position.set(offset + lookOffset, 0.05, 0.25);
+            headGroup.add(pupil);
+            
+            // Eye shine
+            const shineGeo = new THREE.SphereGeometry(0.015, 6, 6);
+            const shineMat = new THREE.MeshStandardMaterial({ 
+                color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 
+            });
+            const shine = new THREE.Mesh(shineGeo, shineMat);
+            shine.position.set(offset + 0.025, 0.08, 0.26);
+            headGroup.add(shine);
+        });
+        
+        // Beak (small penguin beak - orange)
+        const beakGroup = new THREE.Group();
+        beakGroup.name = 'beak';
+        
+        // Upper beak (smaller, more triangular than duck)
+        const upperBeakGeo = new THREE.ConeGeometry(0.06, 0.12, 6);
+        const upperBeak = new THREE.Mesh(upperBeakGeo, beakMat);
+        upperBeak.rotation.x = Math.PI / 2;
+        upperBeak.position.set(0, -0.02, 0.08);
+        beakGroup.add(upperBeak);
+        
+        // Lower beak
+        const lowerBeakGeo = new THREE.ConeGeometry(0.04, 0.08, 6);
+        const lowerBeak = new THREE.Mesh(lowerBeakGeo, beakMat.clone());
+        lowerBeak.rotation.x = Math.PI / 2;
+        lowerBeak.position.set(0, -0.06, 0.06);
+        beakGroup.add(lowerBeak);
+        
+        beakGroup.position.set(0, -0.02, 0.22);
+        headGroup.add(beakGroup);
+        
+        headGroup.position.set(0, 0.4, 0.12);
+        group.add(headGroup);
+        
+        // === FLIPPERS (tiny penguin flippers) ===
+        const leftWingGroup = new THREE.Group();
+        leftWingGroup.name = 'leftWing';
+        const rightWingGroup = new THREE.Group();
+        rightWingGroup.name = 'rightWing';
+        
+        [-1, 1].forEach(side => {
+            const wingGroup = side === -1 ? leftWingGroup : rightWingGroup;
+            
+            const wingGeo = new THREE.SphereGeometry(0.15, 8, 6);
+            const wing = new THREE.Mesh(wingGeo, blackMat.clone());
+            wing.scale.set(0.3, 0.9, 1.1);
+            wingGroup.add(wing);
+            
+            // Wing tip (darker)
+            const tipGeo = new THREE.SphereGeometry(0.08, 6, 4);
+            const tip = new THREE.Mesh(tipGeo, darkGrayMat.clone());
+            tip.scale.set(0.3, 0.6, 1);
+            tip.position.set(0, -0.1, -0.05);
+            wingGroup.add(tip);
+            
+            wingGroup.position.set(side * 0.4, 0, -0.02);
+            wingGroup.rotation.z = side * 0.4;
+            group.add(wingGroup);
+        });
+        
+        // === TAIL (tiny penguin tail) ===
+        const tailGroup = new THREE.Group();
+        tailGroup.name = 'penguinTail';
+        
+        // Tail feathers (small, pointed)
+        for (let i = 0; i < 3; i++) {
+            const tailGeo = new THREE.ConeGeometry(0.03, 0.1, 6);
+            const tail = new THREE.Mesh(tailGeo, blackMat.clone());
+            const angle = (i - 1) * 0.25;
+            tail.position.set(Math.sin(angle) * 0.04, 0.04, 0);
+            tail.rotation.x = -0.6;
+            tail.rotation.z = angle;
+            tailGroup.add(tail);
+        }
+        
+        tailGroup.position.set(0, 0.05, -0.38);
+        group.add(tailGroup);
+        
+        // === FEET (orange penguin feet) ===
+        const leftFootGroup = new THREE.Group();
+        leftFootGroup.name = 'leftFoot';
+        const rightFootGroup = new THREE.Group();
+        rightFootGroup.name = 'rightFoot';
+        
+        [-0.15, 0.15].forEach((offset, idx) => {
+            const footGroup = idx === 0 ? leftFootGroup : rightFootGroup;
+            
+            // Webbed foot (similar to duck but more paddle-shaped)
+            const footGeo = new THREE.SphereGeometry(0.08, 8, 6);
+            const foot = new THREE.Mesh(footGeo, feetMat);
+            foot.scale.set(1.3, 0.25, 1.8);
+            footGroup.add(foot);
+            
+            // Toe details
+            for (let t = 0; t < 3; t++) {
+                const toeGeo = new THREE.SphereGeometry(0.025, 6, 4);
+                const toe = new THREE.Mesh(toeGeo, feetMat.clone());
+                toe.scale.set(1, 0.5, 1.3);
+                toe.position.set((t - 1) * 0.04, 0, 0.08);
+                footGroup.add(toe);
+            }
+            
+            footGroup.position.set(offset, -0.35, 0.08);
+            group.add(footGroup);
+        });
+        
+        // === EMOTE BUBBLE ===
+        const emoteBubble = this.createEmoteBubble(THREE);
+        emoteBubble.position.set(0, 0.9, 0);
+        emoteBubble.visible = false;
+        group.add(emoteBubble);
+        this.emoteBubble = emoteBubble;
+        
+        // === ACCESSORIES GROUP (positioned for penguin head) ===
+        const accessoriesGroup = new THREE.Group();
+        accessoriesGroup.name = 'accessories';
+        accessoriesGroup.position.set(0, 0.1, 0.12); // Same as duck
+        group.add(accessoriesGroup);
+        this._rebuildAccessories(THREE, accessoriesGroup);
+        
+        // Scale and position
+        group.scale.set(0.6, 0.6, 0.6);
+        group.position.set(this.position.x, 0.5, this.position.z);
+        
+        this.mesh = group;
+        return group;
+    }
+    
+    // Baby penguin puffle specific animations (similar to duck)
+    _animateBabyPenguinPuffle(time, baseY) {
+        if (!this.mesh) return;
+        
+        const isMoving = this.state === 'following';
+        const isPlaying = this.state === 'playing';
+        const isExcited = this.mood === 'excited' || this.mood === 'ecstatic' || this.mood === 'playful';
+        
+        // === FLIPPER FLAP ===
+        const leftWing = this.mesh.getObjectByName('leftWing');
+        const rightWing = this.mesh.getObjectByName('rightWing');
+        
+        if (leftWing && rightWing) {
+            const flapSpeed = isExcited ? 12 : isMoving ? 6 : 2;
+            const flapIntensity = isExcited ? 0.4 : isMoving ? 0.25 : 0.08;
+            
+            leftWing.rotation.z = 0.4 + Math.sin(time * flapSpeed) * flapIntensity;
+            rightWing.rotation.z = -0.4 - Math.sin(time * flapSpeed) * flapIntensity;
+        }
+        
+        // === HEAD BOB ===
+        const head = this.mesh.getObjectByName('penguinHead');
+        if (head) {
+            // Penguin waddle head bob
+            const bobSpeed = isMoving ? 8 : 2;
+            head.rotation.x = Math.sin(time * bobSpeed) * (isMoving ? 0.12 : 0.04);
+            head.position.z = 0.12 + Math.sin(time * bobSpeed) * (isMoving ? 0.02 : 0.01);
+            
+            // Head tuft wiggle
+            const tuft = head.getObjectByName('headTuft');
+            if (tuft) {
+                tuft.rotation.x = Math.sin(time * 4) * 0.08;
+            }
+            
+            // Beak open/close occasionally (chirping)
+            const beak = head.getObjectByName('beak');
+            if (beak && Math.random() < 0.008) {
+                this._penguinChirping = true;
+                this._chirpEndTime = time + 0.25;
+            }
+            if (beak && this._penguinChirping) {
+                const chirpProgress = 1 - ((this._chirpEndTime - time) / 0.25);
+                beak.scale.y = 1 + Math.sin(chirpProgress * Math.PI) * 0.25;
+                if (time > this._chirpEndTime) {
+                    this._penguinChirping = false;
+                    beak.scale.y = 1;
+                }
+            }
+        }
+        
+        // === TAIL WAG ===
+        const tail = this.mesh.getObjectByName('penguinTail');
+        if (tail) {
+            const wagSpeed = isExcited ? 10 : 4;
+            tail.rotation.z = Math.sin(time * wagSpeed) * (isExcited ? 0.3 : 0.15);
+            tail.rotation.x = -0.15 + Math.sin(time * 2) * 0.08;
+        }
+        
+        // === FEET WADDLE ===
+        const leftFoot = this.mesh.getObjectByName('leftFoot');
+        const rightFoot = this.mesh.getObjectByName('rightFoot');
+        
+        if (leftFoot && rightFoot) {
+            if (isMoving) {
+                // Classic penguin waddle
+                leftFoot.rotation.x = Math.sin(time * 6) * 0.35;
+                rightFoot.rotation.x = Math.sin(time * 6 + Math.PI) * 0.35;
+                leftFoot.position.z = 0.08 + Math.sin(time * 6) * 0.04;
+                rightFoot.position.z = 0.08 + Math.sin(time * 6 + Math.PI) * 0.04;
+            } else {
+                // Gentle idle shuffle
+                leftFoot.rotation.x = Math.sin(time * 2) * 0.08;
+                rightFoot.rotation.x = Math.sin(time * 2 + Math.PI) * 0.08;
+            }
+        }
+        
+        // === WADDLE (pronounced body sway) ===
+        if (isMoving) {
+            this.mesh.rotation.z = Math.sin(time * 6) * 0.1;
+        } else {
+            this.mesh.rotation.z = Math.sin(time * 2) * 0.03;
+        }
+        
+        // === VERTICAL POSITION (bouncy waddle) ===
+        const idleBob = Math.sin(time * 3) * 0.02;
+        const waddleBounce = isMoving ? Math.abs(Math.sin(time * 6)) * 0.05 : 0;
+        this.mesh.position.y = baseY + idleBob + waddleBounce;
     }
     
     // Create the emote bubble sprite
