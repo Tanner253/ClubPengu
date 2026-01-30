@@ -299,7 +299,7 @@ export const MOUNTS = {
         animated: true,
         animationType: 'duck_bounce',
         hidesFeet: true,
-        riderOffset: { y: 3, z: -2 },  // Sit toward back of duck
+        riderOffset: { y: 1.25, z: -0.25 },  // Sit toward back of duck
         speedBoost: 1.15,  // 15% speed boost
         scale: 0.2,
         positionY: 0.5,
