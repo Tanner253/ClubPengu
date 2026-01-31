@@ -326,6 +326,49 @@ const TUTORIAL_SLIDES = [
         )
     },
     {
+        id: 'nfts',
+        title: '🎨 Mint Cosmetics as NFTs',
+        icon: '🖼️',
+        content: (
+            <div className="space-y-3">
+                <p className="text-white/90 text-sm">
+                    Turn your cosmetics into <strong className="text-purple-400">Solana NFTs</strong> you truly own!
+                </p>
+                <div className="space-y-2">
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2 border border-purple-500/30">
+                        <span className="text-lg">📸</span>
+                        <div>
+                            <div className="text-purple-400 font-bold text-sm">Photo Booth</div>
+                            <p className="text-white/60 text-xs">Capture your penguin wearing the cosmetic - this becomes your NFT image!</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2 border border-cyan-500/30">
+                        <span className="text-lg">⛓️</span>
+                        <div>
+                            <div className="text-cyan-400 font-bold text-sm">On-Chain Ownership</div>
+                            <p className="text-white/60 text-xs">Minted via Metaplex - visible in your wallet & on marketplaces</p>
+                        </div>
+                    </div>
+                    <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2 border border-green-500/30">
+                        <span className="text-lg">💰</span>
+                        <div>
+                            <div className="text-green-400 font-bold text-sm">Trade Anywhere</div>
+                            <p className="text-white/60 text-xs">Sell on Magic Eden, Tensor, or any Solana NFT marketplace</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 rounded-lg p-2 border border-white/10 text-xs">
+                    <p className="text-white/80">
+                        ✨ <strong>Special Traits</strong> like First Edition & Holographic are included in NFT metadata!
+                    </p>
+                    <p className="text-white/60 mt-1">
+                        💎 Rarer items = more valuable NFTs
+                    </p>
+                </div>
+            </div>
+        )
+    },
+    {
         id: 'puffles',
         title: '🐾 Puffles - Your Pet Companion',
         icon: '🟣',

@@ -80,6 +80,29 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.1.4",
+    date: "January 31, 2026",
+    title: "🎨 NFT Minting & Photo Booth",
+    description: "Mint your cosmetics as Solana NFTs! Photo booth for capturing custom NFT images, full Metaplex integration",
+    highlight: true,
+    stats: { filesChanged: 18, additions: 3200, deletions: 200 },
+    changes: [
+      { type: "feature", text: "NFT Minting System - mint any owned cosmetic as a Solana NFT via Metaplex" },
+      { type: "feature", text: "Photo Booth - capture custom images for your NFT with pose selection" },
+      { type: "feature", text: "NFT metadata follows Metaplex Token Metadata Standard with full attributes" },
+      { type: "feature", text: "NFT images stored in database for persistence across deployments" },
+      { type: "feature", text: "First Edition and Holographic traits reflected in NFT metadata" },
+      { type: "feature", text: "5% royalties on secondary sales go to platform wallet" },
+      { type: "backend", text: "NFTMintService.js - Metaplex transaction building without external libraries" },
+      { type: "backend", text: "NFTImageStorage.js - database-backed image storage for NFT renders" },
+      { type: "backend", text: "nftHandlers.js - HTTP endpoints for /api/nft/image and /api/nft/metadata" },
+      { type: "backend", text: "Master Edition creation makes each NFT a unique 1/1" },
+      { type: "security", text: "Server-side ownership verification before mint transaction building" },
+      { type: "security", text: "CORS headers for marketplace compatibility (Magic Eden, Tensor)" },
+      { type: "improvement", text: "Tutorial updated with NFT minting information" },
+    ],
+  },
+  {
     version: "1.1.3",
     date: "January 26, 2026",
     title: "❄️ Snowball Fights & Internationalization",

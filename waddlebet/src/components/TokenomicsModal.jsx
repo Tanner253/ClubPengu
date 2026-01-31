@@ -24,10 +24,10 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
     ];
 
     const roadmapItems = [
-        { phase: 'Phase 1', status: 'live', title: 'Foundation', items: ['Multiplayer World', 'P2P Wagering', 'Basic Minigames'] },
-        { phase: 'Phase 2', status: 'building', title: 'Economy', items: ['Casino Launch', 'Igloo System', 'Cosmetic Drops'] },
-        { phase: 'Phase 3', status: 'soon', title: 'Expansion', items: ['Building Ownership', 'DAO Governance', 'Mobile App'] },
-        { phase: 'Phase 4', status: 'future', title: 'Metaverse', items: ['Cross-chain Support', 'VR Integration', 'Creator Tools'] }
+        { phase: 'Phase 1', status: 'live', title: 'Foundation', items: ['Multiplayer World', 'P2P Wagering', 'Casino & Minigames'] },
+        { phase: 'Phase 2', status: 'live', title: 'Economy', items: ['Gacha System', 'Igloo Ownership', 'Marketplace'] },
+        { phase: 'Phase 3', status: 'building', title: 'NFTs', items: ['NFT Minting', 'Photo Booth', 'Marketplace Trading'] },
+        { phase: 'Phase 4', status: 'soon', title: 'Ecosystem', items: ['Mobile App', 'DAO Governance', 'VIP Program'] }
     ];
     
     return (
