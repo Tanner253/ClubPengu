@@ -18,6 +18,7 @@
     "dotenv": "^17.2.3",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.0.1",
+    "puppeteer": "^23.11.1",
     "tweetnacl": "^1.0.3",
     "ws": "^8.18.0"
   },

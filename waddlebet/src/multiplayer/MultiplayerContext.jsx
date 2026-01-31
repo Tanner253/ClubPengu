@@ -465,6 +465,56 @@ export function MultiplayerProvider({ children }) {
                 callbacksRef.current.onInventoryError?.(message);
                 break;
             
+            // ==================== NFT MESSAGES ====================
+            case 'nft_mint_info':
+                callbacksRef.current.onNftMintInfo?.(message);
+                break;
+                
+            case 'nft_check_mintable_response':
+                callbacksRef.current.onNftCheckMintableResponse?.(message);
+                break;
+                
+            case 'nft_build_mint_tx_response':
+                callbacksRef.current.onNftBuildMintTxResponse?.(message);
+                break;
+                
+            case 'nft_confirm_mint_response':
+                callbacksRef.current.onNftConfirmMintResponse?.(message);
+                break;
+            
+            case 'nft_cosmetics_gained':
+                // User gained cosmetics from buying NFTs externally
+                console.log(`🎨 Gained ${message.items?.length || 0} cosmetics from NFT purchases!`);
+                // Update gachaOwnedCosmetics for wardrobe
+                if (message.items?.length > 0) {
+                    setUserData(prev => {
+                        if (!prev) return prev;
+                        const existingGacha = prev.gachaOwnedCosmetics || [];
+                        const newTemplateIds = message.items.map(item => item.templateId).filter(id => !existingGacha.includes(id));
+                        if (newTemplateIds.length > 0) {
+                            return { ...prev, gachaOwnedCosmetics: [...existingGacha, ...newTemplateIds] };
+                        }
+                        return prev;
+                    });
+                }
+                callbacksRef.current.onNftCosmeticsGained?.(message);
+                break;
+            
+            case 'nft_cosmetics_lost':
+                // User lost cosmetics from selling NFTs externally
+                console.log(`📤 Lost ${message.items?.length || 0} cosmetics (NFTs sold)`);
+                // Remove from gachaOwnedCosmetics
+                if (message.items?.length > 0) {
+                    setUserData(prev => {
+                        if (!prev) return prev;
+                        const lostTemplateIds = new Set(message.items.map(item => item.templateId));
+                        const filteredGacha = (prev.gachaOwnedCosmetics || []).filter(id => !lostTemplateIds.has(id));
+                        return { ...prev, gachaOwnedCosmetics: filteredGacha };
+                    });
+                }
+                callbacksRef.current.onNftCosmeticsLost?.(message);
+                break;
+            
             // ==================== MARKETPLACE MESSAGES ====================
             case 'market_listings':
                 callbacksRef.current.onMarketListings?.(message);

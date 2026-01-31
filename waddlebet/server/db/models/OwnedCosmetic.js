@@ -83,6 +83,32 @@ const ownedCosmeticSchema = new mongoose.Schema({
         index: true
     },
     
+    // ========== NFT STATUS ==========
+    // When minted as Solana NFT, these fields are populated
+    nftMintAddress: {
+        type: String,
+        default: null,
+        index: true,
+        sparse: true  // Allow null, only index non-null values
+    },
+    nftMetadataUri: {
+        type: String,
+        default: null
+    },
+    nftMintedAt: {
+        type: Date,
+        default: null
+    },
+    nftMintTxSignature: {
+        type: String,
+        default: null
+    },
+    // Track who paid for the mint (usually the owner)
+    nftMintedBy: {
+        type: String,
+        default: null
+    },
+    
     // ========== OWNERSHIP HISTORY ==========
     // Complete provenance chain from mint to current owner
     ownershipHistory: [{
@@ -319,14 +345,17 @@ ownedCosmeticSchema.statics.getFullInventory = async function(walletAddress, opt
             tradable: item.tradable !== false, // Promo items are not tradable
             acquisitionMethod: item.acquisitionMethod || 'gacha_roll',
             isListed, // Is this item currently listed on the marketplace?
+            // NFT data
+            nftMintAddress: item.nftMintAddress || null,
+            nftMintedAt: item.nftMintedAt || null,
             // Template data
             name: template?.name || 'Unknown',
             category: template?.category || 'unknown',
             rarity: template?.rarity || 'common',
             assetKey: template?.assetKey || item.templateId,
             duplicateGoldBase: template?.duplicateGoldBase || 25,
-            // Calculated burn value (0 for non-tradable or listed items)
-            burnValue: (item.tradable === false || isListed) ? 0 : calculateBurnValue(template?.duplicateGoldBase || 25, item)
+            // Calculated burn value (0 for non-tradable, listed, or NFT items)
+            burnValue: (item.tradable === false || isListed || item.nftMintAddress) ? 0 : calculateBurnValue(template?.duplicateGoldBase || 25, item)
         };
     });
     
@@ -539,6 +568,70 @@ ownedCosmeticSchema.statics.transferOwnership = async function(instanceId, fromW
 };
 
 /**
+ * Transfer ownership for NFT sync - uses on-chain data as source of truth
+ * Unlike regular transferOwnership, this doesn't require from wallet verification
+ * because the blockchain has already validated the transfer
+ * 
+ * @param {string} instanceId - Item instance ID
+ * @param {string} newOwner - New owner's wallet address (from blockchain)
+ * @param {string} acquisitionType - How they acquired it ('nft_sale', 'nft_purchase', 'nft_sync')
+ * @param {number|null} price - Sale price if known
+ * @returns {object|null} - Updated item or null if failed
+ */
+ownedCosmeticSchema.statics.transferOwnershipByNft = async function(instanceId, newOwner, acquisitionType = 'nft_sale', price = null) {
+    const item = await this.findOne({ 
+        instanceId,
+        nftMintAddress: { $ne: null } // Must be an NFT
+    });
+    
+    if (!item) {
+        return null;
+    }
+    
+    const previousOwner = item.ownerId;
+    
+    // Don't do anything if already owned by this wallet
+    if (previousOwner === newOwner) {
+        return item;
+    }
+    
+    // Initialize ownership history if missing
+    if (!item.ownershipHistory || item.ownershipHistory.length === 0) {
+        item.ownershipHistory = [{
+            walletAddress: item.mintedBy || previousOwner,
+            acquiredAt: item.mintedAt || new Date(),
+            acquiredFrom: null,
+            acquisitionType: 'mint',
+            price: 0
+        }];
+    }
+    
+    // Add new ownership entry
+    item.ownershipHistory.push({
+        walletAddress: newOwner,
+        acquiredAt: new Date(),
+        acquiredFrom: previousOwner,
+        acquisitionType,
+        transactionId: null, // Could be enhanced to track NFT transfer tx
+        price: price || 0,
+        note: 'Synced from on-chain NFT ownership'
+    });
+    
+    // Update ownership
+    item.ownerId = newOwner;
+    item.totalTrades = (item.totalTrades || 0) + 1;
+    if (price) {
+        item.lastSalePrice = price;
+    }
+    item.lastSaleAt = new Date();
+    item.isEquipped = false; // Unequip on transfer
+    
+    await item.save();
+    
+    return item;
+};
+
+/**
  * Get ownership history for an item
  * @param {string} instanceId - Item instance ID
  * @returns {Array} - Full ownership history
@@ -557,6 +650,100 @@ ownedCosmeticSchema.statics.getOwnershipHistory = async function(instanceId) {
         totalTrades: item.totalTrades || 0,
         lastSalePrice: item.lastSalePrice,
         history: item.ownershipHistory || []
+    };
+};
+
+// ==================== NFT METHODS ====================
+
+/**
+ * Check if a cosmetic has been minted as an NFT
+ * @param {string} instanceId - Item instance ID
+ * @returns {boolean}
+ */
+ownedCosmeticSchema.statics.isNftMinted = async function(instanceId) {
+    const item = await this.findOne({ instanceId }, 'nftMintAddress').lean();
+    return !!(item?.nftMintAddress);
+};
+
+/**
+ * Mark a cosmetic as minted to NFT
+ * @param {string} instanceId - Item instance ID
+ * @param {object} nftData - { mintAddress, metadataUri, txSignature, mintedBy }
+ * @returns {object} Updated item
+ */
+ownedCosmeticSchema.statics.markAsNftMinted = async function(instanceId, nftData) {
+    const { mintAddress, metadataUri, txSignature, mintedBy } = nftData;
+    
+    // Match items where nftMintAddress is null, undefined, or doesn't exist
+    const item = await this.findOneAndUpdate(
+        { 
+            instanceId, 
+            $or: [
+                { nftMintAddress: null },
+                { nftMintAddress: { $exists: false } }
+            ]
+        },
+        {
+            $set: {
+                nftMintAddress: mintAddress,
+                nftMetadataUri: metadataUri,
+                nftMintTxSignature: txSignature,
+                nftMintedBy: mintedBy,
+                nftMintedAt: new Date()
+            }
+        },
+        { new: true }
+    );
+    
+    if (item) {
+        console.log(`📝 Database updated: ${instanceId} → NFT ${mintAddress}`);
+    } else {
+        console.warn(`⚠️ markAsNftMinted: Item ${instanceId} not found or already minted`);
+    }
+    
+    return item;
+};
+
+/**
+ * Get full cosmetic data for NFT metadata generation
+ * @param {string} instanceId - Item instance ID
+ * @returns {object} Complete cosmetic data with template info
+ */
+ownedCosmeticSchema.statics.getForNftMetadata = async function(instanceId) {
+    const CosmeticTemplate = mongoose.model('CosmeticTemplate');
+    
+    const item = await this.findOne({ instanceId }).lean();
+    if (!item) return null;
+    
+    const template = await CosmeticTemplate.findOne({ templateId: item.templateId }).lean();
+    if (!template) return null;
+    
+    return {
+        instanceId: item.instanceId,
+        templateId: item.templateId,
+        serialNumber: item.serialNumber,
+        quality: item.quality,
+        isHolographic: item.isHolographic,
+        isFirstEdition: item.isFirstEdition,
+        mintedAt: item.mintedAt,
+        mintedBy: item.mintedBy,
+        totalTrades: item.totalTrades || 0,
+        ownershipHistory: item.ownershipHistory || [],
+        ownerId: item.ownerId,
+        // Template data
+        name: template.name,
+        description: template.description,
+        category: template.category,
+        rarity: template.rarity,
+        assetKey: template.assetKey,
+        collection: template.collection,
+        isAnimated: template.isAnimated,
+        hasGlow: template.hasGlow,
+        hasFx: template.hasFx,
+        totalMinted: template.totalMinted,
+        // NFT status
+        isNftMinted: !!item.nftMintAddress,
+        nftMintAddress: item.nftMintAddress
     };
 };
 

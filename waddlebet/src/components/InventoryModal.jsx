@@ -270,19 +270,59 @@ const InventoryModal = ({ isOpen, onClose }) => {
     const [burning, setBurning] = useState(false);
     const [upgrading, setUpgrading] = useState(false);
     
+    // Reset mint confirmation when item changes
+    useEffect(() => {
+        setConfirmMint(false);
+    }, [selectedItem?.instanceId]);
+    
     // Sell item state
     const [sellItem, setSellItem] = useState(null);
     const [selling, setSelling] = useState(false);
     
+    // NFT mint confirmation
+    const [confirmMint, setConfirmMint] = useState(false);
+    
     // Bulk selection
     const [bulkMode, setBulkMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState(new Set());
+    
+    // NFT minting
+    const [minting, setMinting] = useState(false);
+    const [mintInfo, setMintInfo] = useState(null);
     
     // Status messages
     const [message, setMessage] = useState(null);
     
     useClickOutside(modalRef, onClose);
     useEscapeKey(onClose);
+    
+    // Ref to hold fetchInventory so callbacks always get the latest version
+    const fetchInventoryRef = useRef(null);
+    
+    // Fetch inventory function
+    const fetchInventory = useCallback(() => {
+        if (!isAuthenticated) return;
+        
+        setLoading(true);
+        send({
+            type: 'inventory_get',
+            page,
+            limit: 50,
+            category: categoryFilter !== 'all' ? categoryFilter : null,
+            rarity: rarityFilter !== 'all' ? rarityFilter : null,
+            sortBy
+        });
+    }, [isAuthenticated, send, page, categoryFilter, rarityFilter, sortBy]);
+    
+    // Keep ref updated
+    useEffect(() => {
+        fetchInventoryRef.current = fetchInventory;
+    }, [fetchInventory]);
+    
+    // Helper to call fetchInventory via ref (always gets latest)
+    const refreshInventory = useCallback(() => {
+        fetchInventoryRef.current?.();
+    }, []);
     
     // Register callbacks - re-register when modal opens to ensure our callbacks are active
     useEffect(() => {
@@ -298,6 +338,13 @@ const InventoryModal = ({ isOpen, onClose }) => {
                 setHasMore(data.hasMore || false);
                 setLoading(false);
                 
+                // Update selectedItem if it exists in new data (to refresh NFT status etc)
+                setSelectedItem(prev => {
+                    if (!prev) return null;
+                    const updated = newItems.find(i => i.instanceId === prev.instanceId);
+                    return updated || prev;
+                });
+                
                 // Preload thumbnails in background (uses single shared WebGL context)
                 if (newItems.length > 0) {
                     thumbnailCache.preloadThumbnails(newItems, 72).catch(console.error);
@@ -310,7 +357,7 @@ const InventoryModal = ({ isOpen, onClose }) => {
                 setMessage({ type: 'success', text: `Burned for ${data.goldAwarded} gold!` });
                 setTotal(data.inventoryCount);
                 // Refresh inventory
-                fetchInventory();
+                refreshInventory();
                 setTimeout(() => setMessage(null), 3000);
             },
             onInventoryBulkBurned: (data) => {
@@ -319,14 +366,14 @@ const InventoryModal = ({ isOpen, onClose }) => {
                 setSelectedIds(new Set());
                 setMessage({ type: 'success', text: `Burned ${data.itemsBurned} items for ${data.totalGold} gold!` });
                 setTotal(data.inventoryCount);
-                fetchInventory();
+                refreshInventory();
                 setTimeout(() => setMessage(null), 3000);
             },
             onInventoryUpgraded: (data) => {
                 setUpgrading(false);
                 setMaxSlots(data.newMaxSlots);
                 setMessage({ type: 'success', text: `Inventory upgraded to ${data.newMaxSlots} slots!` });
-                fetchInventory();
+                refreshInventory();
                 setTimeout(() => setMessage(null), 3000);
             },
             onInventoryError: (data) => {
@@ -349,30 +396,101 @@ const InventoryModal = ({ isOpen, onClose }) => {
                         setMessage({ type: 'success', text: 'Item listed on marketplace!' });
                     }
                     
-                    fetchInventory(); // Refresh to show item is now listed
+                    refreshInventory(); // Refresh to show item is now listed
                 } else {
                     setMessage({ type: 'error', text: data.message || 'Failed to list item' });
                 }
                 setTimeout(() => setMessage(null), 3000);
+            },
+            // NFT mint info response
+            onNftMintInfo: (data) => {
+                setMintInfo(data);
+            },
+            // NFT check mintable response
+            onNftCheckMintableResponse: (data) => {
+                if (!data.canMint) {
+                    setMinting(false);
+                    if (data.error === 'ALREADY_MINTED') {
+                        setMessage({ type: 'info', text: `Already minted as NFT: ${data.mintAddress?.slice(0,8)}...` });
+                    } else {
+                        setMessage({ type: 'error', text: data.message || `Cannot mint: ${data.error}` });
+                    }
+                    setTimeout(() => setMessage(null), 5000);
+                }
+            },
+            // NFT build transaction response
+            onNftBuildMintTxResponse: (data) => {
+                console.log('🎨 Received nft_build_mint_tx_response:', data);
+                
+                if (!data.success) {
+                    setMinting(false);
+                    if (data.error === 'INSUFFICIENT_PEBBLES') {
+                        setMessage({ 
+                            type: 'error', 
+                            text: `Not enough Pebbles! Need ${data.required}, you have ${data.current}.`
+                        });
+                    } else {
+                        setMessage({ type: 'error', text: data.message || 'Failed to build mint transaction' });
+                    }
+                    setTimeout(() => setMessage(null), 5000);
+                    return;
+                }
+                
+                // Validate transaction data exists
+                if (!data.transaction) {
+                    console.error('🎨 Missing transaction in response:', data);
+                    setMinting(false);
+                    setMessage({ type: 'error', text: 'Server returned empty transaction' });
+                    setTimeout(() => setMessage(null), 5000);
+                    return;
+                }
+                
+                // Show fee charged message if applicable
+                if (data.pebblesFeeCharged > 0) {
+                    setMessage({ type: 'info', text: `${data.pebblesFeeCharged} Pebbles charged. Confirm in wallet...` });
+                } else {
+                    setMessage({ type: 'info', text: 'Confirm transaction in wallet...' });
+                }
+                
+                // Transaction built - trigger wallet signing
+                handleNftSign(data);
+            },
+            // NFT confirm mint response
+            onNftConfirmMintResponse: (data) => {
+                console.log('🎨 NFT confirm response:', data);
+                setMinting(false);
+                if (data.success) {
+                    const solscanUrl = `https://solscan.io/token/${data.mintAddress}`;
+                    setMessage({ 
+                        type: 'success', 
+                        text: `NFT minted successfully!`,
+                        link: solscanUrl,
+                        linkText: 'View on Solscan'
+                    });
+                    
+                    // Update selected item to show NFT badge immediately
+                    setSelectedItem(prev => prev?.instanceId === data.instanceId 
+                        ? { ...prev, nftMintAddress: data.mintAddress } 
+                        : prev
+                    );
+                    
+                    refreshInventory(); // Refresh to show NFT badge
+                    // Keep success message longer
+                    setTimeout(() => setMessage(null), 15000);
+                } else {
+                    console.error('🎨 NFT mint failed:', data.error, data.message);
+                    setMessage({ type: 'error', text: data.message || `Mint failed: ${data.error}` });
+                    setTimeout(() => setMessage(null), 8000);
+                }
             }
         };
         registerCallbacks(callbacks);
-    }, [registerCallbacks, isOpen]);
-    
-    // Fetch inventory
-    const fetchInventory = useCallback(() => {
-        if (!isAuthenticated) return;
         
-        setLoading(true);
-        send({
-            type: 'inventory_get',
-            page,
-            limit: 50,
-            category: categoryFilter !== 'all' ? categoryFilter : null,
-            rarity: rarityFilter !== 'all' ? rarityFilter : null,
-            sortBy
-        });
-    }, [isAuthenticated, send, page, categoryFilter, rarityFilter, sortBy]);
+        // Request NFT mint info on open
+        if (isAuthenticated) {
+            send({ type: 'nft_get_mint_info' });
+        }
+    }, [registerCallbacks, isOpen, isAuthenticated, send, refreshInventory]);
     
     // Fetch on open and filter changes
     useEffect(() => {
@@ -423,6 +541,120 @@ const InventoryModal = ({ isOpen, onClose }) => {
             instanceIds: Array.from(selectedIds)
         });
     }, [selectedIds, burning, send]);
+    
+    // Handle mint as NFT - show confirmation UI
+    const handleMintNft = useCallback(() => {
+        if (minting || !mintInfo?.enabled) return;
+        setConfirmMint(true);
+    }, [minting, mintInfo]);
+    
+    // Actually execute the mint after confirmation
+    const executeMint = useCallback((item) => {
+        if (minting || !item) return;
+        
+        setMinting(true);
+        setConfirmMint(false);
+        send({
+            type: 'nft_build_mint_tx',
+            instanceId: item.instanceId
+        });
+    }, [minting, send]);
+    
+    // Handle NFT transaction signing (called from callback)
+    // Uses same pattern as SolanaPayment.js for consistency
+    const handleNftSign = useCallback(async (txData) => {
+        console.log('🎨 handleNftSign called with:', txData);
+        
+        try {
+            // Validate txData
+            if (!txData || !txData.transaction) {
+                throw new Error(`Invalid transaction data received`);
+            }
+            
+            const wallet = PhantomWallet.getInstance();
+            const provider = wallet.getProvider();
+            
+            if (!provider) {
+                throw new Error('Phantom wallet not found. Please install Phantom.');
+            }
+            
+            console.log('🎨 Decoding transaction...');
+            
+            // Decode the base64 transaction to Uint8Array
+            const txBuffer = Uint8Array.from(atob(txData.transaction), c => c.charCodeAt(0));
+            
+            // Import solana web3 classes
+            const { Transaction, Connection } = await import('@solana/web3.js');
+            const transaction = Transaction.from(txBuffer);
+            
+            // Create connection (same as other payment flows)
+            const rpcUrl = import.meta.env.VITE_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+            const connection = new Connection(rpcUrl, 'confirmed');
+            
+            console.log('🎨 Transaction deserialized, requesting signature...');
+            
+            // Use same pattern as SolanaPayment.js - try sendTransaction first
+            let signature;
+            const hasSendTransaction = provider.sendTransaction && typeof provider.sendTransaction === 'function';
+            
+            if (hasSendTransaction) {
+                try {
+                    console.log('🎨 Using Phantom sendTransaction...');
+                    signature = await provider.sendTransaction(transaction, connection, {
+                        skipPreflight: true,
+                        preflightCommitment: 'confirmed'
+                    });
+                    console.log('🎨 Transaction sent via sendTransaction!');
+                } catch (sendError) {
+                    // Fallback to sign + send
+                    console.warn('🎨 sendTransaction failed, using fallback:', sendError.message);
+                    const signedTx = await provider.signTransaction(transaction);
+                    signature = await connection.sendRawTransaction(signedTx.serialize(), {
+                        skipPreflight: true,
+                        preflightCommitment: 'confirmed'
+                    });
+                    console.log('🎨 Transaction sent via fallback!');
+                }
+            } else {
+                // Fallback: sign then send
+                console.log('🎨 Using signTransaction + sendRawTransaction fallback...');
+                const signedTx = await provider.signTransaction(transaction);
+                signature = await connection.sendRawTransaction(signedTx.serialize(), {
+                    skipPreflight: true,
+                    preflightCommitment: 'confirmed'
+                });
+                console.log('🎨 Transaction sent via fallback!');
+            }
+            
+            console.log('🎨 NFT mint tx sent:', signature);
+            setMessage({ type: 'info', text: `Transaction sent! Waiting for confirmation...` });
+            
+            // Confirm with server
+            console.log('🎨 Sending nft_confirm_mint to server...');
+            console.log('   instanceId:', txData.instanceId);
+            console.log('   mintAddress:', txData.mintAddress);
+            console.log('   txSignature:', signature);
+            
+            send({
+                type: 'nft_confirm_mint',
+                instanceId: txData.instanceId,
+                mintAddress: txData.mintAddress,
+                txSignature: signature
+            });
+            
+        } catch (err) {
+            console.error('🎨 NFT sign/send error:', err);
+            setMinting(false);
+            
+            let msg = err.message || 'Transaction failed';
+            if (err.code === 4001 || msg.includes('User rejected') || msg.includes('user rejected')) {
+                msg = 'Transaction cancelled';
+            }
+            
+            setMessage({ type: 'error', text: msg });
+            setTimeout(() => setMessage(null), 5000);
+        }
+    }, [send]);
     
     // Handle upgrade - now uses SOL payment
     const handleUpgrade = useCallback(async () => {
@@ -654,9 +886,21 @@ const InventoryModal = ({ isOpen, onClose }) => {
                 {/* Status message */}
                 {message && (
                     <div className={`px-4 py-2 ${
-                        message.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                        message.type === 'success' ? 'bg-green-500/20 text-green-400' : 
+                        message.type === 'info' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-red-500/20 text-red-400'
                     }`}>
                         {message.text}
+                        {message.link && (
+                            <a 
+                                href={message.link} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="ml-2 underline hover:text-white"
+                            >
+                                {message.linkText || 'View'}
+                            </a>
+                        )}
                     </div>
                 )}
                 
@@ -740,6 +984,13 @@ const InventoryModal = ({ isOpen, onClose }) => {
                                                     </div>
                                                 )}
                                                 
+                                                {/* NFT badge - top left */}
+                                                {item.nftMintAddress && !isListed && (
+                                                    <div className="absolute top-0.5 left-0.5 bg-purple-600 text-white px-1 py-0.5 rounded text-[8px] font-bold shadow-lg">
+                                                        NFT
+                                                    </div>
+                                                )}
+                                                
                                                 {/* Rarity indicator dot */}
                                                 {!isListed && (
                                                     <div 
@@ -811,6 +1062,12 @@ const InventoryModal = ({ isOpen, onClose }) => {
                                     burning={burning}
                                     onBurn={handleBurn}
                                     onListForSale={handleListForSale}
+                                    onMintNft={handleMintNft}
+                                    confirmMint={confirmMint}
+                                    setConfirmMint={setConfirmMint}
+                                    onExecuteMint={executeMint}
+                                    minting={minting}
+                                    mintInfo={mintInfo}
                                     onClose={() => setSelectedItem(null)}
                                 />
                             </div>
@@ -825,6 +1082,12 @@ const InventoryModal = ({ isOpen, onClose }) => {
                                     burning={burning}
                                     onBurn={handleBurn}
                                     onListForSale={handleListForSale}
+                                    onMintNft={handleMintNft}
+                                    confirmMint={confirmMint}
+                                    setConfirmMint={setConfirmMint}
+                                    onExecuteMint={executeMint}
+                                    minting={minting}
+                                    mintInfo={mintInfo}
                                     onClose={() => setSelectedItem(null)}
                                     isMobile={true}
                                 />
@@ -1096,11 +1359,139 @@ const BurnSection = ({ item, rarity, confirmBurn, setConfirmBurn, burning, onBur
     );
 };
 
+// Mint NFT Section Component with inline confirmation
+const MintNftSection = ({ item, mintInfo, confirmMint, setConfirmMint, minting, onMintNft, onExecuteMint }) => {
+    const networkCost = mintInfo?.estimatedCost?.networkCost || 0.015;
+    const solFee = mintInfo?.solFee || 0;
+    const pebblesFee = mintInfo?.pebblesFee || 0;
+    const totalSol = mintInfo?.estimatedCost?.sol || networkCost + solFee;
+    const royaltyPercent = mintInfo?.royaltyPercent || 5;
+    
+    if (minting) {
+        return (
+            <div className="p-4 bg-purple-500/20 border border-purple-500/40 rounded-lg">
+                <div className="flex items-center justify-center gap-3 text-purple-300">
+                    <Spinner className="text-2xl" />
+                    <div>
+                        <div className="font-bold">Minting NFT...</div>
+                        <div className="text-xs text-purple-200/70">Please confirm in your wallet</div>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+    
+    if (!confirmMint) {
+        // Show initial button with cost preview
+        return (
+            <div className="p-3 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/30 rounded-lg space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                    <span className="text-white/70">Mint as NFT</span>
+                    <div className="flex gap-1">
+                        <span className="bg-purple-500/30 text-purple-200 px-2 py-0.5 rounded text-xs font-mono">
+                            ~{totalSol.toFixed(3)} SOL
+                        </span>
+                        {pebblesFee > 0 && (
+                            <span className="bg-amber-500/30 text-amber-200 px-2 py-0.5 rounded text-xs">
+                                +{pebblesFee} 🪨
+                            </span>
+                        )}
+                    </div>
+                </div>
+                <button
+                    onClick={onMintNft}
+                    className="w-full py-2 rounded-lg font-bold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white transition-all flex items-center justify-center gap-2"
+                >
+                    <span>🎨</span>
+                    <span>Mint as NFT</span>
+                </button>
+            </div>
+        );
+    }
+    
+    // Show confirmation details
+    return (
+        <div className="p-3 bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/40 rounded-lg space-y-3">
+            <div className="flex items-center gap-2 text-purple-300 font-bold">
+                <span>🎨</span>
+                <span>Mint as Solana NFT</span>
+            </div>
+            
+            {/* Cost Breakdown */}
+            <div className="bg-black/30 rounded-lg p-2 space-y-1 text-xs">
+                <div className="flex justify-between text-white/60">
+                    <span>Network cost</span>
+                    <span className="font-mono">~{networkCost.toFixed(4)} SOL</span>
+                </div>
+                {solFee > 0 && (
+                    <div className="flex justify-between text-white/60">
+                        <span>Platform fee</span>
+                        <span className="font-mono">{solFee} SOL</span>
+                    </div>
+                )}
+                {pebblesFee > 0 && (
+                    <div className="flex justify-between text-amber-300/80">
+                        <span>Platform fee</span>
+                        <span className="font-mono">{pebblesFee} 🪨</span>
+                    </div>
+                )}
+                <div className="flex justify-between text-white font-bold pt-1 border-t border-white/10">
+                    <span>Total</span>
+                    <span className="font-mono">~{totalSol.toFixed(3)} SOL{pebblesFee > 0 ? ` + ${pebblesFee} 🪨` : ''}</span>
+                </div>
+            </div>
+            
+            {/* What you get */}
+            <div className="text-xs text-white/70 space-y-1">
+                <div className="flex items-start gap-2">
+                    <span className="text-green-400">✓</span>
+                    <span>Permanent on-chain NFT</span>
+                </div>
+                <div className="flex items-start gap-2">
+                    <span className="text-green-400">✓</span>
+                    <span>Trade on Magic Eden, Tensor, etc.</span>
+                </div>
+                <div className="flex items-start gap-2">
+                    <span className="text-green-400">✓</span>
+                    <span>Rendered penguin image included</span>
+                </div>
+                <div className="flex items-start gap-2">
+                    <span className="text-purple-400">ℹ</span>
+                    <span>{royaltyPercent}% royalty on resales</span>
+                </div>
+            </div>
+            
+            {/* Action buttons */}
+            <div className="flex gap-2">
+                <button
+                    onClick={() => setConfirmMint(false)}
+                    className="flex-1 py-2 rounded-lg font-bold bg-gray-600 hover:bg-gray-500 text-white transition-all text-sm"
+                >
+                    Cancel
+                </button>
+                <button
+                    onClick={() => onExecuteMint(item)}
+                    className="flex-1 py-2 rounded-lg font-bold bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white transition-all text-sm flex items-center justify-center gap-1"
+                >
+                    <span>✨</span>
+                    <span>Confirm Mint</span>
+                </button>
+            </div>
+        </div>
+    );
+};
+
 // Item Detail Panel Component
-const ItemDetailPanel = ({ item, confirmBurn, setConfirmBurn, burning, onBurn, onListForSale, onClose, isMobile = false }) => {
+const ItemDetailPanel = ({ item, confirmBurn, setConfirmBurn, burning, onBurn, onListForSale, onMintNft, confirmMint, setConfirmMint, onExecuteMint, minting, mintInfo, onClose, isMobile = false }) => {
     const rarity = RARITY_CONFIG[item.rarity] || RARITY_CONFIG.common;
     const quality = QUALITY_CONFIG[item.quality] || QUALITY_CONFIG.standard;
     const canSell = item.tradable !== false;
+    const canMintNft = item.tradable !== false && !item.nftMintAddress && mintInfo?.enabled;
+    
+    // Reset confirmMint when item changes
+    React.useEffect(() => {
+        setConfirmMint?.(false);
+    }, [item.instanceId, setConfirmMint]);
     
     return (
         <div className={isMobile ? "space-y-3" : "space-y-4"}>
@@ -1321,6 +1712,44 @@ const ItemDetailPanel = ({ item, confirmBurn, setConfirmBurn, burning, onBurn, o
                         </div>
                     </div>
                 </div>
+            )}
+            
+            {/* NFT Status Badge - if already minted */}
+            {item.nftMintAddress && (
+                <div className="p-3 bg-gradient-to-r from-purple-900/30 to-indigo-900/30 border border-purple-500/40 rounded-lg">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-lg">🎨</span>
+                            <div>
+                                <div className="text-purple-300 font-bold text-sm">Minted as NFT</div>
+                                <div className="text-xs text-purple-200/60 font-mono">
+                                    {item.nftMintAddress.slice(0, 8)}...{item.nftMintAddress.slice(-6)}
+                                </div>
+                            </div>
+                        </div>
+                        <a
+                            href={`https://solscan.io/token/${item.nftMintAddress}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2 py-1 bg-purple-600/50 hover:bg-purple-600 rounded text-xs text-white transition-colors"
+                        >
+                            View ↗
+                        </a>
+                    </div>
+                </div>
+            )}
+            
+            {/* Mint as NFT Section - only show if not minted and mintable */}
+            {canMintNft && !item.isListed && onMintNft && (
+                <MintNftSection
+                    item={item}
+                    mintInfo={mintInfo}
+                    confirmMint={confirmMint}
+                    setConfirmMint={setConfirmMint}
+                    minting={minting}
+                    onMintNft={onMintNft}
+                    onExecuteMint={onExecuteMint}
+                />
             )}
             
             {/* List for Sale Button - only show if not already listed */}

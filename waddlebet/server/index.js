@@ -37,6 +37,8 @@ import { handleIglooMessage } from './handlers/iglooHandlers.js';
 import { handleTippingMessage } from './handlers/tippingHandlers.js';
 import { handleMarketplaceMessage } from './handlers/marketplaceHandlers.js';
 import { handleGiftMessage } from './handlers/giftHandlers.js';
+import { initializeNFTServices, handleNFTMessage, handleRenderImage, handleGetMetadata, handlePreviewRender } from './handlers/nftHandlers.js';
+import nftOwnershipService from './services/NFTOwnershipService.js';
 import rentScheduler from './schedulers/RentScheduler.js';
 import solanaPaymentService from './services/SolanaPaymentService.js';
 import devBotService, { BOT_CONFIG } from './services/DevBotService.js';
@@ -199,6 +201,34 @@ const server = http.createServer((req, res) => {
             address: address || null,
             available: !!address 
         }));
+        return;
+    }
+    
+    // ==================== NFT API ENDPOINTS ====================
+    
+    // Render NFT image for a cosmetic
+    if (req.url.startsWith('/api/nft/render/')) {
+        const instanceId = req.url.replace('/api/nft/render/', '').split('?')[0];
+        handleRenderImage({ params: { instanceId } }, res);
+        return;
+    }
+    
+    // Get NFT metadata JSON
+    if (req.url.startsWith('/api/nft/metadata/')) {
+        const instanceId = req.url.replace('/api/nft/metadata/', '').split('?')[0];
+        handleGetMetadata(
+            { params: { instanceId }, protocol: 'https', get: (h) => req.headers[h.toLowerCase()] || req.headers.host },
+            res
+        );
+        return;
+    }
+    
+    // Preview render for testing (pass templateId and query params)
+    if (req.url.startsWith('/api/nft/preview/')) {
+        const urlParts = req.url.replace('/api/nft/preview/', '').split('?');
+        const templateId = urlParts[0];
+        const query = Object.fromEntries(new URLSearchParams(urlParts[1] || ''));
+        handlePreviewRender({ params: { templateId }, query }, res);
         return;
     }
     
@@ -1401,6 +1431,12 @@ async function handleMessage(playerId, message) {
         if (handled) return;
     }
     
+    // ==================== NFT MESSAGES ====================
+    if (message.type?.startsWith('nft_')) {
+        const handled = await handleNFTMessage(playerId, player, message, sendToPlayer);
+        if (handled) return;
+    }
+    
     switch (message.type) {
         // ==================== AUTHENTICATION ====================
         case 'auth_request': {
@@ -1520,6 +1556,34 @@ async function handleMessage(playerId, message) {
                 
                 // Start daily bonus session tracking
                 dailyBonusService.startSession(walletAddress);
+                
+                // Sync NFT ownership in background (non-blocking)
+                // This ensures cosmetics are synced if user bought/sold NFTs on external marketplaces
+                nftOwnershipService.syncUserNftOwnership(walletAddress)
+                    .then(result => {
+                        if (result.gained.length > 0 || result.lost.length > 0) {
+                            console.log(`🎨 NFT sync for ${walletAddress.slice(0, 8)}...: gained ${result.gained.length}, lost ${result.lost.length}`);
+                            
+                            // Notify user if they gained new cosmetics from NFT purchases
+                            if (result.gained.length > 0) {
+                                sendToPlayer(playerId, {
+                                    type: 'nft_cosmetics_gained',
+                                    items: result.gained,
+                                    message: `You now own ${result.gained.length} cosmetic(s) from NFT purchases!`
+                                });
+                            }
+                            
+                            // Notify user if they lost cosmetics (sold NFTs)
+                            if (result.lost.length > 0) {
+                                sendToPlayer(playerId, {
+                                    type: 'nft_cosmetics_lost',
+                                    items: result.lost,
+                                    message: `${result.lost.length} cosmetic(s) transferred to new NFT owners.`
+                                });
+                            }
+                        }
+                    })
+                    .catch(err => console.error('NFT sync error:', err.message));
                 
                 // If player is already in a room, notify others of the auth status
                 if (player.room) {
@@ -6735,6 +6799,36 @@ async function start() {
     } else {
         console.warn('⚠️ Wager settlement service not available:', settlementInit.error);
         console.warn('   Token wagers will require manual settlement');
+    }
+    
+    // Initialize NFT services (non-blocking - if puppeteer isn't installed, NFT minting will be disabled)
+    try {
+        const nftBaseUrl = process.env.NFT_RENDER_BASE_URL || `http://localhost:${PORT}`;
+        await initializeNFTServices(nftBaseUrl);
+    } catch (error) {
+        console.warn('⚠️ NFT services initialization failed:', error.message);
+        console.warn('   Install puppeteer for NFT minting: npm install puppeteer');
+    }
+    
+    // Initialize NFT ownership sync service
+    try {
+        await nftOwnershipService.initialize();
+        
+        // Optional: Run periodic background sync for NFT ownership
+        // This catches transfers that might have been missed
+        if (process.env.NFT_BACKGROUND_SYNC_ENABLED === 'true') {
+            const syncInterval = parseInt(process.env.NFT_SYNC_INTERVAL_MS) || 5 * 60 * 1000; // Default 5 minutes
+            setInterval(async () => {
+                try {
+                    await nftOwnershipService.runBackgroundSync(20, 500); // Small batches with delay
+                } catch (err) {
+                    console.error('Background NFT sync error:', err.message);
+                }
+            }, syncInterval);
+            console.log(`🔗 NFT background sync enabled (every ${syncInterval / 1000}s)`);
+        }
+    } catch (error) {
+        console.warn('⚠️ NFT ownership service initialization failed:', error.message);
     }
     
     // Start HTTP server
