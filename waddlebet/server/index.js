@@ -58,8 +58,9 @@ const players = new Map(); // playerId -> { id, name, room, position, rotation, 
 const rooms = new Map(); // roomId -> Set of playerIds
 const ipConnections = new Map(); // ip -> Set of playerIds
 const bannedIPs = new Set(); // Set of banned IP addresses
-const bannedIPLogTimes = new Map(); // ip -> timestamp of last log (for throttling repeated connection attempts)
-const BANNED_IP_LOG_INTERVAL = 60 * 1000; // Only log banned IP attempts once per minute
+const bannedIPLogTimes = new Map(); // ip -> { lastLog: timestamp, count: number }
+const BANNED_IP_LOG_INTERVAL = 5 * 60 * 1000; // Only log banned IP attempts once per 5 minutes
+const BANNED_IP_MAX_LOGS = 3; // After 3 logs, stop logging this IP entirely (they're clearly spamming)
 
 // PvE Activity tracking (for spectator banners)
 // playerId -> { activity: 'fishing'|'blackjack', room, state, position, playerName }
@@ -781,10 +782,12 @@ function canIPConnect(ip) {
     if (bannedIPs.has(ip)) {
         // Throttle logging to avoid log spam from repeated connection attempts
         const now = Date.now();
-        const lastLogTime = bannedIPLogTimes.get(ip) || 0;
-        if (now - lastLogTime >= BANNED_IP_LOG_INTERVAL) {
-            console.log(`🚫 Blocked connection attempt from banned IP: ${ip}`);
-            bannedIPLogTimes.set(ip, now);
+        const logInfo = bannedIPLogTimes.get(ip) || { lastLog: 0, count: 0 };
+        
+        // Only log if under max logs AND enough time has passed
+        if (logInfo.count < BANNED_IP_MAX_LOGS && now - logInfo.lastLog >= BANNED_IP_LOG_INTERVAL) {
+            console.log(`🚫 Blocked banned IP: ${ip} (attempt ${logInfo.count + 1}/${BANNED_IP_MAX_LOGS})`);
+            bannedIPLogTimes.set(ip, { lastLog: now, count: logInfo.count + 1 });
         }
         return false;
     }
@@ -1120,12 +1123,13 @@ wss.on('connection', (ws, req) => {
     
     // Check if IP is banned first (before any other checks)
     if (bannedIPs.has(clientIP)) {
-        // Throttle logging to avoid log spam from repeated connection attempts
+        // Throttle logging - only log first few attempts, then go silent
         const now = Date.now();
-        const lastLogTime = bannedIPLogTimes.get(clientIP) || 0;
-        if (now - lastLogTime >= BANNED_IP_LOG_INTERVAL) {
-            console.log(`🚫 Blocked connection from banned IP: ${clientIP}`);
-            bannedIPLogTimes.set(clientIP, now);
+        const logInfo = bannedIPLogTimes.get(clientIP) || { lastLog: 0, count: 0 };
+        
+        if (logInfo.count < BANNED_IP_MAX_LOGS && now - logInfo.lastLog >= BANNED_IP_LOG_INTERVAL) {
+            console.log(`🚫 Blocked banned IP: ${clientIP} (attempt ${logInfo.count + 1}/${BANNED_IP_MAX_LOGS})`);
+            bannedIPLogTimes.set(clientIP, { lastLog: now, count: logInfo.count + 1 });
         }
         ws.send(JSON.stringify({
             type: 'error',
