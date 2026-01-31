@@ -164,6 +164,17 @@ const AppContent = () => {
         }
     }, [isAuthenticated, userData?.customization, userData?.characterType, isRestoringSession, walletAddress]);
     
+    // Also sync penguinData when live appearance changes (e.g., equipping items from inventory)
+    // This is separate from customization because appearance can change during gameplay
+    useEffect(() => {
+        if (isAuthenticated && userData?.appearance) {
+            setPenguinData(prev => ({
+                ...prev,
+                ...userData.appearance
+            }));
+        }
+    }, [isAuthenticated, userData?.appearance]);
+    
     // Puffle state (shared across all rooms)
     const [playerPuffle, setPlayerPuffle] = useState(null);
     

@@ -30,6 +30,7 @@ import {
     MINT_SIZE,
     getMinimumBalanceForRentExemptMint
 } from '@solana/spl-token';
+import OwnedCosmetic from '../db/models/OwnedCosmetic.js';
 
 // Metaplex Token Metadata Program ID (constant, doesn't change)
 const TOKEN_METADATA_PROGRAM_ID = new PublicKey('metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s');
@@ -179,8 +180,6 @@ function createMasterEditionInstruction(
         data
     });
 }
-import OwnedCosmetic from '../db/models/OwnedCosmetic.js';
-import nftRenderService from './NFTRenderService.js';
 
 // ==================== CONFIGURATION ====================
 
@@ -301,21 +300,65 @@ class NFTMintService {
             fullDescription += '\n\n⭐ PRISTINE QUALITY - Excellent condition!';
         }
 
+        // Rarity tier mapping for numeric comparison
+        const RARITY_TIERS = {
+            common: 1,
+            uncommon: 2,
+            rare: 3,
+            epic: 4,
+            legendary: 5,
+            mythic: 6,
+            divine: 7
+        };
+        
+        // Quality multiplier mapping
+        const QUALITY_MULTIPLIERS = {
+            worn: 0.7,
+            standard: 1.0,
+            pristine: 1.8,
+            flawless: 4.0
+        };
+        
+        // Calculate combined rarity score (for sorting/filtering on marketplaces)
+        const baseRarityScore = RARITY_TIERS[rarity] || 1;
+        const qualityMultiplier = QUALITY_MULTIPLIERS[quality] || 1.0;
+        let rarityScore = baseRarityScore * qualityMultiplier;
+        if (isFirstEdition) rarityScore *= 2;
+        if (isHolographic) rarityScore *= 1.5;
+        
         // Build attributes array (Metaplex standard)
         const attributes = [
+            { trait_type: 'Item', value: name },
             { trait_type: 'Category', value: category.charAt(0).toUpperCase() + category.slice(1) },
             { trait_type: 'Rarity', value: rarity.charAt(0).toUpperCase() + rarity.slice(1) },
+            { trait_type: 'Rarity Tier', value: baseRarityScore, display_type: 'number' },
             { trait_type: 'Quality', value: quality.charAt(0).toUpperCase() + quality.slice(1) },
-            { trait_type: 'Serial Number', value: serialNumber },
+            { trait_type: 'Quality Multiplier', value: `${qualityMultiplier}x` },
+            { trait_type: 'Serial Number', value: serialNumber, display_type: 'number' },
+            { trait_type: 'Rarity Score', value: Math.round(rarityScore * 10) / 10, display_type: 'number' },
             { trait_type: 'Collection', value: collection || 'OG Collection' }
         ];
+        
+        // Add scarcity info
+        if (totalMinted) {
+            attributes.push({ trait_type: 'Total Minted', value: totalMinted, display_type: 'number' });
+            // Calculate scarcity tier
+            let scarcity = 'Common';
+            if (totalMinted <= 10) scarcity = 'Ultra Rare';
+            else if (totalMinted <= 50) scarcity = 'Very Rare';
+            else if (totalMinted <= 100) scarcity = 'Rare';
+            else if (totalMinted <= 500) scarcity = 'Uncommon';
+            attributes.push({ trait_type: 'Scarcity', value: scarcity });
+        }
 
-        // Add special traits
+        // Add special traits as boolean "Yes" values (more visible on marketplaces)
         if (isFirstEdition) {
             attributes.push({ trait_type: 'First Edition', value: 'Yes' });
+            attributes.push({ trait_type: '🏆 Badge', value: 'First Edition' });
         }
         if (isHolographic) {
             attributes.push({ trait_type: 'Holographic', value: 'Yes' });
+            attributes.push({ trait_type: '✨ Badge', value: 'Holographic' });
         }
         if (isAnimated) {
             attributes.push({ trait_type: 'Animated', value: 'Yes' });
@@ -327,7 +370,17 @@ class NFTMintService {
             attributes.push({ trait_type: 'Special Effects', value: 'Yes' });
         }
         if (totalTrades > 0) {
-            attributes.push({ trait_type: 'Times Traded', value: totalTrades });
+            attributes.push({ trait_type: 'Times Traded', value: totalTrades, display_type: 'number' });
+        }
+        
+        // Add combined special status
+        const specialBadges = [];
+        if (isFirstEdition) specialBadges.push('1st Edition');
+        if (isHolographic) specialBadges.push('Holo');
+        if (quality === 'flawless') specialBadges.push('Flawless');
+        if (quality === 'pristine') specialBadges.push('Pristine');
+        if (specialBadges.length > 0) {
+            attributes.push({ trait_type: 'Special Status', value: specialBadges.join(' + ') });
         }
 
         // Metaplex Token Metadata Standard

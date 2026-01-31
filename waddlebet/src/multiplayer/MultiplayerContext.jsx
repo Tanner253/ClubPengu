@@ -482,6 +482,10 @@ export function MultiplayerProvider({ children }) {
                 callbacksRef.current.onNftConfirmMintResponse?.(message);
                 break;
             
+            case 'nft_upload_image_response':
+                callbacksRef.current.onNftUploadImageResponse?.(message);
+                break;
+            
             case 'nft_cosmetics_gained':
                 // User gained cosmetics from buying NFTs externally
                 console.log(`🎨 Gained ${message.items?.length || 0} cosmetics from NFT purchases!`);
@@ -1458,7 +1462,17 @@ export function MultiplayerProvider({ children }) {
     }, [send]);
     
     const updateAppearance = useCallback((appearance) => {
+        // Send to server for broadcast to other players
         send({ type: 'update_appearance', appearance });
+        
+        // Also update local state immediately so our own penguin updates
+        setUserData(prev => prev ? {
+            ...prev,
+            appearance: {
+                ...prev.appearance,
+                ...appearance
+            }
+        } : prev);
     }, [send]);
     
     const updatePuffle = useCallback((puffle) => {

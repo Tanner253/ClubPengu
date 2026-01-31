@@ -2,7 +2,7 @@
  * NFT Handlers - WebSocket and HTTP handlers for NFT operations
  * 
  * Handles:
- * - Rendering cosmetic images for NFTs
+ * - Uploading user-captured NFT images
  * - Generating metadata JSON
  * - Building mint transactions
  * - Confirming mints
@@ -10,8 +10,8 @@
 
 import OwnedCosmetic from '../db/models/OwnedCosmetic.js';
 import User from '../db/models/User.js';
-import nftRenderService from '../services/NFTRenderService.js';
 import nftMintService, { MINT_FEE_PEBBLES } from '../services/NFTMintService.js';
+import nftImageStorage from '../services/NFTImageStorage.js';
 
 // Track initialized state
 let servicesInitialized = false;
@@ -19,14 +19,14 @@ let servicesInitialized = false;
 /**
  * Initialize NFT services (call once at server startup)
  */
-export async function initializeNFTServices(baseUrl) {
+export async function initializeNFTServices() {
     if (servicesInitialized) return;
     
     try {
-        await nftRenderService.initialize(baseUrl);
         await nftMintService.initialize();
         servicesInitialized = true;
         console.log('🎨 NFT services initialized');
+        console.log(`   Image storage: ${NFT_IMAGE_DIR}`);
     } catch (error) {
         console.error('⚠️ NFT services initialization failed:', error.message);
         console.log('   NFT minting will be unavailable');
@@ -305,36 +305,118 @@ export async function handleNFTMessage(playerId, player, message, sendToPlayer) 
         return true;
     }
 
+    // Upload NFT image (user-captured from photo booth)
+    if (message.type === 'nft_upload_image') {
+        const { instanceId, imageData } = message;
+        
+        if (!player.walletAddress) {
+            sendToPlayer(playerId, {
+                type: 'nft_upload_image_response',
+                success: false,
+                error: 'NOT_AUTHENTICATED'
+            });
+            return true;
+        }
+
+        try {
+            // Verify ownership
+            const cosmetic = await OwnedCosmetic.getForNftMetadata(instanceId);
+            if (!cosmetic || cosmetic.ownerId !== player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'nft_upload_image_response',
+                    success: false,
+                    error: 'NOT_OWNER'
+                });
+                return true;
+            }
+
+            // Validate image data (should be base64 PNG)
+            if (!imageData || !imageData.startsWith('data:image/png;base64,')) {
+                sendToPlayer(playerId, {
+                    type: 'nft_upload_image_response',
+                    success: false,
+                    error: 'INVALID_IMAGE',
+                    message: 'Image must be PNG format'
+                });
+                return true;
+            }
+
+            // Save image to database (persistent across deployments)
+            const saved = await nftImageStorage.saveImage(instanceId, imageData);
+            
+            if (!saved) {
+                sendToPlayer(playerId, {
+                    type: 'nft_upload_image_response',
+                    success: false,
+                    error: 'SAVE_FAILED',
+                    message: 'Failed to save image'
+                });
+                return true;
+            }
+            
+            console.log(`📸 NFT image saved: ${instanceId}`);
+            
+            sendToPlayer(playerId, {
+                type: 'nft_upload_image_response',
+                success: true,
+                instanceId
+            });
+
+        } catch (error) {
+            console.error('nft_upload_image error:', error);
+            sendToPlayer(playerId, {
+                type: 'nft_upload_image_response',
+                success: false,
+                error: 'UPLOAD_FAILED',
+                message: error.message
+            });
+        }
+        return true;
+    }
+
     return false; // Message not handled
 }
 
 /**
- * HTTP handler: Render cosmetic image
- * GET /api/nft/render/:instanceId
+ * HTTP handler: Serve NFT image (user-captured)
+ * GET /api/nft/image/:instanceId
  */
-export async function handleRenderImage(req, res) {
+export async function handleGetImage(req, res) {
     const { instanceId } = req.params;
 
-    // CORS headers for marketplace access
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET');
+    // Comprehensive CORS headers for marketplace access (Magic Eden, Tensor, etc.)
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept, Origin',
+        'Access-Control-Expose-Headers': 'Content-Length, Content-Type'
+    };
 
     try {
-        const cosmeticData = await OwnedCosmetic.getForNftMetadata(instanceId);
+        // Get image from database (persistent storage)
+        const imageBuffer = await nftImageStorage.getImage(instanceId);
         
-        if (!cosmeticData) {
-            return res.status(404).json({ error: 'Cosmetic not found' });
+        if (!imageBuffer) {
+            console.log(`❌ NFT image not found in DB: ${instanceId}`);
+            res.writeHead(404, { 'Content-Type': 'application/json', ...corsHeaders });
+            res.end(JSON.stringify({ error: 'Image not found', instanceId }));
+            return;
         }
-
-        const imageBuffer = await nftRenderService.renderCosmetic(cosmeticData);
         
-        res.setHeader('Content-Type', 'image/png');
-        res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
-        res.send(imageBuffer);
+        console.log(`✅ Serving NFT image: ${instanceId} (${imageBuffer.length} bytes)`);
+        
+        res.writeHead(200, {
+            'Content-Type': 'image/png',
+            'Content-Length': imageBuffer.length,
+            'Cache-Control': 'public, max-age=31536000, immutable',
+            ...corsHeaders
+        });
+        res.end(imageBuffer);
 
     } catch (error) {
-        console.error('Render error:', error);
-        res.status(500).json({ error: 'Failed to render image' });
+        console.error('Get image error:', error);
+        res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(JSON.stringify({ error: 'Failed to get image' }));
     }
 }
 
@@ -345,7 +427,16 @@ export async function handleRenderImage(req, res) {
 export async function handleGetMetadata(req, res) {
     const { instanceId } = req.params;
     
-    // Use configured public URL, fall back to request host for dev
+    // Comprehensive CORS headers for marketplace access
+    const corsHeaders = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'GET, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Accept, Origin',
+        'Access-Control-Expose-Headers': 'Content-Length, Content-Type'
+    };
+    
+    // Use configured public URL - MUST be publicly accessible for marketplaces!
+    // Priority: NFT_PUBLIC_URL > PUBLIC_URL > request host (dev only)
     const publicBaseUrl = process.env.NFT_PUBLIC_URL || 
                           process.env.PUBLIC_URL ||
                           `${req.protocol}://${req.get('host')}`;
@@ -354,63 +445,32 @@ export async function handleGetMetadata(req, res) {
         const cosmeticData = await OwnedCosmetic.getForNftMetadata(instanceId);
         
         if (!cosmeticData) {
-            return res.status(404).json({ error: 'Cosmetic not found' });
+            console.log(`❌ NFT metadata not found: ${instanceId}`);
+            res.writeHead(404, { 'Content-Type': 'application/json', ...corsHeaders });
+            res.end(JSON.stringify({ error: 'Cosmetic not found', instanceId }));
+            return;
         }
 
-        // Image URL points to our render endpoint (must be publicly accessible!)
-        const imageUrl = `${publicBaseUrl}/api/nft/render/${instanceId}`;
+        // Image URL points to user-uploaded image
+        const imageUrl = `${publicBaseUrl}/api/nft/image/${instanceId}`;
         
         const metadata = nftMintService.generateMetadata(cosmeticData, imageUrl);
         
-        res.setHeader('Content-Type', 'application/json');
-        res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
-        res.setHeader('Access-Control-Allow-Origin', '*'); // Allow marketplaces to fetch
-        res.json(metadata);
+        console.log(`✅ Serving NFT metadata: ${instanceId}`);
+        console.log(`   Image URL: ${imageUrl}`);
+        console.log(`   Attributes: ${metadata.attributes?.length || 0} traits`);
+        
+        res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'public, max-age=3600',
+            ...corsHeaders
+        });
+        res.end(JSON.stringify(metadata, null, 2)); // Pretty print for debugging
 
     } catch (error) {
         console.error('Metadata error:', error);
-        res.status(500).json({ error: 'Failed to generate metadata' });
-    }
-}
-
-/**
- * HTTP handler: Preview render (for testing)
- * GET /api/nft/preview/:templateId
- */
-export async function handlePreviewRender(req, res) {
-    const { templateId } = req.params;
-    const { 
-        rarity = 'common', 
-        quality = 'standard',
-        holographic = 'false',
-        firstEdition = 'false',
-        serialNumber = '1',
-        skin = 'blue'
-    } = req.query;
-
-    try {
-        // Create mock cosmetic data for preview
-        const mockData = {
-            templateId,
-            assetKey: templateId,
-            name: templateId.replace(/([A-Z])/g, ' $1').trim(), // camelCase to Title Case
-            category: 'hat',
-            rarity,
-            quality,
-            serialNumber: parseInt(serialNumber),
-            isHolographic: holographic === 'true',
-            isFirstEdition: firstEdition === 'true',
-            skin
-        };
-
-        const imageBuffer = await nftRenderService.renderCosmetic(mockData);
-        
-        res.setHeader('Content-Type', 'image/png');
-        res.send(imageBuffer);
-
-    } catch (error) {
-        console.error('Preview render error:', error);
-        res.status(500).json({ error: 'Failed to render preview' });
+        res.writeHead(500, { 'Content-Type': 'application/json', ...corsHeaders });
+        res.end(JSON.stringify({ error: 'Failed to generate metadata' }));
     }
 }
 
@@ -418,8 +478,7 @@ export default {
     initializeNFTServices,
     isNFTEnabled,
     handleNFTMessage,
-    handleRenderImage,
-    handleGetMetadata,
-    handlePreviewRender
+    handleGetImage,
+    handleGetMetadata
 };
 

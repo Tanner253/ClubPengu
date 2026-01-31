@@ -17,6 +17,7 @@ import CosmeticPreview3D from './CosmeticPreview3D';
 import CosmeticThumbnail from './CosmeticThumbnail';
 import { thumbnailCache } from './CosmeticThumbnailCache';
 import PhantomWallet from '../wallet/PhantomWallet';
+import NFTPhotoBooth from './NFTPhotoBooth';
 
 // Inventory upgrade costs SOL (paid to rake wallet like pebbles)
 const INVENTORY_UPGRADE_SOL = 1; // 1 SOL for +200 slots
@@ -248,7 +249,7 @@ const BadgeTooltip = ({ type, children }) => {
 
 const InventoryModal = ({ isOpen, onClose }) => {
     const modalRef = useRef(null);
-    const { userData, isAuthenticated, walletAddress, send, registerCallbacks } = useMultiplayer();
+    const { userData, isAuthenticated, walletAddress, send, registerCallbacks, updateAppearance } = useMultiplayer();
     
     // Inventory state
     const [items, setItems] = useState([]);
@@ -282,6 +283,10 @@ const InventoryModal = ({ isOpen, onClose }) => {
     // NFT mint confirmation
     const [confirmMint, setConfirmMint] = useState(false);
     
+    // Photo booth for NFT minting
+    const [showPhotoBooth, setShowPhotoBooth] = useState(false);
+    const [photoBoothItem, setPhotoBoothItem] = useState(null);
+    
     // Bulk selection
     const [bulkMode, setBulkMode] = useState(false);
     const [selectedIds, setSelectedIds] = useState(new Set());
@@ -289,6 +294,7 @@ const InventoryModal = ({ isOpen, onClose }) => {
     // NFT minting
     const [minting, setMinting] = useState(false);
     const [mintInfo, setMintInfo] = useState(null);
+    const [uploadingImage, setUploadingImage] = useState(false);
     
     // Status messages
     const [message, setMessage] = useState(null);
@@ -406,6 +412,14 @@ const InventoryModal = ({ isOpen, onClose }) => {
             onNftMintInfo: (data) => {
                 setMintInfo(data);
             },
+            // NFT image upload response
+            onNftUploadImageResponse: (data) => {
+                if (!data.success) {
+                    setMessage({ type: 'error', text: data.message || 'Failed to upload image' });
+                    setShowPhotoBooth(true); // Re-open photo booth on error
+                    setTimeout(() => setMessage(null), 5000);
+                }
+            },
             // NFT check mintable response
             onNftCheckMintableResponse: (data) => {
                 if (!data.canMint) {
@@ -515,6 +529,36 @@ const InventoryModal = ({ isOpen, onClose }) => {
         setSellItem(item);
     }, []);
     
+    // Handle equip item - update appearance with this cosmetic
+    const handleEquip = useCallback((item) => {
+        if (!updateAppearance || !userData?.appearance) return;
+        
+        // Map category to appearance key
+        const categoryToKey = {
+            hat: 'hat',
+            bodyItem: 'bodyItem',
+            eyes: 'eyes',
+            mouth: 'mouth',
+            mount: 'mount'
+        };
+        
+        const key = categoryToKey[item.category];
+        if (!key) {
+            console.warn('Unknown category for equip:', item.category);
+            return;
+        }
+        
+        // Build new appearance with this item equipped
+        const newAppearance = {
+            ...userData.appearance,
+            [key]: item.assetKey
+        };
+        
+        updateAppearance(newAppearance);
+        setMessage({ type: 'success', text: `Equipped ${item.name}!` });
+        setTimeout(() => setMessage(null), 2000);
+    }, [updateAppearance, userData?.appearance]);
+    
     // Handle sell submission
     const handleSell = useCallback((price) => {
         if (!sellItem || selling) return;
@@ -542,11 +586,31 @@ const InventoryModal = ({ isOpen, onClose }) => {
         });
     }, [selectedIds, burning, send]);
     
-    // Handle mint as NFT - show confirmation UI
+    // Handle mint as NFT - open photo booth first
     const handleMintNft = useCallback(() => {
-        if (minting || !mintInfo?.enabled) return;
+        if (minting || !mintInfo?.enabled || !selectedItem) return;
+        setPhotoBoothItem(selectedItem);
+        setShowPhotoBooth(true);
+    }, [minting, mintInfo, selectedItem]);
+    
+    // Handle photo captured from booth - upload to server then show confirmation
+    const handlePhotoCaptured = useCallback((imageData) => {
+        if (!photoBoothItem) return;
+        
+        setUploadingImage(true);
+        
+        // Send image to server
+        send({
+            type: 'nft_upload_image',
+            instanceId: photoBoothItem.instanceId,
+            imageData
+        });
+        
+        // Close photo booth and show confirmation
+        setShowPhotoBooth(false);
         setConfirmMint(true);
-    }, [minting, mintInfo]);
+        setUploadingImage(false);
+    }, [photoBoothItem, send]);
     
     // Actually execute the mint after confirmation
     const executeMint = useCallback((item) => {
@@ -1061,6 +1125,7 @@ const InventoryModal = ({ isOpen, onClose }) => {
                                     setConfirmBurn={setConfirmBurn}
                                     burning={burning}
                                     onBurn={handleBurn}
+                                    onEquip={handleEquip}
                                     onListForSale={handleListForSale}
                                     onMintNft={handleMintNft}
                                     confirmMint={confirmMint}
@@ -1081,6 +1146,7 @@ const InventoryModal = ({ isOpen, onClose }) => {
                                     setConfirmBurn={setConfirmBurn}
                                     burning={burning}
                                     onBurn={handleBurn}
+                                    onEquip={handleEquip}
                                     onListForSale={handleListForSale}
                                     onMintNft={handleMintNft}
                                     confirmMint={confirmMint}
@@ -1106,6 +1172,21 @@ const InventoryModal = ({ isOpen, onClose }) => {
                     selling={selling}
                 />
             )}
+            
+            {/* NFT Photo Booth */}
+            <NFTPhotoBooth
+                isOpen={showPhotoBooth}
+                appearance={userData?.appearance || { 
+                    ...userData?.customization, 
+                    characterType: userData?.characterType || 'penguin' 
+                }}
+                item={photoBoothItem}
+                onCapture={handlePhotoCaptured}
+                onClose={() => {
+                    setShowPhotoBooth(false);
+                    setPhotoBoothItem(null);
+                }}
+            />
         </div>
     );
 };
@@ -1482,11 +1563,12 @@ const MintNftSection = ({ item, mintInfo, confirmMint, setConfirmMint, minting, 
 };
 
 // Item Detail Panel Component
-const ItemDetailPanel = ({ item, confirmBurn, setConfirmBurn, burning, onBurn, onListForSale, onMintNft, confirmMint, setConfirmMint, onExecuteMint, minting, mintInfo, onClose, isMobile = false }) => {
+const ItemDetailPanel = ({ item, confirmBurn, setConfirmBurn, burning, onBurn, onEquip, onListForSale, onMintNft, confirmMint, setConfirmMint, onExecuteMint, minting, mintInfo, onClose, isMobile = false }) => {
     const rarity = RARITY_CONFIG[item.rarity] || RARITY_CONFIG.common;
     const quality = QUALITY_CONFIG[item.quality] || QUALITY_CONFIG.standard;
     const canSell = item.tradable !== false;
     const canMintNft = item.tradable !== false && !item.nftMintAddress && mintInfo?.enabled;
+    const canEquip = !item.isListed && ['hat', 'bodyItem', 'eyes', 'mouth', 'mount'].includes(item.category);
     
     // Reset confirmMint when item changes
     React.useEffect(() => {
@@ -1750,6 +1832,17 @@ const ItemDetailPanel = ({ item, confirmBurn, setConfirmBurn, burning, onBurn, o
                     onMintNft={onMintNft}
                     onExecuteMint={onExecuteMint}
                 />
+            )}
+            
+            {/* Equip Button - only show if not listed and is equippable category */}
+            {canEquip && onEquip && (
+                <button
+                    onClick={() => onEquip(item)}
+                    className="w-full py-3 rounded-lg font-bold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white transition-all flex items-center justify-center gap-2"
+                >
+                    <span>👕</span>
+                    <span>Equip Item</span>
+                </button>
             )}
             
             {/* List for Sale Button - only show if not already listed */}

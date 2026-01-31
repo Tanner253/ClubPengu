@@ -37,7 +37,7 @@ import { handleIglooMessage } from './handlers/iglooHandlers.js';
 import { handleTippingMessage } from './handlers/tippingHandlers.js';
 import { handleMarketplaceMessage } from './handlers/marketplaceHandlers.js';
 import { handleGiftMessage } from './handlers/giftHandlers.js';
-import { initializeNFTServices, handleNFTMessage, handleRenderImage, handleGetMetadata, handlePreviewRender } from './handlers/nftHandlers.js';
+import { initializeNFTServices, handleNFTMessage, handleGetImage, handleGetMetadata } from './handlers/nftHandlers.js';
 import nftOwnershipService from './services/NFTOwnershipService.js';
 import rentScheduler from './schedulers/RentScheduler.js';
 import solanaPaymentService from './services/SolanaPaymentService.js';
@@ -206,29 +206,35 @@ const server = http.createServer((req, res) => {
     
     // ==================== NFT API ENDPOINTS ====================
     
-    // Render NFT image for a cosmetic
-    if (req.url.startsWith('/api/nft/render/')) {
-        const instanceId = req.url.replace('/api/nft/render/', '').split('?')[0];
-        handleRenderImage({ params: { instanceId } }, res);
+    // CORS preflight for NFT endpoints (required for Magic Eden and other marketplaces)
+    if (req.method === 'OPTIONS' && req.url.startsWith('/api/nft/')) {
+        res.writeHead(200, {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, OPTIONS',
+            'Access-Control-Allow-Headers': 'Content-Type, Accept, Origin',
+            'Access-Control-Max-Age': '86400', // 24 hours
+            'Content-Length': '0'
+        });
+        res.end();
+        return;
+    }
+    
+    // Serve user-captured NFT images
+    if (req.url.startsWith('/api/nft/image/')) {
+        const instanceId = req.url.replace('/api/nft/image/', '').split('?')[0];
+        console.log(`🖼️ NFT image request: ${instanceId}`);
+        handleGetImage({ params: { instanceId } }, res);
         return;
     }
     
     // Get NFT metadata JSON
     if (req.url.startsWith('/api/nft/metadata/')) {
         const instanceId = req.url.replace('/api/nft/metadata/', '').split('?')[0];
+        console.log(`📋 NFT metadata request: ${instanceId}`);
         handleGetMetadata(
             { params: { instanceId }, protocol: 'https', get: (h) => req.headers[h.toLowerCase()] || req.headers.host },
             res
         );
-        return;
-    }
-    
-    // Preview render for testing (pass templateId and query params)
-    if (req.url.startsWith('/api/nft/preview/')) {
-        const urlParts = req.url.replace('/api/nft/preview/', '').split('?');
-        const templateId = urlParts[0];
-        const query = Object.fromEntries(new URLSearchParams(urlParts[1] || ''));
-        handlePreviewRender({ params: { templateId }, query }, res);
         return;
     }
     
@@ -6801,13 +6807,11 @@ async function start() {
         console.warn('   Token wagers will require manual settlement');
     }
     
-    // Initialize NFT services (non-blocking - if puppeteer isn't installed, NFT minting will be disabled)
+    // Initialize NFT services
     try {
-        const nftBaseUrl = process.env.NFT_RENDER_BASE_URL || `http://localhost:${PORT}`;
-        await initializeNFTServices(nftBaseUrl);
+        await initializeNFTServices();
     } catch (error) {
         console.warn('⚠️ NFT services initialization failed:', error.message);
-        console.warn('   Install puppeteer for NFT minting: npm install puppeteer');
     }
     
     // Initialize NFT ownership sync service
