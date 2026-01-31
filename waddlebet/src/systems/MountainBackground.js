@@ -5,23 +5,49 @@
  * Uses a single merged BufferGeometry with vertex colors - NO textures.
  * Multiple rows of mountains create depth and a natural mountain range feel.
  * 
+ * Supports:
+ * - Rectangular playable areas (multiple zones)
+ * - Path gaps where zones connect
+ * - Collision data for boundary enforcement
+ * 
  * @param {THREE} THREE - Three.js library
  * @param {THREE.Scene} scene - Scene to add mountains to
  * @param {Object} options - Configuration options
  */
 export function createMountainBackground(THREE, scene, options = {}) {
     const {
-        mapSize = 220,          // Size of the playable map
+        mapSize = 220,          // Size of original zone (for backwards compatibility)
+        // NEW: Rectangular playable area bounds
+        worldBounds = {
+            minX: 0,
+            maxX: 440,          // Town (0-220) + Snow Forts (220-440)
+            minZ: 0,
+            maxZ: 220
+        },
+        // NEW: Gaps in mountains for zone transitions (exterior)
+        pathGaps = [],
+        // NEW: Internal walls between zones (with optional gaps for paths)
+        // Each wall: { edge: 'horizontal'|'vertical', x/z, minX/minZ, maxX/maxZ, gapMinX/gapMinZ, gapMaxX/gapMaxZ }
+        internalWalls = [],
         offset = 30,            // How far outside the map to place first row
         mountainRows = 3,       // Number of mountain rows for depth
         rowSpacing = 45,        // Distance between rows
         mountainsPerRow = [24, 32, 40], // Peaks per row (back to front)
-        baseHeight = -5,        // Base height (below ground for seamless look)
+        baseHeight = 0,         // Base height (same as zone ground y=0)
         minPeakHeight = 40,     // Minimum peak height
         maxPeakHeight = 85,     // Maximum peak height
         baseWidth = 35,         // Base width of each mountain
         snowLineRatio = 0.55,   // Percentage of peak height where snow starts
     } = options;
+    
+    // Calculate playable area dimensions
+    const worldWidth = worldBounds.maxX - worldBounds.minX;
+    const worldDepth = worldBounds.maxZ - worldBounds.minZ;
+    const worldCenterX = (worldBounds.minX + worldBounds.maxX) / 2;
+    const worldCenterZ = (worldBounds.minZ + worldBounds.maxZ) / 2;
+    
+    // Collision boxes for mountains (will be returned)
+    const collisionBoxes = [];
 
     // Colors for the mountains (vertex colors) - Deep icy blue with snow caps
     const COLORS = {
@@ -45,6 +71,7 @@ export function createMountainBackground(THREE, scene, options = {}) {
     const colors = [];
     const normals = [];
 
+    // Legacy center for backwards compatibility (not used in new rectangular system)
     const center = mapSize / 2;
 
     // Helper to get color for a vertex based on height
@@ -180,64 +207,266 @@ export function createMountainBackground(THREE, scene, options = {}) {
         }
     };
 
-    // Generate multiple rows of mountains
-    for (let row = 0; row < mountainRows; row++) {
-        // Back rows are further away and taller
-        const rowRadius = mapSize / 2 + offset + (row * rowSpacing);
-        const rowPeakCount = mountainsPerRow[row] || mountainsPerRow[0];
-        
-        // Height multiplier - back rows are taller (distant mountains appear larger)
+    // Helper to check if a position is in a path gap
+    const isInPathGap = (x, z) => {
+        for (const gap of pathGaps) {
+            if (x >= gap.minX && x <= gap.maxX && z >= gap.minZ && z <= gap.maxZ) {
+                return true;
+            }
+        }
+        return false;
+    };
+    
+    // Helper to place mountains along a line segment
+    const placeMountainsAlongEdge = (startX, startZ, endX, endZ, row, facing) => {
+        const rowOffset = offset + (row * rowSpacing);
         const heightMult = 1 + (row * 0.25);
-        
-        // Width multiplier - back rows have wider bases
         const widthMult = 1 + (row * 0.15);
         
-        // Angular offset to stagger peaks between rows
-        const angleOffset = (row * Math.PI) / rowPeakCount;
-
-        for (let i = 0; i < rowPeakCount; i++) {
-            const angle = angleOffset + (i / rowPeakCount) * Math.PI * 2;
+        // Calculate edge length and direction
+        const dx = endX - startX;
+        const dz = endZ - startZ;
+        const edgeLength = Math.sqrt(dx * dx + dz * dz);
+        const dirX = dx / edgeLength;
+        const dirZ = dz / edgeLength;
+        
+        // Normal pointing outward from playable area
+        let normalX, normalZ;
+        if (facing === 'north') { normalX = 0; normalZ = -1; }
+        else if (facing === 'south') { normalX = 0; normalZ = 1; }
+        else if (facing === 'east') { normalX = 1; normalZ = 0; }
+        else { normalX = -1; normalZ = 0; } // west
+        
+        // Number of mountains along this edge
+        const spacing = baseWidth * 0.8;
+        const count = Math.ceil(edgeLength / spacing);
+        
+        for (let i = 0; i <= count; i++) {
+            const t = i / count;
+            const baseX = startX + dx * t;
+            const baseZ = startZ + dz * t;
             
-            // Randomize peak height for variety
+            // Position offset outward from the edge
+            const peakX = baseX + normalX * rowOffset + (Math.random() - 0.5) * 10;
+            const peakZ = baseZ + normalZ * rowOffset + (Math.random() - 0.5) * 10;
+            
+            // Skip if in a path gap (extended to catch mountains near gaps)
+            const gapCheckX = baseX;
+            const gapCheckZ = baseZ;
+            if (isInPathGap(gapCheckX, gapCheckZ)) {
+                continue;
+            }
+            
+            // Randomize peak height
             const basePeakHeight = minPeakHeight + Math.random() * (maxPeakHeight - minPeakHeight);
             const peakHeight = basePeakHeight * heightMult;
             
-            // Vary snow line per mountain - LOWER snow lines for more dramatic snow caps
-            // Range: 20% to 45% of peak height (lower = more snow visible)
             const mountainSnowRatio = 0.20 + Math.random() * 0.25;
             const snowLineHeight = baseHeight + (peakHeight - baseHeight) * mountainSnowRatio;
             
-            // Add slight variation to position for organic feel
-            const radiusVariation = (Math.random() - 0.5) * 15;
-            const actualRadius = rowRadius + radiusVariation;
-            
-            // Peak position
-            const peakX = center + Math.cos(angle) * actualRadius;
-            const peakZ = center + Math.sin(angle) * actualRadius;
-            
-            // Base spread
             const spread = (baseWidth / 2) * widthMult;
-
-            // Create tiered mountain with visible snow bands
+            
             createTieredMountain(peakX, peakZ, peakHeight, spread, snowLineHeight, row);
-
-            // Add secondary peaks for more natural look (ridgelines)
-            if (row < 2 && i % (row === 0 ? 2 : 3) === 0) {
+            
+            // Add collision for first row mountains only (closest to players)
+            if (row === 0) {
+                collisionBoxes.push({
+                    x: peakX,
+                    z: peakZ,
+                    radius: spread * 1.2, // Slightly larger than visual for safe margin
+                    type: 'cylinder'
+                });
+            }
+            
+            // Add ridge peaks
+            if (row < 2 && i % 2 === 0) {
                 const ridgeOffset = spread * (0.8 + Math.random() * 0.4);
                 const ridgeHeight = peakHeight * (0.5 + Math.random() * 0.25);
-                const ridgeAngle = angle + (Math.random() - 0.5) * 0.3;
                 
-                const ridgePeakX = peakX - Math.cos(ridgeAngle) * ridgeOffset;
-                const ridgePeakZ = peakZ - Math.sin(ridgeAngle) * ridgeOffset;
+                const ridgePeakX = peakX + normalX * ridgeOffset * 0.5;
+                const ridgePeakZ = peakZ + normalZ * ridgeOffset * 0.5;
                 const ridgeSpread = spread * 0.5;
                 
-                // Ridge snow line - even lower for dramatic small peaks
                 const ridgeSnowLineHeight = baseHeight + (ridgeHeight - baseHeight) * (0.15 + Math.random() * 0.2);
                 
                 createTieredMountain(ridgePeakX, ridgePeakZ, ridgeHeight, ridgeSpread, ridgeSnowLineHeight, row);
             }
         }
+    };
+    
+    // Generate mountains around RECTANGULAR playable area
+    // Place mountains along each edge of the world bounds
+    for (let row = 0; row < mountainRows; row++) {
+        // North edge (z = minZ)
+        placeMountainsAlongEdge(
+            worldBounds.minX, worldBounds.minZ,
+            worldBounds.maxX, worldBounds.minZ,
+            row, 'north'
+        );
+        
+        // South edge (z = maxZ)
+        placeMountainsAlongEdge(
+            worldBounds.minX, worldBounds.maxZ,
+            worldBounds.maxX, worldBounds.maxZ,
+            row, 'south'
+        );
+        
+        // West edge (x = minX)
+        placeMountainsAlongEdge(
+            worldBounds.minX, worldBounds.minZ,
+            worldBounds.minX, worldBounds.maxZ,
+            row, 'west'
+        );
+        
+        // East edge (x = maxX)
+        placeMountainsAlongEdge(
+            worldBounds.maxX, worldBounds.minZ,
+            worldBounds.maxX, worldBounds.maxZ,
+            row, 'east'
+        );
     }
+    
+    // Add corner mountains for seamless coverage
+    const corners = [
+        { x: worldBounds.minX, z: worldBounds.minZ }, // NW
+        { x: worldBounds.maxX, z: worldBounds.minZ }, // NE
+        { x: worldBounds.minX, z: worldBounds.maxZ }, // SW
+        { x: worldBounds.maxX, z: worldBounds.maxZ }, // SE
+    ];
+    
+    corners.forEach((corner, idx) => {
+        for (let row = 0; row < mountainRows; row++) {
+            const rowOffset = offset + (row * rowSpacing);
+            const heightMult = 1 + (row * 0.25);
+            const widthMult = 1 + (row * 0.15);
+            
+            // Diagonal direction for corner
+            const diagX = corner.x < worldCenterX ? -1 : 1;
+            const diagZ = corner.z < worldCenterZ ? -1 : 1;
+            
+            const peakX = corner.x + diagX * rowOffset * 0.7;
+            const peakZ = corner.z + diagZ * rowOffset * 0.7;
+            
+            const basePeakHeight = (minPeakHeight + maxPeakHeight) / 2 + Math.random() * 20;
+            const peakHeight = basePeakHeight * heightMult;
+            const spread = (baseWidth / 2) * widthMult * 1.2; // Larger corner mountains
+            
+            const snowLineHeight = baseHeight + peakHeight * 0.25;
+            
+            createTieredMountain(peakX, peakZ, peakHeight, spread, snowLineHeight, row);
+            
+            if (row === 0) {
+                collisionBoxes.push({
+                    x: peakX,
+                    z: peakZ,
+                    radius: spread * 1.2,
+                    type: 'cylinder'
+                });
+            }
+        }
+    });
+    
+    // ==================== INTERNAL WALLS (Zone Dividers) ====================
+    // Mountains that separate zones, with optional gaps for paths
+    // These are INSIDE the playable area, not on the exterior
+    internalWalls.forEach(wall => {
+        // Helper to check if position is in this wall's gap
+        const isInWallGap = (x, z) => {
+            if (wall.edge === 'horizontal') {
+                // Horizontal wall at z, gap between gapMinX and gapMaxX
+                return x >= (wall.gapMinX || -9999) && x <= (wall.gapMaxX || -9999);
+            } else {
+                // Vertical wall at x, gap between gapMinZ and gapMaxZ
+                return z >= (wall.gapMinZ || -9999) && z <= (wall.gapMaxZ || -9999);
+            }
+        };
+        
+        // Place mountains along the internal wall (only 1-2 rows, smaller than exterior)
+        const internalRows = 2;
+        const internalOffset = 5; // Much closer to the edge (inside playable area)
+        
+        for (let row = 0; row < internalRows; row++) {
+            const rowOffset = internalOffset + (row * 25); // Tighter spacing
+            const heightMult = 0.7 + (row * 0.15); // Shorter than exterior
+            const widthMult = 0.8 + (row * 0.1);
+            
+            if (wall.edge === 'horizontal') {
+                // Horizontal wall at specific Z, spanning minX to maxX
+                const startX = wall.minX;
+                const endX = wall.maxX;
+                const wallZ = wall.z;
+                
+                const spacing = baseWidth * 0.7;
+                const count = Math.ceil((endX - startX) / spacing);
+                
+                for (let i = 0; i <= count; i++) {
+                    const t = i / count;
+                    const baseX = startX + (endX - startX) * t;
+                    
+                    // Skip if in gap
+                    if (isInWallGap(baseX, wallZ)) continue;
+                    
+                    // Offset perpendicular to the wall (north or south)
+                    const peakX = baseX + (Math.random() - 0.5) * 8;
+                    const peakZ = wallZ + (row % 2 === 0 ? -rowOffset : rowOffset);
+                    
+                    const basePeakHeight = minPeakHeight * 0.6 + Math.random() * (maxPeakHeight - minPeakHeight) * 0.4;
+                    const peakHeight = basePeakHeight * heightMult;
+                    const spread = (baseWidth / 2) * widthMult * 0.8;
+                    
+                    const snowLineHeight = baseHeight + peakHeight * (0.3 + Math.random() * 0.2);
+                    
+                    createTieredMountain(peakX, peakZ, peakHeight, spread, snowLineHeight, row);
+                    
+                    if (row === 0) {
+                        collisionBoxes.push({
+                            x: peakX,
+                            z: peakZ,
+                            radius: spread * 1.2,
+                            type: 'cylinder'
+                        });
+                    }
+                }
+            } else {
+                // Vertical wall at specific X, spanning minZ to maxZ
+                const startZ = wall.minZ;
+                const endZ = wall.maxZ;
+                const wallX = wall.x;
+                
+                const spacing = baseWidth * 0.7;
+                const count = Math.ceil((endZ - startZ) / spacing);
+                
+                for (let i = 0; i <= count; i++) {
+                    const t = i / count;
+                    const baseZ = startZ + (endZ - startZ) * t;
+                    
+                    // Skip if in gap
+                    if (isInWallGap(wallX, baseZ)) continue;
+                    
+                    // Offset perpendicular to the wall (east or west)
+                    const peakX = wallX + (row % 2 === 0 ? -rowOffset : rowOffset);
+                    const peakZ = baseZ + (Math.random() - 0.5) * 8;
+                    
+                    const basePeakHeight = minPeakHeight * 0.6 + Math.random() * (maxPeakHeight - minPeakHeight) * 0.4;
+                    const peakHeight = basePeakHeight * heightMult;
+                    const spread = (baseWidth / 2) * widthMult * 0.8;
+                    
+                    const snowLineHeight = baseHeight + peakHeight * (0.3 + Math.random() * 0.2);
+                    
+                    createTieredMountain(peakX, peakZ, peakHeight, spread, snowLineHeight, row);
+                    
+                    if (row === 0) {
+                        collisionBoxes.push({
+                            x: peakX,
+                            z: peakZ,
+                            radius: spread * 1.2,
+                            type: 'cylinder'
+                        });
+                    }
+                }
+            }
+        }
+    });
 
     // Create the BufferGeometry
     const geometry = new THREE.BufferGeometry();
@@ -260,73 +489,14 @@ export function createMountainBackground(THREE, scene, options = {}) {
 
     scene.add(mountainMesh);
 
-    // ==================== SNOWY GROUND PLANE ====================
-    // Create a large ground plane that extends under the mountains
-    // This prevents the "floating mountains" effect
-    const groundExtent = mapSize + offset + (mountainRows * rowSpacing) + 100; // Extend past furthest mountains
-    const groundGeo = new THREE.PlaneGeometry(groundExtent * 2, groundExtent * 2, 16, 16);
-    groundGeo.rotateX(-Math.PI / 2);
-    
-    // Add vertex colors for icy ground with subtle variation
-    const groundPositions = groundGeo.attributes.position;
-    const groundColors = new Float32Array(groundPositions.count * 3);
-    
-    // Icy ground colors - deep blues transitioning to snowy white
-    const iceGroundBase = new THREE.Color('#a8d0e8');    // Base icy blue-white
-    const iceGroundLight = new THREE.Color('#c8e0f0');   // Lighter icy
-    const iceGroundDark = new THREE.Color('#7ab0d0');    // Deeper icy blue
-    const mapIceColor = new THREE.Color('#7EB8D8');      // Ice blue (matches main map)
-    const distantIce = new THREE.Color('#5a90b8');       // Distant icy blue (atmospheric)
-    
-    for (let i = 0; i < groundPositions.count; i++) {
-        const x = groundPositions.getX(i);
-        const z = groundPositions.getZ(i);
-        
-        // Distance from map center
-        const distFromCenter = Math.sqrt(x * x + z * z);
-        const mapRadius = mapSize / 2;
-        
-        // Transition from map ice to distant snowy ice
-        let color;
-        if (distFromCenter < mapRadius + 15) {
-            // Near the main map - match the map ice color
-            const t = Math.max(0, (distFromCenter - mapRadius) / 15);
-            color = mapIceColor.clone().lerp(iceGroundBase, t);
-        } else {
-            // Under mountains - icy ground with variation
-            const noise = Math.sin(x * 0.04) * Math.cos(z * 0.04) * 0.5 + 0.5;
-            if (noise > 0.65) {
-                color = iceGroundLight.clone();
-            } else if (noise < 0.25) {
-                color = iceGroundDark.clone();
-            } else {
-                color = iceGroundBase.clone();
-            }
-            
-            // Fade to deeper blue with distance (atmospheric perspective)
-            const distanceFade = Math.min(1, (distFromCenter - mapRadius) / (groundExtent * 0.6));
-            color.lerp(distantIce, distanceFade * 0.5);
-        }
-        
-        groundColors[i * 3] = color.r;
-        groundColors[i * 3 + 1] = color.g;
-        groundColors[i * 3 + 2] = color.b;
-    }
-    
-    groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(groundColors, 3));
-    
-    const groundMat = new THREE.MeshLambertMaterial({
-        vertexColors: true,
-        side: THREE.FrontSide,
-    });
-    
-    const groundMesh = new THREE.Mesh(groundGeo, groundMat);
-    groundMesh.name = 'mountainGround';
-    groundMesh.position.set(center, baseHeight + 0.1, center); // Slightly above base to avoid z-fighting
-    groundMesh.receiveShadow = false;
-    groundMesh.castShadow = false;
-    
-    scene.add(groundMesh);
+    // ==================== NO SEPARATE GROUND PLANE ====================
+    // Each zone (Town, Snow Forts, etc.) creates its own ground plane at y=0
+    // Mountain bases are at y=0 (baseHeight=0) so they sit on zone grounds
+    // This prevents double-rendering and z-fighting issues
+    // 
+    // Note: If there are gaps between zones and mountains, zones should extend
+    // their ground slightly to cover the transition area
+    const groundMesh = null; // No separate mountain ground needed
 
     // Add subtle fog to blend mountains into sky (adjusted for depth)
     const fogColor = new THREE.Color('#6AA8C8'); // Match sky color
@@ -334,18 +504,30 @@ export function createMountainBackground(THREE, scene, options = {}) {
 
     // Log performance info
     const triangleCount = positions.length / 9;
-    console.log(`🏔️ Mountain background created: ${mountainRows} rows, ${triangleCount} triangles + ground plane`);
+    console.log(`🏔️ Mountain background created: ${mountainRows} rows, ${triangleCount} triangles, ${collisionBoxes.length} collision zones`);
 
     return {
         mesh: mountainMesh,
-        groundMesh: groundMesh,
+        groundMesh: groundMesh, // null - zones handle their own ground
+        collisionBoxes: collisionBoxes, // Array of { x, z, radius } for collision checks
+        
+        // Check if a point collides with any mountain
+        checkCollision: (x, z, playerRadius = 0.5) => {
+            for (const box of collisionBoxes) {
+                const dx = x - box.x;
+                const dz = z - box.z;
+                const dist = Math.sqrt(dx * dx + dz * dz);
+                if (dist < box.radius + playerRadius) {
+                    return true;
+                }
+            }
+            return false;
+        },
+        
         dispose: () => {
             geometry.dispose();
             material.dispose();
             scene.remove(mountainMesh);
-            groundGeo.dispose();
-            groundMat.dispose();
-            scene.remove(groundMesh);
             scene.fog = null;
         }
     };

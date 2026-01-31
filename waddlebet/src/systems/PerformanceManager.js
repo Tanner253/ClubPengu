@@ -8,15 +8,17 @@
 
 // ==================== UNIVERSAL LOD THRESHOLDS ====================
 // These apply to ALL quality presets for consistent optimization
-// Based on user request: 100% at <50, 80% at <100, 60% at <200
+// AGGRESSIVE thresholds for expanded map (matching mobile performance)
 export const LOD_THRESHOLDS = {
     // Full quality - all effects enabled
-    FULL_QUALITY: 50,      // Within 50 units = 100% fidelity
+    FULL_QUALITY: 20,      // Within 20 units = 100% fidelity (was 35)
     // High quality - minor reductions
-    HIGH_QUALITY: 100,     // 50-100 units = 80% fidelity (no shadows, reduced particles)
+    HIGH_QUALITY: 40,      // 20-40 units = 80% fidelity (was 60)
     // Medium quality - significant reductions  
-    MEDIUM_QUALITY: 200,   // 100-200 units = 60% fidelity (no shadows, no particles, simpler animations)
-    // Beyond 200 units = minimal rendering (update throttling, no animations)
+    MEDIUM_QUALITY: 65,    // 40-65 units = 60% fidelity (was 100)
+    // Low quality - very distant
+    LOW_QUALITY: 90,       // 65-90 units = 40% fidelity (was 150)
+    // Beyond 90 units = ULTRA_LOW - extremely minimal rendering
 };
 
 // Squared thresholds for faster distance checks (avoid sqrt)
@@ -24,6 +26,7 @@ export const LOD_THRESHOLDS_SQ = {
     FULL_QUALITY: LOD_THRESHOLDS.FULL_QUALITY * LOD_THRESHOLDS.FULL_QUALITY,
     HIGH_QUALITY: LOD_THRESHOLDS.HIGH_QUALITY * LOD_THRESHOLDS.HIGH_QUALITY,
     MEDIUM_QUALITY: LOD_THRESHOLDS.MEDIUM_QUALITY * LOD_THRESHOLDS.MEDIUM_QUALITY,
+    LOW_QUALITY: LOD_THRESHOLDS.LOW_QUALITY * LOD_THRESHOLDS.LOW_QUALITY,
 };
 
 // LOD levels for easy checking
@@ -31,23 +34,24 @@ export const LOD_LEVEL = {
     FULL: 0,      // 100% quality
     HIGH: 1,      // 80% quality  
     MEDIUM: 2,    // 60% quality
-    LOW: 3,       // Minimal quality (very distant)
+    LOW: 3,       // 40% quality (very distant)
+    ULTRA_LOW: 4, // Minimal quality (extremely distant - static only)
 };
 
-// Performance presets
+// Performance presets - MORE AGGRESSIVE for expanded map (matching mobile)
 export const PERFORMANCE_PRESETS = {
-    // Maximum quality (default PC)
+    // Maximum quality (default PC) - still aggressive for large map
     ultra: {
         name: 'Ultra',
         dpr: 2.0,
         antialias: true,
         shadowMapSize: 2048,
         shadowType: 'PCFSoft',
-        snowParticles: 1000,
-        distantPlayerThreshold: 80,
-        distantPlayerUpdateRate: 1,    // Every frame
-        veryDistantThreshold: 150,
-        veryDistantUpdateRate: 2,      // Every 2nd frame
+        snowParticles: 800,             // Reduced from 1000
+        distantPlayerThreshold: 50,     // Reduced from 80
+        distantPlayerUpdateRate: 1,
+        veryDistantThreshold: 90,       // Reduced from 150
+        veryDistantUpdateRate: 2,
         animateDistantPlayers: true,
         animateDistantCosmetics: true,
         trailParticles: true,
@@ -60,13 +64,13 @@ export const PERFORMANCE_PRESETS = {
         antialias: true,
         shadowMapSize: 1024,
         shadowType: 'PCF',
-        snowParticles: 800,
-        distantPlayerThreshold: 60,
+        snowParticles: 600,             // Reduced from 800
+        distantPlayerThreshold: 40,     // Reduced from 60
         distantPlayerUpdateRate: 1,
-        veryDistantThreshold: 120,
+        veryDistantThreshold: 75,       // Reduced from 120
         veryDistantUpdateRate: 2,
         animateDistantPlayers: true,
-        animateDistantCosmetics: true,
+        animateDistantCosmetics: false, // Disabled for perf
         trailParticles: true,
         goldRainParticles: true,
     },
@@ -77,27 +81,27 @@ export const PERFORMANCE_PRESETS = {
         antialias: true,
         shadowMapSize: 512,
         shadowType: 'PCF',
-        snowParticles: 500,
-        distantPlayerThreshold: 50,
+        snowParticles: 400,             // Reduced from 500
+        distantPlayerThreshold: 35,     // Reduced from 50
         distantPlayerUpdateRate: 2,
-        veryDistantThreshold: 100,
+        veryDistantThreshold: 60,       // Reduced from 100
         veryDistantUpdateRate: 4,
-        animateDistantPlayers: true,
+        animateDistantPlayers: false,   // Disabled
         animateDistantCosmetics: false,
         trailParticles: true,
-        goldRainParticles: true,
+        goldRainParticles: false,       // Disabled
     },
     // Low quality (performance mode)
     low: {
         name: 'Low',
         dpr: 1.0,
         antialias: false,
-        shadowMapSize: 512,
+        shadowMapSize: 256,             // Reduced from 512
         shadowType: 'Basic',
-        snowParticles: 400,
-        distantPlayerThreshold: 40,
-        distantPlayerUpdateRate: 2,
-        veryDistantThreshold: 80,
+        snowParticles: 250,             // Reduced from 400
+        distantPlayerThreshold: 25,     // Reduced from 40
+        distantPlayerUpdateRate: 3,     // Slower updates
+        veryDistantThreshold: 50,       // Reduced from 80
         veryDistantUpdateRate: 6,
         animateDistantPlayers: false,
         animateDistantCosmetics: false,
@@ -371,13 +375,14 @@ class PerformanceManager {
     /**
      * Get LOD level for a given squared distance
      * @param {number} distanceSq - Squared distance to object
-     * @returns {number} LOD level (0=full, 1=high, 2=medium, 3=low)
+     * @returns {number} LOD level (0=full, 1=high, 2=medium, 3=low, 4=ultra_low)
      */
     getLODLevel(distanceSq) {
         if (distanceSq <= LOD_THRESHOLDS_SQ.FULL_QUALITY) return LOD_LEVEL.FULL;
         if (distanceSq <= LOD_THRESHOLDS_SQ.HIGH_QUALITY) return LOD_LEVEL.HIGH;
         if (distanceSq <= LOD_THRESHOLDS_SQ.MEDIUM_QUALITY) return LOD_LEVEL.MEDIUM;
-        return LOD_LEVEL.LOW;
+        if (distanceSq <= LOD_THRESHOLDS_SQ.LOW_QUALITY) return LOD_LEVEL.LOW;
+        return LOD_LEVEL.ULTRA_LOW;
     }
     
     /**
@@ -427,9 +432,36 @@ class PerformanceManager {
      * @returns {boolean} True if puffle should be visible
      */
     shouldShowPuffle(distanceSq) {
-        // Puffles visible within 150 units (between high and medium)
-        const PUFFLE_THRESHOLD_SQ = 150 * 150;
+        // Puffles visible within 50 units (very aggressive for larger map)
+        const PUFFLE_THRESHOLD_SQ = 50 * 50;
         return distanceSq <= PUFFLE_THRESHOLD_SQ;
+    }
+    
+    /**
+     * Check if object should be updated at all (extremely distant objects can skip updates)
+     * @param {number} distanceSq - Squared distance to object
+     * @param {number} frameCount - Current frame count for throttling
+     * @returns {boolean} True if should update this frame
+     */
+    shouldUpdateDistantObject(distanceSq, frameCount) {
+        if (distanceSq <= LOD_THRESHOLDS_SQ.MEDIUM_QUALITY) return true;
+        if (distanceSq <= LOD_THRESHOLDS_SQ.LOW_QUALITY) {
+            // Update every 2nd frame for distant objects
+            return (frameCount % 2) === 0;
+        }
+        // Ultra distant - update every 4th frame
+        return (frameCount % 4) === 0;
+    }
+    
+    /**
+     * Check if prop/environment object should be visible at distance
+     * @param {number} distanceSq - Squared distance
+     * @returns {boolean} True if should render
+     */
+    shouldRenderProp(distanceSq) {
+        // Props visible within 120 units (was 200, more aggressive for expanded map)
+        const PROP_VISIBLE_SQ = 120 * 120;
+        return distanceSq <= PROP_VISIBLE_SQ;
     }
     
     /**
@@ -441,7 +473,8 @@ class PerformanceManager {
         if (distanceSq <= LOD_THRESHOLDS_SQ.FULL_QUALITY) return 1.0;
         if (distanceSq <= LOD_THRESHOLDS_SQ.HIGH_QUALITY) return 0.85;
         if (distanceSq <= LOD_THRESHOLDS_SQ.MEDIUM_QUALITY) return 0.7;
-        return 0.5;
+        if (distanceSq <= LOD_THRESHOLDS_SQ.LOW_QUALITY) return 0.5;
+        return 0.3; // Ultra distant - very faded
     }
 }
 

@@ -2275,6 +2275,10 @@ export function cacheAnimatedParts(mesh) {
         breathFire: null,
         breathIce: null,
         bubblegum: null,
+        // Animated feathers
+        auroraEmitter: null,
+        crystalEmitter: null,
+        voidEmitter: null,
         // Animated skin (cosmic, galaxy, rainbow, nebula)
         animatedSkin: null,
         cosmicStars: [],
@@ -2293,6 +2297,10 @@ export function cacheAnimatedParts(mesh) {
         if (child.userData?.isBreathFire) cache.breathFire = child;
         if (child.userData?.isBreathIce) cache.breathIce = child;
         if (child.userData?.isBubblegum) cache.bubblegum = child;
+        // Animated feathers
+        if (child.userData?.isAuroraEmitter) cache.auroraEmitter = child;
+        if (child.userData?.isCrystalEmitter) cache.crystalEmitter = child;
+        if (child.userData?.isVoidEmitter) cache.voidEmitter = child;
         // Animated skin data
         if (child.userData?.animatedSkin) cache.animatedSkin = child.userData.animatedSkin;
         if (child.userData?.isCosmicStar) cache.cosmicStars.push(child);

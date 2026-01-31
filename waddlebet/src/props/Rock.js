@@ -1,16 +1,18 @@
 /**
  * Rock - Snow-dusted rock
+ * 
+ * OPTIMIZED: Reduced meshes from 4-5 to 2
+ * Uses deterministic placement instead of random
  */
 
 import BaseProp from './BaseProp';
 import { PropColors } from './PropColors';
 import { getMaterialManager } from './PropMaterials';
 
+// Cache per size
+const _rockGeoCache = new Map();
+
 class Rock extends BaseProp {
-    /**
-     * @param {THREE} THREE - Three.js library
-     * @param {string} size - 'small' | 'medium' | 'large'
-     */
     constructor(THREE, size = 'medium') {
         super(THREE);
         this.size = size;
@@ -18,10 +20,94 @@ class Rock extends BaseProp {
     }
     
     static SIZES = {
-        small: { scale: 0.5, segments: 4 },
-        medium: { scale: 1.0, segments: 5 },
-        large: { scale: 1.8, segments: 6 },
+        small: { scale: 0.5, segments: 4, smallRocks: 1 },
+        medium: { scale: 1.0, segments: 5, smallRocks: 2 },
+        large: { scale: 1.8, segments: 6, smallRocks: 2 },
     };
+    
+    _buildMergedGeometry() {
+        const cacheKey = this.size;
+        if (_rockGeoCache.has(cacheKey)) return _rockGeoCache.get(cacheKey);
+        
+        const THREE = this.THREE;
+        const cfg = Rock.SIZES[this.size] || Rock.SIZES.medium;
+        const rockGeos = [];
+        
+        // Main rock body
+        const mainGeo = new THREE.IcosahedronGeometry(0.8 * cfg.scale, cfg.segments);
+        const posAttr = mainGeo.attributes.position;
+        for (let i = 0; i < posAttr.count; i++) {
+            const px = posAttr.getX(i);
+            const py = posAttr.getY(i);
+            const pz = posAttr.getZ(i);
+            // Deterministic "noise" based on position
+            const noise = 1 + (Math.sin(px * 10 + py * 7 + pz * 13) * 0.15);
+            posAttr.setXYZ(i, px * noise, py * 0.6 * noise, pz * noise);
+        }
+        mainGeo.computeVertexNormals();
+        mainGeo.translate(0, 0.3 * cfg.scale, 0);
+        rockGeos.push(mainGeo);
+        
+        // Smaller attached rocks - deterministic positions
+        for (let i = 0; i < cfg.smallRocks; i++) {
+            const smallGeo = new THREE.IcosahedronGeometry(0.3 * cfg.scale, 2);
+            const angle = (i / cfg.smallRocks) * Math.PI * 2;
+            smallGeo.scale(1, 0.7, 1);
+            smallGeo.translate(
+                Math.cos(angle) * 0.6 * cfg.scale,
+                0.15 * cfg.scale,
+                Math.sin(angle) * 0.4 * cfg.scale
+            );
+            rockGeos.push(smallGeo);
+        }
+        
+        // Snow cap
+        const snowGeo = new THREE.SphereGeometry(0.5 * cfg.scale, 8, 6);
+        snowGeo.scale(1.2, 0.3, 1.2);
+        snowGeo.translate(0, 0.5 * cfg.scale, 0);
+        
+        const result = {
+            rock: this._mergeGeos(rockGeos),
+            snow: snowGeo
+        };
+        
+        rockGeos.forEach(g => g.dispose());
+        _rockGeoCache.set(cacheKey, result);
+        return result;
+    }
+    
+    _mergeGeos(geometries) {
+        if (!geometries.length) return null;
+        const THREE = this.THREE;
+        let totalVerts = 0, totalIdx = 0;
+        geometries.forEach(g => {
+            totalVerts += g.getAttribute('position').count;
+            if (g.getIndex()) totalIdx += g.getIndex().count;
+        });
+        const positions = new Float32Array(totalVerts * 3);
+        const normals = new Float32Array(totalVerts * 3);
+        const indices = totalIdx > 0 ? new Uint32Array(totalIdx) : null;
+        let vOff = 0, iOff = 0, ivOff = 0;
+        geometries.forEach(g => {
+            const pos = g.getAttribute('position');
+            const norm = g.getAttribute('normal');
+            const idx = g.getIndex();
+            positions.set(pos.array, vOff * 3);
+            if (norm) normals.set(norm.array, vOff * 3);
+            if (idx && indices) {
+                for (let i = 0; i < idx.count; i++) indices[iOff + i] = idx.array[i] + ivOff;
+                iOff += idx.count;
+            }
+            ivOff += pos.count;
+            vOff += pos.count;
+        });
+        const merged = new THREE.BufferGeometry();
+        merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+        if (indices) merged.setIndex(new THREE.BufferAttribute(indices, 1));
+        merged.computeVertexNormals();
+        return merged;
+    }
     
     spawn(scene, x, y, z) {
         const THREE = this.THREE;
@@ -30,54 +116,16 @@ class Rock extends BaseProp {
         group.name = `rock_${this.size}`;
         group.position.set(x, y, z);
         
-        const rockMat = this.matManager.get(PropColors.rockMedium, { roughness: 0.95 });
-        const darkMat = this.matManager.get(PropColors.rockDark, { roughness: 0.95 });
-        const snowMat = this.matManager.get(PropColors.snowLight, { roughness: 0.65 });
+        const geos = this._buildMergedGeometry();
         
-        // Main rock body - icosahedron for natural look
-        const rockGeo = new THREE.IcosahedronGeometry(0.8 * cfg.scale, cfg.segments);
+        // ONLY 2 MESHES instead of 4-5!
+        const rockMesh = new THREE.Mesh(geos.rock, this.matManager.get(PropColors.rockMedium, { roughness: 0.95 }));
+        rockMesh.castShadow = true;
+        rockMesh.receiveShadow = true;
+        this.addMesh(rockMesh, group);
         
-        // Distort vertices for natural look
-        const posAttr = rockGeo.attributes.position;
-        for (let i = 0; i < posAttr.count; i++) {
-            const x = posAttr.getX(i);
-            const y = posAttr.getY(i);
-            const z = posAttr.getZ(i);
-            
-            // Random displacement
-            const noise = 1 + (Math.random() - 0.5) * 0.3;
-            posAttr.setXYZ(i, x * noise, y * 0.6 * noise, z * noise);
-        }
-        rockGeo.computeVertexNormals();
-        
-        const rock = new THREE.Mesh(rockGeo, rockMat);
-        rock.position.y = 0.3 * cfg.scale;
-        rock.castShadow = true;
-        rock.receiveShadow = true;
-        this.addMesh(rock, group);
-        
-        // Smaller attached rocks
-        const numSmall = Math.floor(1 + Math.random() * 2);
-        for (let i = 0; i < numSmall; i++) {
-            const smallGeo = new THREE.IcosahedronGeometry(0.3 * cfg.scale, 2);
-            const smallRock = new THREE.Mesh(smallGeo, i % 2 === 0 ? rockMat : darkMat);
-            const angle = (i / numSmall) * Math.PI * 2;
-            smallRock.position.set(
-                Math.cos(angle) * 0.6 * cfg.scale,
-                0.15 * cfg.scale,
-                Math.sin(angle) * 0.4 * cfg.scale
-            );
-            smallRock.scale.y = 0.7;
-            smallRock.castShadow = true;
-            this.addMesh(smallRock, group);
-        }
-        
-        // Snow cap
-        const snowGeo = new THREE.SphereGeometry(0.5 * cfg.scale, 8, 6);
-        const snow = new THREE.Mesh(snowGeo, snowMat);
-        snow.position.y = 0.5 * cfg.scale;
-        snow.scale.set(1.2, 0.3, 1.2);
-        this.addMesh(snow, group);
+        const snowMesh = new THREE.Mesh(geos.snow, this.matManager.get(PropColors.snowLight, { roughness: 0.65 }));
+        this.addMesh(snowMesh, group);
         
         this.collisionScale = cfg.scale;
         

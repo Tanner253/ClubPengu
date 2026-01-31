@@ -1,12 +1,20 @@
 /**
  * PineTree - Snow-covered pine tree prop
- * OPTIMIZED: Uses cached geometries to reduce GPU memory when many trees are placed
+ * 
+ * HEAVILY OPTIMIZED FOR DRAW CALLS:
+ * - Uses BufferGeometryUtils to merge all parts into just 2-3 meshes
+ * - Previous: 14 meshes per tree = 14 draw calls
+ * - Now: 3 meshes per tree = 3 draw calls (trunk + foliage + snow)
+ * - 78% reduction in draw calls per tree!
  */
 
 import BaseProp from './BaseProp';
 import { PropColors } from './PropColors';
 import { getMaterialManager } from './PropMaterials';
 import { getGeometryManager } from './PropGeometries';
+
+// Cache merged geometries per tree size to avoid recalculating
+const _mergedGeoCache = new Map();
 
 class PineTree extends BaseProp {
     /**
@@ -30,87 +38,186 @@ class PineTree extends BaseProp {
     };
     
     /**
-     * Layer color rotation
+     * Get or create merged geometry for this tree size
+     * Returns { trunkGeo, foliageGeo, snowGeo } all pre-merged
      */
-    static LAYER_COLORS = [
-        PropColors.pineDeep,
-        PropColors.pineDark,
-        PropColors.pineMedium,
-        PropColors.pineLight,
-        PropColors.pineMedium,
-    ];
-    
-    spawn(scene, x, y, z) {
+    _getMergedGeometry() {
+        const cacheKey = this.size;
+        if (_mergedGeoCache.has(cacheKey)) {
+            return _mergedGeoCache.get(cacheKey);
+        }
+        
         const THREE = this.THREE;
-        const geo = this.geoManager;
         const cfg = PineTree.SIZES[this.size] || PineTree.SIZES.medium;
-        const group = this.createGroup(scene);
-        group.name = `pine_tree_${this.size}`;
-        group.position.set(x, y, z);
         
-        // Trunk (CACHED)
-        const trunkMat = this.matManager.get(PropColors.barkMedium, { roughness: 0.95 });
-        const trunk = new THREE.Mesh(geo.cylinder(cfg.trunkR * 0.7, cfg.trunkR, cfg.trunkH, 8), trunkMat);
-        trunk.position.y = cfg.trunkH / 2;
-        trunk.castShadow = true;
-        trunk.receiveShadow = true;
-        this.addMesh(trunk, group);
+        // Collect geometries to merge
+        const foliageGeos = [];
+        const snowGeos = [];
         
-        // Pine layers (cones with snow caps)
-        const snowMat = this.matManager.get(PropColors.snowLight, { roughness: 0.6 });
         let currentY = cfg.trunkH * 0.6;
-        
-        // Cache the snow clump geometry for reuse (OPTIMIZATION)
-        const snowClumpGeo = geo.sphere(0.18, 4, 4);
         
         for (let i = 0; i < cfg.layers; i++) {
             const layerRatio = 1 - (i / cfg.layers) * 0.7;
             const radius = cfg.baseRadius * layerRatio;
             const height = cfg.layerH * layerRatio;
             
-            // Pine cone layer (CACHED - rounds to nearest 0.1 for better cache hits)
-            const roundedRadius = Math.round(radius * 10) / 10;
-            const roundedHeight = Math.round(height * 10) / 10;
-            const coneMat = this.matManager.get(PineTree.LAYER_COLORS[i % PineTree.LAYER_COLORS.length], { roughness: 0.9 });
-            const cone = new THREE.Mesh(geo.cone(roundedRadius, roundedHeight, 8), coneMat);
-            cone.position.y = currentY + height / 2;
-            cone.castShadow = true;
-            cone.receiveShadow = true;
-            this.addMesh(cone, group);
+            // Pine cone layer
+            const coneGeo = new THREE.ConeGeometry(radius, height, 8);
+            coneGeo.translate(0, currentY + height / 2, 0);
+            foliageGeos.push(coneGeo);
             
-            // Snow cap on top of this layer (CACHED)
-            const snowRadius = Math.round(radius * 0.85 * 10) / 10;
-            const snow = new THREE.Mesh(geo.cone(snowRadius, cfg.snowDepth, 8), snowMat);
-            snow.position.y = currentY + height - cfg.snowDepth / 2;
-            snow.castShadow = true;
-            this.addMesh(snow, group);
+            // Snow cap on top
+            const snowCapGeo = new THREE.ConeGeometry(radius * 0.85, cfg.snowDepth, 8);
+            snowCapGeo.translate(0, currentY + height - cfg.snowDepth / 2, 0);
+            snowGeos.push(snowCapGeo);
             
-            // Snow clumps on branches (only on larger trees, bottom 2 layers) (CACHED)
+            // Snow clumps (only on larger trees, bottom 2 layers)
             if (this.size !== 'small' && i < 2) {
-                const clumpCount = 2;
-                for (let j = 0; j < clumpCount; j++) {
-                    const angle = (j / clumpCount) * Math.PI * 2;
+                for (let j = 0; j < 2; j++) {
+                    const angle = (j / 2) * Math.PI * 2;
                     const dist = radius * 0.6;
-                    const clump = new THREE.Mesh(snowClumpGeo, snowMat);
-                    clump.position.set(
+                    const clumpGeo = new THREE.SphereGeometry(0.18, 4, 4);
+                    clumpGeo.scale(1, 0.5, 1);
+                    clumpGeo.translate(
                         Math.cos(angle) * dist,
                         currentY + height * 0.4,
                         Math.sin(angle) * dist
                     );
-                    clump.scale.y = 0.5;
-                    this.addMesh(clump, group);
+                    snowGeos.push(clumpGeo);
                 }
             }
             
             currentY += height * 0.65;
         }
         
-        // Top snow cap (CACHED)
-        const topSnowSize = Math.round(cfg.snowDepth * 2 * 10) / 10;
-        const topSnow = new THREE.Mesh(geo.sphere(topSnowSize, 6, 6), this.matManager.get(PropColors.snowBright));
-        topSnow.position.y = currentY + cfg.snowDepth;
-        topSnow.scale.set(1, 0.6, 1);
-        this.addMesh(topSnow, group);
+        // Top snow cap
+        const topSnowGeo = new THREE.SphereGeometry(cfg.snowDepth * 2, 6, 6);
+        topSnowGeo.scale(1, 0.6, 1);
+        topSnowGeo.translate(0, currentY + cfg.snowDepth, 0);
+        snowGeos.push(topSnowGeo);
+        
+        // Trunk geometry
+        const trunkGeo = new THREE.CylinderGeometry(cfg.trunkR * 0.7, cfg.trunkR, cfg.trunkH, 8);
+        trunkGeo.translate(0, cfg.trunkH / 2, 0);
+        
+        // Merge geometries using BufferGeometryUtils if available, otherwise manual merge
+        let mergedFoliage, mergedSnow;
+        
+        if (THREE.BufferGeometryUtils && THREE.BufferGeometryUtils.mergeGeometries) {
+            mergedFoliage = THREE.BufferGeometryUtils.mergeGeometries(foliageGeos, false);
+            mergedSnow = THREE.BufferGeometryUtils.mergeGeometries(snowGeos, false);
+        } else {
+            // Fallback: use mergeBufferGeometries from the global THREE (loaded via CDN usually includes it)
+            // Or just use the first geometry if merging isn't available
+            mergedFoliage = this._manualMergeGeometries(foliageGeos);
+            mergedSnow = this._manualMergeGeometries(snowGeos);
+        }
+        
+        // Dispose source geometries (they're now merged)
+        foliageGeos.forEach(g => g.dispose());
+        snowGeos.forEach(g => g.dispose());
+        
+        const result = { trunkGeo, foliageGeo: mergedFoliage, snowGeo: mergedSnow };
+        _mergedGeoCache.set(cacheKey, result);
+        
+        return result;
+    }
+    
+    /**
+     * Manual geometry merge for when BufferGeometryUtils isn't available
+     */
+    _manualMergeGeometries(geometries) {
+        if (geometries.length === 0) return null;
+        if (geometries.length === 1) return geometries[0].clone();
+        
+        const THREE = this.THREE;
+        
+        // Count total vertices and indices
+        let totalVertices = 0;
+        let totalIndices = 0;
+        
+        geometries.forEach(geo => {
+            const pos = geo.getAttribute('position');
+            if (pos) totalVertices += pos.count;
+            const idx = geo.getIndex();
+            if (idx) totalIndices += idx.count;
+        });
+        
+        // Create merged arrays
+        const positions = new Float32Array(totalVertices * 3);
+        const normals = new Float32Array(totalVertices * 3);
+        const indices = totalIndices > 0 ? new Uint32Array(totalIndices) : null;
+        
+        let vertexOffset = 0;
+        let indexOffset = 0;
+        let indexVertexOffset = 0;
+        
+        geometries.forEach(geo => {
+            const pos = geo.getAttribute('position');
+            const norm = geo.getAttribute('normal');
+            const idx = geo.getIndex();
+            
+            if (pos) {
+                positions.set(pos.array, vertexOffset * 3);
+                if (norm) normals.set(norm.array, vertexOffset * 3);
+                
+                if (idx && indices) {
+                    for (let i = 0; i < idx.count; i++) {
+                        indices[indexOffset + i] = idx.array[i] + indexVertexOffset;
+                    }
+                    indexOffset += idx.count;
+                }
+                
+                indexVertexOffset += pos.count;
+                vertexOffset += pos.count;
+            }
+        });
+        
+        const merged = new THREE.BufferGeometry();
+        merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+        if (indices) merged.setIndex(new THREE.BufferAttribute(indices, 1));
+        merged.computeVertexNormals();
+        
+        return merged;
+    }
+    
+    spawn(scene, x, y, z) {
+        const THREE = this.THREE;
+        const cfg = PineTree.SIZES[this.size] || PineTree.SIZES.medium;
+        const group = this.createGroup(scene);
+        group.name = `pine_tree_${this.size}`;
+        group.position.set(x, y, z);
+        
+        // Get merged geometries (cached per size)
+        const { trunkGeo, foliageGeo, snowGeo } = this._getMergedGeometry();
+        
+        // Materials
+        const trunkMat = this.matManager.get(PropColors.barkMedium, { roughness: 0.95 });
+        const foliageMat = this.matManager.get(PropColors.pineMedium, { roughness: 0.9 });
+        const snowMat = this.matManager.get(PropColors.snowLight, { roughness: 0.6 });
+        
+        // ONLY 3 MESHES instead of 14!
+        // Trunk
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.castShadow = true;
+        trunk.receiveShadow = true;
+        this.addMesh(trunk, group);
+        
+        // Foliage (all cone layers merged)
+        if (foliageGeo) {
+            const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+            foliage.castShadow = true;
+            foliage.receiveShadow = true;
+            this.addMesh(foliage, group);
+        }
+        
+        // Snow (all snow parts merged)
+        if (snowGeo) {
+            const snow = new THREE.Mesh(snowGeo, snowMat);
+            snow.castShadow = true;
+            this.addMesh(snow, group);
+        }
         
         // Store collision data
         this.collisionData = {

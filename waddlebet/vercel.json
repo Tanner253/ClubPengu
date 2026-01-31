@@ -11,6 +11,6 @@
     {
       "source": "/((?!assets|favicon|.*\\.).*)",
       "destination": "/index.html"
-    }
+}
   ]
 }

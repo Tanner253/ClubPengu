@@ -197,8 +197,8 @@ const AppContent = () => {
             }
         };
         
-        ws.addEventListener('message', handleTip);
-        return () => ws.removeEventListener('message', handleTip);
+        ws.addEventListener('message', handleMessage);
+        return () => ws.removeEventListener('message', handleMessage);
     }, []);
     
     // Challenge context for P2P matches

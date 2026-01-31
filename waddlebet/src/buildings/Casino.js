@@ -1346,7 +1346,160 @@ class Casino extends BaseBuilding {
         // Store optimization flag for update throttling
         group.userData.needsOptimization = this.needsOptimization;
 
+        // ==================== GEOMETRY MERGING OPTIMIZATION ====================
+        // Merge static meshes by material to drastically reduce draw calls
+        this._optimizeStaticMeshes(group);
+
         return group;
+    }
+    
+    /**
+     * Optimize static meshes by merging geometries that share the same material
+     * This dramatically reduces draw calls while preserving visual appearance
+     * @private
+     */
+    _optimizeStaticMeshes(group) {
+        const THREE = this.THREE;
+        
+        // Collect meshes by material, skip animated/special ones
+        const materialGroups = new Map();
+        const meshesToRemove = [];
+        const specialMeshes = new Set(); // Meshes that shouldn't be merged
+        
+        // First pass: identify special meshes that need to stay separate
+        group.traverse(obj => {
+            if (obj.isMesh) {
+                // Skip animated elements
+                if (obj.userData.isWoofer || obj.userData.isLED || obj.userData.isNeonStrip ||
+                    obj.userData.bulbMat || obj.userData.bulbIndex !== undefined ||
+                    obj.name?.includes('bulb') || obj.name?.includes('neon') ||
+                    obj.parent?.name?.includes('roulette') || obj.parent?.name?.includes('slot') ||
+                    obj.parent?.name?.includes('dice') || obj.parent?.name?.includes('speaker')) {
+                    specialMeshes.add(obj);
+                }
+            }
+        });
+        
+        // Second pass: collect mergeable meshes by material
+        group.traverse(obj => {
+            if (obj.isMesh && !specialMeshes.has(obj) && obj.geometry && obj.material) {
+                // Use material UUID as key (shared materials have same UUID)
+                const matKey = obj.material.uuid;
+                
+                if (!materialGroups.has(matKey)) {
+                    materialGroups.set(matKey, { material: obj.material, meshes: [] });
+                }
+                materialGroups.get(matKey).meshes.push(obj);
+            }
+        });
+        
+        // Third pass: merge geometries for each material group
+        let mergedCount = 0;
+        let originalCount = 0;
+        
+        materialGroups.forEach(({ material, meshes }) => {
+            if (meshes.length <= 1) return; // Nothing to merge
+            
+            originalCount += meshes.length;
+            
+            // Collect geometries with world transforms
+            const geometries = [];
+            meshes.forEach(mesh => {
+                const geo = mesh.geometry.clone();
+                mesh.updateWorldMatrix(true, false);
+                geo.applyMatrix4(mesh.matrixWorld);
+                geometries.push(geo);
+                meshesToRemove.push(mesh);
+            });
+            
+            // Merge geometries
+            const mergedGeo = this._mergeBufferGeometries(geometries);
+            if (mergedGeo) {
+                const mergedMesh = new THREE.Mesh(mergedGeo, material);
+                mergedMesh.castShadow = meshes[0].castShadow;
+                mergedMesh.receiveShadow = meshes[0].receiveShadow;
+                mergedMesh.name = `merged_${mergedCount}`;
+                group.add(mergedMesh);
+                mergedCount++;
+            }
+            
+            // Dispose cloned geometries
+            geometries.forEach(g => g.dispose());
+        });
+        
+        // Remove original meshes
+        meshesToRemove.forEach(mesh => {
+            if (mesh.parent) {
+                mesh.parent.remove(mesh);
+            }
+        });
+        
+        if (mergedCount > 0) {
+            console.log(`🎰 Casino optimized: ${originalCount} meshes → ${mergedCount} merged meshes`);
+        }
+    }
+    
+    /**
+     * Merge multiple BufferGeometries into one
+     * @private
+     */
+    _mergeBufferGeometries(geometries) {
+        if (!geometries || geometries.length === 0) return null;
+        if (geometries.length === 1) return geometries[0].clone();
+        
+        const THREE = this.THREE;
+        
+        // Calculate totals
+        let totalPositions = 0;
+        let totalIndices = 0;
+        
+        geometries.forEach(g => {
+            const pos = g.getAttribute('position');
+            if (pos) totalPositions += pos.count;
+            const idx = g.getIndex();
+            if (idx) totalIndices += idx.count;
+        });
+        
+        if (totalPositions === 0) return null;
+        
+        // Allocate arrays
+        const positions = new Float32Array(totalPositions * 3);
+        const normals = new Float32Array(totalPositions * 3);
+        const indices = totalIndices > 0 ? new Uint32Array(totalIndices) : null;
+        
+        let posOffset = 0;
+        let idxOffset = 0;
+        let vertOffset = 0;
+        
+        geometries.forEach(g => {
+            const pos = g.getAttribute('position');
+            const norm = g.getAttribute('normal');
+            const idx = g.getIndex();
+            
+            if (pos) {
+                positions.set(pos.array, posOffset * 3);
+                if (norm) normals.set(norm.array, posOffset * 3);
+                
+                if (idx && indices) {
+                    for (let i = 0; i < idx.count; i++) {
+                        indices[idxOffset + i] = idx.array[i] + vertOffset;
+                    }
+                    idxOffset += idx.count;
+                }
+                
+                vertOffset += pos.count;
+                posOffset += pos.count;
+            }
+        });
+        
+        const merged = new THREE.BufferGeometry();
+        merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+        if (indices) merged.setIndex(new THREE.BufferAttribute(indices, 1));
+        merged.computeVertexNormals();
+        merged.computeBoundingSphere();
+        
+        return merged;
     }
     
     /**

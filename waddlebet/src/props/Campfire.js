@@ -1,15 +1,18 @@
 /**
  * Campfire - Animated campfire with light and ember particles
+ * 
+ * OPTIMIZED: Static parts merged into 3 meshes (stone + logs + char)
+ * - Previous: 15+ meshes for static parts
+ * - Now: 3 meshes for static + flames (flames need to animate separately)
  */
 
 import BaseProp from './BaseProp';
 import { getMaterialManager } from './PropMaterials';
 
+// Cache merged static geometry
+const _campfireGeoCache = { stone: null, log: null, char: null };
+
 class Campfire extends BaseProp {
-    /**
-     * @param {THREE} THREE - Three.js library
-     * @param {boolean} isLit - Whether the fire is burning
-     */
     constructor(THREE, isLit = true) {
         super(THREE);
         this.isLit = isLit;
@@ -19,55 +22,102 @@ class Campfire extends BaseProp {
         this.flames = [];
     }
     
+    _buildStaticGeometry() {
+        if (_campfireGeoCache.stone) return _campfireGeoCache;
+        
+        const THREE = this.THREE;
+        const stoneGeos = [];
+        const logGeos = [];
+        
+        // Stone ring - 10 stones merged
+        const stoneRingRadius = 1.2;
+        for (let i = 0; i < 10; i++) {
+            const angle = (i / 10) * Math.PI * 2;
+            const stoneGeo = new THREE.DodecahedronGeometry(0.25, 0);
+            // Deterministic "random" based on index
+            const seed = i * 0.73;
+            stoneGeo.rotateX(seed);
+            stoneGeo.rotateY(seed * 1.3);
+            stoneGeo.rotateZ(seed * 0.7);
+            stoneGeo.scale(1 + (i % 3) * 0.1, 0.6 + (i % 4) * 0.05, 1 + ((i + 2) % 3) * 0.1);
+            stoneGeo.translate(Math.cos(angle) * stoneRingRadius, 0.1, Math.sin(angle) * stoneRingRadius);
+            stoneGeos.push(stoneGeo);
+        }
+        
+        // Logs - 4 logs merged
+        for (let i = 0; i < 4; i++) {
+            const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
+            const logGeo = new THREE.CylinderGeometry(0.15, 0.18, 1.2, 8);
+            logGeo.rotateZ(Math.PI / 2);
+            logGeo.rotateY(angle);
+            logGeo.translate(Math.cos(angle) * 0.3, 0.15, Math.sin(angle) * 0.3);
+            logGeos.push(logGeo);
+        }
+        
+        // Charred center
+        const charGeo = new THREE.CylinderGeometry(0.5, 0.6, 0.1, 12);
+        charGeo.translate(0, 0.05, 0);
+        
+        _campfireGeoCache.stone = this._mergeGeos(stoneGeos);
+        _campfireGeoCache.log = this._mergeGeos(logGeos);
+        _campfireGeoCache.char = charGeo;
+        
+        stoneGeos.forEach(g => g.dispose());
+        logGeos.forEach(g => g.dispose());
+        
+        return _campfireGeoCache;
+    }
+    
+    _mergeGeos(geometries) {
+        if (!geometries.length) return null;
+        const THREE = this.THREE;
+        let totalVerts = 0, totalIdx = 0;
+        geometries.forEach(g => {
+            totalVerts += g.getAttribute('position').count;
+            if (g.getIndex()) totalIdx += g.getIndex().count;
+        });
+        const positions = new Float32Array(totalVerts * 3);
+        const normals = new Float32Array(totalVerts * 3);
+        const indices = totalIdx > 0 ? new Uint32Array(totalIdx) : null;
+        let vOff = 0, iOff = 0, ivOff = 0;
+        geometries.forEach(g => {
+            const pos = g.getAttribute('position');
+            const norm = g.getAttribute('normal');
+            const idx = g.getIndex();
+            positions.set(pos.array, vOff * 3);
+            if (norm) normals.set(norm.array, vOff * 3);
+            if (idx && indices) {
+                for (let i = 0; i < idx.count; i++) indices[iOff + i] = idx.array[i] + ivOff;
+                iOff += idx.count;
+            }
+            ivOff += pos.count;
+            vOff += pos.count;
+        });
+        const merged = new THREE.BufferGeometry();
+        merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+        if (indices) merged.setIndex(new THREE.BufferAttribute(indices, 1));
+        merged.computeVertexNormals();
+        return merged;
+    }
+    
     spawn(scene, x, y, z) {
         const THREE = this.THREE;
         const group = this.createGroup(scene);
         group.name = 'campfire';
         group.position.set(x, y, z);
         
-        const stoneMat = this.matManager.get(0x555555, { roughness: 0.9 });
-        const logMat = this.matManager.get(0x4A3728, { roughness: 0.95 });
-        const charMat = this.matManager.get(0x1A1A1A, { roughness: 1 });
+        const geos = this._buildStaticGeometry();
         
-        // Stone ring
-        const stoneRingRadius = 1.2;
-        const stoneCount = 10;
+        // ONLY 3 MESHES for static parts!
+        const stoneMesh = new THREE.Mesh(geos.stone, this.matManager.get(0x555555, { roughness: 0.9 }));
+        this.addMesh(stoneMesh, group);
         
-        for (let i = 0; i < stoneCount; i++) {
-            const angle = (i / stoneCount) * Math.PI * 2;
-            const stoneGeo = new THREE.DodecahedronGeometry(0.25, 0);
-            const stone = new THREE.Mesh(stoneGeo, stoneMat);
-            stone.position.set(
-                Math.cos(angle) * stoneRingRadius,
-                0.1,
-                Math.sin(angle) * stoneRingRadius
-            );
-            stone.rotation.set(Math.random(), Math.random(), Math.random());
-            stone.scale.set(1 + Math.random() * 0.3, 0.6 + Math.random() * 0.2, 1 + Math.random() * 0.3);
-            this.addMesh(stone, group);
-        }
+        const logMesh = new THREE.Mesh(geos.log, this.matManager.get(0x4A3728, { roughness: 0.95 }));
+        this.addMesh(logMesh, group);
         
-        // Logs in center
-        const logGeo = new THREE.CylinderGeometry(0.15, 0.18, 1.2, 8);
-        
-        for (let i = 0; i < 4; i++) {
-            const log = new THREE.Mesh(logGeo, logMat);
-            const angle = (i / 4) * Math.PI * 2 + Math.PI / 4;
-            log.position.set(
-                Math.cos(angle) * 0.3,
-                0.15,
-                Math.sin(angle) * 0.3
-            );
-            log.rotation.z = Math.PI / 2;
-            log.rotation.y = angle;
-            this.addMesh(log, group);
-        }
-        
-        // Charred center
-        const charGeo = new THREE.CylinderGeometry(0.5, 0.6, 0.1, 12);
-        const char = new THREE.Mesh(charGeo, charMat);
-        char.position.y = 0.05;
-        this.addMesh(char, group);
+        const charMesh = new THREE.Mesh(geos.char, this.matManager.get(0x1A1A1A, { roughness: 1 }));
+        this.addMesh(charMesh, group);
         
         if (this.isLit) {
             this.createFire(group);

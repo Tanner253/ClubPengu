@@ -21,6 +21,8 @@ import GameManager from './engine/GameManager';
 import Puffle from './engine/Puffle';
 import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PenguinBuilder';
 import TownCenter from './rooms/TownCenter';
+import SnowFortsZone from './rooms/SnowFortsZone';
+import ForestTrailsZone from './rooms/ForestTrailsZone';
 import Nightclub from './rooms/Nightclub';
 import CasinoRoom from './rooms/CasinoRoom';
 import { generateIglooInterior } from './rooms/BaseRoom';
@@ -95,6 +97,8 @@ const VoxelWorld = ({
     const clockRef = useRef(null);
     const roomRef = useRef(room); // Track current room
     const townCenterRef = useRef(null); // TownCenter room instance
+    const snowFortsZoneRef = useRef(null); // Snow Forts zone instance (east of town)
+    const forestTrailsZoneRef = useRef(null); // Forest Trails zone instance (south of Snow Forts)
     const nightclubRef = useRef(null); // Nightclub room instance
     const casinoRoomRef = useRef(null); // CasinoRoom room instance
     const sknyIglooInteriorRef = useRef(null); // SKNY GANG igloo interior (with update function)
@@ -522,6 +526,31 @@ const VoxelWorld = ({
     const showDebugPositionRef = useRef(false);
     const [debugPosition, setDebugPosition] = useState({ x: 0, y: 0, z: 0, offsetX: 0, offsetZ: 0 });
     const [showCollisionDebug, setShowCollisionDebug] = useState(false);
+    const [showPerfDebug, setShowPerfDebug] = useState(false);
+    const showPerfDebugRef = useRef(false);
+    const perfStatsRef = useRef({
+        fps: 0,
+        frameTime: 0,
+        drawCalls: 0,
+        triangles: 0,
+        visibleMeshes: 0,
+        culledMeshes: 0,
+        // Timing breakdown (ms)
+        timings: {
+            render: 0,
+            townUpdate: 0,
+            snowFortsUpdate: 0,
+            forestUpdate: 0,
+            playerUpdate: 0,
+            otherPlayers: 0,
+            animations: 0,
+            culling: 0,
+        },
+        // Hot assets (what's costing the most)
+        hotAssets: [],
+        lastUpdate: 0
+    });
+    const [perfStats, setPerfStats] = useState(perfStatsRef.current);
     
     // Settings (persisted to localStorage)
     const [gameSettings, setGameSettings] = useState(() => {
@@ -805,7 +834,12 @@ const VoxelWorld = ({
             mapRef.current = map;
             
             // Create one large ice plane instead of grid tiles
-            const iceGeo = new THREE.PlaneGeometry(CITY_SIZE * BUILDING_SCALE, CITY_SIZE * BUILDING_SCALE, 32, 32);
+            // Extended beyond zone boundaries to cover mountain gaps (except east where Snow Forts connects)
+            const GROUND_EXTEND = 50; // Extend 50 units beyond zone edges
+            const groundWidth = CITY_SIZE * BUILDING_SCALE + GROUND_EXTEND; // Extend west only
+            const groundDepth = CITY_SIZE * BUILDING_SCALE + GROUND_EXTEND * 2; // Extend north and south
+            
+            const iceGeo = new THREE.PlaneGeometry(groundWidth, groundDepth, 32, 32);
             iceGeo.rotateX(-Math.PI / 2);
             
             // Add vertex color variation for organic look
@@ -837,7 +871,12 @@ const VoxelWorld = ({
             });
             
             const icePlane = new THREE.Mesh(iceGeo, iceMat);
-            icePlane.position.set(CITY_SIZE/2 * BUILDING_SCALE, 0, CITY_SIZE/2 * BUILDING_SCALE);
+            // Position: shifted west slightly to cover extended area, centered on original zone
+            icePlane.position.set(
+                CITY_SIZE/2 * BUILDING_SCALE - GROUND_EXTEND / 2, 
+                0, 
+                CITY_SIZE/2 * BUILDING_SCALE
+            );
             icePlane.receiveShadow = true;
             scene.add(icePlane);
             
@@ -845,15 +884,38 @@ const VoxelWorld = ({
             // Create low-poly mountain range surrounding the map (3 rows for depth)
             try {
                 mountainBackgroundRef.current = createMountainBackground(THREE, scene, {
-                    mapSize: CITY_SIZE * BUILDING_SCALE, // 220 units
+                    mapSize: CITY_SIZE * BUILDING_SCALE, // 220 units (for legacy)
+                    // Rectangular playable area: Town + Snow Forts + Forest
+                    // Note: Forest is at x=220-440, z=220-440. "Empty" is x=0-220, z=220-440
+                    worldBounds: {
+                        minX: 0,
+                        maxX: 440,  // Town + Snow Forts width
+                        minZ: 0,
+                        maxZ: 440   // Full depth including Forest
+                    },
+                    // Internal zone dividers (mountains BETWEEN zones, not just exterior)
+                    // Forest needs mountains on its NORTH edge (divider with Snow Forts)
+                    // and WEST edge (divider with empty space)
+                    // Town needs mountains on its SOUTH edge (no zone connection there)
+                    internalWalls: [
+                        // Town SOUTH edge (z=220, x=0-220) - FULL mountains, no connection south
+                        { edge: 'horizontal', z: 220, minX: 0, maxX: 220, gapMinX: -1, gapMaxX: -1 },
+                        // Snow Forts ↔ Forest divider (z=220, x=220-440)
+                        // Mountains with path gap at x=280-310 (Snow Forts/Forest path at local x=60-90)
+                        { edge: 'horizontal', z: 220, minX: 220, maxX: 440, gapMinX: 275, gapMaxX: 315 },
+                        // Empty ↔ Forest divider (x=220, z=220-440) - FULL mountains, no gap
+                        { edge: 'vertical', x: 220, minZ: 220, maxZ: 440, gapMinZ: -1, gapMaxZ: -1 },
+                    ],
+                    // Path gaps for exterior (none needed - all connections are internal)
+                    pathGaps: [],
                     offset: 35,                    // Distance outside map bounds for first row
-                    mountainRows: 3,               // 3 rows of mountains for depth
-                    rowSpacing: 50,                // Distance between rows
-                    mountainsPerRow: [20, 28, 36], // Peaks per row (back to front)
-                    baseHeight: -10,               // Below ground for seamless base
-                    minPeakHeight: 45,             // Minimum peak height
-                    maxPeakHeight: 90,             // Maximum peak height
-                    baseWidth: 38,                 // Width of each mountain base
+                    mountainRows: 2,               // REDUCED: 2 rows instead of 3 for better performance
+                    rowSpacing: 60,                // Increased spacing to compensate for fewer rows
+                    mountainsPerRow: [16, 24],     // REDUCED: Fewer peaks per row
+                    baseHeight: 0,                 // Same level as zone ground (y=0)
+                    minPeakHeight: 50,             // Slightly taller to compensate for fewer rows
+                    maxPeakHeight: 95,             // Slightly taller
+                    baseWidth: 45,                 // Wider bases = fewer mountains needed
                     snowLineRatio: 0.5,            // Snow starts at 50% of peak height
                 });
             } catch (err) {
@@ -872,6 +934,18 @@ const VoxelWorld = ({
             propLightsRef.current = propLights;
             
             console.log(`Town Center spawned: ${propMeshes.length} props, ${propLights.length} lights`);
+            
+            // ==================== SNOW FORTS ZONE (East of Town) ====================
+            const snowFortsZone = new SnowFortsZone(THREE);
+            snowFortsZoneRef.current = snowFortsZone;
+            snowFortsZone.spawn(scene);
+            console.log('⛄ Snow Forts Zone loaded (east of town)');
+            
+            // ==================== FOREST TRAILS ZONE (South of Snow Forts) ====================
+            const forestTrailsZone = new ForestTrailsZone(THREE);
+            forestTrailsZoneRef.current = forestTrailsZone;
+            forestTrailsZone.spawn(scene);
+            console.log('🌲 Forest Trails Zone loaded (south of Snow Forts)');
             
             // Add casino as snow exclusion zone (snow shouldn't fall inside)
             if (townCenter.casinoBounds && snowfallSystemRef.current) {
@@ -1414,11 +1488,8 @@ const VoxelWorld = ({
                 buildingGroup.add(walls);
             }
             
-            // Add label sprite above building
-            const sign = createLabelSprite(building.name, building.emoji);
-            sign.position.set(0, h + 5, d / 2 + 1);
-            sign.name = `label_${building.id}`; // Name for visibility control
-            buildingGroup.add(sign);
+            // Building labels removed for cleaner voxel world look
+            // The buildings are recognizable by their architecture (dojo, pizza, puffle shop)
             
             // Add interactive glow for buildings with games
             if (building.gameId) {
@@ -2318,6 +2389,16 @@ const VoxelWorld = ({
                     });
                 }
             }
+            if(e.code === 'F4') {
+                // F4 toggles performance debug panel - DEV ONLY
+                e.preventDefault();
+                if (process.env.NODE_ENV !== 'production') {
+                    setShowPerfDebug(prev => {
+                        showPerfDebugRef.current = !prev;
+                        return !prev;
+                    });
+                }
+            }
             
             // Snowball throwing mode - check configured keybind
             const snowballKey = gameSettingsRef.current?.keybinds?.snowballThrow || 'ShiftLeft';
@@ -2388,6 +2469,10 @@ const VoxelWorld = ({
         const MAX_DELTA = 0.1;
         const BASE_SPEED = 10;
         const TERMINAL_VELOCITY = -25;
+        
+        // OPTIMIZATION: Cache reusable Vector3 objects to avoid GC pressure
+        const _cachedCamForward = new THREE.Vector3();
+        const _cachedCamRight = new THREE.Vector3();
         
         const update = () => {
             reqRef.current = requestAnimationFrame(update);
@@ -2621,18 +2706,18 @@ const VoxelWorld = ({
                         const camera = cameraRef.current;
                         if (camera) {
                             // Camera looks at player, so forward is from camera toward player
-                            const camForward = new THREE.Vector3();
-                            camera.getWorldDirection(camForward);
-                            camForward.y = 0; // Project onto XZ plane
-                            camForward.normalize();
+                            // OPTIMIZATION: Reuse cached vectors instead of creating new ones
+                            camera.getWorldDirection(_cachedCamForward);
+                            _cachedCamForward.y = 0; // Project onto XZ plane
+                            _cachedCamForward.normalize();
                             
                             // Camera right vector (perpendicular to forward on XZ plane)
-                            const camRight = new THREE.Vector3(-camForward.z, 0, camForward.x);
+                            _cachedCamRight.set(-_cachedCamForward.z, 0, _cachedCamForward.x);
                             
                             // Calculate world movement direction from joystick input
                             // joystick.y = forward/back relative to camera, joystick.x = left/right
-                            const worldDirX = camRight.x * joystick.x + camForward.x * joystick.y;
-                            const worldDirZ = camRight.z * joystick.x + camForward.z * joystick.y;
+                            const worldDirX = _cachedCamRight.x * joystick.x + _cachedCamForward.x * joystick.y;
+                            const worldDirZ = _cachedCamRight.z * joystick.x + _cachedCamForward.z * joystick.y;
                             
                             // Normalize and apply speed
                             const dirMag = Math.sqrt(worldDirX * worldDirX + worldDirZ * worldDirZ);
@@ -2688,15 +2773,15 @@ const VoxelWorld = ({
                         
                         const camera = cameraRef.current;
                         if (camera) {
-                            const camForward = new THREE.Vector3();
-                            camera.getWorldDirection(camForward);
-                            camForward.y = 0;
-                            camForward.normalize();
+                            // OPTIMIZATION: Reuse cached vectors instead of creating new ones
+                            camera.getWorldDirection(_cachedCamForward);
+                            _cachedCamForward.y = 0;
+                            _cachedCamForward.normalize();
                             
-                            const camRight = new THREE.Vector3(-camForward.z, 0, camForward.x);
+                            _cachedCamRight.set(-_cachedCamForward.z, 0, _cachedCamForward.x);
                             
-                            const worldDirX = camRight.x * joystick.x + camForward.x * joystick.y;
-                            const worldDirZ = camRight.z * joystick.x + camForward.z * joystick.y;
+                            const worldDirX = _cachedCamRight.x * joystick.x + _cachedCamForward.x * joystick.y;
+                            const worldDirZ = _cachedCamRight.z * joystick.x + _cachedCamForward.z * joystick.y;
                             
                             const dirMag = Math.sqrt(worldDirX * worldDirX + worldDirZ * worldDirZ);
                             if (dirMag > 0.01) {
@@ -3092,27 +3177,79 @@ const VoxelWorld = ({
                 finalZ = result.z;
                 collided = result.collided;
             } else if (townCenterRef.current) {
-                // Town uses TownCenter collision system (props + buildings + water)
-                // Pass Y position for height-based collision (so player can jump on objects)
-                const result = townCenterRef.current.checkPlayerMovement(
-                    posRef.current.x, 
-                    posRef.current.z, 
-                    nextX, 
-                    nextZ, 
-                    0.8, // Player radius
-                    posRef.current.y // Y position for height check
-                );
-                finalX = result.x;
-                finalZ = result.z;
-                collided = result.collided;
+                // ==================== MULTI-ZONE COLLISION ====================
+                // Determine which zone player is in based on position
+                const TOWN_EAST_EDGE = 220;
+                const SNOW_FORTS_SOUTH_EDGE = 220;
+                
+                const inForest = (nextX > TOWN_EAST_EDGE && nextZ > SNOW_FORTS_SOUTH_EDGE) || 
+                                 (posRef.current.x > TOWN_EAST_EDGE && posRef.current.z > SNOW_FORTS_SOUTH_EDGE);
+                const inSnowForts = !inForest && (nextX > TOWN_EAST_EDGE || posRef.current.x > TOWN_EAST_EDGE);
+                
+                if (inForest && forestTrailsZoneRef.current) {
+                    // Player is in Forest zone - use Forest collision
+                    const forestCollision = forestTrailsZoneRef.current.checkCollision(nextX, nextZ, 0.8);
+                    if (forestCollision) {
+                        finalX = posRef.current.x;
+                        finalZ = posRef.current.z;
+                        collided = true;
+                    } else {
+                        finalX = nextX;
+                        finalZ = nextZ;
+                    }
+                } else if (inSnowForts && snowFortsZoneRef.current) {
+                    // Player is in Snow Forts zone - use Snow Forts collision
+                    const sfCollision = snowFortsZoneRef.current.checkCollision(nextX, nextZ, 0.8);
+                    if (sfCollision) {
+                        // Hit a wall in Snow Forts - stay at current position
+                        finalX = posRef.current.x;
+                        finalZ = posRef.current.z;
+                        collided = true;
+                    } else {
+                        finalX = nextX;
+                        finalZ = nextZ;
+                    }
+                } else {
+                    // Town uses TownCenter collision system (props + buildings + water)
+                    // Pass Y position for height-based collision (so player can jump on objects)
+                    const result = townCenterRef.current.checkPlayerMovement(
+                        posRef.current.x, 
+                        posRef.current.z, 
+                        nextX, 
+                        nextZ, 
+                        0.8, // Player radius
+                        posRef.current.y // Y position for height check
+                    );
+                    finalX = result.x;
+                    finalZ = result.z;
+                    collided = result.collided;
+                }
+                
+                // ==================== MOUNTAIN COLLISION ====================
+                // Check if player is trying to walk into mountains at world edges
+                if (!collided && mountainBackgroundRef.current?.checkCollision) {
+                    if (mountainBackgroundRef.current.checkCollision(finalX, finalZ, 0.8)) {
+                        // Hit a mountain - stay at current position
+                        finalX = posRef.current.x;
+                        finalZ = posRef.current.z;
+                        collided = true;
+                    }
+                }
                 
                 // Landing on objects is now handled in the unified ground collision section below
                 
                 // OPTIMIZED: Only check triggers every 3rd frame (still responsive, but 3x faster)
                 if (frameCount % 3 === 0) {
-                // Also check triggers (benches, snowmen, etc.)
-                // Pass Y position so triggers can filter by height (e.g., don't show "sit" prompt when standing ON furniture)
-                townCenterRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
+                    if (inForest && forestTrailsZoneRef.current) {
+                        // Check Forest triggers (benches, campfires, etc.)
+                        forestTrailsZoneRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
+                    } else if (inSnowForts && snowFortsZoneRef.current) {
+                        // Check Snow Forts triggers (benches, etc.)
+                        snowFortsZoneRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
+                    } else {
+                        // Check Town Center triggers
+                        townCenterRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
+                    }
                 }
             }
             
@@ -3437,11 +3574,50 @@ const VoxelWorld = ({
                 
                 // Check town furniture proximity for interaction (roof couch, park benches)
                 // Also check casino furniture (stools, couch on 2nd floor)
+                // And Snow Forts / Forest furniture (benches, log seats)
                 let nearFurniture = null;
                 const playerY = posRef.current.y;
                 
-                // First check regular town furniture
-                if (roomData && roomData.furniture) {
+                // Check which zone the player is in
+                const TOWN_EAST_EDGE = 220;
+                const SNOW_FORTS_SOUTH_EDGE = 220;
+                const inSnowFortsZone = finalX > TOWN_EAST_EDGE && finalZ < SNOW_FORTS_SOUTH_EDGE;
+                const inForestZone = finalX > TOWN_EAST_EDGE && finalZ >= SNOW_FORTS_SOUTH_EDGE;
+                
+                // Check Forest furniture if in that zone
+                if (inForestZone && forestTrailsZoneRef.current) {
+                    const forestFurniture = forestTrailsZoneRef.current.getFurniture();
+                    for (const furn of forestFurniture) {
+                        const dx = finalX - furn.position.x;
+                        const dz = finalZ - furn.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        const furnY = furn.platformHeight || 0;
+                        const yMatch = Math.abs(playerY - furnY) < 2;
+                        if (dist < furn.interactionRadius && yMatch) {
+                            nearFurniture = furn;
+                            break;
+                        }
+                    }
+                }
+                
+                // Check Snow Forts furniture if in that zone
+                if (!nearFurniture && inSnowFortsZone && snowFortsZoneRef.current) {
+                    const snowFortsFurniture = snowFortsZoneRef.current.getFurniture();
+                    for (const furn of snowFortsFurniture) {
+                        const dx = finalX - furn.position.x;
+                        const dz = finalZ - furn.position.z;
+                        const dist = Math.sqrt(dx * dx + dz * dz);
+                        const furnY = furn.platformHeight || 0;
+                        const yMatch = Math.abs(playerY - furnY) < 2;
+                        if (dist < furn.interactionRadius && yMatch) {
+                            nearFurniture = furn;
+                            break;
+                        }
+                    }
+                }
+                
+                // First check regular town furniture (only if not in Snow Forts)
+                if (!nearFurniture && !inSnowFortsZone && roomData && roomData.furniture) {
                     for (const furn of roomData.furniture) {
                         const dx = finalX - furn.position.x;
                         const dz = finalZ - furn.position.z;
@@ -3456,8 +3632,8 @@ const VoxelWorld = ({
                     }
                 }
                 
-                // Then check casino furniture (elevated on 2nd floor)
-                if (!nearFurniture && townCenterRef.current) {
+                // Then check casino furniture (elevated on 2nd floor) - only if not in Snow Forts
+                if (!nearFurniture && !inSnowFortsZone && townCenterRef.current) {
                     const casinoFurniture = townCenterRef.current.getCasinoFurniture();
                     for (const furn of casinoFurniture) {
                         const dx = finalX - furn.position.x;
@@ -5619,22 +5795,9 @@ const VoxelWorld = ({
                     
                     
                     // Update gold rain particle system for Day 1 nametag (other players)
-                    // Nametag particle rain - controlled by same setting as snow AND distance LOD
-                    if (meshData.goldRainSystem && camera) {
-                        // LOD: Only show particles for close players (within 100 units)
-                        const shouldShowParticles = performanceManager.shouldShowParticlesForDistance(distSq) && 
-                                                    gameSettingsRef.current.snowEnabled !== false;
-                        if (shouldShowParticles) {
-                            const pos = meshData.mesh.position;
-                            const camPos = camera.position;
-                            meshData.goldRainSystem.update(time, delta, 
-                                { x: pos.x, y: pos.y, z: pos.z },
-                                { x: camPos.x, y: camPos.y, z: camPos.z }
-                            );
-                            meshData.goldRainSystem.setVisible(true);
-                        } else {
-                            meshData.goldRainSystem.setVisible(false);
-                        }
+                    // DISABLED: Gold rain removed for performance boost
+                    if (meshData.goldRainSystem) {
+                        meshData.goldRainSystem.setVisible(false);
                     }
                 }
                 
@@ -5708,18 +5871,9 @@ const VoxelWorld = ({
             
             // Update world-space nametag particle rain for local player
             // Controlled by same setting as snow particles
-            if (playerGoldRainRef.current && playerRef.current && camera) {
-                if (gameSettingsRef.current.snowEnabled !== false) {
-                    const pos = playerRef.current.position;
-                    const camPos = camera.position;
-                    playerGoldRainRef.current.update(time, delta, 
-                        { x: pos.x, y: pos.y, z: pos.z },
-                        { x: camPos.x, y: camPos.y, z: camPos.z }
-                    );
-                    playerGoldRainRef.current.setVisible(true);
-                } else {
-                    playerGoldRainRef.current.setVisible(false);
-                }
+            // DISABLED: Gold rain removed for performance boost
+            if (playerGoldRainRef.current) {
+                playerGoldRainRef.current.setVisible(false);
             }
 
             // PARKOUR PERFORMANCE MODE: Skip heavy animations when player is high up (parkour course 4+)
@@ -5735,7 +5889,31 @@ const VoxelWorld = ({
                 const nightFactor = calculateNightFactor(worldTime);
                 // Pass player position for distance-based animation culling
                 const playerPos = posRef.current;
+                
+                // Performance timing for TownCenter
+                const t0 = showPerfDebugRef.current ? performance.now() : 0;
                 townCenterRef.current.update(time, delta, nightFactor, playerPos);
+                if (showPerfDebugRef.current) {
+                    perfStatsRef.current.timings.townUpdate = performance.now() - t0;
+                }
+                
+                // Update Snow Forts zone if player is nearby
+                if (snowFortsZoneRef.current && playerPos.x > 180) {
+                    const t1 = showPerfDebugRef.current ? performance.now() : 0;
+                    snowFortsZoneRef.current.update(time, delta, playerPos.x, playerPos.z);
+                    if (showPerfDebugRef.current) {
+                        perfStatsRef.current.timings.snowFortsUpdate = performance.now() - t1;
+                    }
+                }
+                
+                // Update Forest zone if player is nearby (south of Snow Forts)
+                if (forestTrailsZoneRef.current && playerPos.x > 180 && playerPos.z > 180) {
+                    const t2 = showPerfDebugRef.current ? performance.now() : 0;
+                    forestTrailsZoneRef.current.update(time, delta, nightFactor, playerPos);
+                    if (showPerfDebugRef.current) {
+                        perfStatsRef.current.timings.forestUpdate = performance.now() - t2;
+                    }
+                }
             }
             
             // Animate nightclub interior (dance floor, stage lights, speakers, disco ball)
@@ -5763,46 +5941,14 @@ const VoxelWorld = ({
                             glow.material.opacity = 0.2 + Math.sin(time * 2) * 0.15;
                         }
                     }
-                    
-                    // Check if player is inside casino
-                    const isInCasino = townCenterRef.current?.isPlayerInCasino(posRef.current.x, posRef.current.z);
-                    
-                    // Hide dojo label when player is on the roof (y > 9) or inside casino
-                    if (building.id === 'dojo' && building.mesh) {
-                        const dojoLabel = building.mesh.getObjectByName('label_dojo');
-                        if (dojoLabel) {
-                            dojoLabel.visible = posRef.current.y < 9 && !isInCasino;
-                        }
-                    }
-                    
-                    // Hide other building labels when inside casino
-                    if (building.mesh) {
-                        const label = building.mesh.getObjectByName(`label_${building.id}`);
-                        if (label && building.id !== 'dojo') {
-                            label.visible = !isInCasino;
-                        }
-                    }
                 });
-                
-                // Check if player is inside casino for nightclub sign
-                const isInCasino = townCenterRef.current?.isPlayerInCasino(posRef.current.x, posRef.current.z);
-                
-                // Hide nightclub title sign when player is on the roof (y > 12) or inside casino
-                if (townCenterRef.current?.propMeshes) {
-                    const nightclubMesh = townCenterRef.current.propMeshes.find(m => m.name === 'nightclub');
-                    if (nightclubMesh) {
-                        const titleSign = nightclubMesh.getObjectByName('nightclub_title_sign');
-                        if (titleSign) {
-                            titleSign.visible = posRef.current.y < 12 && !isInCasino;
-                        }
-                    }
-                }
                 
                 // ==================== CASINO INTERIOR CAMERA ZOOM ====================
                 // Auto-zoom camera ONCE when entering/exiting casino (allows free zoom otherwise)
                 if (controls && camera) {
                     // Track state change (only zoom on transition, not continuously)
                     const wasInCasino = wasInCasinoRef.current;
+                    const isInCasino = townCenterRef.current?.isPlayerInCasino(posRef.current.x, posRef.current.z);
                     
                     if (isInCasino !== wasInCasino) {
                         // State changed - trigger one-time zoom adjustment
@@ -6084,7 +6230,78 @@ const VoxelWorld = ({
                 }
             });
             
+            // Performance tracking for render
+            const renderStart = showPerfDebugRef.current ? performance.now() : 0;
             renderer.render(scene, camera);
+            
+            // Collect performance stats (throttled to every 30 frames)
+            if (showPerfDebugRef.current && frameCount % 30 === 0) {
+                const renderTime = performance.now() - renderStart;
+                const info = renderer.info;
+                
+                // Count visible vs culled meshes
+                let visibleCount = 0;
+                let culledCount = 0;
+                scene.traverse(obj => {
+                    if (obj.isMesh) {
+                        if (obj.visible) visibleCount++;
+                        else culledCount++;
+                    }
+                });
+                
+                // Find hot assets - Count meshes under each TOP-LEVEL scene child
+                // This shows what's actually contributing draw calls
+                const hotAssets = [];
+                
+                scene.children.forEach(topLevel => {
+                    let meshCount = 0;
+                    let triCount = 0;
+                    
+                    // Count all visible meshes under this top-level object
+                    if (topLevel.isMesh && topLevel.visible) {
+                        meshCount = 1;
+                        const tris = topLevel.geometry?.index 
+                            ? topLevel.geometry.index.count / 3 
+                            : (topLevel.geometry?.attributes?.position?.count || 0) / 3;
+                        triCount = Math.round(tris);
+                    } else {
+                        topLevel.traverse(obj => {
+                            if (obj.isMesh && obj.visible) {
+                                meshCount++;
+                                const tris = obj.geometry?.index 
+                                    ? obj.geometry.index.count / 3 
+                                    : (obj.geometry?.attributes?.position?.count || 0) / 3;
+                                triCount += Math.round(tris);
+                            }
+                        });
+                    }
+                    
+                    if (meshCount > 0) {
+                        const name = topLevel.name || topLevel.type || 'unnamed';
+                        hotAssets.push({ name, draws: meshCount, tris: triCount });
+                    }
+                });
+                
+                // Sort by draw calls (mesh count)
+                hotAssets.sort((a, b) => b.draws - a.draws);
+                
+                perfStatsRef.current = {
+                    ...perfStatsRef.current,
+                    fps: Math.round(1 / delta),
+                    frameTime: (delta * 1000).toFixed(1),
+                    drawCalls: info.render.calls,
+                    triangles: info.render.triangles,
+                    visibleMeshes: visibleCount,
+                    culledMeshes: culledCount,
+                    timings: {
+                        ...perfStatsRef.current.timings,
+                        render: renderTime.toFixed(1)
+                    },
+                    hotAssets: hotAssets.slice(0, 15),
+                    lastUpdate: Date.now()
+                };
+                setPerfStats({ ...perfStatsRef.current });
+            }
         };
         update();
         
@@ -6102,6 +6319,11 @@ const VoxelWorld = ({
             if (townCenterRef.current) {
                 townCenterRef.current.dispose();
                 townCenterRef.current = null;
+            }
+            // Cleanup Snow Forts Zone
+            if (snowFortsZoneRef.current) {
+                snowFortsZoneRef.current.cleanup();
+                snowFortsZoneRef.current = null;
             }
             // Cleanup Mountain Background
             if (mountainBackgroundRef.current) {
@@ -7563,10 +7785,14 @@ const VoxelWorld = ({
         if (room !== 'town') return;
         
         const playerPos = posRef.current;
-        const VISIBILITY_DISTANCE = 25; // Show bubble when within 25 units
+        const VISIBILITY_DISTANCE = 20; // Show bubble when within 20 units (reduced for performance)
         
         // Hide all banners if player is inside the casino
         const isInCasino = townCenterRef.current?.isPlayerInCasino(playerPos.x, playerPos.z);
+        
+        // Also hide if player is in Snow Forts zone (far from town)
+        const TOWN_EAST_EDGE = 220;
+        const inSnowForts = playerPos.x > TOWN_EAST_EDGE;
         
         iglooOccupancySpritesRef.current.forEach((sprite, iglooId) => {
             if (!sprite.userData) return;
@@ -7575,8 +7801,8 @@ const VoxelWorld = ({
             const dz = playerPos.z - sprite.userData.iglooZ;
             const dist = Math.sqrt(dx * dx + dz * dz);
             
-            // Show sprite if player is close enough AND not inside casino
-            const shouldShow = dist < VISIBILITY_DISTANCE && !isInCasino;
+            // Show sprite if player is close enough AND not inside casino AND not in Snow Forts
+            const shouldShow = dist < VISIBILITY_DISTANCE && !isInCasino && !inSnowForts;
             
             if (sprite.visible !== shouldShow) {
                 sprite.visible = shouldShow;
@@ -8424,13 +8650,25 @@ const VoxelWorld = ({
                     data: data
                 });
             } else if (action === 'climb_lighthouse') {
-                // Show lighthouse climb prompt
-                console.log('🔦 Setting nearbyInteraction for climb_lighthouse');
-                setNearbyInteraction({ 
-                    action, 
-                    message: `🔦 Climb to Beacon (${t('interact.pressE')})`,
-                    data: data
-                });
+                // Show lighthouse climb prompt (only when at ground level)
+                if (posRef.current.y < 5) {
+                    console.log('🔦 Setting nearbyInteraction for climb_lighthouse');
+                    setNearbyInteraction({ 
+                        action, 
+                        message: `🔦 Climb to Beacon (${t('interact.pressE')})`,
+                        data: data
+                    });
+                }
+            } else if (action === 'descend_lighthouse') {
+                // Show lighthouse descend prompt (for mobile users at top of lighthouse)
+                // Only show if player is actually elevated (Y > 10)
+                if (posRef.current.y > 10) {
+                    setNearbyInteraction({ 
+                        action, 
+                        message: `🔦 Descend (${t('interact.pressE')})`,
+                        data: data
+                    });
+                }
             } else if (action === 'interact_snowman') {
                 // Show snowman message
                 setNearbyInteraction({ action, message: message || '☃️ Say hi to the snowman!', emote: 'Wave' });
@@ -10493,6 +10731,22 @@ const VoxelWorld = ({
                                 
                                 setNearbyInteraction(null);
                             }
+                            else if (nearbyInteraction.action === 'descend_lighthouse') {
+                                // Teleport back down from lighthouse observation deck
+                                const lighthouseX = CENTER_X + 80.5;
+                                const lighthouseZ = CENTER_Z + 52.7;
+                                
+                                posRef.current.x = lighthouseX;
+                                posRef.current.z = lighthouseZ + 7; // In front of lighthouse
+                                posRef.current.y = 0.5;
+                                velRef.current.y = 0;
+                                
+                                if (playerRef.current) {
+                                    playerRef.current.position.set(lighthouseX, 0.5, lighthouseZ + 7);
+                                }
+                                
+                                setNearbyInteraction(null);
+                            }
                             else if (nearbyInteraction.action === 'play_arcade') {
                                 // Open arcade minigame (PvE Battleship)
                                 const gameType = nearbyInteraction.gameType || 'battleship';
@@ -10513,6 +10767,7 @@ const VoxelWorld = ({
                          nearbyInteraction.action === 'dj' ? `🎧 ${t('interact.dj')}` :
                          nearbyInteraction.action === 'climb_roof' ? `🪜 ${t('interact.climb')}` :
                          nearbyInteraction.action === 'climb_lighthouse' ? `🔦 ${t('interact.climb')}` :
+                         nearbyInteraction.action === 'descend_lighthouse' ? `🔦 ${t('interact.descend') || 'Descend'}` :
                          nearbyInteraction.action === 'play_arcade' ? `🎮 ${t('interact.play')}` :
                          `✓ ${t('interact.ok')}`}
                     </button>
@@ -10738,11 +10993,110 @@ const VoxelWorld = ({
                                  {showCollisionDebug ? 'ON' : 'OFF'}
                              </button>
                          </div>
-                         <div className="text-[8px] text-white/40 space-y-0.5">
-                             <div>🔴 Red = Ground colliders</div>
-                             <div>🟡 Yellow = Elevated colliders</div>
-                             <div>🟢 Green = Triggers</div>
+                        <div className="text-[8px] text-white/40 space-y-0.5">
+                            <div>🔴 Red = Ground colliders</div>
+                            <div>🟡 Yellow = Elevated colliders</div>
+                            <div>🟢 Green = Triggers</div>
+                        </div>
+                    </div>
+                </div>
+             )}
+             
+             {/* Performance Debug Panel - Press F4 to toggle (DEV ONLY) */}
+             {process.env.NODE_ENV !== 'production' && showPerfDebug && (
+                 <div className="absolute top-4 left-4 bg-black/90 border border-red-500/50 rounded-lg p-3 z-50 pointer-events-auto font-mono text-xs max-w-[400px] max-h-[80vh] overflow-y-auto">
+                     <div className="text-red-400 font-bold mb-2 flex items-center gap-2">
+                         🔥 PERFORMANCE DEBUG
+                         <span className="text-[10px] text-white/50">(F4 to hide)</span>
+                     </div>
+                     
+                     {/* Frame Stats */}
+                     <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-white/90 mb-3">
+                         <div className="flex justify-between">
+                             <span className="text-yellow-400">FPS:</span>
+                             <span className={perfStats.fps < 30 ? 'text-red-400' : perfStats.fps < 50 ? 'text-yellow-400' : 'text-green-400'}>
+                                 {perfStats.fps}
+                             </span>
                          </div>
+                         <div className="flex justify-between">
+                             <span className="text-yellow-400">Frame:</span>
+                             <span>{perfStats.frameTime}ms</span>
+                         </div>
+                         <div className="flex justify-between">
+                             <span className="text-cyan-400">Draw Calls:</span>
+                             <span className={perfStats.drawCalls > 500 ? 'text-red-400' : 'text-white'}>{perfStats.drawCalls}</span>
+                         </div>
+                         <div className="flex justify-between">
+                             <span className="text-cyan-400">Triangles:</span>
+                             <span className={perfStats.triangles > 500000 ? 'text-red-400' : 'text-white'}>{(perfStats.triangles / 1000).toFixed(0)}K</span>
+                         </div>
+                         <div className="flex justify-between">
+                             <span className="text-green-400">Visible:</span>
+                             <span>{perfStats.visibleMeshes}</span>
+                         </div>
+                         <div className="flex justify-between">
+                             <span className="text-gray-400">Culled:</span>
+                             <span>{perfStats.culledMeshes}</span>
+                         </div>
+                     </div>
+                     
+                     {/* Update Timings */}
+                     <div className="border-t border-white/20 pt-2 mb-3">
+                         <div className="text-orange-400 font-bold mb-1 text-[10px]">⏱️ UPDATE TIMINGS (ms)</div>
+                         <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px]">
+                             <div className="flex justify-between">
+                                 <span className="text-white/60">TownCenter:</span>
+                                 <span className={perfStats.timings.townUpdate > 5 ? 'text-red-400' : 'text-white'}>
+                                     {perfStats.timings.townUpdate?.toFixed(1) || '0.0'}
+                                 </span>
+                             </div>
+                             <div className="flex justify-between">
+                                 <span className="text-white/60">SnowForts:</span>
+                                 <span className={perfStats.timings.snowFortsUpdate > 5 ? 'text-red-400' : 'text-white'}>
+                                     {perfStats.timings.snowFortsUpdate?.toFixed(1) || '0.0'}
+                                 </span>
+                             </div>
+                             <div className="flex justify-between">
+                                 <span className="text-white/60">Forest:</span>
+                                 <span className={perfStats.timings.forestUpdate > 5 ? 'text-red-400' : 'text-white'}>
+                                     {perfStats.timings.forestUpdate?.toFixed(1) || '0.0'}
+                                 </span>
+                             </div>
+                             <div className="flex justify-between">
+                                 <span className="text-white/60">Render:</span>
+                                 <span className={perfStats.timings.render > 16 ? 'text-red-400' : 'text-white'}>
+                                     {perfStats.timings.render || '0.0'}
+                                 </span>
+                             </div>
+                         </div>
+                     </div>
+                     
+                     {/* Hot Assets - What's causing lag (by draw calls) */}
+                     <div className="border-t border-white/20 pt-2">
+                         <div className="text-red-400 font-bold mb-1 text-[10px]">🔥 SCENE OBJECTS (meshes = draw calls)</div>
+                         <div className="text-[9px] space-y-0.5 max-h-[200px] overflow-y-auto">
+                             {perfStats.hotAssets?.length > 0 ? (
+                                 perfStats.hotAssets.slice(0, 15).map((asset, i) => (
+                                     <div key={i} className="flex justify-between items-center">
+                                         <span className="text-white/70 truncate max-w-[160px]" title={asset.name}>
+                                             {asset.name || 'unnamed'}
+                                         </span>
+                                         <span className="ml-2 flex gap-2">
+                                             <span className={asset.draws > 100 ? 'text-red-400 font-bold' : asset.draws > 30 ? 'text-yellow-400' : 'text-green-400'}>
+                                                 {asset.draws}
+                                             </span>
+                                             <span className="text-white/30 text-[8px]">{(asset.tris/1000).toFixed(1)}K△</span>
+                                         </span>
+                                     </div>
+                                 ))
+                             ) : (
+                                 <div className="text-white/40">No objects detected</div>
+                             )}
+                         </div>
+                     </div>
+                     
+                     <div className="mt-2 text-[8px] text-white/30 text-center">
+                         Updates every 30 frames
                      </div>
                  </div>
              )}

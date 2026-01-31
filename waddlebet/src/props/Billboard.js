@@ -161,7 +161,8 @@ class Billboard extends BaseProp {
                 imagePath: imagePath
             };
         }
-        advert.userData.isBanner = true; // Mark for click detection
+        advert.userData.isBanner = true; // Mark for click detection and distance culling
+        advert.name = 'advert';
         
         this.addMesh(advert, group);
         
@@ -270,6 +271,8 @@ class Billboard extends BaseProp {
             textSprite.scale.set(textWidth, textHeight, 1);
             textSprite.position.set(0, poleHeight + boardHeight + 2 + textHeight / 2, frameDepth);
             textSprite.renderOrder = 999;
+            textSprite.userData.isBanner = true; // Mark for distance culling
+            textSprite.name = 'billboard_text';
             group.add(textSprite);
         }
         

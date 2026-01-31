@@ -58,6 +58,133 @@ class PropsFactory {
         this.geometryCache = new Map();
     }
 
+    // ==================== GEOMETRY MERGING OPTIMIZATION ====================
+    
+    /**
+     * Optimize a group by merging static meshes that share the same material
+     * @param {THREE.Group} group - The group to optimize
+     * @param {Set} skipNames - Optional set of mesh names to skip
+     */
+    optimizeGroup(group, skipNames = new Set()) {
+        const THREE = this.THREE;
+        const materialGroups = new Map();
+        const meshesToRemove = [];
+        
+        // Collect meshes by material
+        group.traverse(obj => {
+            if (obj.isMesh && obj.geometry && obj.material && !skipNames.has(obj.name)) {
+                // Skip animated or special meshes
+                if (obj.userData.isWoofer || obj.userData.isLED || obj.userData.isNeonStrip ||
+                    obj.userData.isAnimated || obj.name?.includes('speaker')) {
+                    return;
+                }
+                
+                const matKey = obj.material.uuid;
+                if (!materialGroups.has(matKey)) {
+                    materialGroups.set(matKey, { material: obj.material, meshes: [] });
+                }
+                materialGroups.get(matKey).meshes.push(obj);
+            }
+        });
+        
+        // Merge geometries for each material
+        let mergedCount = 0;
+        let originalCount = 0;
+        
+        materialGroups.forEach(({ material, meshes }) => {
+            if (meshes.length <= 1) return;
+            
+            originalCount += meshes.length;
+            
+            const geometries = [];
+            meshes.forEach(mesh => {
+                const geo = mesh.geometry.clone();
+                mesh.updateWorldMatrix(true, false);
+                geo.applyMatrix4(mesh.matrixWorld);
+                geometries.push(geo);
+                meshesToRemove.push(mesh);
+            });
+            
+            const mergedGeo = this._mergeGeos(geometries);
+            if (mergedGeo) {
+                const mergedMesh = new THREE.Mesh(mergedGeo, material);
+                mergedMesh.castShadow = meshes[0].castShadow;
+                mergedMesh.receiveShadow = meshes[0].receiveShadow;
+                mergedMesh.name = `merged_${mergedCount}`;
+                group.add(mergedMesh);
+                mergedCount++;
+            }
+            
+            geometries.forEach(g => g.dispose());
+        });
+        
+        // Remove originals
+        meshesToRemove.forEach(mesh => {
+            if (mesh.parent) mesh.parent.remove(mesh);
+        });
+        
+        if (mergedCount > 0) {
+            console.log(`🔧 Optimized: ${originalCount} meshes → ${mergedCount} merged`);
+        }
+    }
+    
+    /**
+     * Merge buffer geometries
+     * @private
+     */
+    _mergeGeos(geometries) {
+        if (!geometries || geometries.length === 0) return null;
+        if (geometries.length === 1) return geometries[0].clone();
+        
+        const THREE = this.THREE;
+        let totalPos = 0, totalIdx = 0;
+        
+        geometries.forEach(g => {
+            const pos = g.getAttribute('position');
+            if (pos) totalPos += pos.count;
+            const idx = g.getIndex();
+            if (idx) totalIdx += idx.count;
+        });
+        
+        if (totalPos === 0) return null;
+        
+        const positions = new Float32Array(totalPos * 3);
+        const normals = new Float32Array(totalPos * 3);
+        const indices = totalIdx > 0 ? new Uint32Array(totalIdx) : null;
+        
+        let posOff = 0, idxOff = 0, vertOff = 0;
+        
+        geometries.forEach(g => {
+            const pos = g.getAttribute('position');
+            const norm = g.getAttribute('normal');
+            const idx = g.getIndex();
+            
+            if (pos) {
+                positions.set(pos.array, posOff * 3);
+                if (norm) normals.set(norm.array, posOff * 3);
+                
+                if (idx && indices) {
+                    for (let i = 0; i < idx.count; i++) {
+                        indices[idxOff + i] = idx.array[i] + vertOff;
+                    }
+                    idxOff += idx.count;
+                }
+                
+                vertOff += pos.count;
+                posOff += pos.count;
+            }
+        });
+        
+        const merged = new THREE.BufferGeometry();
+        merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+        if (indices) merged.setIndex(new THREE.BufferAttribute(indices, 1));
+        merged.computeVertexNormals();
+        merged.computeBoundingSphere();
+        
+        return merged;
+    }
+
     // ==================== MATERIAL CACHING ====================
     
     getMaterial(color, options = {}) {
@@ -89,6 +216,10 @@ class PropsFactory {
     
     /**
      * Create a floating platform for parkour courses
+     * OPTIMIZED: Merged trim geometry into single mesh
+     * - Previous: 5 meshes per platform (1 main + 4 trims)
+     * - Now: 2 meshes per platform (1 main + 1 merged trim)
+     * - 60% reduction in draw calls!
      * @param {Object} config - Platform configuration
      * @returns {THREE.Group}
      */
@@ -111,25 +242,32 @@ class PropsFactory {
         platform.receiveShadow = true;
         group.add(platform);
 
-        // Edge trim
+        // Edge trim - MERGED into single geometry
         const trimMat = this.getMaterial(0x333333, { roughness: 0.8 });
         const trimHeight = 0.1;
+        const trimGeos = [];
         
         // Front and back trim
         [-1, 1].forEach(side => {
             const trimGeo = new THREE.BoxGeometry(width + 0.1, trimHeight, 0.15);
-            const trim = new THREE.Mesh(trimGeo, trimMat);
-            trim.position.set(0, height + trimHeight / 2, side * (depth / 2));
-            group.add(trim);
+            trimGeo.translate(0, height + trimHeight / 2, side * (depth / 2));
+            trimGeos.push(trimGeo);
         });
         
         // Left and right trim
         [-1, 1].forEach(side => {
             const trimGeo = new THREE.BoxGeometry(0.15, trimHeight, depth + 0.1);
-            const trim = new THREE.Mesh(trimGeo, trimMat);
-            trim.position.set(side * (width / 2), height + trimHeight / 2, 0);
-            group.add(trim);
+            trimGeo.translate(side * (width / 2), height + trimHeight / 2, 0);
+            trimGeos.push(trimGeo);
         });
+        
+        // Merge all trim into single mesh
+        const mergedTrim = this._mergeGeometries(trimGeos);
+        if (mergedTrim) {
+            const trim = new THREE.Mesh(mergedTrim, trimMat);
+            group.add(trim);
+        }
+        trimGeos.forEach(g => g.dispose());
 
         // Store collision data
         group.userData.collision = {
@@ -139,6 +277,47 @@ class PropsFactory {
         };
 
         return group;
+    }
+    
+    /**
+     * Merge multiple BufferGeometries into one
+     * @private
+     */
+    _mergeGeometries(geometries) {
+        if (!geometries.length) return null;
+        const THREE = this.THREE;
+        
+        let totalVerts = 0, totalIdx = 0;
+        geometries.forEach(g => {
+            totalVerts += g.getAttribute('position').count;
+            if (g.getIndex()) totalIdx += g.getIndex().count;
+        });
+        
+        const positions = new Float32Array(totalVerts * 3);
+        const normals = new Float32Array(totalVerts * 3);
+        const indices = totalIdx > 0 ? new Uint32Array(totalIdx) : null;
+        
+        let vOff = 0, iOff = 0, ivOff = 0;
+        geometries.forEach(g => {
+            const pos = g.getAttribute('position');
+            const norm = g.getAttribute('normal');
+            const idx = g.getIndex();
+            positions.set(pos.array, vOff * 3);
+            if (norm) normals.set(norm.array, vOff * 3);
+            if (idx && indices) {
+                for (let i = 0; i < idx.count; i++) indices[iOff + i] = idx.array[i] + ivOff;
+                iOff += idx.count;
+            }
+            ivOff += pos.count;
+            vOff += pos.count;
+        });
+        
+        const merged = new THREE.BufferGeometry();
+        merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+        if (indices) merged.setIndex(new THREE.BufferAttribute(indices, 1));
+        merged.computeVertexNormals();
+        return merged;
     }
 
     // ==================== DOJO PARKOUR COURSE ====================
@@ -1291,6 +1470,9 @@ class PropsFactory {
             group.add(crystal);
         });
 
+        // Optimize by merging static meshes
+        this.optimizeGroup(group);
+        
         return { 
             mesh: group, 
             platforms, 
@@ -2238,6 +2420,9 @@ class PropsFactory {
             { x: -w / 3, z: 0, size: { x: 3.5, z: 2.5 }, height: 5, y: h + 1 },
             { x: w / 3, z: 0, size: { x: 3.5, z: 2.5 }, height: 5, y: h + 1 },
         ];
+        
+        // Optimize by merging static meshes (skip animated speaker parts)
+        this.optimizeGroup(group, new Set(['speaker']));
         
         return { mesh: group, speakers, update, speakerColliders };
     }

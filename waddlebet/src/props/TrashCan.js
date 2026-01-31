@@ -1,90 +1,142 @@
 /**
  * TrashCan - Metal trash can with lid and snow
- * OPTIMIZED: Uses cached geometries for all parts
+ * 
+ * OPTIMIZED: All geometry merged into 2-3 meshes
+ * - Previous: 11 meshes per trash can
+ * - Now: 3 meshes (metal + dark trim + snow)
  */
 
 import BaseProp from './BaseProp';
 import { PropColors } from './PropColors';
 import { getMaterialManager } from './PropMaterials';
-import { getGeometryManager } from './PropGeometries';
+
+const _trashCanGeoCache = { metal: null, dark: null, snow: null };
 
 class TrashCan extends BaseProp {
-    /**
-     * @param {THREE} THREE - Three.js library
-     * @param {boolean} withLid - Include lid on top
-     */
     constructor(THREE, withLid = true) {
         super(THREE);
         this.withLid = withLid;
         this.matManager = getMaterialManager(THREE);
-        this.geoManager = getGeometryManager(THREE);
+    }
+    
+    _buildMergedGeometry() {
+        if (_trashCanGeoCache.metal) return _trashCanGeoCache;
+        
+        const THREE = this.THREE;
+        const metalGeos = [];
+        const darkGeos = [];
+        const snowGeos = [];
+        
+        // Main body
+        const bodyGeo = new THREE.CylinderGeometry(0.35, 0.3, 0.9, 12);
+        bodyGeo.translate(0, 0.45, 0);
+        metalGeos.push(bodyGeo);
+        
+        // Rim at top
+        const rimGeo = new THREE.TorusGeometry(0.36, 0.03, 6, 16);
+        rimGeo.rotateX(Math.PI / 2);
+        rimGeo.translate(0, 0.9, 0);
+        darkGeos.push(rimGeo);
+        
+        // Rim at bottom
+        const bottomRimGeo = new THREE.TorusGeometry(0.31, 0.025, 6, 16);
+        bottomRimGeo.rotateX(Math.PI / 2);
+        bottomRimGeo.translate(0, 0.02, 0);
+        darkGeos.push(bottomRimGeo);
+        
+        // Horizontal bands
+        [0.25, 0.55].forEach(yPos => {
+            const bandGeo = new THREE.TorusGeometry(0.33, 0.015, 6, 16);
+            bandGeo.rotateX(Math.PI / 2);
+            bandGeo.translate(0, yPos, 0);
+            darkGeos.push(bandGeo);
+        });
+        
+        // Handles
+        [-1, 1].forEach(side => {
+            const handleGeo = new THREE.TorusGeometry(0.08, 0.015, 6, 8);
+            handleGeo.rotateY(side * Math.PI / 2);
+            handleGeo.translate(side * 0.35, 0.7, 0);
+            darkGeos.push(handleGeo);
+        });
+        
+        // Lid
+        const lidGeo = new THREE.CylinderGeometry(0.38, 0.36, 0.08, 12);
+        lidGeo.translate(0, 0.96, 0);
+        metalGeos.push(lidGeo);
+        
+        // Lid handle
+        const lidHandleGeo = new THREE.CylinderGeometry(0.05, 0.05, 0.08, 8);
+        lidHandleGeo.translate(0, 1.04, 0);
+        darkGeos.push(lidHandleGeo);
+        
+        // Snow
+        const snowGeo = new THREE.SphereGeometry(0.25, 8, 6);
+        snowGeo.scale(1.3, 0.35, 1.3);
+        snowGeo.translate(0, 1.1, 0);
+        snowGeos.push(snowGeo);
+        
+        _trashCanGeoCache.metal = this._mergeGeos(metalGeos);
+        _trashCanGeoCache.dark = this._mergeGeos(darkGeos);
+        _trashCanGeoCache.snow = this._mergeGeos(snowGeos);
+        
+        [...metalGeos, ...darkGeos, ...snowGeos].forEach(g => g.dispose());
+        return _trashCanGeoCache;
+    }
+    
+    _mergeGeos(geometries) {
+        if (!geometries.length) return null;
+        const THREE = this.THREE;
+        let totalVerts = 0, totalIdx = 0;
+        geometries.forEach(g => {
+            totalVerts += g.getAttribute('position').count;
+            if (g.getIndex()) totalIdx += g.getIndex().count;
+        });
+        const positions = new Float32Array(totalVerts * 3);
+        const normals = new Float32Array(totalVerts * 3);
+        const indices = totalIdx > 0 ? new Uint32Array(totalIdx) : null;
+        let vOff = 0, iOff = 0, ivOff = 0;
+        geometries.forEach(g => {
+            const pos = g.getAttribute('position');
+            const norm = g.getAttribute('normal');
+            const idx = g.getIndex();
+            positions.set(pos.array, vOff * 3);
+            if (norm) normals.set(norm.array, vOff * 3);
+            if (idx && indices) {
+                for (let i = 0; i < idx.count; i++) indices[iOff + i] = idx.array[i] + ivOff;
+                iOff += idx.count;
+            }
+            ivOff += pos.count;
+            vOff += pos.count;
+        });
+        const merged = new THREE.BufferGeometry();
+        merged.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        merged.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+        if (indices) merged.setIndex(new THREE.BufferAttribute(indices, 1));
+        merged.computeVertexNormals();
+        return merged;
     }
     
     spawn(scene, x, y, z) {
         const THREE = this.THREE;
-        const geo = this.geoManager;
         const group = this.createGroup(scene);
         group.name = 'trash_can';
         group.position.set(x, y, z);
         
-        const metalMat = this.matManager.get('#4A5A6A', { roughness: 0.6, metalness: 0.5 });
-        const darkMat = this.matManager.get('#3A4A5A', { roughness: 0.7, metalness: 0.4 });
-        const snowMat = this.matManager.get(PropColors.snowLight, { roughness: 0.6 });
+        const geos = this._buildMergedGeometry();
         
-        // Main body (tapered cylinder) (CACHED)
-        const body = new THREE.Mesh(geo.cylinder(0.35, 0.3, 0.9, 12), metalMat);
-        body.position.y = 0.45;
-        body.castShadow = true;
-        body.receiveShadow = true;
-        this.addMesh(body, group);
+        // ONLY 3 MESHES instead of 11!
+        const metalMesh = new THREE.Mesh(geos.metal, this.matManager.get('#4A5A6A', { roughness: 0.6, metalness: 0.5 }));
+        metalMesh.castShadow = true;
+        metalMesh.receiveShadow = true;
+        this.addMesh(metalMesh, group);
         
-        // Rim at top (CACHED)
-        const rim = new THREE.Mesh(geo.torus(0.36, 0.03, 6, 16), darkMat);
-        rim.position.y = 0.9;
-        rim.rotation.x = Math.PI / 2;
-        this.addMesh(rim, group);
+        const darkMesh = new THREE.Mesh(geos.dark, this.matManager.get('#3A4A5A', { roughness: 0.7, metalness: 0.4 }));
+        this.addMesh(darkMesh, group);
         
-        // Rim at bottom (CACHED)
-        const bottomRim = new THREE.Mesh(geo.torus(0.31, 0.025, 6, 16), darkMat);
-        bottomRim.position.y = 0.02;
-        bottomRim.rotation.x = Math.PI / 2;
-        this.addMesh(bottomRim, group);
-        
-        // Horizontal bands (CACHED - both share same geometry)
-        const bandGeo = geo.torus(0.33, 0.015, 6, 16);
-        [0.25, 0.55].forEach(yPos => {
-            const band = new THREE.Mesh(bandGeo, darkMat);
-            band.position.y = yPos;
-            band.rotation.x = Math.PI / 2;
-            this.addMesh(band, group);
-        });
-        
-        // Handles on sides (CACHED - both share same geometry)
-        const handleGeo = geo.torus(0.08, 0.015, 6, 8);
-        [-1, 1].forEach(side => {
-            const handle = new THREE.Mesh(handleGeo, darkMat);
-            handle.position.set(side * 0.35, 0.7, 0);
-            handle.rotation.y = side * Math.PI / 2;
-            this.addMesh(handle, group);
-        });
-        
-        // Lid
         if (this.withLid) {
-            const lid = new THREE.Mesh(geo.cylinder(0.38, 0.36, 0.08, 12), metalMat);
-            lid.position.y = 0.96;
-            lid.castShadow = true;
-            this.addMesh(lid, group);
-            
-            // Lid handle (CACHED)
-            const lidHandle = new THREE.Mesh(geo.cylinder(0.05, 0.05, 0.08, 8), darkMat);
-            lidHandle.position.y = 1.04;
-            this.addMesh(lidHandle, group);
-            
-            // Snow on lid (CACHED)
-            const snow = new THREE.Mesh(geo.sphere(0.25, 8, 6), snowMat);
-            snow.position.y = 1.1;
-            snow.scale.set(1.3, 0.35, 1.3);
-            this.addMesh(snow, group);
+            const snowMesh = new THREE.Mesh(geos.snow, this.matManager.get(PropColors.snowLight, { roughness: 0.6 }));
+            this.addMesh(snowMesh, group);
         }
         
         return this;

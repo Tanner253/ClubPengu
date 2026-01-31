@@ -2053,9 +2053,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                                                    c === 'rainbow' || c === 'prismatic' ? 'rainbowShift 8s linear infinite' : 
                                                                    c === 'holographic' ? 'rainbowShift 10s ease infinite' :
                                                                    'cosmicShift 12s ease infinite';
-                                                    return {
+                                                        return {
                                                         background: style.background,
-                                                        backgroundSize: '400% 400%',
+                                                            backgroundSize: '400% 400%',
                                                         animation: animationName,
                                                         glowColor: style.glowColor
                                                     };

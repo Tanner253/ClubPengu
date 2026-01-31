@@ -124,6 +124,42 @@ class TownCenter {
         const SIZE = TownCenter.WORLD_SIZE; // 220
         const props = [];
         
+        // ==================== CARDINAL DIRECTION MARKERS ====================
+        // Large floating letters to show N/S/E/W for debugging orientation
+        // Coordinate system: +Z = South, -Z = North, +X = East, -X = West
+        // World bounds: Town (0-220) + Snow Forts (220-440) = total 440 x 220
+        const WORLD_WIDTH = 440; // Total expanded world width
+        const WORLD_DEPTH = SIZE; // 220
+        
+        props.push({
+            type: 'cardinal_marker',
+            x: WORLD_WIDTH / 2,  // Center of expanded world (220)
+            z: -20,              // North edge (above z=0)
+            letter: 'N',
+            color: 0x00AAFF      // Blue for North
+        });
+        props.push({
+            type: 'cardinal_marker',
+            x: WORLD_WIDTH / 2,  // Center of expanded world
+            z: WORLD_DEPTH + 20, // South edge (below z=220)
+            letter: 'S',
+            color: 0xFF4444      // Red for South
+        });
+        props.push({
+            type: 'cardinal_marker',
+            x: -20,              // West edge (left of x=0)
+            z: C,                // Center depth
+            letter: 'W',
+            color: 0xFFAA00      // Orange for West
+        });
+        props.push({
+            type: 'cardinal_marker',
+            x: WORLD_WIDTH + 20, // East edge (right of x=440)
+            z: C,                // Center depth
+            letter: 'E',
+            color: 0x00FF00      // Green for East
+        });
+        
         // ==================== T-INTERSECTION CAMPFIRE ====================
         const campfireX = C;
         const campfireZ = C + 10;
@@ -339,6 +375,31 @@ class TownCenter {
             z: C - 45,    // Center of horizontal bar
             width: 190,
             depth: 32,    // From C-29 to C-61
+        });
+        
+        // ==================== ZONE EXIT PATHS ====================
+        // Extension path to Snow Forts (EAST only)
+        
+        // EAST ZONE EXIT PATH - extends T-bar to the east edge
+        // Leads to Snow Forts zone
+        props.push({
+            type: 'gravel_path',
+            x: SIZE - 8,   // Near east edge (204-220)
+            z: C - 45,     // Same z as T-bar
+            width: 16,     // From x=204 to x=220
+            depth: 32,     // Same depth as T-bar
+        });
+        
+        // ==================== ZONE EXIT SIGNS ====================
+        // Directional signs pointing to adjacent zones
+        
+        // EAST EXIT - Sign pointing to Snow Forts / Ice Rink
+        props.push({
+            type: 'direction_sign',
+            x: SIZE - 15,
+            z: C - 45,
+            text: 'SNOW FORTS →',
+            rotation: 0
         });
         
         // Path to Nightclub (north from T-bar)
@@ -597,8 +658,8 @@ class TownCenter {
             // Pizza entrance (west side, door faces east) - UPDATED POSITION
             { type: 'building_light', x: C - 38, z: C + 35, color: 0xFFAA55, intensity: 3.5, distance: 15, height: 4 },
             
-            // Puffle Shop entrance (east side, door faces west) - UPDATED POSITION
-            { type: 'building_light', x: C + 38, z: C + 35, color: 0xFFE4B5, intensity: 3.5, distance: 15, height: 4 },
+            // Puffle Shop entrance (east side, door faces west) - UPDATED POSITION (reduced glow)
+            { type: 'building_light', x: C + 38, z: C + 35, color: 0xFFE4B5, intensity: 1.0, distance: 10, height: 4 },
             
             // Dojo entrance (south, door faces north) - UPDATED POSITION
             { type: 'building_light', x: C, z: C + 62, color: 0xFF8844, intensity: 3.5, distance: 18, height: 3 },
@@ -882,72 +943,35 @@ class TownCenter {
                     mesh.userData.isPersonalIgloo = true;
                     mesh.userData.interactionType = 'penguin_creator';
                     
-                    // === FLOATING COSMETICS (Actual game items) ===
+                    // === FLOATING COSMETICS - OPTIMIZED ===
+                    // OLD CODE created 1 mesh per voxel = 800+ draw calls for 4 hats!
+                    // NEW: Simple orbiting gem indicators (4 meshes total)
                     const floatingGroup = new this.THREE.Group();
-                    floatingGroup.position.set(0, 8, 0); // Above igloo
+                    floatingGroup.position.set(0, 6, 0); // Above igloo
                     mesh.add(floatingGroup);
                     
-                    // Import actual cosmetics from the game
-                    import('../assets/index.js').then(({ HATS, BODY }) => {
-                        const VOXEL_SIZE = 0.15; // Scale for floating items
-                        
-                        // Helper to create a voxel mesh from cosmetic data
-                        const createVoxelMesh = (voxels, orbitRadius, orbitSpeed, yOffset, scale = 1) => {
-                            const itemGroup = new this.THREE.Group();
-                            const boxGeo = new this.THREE.BoxGeometry(VOXEL_SIZE * scale, VOXEL_SIZE * scale, VOXEL_SIZE * scale);
-                            
-                            voxels.forEach(v => {
-                                const color = typeof v.c === 'string' && v.c.startsWith('#') ? v.c : '#FFD700';
-                                const mat = new this.THREE.MeshStandardMaterial({
-                                    color: color,
-                                    emissive: color,
-                                    emissiveIntensity: 0.3,
-                                    metalness: 0.6,
-                                    roughness: 0.3
-                                });
-                                const voxelMesh = new this.THREE.Mesh(boxGeo, mat);
-                                voxelMesh.position.set(v.x * VOXEL_SIZE * scale, v.y * VOXEL_SIZE * scale, v.z * VOXEL_SIZE * scale);
-                                itemGroup.add(voxelMesh);
-                            });
-                            
-                            // Orbit container
-                            const orbit = new this.THREE.Group();
-                            orbit.userData.orbitSpeed = orbitSpeed;
-                            orbit.userData.yOffset = yOffset;
-                            itemGroup.position.set(orbitRadius, 0, 0);
-                            orbit.add(itemGroup);
-                            return orbit;
-                        };
-                        
-                        // Select some actual cosmetics to display
-                        const hatNames = ['crown', 'wizardHat', 'topHat', 'vikingHelmet', 'partyHat', 'cowboyHat'];
-                        const availableHats = hatNames.filter(name => HATS[name] && HATS[name].length > 0);
-                        
-                        // Add floating hats
-                        availableHats.slice(0, 4).forEach((hatName, i) => {
-                            const hatVoxels = HATS[hatName];
-                            if (hatVoxels && hatVoxels.length > 0) {
-                                const orbitSpeed = 0.4 + i * 0.15;
-                                const yOffset = Math.sin(i * 1.5) * 0.5;
-                                const orbit = createVoxelMesh(hatVoxels, 3.5, orbitSpeed, yOffset, 1.2);
-                                orbit.rotation.y = (i / 4) * Math.PI * 2;
-                                floatingGroup.add(orbit);
-                            }
+                    // Simple orbiting indicators - just 4 simple meshes total
+                    const colors = [0xFFD700, 0x9B59B6, 0x3498DB, 0xE74C3C]; // gold, purple, blue, red
+                    const sharedGeo = new this.THREE.OctahedronGeometry(0.5, 0); // Simple diamond shape
+                    
+                    colors.forEach((color, i) => {
+                        const mat = new this.THREE.MeshStandardMaterial({
+                            color: color,
+                            emissive: color,
+                            emissiveIntensity: 0.5,
+                            metalness: 0.8,
+                            roughness: 0.2
                         });
+                        const gem = new this.THREE.Mesh(sharedGeo, mat);
                         
-                        // If we don't have enough hats, add body items
-                        if (availableHats.length < 4) {
-                            const bodyNames = ['cape', 'bowtie', 'scarf'];
-                            bodyNames.forEach((itemName, i) => {
-                                if (BODY[itemName] && BODY[itemName].voxels && BODY[itemName].voxels.length > 0) {
-                                    const orbit = createVoxelMesh(BODY[itemName].voxels, 3.5, 0.6 + i * 0.1, i * 0.3, 1.0);
-                                    orbit.rotation.y = Math.PI + (i / 3) * Math.PI;
-                                    floatingGroup.add(orbit);
-                                }
-                            });
-                        }
-                    }).catch(err => {
-                        console.warn('Could not load cosmetics for wardrobe display:', err);
+                        // Create orbit container
+                        const orbit = new this.THREE.Group();
+                        orbit.userData.orbitSpeed = 0.3 + i * 0.1;
+                        orbit.userData.yOffset = Math.sin(i * 1.5) * 0.3;
+                        gem.position.set(3, 0, 0); // Orbit radius
+                        orbit.add(gem);
+                        orbit.rotation.y = (i / 4) * Math.PI * 2;
+                        floatingGroup.add(orbit);
                     });
                     
                     // Store for animation
@@ -999,31 +1023,16 @@ class TownCenter {
                     signSprite.position.set(0, 12, 0);
                     mesh.add(signSprite);
                     
-                    // === AMBIENT LIGHTS ===
-                    // Main spotlight on igloo
-                    const spotlight = new this.THREE.SpotLight(0xFFD700, 3, 20, Math.PI / 4, 0.5);
-                    spotlight.position.set(0, 15, 5);
+                    // === AMBIENT LIGHTS (subtle - no harsh glow) ===
+                    // Single soft spotlight on igloo
+                    const spotlight = new this.THREE.SpotLight(0xFFD700, 0.5, 15, Math.PI / 3, 0.8);
+                    spotlight.position.set(0, 12, 5);
                     spotlight.target.position.set(0, 0, 0);
                     mesh.add(spotlight);
                     mesh.add(spotlight.target);
                     
-                    // Purple accent light
-                    const purpleLight = new this.THREE.PointLight(0x9966FF, 2, 15);
-                    purpleLight.position.set(-5, 6, -3);
-                    mesh.add(purpleLight);
-                    
-                    // Cyan accent light  
-                    const cyanLight = new this.THREE.PointLight(0x00FFFF, 2, 15);
-                    cyanLight.position.set(5, 6, -3);
-                    mesh.add(cyanLight);
-                    
-                    // Ground glow
-                    const groundGlow = new this.THREE.PointLight(0xFFD700, 1.5, 12);
-                    groundGlow.position.set(0, 0.5, 4);
-                    mesh.add(groundGlow);
-                    
-                    // Store lights for potential animation
-                    mesh.userData.wardrobeLights = { spotlight, purpleLight, cyanLight, groundGlow };
+                    // Store lights for potential animation (removed intense colored lights)
+                    mesh.userData.wardrobeLights = { spotlight };
                     
                     break;
                 }
@@ -1631,6 +1640,26 @@ class TownCenter {
                         }),
                         { name: 'lighthouse_entrance' }
                     );
+                    
+                    // Exit trigger at the TOP of the lighthouse (for mobile users to see UI)
+                    // Elevated sphere at deck height (~12.5) with small radius
+                    this.collisionSystem.addTrigger(
+                        prop.x, prop.z,
+                        {
+                            type: 'sphere',
+                            radius: 4,
+                            action: 'descend_lighthouse',
+                            message: '🔦 Descend (Press E)',
+                            minY: 10, // Only active when player Y > 10
+                            elevated: true
+                        },
+                        (event) => this._handleInteraction(event, {
+                            action: 'descend_lighthouse',
+                            message: '🔦 Descend (Press E)'
+                        }),
+                        { name: 'lighthouse_exit', checkY: true, minY: 10 }
+                    );
+                    
                     console.log(`🔦 Lighthouse entrance trigger at (${prop.x}, ${prop.z}) with radius 6`);
                     mesh = null;
                     break;
@@ -1699,6 +1728,126 @@ class TownCenter {
                 case 'wooden_post': {
                     const postProp = createProp(this.THREE, null, PROP_TYPES.WOODEN_POST, 0, 0, 0, { style: prop.style || 'plain' });
                     mesh = attachPropData(postProp, postProp.group);
+                    break;
+                }
+                
+                case 'cardinal_marker': {
+                    // Large floating cardinal direction letter for orientation
+                    const THREE = this.THREE;
+                    const markerGroup = new THREE.Group();
+                    
+                    // Create large 3D text using canvas texture on a plane
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 256;
+                    canvas.height = 256;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Background (transparent)
+                    ctx.clearRect(0, 0, 256, 256);
+                    
+                    // Draw letter with glow
+                    ctx.shadowColor = `#${prop.color.toString(16).padStart(6, '0')}`;
+                    ctx.shadowBlur = 30;
+                    ctx.fillStyle = `#${prop.color.toString(16).padStart(6, '0')}`;
+                    ctx.font = 'bold 200px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(prop.letter, 128, 128);
+                    
+                    // Second pass for extra glow
+                    ctx.shadowBlur = 15;
+                    ctx.fillText(prop.letter, 128, 128);
+                    
+                    const texture = new THREE.CanvasTexture(canvas);
+                    const spriteMat = new THREE.SpriteMaterial({ 
+                        map: texture, 
+                        transparent: true,
+                        depthTest: false  // Always visible
+                    });
+                    const sprite = new THREE.Sprite(spriteMat);
+                    sprite.scale.set(40, 40, 1); // Large scale for visibility
+                    sprite.position.y = 50; // High above ground
+                    markerGroup.add(sprite);
+                    
+                    // Add point light for extra visibility
+                    const light = new THREE.PointLight(prop.color, 1, 100);
+                    light.position.y = 50;
+                    markerGroup.add(light);
+                    
+                    mesh = markerGroup;
+                    break;
+                }
+                
+                case 'direction_sign': {
+                    // Directional sign pointing to adjacent zones
+                    const THREE = this.THREE;
+                    const signGroup = new THREE.Group();
+                    
+                    // Wooden post (offset to the side so it doesn't go through sign)
+                    const postGeo = new THREE.CylinderGeometry(0.12, 0.18, 5, 8);
+                    const postMat = new THREE.MeshStandardMaterial({ color: 0x6B4423, roughness: 0.9 });
+                    const post = new THREE.Mesh(postGeo, postMat);
+                    post.position.set(-2.2, 2.5, 0); // Offset to the left side
+                    post.castShadow = true;
+                    signGroup.add(post);
+                    
+                    // Wooden sign board (arrow shape) - attached to side of post
+                    const boardGeo = new THREE.BoxGeometry(4.5, 1.2, 0.2);
+                    const boardMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.85 });
+                    const board = new THREE.Mesh(boardGeo, boardMat);
+                    board.position.set(0.3, 4.5, 0);
+                    board.castShadow = true;
+                    signGroup.add(board);
+                    
+                    // Arrow point (triangle on the right side)
+                    const arrowShape = new THREE.Shape();
+                    arrowShape.moveTo(0, 0.6);
+                    arrowShape.lineTo(0.8, 0);
+                    arrowShape.lineTo(0, -0.6);
+                    arrowShape.lineTo(0, 0.6);
+                    const arrowGeo = new THREE.ExtrudeGeometry(arrowShape, { depth: 0.2, bevelEnabled: false });
+                    const arrow = new THREE.Mesh(arrowGeo, boardMat);
+                    arrow.position.set(2.55, 4.5, -0.1);
+                    arrow.castShadow = true;
+                    signGroup.add(arrow);
+                    
+                    // Bracket connecting post to sign
+                    const bracketGeo = new THREE.BoxGeometry(0.6, 0.15, 0.15);
+                    const bracket = new THREE.Mesh(bracketGeo, postMat);
+                    bracket.position.set(-1.9, 4.5, 0);
+                    signGroup.add(bracket);
+                    
+                    // Text on sign
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 512;
+                    canvas.height = 128;
+                    const ctx = canvas.getContext('2d');
+                    ctx.fillStyle = '#F5DEB3'; // Wheat color background
+                    ctx.fillRect(0, 0, 512, 128);
+                    ctx.fillStyle = '#2F1810';
+                    ctx.font = 'bold 48px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(prop.text || 'ZONE', 256, 64);
+                    
+                    const texture = new THREE.CanvasTexture(canvas);
+                    const textMat = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+                    const textMesh = new THREE.Mesh(
+                        new THREE.PlaneGeometry(4, 1),
+                        textMat
+                    );
+                    textMesh.position.set(0.3, 4.5, 0.11);
+                    signGroup.add(textMesh);
+                    
+                    // Snow cap on top of post
+                    const snowGeo = new THREE.SphereGeometry(0.2, 8, 4, 0, Math.PI * 2, 0, Math.PI / 2);
+                    const snowMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 0.9 });
+                    const snow = new THREE.Mesh(snowGeo, snowMat);
+                    snow.position.set(-2.2, 5.1, 0);
+                    signGroup.add(snow);
+                    
+                    signGroup.rotation.y = prop.rotation || 0;
+                    mesh = signGroup;
                     break;
                 }
                 
@@ -2051,38 +2200,40 @@ class TownCenter {
         const WALL_THICKNESS = 4;
         const MARGIN = 5; // Distance from edge
         
-        // Create invisible but solid wall colliders on all 4 sides
-        // North wall (z = margin)
-                this.collisionSystem.addCollider(
+        // ==================== ZONE BOUNDARY CONFIGURATION ====================
+        // Town is connected to Snow Forts on the EAST (no wall there)
+        // Other edges have solid walls
+        
+        // Create invisible but solid wall colliders on exterior edges only
+        
+        // North wall (z = margin) - FULL, no exit needed yet
+        this.collisionSystem.addCollider(
             C, MARGIN,
             { type: 'box', size: { x: SIZE, z: WALL_THICKNESS }, height: WALL_HEIGHT },
             CollisionSystem.TYPES.WALL,
             { name: 'wall_north' }
         );
         
-        // South wall (z = SIZE - margin)
-                this.collisionSystem.addCollider(
+        // South wall (z = SIZE - margin) - FULL, no exit needed yet
+        this.collisionSystem.addCollider(
             C, SIZE - MARGIN,
             { type: 'box', size: { x: SIZE, z: WALL_THICKNESS }, height: WALL_HEIGHT },
             CollisionSystem.TYPES.WALL,
             { name: 'wall_south' }
         );
         
-        // West wall (x = margin)
-                this.collisionSystem.addCollider(
+        // ==================== WEST WALL (SOLID - no exit) ====================
+        // Full wall on west side - no zone connection yet
+        this.collisionSystem.addCollider(
             MARGIN, C,
             { type: 'box', size: { x: WALL_THICKNESS, z: SIZE }, height: WALL_HEIGHT },
             CollisionSystem.TYPES.WALL,
             { name: 'wall_west' }
         );
         
-        // East wall (x = SIZE - margin)
-        this.collisionSystem.addCollider(
-            SIZE - MARGIN, C,
-            { type: 'box', size: { x: WALL_THICKNESS, z: SIZE }, height: WALL_HEIGHT },
-            CollisionSystem.TYPES.WALL,
-            { name: 'wall_east' }
-        );
+        // ==================== EAST WALL - REMOVED ====================
+        // No east wall - Snow Forts zone is directly connected
+        // Players can walk freely between Town and Snow Forts at x=220
         
         // Walls are invisible - collision only, no visible meshes
     }
@@ -2431,6 +2582,17 @@ class TownCenter {
     update(time, delta, nightFactor = 0.5, playerPos = null) {
         if (!this._animatedCache) {
             this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], wardrobeIgloos: [], streetLightStrings: [], frameCounter: 0 };
+            // === VISIBILITY CULLING CACHE ===
+            // Store elements that should be hidden at distance (with state tracking to avoid freeze)
+            // Billboard STRUCTURE stays visible, only the ADVERT IMAGE is hidden at distance
+            this._cullCache = {
+                billboardAdverts: [], // Just the advertisement planes (not whole billboard)
+                nightclubSign: null,  // Nightclub title sprite
+                casinoSign: null,     // Casino title sprite
+                floatingTitles: [],   // ARCADE, FISHING signs
+                wardrobeGroup: null,  // Personal igloo floating cosmetics
+            };
+            
             this.propMeshes.forEach(mesh => {
                 // Wardrobe/Personal igloo with floating cosmetics
                 if (mesh.userData.isPersonalIgloo && mesh.userData.floatingGroup) {
@@ -2439,6 +2601,12 @@ class TownCenter {
                         floatingGroup: mesh.userData.floatingGroup,
                         lights: mesh.userData.wardrobeLights
                     });
+                    // Cache for visibility culling
+                    this._cullCache.wardrobeGroup = {
+                        mesh: mesh,
+                        floatingGroup: mesh.userData.floatingGroup,
+                        wasVisible: true
+                    };
                 }
                 if (mesh.name === 'campfire') {
                     // Store the Campfire instance reference for clean single-point animation
@@ -2452,16 +2620,46 @@ class TownCenter {
                 }
                 if (mesh.name === 'nightclub' && mesh.userData.nightclubUpdate) {
                     this._animatedCache.nightclubs.push(mesh);
+                    // Cache nightclub sign for visibility culling
+                    const sign = mesh.getObjectByName('nightclub_title_sign');
+                    if (sign) {
+                        this._cullCache.nightclubSign = { sprite: sign, parentMesh: mesh, wasVisible: true };
+                    }
                 }
                 // Casino exterior animations (Vegas-style lights, slot machines, roulette, etc.)
                 if (mesh.name === 'casino' && mesh.userData.update) {
                     this._animatedCache.casinos.push(mesh);
+                    // Cache casino sign for visibility culling
+                    const casinoSign = mesh.getObjectByName('casino_title_sign');
+                    if (casinoSign) {
+                        this._cullCache.casinoSign = { sprite: casinoSign, parentMesh: mesh, wasVisible: true };
+                    }
                 }
-                // Floating title signs
+                // Floating title signs - cache for visibility culling
                 if (mesh.name === 'floating_title' && mesh.userData.floatingSign) {
+                    const sprite = mesh.userData.floatingSign;
                     this._animatedCache.floatingSigns.push({
-                        sprite: mesh.userData.floatingSign,
+                        sprite: sprite,
                         baseY: mesh.userData.floatingSignBaseY
+                    });
+                    // Also cache for visibility culling
+                    this._cullCache.floatingTitles.push({
+                        sprite: sprite,
+                        parentMesh: mesh,
+                        wasVisible: true
+                    });
+                }
+                // Billboard/highway signs - cache just the ADVERT PLANE for visibility culling
+                // Keep billboard structure (poles, frame) always visible - only hide the textured ad
+                if (mesh.name === 'billboard') {
+                    mesh.traverse(child => {
+                        if (child.userData?.isBanner) {
+                            this._cullCache.billboardAdverts.push({
+                                advertMesh: child,
+                                parentPos: mesh.position,
+                                wasVisible: true
+                            });
+                        }
                     });
                 }
                 // Street light strings (Christmas lights between lamp posts)
@@ -2485,11 +2683,15 @@ class TownCenter {
         const px = playerPos?.x || 0;
         const pz = playerPos?.z || 0;
         
-        // Nightclub animations - ALWAYS run (major landmark, visible from far away)
-        // No distance culling - nightclub lasers and speakers should always animate
+        // Nightclub animations - distance culled like other props for performance
         this._animatedCache.nightclubs.forEach(mesh => {
             if (mesh.userData.nightclubUpdate) {
-                mesh.userData.nightclubUpdate(time);
+                // Distance check for nightclub
+                const dx = px - mesh.position.x;
+                const dz = pz - mesh.position.z;
+                if (dx * dx + dz * dz < ANIMATION_DISTANCE_SQ) {
+                    mesh.userData.nightclubUpdate(time);
+                }
             }
         });
         
@@ -2515,8 +2717,18 @@ class TownCenter {
                 }
             });
             
-            // Wardrobe igloo floating cosmetics animation
-            this._animatedCache.wardrobeIgloos.forEach(({ floatingGroup, lights }) => {
+            // Wardrobe igloo floating cosmetics animation - DISTANCE CULLED like nightclub
+            // NOTE: Do NOT toggle .visible - just skip animation updates
+            this._animatedCache.wardrobeIgloos.forEach(({ mesh, floatingGroup, lights }) => {
+                // Distance check - skip animation if too far (matches nightclub pattern)
+                if (mesh) {
+                    const dx = px - mesh.position.x;
+                    const dz = pz - mesh.position.z;
+                    if (dx * dx + dz * dz > ANIMATION_DISTANCE_SQ) {
+                        return; // Skip animation, do NOT toggle visibility
+                    }
+                }
+                
                 if (floatingGroup) {
                     // Rotate each floating item in its orbit
                     floatingGroup.children.forEach((orbit, index) => {
@@ -2590,9 +2802,22 @@ class TownCenter {
             this.parkInstance.animate(delta);
         }
         
-        // Floating signs - gentle bobbing animation every 2nd frame
+        // Floating signs - gentle bobbing animation every 2nd frame - DISTANCE CULLED
+        // NOTE: Do NOT toggle .visible - that causes GPU recompilation freezes!
+        // Instead, just skip animation updates like nightclub does
+        const SIGN_ANIM_DISTANCE_SQ = 80 * 80;
         if (frame % 2 === 0) {
             this._animatedCache.floatingSigns.forEach(({ sprite, baseY }) => {
+                // Distance check - skip animation if too far (DO NOT TOGGLE VISIBILITY)
+                const dx = px - sprite.position.x;
+                const dz = pz - sprite.position.z;
+                const distSq = dx * dx + dz * dz;
+                
+                // Just skip animation if far away - no visibility toggle
+                if (distSq > SIGN_ANIM_DISTANCE_SQ) {
+                    return;
+                }
+                
                 // Gentle floating bob
                 sprite.position.y = baseY + Math.sin(time * 1.5) * 0.3;
                 // Subtle scale pulse
@@ -2634,6 +2859,93 @@ class TownCenter {
                 });
             });
         }
+        
+        // ==================== VISIBILITY CULLING (every 15 frames to avoid freeze) ====================
+        // Only update visibility when state actually changes - prevents GPU shader recompilation freeze
+        // Uses hysteresis: hide at HIDE_DIST, show at SHOW_DIST (prevents flickering at boundary)
+        // Billboard adverts visible from further (100 units), other UI from closer (75 units)
+        if (frame % 15 === 0 && this._cullCache) {
+            const HIDE_DIST_SQ = 75 * 75;           // Hide UI when > 75 units away
+            const SHOW_DIST_SQ = 60 * 60;           // Show UI when < 60 units away
+            const BILLBOARD_HIDE_SQ = 120 * 120;    // Billboards visible from further (120 units)
+            const BILLBOARD_SHOW_SQ = 100 * 100;    // Show billboard when < 100 units
+            
+            // Helper: only toggle visibility if state changed
+            const updateVisibility = (obj, shouldShow, cacheEntry) => {
+                if (!obj) return;
+                if (shouldShow && !cacheEntry.wasVisible) {
+                    obj.visible = true;
+                    cacheEntry.wasVisible = true;
+                } else if (!shouldShow && cacheEntry.wasVisible) {
+                    obj.visible = false;
+                    cacheEntry.wasVisible = false;
+                }
+            };
+            
+            // Billboard ADVERTS only (structure stays visible, just hide the textured plane)
+            // Billboards visible from FURTHER away than other UI elements
+            this._cullCache.billboardAdverts.forEach(entry => {
+                const dx = px - entry.parentPos.x;
+                const dz = pz - entry.parentPos.z;
+                const distSq = dx * dx + dz * dz;
+                
+                const shouldShow = entry.wasVisible 
+                    ? distSq < BILLBOARD_HIDE_SQ 
+                    : distSq < BILLBOARD_SHOW_SQ;
+                updateVisibility(entry.advertMesh, shouldShow, entry);
+            });
+            
+            // Nightclub title sign (sprite - safe to cull)
+            if (this._cullCache.nightclubSign) {
+                const entry = this._cullCache.nightclubSign;
+                const dx = px - entry.parentMesh.position.x;
+                const dz = pz - entry.parentMesh.position.z;
+                const distSq = dx * dx + dz * dz;
+                
+                const shouldShow = entry.wasVisible 
+                    ? distSq < HIDE_DIST_SQ 
+                    : distSq < SHOW_DIST_SQ;
+                updateVisibility(entry.sprite, shouldShow, entry);
+            }
+            
+            // Casino title sign (sprite - safe to cull)
+            if (this._cullCache.casinoSign) {
+                const entry = this._cullCache.casinoSign;
+                const dx = px - entry.parentMesh.position.x;
+                const dz = pz - entry.parentMesh.position.z;
+                const distSq = dx * dx + dz * dz;
+                
+                const shouldShow = entry.wasVisible 
+                    ? distSq < HIDE_DIST_SQ 
+                    : distSq < SHOW_DIST_SQ;
+                updateVisibility(entry.sprite, shouldShow, entry);
+            }
+            
+            // Floating titles (ARCADE, FISHING zones - sprites, safe to cull)
+            this._cullCache.floatingTitles.forEach(entry => {
+                const dx = px - entry.parentMesh.position.x;
+                const dz = pz - entry.parentMesh.position.z;
+                const distSq = dx * dx + dz * dz;
+                
+                const shouldShow = entry.wasVisible 
+                    ? distSq < HIDE_DIST_SQ 
+                    : distSq < SHOW_DIST_SQ;
+                updateVisibility(entry.sprite, shouldShow, entry);
+            });
+            
+            // Wardrobe igloo floating cosmetics
+            if (this._cullCache.wardrobeGroup) {
+                const entry = this._cullCache.wardrobeGroup;
+                const dx = px - entry.mesh.position.x;
+                const dz = pz - entry.mesh.position.z;
+                const distSq = dx * dx + dz * dz;
+                
+                const shouldShow = entry.wasVisible 
+                    ? distSq < HIDE_DIST_SQ 
+                    : distSq < SHOW_DIST_SQ;
+                updateVisibility(entry.floatingGroup, shouldShow, entry);
+            }
+        }
     }
 
     cleanup() {
@@ -2651,6 +2963,7 @@ class TownCenter {
         this.lights = [];
         this.collisionSystem.clear();
         this._animatedCache = null;
+        this._cullCache = null;
     }
 
     dispose() {
