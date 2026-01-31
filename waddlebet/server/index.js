@@ -6563,6 +6563,116 @@ setInterval(async () => {
     }
 }, 5 * 60 * 1000); // 5 minutes
 
+// 🚨 CRITICAL: Check for newly banned players every 30 seconds
+// This ensures players banned via database are kicked immediately
+setInterval(async () => {
+    if (!isDBConnected()) return;
+    
+    try {
+        // Get all authenticated players
+        const authenticatedPlayers = Array.from(players.values())
+            .filter(p => p.isAuthenticated && p.walletAddress);
+        
+        if (authenticatedPlayers.length === 0) return;
+        
+        // Get wallet addresses
+        const walletAddresses = authenticatedPlayers.map(p => p.walletAddress);
+        
+        // Check which ones are banned in database
+        const bannedUsers = await User.find(
+            { 
+                walletAddress: { $in: walletAddresses },
+                isBanned: true 
+            },
+            'walletAddress username banReason banExpires lastIpAddress'
+        ).lean();
+        
+        if (bannedUsers.length === 0) return;
+        
+        // Create a map for quick lookup
+        const bannedWallets = new Map(bannedUsers.map(u => [u.walletAddress, u]));
+        
+        // Kick each banned player
+        for (const player of authenticatedPlayers) {
+            const banInfo = bannedWallets.get(player.walletAddress);
+            if (!banInfo) continue;
+            
+            console.log(`🚫 KICKING BANNED PLAYER: ${banInfo.username || player.name} (${player.walletAddress.slice(0, 8)}...) - Reason: ${banInfo.banReason || 'No reason'}`);
+            
+            // Add their IPs to ban list
+            if (banInfo.lastIpAddress && banInfo.lastIpAddress !== 'unknown') {
+                bannedIPs.add(banInfo.lastIpAddress);
+            }
+            if (player.ip && player.ip !== 'unknown') {
+                bannedIPs.add(player.ip);
+            }
+            
+            // Build ban message
+            let banMessage = 'Your account has been banned. Access denied.';
+            if (banInfo.banReason) {
+                banMessage = `Your account has been banned. Reason: ${banInfo.banReason}. Access denied.`;
+            }
+            if (banInfo.banExpires) {
+                const expiresDate = new Date(banInfo.banExpires).toLocaleString();
+                banMessage += ` Ban expires: ${expiresDate}`;
+            }
+            
+            // Notify and disconnect
+            try {
+                sendToPlayer(player.id, {
+                    type: 'banned',
+                    error: 'ACCOUNT_BANNED',
+                    message: banMessage,
+                    banReason: banInfo.banReason || null,
+                    banExpires: banInfo.banExpires || null
+                });
+                
+                // Clean up player from room
+                if (player.room) {
+                    const room = rooms.get(player.room);
+                    if (room) {
+                        room.delete(player.id);
+                        broadcastToRoom(player.room, { 
+                            type: 'player_left', 
+                            playerId: player.id,
+                            reason: 'banned'
+                        });
+                    }
+                }
+                
+                // Remove from IP tracking
+                if (player.ip) {
+                    const ipSet = ipConnections.get(player.ip);
+                    if (ipSet) {
+                        ipSet.delete(player.id);
+                        if (ipSet.size === 0) {
+                            ipConnections.delete(player.ip);
+                        }
+                    }
+                }
+                
+                // End daily bonus session
+                if (player.walletAddress) {
+                    dailyBonusService.endSession(player.walletAddress);
+                }
+                
+                // Close websocket
+                if (player.ws && player.ws.readyState === 1) {
+                    player.ws.close(1008, 'Account banned');
+                }
+                
+                // Remove from players map
+                players.delete(player.id);
+                
+            } catch (kickError) {
+                console.error(`Error kicking banned player ${player.id}:`, kickError.message);
+            }
+        }
+    } catch (error) {
+        console.error('🚫 Ban check error:', error.message);
+    }
+}, 30000); // Check every 30 seconds
+
 // ==================== STARTUP ====================
 async function start() {
     console.log(`🐧 Club Pengu Server starting...`);
