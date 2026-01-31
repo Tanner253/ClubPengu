@@ -5,12 +5,16 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/api/nft/:path*",
+      "destination": "https://clubpengu-server.onrender.com/api/nft/:path*"
+    },
+    {
       "source": "/ref/:code*",
       "destination": "/index.html"
     },
     {
-      "source": "/((?!assets|favicon|.*\\.).*)",
+      "source": "/((?!assets|favicon|api|.*\\.).*)",
       "destination": "/index.html"
-}
+    }
   ]
 }
