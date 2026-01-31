@@ -49,6 +49,10 @@ const CONFIG = {
     LAMPORTS_PER_SOL: 1_000_000_000
 };
 
+// 🚨 CRITICAL: Prevent promo reward exploitation
+const _promoInProgress = new Set();  // Wallets currently being processed
+const _payoutInProgress = new Set(); // Wallets with payout in progress
+
 class ReferralService {
     constructor(dailyBonusService) {
         this.dailyBonusService = dailyBonusService;
@@ -367,6 +371,12 @@ class ReferralService {
             return { success: false, error: 'PAYOUT_SERVICE_UNAVAILABLE' };
         }
         
+        // 🚨 CRITICAL: Prevent concurrent payout requests
+        if (_payoutInProgress.has(walletAddress)) {
+            return { success: false, error: 'PAYOUT_IN_PROGRESS', message: 'Payout already being processed' };
+        }
+        _payoutInProgress.add(walletAddress);
+        
         try {
             const user = await User.findOne({ walletAddress });
             if (!user) {
@@ -440,6 +450,8 @@ class ReferralService {
         } catch (error) {
             console.error('[Referral] Payout error:', error.message);
             return { success: false, error: 'PAYOUT_FAILED', message: error.message };
+        } finally {
+            _payoutInProgress.delete(walletAddress);
         }
     }
     
@@ -463,12 +475,22 @@ class ReferralService {
         if (sessionMinutes < CONFIG.PROMO_REQUIRED_MINUTES) return { awarded: false };
         if (!isDBConnected()) return { awarded: false };
         
+        // 🚨 CRITICAL: Prevent concurrent promo claims
+        if (_promoInProgress.has(walletAddress)) {
+            return { awarded: false, reason: 'IN_PROGRESS' };
+        }
+        _promoInProgress.add(walletAddress);
+        
         try {
             const user = await User.findOne({ walletAddress });
-            if (!user) return { awarded: false };
+            if (!user) {
+                _promoInProgress.delete(walletAddress);
+                return { awarded: false };
+            }
             
             // Check if already awarded
             if (user.referral?.promoReward?.claimed) {
+                _promoInProgress.delete(walletAddress);
                 return { awarded: false, reason: 'ALREADY_CLAIMED' };
             }
             
@@ -589,6 +611,8 @@ class ReferralService {
         } catch (error) {
             console.error('[Referral] Promo award error:', error.message);
             return { awarded: false, reason: 'ERROR' };
+        } finally {
+            _promoInProgress.delete(walletAddress);
         }
     }
     

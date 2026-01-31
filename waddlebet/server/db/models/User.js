@@ -319,6 +319,43 @@ const userSchema = new mongoose.Schema({
         sessionStartTime: { type: Date, default: null }      // Current session start
     },
 
+    // ========== REFERRAL SYSTEM (CRITICAL - DO NOT REMOVE) ==========
+    referral: {
+        // Who referred this user
+        referredBy: { type: String, default: null },         // Referrer's wallet address
+        referredAt: { type: Date, default: null },           // When they were referred
+        referralCode: { type: String, default: null },       // This user's referral code
+        
+        // Referral statistics
+        stats: {
+            tier1Count: { type: Number, default: 0 },        // Direct referrals
+            tier1ActiveCount: { type: Number, default: 0 },  // Active (1hr+) referrals
+            tier2Count: { type: Number, default: 0 },        // Indirect referrals
+            tier1EarningsLamports: { type: String, default: '0' },  // BigInt as string
+            tier2EarningsLamports: { type: String, default: '0' },
+            totalNetworkRevenueLamports: { type: String, default: '0' }
+        },
+        
+        // Earnings tracking
+        earnings: {
+            pendingLamports: { type: String, default: '0' }, // Unclaimed earnings
+            totalPaidOutLamports: { type: String, default: '0' },
+            lastPayoutAt: { type: Date, default: null },
+            lastPayoutTx: { type: String, default: null },
+            lastPayoutAmount: { type: String, default: '0' }
+        },
+        
+        // Launch promo tracking (prevents double-claim)
+        promoReward: {
+            eligible: { type: Boolean, default: false },
+            claimed: { type: Boolean, default: false },      // CRITICAL: Prevents double claim
+            claimedAt: { type: Date, default: null },
+            claimTxSignature: { type: String, default: null },
+            referrerRewarded: { type: Boolean, default: false },
+            referrerRewardedAt: { type: Date, default: null }
+        }
+    },
+
     // ========== SESSION STATE ==========
     lastRoom: { type: String, default: 'town' },
     lastPosition: {
