@@ -43,6 +43,11 @@ const _claimsInProgress = new Set();
 // Nonce storage for replay protection (nonce -> timestamp)
 const _usedNonces = new Map();
 
+// 🚨 CRITICAL: Rate limit per wallet (prevent rapid-fire claims)
+// Maps walletAddress -> last claim attempt timestamp
+const _claimAttempts = new Map();
+const CLAIM_ATTEMPT_COOLDOWN_MS = 30 * 1000; // 30 seconds between attempts
+
 class DailyBonusService {
     constructor() {
         // Clean up old nonces periodically
@@ -260,6 +265,20 @@ class DailyBonusService {
             return { success: false, error: 'NO_NONCE', message: 'Request nonce required' };
         }
         
+        // 🚨 CRITICAL: Rate limit - prevent rapid-fire claim attempts
+        const lastAttempt = _claimAttempts.get(walletAddress);
+        const now = Date.now();
+        if (lastAttempt && (now - lastAttempt) < CLAIM_ATTEMPT_COOLDOWN_MS) {
+            const waitSeconds = Math.ceil((CLAIM_ATTEMPT_COOLDOWN_MS - (now - lastAttempt)) / 1000);
+            console.warn(`🚨 [DailyBonus] Rate limit hit for ${walletAddress.slice(0, 8)}... (${waitSeconds}s remaining)`);
+            return { 
+                success: false, 
+                error: 'RATE_LIMITED', 
+                message: `Please wait ${waitSeconds} seconds before trying again` 
+            };
+        }
+        _claimAttempts.set(walletAddress, now);
+        
         // Check for replay attack (nonce already used)
         if (_usedNonces.has(clientNonce)) {
             console.warn(`🚨 [DailyBonus] Replay attack detected! Nonce: ${clientNonce.slice(0, 16)}...`);
@@ -444,16 +463,24 @@ class DailyBonusService {
     }
     
     /**
-     * Clean up expired nonces
+     * Clean up expired nonces and rate limit entries
      * @private
      */
     _cleanupNonces() {
         const expiryMs = CONFIG.NONCE_EXPIRY_MINUTES * 60 * 1000;
         const now = Date.now();
         
+        // Clean old nonces
         for (const [nonce, timestamp] of _usedNonces) {
             if (now - timestamp > expiryMs) {
                 _usedNonces.delete(nonce);
+            }
+        }
+        
+        // Clean old rate limit entries (older than 5 minutes)
+        for (const [wallet, timestamp] of _claimAttempts) {
+            if (now - timestamp > 5 * 60 * 1000) {
+                _claimAttempts.delete(wallet);
             }
         }
     }

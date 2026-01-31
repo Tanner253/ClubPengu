@@ -309,6 +309,16 @@ const userSchema = new mongoose.Schema({
         }
     },
 
+    // ========== DAILY BONUS (CRITICAL - DO NOT REMOVE) ==========
+    dailyBonus: {
+        lastClaimAt: { type: Date, default: null },          // Last claim timestamp
+        totalClaimed: { type: Number, default: 0 },          // Total claims made
+        totalWaddleEarned: { type: Number, default: 0 },     // Total WADDLE earned from daily bonus
+        claimNonce: { type: String, default: null },         // Last claim ID for anti-replay
+        currentSessionMinutes: { type: Number, default: 0 }, // Session time tracking
+        sessionStartTime: { type: Date, default: null }      // Current session start
+    },
+
     // ========== SESSION STATE ==========
     lastRoom: { type: String, default: 'town' },
     lastPosition: {
