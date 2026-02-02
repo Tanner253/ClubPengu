@@ -12,7 +12,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-In%20Development-yellow?style=for-the-badge)]()
 
-[Whitepaper](./whitepaper) • [Play Now](https://waddlebet.fun) • [Community](https://x.com/i/communities/1998537610592137381) • [Buy $WADDLE](https://pump.fun/coin/63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump)
+[Whitepaper](./whitepaper) • [Play Now](https://waddle.bet) • [Community](https://x.com/i/communities/1998537610592137381) • [Buy $WADDLE](https://pump.fun/coin/63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump)
 
 </div>
 
@@ -236,7 +236,7 @@ waddlebet/
 
 | Resource | Link |
 |----------|------|
-| 🎮 **Play Now** | [waddlebet.fun](https://waddlebet.fun) |
+| 🎮 **Play Now** | [waddle.bet](https://waddle.bet) |
 | 🌐 **Whitepaper** | [View Whitepaper](./whitepaper) |
 | 🐦 **X Community** | [Join Community](https://x.com/i/communities/1998537610592137381) |
 | 💰 **Buy $WADDLE** | [PumpFun](https://pump.fun/coin/63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump) |
