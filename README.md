@@ -12,7 +12,7 @@
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-In%20Development-yellow?style=for-the-badge)]()
 
-[Whitepaper](./whitepaper) • [Play Now](https://waddle.bet) • [Community](https://x.com/i/communities/1998537610592137381) • [Buy $WADDLE](https://pump.fun/coin/63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump)
+[Whitepaper](./whitepaper) • [Play Now](https://waddle.bet) • [Community](https://x.com/i/communities/1998537610592137381) • [Buy $CPC](https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump)
 
 </div>
 
@@ -56,15 +56,15 @@ Adopt fluffy puffle pets with tiered rarity:
 - **Epic** - Black, Gold (500 coins)
 - **Legendary** - Rainbow, Ghost (1000 coins) - *Special effects!*
 
-### 💰 $WADDLE Token Economy
+### 💰 $CPC Token Economy
 The native platform token powers the ecosystem:
 - **Property Rentals** - Rent igloos, apartments, and exclusive spaces
-- **Gacha System** - Spend $WADDLE to unlock rare, tradeable cosmetics
+- **Gacha System** - Spend $CPC to unlock rare, tradeable cosmetics
 - **Trading** - All items are tradeable between players
 
 ### 🎲 P2P Wagering
 Bet on minigames with **any Solana token**:
-- $SOL, $WADDLE, $BONK, $WIF, $PENGU, or any SPL token
+- $SOL, $CPC, $BONK, $WIF, $PENGU, or any SPL token
 - You choose the token, you set the stakes
 - Winner takes all with instant Solana settlement
 
@@ -214,7 +214,7 @@ waddlebet/
 - [ ] Additional Minigames (Pong, Connect 4, Tic Tac Toe)
 - [ ] Property Rental System
 - [ ] Igloo Customization
-- [ ] $WADDLE Token Integration
+- [ ] $CPC Token Integration
 
 ### Phase 3: Wagering
 - [ ] P2P Wagering System
@@ -239,7 +239,7 @@ waddlebet/
 | 🎮 **Play Now** | [waddle.bet](https://waddle.bet) |
 | 🌐 **Whitepaper** | [View Whitepaper](./whitepaper) |
 | 🐦 **X Community** | [Join Community](https://x.com/i/communities/1998537610592137381) |
-| 💰 **Buy $WADDLE** | [PumpFun](https://pump.fun/coin/63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump) |
+| 💰 **Buy $CPC** | [PumpFun](https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump) |
 | 📦 **GitHub** | [Repository](https://github.com/Tanner253/waddlebet) |
 
 ---
@@ -247,7 +247,7 @@ waddlebet/
 ## 📜 Contract Address
 
 ```
-63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump
+PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump
 ```
 
 ---

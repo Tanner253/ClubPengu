@@ -50,10 +50,10 @@ const PumpFunIcon = ({ className }: { className?: string }) => (
 const SOCIAL_LINKS = {
   github: "https://github.com/Tanner253/ClubPengu",
   x: "https://x.com/i/communities/1998537610592137381",
-  pumpfun: "#", // Coming soon
+  pumpfun: "https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump",
 };
 
-const CONTRACT_ADDRESS = "9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump";
+const CONTRACT_ADDRESS = "PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump";
 
 // Snow effect component
 function Snowfall() {
