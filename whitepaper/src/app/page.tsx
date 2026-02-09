@@ -53,7 +53,7 @@ const SOCIAL_LINKS = {
   pumpfun: "https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump",
 };
 
-const CONTRACT_ADDRESS = "PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump";
+const CONTRACT_ADDRESS = "3V7CAY9GxQB4CgmnXUxXy1GfaYg7tE7AH4SfVWFwpump";
 
 // Snow effect component
 function Snowfall() {
@@ -104,7 +104,6 @@ function Navigation() {
   const [featuresOpen, setFeaturesOpen] = useState(false);
 
   const navItems = [
-    { label: "Relaunch", href: "#relaunch" },
     { label: "Product", href: "#about" },
     { label: "Economics", href: "#economics" },
     { label: "Team", href: "#team" },
@@ -206,14 +205,14 @@ function Navigation() {
             <div className="w-px h-6 bg-white/10" />
             
             <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-sm font-medium">
-              $CPC
+              $CPx402
             </span>
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex md:hidden items-center gap-3">
             <span className="px-2 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-medium">
-              $CPC
+              $CPx402
             </span>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -439,7 +438,7 @@ function HeroSection() {
           className="mt-16 inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20"
         >
           <Coins className="w-5 h-5 text-yellow-500" />
-          <span className="text-yellow-500 font-bold">$CPC</span>
+          <span className="text-yellow-500 font-bold">$CPx402</span>
           <span className="text-slate-400">•</span>
           <span className="text-slate-400 text-sm">Solana Native</span>
         </motion.div>
@@ -535,156 +534,6 @@ function VideoSection() {
   );
 }
 
-// Relaunch Section - February 2nd 2026
-function RelaunchSection() {
-  return (
-    <section id="relaunch" className="py-32 px-6 relative overflow-hidden">
-      {/* Dramatic background */}
-      <div className="absolute inset-0">
-        <div className="absolute top-0 left-1/4 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-3xl" />
-        <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-purple-500/10 rounded-full blur-3xl" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[800px] bg-emerald-500/5 rounded-full blur-3xl" />
-      </div>
-
-      <div className="max-w-5xl mx-auto relative">
-        {/* Main Relaunch Banner */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          className="relative"
-        >
-          {/* Glowing border effect */}
-          <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 via-emerald-500 to-purple-500 rounded-3xl blur-lg opacity-50 animate-pulse" />
-          
-          <div className="relative glass-card rounded-3xl p-10 md:p-16 border-2 border-cyan-500/50 bg-gradient-to-br from-slate-900/95 via-slate-800/95 to-slate-900/95 text-center overflow-hidden">
-            {/* Decorative elements */}
-            <div className="absolute top-4 left-4 text-4xl opacity-20">🐧</div>
-            <div className="absolute top-4 right-4 text-4xl opacity-20">🎰</div>
-            <div className="absolute bottom-4 left-4 text-4xl opacity-20">🎲</div>
-            <div className="absolute bottom-4 right-4 text-4xl opacity-20">🐧</div>
-
-            {/* Badge */}
-            <motion.div
-              initial={{ opacity: 0, y: -20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.2 }}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/40 mb-8"
-            >
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
-              </span>
-              <span className="text-emerald-400 font-semibold text-sm uppercase tracking-wider">Official Relaunch</span>
-            </motion.div>
-
-            {/* Main Title */}
-            <motion.h2
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.3 }}
-              className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6"
-            >
-              <span className="text-white">February 2nd, 2026</span>
-            </motion.h2>
-
-            {/* Ticker Announcement */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.4 }}
-              className="mb-8"
-            >
-              <div className="inline-flex items-center gap-4 px-8 py-4 rounded-2xl bg-gradient-to-r from-cyan-500/10 via-purple-500/10 to-pink-500/10 border border-white/10">
-                <span className="text-slate-400 text-lg">New Ticker:</span>
-                <span className="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400">
-                  $CPC
-                </span>
-              </div>
-              <p className="text-slate-400 mt-4 text-lg">
-                <span className="text-white font-semibold">Club Penguin Casino</span> — The game you know and love as <span className="text-cyan-400 font-semibold">waddle.bet</span>
-              </p>
-            </motion.div>
-
-            {/* Demo Chart Achievement */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.5 }}
-              className="glass-card rounded-2xl p-6 md:p-8 mb-8 border border-emerald-500/30 bg-gradient-to-br from-emerald-500/5 to-cyan-500/5 max-w-2xl mx-auto"
-            >
-              <div className="flex items-center justify-center gap-3 mb-4">
-                <span className="text-3xl">📈</span>
-                <h3 className="text-xl md:text-2xl font-bold text-emerald-400">Demo Chart Success</h3>
-              </div>
-              <p className="text-slate-300 mb-4 leading-relaxed">
-                Our demo chart <span className="text-cyan-400 font-bold">$CPw3</span> reached 
-                <span className="text-emerald-400 font-black text-2xl md:text-3xl mx-2">$700K</span> 
-                market cap, proving the community&apos;s strength and belief in this project.
-              </p>
-              <div className="flex flex-wrap justify-center gap-3">
-                <span className="px-4 py-2 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-sm font-medium">
-                  Battle-Tested Community
-                </span>
-                <span className="px-4 py-2 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-sm font-medium">
-                  Diamond Hands Proven
-                </span>
-                <span className="px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-400 text-sm font-medium">
-                  Ready for Launch
-                </span>
-              </div>
-            </motion.div>
-
-            {/* Key Info Cards */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.6 }}
-              className="grid md:grid-cols-3 gap-4 mb-8"
-            >
-              <div className="p-5 rounded-xl bg-white/5 border border-white/10">
-                <div className="text-3xl mb-2">🎰</div>
-                <div className="text-lg font-bold text-white mb-1">$CPC</div>
-                <div className="text-sm text-slate-400">Official Token Ticker</div>
-              </div>
-              <div className="p-5 rounded-xl bg-white/5 border border-white/10">
-                <div className="text-3xl mb-2">🌐</div>
-                <div className="text-lg font-bold text-cyan-400 mb-1">waddle.bet</div>
-                <div className="text-sm text-slate-400">Game Platform</div>
-              </div>
-              <div className="p-5 rounded-xl bg-white/5 border border-white/10">
-                <div className="text-3xl mb-2">⛓️</div>
-                <div className="text-lg font-bold text-purple-400 mb-1">Solana</div>
-                <div className="text-sm text-slate-400">Blockchain</div>
-              </div>
-            </motion.div>
-
-            {/* CTA */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: 0.7 }}
-              className="inline-flex flex-wrap items-center justify-center gap-3 px-6 py-4 rounded-full bg-gradient-to-r from-cyan-500/20 via-emerald-500/20 to-purple-500/20 border border-cyan-500/30"
-            >
-              <span className="text-cyan-400 font-semibold">🐧 Same Vision</span>
-              <span className="text-slate-500">•</span>
-              <span className="text-emerald-400 font-semibold">💎 New Token</span>
-              <span className="text-slate-500">•</span>
-              <span className="text-purple-400 font-semibold">🚀 Bigger Launch</span>
-            </motion.div>
-          </div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
 // About Section - Enhanced with SPL Token Wagering
 function AboutSection() {
   return (
@@ -728,7 +577,7 @@ function AboutSection() {
                 <span className="text-cyan-400 font-semibold"> Every Solana community, one arena.</span>
               </p>
               <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-6">
-                {["$SOL", "$BONK", "$WIF", "$PENGU", "$CPC", "Any Token"].map((token, i) => (
+                {["$SOL", "$BONK", "$WIF", "$PENGU", "$CPx402", "Any Token"].map((token, i) => (
                   <span
                     key={i}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium ${
@@ -1053,7 +902,7 @@ function EconomySection() {
                     alt="WaddleBet" 
                     className="w-20 h-20 md:w-28 md:h-28 rounded-2xl object-cover mx-auto shadow-lg"
                   />
-                  <p className="text-2xl font-bold text-white mt-4">$CPC</p>
+                  <p className="text-2xl font-bold text-white mt-4">$CPx402</p>
                   <p className="text-sm text-yellow-100/80">Solana Native Token</p>
                 </div>
               </div>
@@ -1746,7 +1595,7 @@ function RoadmapSection() {
       title: "Rebranding",
       status: "complete",
       items: [
-        "✅ New Token Launch ($CPC)",
+        "✅ New Token Launch ($CPx402)",
         "✅ OG Holder Airdrop",
         "✅ Brand Refresh to WaddleBet",
         "✅ Shrimp Character & Feathers",
@@ -2061,7 +1910,7 @@ function Footer() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-white/5">
             <div className="flex flex-wrap items-center justify-center gap-4 text-slate-500 text-xs sm:text-sm">
               <span className="text-cyan-400 font-semibold">
-                $CPC
+                $CPx402
               </span>
               <span className="text-slate-700">•</span>
               <a href={SOCIAL_LINKS.github} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
@@ -2094,7 +1943,6 @@ export default function WhitepaperPage() {
       <Navigation />
       <HeroSection />
       <VideoSection />
-      <RelaunchSection />
       <AboutSection />
       <CustomizationSection />
       <WhaleStatusSection />
