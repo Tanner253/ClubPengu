@@ -39,10 +39,9 @@ const XIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const PumpFunIcon = ({ className }: { className?: string }) => (
+const BagsIcon = ({ className }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2" fill="none"/>
-    <path d="M8 12h8M12 8v8" strokeWidth="2" stroke="currentColor" strokeLinecap="round"/>
+    <path d="M20 7h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 4h4v3h-4V4zm10 16H4V9h16v11z"/>
   </svg>
 );
 
@@ -50,10 +49,10 @@ const PumpFunIcon = ({ className }: { className?: string }) => (
 const SOCIAL_LINKS = {
   github: "https://github.com/Tanner253/ClubPengu",
   x: "https://x.com/i/communities/1998537610592137381",
-  pumpfun: "https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump",
+  bags: "https://bags.fm", // Launching on bags.fm
 };
 
-const CONTRACT_ADDRESS = "3V7CAY9GxQB4CgmnXUxXy1GfaYg7tE7AH4SfVWFwpump";
+const CONTRACT_ADDRESS = "Coming Soon - Launching on Bags";
 
 // Snow effect component
 function Snowfall() {
@@ -121,7 +120,7 @@ function Navigation() {
   const socialLinks = [
     { icon: <GitHubIcon className="w-5 h-5" />, href: SOCIAL_LINKS.github, label: "GitHub" },
     { icon: <XIcon className="w-5 h-5" />, href: SOCIAL_LINKS.x, label: "X Community" },
-    { icon: <PumpFunIcon className="w-5 h-5" />, href: SOCIAL_LINKS.pumpfun, label: "PumpFun" },
+    { icon: <BagsIcon className="w-5 h-5" />, href: SOCIAL_LINKS.bags, label: "Bags" },
   ];
 
   return (
@@ -205,14 +204,14 @@ function Navigation() {
             <div className="w-px h-6 bg-white/10" />
             
             <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-sm font-medium">
-              $CPx402
+              $BAGS
             </span>
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex md:hidden items-center gap-3">
             <span className="px-2 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-medium">
-              $CPx402
+              $BAGS
             </span>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -438,7 +437,7 @@ function HeroSection() {
           className="mt-16 inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20"
         >
           <Coins className="w-5 h-5 text-yellow-500" />
-          <span className="text-yellow-500 font-bold">$CPx402</span>
+          <span className="text-yellow-500 font-bold">$BAGS</span>
           <span className="text-slate-400">•</span>
           <span className="text-slate-400 text-sm">Solana Native</span>
         </motion.div>
@@ -577,7 +576,7 @@ function AboutSection() {
                 <span className="text-cyan-400 font-semibold"> Every Solana community, one arena.</span>
               </p>
               <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-6">
-                {["$SOL", "$BONK", "$WIF", "$PENGU", "$CPx402", "Any Token"].map((token, i) => (
+                {["$SOL", "$BONK", "$WIF", "$PENGU", "$BAGS", "Any Token"].map((token, i) => (
                   <span
                     key={i}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium ${
@@ -902,7 +901,7 @@ function EconomySection() {
                     alt="WaddleBet" 
                     className="w-20 h-20 md:w-28 md:h-28 rounded-2xl object-cover mx-auto shadow-lg"
                   />
-                  <p className="text-2xl font-bold text-white mt-4">$CPx402</p>
+                  <p className="text-2xl font-bold text-white mt-4">$BAGS</p>
                   <p className="text-sm text-yellow-100/80">Solana Native Token</p>
                 </div>
               </div>
@@ -1595,7 +1594,7 @@ function RoadmapSection() {
       title: "Rebranding",
       status: "complete",
       items: [
-        "✅ New Token Launch ($CPx402)",
+        "✅ New Token Launch ($BAGS)",
         "✅ OG Holder Airdrop",
         "✅ Brand Refresh to WaddleBet",
         "✅ Shrimp Character & Feathers",
@@ -1785,45 +1784,40 @@ function RoadmapSection() {
   );
 }
 
-// Contract Address Copy Component
-function ContractAddress() {
-  const [copied, setCopied] = useState(false);
-
-  const copyToClipboard = async () => {
-    try {
-      await navigator.clipboard.writeText(CONTRACT_ADDRESS);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
-    }
-  };
-
+// Contract Address / Token Launch Component
+function TokenLaunchInfo() {
   return (
-    <div className="glass-card rounded-xl p-4 sm:p-6">
+    <div className="glass-card rounded-xl p-4 sm:p-6 border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-cyan-500/5">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500/20 to-purple-500/20 flex items-center justify-center">
-            <Coins className="w-5 h-5 text-cyan-400" />
+          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-cyan-500/20 flex items-center justify-center">
+            <Coins className="w-5 h-5 text-purple-400" />
           </div>
           <div>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Contract Address</p>
-            <p className="text-sm font-medium text-slate-300">New Token on Solana</p>
+            <p className="text-xs text-purple-400 uppercase tracking-wider font-semibold">$BAGS Token</p>
+            <p className="text-sm font-medium text-slate-300">Launching on Bags.fm</p>
           </div>
         </div>
         
         <div className="flex-1 w-full sm:w-auto">
-          <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 border border-white/5">
-            <code className="text-xs sm:text-sm text-cyan-400 font-mono truncate flex-1">
-              {CONTRACT_ADDRESS}
-            </code>
-            <button
-              onClick={copyToClipboard}
-              className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0"
-              title="Copy address"
-            >
-              {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-            </button>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 border border-purple-500/20">
+              <span className="text-xs sm:text-sm text-purple-400 font-semibold">
+                CA Coming Soon
+              </span>
+              <span className="text-slate-500">•</span>
+              <a 
+                href="https://bags.fm" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="text-xs sm:text-sm text-cyan-400 hover:text-cyan-300 transition-colors"
+              >
+                bags.fm
+              </a>
+            </div>
+            <p className="text-xs text-slate-500">
+              700k ATH pump never supported us. Time for a fresh start with a community that believes in the product.
+            </p>
           </div>
         </div>
       </div>
@@ -1836,20 +1830,20 @@ function Footer() {
   const socialLinks = [
     { icon: <GitHubIcon className="w-5 h-5" />, href: SOCIAL_LINKS.github, label: "GitHub" },
     { icon: <XIcon className="w-5 h-5" />, href: SOCIAL_LINKS.x, label: "X Community" },
-    { icon: <PumpFunIcon className="w-5 h-5" />, href: SOCIAL_LINKS.pumpfun, label: "PumpFun" },
+    { icon: <BagsIcon className="w-5 h-5" />, href: SOCIAL_LINKS.bags, label: "Bags" },
   ];
 
   return (
     <footer className="py-12 sm:py-16 px-4 sm:px-6 border-t border-white/5">
       <div className="max-w-6xl mx-auto">
-        {/* Contract Address */}
+        {/* Token Launch Info */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           className="mb-8"
         >
-          <ContractAddress />
+          <TokenLaunchInfo />
         </motion.div>
 
         {/* Disclaimer */}
@@ -1910,8 +1904,8 @@ function Footer() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-white/5">
             <div className="flex flex-wrap items-center justify-center gap-4 text-slate-500 text-xs sm:text-sm">
               <span className="text-cyan-400 font-semibold">
-                $CPx402
-              </span>
+              $BAGS
+            </span>
               <span className="text-slate-700">•</span>
               <a href={SOCIAL_LINKS.github} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
                 GitHub
