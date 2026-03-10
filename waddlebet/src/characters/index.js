@@ -31,6 +31,7 @@ import DuckGenerators, { DUCK_PALETTE, DUCK_PALETTES } from './DuckCharacter';
 import TungTungGenerators, { TUNG_PALETTE } from './TungTungCharacter';
 import GakeGenerators, { GAKE_PALETTE } from './GakeCharacter';
 import PumpGenerators, { PUMP_PALETTE } from './PumpCharacter';
+import TortoiseGenerators, { TORTOISE_PALETTE, TORTOISE_PALETTES, generateTortoisePalette } from './TortoiseCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -240,6 +241,24 @@ characterRegistry.registerCharacter('pump', {
     }
 });
 
+characterRegistry.registerCharacter('tortoise', {
+    name: 'Jonathan',
+    description: 'Jonathan the friendly tortoise - slow and steady wins the race!',
+    generators: TortoiseGenerators,
+    palette: TORTOISE_PALETTE,
+    palettes: TORTOISE_PALETTES,
+    isSecret: true,
+    previewScale: 0.85,
+    customizationOptions: {
+        disableSkinColor: false,
+        disableHats: false,
+        disableEyes: true,
+        disableMouth: true,
+        disableBodyItems: false,
+        disableMounts: false,
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -273,6 +292,10 @@ export {
     GakeGenerators,
     GAKE_PALETTE,
     PumpGenerators,
-    PUMP_PALETTE
+    PUMP_PALETTE,
+    TortoiseGenerators,
+    TORTOISE_PALETTE,
+    TORTOISE_PALETTES,
+    generateTortoisePalette
 };
 export default characterRegistry;

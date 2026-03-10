@@ -1969,6 +1969,8 @@ async function handleMessage(playerId, message) {
                         frogPrimaryColor: dbCustomization.frogPrimaryColor,
                         frogSecondaryColor: dbCustomization.frogSecondaryColor,
                         shrimpPrimaryColor: dbCustomization.shrimpPrimaryColor,
+                        tortoisePrimaryColor: dbCustomization.tortoisePrimaryColor,
+                        tortoiseSecondaryColor: dbCustomization.tortoiseSecondaryColor,
                         characterType: resolvedCharacterType,
                         // Preserve client-side settings that aren't stored in DB
                         mountEnabled: clientAppearance.mountEnabled,
@@ -1998,6 +2000,8 @@ async function handleMessage(playerId, message) {
                             currentCustom.frogPrimaryColor !== newCustom.frogPrimaryColor ||
                             currentCustom.frogSecondaryColor !== newCustom.frogSecondaryColor ||
                             currentCustom.shrimpPrimaryColor !== newCustom.shrimpPrimaryColor ||
+                            currentCustom.tortoisePrimaryColor !== newCustom.tortoisePrimaryColor ||
+                            currentCustom.tortoiseSecondaryColor !== newCustom.tortoiseSecondaryColor ||
                             (newCustom.characterType !== undefined && user.characterType !== newCustom.characterType);
                         
                         
@@ -2071,6 +2075,8 @@ async function handleMessage(playerId, message) {
                                 frogPrimaryColor: validatedCustom.frogPrimaryColor || dbCustomization.frogPrimaryColor,
                                 frogSecondaryColor: validatedCustom.frogSecondaryColor || dbCustomization.frogSecondaryColor,
                                 shrimpPrimaryColor: validatedCustom.shrimpPrimaryColor || dbCustomization.shrimpPrimaryColor,
+                                tortoisePrimaryColor: validatedCustom.tortoisePrimaryColor || dbCustomization.tortoisePrimaryColor,
+                                tortoiseSecondaryColor: validatedCustom.tortoiseSecondaryColor || dbCustomization.tortoiseSecondaryColor,
                                 characterType: finalCharacterType,
                                 mountEnabled: clientAppearance.mountEnabled,
                                 nametagStyle: clientAppearance.nametagStyle
@@ -2151,6 +2157,8 @@ async function handleMessage(playerId, message) {
                     frogPrimaryColor: guestAppearance.frogPrimaryColor,
                     frogSecondaryColor: guestAppearance.frogSecondaryColor,
                     shrimpPrimaryColor: guestAppearance.shrimpPrimaryColor,
+                    tortoisePrimaryColor: guestAppearance.tortoisePrimaryColor,
+                    tortoiseSecondaryColor: guestAppearance.tortoiseSecondaryColor,
                     mountEnabled: guestAppearance.mountEnabled,
                     nametagStyle: guestAppearance.nametagStyle
                 };

@@ -34,7 +34,10 @@ import {
     GakeGenerators,
     GAKE_PALETTE,
     PumpGenerators,
-    PUMP_PALETTE
+    PUMP_PALETTE,
+    TortoiseGenerators,
+    TORTOISE_PALETTE,
+    generateTortoisePalette
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 import LanguageToggle from './components/LanguageToggle';
@@ -208,6 +211,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         tungTung: '🪵',
         gake: '⭐',
         pump: '💊',
+        tortoise: '🐢',
         whiteWhale: '🐋',
         blackWhale: '🖤',
         silverWhale: '🩶',
@@ -233,6 +237,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     // Shrimp color (primary shell color)
     const [shrimpPrimaryColor, setShrimpPrimaryColor] = useState(currentData?.shrimpPrimaryColor || '#FF6B4A');
     
+    // Tortoise freestyle colors (primary skin, secondary belly/shell)
+    const [tortoisePrimaryColor, setTortoisePrimaryColor] = useState(currentData?.tortoisePrimaryColor || '#5A7A3A');
+    const [tortoiseSecondaryColor, setTortoiseSecondaryColor] = useState(currentData?.tortoiseSecondaryColor || '#C8B888');
+    
     // Sync state when currentData changes (from server restore)
     useEffect(() => {
         if (currentData) {
@@ -251,6 +259,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             setFrogSecondaryColor(currentData.frogSecondaryColor || '#B8C8B0');
             // Shrimp color
             setShrimpPrimaryColor(currentData.shrimpPrimaryColor || '#FF6B4A');
+            // Tortoise colors
+            setTortoisePrimaryColor(currentData.tortoisePrimaryColor || '#5A7A3A');
+            setTortoiseSecondaryColor(currentData.tortoiseSecondaryColor || '#C8B888');
         }
     }, [currentData]);
     
@@ -565,6 +576,12 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 setBodyItem('none'); // No shirt on dog
             }
             
+            // Tortoise has its own eyes and mouth built in
+            if (typeId === 'tortoise') {
+                setEyes('none');
+                setMouth('none');
+            }
+            
             // Duck has built-in eyes and bill, but allows hats and clothing
             if (typeId === 'duck') {
                 setEyes('none');     // Duck has its own eyes
@@ -586,7 +603,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharactersList = useMemo(() => {
         // TEMPORARY: Unlock all characters for everyone (matches cosmetics unlock)
         if (UNLOCK_ALL_COSMETICS) {
-            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'pump', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
+            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'pump', 'tortoise', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
         }
         
         const chars = ['penguin']; // Penguin always unlocked
@@ -604,9 +621,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     useEffect(() => {
         if(updateData) {
             console.log(`📦 Syncing appearance to parent: characterType=${characterType}`);
-            updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor});
+            updateData({skin: skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, tortoisePrimaryColor, tortoiseSecondaryColor});
         }
-    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, updateData]);
+    }, [skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, tortoisePrimaryColor, tortoiseSecondaryColor, updateData]);
 
     const sceneRef = useRef(null);
     const penguinRef = useRef(null);
@@ -1385,6 +1402,36 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             if (pumpBodyItemVoxels.length > 0) {
                 addPart(pumpBodyItemVoxels, 'bodyItem');
             }
+        } else if (characterType === 'tortoise') {
+            // Build Tortoise (Jonathan) character
+            const tortoisePalette = generateTortoisePalette(
+                tortoisePrimaryColor || '#5A7A3A',
+                tortoiseSecondaryColor || '#C8B888'
+            );
+            
+            addPart(TortoiseGenerators.head(), 'head', tortoisePalette);
+            addPart(TortoiseGenerators.body(), 'body', tortoisePalette);
+            addPart(TortoiseGenerators.armLeft(), 'flipper_l', tortoisePalette);
+            addPart(TortoiseGenerators.armRight(), 'flipper_r', tortoisePalette);
+            addPart(TortoiseGenerators.legLeft(), 'foot_l', tortoisePalette);
+            addPart(TortoiseGenerators.legRight(), 'foot_r', tortoisePalette);
+            addPart(TortoiseGenerators.shell(), 'shell', tortoisePalette);
+            addPart(TortoiseGenerators.tail(), 'tail', tortoisePalette);
+            
+            // Hat support - offset for tortoise head
+            const tortoiseHatVoxels = ASSETS.HATS[hat] || [];
+            if (tortoiseHatVoxels.length > 0) {
+                const offsetHatVoxels = tortoiseHatVoxels.map(v => ({ ...v, y: v.y - 1, z: v.z + 13 }));
+                addPart(offsetHatVoxels, 'hat');
+            }
+            
+            // Body item support
+            const tortoiseBodyItemData = ASSETS.BODY[bodyItem];
+            const tortoiseBodyItemVoxels = tortoiseBodyItemData?.voxels || tortoiseBodyItemData || [];
+            if (tortoiseBodyItemVoxels.length > 0) {
+                const offsetBodyVoxels = tortoiseBodyItemVoxels.map(v => ({ ...v, y: v.y - 4 }));
+                addPart(offsetBodyVoxels, 'bodyItem');
+            }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body
             const WHALE_CONFIGS = {
@@ -1769,7 +1816,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             createCosmicStars(group);
         }
 
-    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor]);
+    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, tortoisePrimaryColor, tortoiseSecondaryColor]);
 
     // Get available skin colors - base + unlocked premium
     const availableSkinColors = useMemo(() => {
@@ -2427,6 +2474,140 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                     ))}
                                 </div>
                             </div>
+                        </div>
+                    ) : characterType === 'tortoise' ? (
+                        /* Tortoise (Jonathan) color customization */
+                        <div className="bg-gradient-to-br from-green-900/50 to-amber-900/50 rounded-xl p-4 border border-green-500/30">
+                            <div className="text-center mb-4">
+                                <span className="text-2xl">🐢</span>
+                                <h3 className="text-white font-bold mt-2">{t('character.tortoise')}</h3>
+                                <p className="text-white/60 text-xs mt-1">
+                                    {t('character.tortoiseDesc')}
+                                </p>
+                            </div>
+                            
+                            {/* Primary Color - Skin */}
+                            <div className="mb-4">
+                                <label className="text-green-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    🎨 {t('character.skinColor')}
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={tortoisePrimaryColor}
+                                        onChange={(e) => setTortoisePrimaryColor(e.target.value)}
+                                        className="w-12 h-10 rounded cursor-pointer border-2 border-green-500/50"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={tortoisePrimaryColor}
+                                        onChange={(e) => setTortoisePrimaryColor(e.target.value)}
+                                        className="flex-1 bg-black/50 border border-green-500/30 rounded px-2 py-1 text-white text-sm font-mono"
+                                        placeholder="#5A7A3A"
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Secondary Color - Belly/Shell */}
+                            <div className="mb-4">
+                                <label className="text-amber-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    🐚 {t('character.bellyColor')}
+                                </label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="color"
+                                        value={tortoiseSecondaryColor}
+                                        onChange={(e) => setTortoiseSecondaryColor(e.target.value)}
+                                        className="w-12 h-10 rounded cursor-pointer border-2 border-amber-500/50"
+                                    />
+                                    <input
+                                        type="text"
+                                        value={tortoiseSecondaryColor}
+                                        onChange={(e) => setTortoiseSecondaryColor(e.target.value)}
+                                        className="flex-1 bg-black/50 border border-amber-500/30 rounded px-2 py-1 text-white text-sm font-mono"
+                                        placeholder="#C8B888"
+                                    />
+                                </div>
+                            </div>
+                            
+                            {/* Preset Colors */}
+                            <div>
+                                <label className="text-green-300 text-xs font-bold uppercase tracking-wider block mb-2">
+                                    {t('character.quickPresets')}
+                                </label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {[
+                                        { name: 'Forest', primary: '#5A7A3A', secondary: '#C8B888', emoji: '🌿' },
+                                        { name: 'Dark', primary: '#3A4A2A', secondary: '#8A8060', emoji: '🌑' },
+                                        { name: 'Desert', primary: '#B89060', secondary: '#E8D8B8', emoji: '🏜️' },
+                                        { name: 'Blue', primary: '#3A6A7A', secondary: '#88B8C8', emoji: '💎' },
+                                        { name: 'Red', primary: '#7A3A2A', secondary: '#C89878', emoji: '🔴' },
+                                        { name: 'Gold', primary: '#8A7A30', secondary: '#E8D898', emoji: '✨' },
+                                        { name: 'Moss', primary: '#4A6A3A', secondary: '#A0B080', emoji: '🌱' },
+                                        { name: 'Stone', primary: '#6A6A6A', secondary: '#B0B0B0', emoji: '🪨' },
+                                    ].map((preset) => (
+                                        <button
+                                            key={preset.name}
+                                            onClick={() => {
+                                                setTortoisePrimaryColor(preset.primary);
+                                                setTortoiseSecondaryColor(preset.secondary);
+                                            }}
+                                            className="flex flex-col items-center p-2 rounded-lg bg-black/30 hover:bg-black/50 border border-green-500/20 hover:border-green-400 transition-all"
+                                            title={preset.name}
+                                        >
+                                            <div 
+                                                className="w-6 h-6 rounded-full border border-white/30"
+                                                style={{ backgroundColor: preset.primary }}
+                                            />
+                                            <span className="text-white/70 text-[9px] mt-1">{preset.emoji} {preset.name}</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            {/* Tortoise Cosmetics - Hats, Clothing, Mounts */}
+                            {[
+                                { labelKey: 'creator.headwear', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
+                                { labelKey: 'creator.clothing', key: 'body', val: bodyItem, set: setBodyItem, list: options.body, defaultVal: null },
+                                { labelKey: 'creator.mounts', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                            ].map((opt, i) => {
+                                const categoryForCheck = opt.key === 'head' ? 'hat' : opt.key === 'body' ? 'bodyItem' : opt.key;
+                                const isCurrentLocked = opt.isMount 
+                                    ? (opt.val !== 'none' && !isMountUnlocked(opt.val))
+                                    : (opt.val !== 'none' && opt.val !== opt.defaultVal && !isCosmeticUnlocked(opt.val, categoryForCheck));
+                                
+                                return (
+                                    <div key={i} className="flex flex-col gap-1 mt-3">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                            {t(opt.labelKey)}
+                                        </span>
+                                        <div className={`flex items-center justify-between rounded-lg p-1 ${
+                                            isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
+                                        }`}>
+                                            <button 
+                                                onClick={() => {
+                                                    const items = opt.list;
+                                                    const idx = items.indexOf(opt.val);
+                                                    opt.set(items[(idx - 1 + items.length) % items.length]);
+                                                }}
+                                                className="p-1 text-gray-400 hover:text-white"
+                                            >◀</button>
+                                            <span className="text-white text-xs font-medium capitalize flex items-center gap-1">
+                                                {opt.val || 'none'}
+                                                {isCurrentLocked && <span className="text-red-400">🔒</span>}
+                                            </span>
+                                            <button 
+                                                onClick={() => {
+                                                    const items = opt.list;
+                                                    const idx = items.indexOf(opt.val);
+                                                    opt.set(items[(idx + 1) % items.length]);
+                                                }}
+                                                className="p-1 text-gray-400 hover:text-white"
+                                            >▶</button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
                         </div>
                     ) : characterType === 'duck' ? (
                         /* Duck character - allows hats, clothing, and mounts */

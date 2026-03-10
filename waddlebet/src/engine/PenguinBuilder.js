@@ -36,7 +36,11 @@ import {
     GakeGenerators,
     GAKE_PALETTE,
     PumpGenerators,
-    PUMP_PALETTE
+    PUMP_PALETTE,
+    TortoiseGenerators,
+    TORTOISE_PALETTE,
+    TORTOISE_PALETTES,
+    generateTortoisePalette
 } from '../characters';
 
 /**
@@ -1483,6 +1487,109 @@ export function createPenguinBuilder(THREE) {
     };
     
     /**
+     * Build Tortoise (Jonathan) mesh with shell and hat support
+     */
+    const buildTortoiseMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = TortoiseGenerators.pivots();
+        
+        const primaryColor = data.tortoisePrimaryColor || '#5A7A3A';
+        const secondaryColor = data.tortoiseSecondaryColor || '#C8B888';
+        const tortoisePalette = generateTortoisePalette(primaryColor, secondaryColor);
+        
+        // Collect all voxel positions globally to dedup across parts (prevents Z-fighting)
+        const usedPositions = new Set();
+        const dedupVoxels = (voxels) => {
+            return voxels.filter(v => {
+                const key = `${v.x},${v.y},${v.z}`;
+                if (usedPositions.has(key)) return false;
+                usedPositions.add(key);
+                return true;
+            });
+        };
+        
+        // Build order matters: earlier parts win in overlap resolution
+        const bodyVoxels = dedupVoxels(TortoiseGenerators.body());
+        const body = buildPartMerged(bodyVoxels, tortoisePalette);
+        body.name = 'body';
+        
+        const shellVoxels = dedupVoxels(TortoiseGenerators.shell());
+        const shell = buildPartMerged(shellVoxels, tortoisePalette, pivots.shell);
+        shell.name = 'shell';
+        
+        const headVoxels = dedupVoxels(TortoiseGenerators.head());
+        const head = buildPartMerged(headVoxels, tortoisePalette);
+        head.name = 'head';
+        
+        const armLVoxels = dedupVoxels(TortoiseGenerators.armLeft());
+        const armL = buildPartMerged(armLVoxels, tortoisePalette, pivots.armLeft);
+        armL.name = 'flipper_l';
+        
+        const armRVoxels = dedupVoxels(TortoiseGenerators.armRight());
+        const armR = buildPartMerged(armRVoxels, tortoisePalette, pivots.armRight);
+        armR.name = 'flipper_r';
+        
+        const legLVoxels = dedupVoxels(TortoiseGenerators.legLeft());
+        const legL = buildPartMerged(legLVoxels, tortoisePalette, pivots.legLeft);
+        legL.name = 'foot_l';
+        
+        const legRVoxels = dedupVoxels(TortoiseGenerators.legRight());
+        const legR = buildPartMerged(legRVoxels, tortoisePalette, pivots.legRight);
+        legR.name = 'foot_r';
+        
+        const tailVoxels = dedupVoxels(TortoiseGenerators.tail());
+        const tail = buildPartMerged(tailVoxels, tortoisePalette, pivots.tail);
+        tail.name = 'tail';
+        
+        group.add(body, head, armL, armR, legL, legR, shell, tail);
+        
+        // Hat support - offset for tortoise's small head at end of long neck (y~6, z~13)
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            if (hatVoxels && hatVoxels.length > 0) {
+                const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y - 1, z: v.z + 13 }));
+                const hat = buildPartMerged(offsetHatVoxels, PALETTE);
+                hat.name = 'hat';
+                group.add(hat);
+                
+                if (data.hat === 'propeller') {
+                    const blades = new THREE.Group();
+                    blades.name = 'propeller_blades';
+                    blades.position.set(0, 12 * VOXEL_SIZE, 13 * VOXEL_SIZE);
+                    const bladeGeo = new THREE.BoxGeometry(4 * VOXEL_SIZE, 0.2 * VOXEL_SIZE, 0.5 * VOXEL_SIZE);
+                    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+                    const b1 = new THREE.Mesh(bladeGeo, bladeMat);
+                    const b2 = new THREE.Mesh(bladeGeo, bladeMat);
+                    b2.rotation.y = Math.PI / 2;
+                    blades.add(b1, b2);
+                    group.add(blades);
+                }
+                
+                if (data.hat === 'wizardHat') {
+                    group.userData.hasWizardHat = true;
+                }
+            }
+        }
+        
+        // Body item support
+        if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
+            const bodyItemData = ASSETS.BODY[data.bodyItem];
+            const bodyItemVoxels = bodyItemData?.voxels || bodyItemData || [];
+            if (bodyItemVoxels.length > 0) {
+                const offsetBodyVoxels = bodyItemVoxels.map(v => ({ ...v, y: v.y - 4 }));
+                const bodyItemMesh = buildPartMerged(offsetBodyVoxels, PALETTE);
+                bodyItemMesh.name = 'bodyItem';
+                group.add(bodyItemMesh);
+            }
+        }
+        
+        group.scale.set(0.18, 0.18, 0.18);
+        group.position.y = 0.8;
+        
+        return group;
+    };
+    
+    /**
      * Build Shrimp character mesh with tail flappers and antennae
      */
     const buildShrimpMesh = (data) => {
@@ -2224,6 +2331,8 @@ export function createPenguinBuilder(THREE) {
             group = buildGakeMesh(data);
         } else if (data.characterType === 'pump') {
             group = buildPumpMesh(data);
+        } else if (data.characterType === 'tortoise') {
+            group = buildTortoiseMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {

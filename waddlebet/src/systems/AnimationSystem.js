@@ -23,7 +23,9 @@ export function cacheAnimParts(meshWrapper) {
         // Doginal-specific animated parts
         tail: meshInner.getObjectByName('tail'),
         earL: meshInner.getObjectByName('ear_l'),
-        earR: meshInner.getObjectByName('ear_r')
+        earR: meshInner.getObjectByName('ear_r'),
+        // Tortoise shell
+        shell: meshInner.getObjectByName('shell')
     };
     
     return meshWrapper._animParts;
@@ -63,12 +65,13 @@ export function animateMesh(
     const isShrimp = characterType === 'shrimp';
     const isDuck = characterType === 'duck';
     const isTungTung = characterType === 'tungTung';
+    const isTortoise = characterType === 'tortoise';
     
     // Use cached parts if available, otherwise look up and cache
     if (!meshWrapper._animParts) {
         cacheAnimParts(meshWrapper);
     }
-    const { flipperL, flipperR, head, hatPart, eyesPart, mouthPart, footL, footR, tail, earL, earR } = meshWrapper._animParts || {};
+    const { flipperL, flipperR, head, hatPart, eyesPart, mouthPart, footL, footR, tail, earL, earR, shell } = meshWrapper._animParts || {};
     
     // Reset all parts to default pose (ensures clean state after any emote)
     // NOTE: Only reset ROTATIONS - positions are set by the model builder and should not be touched!
@@ -84,10 +87,11 @@ export function animateMesh(
     if(hatPart) { hatPart.rotation.set(0,0,0); hatPart.position.y = 0; hatPart.position.z = 0; }
     if(eyesPart) { eyesPart.rotation.set(0,0,0); eyesPart.position.y = 0; eyesPart.position.z = 0; }
     if(mouthPart) { mouthPart.rotation.set(0,0,0); mouthPart.position.y = 0; mouthPart.position.z = 0; }
-    // Doginal animated parts reset (only rotations)
+    // Doginal/Tortoise animated parts reset (only rotations)
     if(tail) { tail.rotation.set(0,0,0); }
     if(earL) { earL.rotation.set(0,0,0); }
     if(earR) { earR.rotation.set(0,0,0); }
+    if(shell) { shell.rotation.set(0,0,0); }
     
     // Jumping animation - feet point down when airborne
     if (isAirborne && !isSeatedOnFurniture && !isMounted) {
@@ -742,6 +746,43 @@ export function animateMesh(
             // Slight body lean forward while marching
             meshInner.rotation.z = Math.sin(marchSpeed) * 0.06;
             meshInner.position.y = 0.8 + Math.abs(Math.sin(marchSpeed)) * 0.03;
+        } else if (isTortoise) {
+            // Tortoise walk: slow lumbering gait with weight transfer
+            const plodSpeed = time * 7;
+            const stride = 0.35;
+            
+            // "Lift and plant" waveform: sharper lift, longer ground contact
+            const liftWave = (phase) => {
+                const s = Math.sin(phase);
+                return s > 0 ? Math.pow(s, 0.7) : s * 0.3; // Quick lift, gentle push-back
+            };
+            
+            // Diagonal gait: front-left + back-right, front-right + back-left
+            if(flipperL) flipperL.rotation.x = liftWave(plodSpeed) * stride;
+            if(flipperR) flipperR.rotation.x = liftWave(plodSpeed + Math.PI) * stride;
+            if(footL) footL.rotation.x = liftWave(plodSpeed + Math.PI) * stride;
+            if(footR) footR.rotation.x = liftWave(plodSpeed) * stride;
+            
+            // Body rocks side to side as weight transfers between leg pairs
+            meshInner.position.y = 0.8 + Math.abs(Math.sin(plodSpeed * 2)) * 0.02;
+            meshInner.rotation.z = Math.sin(plodSpeed) * 0.04; // Side-to-side rock
+            
+            // Head/neck bobs with each step and leads the walk
+            if(head) {
+                head.rotation.x = -0.04 + Math.sin(plodSpeed * 2) * 0.06;
+                head.rotation.y = Math.sin(plodSpeed * 0.5) * 0.04;
+            }
+            if(hatPart) hatPart.rotation.x = -0.04 + Math.sin(plodSpeed * 2) * 0.06;
+            
+            // Shell rocks subtly with body
+            if(shell) {
+                shell.rotation.z = Math.sin(plodSpeed) * 0.015;
+            }
+            
+            // Tiny tail sway
+            if(tail) {
+                tail.rotation.y = Math.sin(time * 4) * 0.15;
+            }
         } else {
             // Standard biped walking animation (penguin, marcus, whale, frog)
         if(footL) footL.rotation.x = Math.sin(walkCycle) * 0.5;
@@ -816,6 +857,29 @@ export function animateMesh(
                 const batTwitch = Math.sin(time * 0.4) > 0.85 ? Math.sin(time * 8) * 0.15 : 0;
                 flipperR.rotation.z = -0.1 - Math.sin(time * 1.5) * 0.02;
                 flipperR.rotation.x = batTwitch; // Occasional bat tap
+            }
+        } else if (isTortoise) {
+            // Tortoise idle - slow, zen-like. Occasionally extends/retracts neck to look around
+            meshInner.rotation.z = Math.sin(time * 0.6) * 0.008;
+            
+            // Head/neck slowly looks around - the main idle behavior for a tortoise
+            if(head) {
+                // Slow scanning look left and right
+                head.rotation.y = Math.sin(time * 0.3) * 0.06;
+                // Occasional neck extend/retract (looks like breathing/curiosity)
+                const neckPulse = Math.sin(time * 0.4) > 0.7 ? Math.sin(time * 2) * 0.04 : 0;
+                head.rotation.x = -0.02 + neckPulse;
+            }
+            
+            // Shell barely moves - stable heavy dome
+            if(shell) {
+                shell.rotation.x = Math.sin(time * 0.6) * 0.003;
+            }
+            
+            // Tail very occasional tiny twitch
+            if(tail) {
+                const tailTwitch = Math.sin(time * 0.3) > 0.9 ? Math.sin(time * 8) * 0.1 : 0;
+                tail.rotation.y = tailTwitch;
             }
         } else {
         meshInner.rotation.z = Math.sin(time * 1.5) * 0.02;

@@ -28,7 +28,7 @@ const userSchema = new mongoose.Schema({
     },
     characterType: {
         type: String,
-        enum: ['penguin', 'marcus', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale', 'doginal', 'frog', 'shrimp', 'pump'],
+        enum: ['penguin', 'marcus', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'pump', 'tortoise'],
         default: 'penguin'
     },
 
@@ -47,7 +47,10 @@ const userSchema = new mongoose.Schema({
         frogPrimaryColor: { type: String, default: '#6B8E23' },
         frogSecondaryColor: { type: String, default: '#556B2F' },
         // Shrimp color
-        shrimpPrimaryColor: { type: String, default: '#FF6B4A' }
+        shrimpPrimaryColor: { type: String, default: '#FF6B4A' },
+        // Tortoise freestyle colors
+        tortoisePrimaryColor: { type: String, default: '#5A7A3A' },
+        tortoiseSecondaryColor: { type: String, default: '#C8B888' }
     },
 
     // ========== CURRENCY (Server-Authoritative) ==========
@@ -845,6 +848,9 @@ userSchema.methods.updateCustomization = function(customization) {
     if (customization.frogSecondaryColor) this.customization.frogSecondaryColor = customization.frogSecondaryColor;
     // Shrimp color
     if (customization.shrimpPrimaryColor) this.customization.shrimpPrimaryColor = customization.shrimpPrimaryColor;
+    // Tortoise freestyle colors
+    if (customization.tortoisePrimaryColor) this.customization.tortoisePrimaryColor = customization.tortoisePrimaryColor;
+    if (customization.tortoiseSecondaryColor) this.customization.tortoiseSecondaryColor = customization.tortoiseSecondaryColor;
     return true;
 };
 

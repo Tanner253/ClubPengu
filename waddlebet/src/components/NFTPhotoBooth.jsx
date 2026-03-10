@@ -33,7 +33,10 @@ import {
     GakeGenerators,
     GAKE_PALETTE,
     PumpGenerators,
-    PUMP_PALETTE
+    PUMP_PALETTE,
+    TortoiseGenerators,
+    TORTOISE_PALETTE,
+    generateTortoisePalette
 } from '../characters';
 
 // Color palette for penguin skins (same as PenguinPreview3D)
@@ -548,6 +551,21 @@ function buildPenguin(THREE, group, appearance) {
         if (pumpMouth) {
             voxels = [...voxels, ...pumpMouth.map(v => ({ ...v, y: v.y + PUMP_FACE_OFFSET, z: v.z + 2 }))];
         }
+    } else if (characterType === 'tortoise') {
+        characterPalette = generateTortoisePalette(
+            appearance.tortoisePrimaryColor || '#5A7A3A',
+            appearance.tortoiseSecondaryColor || '#C8B888'
+        );
+        voxels = [
+            ...TortoiseGenerators.head(),
+            ...TortoiseGenerators.body(),
+            ...TortoiseGenerators.shell(),
+            ...TortoiseGenerators.armLeft(),
+            ...TortoiseGenerators.armRight(),
+            ...TortoiseGenerators.legLeft(),
+            ...TortoiseGenerators.legRight(),
+            ...TortoiseGenerators.tail()
+        ];
     } else if (characterType === 'marcus') {
         characterPalette = MARCUS_PALETTE;
         voxels = [
