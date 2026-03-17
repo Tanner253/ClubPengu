@@ -39,17 +39,11 @@ const XIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-const BagsIcon = ({ className }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="currentColor">
-    <path d="M20 7h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 4h4v3h-4V4zm10 16H4V9h16v11z"/>
-  </svg>
-);
-
 // Social Links
 const SOCIAL_LINKS = {
   github: "https://github.com/Tanner253/ClubPengu",
   x: "https://x.com/i/communities/1998537610592137381",
-  bags: "https://bags.fm", // Launching on bags.fm
+  pumpfun: "https://pump.fun",
 };
 
 const CONTRACT_ADDRESS = "44E4BqVSZmRbGTbp6vXs9QTPpLZLk4YMzaSrNqVgpump";
@@ -120,7 +114,6 @@ function Navigation() {
   const socialLinks = [
     { icon: <GitHubIcon className="w-5 h-5" />, href: SOCIAL_LINKS.github, label: "GitHub" },
     { icon: <XIcon className="w-5 h-5" />, href: SOCIAL_LINKS.x, label: "X Community" },
-    { icon: <BagsIcon className="w-5 h-5" />, href: SOCIAL_LINKS.bags, label: "Bags" },
   ];
 
   return (
@@ -1808,7 +1801,12 @@ function ContractAddress() {
             </div>
             <div>
               <p className="text-xs text-purple-400 uppercase tracking-wider font-semibold">$WADDLE Token</p>
-              <p className="text-sm font-medium text-slate-300">Live on Bags.fm</p>
+              <p className="text-sm font-medium text-slate-300">
+                Live on{" "}
+                <a href={`https://pump.fun/coin/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">
+                  Pump.fun
+                </a>
+              </p>
             </div>
           </div>
           
@@ -1828,7 +1826,7 @@ function ContractAddress() {
           </div>
         </div>
         <p className="text-xs text-slate-500">
-          700k ATH pump never supported us. Fresh start on Bags with a community that believes in the product.
+          700k ATH pump never supported us. Fresh start on Pump.fun with a community that believes in the product.
         </p>
       </div>
     </div>
@@ -1840,7 +1838,6 @@ function Footer() {
   const socialLinks = [
     { icon: <GitHubIcon className="w-5 h-5" />, href: SOCIAL_LINKS.github, label: "GitHub" },
     { icon: <XIcon className="w-5 h-5" />, href: SOCIAL_LINKS.x, label: "X Community" },
-    { icon: <BagsIcon className="w-5 h-5" />, href: SOCIAL_LINKS.bags, label: "Bags" },
   ];
 
   return (

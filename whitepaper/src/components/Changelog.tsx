@@ -272,10 +272,10 @@ const CHANGELOG_DATA: ChangelogVersion[] = [
     version: "1.0.0",
     date: "December 27, 2025",
     title: "🚀 WaddleBet Rebrand & $WADDLE Token Launch",
-    description: "Major rebranding to WaddleBet with $WADDLE token launch on Bags.fm. Fresh start after 700k ATH pump never supported us. Airdrop for OG holders who helped invest and get the game developed!",
+    description: "Major rebranding to WaddleBet with $WADDLE token launch on Pump.fun. Fresh start after 700k ATH pump never supported us. Airdrop for OG holders who helped invest and get the game developed!",
     highlight: true,
     changes: [
-      { type: "feature", text: "$WADDLE token launching on Bags.fm - airdrop for early supporters and investors" },
+      { type: "feature", text: "$WADDLE token launching on Pump.fun - airdrop for early supporters and investors" },
       { type: "feature", text: "OG holder rewards program for those who helped develop the game" },
       { type: "content", text: "Complete rebrand from Club Pengu to WaddleBet" },
     ],
