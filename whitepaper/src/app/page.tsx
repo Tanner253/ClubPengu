@@ -52,7 +52,7 @@ const SOCIAL_LINKS = {
   bags: "https://bags.fm", // Launching on bags.fm
 };
 
-const CONTRACT_ADDRESS = "21pgaWDB3CZkr7YTD7CLVjQevK2Y9YcNYteisbMyBAGS";
+const CONTRACT_ADDRESS = "44E4BqVSZmRbGTbp6vXs9QTPpLZLk4YMzaSrNqVgpump";
 
 // Snow effect component
 function Snowfall() {
