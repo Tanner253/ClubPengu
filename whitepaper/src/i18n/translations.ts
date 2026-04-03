@@ -14,7 +14,7 @@ const en: Record<string, string> = {
 
   "bsc.banner.title": "BSC migration in development",
   "bsc.banner.body":
-    "We are building a move toward Binance Smart Chain (BSC) as the primary home for $WADDLE—supporting Binance, BNB, and BEP-20—due to Solana holder volatility. $waddle hit 700k on solana, can it do betteron BSC? thats the question.Full details are in the Changelog section below.",
+    "We are building a move toward Binance Smart Chain (BSC) as the primary home for $WADDLE—supporting Binance, BNB, and BEP-20—due to Solana holder volatility. $waddle hit 700k on solana, can it do betteron BSC? thats the question. Full details are in the Changelog section below.",
   "bsc.banner.cta": "Open roadmap",
   "bsc.modal.title": "BSC roadmap & what’s next",
   "bsc.modal.body": `We are actively developing a migration toward Binance Smart Chain (BSC). Volatility among Solana holders has made it harder to build a stable long-term economy on a single chain—so we are integrating Binance, BNB, and BEP-20 into the product. Over time, BSC will become the primary chain for $WADDLE; contract (CA) updates and timing will be announced as we ship each phase.
