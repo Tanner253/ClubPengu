@@ -451,7 +451,7 @@ function HeroSection() {
           <Coins className="w-5 h-5 text-yellow-500" />
           <span className="text-yellow-500 font-bold">$WADDLE</span>
           <span className="text-slate-400">•</span>
-          <span className="text-slate-400 text-sm">{t("hero.token.solanaNative")}</span>
+          <span className="text-slate-400 text-sm max-w-md">{t("hero.token.chains")}</span>
         </motion.div>
       </motion.div>
 
@@ -879,6 +879,7 @@ function CustomizationSection() {
 
 // Economy Section
 function EconomySection() {
+  const { t } = useWhitepaperLanguage();
   return (
     <section id="economy" className="py-32 px-6 relative">
       <div className="section-divider mb-32" />
@@ -920,7 +921,7 @@ function EconomySection() {
                     className="w-20 h-20 md:w-28 md:h-28 rounded-2xl object-cover mx-auto shadow-lg"
                   />
                   <p className="text-2xl font-bold text-white mt-4">$WADDLE</p>
-                  <p className="text-sm text-yellow-100/80">Solana Native Token</p>
+                  <p className="text-sm text-yellow-100/80 text-center px-2 leading-snug">{t("economy.tokenSubtitle")}</p>
                 </div>
               </div>
               
@@ -1985,7 +1986,7 @@ function Footer() {
 
             <div className="flex items-center gap-2 text-slate-500 text-xs sm:text-sm">
               <span>{t("footer.builtOn")}</span>
-              <span className="text-purple-400 font-semibold">Solana</span>
+              <span className="text-purple-400 font-semibold">{t("footer.chains")}</span>
               <span className="text-slate-700">•</span>
               <span>© 2025 WaddleBet</span>
             </div>
