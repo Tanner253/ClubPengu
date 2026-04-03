@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Inter } from "next/font/google";
+import { Space_Grotesk, Inter, Noto_Sans_TC } from "next/font/google";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -11,6 +11,13 @@ const spaceGrotesk = Space_Grotesk({
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-sans",
+  display: "swap",
+});
+
+const notoSansTc = Noto_Sans_TC({
+  subsets: ["latin"],
+  variable: "--font-noto-tc",
+  weight: ["400", "500", "700"],
   display: "swap",
 });
 
@@ -43,7 +50,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="scroll-smooth">
-      <body className={`${spaceGrotesk.variable} ${inter.variable} antialiased`} suppressHydrationWarning>
+      <body
+        className={`${spaceGrotesk.variable} ${inter.variable} ${notoSansTc.variable} antialiased`}
+        suppressHydrationWarning
+      >
         {children}
       </body>
     </html>

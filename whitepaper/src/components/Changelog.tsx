@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, type ReactNode } from "react";
+import { useWhitepaperT } from "../i18n/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown,
@@ -752,6 +753,8 @@ export default function Changelog() {
   const totalDeletions = CHANGELOG_DATA.reduce((acc, v) => acc + (v.stats?.deletions || 0), 0);
   const totalFiles = CHANGELOG_DATA.reduce((acc, v) => acc + (v.stats?.filesChanged || 0), 0);
 
+  const t = useWhitepaperT();
+
   return (
     <section id="changelog" className="py-32 px-4 sm:px-6 relative">
       <div className="section-divider mb-32" />
@@ -764,32 +767,33 @@ export default function Changelog() {
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <span className="text-green-400 text-sm font-semibold uppercase tracking-widest">Development Log</span>
+          <span className="text-green-400 text-sm font-semibold uppercase tracking-widest">{t("changelog.kicker")}</span>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
-            <span className="text-green-400">Changelog</span>
+            <span className="text-green-400">{t("changelog.title")}</span>
           </h2>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto mb-8">
-            Every line of code, every feature, every optimization documented. 
-            <span className="text-cyan-400 font-semibold"> 36 days of shipping.</span>
+          <p className="text-slate-400 text-lg max-w-2xl mx-auto mb-4">
+            {t("changelog.lead")}
+            <span className="text-cyan-400 font-semibold"> {t("changelog.leadHighlight")}</span>
           </p>
+          <p className="text-slate-500 text-sm max-w-xl mx-auto mb-8">{t("changelog.localeNote")}</p>
           
           {/* Impressive stats */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8 max-w-2xl mx-auto">
             <div className="glass-card rounded-xl p-4 text-center">
               <div className="text-2xl font-bold text-cyan-400">{totalVersions}</div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Releases</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider">{t("changelog.stat.releases")}</div>
             </div>
             <div className="glass-card rounded-xl p-4 text-center">
               <div className="text-2xl font-bold text-green-400">{totalChanges}</div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Changes</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider">{t("changelog.stat.changes")}</div>
             </div>
             <div className="glass-card rounded-xl p-4 text-center">
               <div className="text-2xl font-bold text-purple-400">{totalFiles.toLocaleString()}</div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Files Touched</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider">{t("changelog.stat.files")}</div>
             </div>
             <div className="glass-card rounded-xl p-4 text-center">
               <div className="text-2xl font-bold text-yellow-400">{Math.round(totalAdditions / 1000)}k+</div>
-              <div className="text-xs text-slate-500 uppercase tracking-wider">Lines Written</div>
+              <div className="text-xs text-slate-500 uppercase tracking-wider">{t("changelog.stat.lines")}</div>
             </div>
           </div>
           
@@ -804,7 +808,7 @@ export default function Changelog() {
             onClick={handleExpandAll}
             className="px-4 py-2 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-slate-300 text-sm"
           >
-            {expandAll ? "Collapse All" : "Expand All"}
+            {expandAll ? t("changelog.collapseAll") : t("changelog.expandAll")}
           </button>
         </motion.div>
 

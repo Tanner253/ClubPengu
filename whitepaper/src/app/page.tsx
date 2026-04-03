@@ -25,6 +25,13 @@ import {
 } from "lucide-react";
 import Changelog from "../components/Changelog";
 import GachaSystemSection from "../components/GachaSystem";
+import { BscMigrationBanner } from "../components/BscMigrationBanner";
+import { BscRoadmapModal } from "../components/BscRoadmapModal";
+import { LanguageSwitcher } from "../components/LanguageSwitcher";
+import {
+  WhitepaperLanguageProvider,
+  useWhitepaperLanguage,
+} from "../i18n/LanguageContext";
 
 // Custom Icons
 const GitHubIcon = ({ className }: { className?: string }) => (
@@ -85,6 +92,7 @@ function Snowfall() {
 
 // Navigation
 function Navigation() {
+  const { t } = useWhitepaperLanguage();
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -97,19 +105,21 @@ function Navigation() {
   const [featuresOpen, setFeaturesOpen] = useState(false);
 
   const navItems = [
-    { label: "Product", href: "#about" },
-    { label: "Economics", href: "#economics" },
-    { label: "Team", href: "#team" },
-    { label: "Roadmap", href: "#roadmap" },
+    { label: t("nav.product"), href: "#about" },
+    { label: t("nav.economics"), href: "#economics" },
+    { label: t("nav.team"), href: "#team" },
+    { label: t("nav.roadmap"), href: "#roadmap" },
   ];
 
   const gameFeatures = [
-    { label: "Customization", href: "#customization" },
-    { label: "Whale Status", href: "#whale-status" },
-    { label: "Gacha System", href: "#gacha-system" },
-    { label: "Token Economy", href: "#economy" },
-    { label: "Changelog", href: "#changelog" },
+    { label: t("nav.customization"), href: "#customization" },
+    { label: t("nav.whaleStatus"), href: "#whale-status" },
+    { label: t("nav.gachaSystem"), href: "#gacha-system" },
+    { label: t("nav.tokenEconomy"), href: "#economy" },
+    { label: t("nav.changelog"), href: "#changelog" },
   ];
+
+  const gameFeaturesLabel = t("nav.features");
 
   const socialLinks = [
     { icon: <GitHubIcon className="w-5 h-5" />, href: SOCIAL_LINKS.github, label: "GitHub" },
@@ -157,7 +167,7 @@ function Navigation() {
                 onBlur={() => setTimeout(() => setFeaturesOpen(false), 150)}
                 className="flex items-center gap-1 text-sm text-slate-400 hover:text-white transition-colors"
               >
-                Game Features
+                {gameFeaturesLabel}
                 <ChevronDown className={`w-4 h-4 transition-transform ${featuresOpen ? 'rotate-180' : ''}`} />
               </button>
               {featuresOpen && (
@@ -178,6 +188,7 @@ function Navigation() {
 
           {/* Desktop Social Links & Token */}
           <div className="hidden md:flex items-center gap-4">
+            <LanguageSwitcher />
             {/* Social Icons */}
             <div className="flex items-center gap-2">
               {socialLinks.map((social) => (
@@ -243,7 +254,7 @@ function Navigation() {
                 onClick={() => setFeaturesOpen(!featuresOpen)}
                 className="flex items-center justify-between w-full text-slate-400 hover:text-white transition-colors"
               >
-                <span>Game Features</span>
+                <span>{gameFeaturesLabel}</span>
                 <ChevronDown className={`w-4 h-4 transition-transform ${featuresOpen ? 'rotate-180' : ''}`} />
               </button>
               {featuresOpen && (
@@ -263,7 +274,7 @@ function Navigation() {
             </div>
             
             <div className="h-px bg-white/10 my-4" />
-            
+            <LanguageSwitcher className="mb-2" />
             {/* Social Links */}
             <div className="flex items-center gap-4">
               {socialLinks.map((social) => (
@@ -288,6 +299,7 @@ function Navigation() {
 
 // Hero Section
 function HeroSection() {
+  const { t, locale } = useWhitepaperLanguage();
   const { scrollY } = useScroll();
   const y = useTransform(scrollY, [0, 500], [0, 150]);
   const opacity = useTransform(scrollY, [0, 300], [1, 0]);
@@ -317,7 +329,7 @@ function HeroSection() {
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
           </span>
-          <span className="text-sm text-slate-300">Now Building on Solana</span>
+          <span className="text-sm text-slate-300">{t("hero.badge")}</span>
         </motion.div>
 
         {/* Main heading */}
@@ -338,7 +350,15 @@ function HeroSection() {
           transition={{ delay: 0.4 }}
           className="text-xl md:text-2xl text-slate-400 mb-4 max-w-2xl mx-auto"
         >
-          The First <span className="text-cyan-400 font-semibold">Permissionless</span> Social Wagering Platform
+          {locale === "zh-TW" ? (
+            <span className="text-cyan-400 font-semibold">{t("hero.taglineSingle")}</span>
+          ) : (
+            <>
+              {t("hero.taglineStart")}
+              <span className="text-cyan-400 font-semibold">{t("hero.taglineHighlight")}</span>
+              {t("hero.taglineEnd")}
+            </>
+          )}
         </motion.p>
         
         <motion.p
@@ -347,8 +367,7 @@ function HeroSection() {
           transition={{ delay: 0.5 }}
           className="text-lg text-slate-500 mb-6 max-w-2xl mx-auto"
         >
-          No KYC. No accounts. Just connect your wallet and wager <span className="text-white font-medium">any SPL token</span> against 
-          anyone, anywhere. Powered by x402 payment protocol with instant on-chain settlement.
+          {t("hero.sub")}
         </motion.p>
 
         {/* Tech Stack Pills */}
@@ -359,11 +378,11 @@ function HeroSection() {
           className="flex flex-wrap justify-center gap-2 mb-8 max-w-2xl mx-auto"
         >
           {[
-            { label: "No KYC", color: "from-green-500/20 to-emerald-500/20 border-green-500/30 text-green-400" },
-            { label: "x403 Wallet Auth", color: "from-cyan-500/20 to-blue-500/20 border-cyan-500/30 text-cyan-400" },
-            { label: "x402 P2P Protocol", color: "from-purple-500/20 to-pink-500/20 border-purple-500/30 text-purple-400" },
-            { label: "Any SPL Token", color: "from-yellow-500/20 to-orange-500/20 border-yellow-500/30 text-yellow-400" },
-            { label: "All Solana Cults", color: "from-pink-500/20 to-red-500/20 border-pink-500/30 text-pink-400" },
+            { label: t("pill.noKyc"), color: "from-green-500/20 to-emerald-500/20 border-green-500/30 text-green-400" },
+            { label: t("pill.x403"), color: "from-cyan-500/20 to-blue-500/20 border-cyan-500/30 text-cyan-400" },
+            { label: t("pill.x402"), color: "from-purple-500/20 to-pink-500/20 border-purple-500/30 text-purple-400" },
+            { label: t("pill.anySpl"), color: "from-yellow-500/20 to-orange-500/20 border-yellow-500/30 text-yellow-400" },
+            { label: t("pill.cults"), color: "from-pink-500/20 to-red-500/20 border-pink-500/30 text-pink-400" },
           ].map((pill, i) => (
             <span
               key={i}
@@ -383,17 +402,17 @@ function HeroSection() {
         >
           <div className="text-center">
             <div className="text-2xl md:text-3xl font-bold text-white">700+</div>
-            <div className="text-xs text-slate-500 uppercase tracking-wider">Peak Concurrent</div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider">{t("hero.stat.peak")}</div>
           </div>
           <div className="w-px h-12 bg-white/10" />
           <div className="text-center">
             <div className="text-2xl md:text-3xl font-bold text-white">7+</div>
-            <div className="text-xs text-slate-500 uppercase tracking-wider">P2P Games</div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider">{t("hero.stat.p2p")}</div>
           </div>
           <div className="w-px h-12 bg-white/10" />
           <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-white">Live</div>
-            <div className="text-xs text-slate-500 uppercase tracking-wider">On Mainnet</div>
+            <div className="text-2xl md:text-3xl font-bold text-white">{t("hero.stat.live")}</div>
+            <div className="text-xs text-slate-500 uppercase tracking-wider">{t("hero.stat.mainnet")}</div>
           </div>
         </motion.div>
 
@@ -408,7 +427,7 @@ function HeroSection() {
             href="#about"
             className="group px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold flex items-center gap-2 hover:opacity-90 transition-all pulse-glow text-sm sm:text-base"
           >
-            Explore Whitepaper
+            {t("hero.cta.explore")}
             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
           </a>
           <a
@@ -417,7 +436,7 @@ function HeroSection() {
             rel="noopener noreferrer"
             className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white/10 border border-white/20 text-white font-semibold flex items-center gap-2 hover:bg-white/20 hover:border-white/30 transition-all text-sm sm:text-base"
           >
-            Play Now
+            {t("hero.cta.play")}
             <ExternalLink className="w-4 h-4" />
           </a>
         </motion.div>
@@ -432,7 +451,7 @@ function HeroSection() {
           <Coins className="w-5 h-5 text-yellow-500" />
           <span className="text-yellow-500 font-bold">$WADDLE</span>
           <span className="text-slate-400">•</span>
-          <span className="text-slate-400 text-sm">Solana Native</span>
+          <span className="text-slate-400 text-sm">{t("hero.token.solanaNative")}</span>
         </motion.div>
       </motion.div>
 
@@ -448,7 +467,7 @@ function HeroSection() {
           transition={{ repeat: Infinity, duration: 2 }}
           className="flex flex-col items-center gap-2 text-slate-500"
         >
-          <span className="text-xs uppercase tracking-widest">Scroll</span>
+          <span className="text-xs uppercase tracking-widest">{t("hero.scroll")}</span>
           <ChevronDown className="w-5 h-5" />
         </motion.div>
       </motion.div>
@@ -458,6 +477,7 @@ function HeroSection() {
 
 // Video/Demo Section
 function VideoSection() {
+  const { t, locale } = useWhitepaperLanguage();
   return (
     <section id="demo" className="py-24 px-6 relative overflow-hidden">
       {/* Background glow */}
@@ -472,12 +492,18 @@ function VideoSection() {
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">Gameplay</span>
+          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">{t("video.kicker")}</span>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
-            See <span className="gradient-text-blue">WaddleBet</span> in Action
+            {locale === "zh-TW" ? (
+              <span className="gradient-text-blue">{t("video.titleZh")}</span>
+            ) : (
+              <>
+                See <span className="gradient-text-blue">WaddleBet</span> in Action
+              </>
+            )}
           </h2>
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            Watch real gameplay footage and see what we&apos;re building. This is not a concept—it&apos;s playable right now.
+            {t("video.desc")}
           </p>
         </motion.div>
 
@@ -508,9 +534,9 @@ function VideoSection() {
           className="mt-8 flex flex-wrap justify-center gap-4"
         >
           {[
-            { icon: "🎮", label: "Real Gameplay" },
-            { icon: "🔧", label: "Active Development" },
-            { icon: "🐧", label: "Playable Now" },
+            { icon: "🎮", label: t("video.badge1") },
+            { icon: "🔧", label: t("video.badge2") },
+            { icon: "🐧", label: t("video.badge3") },
           ].map((item, i) => (
             <span
               key={i}
@@ -528,6 +554,7 @@ function VideoSection() {
 
 // About Section - Enhanced with SPL Token Wagering
 function AboutSection() {
+  const { t } = useWhitepaperLanguage();
   return (
     <section id="about" className="py-32 px-6 relative">
       <div className="max-w-6xl mx-auto">
@@ -537,13 +564,13 @@ function AboutSection() {
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">About</span>
+          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">{t("about.kicker")}</span>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
-            Waddle Into <span className="gradient-text-blue">Web3</span>
+            {t("about.title").replace(t("about.title.web3"), "").trim()}{" "}
+            <span className="gradient-text-blue">{t("about.title.web3")}</span>
           </h2>
           <p className="text-slate-400 text-lg max-w-3xl mx-auto">
-            WaddleBet brings the nostalgia of classic penguin social gaming into the future—combining 
-            beloved mechanics with Solana&apos;s speed and the thrill of crypto-native wagering.
+            {t("about.lead")}
           </p>
         </motion.div>
 
@@ -558,18 +585,16 @@ function AboutSection() {
             <div className="flex-1 text-center lg:text-left">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-500/30 mb-4">
                 <Coins className="w-4 h-4 text-cyan-400" />
-                <span className="text-cyan-400 text-sm font-semibold">First of Its Kind</span>
+                <span className="text-cyan-400 text-sm font-semibold">{t("about.firstKind")}</span>
               </div>
               <h3 className="text-3xl md:text-4xl font-bold mb-4">
-                Wager <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400">Any SPL Token</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400">
+                  {t("about.wagerAny")}
+                </span>
               </h3>
-              <p className="text-slate-300 text-lg mb-6 leading-relaxed">
-                <span className="text-white font-semibold">The first true multi-token PvP platform.</span> No more fragmented communities. 
-                $BONK holder? Challenge a $WIF degen. $PENGU maxi? Wager against $SOL whales. 
-                <span className="text-cyan-400 font-semibold"> Every Solana community, one arena.</span>
-              </p>
+              <p className="text-slate-300 text-lg mb-6 leading-relaxed">{t("about.p1")}</p>
               <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-6">
-                {["$SOL", "$BONK", "$WIF", "$PENGU", "$WADDLE", "Any Token"].map((token, i) => (
+                {["$SOL", "$BONK", "$WIF", "$PENGU", "$WADDLE", t("about.anyToken")].map((token, i) => (
                   <span
                     key={i}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium ${
@@ -583,22 +608,22 @@ function AboutSection() {
                 ))}
               </div>
               <p className="text-slate-400 text-sm">
-                Enter any contract address. If it&apos;s on Solana, you can wager it. Real-time blockchain validation ensures authenticity.
+                {t("about.enterCa")}
               </p>
             </div>
             <div className="lg:w-80 shrink-0">
               <div className="glass-card rounded-xl p-6 border border-purple-500/30 bg-gradient-to-br from-purple-500/10 to-pink-500/10">
                 <h4 className="text-lg font-bold text-purple-400 mb-4 flex items-center gap-2">
                   <Zap className="w-5 h-5" />
-                  Why This Matters
+                  {t("about.whyMatters")}
                 </h4>
                 <ul className="space-y-3 text-sm">
                   {[
-                    { icon: "🌊", text: "Liquidity for every token" },
-                    { icon: "🤝", text: "Cross-community interaction" },
-                    { icon: "🎮", text: "Real utility beyond trading" },
-                    { icon: "⚡", text: "Instant on-chain settlement" },
-                    { icon: "🔒", text: "Custodial escrow protection" },
+                    { icon: "🌊", text: t("about.wh1") },
+                    { icon: "🤝", text: t("about.wh2") },
+                    { icon: "🎮", text: t("about.wh3") },
+                    { icon: "⚡", text: t("about.wh4") },
+                    { icon: "🔒", text: t("about.wh5") },
                   ].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-slate-300">
                       <span>{item.icon}</span>
@@ -616,20 +641,20 @@ function AboutSection() {
           {[
             {
               icon: <Users className="w-8 h-8" />,
-              title: "Classic Social Gaming",
-              description: "3D voxel world, penguin customization, puffles, emotes, and the social experience you remember—rebuilt for Web3.",
+              title: t("about.feature1.title"),
+              description: t("about.feature1.desc"),
               color: "from-cyan-500 to-blue-500",
             },
             {
               icon: <Building className="w-8 h-8" />,
-              title: "Virtual Properties",
-              description: "Rent igloos and lounges. Paywall your space with any token. Host exclusive hangouts and earn from visitors.",
+              title: t("about.feature2.title"),
+              description: t("about.feature2.desc"),
               color: "from-purple-500 to-pink-500",
             },
             {
               icon: <Repeat className="w-8 h-8" />,
-              title: "Open Market Trading",
-              description: "Runescape-style cosmetics marketplace. Trade items with other players. Build your collection through gacha and deals.",
+              title: t("about.feature3.title"),
+              description: t("about.feature3.desc"),
               color: "from-yellow-500 to-orange-500",
             },
           ].map((item, i) => (
@@ -659,12 +684,12 @@ function AboutSection() {
         >
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 text-center">
             {[
-              { icon: <Gamepad2 className="w-5 h-5" />, label: "8+ Minigames" },
-              { icon: <Palette className="w-5 h-5" />, label: "267+ Cosmetics" },
-              { icon: <Sparkles className="w-5 h-5" />, label: "Puffle Pets" },
-              { icon: <Home className="w-5 h-5" />, label: "Own Property" },
-              { icon: <Trophy className="w-5 h-5" />, label: "P2P Wagers" },
-              { icon: <Zap className="w-5 h-5" />, label: "Instant Settle" },
+              { icon: <Gamepad2 className="w-5 h-5" />, label: t("about.quick1") },
+              { icon: <Palette className="w-5 h-5" />, label: t("about.quick2") },
+              { icon: <Sparkles className="w-5 h-5" />, label: t("about.quick3") },
+              { icon: <Home className="w-5 h-5" />, label: t("about.quick4") },
+              { icon: <Trophy className="w-5 h-5" />, label: t("about.quick5") },
+              { icon: <Zap className="w-5 h-5" />, label: t("about.quick6") },
             ].map((item, i) => (
               <div key={i} className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white/5">
                 <div className="text-cyan-400">{item.icon}</div>
@@ -1528,7 +1553,8 @@ function TeamSection() {
 }
 
 // Roadmap Section
-function RoadmapSection() {
+function RoadmapSection({ onOpenBscRoadmap }: { onOpenBscRoadmap: () => void }) {
+  const { t, locale } = useWhitepaperLanguage();
   const phases = [
     {
       phase: "Phase 1",
@@ -1654,14 +1680,45 @@ function RoadmapSection() {
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <span className="text-purple-400 text-sm font-semibold uppercase tracking-widest">Roadmap</span>
+          <span className="text-purple-400 text-sm font-semibold uppercase tracking-widest">{t("roadmap.kicker")}</span>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
-            The <span className="text-purple-400">Journey</span>
+            {locale === "zh-TW" ? (
+              <span className="text-purple-400">{t("roadmap.title")}</span>
+            ) : (
+              <>
+                The <span className="text-purple-400">{t("roadmap.titleHighlight")}</span>
+              </>
+            )}
           </h2>
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            From concept to the ultimate Web3 social gaming platform. 
-            Building in public, shipping fast.
+            {t("roadmap.lead")}
           </p>
+        </motion.div>
+
+        {/* BSC migration — primary chain for $WADDLE */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="glass-card rounded-2xl p-6 mb-10 border border-amber-500/40 bg-gradient-to-br from-amber-950/30 via-slate-900/80 to-slate-900/80"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <img src="/binance-icon.svg" alt="" className="h-12 w-12 shrink-0 object-contain" aria-hidden />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-amber-400 font-semibold uppercase tracking-wider mb-1">
+                {t("bsc.roadmapCard.phase")}
+              </p>
+              <h3 className="text-lg font-bold text-white mb-2">{t("bsc.roadmapCard.title")}</h3>
+              <p className="text-slate-400 text-sm leading-relaxed">{t("bsc.roadmapCard.summary")}</p>
+            </div>
+            <button
+              type="button"
+              onClick={onOpenBscRoadmap}
+              className="shrink-0 px-5 py-3 rounded-xl font-bold text-black bg-amber-400 hover:bg-amber-300 border-b-4 border-amber-700 transition-all text-sm"
+            >
+              {t("bsc.roadmapCard.cta")}
+            </button>
+          </div>
         </motion.div>
 
         {/* Progress Bar */}
@@ -1672,8 +1729,10 @@ function RoadmapSection() {
           className="glass-card rounded-2xl p-6 mb-12"
         >
           <div className="flex items-center justify-between mb-4">
-            <span className="text-slate-400 text-sm">Development Progress</span>
-            <span className="text-green-400 font-bold">{completedPhases}/{phases.length} Phases Complete</span>
+            <span className="text-slate-400 text-sm">{t("roadmap.progressLabel")}</span>
+            <span className="text-green-400 font-bold">
+              {completedPhases}/{phases.length} {t("roadmap.phasesComplete")}
+            </span>
           </div>
           <div className="w-full h-3 bg-white/10 rounded-full overflow-hidden mb-4">
             <motion.div
@@ -1687,19 +1746,19 @@ function RoadmapSection() {
           <div className="grid grid-cols-4 gap-4 text-center text-xs">
             <div>
               <div className="text-2xl font-bold text-green-400">{completedItems}</div>
-              <div className="text-slate-500">Features Done</div>
+              <div className="text-slate-500">{t("roadmap.featuresDone")}</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-cyan-400">{totalItems - completedItems}</div>
-              <div className="text-slate-500">In Progress</div>
+              <div className="text-slate-500">{t("roadmap.inProgress")}</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-purple-400">7+</div>
-              <div className="text-slate-500">P2P Games</div>
+              <div className="text-slate-500">{t("roadmap.p2pGames")}</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-yellow-400">18</div>
-              <div className="text-slate-500">Days Building</div>
+              <div className="text-slate-500">{t("roadmap.daysBuilding")}</div>
             </div>
           </div>
         </motion.div>
@@ -1752,13 +1811,13 @@ function RoadmapSection() {
                       {phase.phase}
                     </span>
                     {phase.status === "complete" && (
-                      <span className="text-xs text-green-400">✓ Complete</span>
+                      <span className="text-xs text-green-400">{t("roadmap.status.complete")}</span>
                     )}
                     {phase.status === "current" && (
-                      <span className="text-xs text-cyan-400">● In Progress</span>
+                      <span className="text-xs text-cyan-400">{t("roadmap.status.current")}</span>
                     )}
                     {phase.status === "upcoming" && (
-                      <span className="text-xs text-purple-400">◐ Next</span>
+                      <span className="text-xs text-purple-400">{t("roadmap.status.next")}</span>
                     )}
                   </div>
                   <h3 className="text-lg font-bold mb-3">{phase.title}</h3>
@@ -1779,6 +1838,7 @@ function RoadmapSection() {
 
 // Contract Address / Token Launch Component
 function ContractAddress() {
+  const { t } = useWhitepaperLanguage();
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async () => {
@@ -1800,11 +1860,11 @@ function ContractAddress() {
               <Coins className="w-5 h-5 text-purple-400" />
             </div>
             <div>
-              <p className="text-xs text-purple-400 uppercase tracking-wider font-semibold">$WADDLE Token</p>
+              <p className="text-xs text-purple-400 uppercase tracking-wider font-semibold">{t("contract.tokenLabel")}</p>
               <p className="text-sm font-medium text-slate-300">
-                Live on{" "}
+                {t("contract.liveOn")}{" "}
                 <a href={`https://pump.fun/coin/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">
-                  Pump.fun
+                  {t("contract.pumpfun")}
                 </a>
               </p>
             </div>
@@ -1818,7 +1878,7 @@ function ContractAddress() {
               <button
                 onClick={copyToClipboard}
                 className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0"
-                title="Copy address"
+                title={t("contract.copyTitle")}
               >
                 {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
               </button>
@@ -1826,7 +1886,7 @@ function ContractAddress() {
           </div>
         </div>
         <p className="text-xs text-slate-500">
-          700k ATH pump never supported us. Fresh start on Pump.fun with a community that believes in the product.
+          {t("contract.note")}
         </p>
       </div>
     </div>
@@ -1835,6 +1895,7 @@ function ContractAddress() {
 
 // Footer
 function Footer() {
+  const { t } = useWhitepaperLanguage();
   const socialLinks = [
     { icon: <GitHubIcon className="w-5 h-5" />, href: SOCIAL_LINKS.github, label: "GitHub" },
     { icon: <XIcon className="w-5 h-5" />, href: SOCIAL_LINKS.x, label: "X Community" },
@@ -1865,10 +1926,9 @@ function Footer() {
               ⚠️
             </div>
             <div>
-              <h4 className="font-semibold text-yellow-500 mb-2 text-sm sm:text-base">Development Notice</h4>
+              <h4 className="font-semibold text-yellow-500 mb-2 text-sm sm:text-base">{t("footer.devNoticeTitle")}</h4>
               <p className="text-slate-400 text-xs sm:text-sm">
-                WaddleBet is currently in active development. Features, tokenomics, and gameplay mechanics 
-                described in this whitepaper are subject to change. Join our community to stay updated on progress.
+                {t("footer.disclaimerBody")}
               </p>
             </div>
           </div>
@@ -1886,7 +1946,7 @@ function Footer() {
               />
               <div className="text-center sm:text-left">
                 <span className="font-bold text-base sm:text-lg">WaddleBet</span>
-                <p className="text-slate-500 text-xs sm:text-sm">Permissionless Social Wagering</p>
+                <p className="text-slate-500 text-xs sm:text-sm">{t("footer.tagline")}</p>
               </div>
             </div>
 
@@ -1919,12 +1979,12 @@ function Footer() {
               </a>
               <span className="text-slate-700">•</span>
               <a href={SOCIAL_LINKS.x} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
-                Community
+                {t("footer.community")}
               </a>
             </div>
 
             <div className="flex items-center gap-2 text-slate-500 text-xs sm:text-sm">
-              <span>Built on</span>
+              <span>{t("footer.builtOn")}</span>
               <span className="text-purple-400 font-semibold">Solana</span>
               <span className="text-slate-700">•</span>
               <span>© 2025 WaddleBet</span>
@@ -1937,11 +1997,14 @@ function Footer() {
 }
 
 // Main Page
-export default function WhitepaperPage() {
+function WhitepaperPageContent() {
+  const [bscRoadmapOpen, setBscRoadmapOpen] = useState(false);
+
   return (
     <main className="relative">
       <Snowfall />
       <Navigation />
+      <BscMigrationBanner onOpenRoadmap={() => setBscRoadmapOpen(true)} />
       <HeroSection />
       <VideoSection />
       <AboutSection />
@@ -1951,9 +2014,18 @@ export default function WhitepaperPage() {
       <EconomySection />
       <PlatformEconomicsSection />
       <TeamSection />
-      <RoadmapSection />
+      <RoadmapSection onOpenBscRoadmap={() => setBscRoadmapOpen(true)} />
       <Changelog />
       <Footer />
+      <BscRoadmapModal open={bscRoadmapOpen} onClose={() => setBscRoadmapOpen(false)} />
     </main>
+  );
+}
+
+export default function WhitepaperPage() {
+  return (
+    <WhitepaperLanguageProvider>
+      <WhitepaperPageContent />
+    </WhitepaperLanguageProvider>
   );
 }
