@@ -30,14 +30,14 @@ describe('IglooRequirementsPanel', () => {
             tokenGate: {
                 enabled: true,
                 tokenAddress: 'tokenMint123',
-                tokenSymbol: 'CPw3',
+                tokenSymbol: '$WADDLE',
                 minimumBalance: 1000
             },
             entryFee: {
                 enabled: true,
                 amount: 500,
                 tokenAddress: 'feeToken456',
-                tokenSymbol: 'CPw3'
+                tokenSymbol: '$WADDLE'
             }
         },
         walletAddress: 'visitorWallet987',

@@ -55,7 +55,7 @@ async function seedMyIgloo() {
                     rentStatus: 'current',
                     banner: {
                         title: '🎧 SKNY GANG',
-                        ticker: '$CPw3',
+                        ticker: '$WADDLE',
                         shill: 'VIP Access • The Rave Never Stops',
                         styleIndex: 2 // Nightclub neon style
                     }

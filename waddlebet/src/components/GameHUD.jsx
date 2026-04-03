@@ -10,6 +10,7 @@ import MarketplaceModal from './MarketplaceModal';
 import TutorialModal, { shouldShowTutorial } from './TutorialModal';
 import DailyBonusModal from './DailyBonusModal';
 import { useMultiplayer } from '../multiplayer';
+import { useLanguage } from '../i18n';
 
 /**
  * GameHUD - Heads Up Display showing coins, stats, and quick actions
@@ -29,6 +30,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     
     // Get pebbles from multiplayer context
     const { userData, isAuthenticated } = useMultiplayer();
+    const { t } = useLanguage();
     const pebbles = userData?.pebbles || 0;
     
     // Track if we've already shown tutorial this session to avoid re-triggering
@@ -175,7 +177,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`${compactBtn} bg-gradient-to-r from-cyan-600/80 to-blue-600/80`}
-                        title="Whitepaper"
+                        title={t('hud.whitepaper')}
                     >
                         📄
                     </a>
@@ -184,7 +186,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button
                         onClick={() => setShowTokenomics(true)}
                         className={`${compactBtn} bg-gradient-to-r from-purple-600/80 to-pink-600/80 relative`}
-                        title="$CP Tokenomics"
+                        title={t('hud.tokenomicsShort')}
                     >
                         ❗
                         <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-yellow-400 rounded-full animate-ping" />
@@ -196,7 +198,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                         target="_blank"
                         rel="noopener noreferrer"
                         className={`${compactBtn} bg-gradient-to-r from-green-600/80 to-emerald-600/80`}
-                        title="View Chart"
+                        title={t('hud.viewChartShort')}
                     >
                         📈
                     </a>
@@ -206,7 +208,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                         <button
                             onClick={() => setShowDailyBonus(true)}
                             className={`${compactBtn} bg-gradient-to-r from-amber-600/80 to-orange-600/80 relative`}
-                            title="Daily Login Bonus"
+                            title={t('hud.dailyBonusShort')}
                         >
                             🎁
                             <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
@@ -221,7 +223,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                         <button
                             onClick={onOpenSettings}
                             className={`${compactBtn} bg-gray-700/80`}
-                            title="Settings"
+                            title={t('hud.settings')}
                         >
                             ⚙️
                         </button>
@@ -232,7 +234,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                         <button
                             onClick={onOpenIglooSettings}
                             className={`${compactBtn} bg-gradient-to-r from-purple-600/80 to-pink-600/80`}
-                            title="Igloo Settings"
+                            title={t('hud.iglooSettings')}
                         >
                             🏠
                         </button>
@@ -242,7 +244,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button
                         onClick={onOpenPuffles}
                         className={`${compactBtn} bg-purple-600/80`}
-                        title="Puffles"
+                        title={t('hud.puffles')}
                     >
                         🐾
                     </button>
@@ -251,7 +253,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button 
                         onClick={() => setShowStatsModal(true)}
                         className={`${compactBtn} bg-black/50`}
-                        title="Full Statistics"
+                        title={t('hud.fullStats')}
                     >
                         📊
                     </button>
@@ -330,7 +332,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bg-gradient-to-r from-cyan-600/80 to-blue-600/80 hover:from-cyan-500 hover:to-blue-500 active:from-cyan-700 active:to-blue-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center hover:scale-105 active:scale-95"
-                    title="Whitepaper & Info"
+                    title={t('hud.whitepaperLong')}
                 >
                     📄
                 </a>
@@ -339,7 +341,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 <button
                     onClick={() => setShowTokenomics(true)}
                     className="relative bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500 hover:to-pink-500 active:from-purple-700 active:to-pink-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center animate-bounce-hud group"
-                    title="$WADDLE Tokenomics"
+                    title={t('hud.tokenomics')}
                 >
                     <span className="group-hover:scale-125 transition-transform">❗</span>
                     <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full animate-ping" />
@@ -352,7 +354,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     target="_blank"
                     rel="noopener noreferrer"
                     className="bg-gradient-to-r from-green-600/80 to-emerald-600/80 hover:from-green-500 hover:to-emerald-500 active:from-green-700 active:to-emerald-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center hover:scale-105 active:scale-95"
-                    title="View Chart on DEX Screener"
+                    title={t('hud.viewChart')}
                 >
                     📈
                 </a>
@@ -362,7 +364,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button
                         onClick={() => setShowDailyBonus(true)}
                         className="relative bg-gradient-to-r from-amber-600/80 to-orange-600/80 hover:from-amber-500 hover:to-orange-500 active:from-amber-700 active:to-orange-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center hover:scale-105 active:scale-95"
-                        title="Daily Login Bonus - Earn $WADDLE!"
+                        title={t('hud.dailyBonus')}
                     >
                         🎁
                         <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
@@ -374,7 +376,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button
                         onClick={onOpenSettings}
                         className="bg-gray-700/80 hover:bg-gray-600 active:bg-gray-500 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-xs transition-colors flex items-center justify-center"
-                        title="Settings"
+                        title={t('hud.settings')}
                     >
                         ⚙️
                     </button>
@@ -385,10 +387,10 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button
                         onClick={onOpenIglooSettings}
                         className="bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500 hover:to-pink-500 active:from-purple-700 active:to-pink-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-xs transition-colors flex items-center justify-center gap-1"
-                        title="Igloo Settings"
+                        title={t('hud.iglooSettings')}
                     >
                         🏠
-                        <span className="hidden sm:inline text-[10px]">Igloo</span>
+                        <span className="hidden sm:inline text-[10px]">{t('hud.iglooLabel')}</span>
                     </button>
                 )}
                 
@@ -399,7 +401,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 <button
                     onClick={onOpenPuffles}
                     className="bg-purple-600/80 hover:bg-purple-500 active:bg-purple-400 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-xs transition-colors flex items-center justify-center"
-                    title="Manage Puffles"
+                        title={t('hud.managePuffles')}
                 >
                     🐾
                 </button>
@@ -411,13 +413,13 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 <button 
                     onClick={() => setShowStatsModal(true)}
                     className="bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-lg p-2 transition-all"
-                    title="Full Statistics"
+                    title={t('hud.fullStats')}
                 >
                     <span className="text-sm">📊</span>
                 </button>
                 
                 {/* Player Count - Room / Total */}
-                <div className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-cyan-400/30" title="In Room / Online Total">
+                <div className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-cyan-400/30" title={t('hud.inRoomOnline')}>
                     <span className="text-lg">👥</span>
                     <span className="text-cyan-300 font-bold retro-text text-sm">{playerCount + 1}</span>
                     <span className="text-white/40 retro-text text-xs">/</span>
@@ -435,7 +437,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button 
                         onClick={() => setShowPebblesPurchase(true)}
                         className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-purple-400/30 hover:border-purple-400/60 hover:bg-black/80 transition-all group"
-                        title="Buy Pebbles for Gacha Rolls"
+                        title={t('hud.buyPebbles')}
                     >
                         <span className="text-lg">🪨</span>
                         <span className="text-purple-300 font-bold retro-text text-sm">{pebbles}</span>
@@ -448,10 +450,10 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button 
                         onClick={() => setShowInventory(true)}
                         className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-amber-400/30 hover:border-amber-400/60 hover:bg-black/80 transition-all"
-                        title="Open Inventory"
+                        title={t('hud.openInventory')}
                     >
                         <span className="text-lg">📦</span>
-                        <span className="text-amber-300 font-bold retro-text text-sm hidden sm:inline">Inventory</span>
+                        <span className="text-amber-300 font-bold retro-text text-sm hidden sm:inline">{t('hud.inventory')}</span>
                     </button>
                 )}
                 
@@ -460,10 +462,10 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <button 
                         onClick={() => setShowMarketplace(true)}
                         className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-cyan-400/30 hover:border-cyan-400/60 hover:bg-black/80 transition-all"
-                        title="Open Marketplace"
+                        title={t('hud.openMarketplace')}
                     >
                         <span className="text-lg">🏪</span>
-                        <span className="text-cyan-300 font-bold retro-text text-sm hidden sm:inline">Market</span>
+                        <span className="text-cyan-300 font-bold retro-text text-sm hidden sm:inline">{t('hud.market')}</span>
                     </button>
                 )}
             </div>

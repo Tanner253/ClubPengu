@@ -79,7 +79,8 @@ const VoxelWorld = ({
     spectatingMatch = {}, // Real-time match state data for spectating
     activePveActivities = {}, // PvE activity state for spectator banners (fishing, blackjack, etc.)
     onRequestAuth,    // Callback to redirect to penguin maker for auth
-    turnstileToken = null // Cloudflare Turnstile verification token (for bot protection)
+    turnstileToken = null, // Cloudflare Turnstile verification token (for bot protection)
+    onWorldReady = null // First frame rendered (for entry loading screen)
 }) => {
     // Language context for translations
     const { t } = useLanguage();
@@ -118,6 +119,12 @@ const VoxelWorld = ({
     const mpUpdateAppearanceRef = useRef(null); // Ref for appearance update function
     const cameraControllerRef = useRef(null); // Smooth third-person camera controller
     const penguinDataRef = useRef(null); // Ref for current penguin data
+    const onWorldReadyRef = useRef(onWorldReady);
+    const worldReadyFiredRef = useRef(false);
+    useEffect(() => {
+        onWorldReadyRef.current = onWorldReady;
+    }, [onWorldReady]);
+    
     const wasInCasinoRef = useRef(false); // Track if player was inside casino (for one-time zoom)
     const casinoZoomTransitionRef = useRef({ active: false, targetDistance: 20, progress: 0 }); // Casino zoom state
     const slotMachineSystemRef = useRef(null); // Slot machine interaction system
@@ -2459,6 +2466,8 @@ const VoxelWorld = ({
         rebuildAIMaps(); // Initial build
         
         // --- GAME LOOP ---
+        // Let a few frames + shader compile run before "world ready" so first interaction is smoother
+        const MIN_FRAMES_BEFORE_WORLD_READY = 6;
         let frameCount = 0;
         
         // OPTIMIZATION: Cache device detection outside loop (runs once, not every frame)
@@ -6234,6 +6243,15 @@ const VoxelWorld = ({
             const renderStart = showPerfDebugRef.current ? performance.now() : 0;
             renderer.render(scene, camera);
             
+            if (frameCount >= MIN_FRAMES_BEFORE_WORLD_READY && !worldReadyFiredRef.current && onWorldReadyRef.current) {
+                worldReadyFiredRef.current = true;
+                try {
+                    onWorldReadyRef.current();
+                } catch (e) {
+                    console.warn('onWorldReady:', e);
+                }
+            }
+            
             // Collect performance stats (throttled to every 30 frames)
             if (showPerfDebugRef.current && frameCount % 30 === 0) {
                 const renderTime = performance.now() - renderStart;
@@ -6303,6 +6321,25 @@ const VoxelWorld = ({
                 setPerfStats({ ...perfStatsRef.current });
             }
         };
+
+        // Pre-compile materials + prime raycast path before first RAF tick (reduces first-move hitch)
+        try {
+            if (typeof renderer.compile === 'function') {
+                renderer.compile(scene, camera);
+            }
+        } catch (e) {
+            console.warn('Shader pre-compile:', e);
+        }
+        try {
+            const rc = raycasterRef.current;
+            if (rc && camera) {
+                rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+                rc.intersectObjects(scene.children, true);
+            }
+        } catch (e) {
+            console.warn('Raycast warmup:', e);
+        }
+
         update();
         
         return () => {

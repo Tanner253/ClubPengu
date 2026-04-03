@@ -26,6 +26,7 @@ import IglooDetailsPanel from './components/IglooDetailsPanel';
 import IglooRequirementsPanel from './components/IglooRequirementsPanel';
 import TipNotification from './components/TipNotification';
 import GiftNotification from './components/GiftNotification';
+import LoadingScreen from './components/LoadingScreen';
 
 // Default penguin appearance for guests
 const DEFAULT_PENGUIN = {
@@ -225,14 +226,49 @@ const AppContent = () => {
     // Turnstile token for bot protection
     const [turnstileToken, setTurnstileToken] = useState(null);
     
+    // Full-screen loading between designer and world (min duration + world ready)
+    const [entryLoading, setEntryLoading] = useState(false);
+    const entryLoadStartedAt = useRef(0);
+    const entryDismissTimer = useRef(null);
+    
+    const dismissEntryLoading = useCallback(() => {
+        if (entryDismissTimer.current) {
+            clearTimeout(entryDismissTimer.current);
+            entryDismissTimer.current = null;
+        }
+        setEntryLoading(false);
+    }, []);
+    
+    const scheduleDismissEntryLoading = useCallback(() => {
+        const elapsed = Date.now() - entryLoadStartedAt.current;
+        const wait = Math.max(0, 3000 - elapsed);
+        if (entryDismissTimer.current) clearTimeout(entryDismissTimer.current);
+        entryDismissTimer.current = setTimeout(dismissEntryLoading, wait);
+    }, [dismissEntryLoading]);
+    
     // Enter the game world (from designer)
     const handleEnterWorld = (token = null) => {
         if (token) {
             setTurnstileToken(token);
         }
+        entryLoadStartedAt.current = Date.now();
+        setEntryLoading(true);
         GameManager.getInstance().setRoom('town');
         setCurrentRoom('town');
     };
+    
+    const handleWorldReady = useCallback(() => {
+        scheduleDismissEntryLoading();
+    }, [scheduleDismissEntryLoading]);
+    
+    // If world never signals ready, do not block forever
+    useEffect(() => {
+        if (!entryLoading) return undefined;
+        const maxWait = setTimeout(() => {
+            dismissEntryLoading();
+        }, 45000);
+        return () => clearTimeout(maxWait);
+    }, [entryLoading, dismissEntryLoading]);
     
     // Exit to designer
     const handleExitToDesigner = () => {
@@ -286,6 +322,8 @@ const AppContent = () => {
         <div className="w-screen h-screen">
             <Styles />
             
+            {entryLoading && <LoadingScreen visible={entryLoading} />}
+            
             {/* Designer Mode */}
             {!inGameWorld && (
                 <VoxelPenguinDesigner 
@@ -315,6 +353,7 @@ const AppContent = () => {
                         spectatingMatch={spectatingMatch}
                         activePveActivities={activePveActivities}
                         onRequestAuth={handleRequestAuth}
+                        onWorldReady={handleWorldReady}
                     />
                 </div>
             )}

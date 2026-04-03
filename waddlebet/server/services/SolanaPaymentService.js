@@ -589,7 +589,7 @@ class SolanaPaymentService {
             };
         }
         
-        // Get CPw3 token address from env
+        // Get WADDLE token mint from env (CPW3_TOKEN_ADDRESS)
         const tokenAddress = process.env.CPW3_TOKEN_ADDRESS;
         if (!tokenAddress) {
             console.error('CPW3_TOKEN_ADDRESS not configured');

@@ -1,5 +1,5 @@
 /**
- * CasinoTVSystem - Renders $CP token info as a 3D mesh with REAL data from DexScreener API
+ * CasinoTVSystem - Renders $WADDLE token info as a 3D mesh with REAL data from DexScreener API
  * Positioned at the TV location in the casino
  */
 
@@ -55,7 +55,7 @@ export async function fetchTokenData() {
                 lastUpdated: now
             };
             lastFetchTime = now;
-            console.log('📊 Casino TV: Updated $CP data - Price:', cachedTokenData.price);
+            console.log('📊 Casino TV: Updated $WADDLE data - Price:', cachedTokenData.price);
         }
     } catch (error) {
         console.warn('Casino TV: API fetch failed, using cached data');
@@ -126,7 +126,7 @@ function renderCasinoTVBanner(ctx, tokenData = null) {
         ctx.fillStyle = '#00ffff';
         ctx.font = 'bold 18px Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Loading $CP data...', w / 2, h / 2);
+        ctx.fillText('Loading $WADDLE data...', w / 2, h / 2);
         return;
     }
     
@@ -308,7 +308,7 @@ export async function createCasinoTVSprite(THREE) {
     // Store banner data for zoom overlay
     mesh.userData.bannerData = {
         type: 'canvas',
-        title: '$CP Token Chart',
+        title: '$WADDLE Token Chart',
         description: 'Real-time token price and market data from DexScreener',
         canvas: canvas,
         renderFn: (ctx, w, h) => {

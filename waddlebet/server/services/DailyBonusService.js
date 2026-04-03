@@ -24,7 +24,7 @@ const CONFIG = {
     COOLDOWN_HOURS: 24,                     // 24 hour cooldown between claims
     
     // Reward amount
-    REWARD_AMOUNT: 5000,                    // 5,000 WADDLE tokens ($CP)
+    REWARD_AMOUNT: 5000,                    // 5,000 $WADDLE
     
     // Token config (loaded after env)
     getTokenAddress: () => process.env.CPW3_TOKEN_ADDRESS || '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump',

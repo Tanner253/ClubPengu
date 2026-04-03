@@ -55,8 +55,8 @@ const ProfileMenu = () => {
     const isDev = import.meta.env.DEV;
     const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : (isDev ? 1000 : 0);
     
-    // Allow challenging in dev mode even as guest
-    const canChallenge = isAuthenticated || isDev;
+    // Casual PvP: guests can challenge (0 coin / 0 token); wagers still require login on server
+    const canChallenge = true;
     
     const handleChallengeClick = () => {
         setShowGameDropdown(!showGameDropdown);
@@ -167,7 +167,7 @@ const ProfileMenu = () => {
                             </span>
                         </div>
                         
-                        {/* Right: Challenge buttons - Auth users or dev mode */}
+                        {/* Right: Challenge — casual (0 wager) for everyone; gifts need both authenticated */}
                         {canChallenge && (
                             <div className="flex flex-col gap-1.5 min-w-[100px]">
                                 {!showGameDropdown ? (
@@ -392,7 +392,7 @@ const ProfileMenu = () => {
                         </div>
                     </div>
                     
-                    {/* Challenge Button - Auth users or dev mode */}
+                    {/* Challenge — casual PvP for guests; wagers require auth on server */}
                     {canChallenge && (
                         <>
                             <div className="relative">

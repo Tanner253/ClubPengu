@@ -116,6 +116,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const [promoCode, setPromoCode] = useState('');
     const [promoMessage, setPromoMessage] = useState(null);
     
+    // BSC migration notice — show on every homepage load (designer); dismiss only until refresh
+    const [showBscMigrationPopup, setShowBscMigrationPopup] = useState(true);
+
     // Cloudflare Turnstile verification state
     const [turnstileToken, setTurnstileToken] = useState(null);
     const [turnstileVerified, setTurnstileVerified] = useState(false);
@@ -1920,8 +1923,58 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         setCharacterType('penguin');
     };
 
+    const dismissBscMigrationPopup = () => setShowBscMigrationPopup(false);
+
     return (
         <div className="relative w-full h-full bg-gray-900 overflow-hidden font-sans">
+            {/* BSC migration notice — Binance / BSC; CA migration coming */}
+            {showBscMigrationPopup && (
+                <div
+                    className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="bsc-migration-title"
+                >
+                    <div className="w-full max-w-lg rounded-2xl border border-amber-500/40 bg-gradient-to-br from-slate-900 via-slate-900 to-amber-950/40 p-6 shadow-2xl shadow-amber-900/20">
+                        <div className="flex items-start gap-3">
+                            <img
+                                src="/binance-icon.svg"
+                                alt=""
+                                width={48}
+                                height={48}
+                                className="h-12 w-12 shrink-0 object-contain"
+                                aria-hidden
+                            />
+                            <div className="min-w-0 flex-1">
+                                <h2
+                                    id="bsc-migration-title"
+                                    className="text-amber-300 font-black uppercase tracking-wide text-sm sm:text-base leading-tight"
+                                >
+                                    {t('menu.bscMigrationTitle')}
+                                </h2>
+                                <div className="mt-3 max-h-[min(52vh,380px)] overflow-y-auto pr-1 text-white/90 text-sm leading-relaxed whitespace-pre-line [scrollbar-gutter:stable]">
+                                    {t('menu.bscMigrationBody')}
+                                </div>
+                            </div>
+                        </div>
+                        <div
+                            className="mt-5 pt-4 border-t border-white/10"
+                            role="group"
+                            aria-label={t('menu.language')}
+                        >
+                            <LanguageToggle variant="inline" className="justify-center gap-2" />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={dismissBscMigrationPopup}
+                            className="mt-6 w-full py-3 rounded-xl font-bold text-black bg-amber-400 hover:bg-amber-300 active:scale-[0.98] transition-all retro-text text-sm border-b-4 border-amber-700"
+                        >
+                            {t('menu.bscMigrationDismiss')}
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* 3D Canvas - in portrait mode, only show top portion */}
             <div 
                 ref={mountRef} 
@@ -2897,10 +2950,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 </div>
             </div>
             
-            {/* Bottom Left - Language Toggle and Help text */}
-            <div className={`absolute bottom-4 left-4 z-10 flex flex-col items-start gap-2 ${isPortrait && isMobileView ? 'bottom-[62vh]' : ''}`}>
-                {/* Language Toggle - cycles through languages on click */}
-                <LanguageToggle compact={true} />
+            {/* Bottom Left - Language flags (bar on desktop; sheet on mobile) */}
+            <div className={`absolute bottom-4 left-4 z-10 flex flex-col items-start gap-2 max-w-[calc(100vw-2rem)] ${isPortrait && isMobileView ? 'bottom-[62vh]' : ''}`}>
+                <LanguageToggle variant="auto" isMobile={isMobileView} />
                 
                 {/* Help text - hide on mobile portrait to save space */}
                 {!(isPortrait && isMobileView) && (

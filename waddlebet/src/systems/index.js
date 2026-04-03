@@ -87,4 +87,3 @@ export { createMountainBackground, createBillboardMountains } from './MountainBa
 // Performance management system (presets, LOD, distance-based optimizations)
 export { default as performanceManager, PERFORMANCE_PRESETS, PerformanceManager } from './PerformanceManager';
 export { LOD_THRESHOLDS, LOD_THRESHOLDS_SQ, LOD_LEVEL } from './PerformanceManager';
-

@@ -56,12 +56,12 @@ describe('IglooDetailsPanel', () => {
         
         it('should display daily rent price', () => {
             render(<IglooDetailsPanel {...defaultProps} />);
-            expect(screen.getByText(/10,000 CPw3\/day/i)).toBeInTheDocument();
+            expect(screen.getByText(/10,000 \$WADDLE\/day/i)).toBeInTheDocument();
         });
         
         it('should display minimum balance requirement', () => {
             render(<IglooDetailsPanel {...defaultProps} />);
-            expect(screen.getByText(/70,000 CPw3/i)).toBeInTheDocument();
+            expect(screen.getByText(/70,000 \$WADDLE/i)).toBeInTheDocument();
         });
         
         it('should display grace period', () => {

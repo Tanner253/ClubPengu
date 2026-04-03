@@ -118,7 +118,7 @@ describe('IglooPortal', () => {
                         hasTokenGate: true,
                         tokenGate: {
                             enabled: true,
-                            tokenSymbol: 'CPw3',
+                            tokenSymbol: '$WADDLE',
                             minimumBalance: 1000
                         }
                     }}
@@ -126,7 +126,7 @@ describe('IglooPortal', () => {
             );
             // Should show token requirement info
             const container = document.body;
-            expect(container.textContent).toMatch(/TOKEN|Hold|CPw3/i);
+            expect(container.textContent).toMatch(/TOKEN|Hold|\$WADDLE/i);
         });
     });
     
@@ -144,7 +144,7 @@ describe('IglooPortal', () => {
                         entryFee: {
                             enabled: true,
                             amount: 500,
-                            tokenSymbol: 'CPw3'
+                            tokenSymbol: '$WADDLE'
                         }
                     }}
                 />

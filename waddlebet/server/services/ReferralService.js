@@ -8,8 +8,8 @@
  * - No cap on earnings
  * 
  * LAUNCH PROMO:
- * - Referrer gets 1000 $CP when referred user plays 1 hour
- * - Referred user gets 1000 $CP when they play 1 hour
+ * - Referrer gets 1000 $WADDLE when referred user plays 1 hour
+ * - Referred user gets 1000 $WADDLE when they play 1 hour
  * - Limited time promotion
  * 
  * REUSES:
@@ -37,7 +37,7 @@ const CONFIG = {
     
     // Launch promo settings
     PROMO_ENABLED: true,
-    PROMO_REWARD_AMOUNT: 1000,      // 1000 $CP tokens
+    PROMO_REWARD_AMOUNT: 1000,      // 1000 $WADDLE tokens
     PROMO_REQUIRED_MINUTES: 60,     // 1 hour of playtime required
     
     // Token config
@@ -60,7 +60,7 @@ class ReferralService {
         console.log(`   Tier 1: ${CONFIG.TIER_1_PERCENT * 100}%`);
         console.log(`   Tier 2: ${CONFIG.TIER_2_PERCENT * 100}%`);
         console.log(`   Payout threshold: ${Number(CONFIG.PAYOUT_THRESHOLD_LAMPORTS) / CONFIG.LAMPORTS_PER_SOL} SOL`);
-        console.log(`   Promo: ${CONFIG.PROMO_ENABLED ? `${CONFIG.PROMO_REWARD_AMOUNT} $CP after ${CONFIG.PROMO_REQUIRED_MINUTES}min` : 'Disabled'}`);
+        console.log(`   Promo: ${CONFIG.PROMO_ENABLED ? `${CONFIG.PROMO_REWARD_AMOUNT} $WADDLE after ${CONFIG.PROMO_REQUIRED_MINUTES}min` : 'Disabled'}`);
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
@@ -456,7 +456,7 @@ class ReferralService {
     }
     
     // ═══════════════════════════════════════════════════════════════════════════
-    // LAUNCH PROMO: 1000 $CP REWARDS
+    // LAUNCH PROMO: 1000 $WADDLE REWARDS
     // ═══════════════════════════════════════════════════════════════════════════
     
     /**
@@ -464,8 +464,8 @@ class ReferralService {
      * Called when user completes 1 hour of playtime
      * 
      * Awards:
-     * - 1000 $CP to the referred user
-     * - 1000 $CP to their referrer
+     * - 1000 $WADDLE to the referred user
+     * - 1000 $WADDLE to their referrer
      * 
      * @param {string} walletAddress - User who completed 1 hour
      * @param {number} sessionMinutes - Current session minutes
@@ -517,7 +517,7 @@ class ReferralService {
             const amountRaw = BigInt(CONFIG.PROMO_REWARD_AMOUNT) * BigInt(10 ** CONFIG.TOKEN_DECIMALS);
             
             // Award to referred user (the one who played 1 hour)
-            console.log(`🔗 [Referral] Promo: Awarding ${CONFIG.PROMO_REWARD_AMOUNT} $CP to ${user.username}`);
+            console.log(`🔗 [Referral] Promo: Awarding ${CONFIG.PROMO_REWARD_AMOUNT} $WADDLE to ${user.username}`);
             
             const userRewardResult = await custodialWalletService._sendPayoutTransaction(
                 walletAddress,
@@ -556,7 +556,7 @@ class ReferralService {
             });
             
             // Now award the referrer
-            console.log(`🔗 [Referral] Promo: Awarding ${CONFIG.PROMO_REWARD_AMOUNT} $CP to referrer ${user.referral.referredBy.slice(0, 8)}...`);
+            console.log(`🔗 [Referral] Promo: Awarding ${CONFIG.PROMO_REWARD_AMOUNT} $WADDLE to referrer ${user.referral.referredBy.slice(0, 8)}...`);
             
             const referrerRewardResult = await custodialWalletService._sendPayoutTransaction(
                 user.referral.referredBy,

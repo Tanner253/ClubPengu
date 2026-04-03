@@ -142,7 +142,7 @@ const TUTORIAL_SLIDES = [
                 <div className="bg-gradient-to-r from-green-500/20 to-cyan-500/20 rounded-lg p-3 border border-green-500/30">
                     <div className="text-green-400 font-bold text-center mb-2">🚀 WAGER ANY SPL TOKEN</div>
                     <p className="text-white/80 text-sm text-center">
-                        SOL, $CP, memecoins, stablecoins - <strong>any Solana token</strong>!
+                        SOL, $WADDLE, memecoins, stablecoins - <strong>any Solana token</strong>!
                     </p>
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
@@ -165,28 +165,28 @@ const TUTORIAL_SLIDES = [
     },
     {
         id: 'buy-cp',
-        title: '🐧 Get $CP - The WaddleBet Token',
+        title: '🐧 Get $WADDLE - The WaddleBet Token',
         icon: '🚀',
         content: (
             <div className="space-y-3">
                 <p className="text-white/90 text-sm">
-                    <strong className="text-cyan-400">$CP</strong> is the official WaddleBet token on Solana!
+                    <strong className="text-cyan-400">$WADDLE</strong> is the official WaddleBet token on Solana!
                 </p>
                 
-                {/* Why buy $CP */}
+                {/* Why buy $WADDLE */}
                 <div className="space-y-2">
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2 border border-amber-500/30">
                         <span className="text-lg">👑</span>
                         <div>
                             <div className="text-amber-400 font-bold text-sm">Whale Status</div>
-                            <p className="text-white/60 text-xs">Hold $CP for exclusive nametag tiers (Bronze → Legendary)</p>
+                            <p className="text-white/60 text-xs">Hold $WADDLE for exclusive nametag tiers (Bronze → Legendary)</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2 border border-cyan-500/30">
                         <span className="text-lg">⚔️</span>
                         <div>
                             <div className="text-cyan-400 font-bold text-sm">Default Wager Token</div>
-                            <p className="text-white/60 text-xs">$CP is the native token for P2P wagers</p>
+                            <p className="text-white/60 text-xs">$WADDLE is the native token for P2P wagers</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2 border border-purple-500/30">
@@ -523,7 +523,7 @@ const TUTORIAL_SLIDES = [
                 </div>
                 <div className="bg-amber-500/20 rounded-lg p-2 border border-amber-500/30 text-center">
                     <p className="text-amber-400 text-xs font-bold">
-                        🎁 LIMITED TIME: Both you and your friend get 1,000 $CP!
+                        🎁 LIMITED TIME: Both you and your friend get 1,000 $WADDLE!
                     </p>
                     <p className="text-white/60 text-[10px] mt-1">
                         (Friend must connect wallet & play 1 hour)

@@ -9,7 +9,7 @@
 // Tokens available for quick-select when creating a wager
 export const WAGER_TOKENS = [
     { 
-        symbol: '$CP', 
+        symbol: '$WADDLE', 
         name: 'WaddleBet',
         address: '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump',
         decimals: 6,
@@ -42,7 +42,7 @@ export const WAGER_TOKENS = [
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Get default wager token ($CP)
+ * Get default wager token ($WADDLE)
  */
 export const getDefaultWagerToken = () => {
     return WAGER_TOKENS.find(t => t.isDefault) || WAGER_TOKENS[0];

@@ -36,7 +36,7 @@ describe('IglooEntryModal', () => {
             entryFee: {
                 enabled: true,
                 amount: 500,
-                tokenSymbol: 'CPw3'
+                tokenSymbol: '$WADDLE'
             }
         },
         onPay: vi.fn(),

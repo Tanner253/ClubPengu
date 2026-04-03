@@ -408,7 +408,7 @@ const WagerModal = () => {
                                     onClick={() => sendChallenge(selectedPlayer.id, wagerGameType, 0, null)}
                                     className="w-full py-2 rounded-lg text-xs font-medium bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 active:bg-purple-500/40 transition-colors mb-3 active:scale-[0.98] border border-purple-500/30"
                                 >
-                                    🎮 FREE PLAY (Dev Mode)
+                                    Casual match (0 coins)
                                 </button>
                             )}
                             
@@ -432,7 +432,7 @@ const WagerModal = () => {
                         
                         {/* Info */}
                         <p className="text-white/40 text-[10px] text-center mt-3">
-                            Winner takes all • 5 min to respond
+                            5 min to respond • Wagers optional
                         </p>
                     </div>
                 </div>

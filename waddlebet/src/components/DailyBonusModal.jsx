@@ -1,6 +1,6 @@
 /**
  * DailyBonusModal - Daily Login Bonus Panel
- * Rewards players with 5,000 $CP for 1 hour of play time
+ * Rewards players with 5,000 $WADDLE for 1 hour of play time
  * 24 hour cooldown between claims
  * 
  * Design copied from SettingsMenu.jsx
@@ -195,7 +195,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                 <div className="text-center">
                                     <div className="text-3xl mb-2">💰</div>
                                     <div className="text-2xl font-bold text-cyan-300">
-                                        5,000 $CP
+                                        5,000 $WADDLE
                                     </div>
                                     <p className="text-white/50 text-xs mt-1">
                                         Daily reward for active players
@@ -272,7 +272,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                         <div className="text-xl font-bold text-green-300">
                                             {((status?.totalWaddleEarned || 0) / 1000).toFixed(0)}K
                                         </div>
-                                        <div className="text-white/40 text-xs">$CP Earned</div>
+                                        <div className="text-white/40 text-xs">$WADDLE Earned</div>
                                     </div>
                                 </div>
                             </div>
@@ -286,7 +286,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                             <span className="text-white/60 text-sm">Reward Pool</span>
                                         </div>
                                         <span className="text-purple-300 font-mono font-bold">
-                                            {status.custodialBalance?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '---'} $CP
+                                            {status.custodialBalance?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '---'} $WADDLE
                                         </span>
                                     </div>
                                 </div>
@@ -349,7 +349,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                 </span>
                             ) : status.canClaim ? (
                                 <span className="flex items-center justify-center gap-2">
-                                    🎁 Claim 5,000 $CP
+                                    🎁 Claim 5,000 $WADDLE
                                 </span>
                             ) : !status.cooldownExpired ? (
                                 <span className="flex items-center justify-center gap-2">

@@ -166,7 +166,7 @@ describe('IglooOccupancySystem', () => {
                 accessType: 'token',
                 isRented: true,
                 hasTokenGate: true,
-                tokenGateInfo: { tokenSymbol: 'CPw3', minimumBalance: 1000 }
+                tokenGateInfo: { tokenSymbol: '$WADDLE', minimumBalance: 1000 }
             };
             
             renderIglooBanner(mockCtx, 0, 0, iglooData);

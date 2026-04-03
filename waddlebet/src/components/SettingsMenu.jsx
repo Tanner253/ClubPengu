@@ -8,6 +8,7 @@ import { useClickOutside, useEscapeKey } from '../hooks';
 import { useLanguage } from '../i18n';
 import { performanceManager, PERFORMANCE_PRESETS } from '../systems';
 import ReferralPanel from './ReferralPanel';
+import LanguageToggle from './LanguageToggle';
 
 // Default keybinds
 const DEFAULT_KEYBINDS = {
@@ -106,13 +107,21 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
     };
     
     const tabs = [
-        { id: 'general', icon: '⚙️', label: t('settings.title') || 'General' },
-        { id: 'controls', icon: '🎮', label: t('settings.controls') || 'Controls' },
-        { id: 'audio', icon: '🔊', label: t('settings.sound') || 'Audio' },
-        { id: 'display', icon: '✨', label: t('settings.graphics') || 'Display' },
-        { id: 'referral', icon: '🔗', label: 'Referral' },
-        { id: 'info', icon: '📋', label: 'Info' },
+        { id: 'general', icon: '⚙️', label: t('settings.tabGeneral') },
+        { id: 'controls', icon: '🎮', label: t('settings.controls') },
+        { id: 'audio', icon: '🔊', label: t('settings.tabAudio') },
+        { id: 'display', icon: '✨', label: t('settings.tabDisplay') },
+        { id: 'referral', icon: '🔗', label: t('settings.tabReferral') },
+        { id: 'info', icon: '📋', label: t('settings.tabInfo') },
     ];
+
+    const perfPresetHintKey = {
+        ultra: 'settings.perfUltra',
+        high: 'settings.perfHigh',
+        medium: 'settings.perfMedium',
+        low: 'settings.perfLow',
+        potato: 'settings.perfPotato',
+    };
     
     // Toggle component
     const Toggle = ({ enabled, onChange, color = 'cyan' }) => {
@@ -166,7 +175,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                         : 'bg-white/10 text-white hover:bg-white/20 border border-white/10'
                 }`}
             >
-                {isRebinding ? 'Press key...' : getKeyDisplayName(currentKey)}
+                {isRebinding ? t('settings.pressKey') : getKeyDisplayName(currentKey)}
             </button>
         );
     };
@@ -190,7 +199,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                 <span className="text-lg">⚙️</span>
                             </div>
                             <span className="bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
-                                {t('settings.title') || 'Settings'}
+                                {t('settings.title')}
                             </span>
                         </h2>
                         <button 
@@ -226,10 +235,20 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                     {/* General Tab */}
                     {activeTab === 'general' && (
                         <>
+                            <div className="py-3 border-b border-white/5">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <span className="text-lg">🌐</span>
+                                    <div>
+                                        <div className="text-white text-sm font-medium">{t('settings.languageSection')}</div>
+                                        <div className="text-white/40 text-xs">{t('settings.languageHint')}</div>
+                                    </div>
+                                </div>
+                                <LanguageToggle variant="inline" />
+                            </div>
                             <SettingRow
                                 icon="🖐️"
-                                title="Left-Handed Mode"
-                                description="Swap joystick to right side"
+                                title={t('settings.leftHanded')}
+                                description={t('settings.leftHandedDesc')}
                             >
                                 <Toggle 
                                     enabled={settings.leftHanded === true} 
@@ -240,8 +259,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                             
                             <SettingRow
                                 icon="🚣"
-                                title="Mount"
-                                description="Show your equipped mount"
+                                title={t('settings.mount')}
+                                description={t('settings.mountDesc')}
                             >
                                 <Toggle 
                                     enabled={settings.mountEnabled !== false} 
@@ -257,8 +276,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                             
                             <SettingRow
                                 icon="📈"
-                                title="Green Candles Trail"
-                                description="Trading candle trail effect"
+                                title={t('settings.greenCandles')}
+                                description={t('settings.greenCandlesDesc')}
                             >
                                 <Toggle 
                                     enabled={settings.greenCandlesEnabled === true} 
@@ -277,9 +296,9 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                 <div className="flex items-center gap-3 mb-3">
                                     <span className="text-lg">🏷️</span>
                                     <div>
-                                        <div className="text-white text-sm font-medium">Nametag Style</div>
+                                        <div className="text-white text-sm font-medium">{t('settings.nametagStyle')}</div>
                                         <div className="text-white/40 text-xs">
-                                            {isAuthenticated ? 'Choose your style' : 'Connect wallet to unlock'}
+                                            {isAuthenticated ? t('settings.nametagChoose') : t('settings.nametagConnect')}
                                         </div>
                                     </div>
                                 </div>
@@ -298,7 +317,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                                 }`}
                                             >
                                                 <span className="text-2xl block mb-1">⭐</span>
-                                                <span className="text-amber-400 text-xs font-bold">DAY 1</span>
+                                                <span className="text-amber-400 text-xs font-bold">{t('settings.nametagDay1')}</span>
                                             </button>
                                             <button
                                                 onClick={() => {
@@ -312,7 +331,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                                 }`}
                                             >
                                                 <span className="text-2xl block mb-1">🐳</span>
-                                                <span className="text-cyan-400 text-xs font-bold">WHALE</span>
+                                                <span className="text-cyan-400 text-xs font-bold">{t('settings.nametagWhale')}</span>
                                             </button>
                                         </>
                                     )}
@@ -328,7 +347,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                         }`}
                                     >
                                         <span className="text-2xl block mb-1">📛</span>
-                                        <span className="text-white text-xs font-bold">DEFAULT</span>
+                                        <span className="text-white text-xs font-bold">{t('settings.nametagDefault')}</span>
                                     </button>
                                 </div>
                             </div>
@@ -341,39 +360,39 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                             {/* Quick Reference */}
                             <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-2xl p-4 border border-cyan-500/20 mb-4">
                                 <div className="text-cyan-400 text-sm font-bold mb-3 flex items-center gap-2">
-                                    <span>📖</span> Quick Controls
+                                    <span>📖</span> {t('settings.quickControls')}
                                 </div>
                                 <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs">
                                     <div className="flex justify-between">
-                                        <span className="text-white/50">Move</span>
+                                        <span className="text-white/50">{t('settings.ctrlMove')}</span>
                                         <span className="text-white/80 font-mono">WASD</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-white/50">Camera</span>
+                                        <span className="text-white/50">{t('settings.ctrlCamera')}</span>
                                         <span className="text-white/80 font-mono">Mouse</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-white/50">Jump</span>
+                                        <span className="text-white/50">{t('settings.ctrlJump')}</span>
                                         <span className="text-white/80 font-mono">Space</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-white/50">Chat</span>
+                                        <span className="text-white/50">{t('settings.ctrlChat')}</span>
                                         <span className="text-white/80 font-mono">Enter</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-white/50">Emotes</span>
-                                        <span className="text-white/80 font-mono">Hold T</span>
+                                        <span className="text-white/50">{t('settings.ctrlEmotes')}</span>
+                                        <span className="text-white/80 font-mono">{t('settings.ctrlEmotesHold')}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-white/50">Whisper</span>
+                                        <span className="text-white/50">{t('settings.ctrlWhisper')}</span>
                                         <span className="text-white/80 font-mono">/w name</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-white/50">AFK</span>
+                                        <span className="text-white/50">{t('settings.ctrlAfk')}</span>
                                         <span className="text-white/80 font-mono">/afk msg</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-white/50">Unstuck</span>
+                                        <span className="text-white/50">{t('settings.ctrlUnstuck')}</span>
                                         <span className="text-white/80 font-mono">/spawn</span>
                                     </div>
                                 </div>
@@ -387,15 +406,15 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                             <span className="text-lg">❄️</span>
                                         </div>
                                         <div>
-                                            <div className="text-white text-sm font-bold">Snowball Throw</div>
-                                            <div className="text-white/40 text-xs">Hold key + click to throw</div>
+                                            <div className="text-white text-sm font-bold">{t('settings.snowballTitle')}</div>
+                                            <div className="text-white/40 text-xs">{t('settings.snowballHold')}</div>
                                         </div>
                                     </div>
-                                    <KeybindButton action="snowballThrow" label="Snowball" />
+                                    <KeybindButton action="snowballThrow" label={t('settings.snowballTitle')} />
                                 </div>
                                 <div className="text-white/30 text-xs pl-[52px]">
-                                    • 3 second cooldown between throws<br/>
-                                    • Visible to all players in room
+                                    • {t('settings.snowballCd1')}<br/>
+                                    • {t('settings.snowballCd2')}
                                 </div>
                             </div>
                             
@@ -405,8 +424,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                     <div className="flex items-center gap-3">
                                         <span className="text-lg">📷</span>
                                         <div>
-                                            <div className="text-white text-sm font-medium">Camera Sensitivity</div>
-                                            <div className="text-white/40 text-xs">Adjust look speed</div>
+                                            <div className="text-white text-sm font-medium">{t('settings.cameraSens')}</div>
+                                            <div className="text-white/40 text-xs">{t('settings.cameraSensDesc')}</div>
                                         </div>
                                     </div>
                                     <span className="text-cyan-400 text-sm font-mono bg-cyan-500/10 px-3 py-1 rounded-lg">
@@ -423,8 +442,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                     className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-cyan-500"
                                 />
                                 <div className="flex justify-between text-[10px] text-white/30 mt-1 px-1">
-                                    <span>Slow</span>
-                                    <span>Fast</span>
+                                    <span>{t('settings.slow')}</span>
+                                    <span>{t('settings.fast')}</span>
                                 </div>
                             </div>
                         </>
@@ -451,8 +470,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                     <div className="flex items-center gap-3">
                                         <span className="text-lg">🎵</span>
                                         <div>
-                                            <div className="text-white text-sm font-medium">Music Volume</div>
-                                            <div className="text-white/40 text-xs">Background music level</div>
+                                            <div className="text-white text-sm font-medium">{t('settings.musicVol')}</div>
+                                            <div className="text-white/40 text-xs">{t('settings.musicVolDesc')}</div>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -496,8 +515,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                     <div className="flex items-center gap-3 mb-3">
                                         <span className="text-lg">🎮</span>
                                         <div>
-                                            <div className="text-white text-sm font-medium">Performance Mode</div>
-                                            <div className="text-white/40 text-xs">Adjust quality vs FPS</div>
+                                            <div className="text-white text-sm font-medium">{t('settings.perfMode')}</div>
+                                            <div className="text-white/40 text-xs">{t('settings.perfModeDesc')}</div>
                                         </div>
                                     </div>
                                     <div className="grid grid-cols-5 gap-1">
@@ -518,7 +537,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                                         // Force re-render
                                                         onSettingsChange({ ...settings, _perfUpdate: Date.now() });
                                                         // Show toast notification
-                                                        alert(`Performance set to ${preset.name}. Refresh page to apply renderer changes.`);
+                                                        alert(t('settings.perfAlert').replace('{name}', preset.name));
                                                     }}
                                                     className={`px-2 py-2 rounded-lg text-xs font-bold transition-all ${
                                                         isActive 
@@ -532,19 +551,15 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                         })}
                                     </div>
                                     <div className="mt-2 text-white/30 text-[10px] text-center">
-                                        {performanceManager.getPreset() === 'ultra' && '⚠️ Ultra: Best quality, may cause FPS drops on some PCs'}
-                                        {performanceManager.getPreset() === 'high' && '✓ High: Good balance for most PCs'}
-                                        {performanceManager.getPreset() === 'medium' && '✓ Medium: Balanced quality & performance'}
-                                        {performanceManager.getPreset() === 'low' && '⚡ Low: Optimized for smooth gameplay'}
-                                        {performanceManager.getPreset() === 'potato' && '🥔 Potato: Maximum FPS, minimal effects'}
+                                        {t(perfPresetHintKey[performanceManager.getPreset()] || 'settings.perfMedium')}
                                     </div>
                                 </div>
                             )}
                             
                             <SettingRow
                                 icon="❄️"
-                                title="Particle Effects"
-                                description="Snow & nametag particles"
+                                title={t('settings.particles')}
+                                description={t('settings.particlesDesc')}
                             >
                                 <Toggle 
                                     enabled={settings.snowEnabled !== false} 
@@ -575,8 +590,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                         <span className="text-xl">❓</span>
                                     </div>
                                     <div className="flex-1">
-                                        <div className="text-white font-bold">Help & Tutorial</div>
-                                        <p className="text-white/40 text-xs">Learn how to play WaddleBet</p>
+                                        <div className="text-white font-bold">{t('settings.helpTutorial')}</div>
+                                        <p className="text-white/40 text-xs">{t('settings.helpTutorialDesc')}</p>
                                     </div>
                                     <span className="text-white/30 group-hover:text-white/60 transition-colors">→</span>
                                 </div>
@@ -594,8 +609,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                         <span className="text-xl">📋</span>
                                     </div>
                                     <div className="flex-1">
-                                        <div className="text-white font-bold">Changelog</div>
-                                        <p className="text-white/40 text-xs">See what's new in WaddleBet</p>
+                                        <div className="text-white font-bold">{t('settings.changelogBtn')}</div>
+                                        <p className="text-white/40 text-xs">{t('settings.changelogDesc')}</p>
                                     </div>
                                     <span className="text-white/30 group-hover:text-white/60 transition-colors">→</span>
                                 </div>
@@ -612,8 +627,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                         <span className="text-xl">📄</span>
                                     </div>
                                     <div className="flex-1">
-                                        <div className="text-white font-bold">Whitepaper</div>
-                                        <p className="text-white/40 text-xs">Read the full documentation</p>
+                                        <div className="text-white font-bold">{t('settings.whitepaperBtn')}</div>
+                                        <p className="text-white/40 text-xs">{t('settings.whitepaperDesc')}</p>
                                     </div>
                                     <span className="text-white/30 group-hover:text-white/60 transition-colors">↗</span>
                                 </div>
@@ -621,7 +636,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                             
                             {/* Version Info */}
                             <div className="text-center text-white/20 text-xs pt-4">
-                                WaddleBet v2.0 • © 2026
+                                {t('settings.versionFooter')}
                             </div>
                         </div>
                     )}
@@ -633,7 +648,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                         onClick={onClose}
                         className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white rounded-2xl font-bold text-sm transition-all shadow-lg hover:shadow-cyan-500/25"
                     >
-                        Done
+                        {t('settings.done')}
                     </button>
                 </div>
             </div>

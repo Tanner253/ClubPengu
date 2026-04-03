@@ -50,7 +50,7 @@ const challengeSchema = new mongoose.Schema({
     // ========== SPL TOKEN WAGER (optional, enhancement to coin wager) ==========
     wagerToken: {
         tokenAddress: { type: String, default: null },      // SPL token mint (null = no token wager)
-        tokenSymbol: { type: String, default: null },       // Display symbol (e.g., "$CPw3")
+        tokenSymbol: { type: String, default: null },       // Display symbol (e.g., "$WADDLE")
         tokenDecimals: { type: Number, default: 6 },        // For amount conversion
         tokenAmount: { type: Number, default: 0 },          // Human-readable amount
         amountRaw: { type: String, default: null }          // BigInt as string (full precision)

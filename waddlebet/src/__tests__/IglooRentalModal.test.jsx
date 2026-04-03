@@ -69,7 +69,7 @@ describe('IglooRentalModal', () => {
         it('should show rental price', () => {
             render(<IglooRentalModal {...defaultProps} />);
             const content = document.body.textContent;
-            expect(content).toMatch(/10,000|CPw3|rent/i);
+            expect(content).toMatch(/10,000|\$WADDLE|rent/i);
         });
         
         it('should show minimum balance', () => {

@@ -583,12 +583,9 @@ export function ChallengeProvider({ children }) {
     // tokenWager is optional: { tokenAddress, tokenSymbol, tokenDecimals, tokenAmount, amountRaw }
     const sendChallenge = useCallback(async (targetPlayerId, gameType, wagerAmount, tokenWager = null) => {
         if (!targetPlayerId || !gameType) return;
-        // Allow 0 wager in development mode for testing
-        const isDev = typeof window !== 'undefined' && window.location.hostname === 'localhost';
+        if (wagerAmount < 0) return;
         const hasTokenWager = tokenWager?.tokenAddress && tokenWager?.tokenAmount > 0;
-        
-        // Must have either coin or token wager (or both) unless in dev mode
-        if (!hasTokenWager && (wagerAmount < 0 || (wagerAmount === 0 && !isDev))) return;
+        // Zero coin + zero token = casual PvP for guests; coin/token wagers validated on server
         
         const message = {
             type: 'challenge_send',

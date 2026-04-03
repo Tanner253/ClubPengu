@@ -214,7 +214,7 @@ describe('X402Service (Client)', () => {
             });
             
             expect(result.success).toBe(true);
-            expect(result.paymentDetails.memo).toBe('wager:match123:$CPw3');
+            expect(result.paymentDetails.memo).toBe('wager:match123:$WADDLE');
             expect(result.paymentDetails.recipient).toBe('OpponentWallet456');
             expect(result.paymentDetails.amount).toBe('5000');
         });

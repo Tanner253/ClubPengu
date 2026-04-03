@@ -142,7 +142,7 @@ const ReferralPanel = ({ isAuthenticated }) => {
                     <div>
                         <div className="text-amber-300 font-bold text-sm">Launch Promo!</div>
                         <div className="text-white/60 text-xs">
-                            Both you and your friend get <span className="text-amber-300 font-bold">1,000 $CP</span> when they play for 1 hour!
+                            Both you and your friend get <span className="text-amber-300 font-bold">1,000 $WADDLE</span> when they play for 1 hour!
                         </div>
                     </div>
                 </div>
@@ -351,7 +351,7 @@ const ReferralPanel = ({ isAuthenticated }) => {
                     </div>
                     <div className="flex gap-3">
                         <div className="w-6 h-6 rounded-full bg-pink-500/20 flex items-center justify-center text-pink-400 font-bold text-xs shrink-0">3</div>
-                        <div className="text-white/70">Play 1 hour → Both get <span className="text-amber-400 font-bold">1,000 $CP</span></div>
+                        <div className="text-white/70">Play 1 hour → Both get <span className="text-amber-400 font-bold">1,000 $WADDLE</span></div>
                     </div>
                     <div className="flex gap-3">
                         <div className="w-6 h-6 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 font-bold text-xs shrink-0">$</div>
