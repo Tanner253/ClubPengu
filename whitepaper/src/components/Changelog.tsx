@@ -721,7 +721,12 @@ function VersionCard({ version, isExpanded, onToggle }: { version: ChangelogVers
 
 // ==================== MAIN COMPONENT ====================
 
-export default function Changelog() {
+type ChangelogProps = {
+  /** Opens the BSC migration detail modal (wired from page). */
+  onOpenBscRoadmap?: () => void;
+};
+
+export default function Changelog({ onOpenBscRoadmap }: ChangelogProps) {
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set([CHANGELOG_DATA[0]?.version]));
   const [expandAll, setExpandAll] = useState(false);
 
@@ -811,6 +816,38 @@ export default function Changelog() {
             {expandAll ? t("changelog.collapseAll") : t("changelog.expandAll")}
           </button>
         </motion.div>
+
+        {onOpenBscRoadmap && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="glass-card rounded-2xl p-6 mb-10 border border-amber-500/40 bg-gradient-to-br from-amber-950/30 via-slate-900/80 to-slate-900/80"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+              <img
+                src="/binance-icon.svg"
+                alt=""
+                className="h-12 w-12 shrink-0 object-contain"
+                aria-hidden
+              />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-amber-400 font-semibold uppercase tracking-wider mb-1">
+                  {t("bsc.roadmapCard.phase")}
+                </p>
+                <h3 className="text-lg font-bold text-white mb-2">{t("bsc.roadmapCard.title")}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">{t("bsc.roadmapCard.summary")}</p>
+              </div>
+              <button
+                type="button"
+                onClick={onOpenBscRoadmap}
+                className="shrink-0 px-5 py-3 rounded-xl font-bold text-black bg-amber-400 hover:bg-amber-300 border-b-4 border-amber-700 transition-all text-sm"
+              >
+                {t("bsc.roadmapCard.cta")}
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* Version cards */}
         <div className="space-y-4">

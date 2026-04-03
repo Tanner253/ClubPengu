@@ -1,7 +1,6 @@
 "use client";
 
 import { useWhitepaperLanguage } from "../i18n/LanguageContext";
-import { LanguageSwitcher } from "./LanguageSwitcher";
 
 type Props = {
   open: boolean;
@@ -43,17 +42,10 @@ export function BscRoadmapModal({ open, onClose }: Props) {
             </div>
           </div>
         </div>
-        <div
-          className="mt-5 pt-4 border-t border-white/10 flex justify-center"
-          role="group"
-          aria-label={t("lang.switchAria")}
-        >
-          <LanguageSwitcher className="justify-center gap-2" />
-        </div>
         <button
           type="button"
           onClick={onClose}
-          className="mt-4 w-full py-3 rounded-xl font-bold text-black bg-amber-400 hover:bg-amber-300 active:scale-[0.98] transition-all text-sm border-b-4 border-amber-700"
+          className="mt-6 w-full py-3 rounded-xl font-bold text-black bg-amber-400 hover:bg-amber-300 active:scale-[0.98] transition-all text-sm border-b-4 border-amber-700"
         >
           {t("bsc.modal.dismiss")}
         </button>

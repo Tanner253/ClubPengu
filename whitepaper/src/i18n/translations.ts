@@ -14,7 +14,7 @@ const en: Record<string, string> = {
 
   "bsc.banner.title": "BSC migration in development",
   "bsc.banner.body":
-    "We are building a move toward Binance Smart Chain (BSC) as the primary home for $WADDLE—supporting Binance, BNB, and BEP-20—due to Solana holder volatility. Details are in the roadmap.",
+    "We are building a move toward Binance Smart Chain (BSC) as the primary home for $WADDLE—supporting Binance, BNB, and BEP-20—due to Solana holder volatility. $waddle hit 700k on solana, can it do betteron BSC? thats the question.Full details are in the Changelog section below.",
   "bsc.banner.cta": "Open roadmap",
   "bsc.modal.title": "BSC roadmap & what’s next",
   "bsc.modal.body": `We are actively developing a migration toward Binance Smart Chain (BSC). Volatility among Solana holders has made it harder to build a stable long-term economy on a single chain—so we are integrating Binance, BNB, and BEP-20 into the product. Over time, BSC will become the primary chain for $WADDLE; contract (CA) updates and timing will be announced as we ship each phase.
@@ -33,7 +33,7 @@ Features ship in phases; this is our roadmap.`,
   "bsc.roadmapCard.phase": "Phase · In progress",
   "bsc.roadmapCard.title": "BSC migration — primary chain for $WADDLE",
   "bsc.roadmapCard.summary":
-    "Binance Smart Chain support, BNB & BEP-20, and $WADDLE as the primary chain over time. Tap for the full roadmap.",
+    "Binance Smart Chain support, BNB & BEP-20, and $WADDLE as the primary chain over time. Open for the full plan.",
   "bsc.roadmapCard.cta": "View full roadmap",
 
   "nav.product": "Product",
@@ -169,7 +169,7 @@ const zhTW: Record<string, string> = {
 
   "bsc.banner.title": "BSC 遷移開發中",
   "bsc.banner.body":
-    "我們正將 $WADDLE 的主戰場移向幣安智能鏈（BSC），支援 Binance、BNB 與 BEP-20——因應 Solana 持幣者波動。詳見路線圖。",
+    "我們正將 $WADDLE 的主戰場移向幣安智能鏈（BSC），支援 Binance、BNB 與 BEP-20——因應 Solana 持幣者波動。完整說明見下方「更新日誌」區塊。",
   "bsc.banner.cta": "開啟路線圖",
   "bsc.modal.title": "BSC 路線圖與後續計畫",
   "bsc.modal.body": `我們正積極開發遷移至幣安智能鏈（BSC）。Solana 持幣者波動使單一鏈上長期穩定經濟更難建立——因此我們將 Binance、BNB 與 BEP-20 整合進產品。隨著各階段上線，BSC 將成為 $WADDLE 的主鏈；合約（CA）與時程將另行公告。
@@ -188,7 +188,7 @@ const zhTW: Record<string, string> = {
   "bsc.roadmapCard.phase": "階段 · 進行中",
   "bsc.roadmapCard.title": "BSC 遷移 — $WADDLE 主鏈",
   "bsc.roadmapCard.summary":
-    "幣安智能鏈支援、BNB 與 BEP-20，$WADDLE 將逐步以 BSC 為主鏈。點此查看完整路線圖。",
+    "幣安智能鏈支援、BNB 與 BEP-20，$WADDLE 將逐步以 BSC 為主鏈。開啟以檢視完整計畫。",
   "bsc.roadmapCard.cta": "查看完整路線圖",
 
   "nav.product": "產品",

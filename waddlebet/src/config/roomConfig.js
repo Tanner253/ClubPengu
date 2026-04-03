@@ -64,11 +64,36 @@ export const NAME_HEIGHT_PENGUIN = 5;
 export const NAME_HEIGHT_MARCUS = 6;
 export const NAME_HEIGHT_WHALE = 5.8;
 
-// AI penguin names
+// AI penguin names (first N used; see AI_AGENT_COUNT)
 export const AI_NAMES = [
-    "Puddles", "Waddle", "Snowy", "Flipper", "IceCube", 
+    "Puddles", "Waddle", "Snowy", "Flipper", "IceCube",
     "Chilly", "Pebble", "Igloo", "Frosty", "Slippy"
 ];
+
+/** Active NPC count in town / shared rooms (keep small for frame budget) */
+export const AI_AGENT_COUNT = 5;
+
+/** Companion puffles double meshes + tick() cost — disabled for NPCs */
+export const AI_SPAWN_PUFFLES = false;
+
+/**
+ * Exclude hats that drive heavy per-frame cosmetic animation (wizard trail, propeller, etc.)
+ * See systems/AIUpdateLoop.js updateAICosmetics / updateAIWizardTrail
+ */
+/** Matches heavy paths in systems/AIUpdateLoop.js updateAICosmetics / wizard trail */
+export const AI_HEAVY_HATS = new Set([
+    "wizardHat", "propeller", "flamingCrown"
+]);
+
+/** Exclude animated eyes/mouth/body items for NPC random rolls */
+export const AI_HEAVY_EYES = new Set(["laser", "fire", "cosmic", "galaxy"]);
+export const AI_HEAVY_MOUTH = new Set(["cigarette", "pipe", "cigar", "vape"]);
+export const AI_HEAVY_BODY = new Set([
+    "angelWings", "demonWings", "fireAura", "lightningAura"
+]);
+
+/** Master switch for town/shared-room NPC penguins */
+export const AI_NPC_ENABLED = true;
 
 // AI emotes (subset available to AI penguins)
 export const AI_EMOTES = ['Wave', 'Dance', 'Laugh', 'Sit', 'Breakdance'];

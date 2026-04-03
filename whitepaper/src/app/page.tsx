@@ -1554,7 +1554,7 @@ function TeamSection() {
 }
 
 // Roadmap Section
-function RoadmapSection({ onOpenBscRoadmap }: { onOpenBscRoadmap: () => void }) {
+function RoadmapSection() {
   const { t, locale } = useWhitepaperLanguage();
   const phases = [
     {
@@ -1694,32 +1694,6 @@ function RoadmapSection({ onOpenBscRoadmap }: { onOpenBscRoadmap: () => void }) 
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">
             {t("roadmap.lead")}
           </p>
-        </motion.div>
-
-        {/* BSC migration — primary chain for $WADDLE */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="glass-card rounded-2xl p-6 mb-10 border border-amber-500/40 bg-gradient-to-br from-amber-950/30 via-slate-900/80 to-slate-900/80"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-            <img src="/binance-icon.svg" alt="" className="h-12 w-12 shrink-0 object-contain" aria-hidden />
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-amber-400 font-semibold uppercase tracking-wider mb-1">
-                {t("bsc.roadmapCard.phase")}
-              </p>
-              <h3 className="text-lg font-bold text-white mb-2">{t("bsc.roadmapCard.title")}</h3>
-              <p className="text-slate-400 text-sm leading-relaxed">{t("bsc.roadmapCard.summary")}</p>
-            </div>
-            <button
-              type="button"
-              onClick={onOpenBscRoadmap}
-              className="shrink-0 px-5 py-3 rounded-xl font-bold text-black bg-amber-400 hover:bg-amber-300 border-b-4 border-amber-700 transition-all text-sm"
-            >
-              {t("bsc.roadmapCard.cta")}
-            </button>
-          </div>
         </motion.div>
 
         {/* Progress Bar */}
@@ -2005,7 +1979,7 @@ function WhitepaperPageContent() {
     <main className="relative">
       <Snowfall />
       <Navigation />
-      <BscMigrationBanner onOpenRoadmap={() => setBscRoadmapOpen(true)} />
+      <BscMigrationBanner />
       <HeroSection />
       <VideoSection />
       <AboutSection />
@@ -2015,8 +1989,8 @@ function WhitepaperPageContent() {
       <EconomySection />
       <PlatformEconomicsSection />
       <TeamSection />
-      <RoadmapSection onOpenBscRoadmap={() => setBscRoadmapOpen(true)} />
-      <Changelog />
+      <RoadmapSection />
+      <Changelog onOpenBscRoadmap={() => setBscRoadmapOpen(true)} />
       <Footer />
       <BscRoadmapModal open={bscRoadmapOpen} onClose={() => setBscRoadmapOpen(false)} />
     </main>

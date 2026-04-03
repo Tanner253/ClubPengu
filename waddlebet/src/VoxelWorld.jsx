@@ -38,7 +38,14 @@ import {
     CENTER_X, 
     CENTER_Z, 
     BUILDINGS, 
-    AI_NAMES, 
+    AI_NAMES,
+    AI_AGENT_COUNT,
+    AI_SPAWN_PUFFLES,
+    AI_HEAVY_HATS,
+    AI_HEAVY_EYES,
+    AI_HEAVY_MOUTH,
+    AI_HEAVY_BODY,
+    AI_NPC_ENABLED,
     AI_EMOTES,
     AI_CONVERSATIONS,
     BUBBLE_HEIGHT_PENGUIN,
@@ -2061,23 +2068,25 @@ const VoxelWorld = ({
         }
         
         // --- INITIALIZE/RESTORE AI AGENTS ---
-        // AI DISABLED FOR PERFORMANCE - set to true to re-enable
-        const AI_ENABLED = false;
+        // Performance: AI_AGENT_COUNT cap, no NPC puffles, exclude animated cosmetics (see roomConfig)
+        const AI_ENABLED = AI_NPC_ENABLED;
         
         if (AI_ENABLED && aiAgentsRef.current.length === 0) {
-            // First time - create AI agents
-            AI_NAMES.forEach((name, i) => {
-                const skins = Object.keys(PALETTE).filter(k => !['floorLight','floorDark','wood','rug','glass','beerGold','mirrorFrame','mirrorGlass', 'asphalt', 'roadLine', 'buildingBrickRed', 'buildingBrickYellow', 'buildingBrickBlue', 'windowLight', 'windowDark', 'grass', 'snow', 'water', 'waterDeep', 'butterfly1', 'butterfly2', 'butterfly3'].includes(k));
-                const hats = Object.keys(ASSETS.HATS);
-                // Filter out exclusive items like "joe" (invisible body) from AI clothing
-                const bodyItems = Object.keys(ASSETS.BODY).filter(k => !ASSETS.BODY[k]?.hideBody);
-                
+            const skins = Object.keys(PALETTE).filter(k => !['floorLight','floorDark','wood','rug','glass','beerGold','mirrorFrame','mirrorGlass', 'asphalt', 'roadLine', 'buildingBrickRed', 'buildingBrickYellow', 'buildingBrickBlue', 'windowLight', 'windowDark', 'grass', 'snow', 'water', 'waterDeep', 'butterfly1', 'butterfly2', 'butterfly3'].includes(k));
+            const hatPool = Object.keys(ASSETS.HATS).filter(k => !AI_HEAVY_HATS.has(k));
+            const bodyPool = Object.keys(ASSETS.BODY).filter(k => !ASSETS.BODY[k]?.hideBody && !AI_HEAVY_BODY.has(k));
+            const eyePool = Object.keys(ASSETS.EYES).filter(k => !AI_HEAVY_EYES.has(k));
+            const mouthPool = Object.keys(ASSETS.MOUTH).filter(k => !AI_HEAVY_MOUTH.has(k));
+            const pick = (arr, fallback) => (arr.length ? arr[Math.floor(Math.random() * arr.length)] : fallback);
+
+            // First time - create AI agents (limited count for frame budget)
+            AI_NAMES.slice(0, AI_AGENT_COUNT).forEach((name, i) => {
                 const aiData = {
-                    skin: skins[Math.floor(Math.random() * skins.length)],
-                    hat: hats[Math.floor(Math.random() * hats.length)],
-                    eyes: 'normal',
-                    mouth: 'beak',
-                    bodyItem: bodyItems[Math.floor(Math.random() * bodyItems.length)]
+                    skin: pick(skins, 'blue'),
+                    hat: pick(hatPool, 'none'),
+                    eyes: pick(eyePool, 'normal'),
+                    mouth: pick(mouthPool, 'beak'),
+                    bodyItem: pick(bodyPool, 'none')
                 };
                 
                 // Store appearance data for mesh rebuilding
@@ -2124,9 +2133,8 @@ const VoxelWorld = ({
                 aiMesh.position.set(sx, 0, sz);
                 scene.add(aiMesh);
 
-                // 20% chance to have a puffle companion
                 let aiPuffle = null;
-                if (Math.random() < 0.2) {
+                if (AI_SPAWN_PUFFLES && Math.random() < 0.2) {
                     const puffleColors = Object.keys(Puffle.COLORS);
                     const randomColor = puffleColors[Math.floor(Math.random() * puffleColors.length)];
                     aiPuffle = new Puffle({ 
