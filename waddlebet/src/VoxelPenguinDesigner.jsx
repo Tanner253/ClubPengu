@@ -1964,10 +1964,19 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         >
                             <LanguageToggle variant="inline" className="justify-center gap-2" />
                         </div>
+                        <a
+                            href="https://whitepaper.waddle.bet/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/50 bg-cyan-950/40 py-3 text-sm font-bold text-cyan-200 transition-colors hover:bg-cyan-900/50 retro-text"
+                        >
+                            <IconWorld size={18} />
+                            {t('menu.whitepaperCta')}
+                        </a>
                         <button
                             type="button"
                             onClick={dismissBscMigrationPopup}
-                            className="mt-6 w-full py-3 rounded-xl font-bold text-black bg-amber-400 hover:bg-amber-300 active:scale-[0.98] transition-all retro-text text-sm border-b-4 border-amber-700"
+                            className="mt-3 w-full py-3 rounded-xl font-bold text-black bg-amber-400 hover:bg-amber-300 active:scale-[0.98] transition-all retro-text text-sm border-b-4 border-amber-700"
                         >
                             {t('menu.bscMigrationDismiss')}
                         </button>
@@ -1985,11 +1994,22 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 }}
             />
             
-            {/* Title - smaller on mobile portrait */}
-            <div className={`absolute top-0 left-0 z-10 w-full pointer-events-none ${isPortrait && isMobileView ? 'p-3' : 'p-6'}`}>
-                <h1 className={`retro-text text-white drop-shadow-lg ${isPortrait && isMobileView ? 'text-2xl' : 'text-4xl'}`} style={{textShadow: '4px 4px 0px #000'}}>
-                    {t('creator.penguinMaker')} <span className={`text-yellow-400 align-top ${isPortrait && isMobileView ? 'text-xs' : 'text-sm'}`}>{t('creator.deluxe')}</span>
-                </h1>
+            {/* Title + whitepaper — link is pointer-events-auto so canvas stays clickable elsewhere */}
+            <div className={`absolute top-0 left-0 z-10 w-full ${isPortrait && isMobileView ? 'p-3' : 'p-6'}`}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                    <h1 className={`retro-text text-white drop-shadow-lg pointer-events-none ${isPortrait && isMobileView ? 'text-2xl' : 'text-4xl'}`} style={{textShadow: '4px 4px 0px #000'}}>
+                        {t('creator.penguinMaker')} <span className={`text-yellow-400 align-top ${isPortrait && isMobileView ? 'text-xs' : 'text-sm'}`}>{t('creator.deluxe')}</span>
+                    </h1>
+                    <a
+                        href="https://whitepaper.waddle.bet/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-950/50 px-2.5 py-1.5 text-xs font-bold text-cyan-200 shadow-md transition-colors hover:bg-cyan-900/60 sm:px-3 sm:py-2 sm:text-sm"
+                    >
+                        <IconWorld size={isPortrait && isMobileView ? 14 : 16} />
+                        {t('menu.whitepaperCta')}
+                    </a>
+                </div>
             </div>
 
             {/* Settings Panel - bottom sheet on mobile portrait, side panel on landscape/desktop */}

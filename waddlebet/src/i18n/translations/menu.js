@@ -131,4 +131,16 @@ export default {
         ru: 'Понятно',
         ar: 'حسناً',
     },
+    'menu.whitepaperCta': {
+        en: 'Whitepaper',
+        zh: '白皮书',
+        es: 'Whitepaper',
+        pt: 'Whitepaper',
+        ko: '백서',
+        ja: 'ホワイトペーパー',
+        fr: 'Whitepaper',
+        de: 'Whitepaper',
+        ru: 'Whitepaper',
+        ar: 'الورقة البيضاء',
+    },
 };
