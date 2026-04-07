@@ -1528,6 +1528,8 @@ function TeamSection() {
           </p>
         </motion.div>
 
+        <SolanaHistoryChart mint={CPW3_ORIGINAL_SOLANA_MINT} embedded />
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -2097,7 +2099,6 @@ function WhitepaperPageContent() {
       <BscMigrationBanner />
       <HeroSection />
       <FourMemeFeeDisclosure />
-      <SolanaHistoryChart mint={CPW3_ORIGINAL_SOLANA_MINT} />
       <VideoSection />
       <AboutSection />
       <CustomizationSection />

@@ -8,9 +8,11 @@ import { useWhitepaperLanguage } from "../i18n/LanguageContext";
 type Props = {
   /** Original $CPW3 SPL mint */
   mint: string;
+  /** Nested under another section (e.g. Team); uses a div wrapper and subheading for document outline */
+  embedded?: boolean;
 };
 
-export function SolanaHistoryChart({ mint }: Props) {
+export function SolanaHistoryChart({ mint, embedded = false }: Props) {
   const { t } = useWhitepaperLanguage();
   const [copied, setCopied] = useState(false);
 
@@ -24,27 +26,37 @@ export function SolanaHistoryChart({ mint }: Props) {
     }
   };
 
+  const Root = embedded ? "div" : "section";
+  const Heading = embedded ? "h3" : "h2";
+
   return (
-    <section
+    <Root
       id="cpw3-track-record"
-      className="py-24 px-4 sm:px-6 relative overflow-hidden scroll-mt-24"
+      className={
+        embedded
+          ? "relative mb-16 scroll-mt-24"
+          : "relative scroll-mt-24 overflow-hidden px-4 py-24 sm:px-6"
+      }
       aria-labelledby="cpw3-track-heading"
     >
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[380px] bg-cyan-500/6 rounded-full blur-3xl" />
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute left-1/2 top-1/2 h-[380px] w-[600px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-500/6 blur-3xl" />
       </div>
 
-      <div className="max-w-3xl mx-auto relative text-center">
+      <div className="relative mx-auto max-w-3xl text-center">
         <motion.div
           initial={{ opacity: 0, y: 32 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
         >
-          <p className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">{t("chart.kicker")}</p>
-          <h2 id="cpw3-track-heading" className="text-3xl md:text-4xl font-bold mt-4 mb-3 text-white">
+          <p className="text-sm font-semibold uppercase tracking-widest text-cyan-400">{t("chart.kicker")}</p>
+          <Heading
+            id="cpw3-track-heading"
+            className={`mt-4 mb-3 font-bold text-white ${embedded ? "text-2xl md:text-3xl" : "text-3xl md:text-4xl"}`}
+          >
             {t("chart.title")}
-          </h2>
-          <p className="text-slate-400 text-base md:text-lg leading-relaxed mb-8">{t("chart.sub")}</p>
+          </Heading>
+          <p className="mb-8 text-base leading-relaxed text-slate-400 md:text-lg">{t("chart.sub")}</p>
 
           <div className="glass-card rounded-2xl p-5 sm:p-6 border border-cyan-500/25 text-left">
             <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">{t("chart.mintLabel")}</p>
@@ -62,6 +74,6 @@ export function SolanaHistoryChart({ mint }: Props) {
           </div>
         </motion.div>
       </div>
-    </section>
+    </Root>
   );
 }
