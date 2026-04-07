@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion, useScroll, useTransform, useMotionValue } from "framer-motion";
 import {
   Gamepad2,
   Coins,
@@ -68,6 +68,9 @@ const BSC_TOKEN_CONTRACT_ADDRESS =
 /** Original $CPW3 SPL mint (~$700k ATH on Solana). */
 const CPW3_ORIGINAL_SOLANA_MINT = "63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump";
 
+/** Hero background — same trailer as the demo section (no second embed there). */
+const HERO_YOUTUBE_VIDEO_ID = "H2Ge_hb5Gfc";
+
 // Snow effect component
 function Snowfall() {
   const [snowflakes, setSnowflakes] = useState<Array<{ id: number; left: number; delay: number; duration: number; size: number }>>([]);
@@ -84,7 +87,7 @@ function Snowfall() {
   }, []);
 
   return (
-    <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
+    <div className="fixed inset-0 pointer-events-none overflow-hidden z-[3]">
       {snowflakes.map((flake) => (
         <div
           key={flake.id}
