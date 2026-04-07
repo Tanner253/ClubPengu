@@ -1572,6 +1572,9 @@ function TeamSection() {
 // Roadmap Section
 function RoadmapSection() {
   const { t, locale } = useWhitepaperLanguage();
+  /** Total time on the product (prototypes, game, infra)—not “days since first git commit.” */
+  const DAYS_BUILDING_DISPLAY = "365+";
+
   const phases = [
     {
       phase: "Phase 1",
@@ -1748,7 +1751,7 @@ function RoadmapSection() {
               <div className="text-slate-500">{t("roadmap.p2pGames")}</div>
             </div>
             <div>
-              <div className="text-2xl font-bold text-yellow-400">18</div>
+              <div className="text-2xl font-bold text-yellow-400">{DAYS_BUILDING_DISPLAY}</div>
               <div className="text-slate-500">{t("roadmap.daysBuilding")}</div>
             </div>
           </div>
