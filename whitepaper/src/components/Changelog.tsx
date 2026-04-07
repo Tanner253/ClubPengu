@@ -91,7 +91,7 @@ const CHANGELOG_DATA: ChangelogVersion[] = [
     changes: [
       { type: "feature", text: "BSC / four.meme token track — 企鹅俱乐部 as primary on-chain brand for the new deployment" },
       { type: "backend", text: "Wallet, RPC, and settlement paths being extended for BSC alongside existing Solana flows" },
-      { type: "content", text: "Whitepaper: BSC migration called out in Changelog; contract UI shows BSC CA when set, legacy Solana mint retained for reference" },
+      { type: "content", text: "Whitepaper: BSC migration in Changelog; contract UI shows BSC CA when set, original $CPW3 Solana mint for track record only" },
       { type: "improvement", text: "Layout: full-page dark background on html + shell to prevent white flash under the nav during load" },
     ],
   },
