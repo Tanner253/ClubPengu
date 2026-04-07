@@ -24,7 +24,22 @@ const notoSansTc = Noto_Sans_TC({
 export const metadata: Metadata = {
   title: "WaddleBet | Permissionless Social Wagering on Solana",
   description: "No KYC. No accounts. Wager any SPL token P2P with instant on-chain settlement. x402 payment protocol, x403 wallet auth. First of its kind.",
-  keywords: ["Solana", "BSC", "BNB", "Binance Smart Chain", "Web3", "P2P Wagering", "No KYC", "x402", "SPL Token", "Crypto Gaming", "DeFi", "WaddleBet", "WADDLE", "Pump.fun"],
+  keywords: [
+    "Solana",
+    "BSC",
+    "BNB",
+    "Binance Smart Chain",
+    "four.meme",
+    "Web3",
+    "P2P Wagering",
+    "No KYC",
+    "x402",
+    "SPL Token",
+    "Crypto Gaming",
+    "DeFi",
+    "WaddleBet",
+    "企鹅俱乐部",
+  ],
   icons: {
     icon: "/character.png",
     apple: "/character.png",

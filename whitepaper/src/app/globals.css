@@ -22,12 +22,14 @@
 
 html {
   scroll-behavior: smooth;
+  /* Prevent white flash under fixed nav / during paint (matches body) */
+  background-color: rgb(8, 12, 21);
 }
 
 body {
   background: rgb(var(--background));
   color: rgb(var(--foreground));
-  font-family: var(--font-geist-sans);
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
 
 /* Custom scrollbar */

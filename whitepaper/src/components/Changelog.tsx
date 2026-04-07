@@ -81,6 +81,21 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.2.0-dev",
+    date: "April 3, 2026",
+    title: "🌐 BSC migration (in progress)",
+    description:
+      "Active engineering toward Binance Smart Chain: four.meme launch for 企鹅俱乐部, BEP-20 integration, and whitepaper updates. Game stack remains multi-chain.",
+    highlight: true,
+    stats: { filesChanged: 12, additions: 800, deletions: 400 },
+    changes: [
+      { type: "feature", text: "BSC / four.meme token track — 企鹅俱乐部 as primary on-chain brand for the new deployment" },
+      { type: "backend", text: "Wallet, RPC, and settlement paths being extended for BSC alongside existing Solana flows" },
+      { type: "content", text: "Whitepaper: BSC migration called out in Changelog; contract UI shows BSC CA when set, legacy Solana mint retained for reference" },
+      { type: "improvement", text: "Layout: full-page dark background on html + shell to prevent white flash under the nav during load" },
+    ],
+  },
+  {
     version: "1.1.4",
     date: "January 31, 2026",
     title: "🎨 NFT Minting & Photo Booth",

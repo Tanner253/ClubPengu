@@ -69,7 +69,7 @@ export function WhitepaperLanguageProvider({ children }: { children: ReactNode }
   return (
     <LanguageContext.Provider value={value}>
       <div
-        className="min-h-screen"
+        className="min-h-screen bg-[rgb(8,12,21)] text-slate-100"
         style={
           locale === "zh-TW"
             ? { fontFamily: "var(--font-noto-tc), var(--font-sans), system-ui, sans-serif" }

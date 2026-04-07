@@ -26,6 +26,7 @@ import {
 import Changelog from "../components/Changelog";
 import GachaSystemSection from "../components/GachaSystem";
 import { BscMigrationBanner } from "../components/BscMigrationBanner";
+import { FourMemeFeeDisclosure } from "../components/FourMemeFeeDisclosure";
 import { BscRoadmapModal } from "../components/BscRoadmapModal";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import {
@@ -50,10 +51,21 @@ const XIcon = ({ className }: { className?: string }) => (
 const SOCIAL_LINKS = {
   github: "https://github.com/Tanner253/ClubPengu",
   x: "https://x.com/i/communities/1998537610592137381",
-  pumpfun: "https://pump.fun",
+  fourmeme: "https://four.meme",
 };
 
-const CONTRACT_ADDRESS = "44E4BqVSZmRbGTbp6vXs9QTPpLZLk4YMzaSrNqVgpump";
+/** Display name for the BSC token (four.meme). */
+const TOKEN_DISPLAY_NAME = "企鹅俱乐部";
+
+/**
+ * BEP-20 contract on BSC after four.meme deploy. Paste 0x… here when live.
+ * Optional: set NEXT_PUBLIC_BSC_TOKEN_CA in env at build time instead.
+ */
+const BSC_TOKEN_CONTRACT_ADDRESS =
+  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_BSC_TOKEN_CA) || "";
+
+/** Legacy Solana mint (historical reference only). */
+const SOLANA_LEGACY_TOKEN_MINT = "44E4BqVSZmRbGTbp6vXs9QTPpLZLk4YMzaSrNqVgpump";
 
 // Snow effect component
 function Snowfall() {
@@ -207,15 +219,15 @@ function Navigation() {
             
             <div className="w-px h-6 bg-white/10" />
             
-            <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-sm font-medium">
-              $WADDLE
+            <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-sm font-medium max-w-[10rem] truncate" title={TOKEN_DISPLAY_NAME}>
+              {TOKEN_DISPLAY_NAME}
             </span>
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex md:hidden items-center gap-3">
-            <span className="px-2 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-medium">
-              $WADDLE
+            <span className="px-2 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-medium max-w-[7rem] truncate" title={TOKEN_DISPLAY_NAME}>
+              {TOKEN_DISPLAY_NAME}
             </span>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -449,7 +461,7 @@ function HeroSection() {
           className="mt-16 inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20"
         >
           <Coins className="w-5 h-5 text-yellow-500" />
-          <span className="text-yellow-500 font-bold">$WADDLE</span>
+          <span className="text-yellow-500 font-bold">{TOKEN_DISPLAY_NAME}</span>
           <span className="text-slate-400">•</span>
           <span className="text-slate-400 text-sm max-w-md">{t("hero.token.chains")}</span>
         </motion.div>
@@ -594,7 +606,7 @@ function AboutSection() {
               </h3>
               <p className="text-slate-300 text-lg mb-6 leading-relaxed">{t("about.p1")}</p>
               <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-6">
-                {["$SOL", "$BONK", "$WIF", "$PENGU", "$WADDLE", t("about.anyToken")].map((token, i) => (
+                {["$SOL", "$BONK", "$WIF", "$PENGU", TOKEN_DISPLAY_NAME, t("about.anyToken")].map((token, i) => (
                   <span
                     key={i}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium ${
@@ -920,7 +932,7 @@ function EconomySection() {
                     alt="WaddleBet" 
                     className="w-20 h-20 md:w-28 md:h-28 rounded-2xl object-cover mx-auto shadow-lg"
                   />
-                  <p className="text-2xl font-bold text-white mt-4">$WADDLE</p>
+                  <p className="text-2xl font-bold text-white mt-4">{TOKEN_DISPLAY_NAME}</p>
                   <p className="text-sm text-yellow-100/80 text-center px-2 leading-snug">{t("economy.tokenSubtitle")}</p>
                 </div>
               </div>
@@ -1614,7 +1626,7 @@ function RoadmapSection() {
       title: "Rebranding",
       status: "complete",
       items: [
-        "✅ New Token Launch ($WADDLE)",
+        "✅ Token launch — 企鹅俱乐部 (BSC / four.meme)",
         "✅ OG Holder Airdrop",
         "✅ Brand Refresh to WaddleBet",
         "✅ Shrimp Character & Feathers",
@@ -1815,16 +1827,37 @@ function RoadmapSection() {
 function ContractAddress() {
   const { t } = useWhitepaperLanguage();
   const [copied, setCopied] = useState(false);
+  const [copiedLegacy, setCopiedLegacy] = useState(false);
 
-  const copyToClipboard = async () => {
+  const hasBscCa =
+    typeof BSC_TOKEN_CONTRACT_ADDRESS === "string" &&
+    BSC_TOKEN_CONTRACT_ADDRESS.startsWith("0x") &&
+    BSC_TOKEN_CONTRACT_ADDRESS.length >= 42;
+
+  const copyBsc = async () => {
+    if (!hasBscCa) return;
     try {
-      await navigator.clipboard.writeText(CONTRACT_ADDRESS);
+      await navigator.clipboard.writeText(BSC_TOKEN_CONTRACT_ADDRESS);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
     }
   };
+
+  const copyLegacy = async () => {
+    try {
+      await navigator.clipboard.writeText(SOLANA_LEGACY_TOKEN_MINT);
+      setCopiedLegacy(true);
+      setTimeout(() => setCopiedLegacy(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  const bscscanUrl = hasBscCa
+    ? `https://bscscan.com/token/${BSC_TOKEN_CONTRACT_ADDRESS}`
+    : "";
 
   return (
     <div className="glass-card rounded-xl p-4 sm:p-6 border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-cyan-500/5">
@@ -1838,21 +1871,28 @@ function ContractAddress() {
               <p className="text-xs text-purple-400 uppercase tracking-wider font-semibold">{t("contract.tokenLabel")}</p>
               <p className="text-sm font-medium text-slate-300">
                 {t("contract.liveOn")}{" "}
-                <a href={`https://pump.fun/coin/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="text-cyan-400 hover:underline">
-                  {t("contract.pumpfun")}
+                <a
+                  href={bscscanUrl || SOCIAL_LINKS.fourmeme}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-cyan-400 hover:underline"
+                >
+                  {t("contract.platform")}
                 </a>
               </p>
             </div>
           </div>
-          
+
           <div className="flex-1 w-full sm:w-auto">
             <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 border border-purple-500/20">
               <code className="text-xs sm:text-sm text-cyan-400 font-mono truncate flex-1">
-                {CONTRACT_ADDRESS}
+                {hasBscCa ? BSC_TOKEN_CONTRACT_ADDRESS : t("contract.caPending")}
               </code>
               <button
-                onClick={copyToClipboard}
-                className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0"
+                type="button"
+                onClick={copyBsc}
+                disabled={!hasBscCa}
+                className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0 disabled:opacity-40 disabled:pointer-events-none"
                 title={t("contract.copyTitle")}
               >
                 {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
@@ -1860,9 +1900,21 @@ function ContractAddress() {
             </div>
           </div>
         </div>
-        <p className="text-xs text-slate-500">
-          {t("contract.note")}
-        </p>
+        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{t("contract.legacyLabel")}</p>
+          <div className="flex items-center gap-2">
+            <code className="text-[11px] sm:text-xs text-slate-400 font-mono truncate flex-1">{SOLANA_LEGACY_TOKEN_MINT}</code>
+            <button
+              type="button"
+              onClick={copyLegacy}
+              className="p-1 rounded-md hover:bg-white/5 text-slate-500 hover:text-white shrink-0"
+              title={t("contract.copyLegacyTitle")}
+            >
+              {copiedLegacy ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-slate-500">{t("contract.note")}</p>
       </div>
     </div>
   );
@@ -1945,9 +1997,7 @@ function Footer() {
           {/* Bottom row: Links and Copyright */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-white/5">
             <div className="flex flex-wrap items-center justify-center gap-4 text-slate-500 text-xs sm:text-sm">
-              <span className="text-cyan-400 font-semibold">
-              $WADDLE
-            </span>
+              <span className="text-cyan-400 font-semibold">{TOKEN_DISPLAY_NAME}</span>
               <span className="text-slate-700">•</span>
               <a href={SOCIAL_LINKS.github} target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">
                 GitHub
@@ -1976,10 +2026,11 @@ function WhitepaperPageContent() {
   const [bscRoadmapOpen, setBscRoadmapOpen] = useState(false);
 
   return (
-    <main className="relative">
+    <main className="relative min-h-screen bg-[rgb(8,12,21)] text-slate-100">
       <Snowfall />
       <Navigation />
       <BscMigrationBanner />
+      <FourMemeFeeDisclosure />
       <HeroSection />
       <VideoSection />
       <AboutSection />
