@@ -142,11 +142,10 @@ Features ship in phases; this is our roadmap.`,
   "contract.copyTitle": "Copy BSC contract",
 
   "chart.kicker": "Track record",
-  "chart.title": "Original CPW3 — market cap history (Dexscreener)",
-  "chart.sub":
-    "Live chart for the first CPW3 SPL mint. Community-reported peak around ~$700k MC during the Solana leg — confirm on Dexscreener.",
-  "chart.openDex": "Open on Dexscreener",
-  "chart.iframeTitle": "Dexscreener chart for original CPW3 token",
+  "chart.title": "Original token $CPW3",
+  "chart.sub": "All-time high about $700k market cap on Solana.",
+  "chart.mintLabel": "SPL mint (contract address)",
+  "chart.copyMint": "Copy mint address",
 
   "economy.tokenSubtitle": "BSC-native (Binance) · Ecosystem spans Solana & BSC",
 
@@ -321,11 +320,10 @@ const zhTW: Record<string, string> = {
   "contract.copyTitle": "複製 BSC 合約",
 
   "chart.kicker": "歷史紀錄",
-  "chart.title": "原始 CPW3 — 市值走勢（Dexscreener）",
-  "chart.sub":
-    "第一個 CPW3 SPL 鑄幣的即時圖表。社群曾提及 Solana 階段約 ~70 萬美元市值高峰——請以 Dexscreener 為準。",
-  "chart.openDex": "於 Dexscreener 開啟",
-  "chart.iframeTitle": "原始 CPW3 代幣 Dexscreener 圖表",
+  "chart.title": "原始代幣 $CPW3",
+  "chart.sub": "Solana 上歷史高點約 70 萬美元市值。",
+  "chart.mintLabel": "SPL 鑄幣地址",
+  "chart.copyMint": "複製鑄幣地址",
 
   "economy.tokenSubtitle": "BSC 原生（幣安）· 生態涵蓋 Solana 與 BSC",
 
