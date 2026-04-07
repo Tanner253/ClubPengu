@@ -55,7 +55,11 @@ const LoadingScreen = ({ visible }) => {
                     <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-white/10">
                         <div className="h-full w-2/5 animate-pulse rounded-full bg-gradient-to-r from-cyan-500 to-purple-500" />
                     </div>
-                    <p className="mt-4 text-xs text-white/55 sm:text-sm">{t('loading.footer')}</p>
+                    <p className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-400/90 sm:text-sm">
+                        <span className="inline-block animate-pulse">&#9888;</span>
+                        {t('loading.freezeWarning')}
+                    </p>
+                    <p className="mt-2 text-xs text-white/55 sm:text-sm">{t('loading.footer')}</p>
                 </div>
             </div>
         </div>

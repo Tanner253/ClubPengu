@@ -282,6 +282,20 @@ const VoxelWorld = ({
             prevPenguinDataRef.current = penguinData;
             return;
         }
+        
+        // Only rebuild mesh if cosmetic-relevant properties actually changed.
+        // Visibility flags (mountEnabled, greenCandlesEnabled, nametagStyle) are handled
+        // by their own event listeners and should NOT trigger a full mesh rebuild.
+        const prev = prevPenguinDataRef.current;
+        const cosmeticKeys = ['skin', 'hat', 'eyes', 'mouth', 'bodyItem', 'mount', 'characterType', 'dogPrimaryColor', 'dogSecondaryColor'];
+        if (prev && penguinData) {
+            const cosmeticsChanged = cosmeticKeys.some(key => prev[key] !== penguinData[key]);
+            if (!cosmeticsChanged) {
+                prevPenguinDataRef.current = penguinData;
+                return;
+            }
+        }
+        
         prevPenguinDataRef.current = penguinData;
         
         if (!playerRef.current || !buildPenguinMeshRef.current || !sceneRef.current || !penguinData) return;
@@ -654,6 +668,20 @@ const VoxelWorld = ({
 
     useEffect(() => {
         if (!mountRef.current || !window.THREE) return;
+        
+        // Hoist event handler references so cleanup can access them even when init is deferred
+        let handleDown, handleUp, handleResize;
+        let initCancelled = false;
+        
+        // Defer heavy world init by one frame so the loading screen can paint first.
+        // Without this, the synchronous zone spawning blocks the main thread before
+        // the browser ever gets a chance to render the loading screen.
+        const deferTimer = requestAnimationFrame(() => {
+            if (initCancelled) return;
+            initWorld();
+        });
+        
+        function initWorld() {
         const THREE = window.THREE;
         const OrbitControls = window.THREE.OrbitControls;
         
@@ -780,7 +808,7 @@ const VoxelWorld = ({
         cameraControllerRef.current = cameraController;
         
         // Window resize handler (important for iOS URL bar showing/hiding)
-        const handleResize = () => {
+        handleResize = () => {
             const width = window.innerWidth;
             const height = window.innerHeight;
             camera.aspect = width / height;
@@ -1976,7 +2004,7 @@ const VoxelWorld = ({
         };
         
         // --- BUILD PLAYER ---
-        const playerWrapper = buildPenguinMesh(penguinData);
+        const playerWrapper = buildPenguinMesh(penguinDataRef.current || penguinData);
         playerRef.current = playerWrapper;
         // OPTIMIZATION: Cache animated parts for local player
         playerWrapper.userData._animatedPartsCache = cacheAnimatedParts(playerWrapper);
@@ -2314,7 +2342,7 @@ const VoxelWorld = ({
         }
 
         // --- INPUT HANDLING ---
-        const handleDown = (e) => {
+        handleDown = (e) => {
             // Skip input processing when arcade game is active (games handle their own input)
             if (arcadeGameActiveRef.current) {
                 return;
@@ -2422,7 +2450,7 @@ const VoxelWorld = ({
                 setIsSnowballMode(true);
             }
         };
-        const handleUp = (e) => {
+        handleUp = (e) => {
             keysRef.current[e.code] = false;
             
             // Release snowball mode
@@ -3938,7 +3966,7 @@ const VoxelWorld = ({
                     emoteRef.current.type, 
                     emoteRef.current.startTime, 
                     !!seatedRef.current, 
-                    penguinData?.characterType || 'penguin', 
+                    penguinDataRef.current?.characterType || 'penguin', 
                     isMounted, 
                     isAirborne,
                     time,
@@ -3958,7 +3986,7 @@ const VoxelWorld = ({
                 
                 // --- WIZARD HAT WORLD-SPACE TRAIL (Per-Player Pools) ---
                 // Triggers for wizardHat equipped OR doginal character (who always has wizard hat)
-                const hasWizardHat = penguinData?.hat === 'wizardHat' || penguinData?.characterType === 'doginal';
+                const hasWizardHat = penguinDataRef.current?.hat === 'wizardHat' || penguinDataRef.current?.characterType === 'doginal';
                 if (hasWizardHat && wizardTrailSystemRef.current) {
                     wizardTrailSystemRef.current.getOrCreatePool('localPlayer');
                     wizardTrailSystemRef.current.update('localPlayer', playerRef.current.position, moving, time, delta);
@@ -3966,7 +3994,7 @@ const VoxelWorld = ({
                 
                 // --- GREEN CANDLE TRAIL ---
                 // Triggers for Gake character OR when greenCandlesEnabled setting is on
-                const isGake = penguinData?.characterType === 'gake';
+                const isGake = penguinDataRef.current?.characterType === 'gake';
                 const greenCandlesEnabled = gameSettingsRef.current?.greenCandlesEnabled === true;
                 if ((isGake || greenCandlesEnabled) && gakeCandleTrailSystemRef.current) {
                     gakeCandleTrailSystemRef.current.getOrCreatePool('localPlayer');
@@ -5880,7 +5908,7 @@ const VoxelWorld = ({
                 if (localNameStyle === 'day1' || localNameStyle === 'whale') {
                     const phase = playerNameSpriteRef.current.userData.animationPhase || 0;
                     const floatOffset = Math.sin(time * 1.5 + phase) * 0.1;
-                    const baseHeight = penguinData?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : penguinData?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
+                    const baseHeight = penguinDataRef.current?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : penguinDataRef.current?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
                     playerNameSpriteRef.current.position.y = baseHeight + floatOffset;
                 }
                 
@@ -6350,12 +6378,18 @@ const VoxelWorld = ({
 
         update();
         
+        } // end initWorld()
+        
         return () => {
+            initCancelled = true;
+            cancelAnimationFrame(deferTimer);
             cancelAnimationFrame(reqRef.current);
-            window.removeEventListener('keydown', handleDown);
-            window.removeEventListener('keyup', handleUp);
-            window.removeEventListener('resize', handleResize);
-            window.removeEventListener('orientationchange', handleResize);
+            if (handleDown) window.removeEventListener('keydown', handleDown);
+            if (handleUp) window.removeEventListener('keyup', handleUp);
+            if (handleResize) {
+                window.removeEventListener('resize', handleResize);
+                window.removeEventListener('orientationchange', handleResize);
+            }
             if(rendererRef.current && mountRef.current) {
                 mountRef.current.removeChild(rendererRef.current.domElement);
                 rendererRef.current.dispose();
@@ -6433,7 +6467,7 @@ const VoxelWorld = ({
             // Cleanup player name sprite ref
             playerNameSpriteRef.current = null;
         };
-    }, [penguinData, room]); // Rebuild scene when room changes
+    }, [room]); // eslint-disable-line react-hooks/exhaustive-deps -- penguinData reads use penguinDataRef; the line-279 useEffect handles mesh rebuilds
     
     // ==================== 3D MATCH BANNERS (SPECTATOR VIEW) ====================
     // Create floating banners above players in active matches

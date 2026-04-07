@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion, useScroll, useTransform, useMotionValue } from "framer-motion";
+import { motion, useTransform, useMotionValue } from "framer-motion";
 import {
   Gamepad2,
   Coins,
@@ -313,181 +313,240 @@ function Navigation() {
   );
 }
 
-// Hero Section
+// Hero Section — full-viewport YouTube under a blurred “glass” layer that lifts on first scroll
 function HeroSection() {
   const { t, locale } = useWhitepaperLanguage();
-  const { scrollY } = useScroll();
-  const y = useTransform(scrollY, [0, 500], [0, 150]);
-  const opacity = useTransform(scrollY, [0, 300], [1, 0]);
+  const liftProgress = useMotionValue(0);
+  const [spacerPx, setSpacerPx] = useState(1400);
+
+  const paneY = useTransform(liftProgress, [0, 1], ["0%", "-100%"]);
+  const overlayBlur = useTransform(liftProgress, [0, 1], ["blur(28px)", "blur(0px)"]);
+  const overlayTint = useTransform(liftProgress, [0, 1], [0.52, 0.08]);
+
+  useEffect(() => {
+    const liftRange = () => Math.max(420, window.innerHeight * 0.92);
+    const updateSpacer = () => {
+      const vh = window.innerHeight;
+      setSpacerPx(Math.round(liftRange() + vh * 0.65));
+    };
+    updateSpacer();
+
+    const onScroll = () => {
+      const y = window.scrollY;
+      const range = liftRange();
+      liftProgress.set(Math.max(0, Math.min(1, y / range)));
+    };
+
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      liftProgress.set(1);
+    } else {
+      onScroll();
+    }
+
+    const onResize = () => {
+      updateSpacer();
+      onScroll();
+    };
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onResize);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onResize);
+    };
+  }, [liftProgress]);
+
+  const embedSrc = `https://www.youtube.com/embed/${HERO_YOUTUBE_VIDEO_ID}?autoplay=1&mute=1&loop=1&playlist=${HERO_YOUTUBE_VIDEO_ID}&controls=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1`;
 
   return (
-    <section className="relative min-h-screen flex items-center justify-center overflow-hidden">
-      {/* Background gradient orbs */}
-      <div className="absolute inset-0 animated-bg" />
-      
-      {/* Grid pattern */}
-      <div 
-        className="absolute inset-0 opacity-[0.02]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        }}
+    <>
+      {/* Fixed trailer — sits behind glass; z below nav + BSC banner */}
+      <div className="fixed inset-0 z-[1] overflow-hidden pointer-events-none" aria-hidden>
+        <iframe
+          title={t("hero.videoBgTitle")}
+          src={embedSrc}
+          className="absolute top-1/2 left-1/2 min-w-full min-h-full w-[177.77vh] h-[56.25vw] max-w-none -translate-x-1/2 -translate-y-1/2 border-0 scale-[1.15]"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
+        />
+        <div className="absolute inset-0 bg-black/25" />
+      </div>
+
+      {/* Scroll height: first ~1 viewport of scroll lifts the glass, then continued scroll reads the page */}
+      <div
+        className="relative z-10 w-full shrink-0"
+        style={{ height: spacerPx }}
+        aria-hidden
       />
 
-      <motion.div style={{ y, opacity }} className="relative z-10 text-center px-6 max-w-5xl mx-auto">
-        {/* Badge */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/10 mb-8"
-        >
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-          </span>
-          <span className="text-sm text-slate-300">{t("hero.badge")}</span>
-        </motion.div>
-
-        {/* Main heading */}
-        <motion.h1
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-          className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-6"
-        >
-          <span className="block">Waddle</span>
-          <span className="gradient-text">Bet</span>
-        </motion.h1>
-
-        {/* Tagline */}
-        <motion.p
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="text-xl md:text-2xl text-slate-400 mb-4 max-w-2xl mx-auto"
-        >
-          {locale === "zh-TW" ? (
-            <span className="text-cyan-400 font-semibold">{t("hero.taglineSingle")}</span>
-          ) : (
-            <>
-              {t("hero.taglineStart")}
-              <span className="text-cyan-400 font-semibold">{t("hero.taglineHighlight")}</span>
-              {t("hero.taglineEnd")}
-            </>
-          )}
-        </motion.p>
-        
-        <motion.p
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="text-lg text-slate-500 mb-6 max-w-2xl mx-auto"
-        >
-          {t("hero.sub")}
-        </motion.p>
-
-        {/* Tech Stack Pills */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.55 }}
-          className="flex flex-wrap justify-center gap-2 mb-8 max-w-2xl mx-auto"
-        >
-          {[
-            { label: t("pill.noKyc"), color: "from-green-500/20 to-emerald-500/20 border-green-500/30 text-green-400" },
-            { label: t("pill.x403"), color: "from-cyan-500/20 to-blue-500/20 border-cyan-500/30 text-cyan-400" },
-            { label: t("pill.x402"), color: "from-purple-500/20 to-pink-500/20 border-purple-500/30 text-purple-400" },
-            { label: t("pill.anySpl"), color: "from-yellow-500/20 to-orange-500/20 border-yellow-500/30 text-yellow-400" },
-            { label: t("pill.cults"), color: "from-pink-500/20 to-red-500/20 border-pink-500/30 text-pink-400" },
-          ].map((pill, i) => (
-            <span
-              key={i}
-              className={`px-3 py-1.5 rounded-full bg-gradient-to-r ${pill.color} text-xs font-semibold border`}
-            >
-              {pill.label}
-            </span>
-          ))}
-        </motion.div>
-
-        {/* Traction Stats */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-          className="flex justify-center gap-8 mb-12"
-        >
-          <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-white">700+</div>
-            <div className="text-xs text-slate-500 uppercase tracking-wider">{t("hero.stat.peak")}</div>
-          </div>
-          <div className="w-px h-12 bg-white/10" />
-          <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-white">7+</div>
-            <div className="text-xs text-slate-500 uppercase tracking-wider">{t("hero.stat.p2p")}</div>
-          </div>
-          <div className="w-px h-12 bg-white/10" />
-          <div className="text-center">
-            <div className="text-2xl md:text-3xl font-bold text-white">{t("hero.stat.live")}</div>
-            <div className="text-xs text-slate-500 uppercase tracking-wider">{t("hero.stat.mainnet")}</div>
-          </div>
-        </motion.div>
-
-        {/* CTA Buttons */}
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.7 }}
-          className="flex flex-col sm:flex-row items-center justify-center gap-4"
-        >
-          <a
-            href="#about"
-            className="group px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold flex items-center gap-2 hover:opacity-90 transition-all pulse-glow text-sm sm:text-base"
-          >
-            {t("hero.cta.explore")}
-            <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </a>
-          <a
-            href="https://waddle.bet"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white/10 border border-white/20 text-white font-semibold flex items-center gap-2 hover:bg-white/20 hover:border-white/30 transition-all text-sm sm:text-base"
-          >
-            {t("hero.cta.play")}
-            <ExternalLink className="w-4 h-4" />
-          </a>
-        </motion.div>
-
-        {/* Token badge */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.8 }}
-          className="mt-16 inline-flex items-center gap-3 px-6 py-3 rounded-2xl bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20"
-        >
-          <Coins className="w-5 h-5 text-yellow-500" />
-          <span className="text-yellow-500 font-bold">{TOKEN_DISPLAY_NAME}</span>
-          <span className="text-slate-400">•</span>
-          <span className="text-slate-400 text-sm max-w-md">{t("hero.token.chains")}</span>
-        </motion.div>
-      </motion.div>
-
-      {/* Scroll indicator */}
+      {/* Glass pane + hero copy — lifts with scroll progress */}
       <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 1 }}
-        className="absolute bottom-8 left-1/2 -translate-x-1/2"
+        style={{ y: paneY }}
+        className="fixed inset-0 z-20 flex flex-col justify-center pointer-events-none"
       >
         <motion.div
-          animate={{ y: [0, 8, 0] }}
-          transition={{ repeat: Infinity, duration: 2 }}
-          className="flex flex-col items-center gap-2 text-slate-500"
-        >
-          <span className="text-xs uppercase tracking-widest">{t("hero.scroll")}</span>
-          <ChevronDown className="w-5 h-5" />
-        </motion.div>
+          className="absolute inset-0 bg-[rgb(8,12,21)] will-change-[opacity,backdrop-filter]"
+          style={{
+            opacity: overlayTint,
+            backdropFilter: overlayBlur,
+            WebkitBackdropFilter: overlayBlur,
+          }}
+        />
+        <div className="absolute inset-0 animated-bg opacity-[0.12]" aria-hidden />
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}
+        />
+
+        <div className="relative z-10 mx-auto w-full max-w-5xl px-6 text-center pointer-events-auto max-h-[100dvh] overflow-y-auto py-16 sm:py-20">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/15 mb-8 backdrop-blur-sm"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+            </span>
+            <span className="text-sm text-slate-200">{t("hero.badge")}</span>
+          </motion.div>
+
+          <motion.h1
+            initial={{ opacity: 0, y: 26 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.22 }}
+            className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-6 drop-shadow-lg"
+          >
+            <span className="block text-white">Waddle</span>
+            <span className="gradient-text">Bet</span>
+          </motion.h1>
+
+          <motion.p
+            initial={{ opacity: 0, y: 22 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.28 }}
+            className="text-xl md:text-2xl text-slate-200 mb-4 max-w-2xl mx-auto drop-shadow"
+          >
+            {locale === "zh-TW" ? (
+              <span className="text-cyan-300 font-semibold">{t("hero.taglineSingle")}</span>
+            ) : (
+              <>
+                {t("hero.taglineStart")}
+                <span className="text-cyan-300 font-semibold">{t("hero.taglineHighlight")}</span>
+                {t("hero.taglineEnd")}
+              </>
+            )}
+          </motion.p>
+
+          <motion.p
+            initial={{ opacity: 0, y: 22 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.34 }}
+            className="text-lg text-slate-300 mb-6 max-w-2xl mx-auto drop-shadow"
+          >
+            {t("hero.sub")}
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+            className="flex flex-wrap justify-center gap-2 mb-8 max-w-2xl mx-auto"
+          >
+            {[
+              { label: t("pill.noKyc"), color: "from-green-500/25 to-emerald-500/25 border-green-500/40 text-green-300" },
+              { label: t("pill.x403"), color: "from-cyan-500/25 to-blue-500/25 border-cyan-500/40 text-cyan-300" },
+              { label: t("pill.x402"), color: "from-purple-500/25 to-pink-500/25 border-purple-500/40 text-purple-300" },
+              { label: t("pill.anySpl"), color: "from-yellow-500/25 to-orange-500/25 border-yellow-500/40 text-yellow-300" },
+              { label: t("pill.cults"), color: "from-pink-500/25 to-red-500/25 border-pink-500/40 text-pink-300" },
+            ].map((pill, i) => (
+              <span
+                key={i}
+                className={`px-3 py-1.5 rounded-full bg-gradient-to-r ${pill.color} text-xs font-semibold border backdrop-blur-sm`}
+              >
+                {pill.label}
+              </span>
+            ))}
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.45 }}
+            className="flex justify-center gap-8 mb-12"
+          >
+            <div className="text-center">
+              <div className="text-2xl md:text-3xl font-bold text-white drop-shadow">700+</div>
+              <div className="text-xs text-slate-400 uppercase tracking-wider">{t("hero.stat.peak")}</div>
+            </div>
+            <div className="w-px h-12 bg-white/20" />
+            <div className="text-center">
+              <div className="text-2xl md:text-3xl font-bold text-white drop-shadow">7+</div>
+              <div className="text-xs text-slate-400 uppercase tracking-wider">{t("hero.stat.p2p")}</div>
+            </div>
+            <div className="w-px h-12 bg-white/20" />
+            <div className="text-center">
+              <div className="text-2xl md:text-3xl font-bold text-white drop-shadow">{t("hero.stat.live")}</div>
+              <div className="text-xs text-slate-400 uppercase tracking-wider">{t("hero.stat.mainnet")}</div>
+            </div>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.5 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4"
+          >
+            <a
+              href="#about"
+              className="group px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold flex items-center gap-2 hover:opacity-95 transition-all pulse-glow text-sm sm:text-base shadow-lg"
+            >
+              {t("hero.cta.explore")}
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+            </a>
+            <a
+              href="https://waddle.bet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white/15 border border-white/25 text-white font-semibold flex items-center gap-2 hover:bg-white/25 transition-all text-sm sm:text-base backdrop-blur-sm"
+            >
+              {t("hero.cta.play")}
+              <ExternalLink className="w-4 h-4" />
+            </a>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.58 }}
+            className="mt-14 inline-flex flex-wrap items-center justify-center gap-3 px-6 py-3 rounded-2xl bg-black/25 border border-yellow-500/30 backdrop-blur-sm"
+          >
+            <Coins className="w-5 h-5 text-yellow-400" />
+            <span className="text-yellow-400 font-bold">{TOKEN_DISPLAY_NAME}</span>
+            <span className="text-slate-500">•</span>
+            <span className="text-slate-300 text-sm max-w-md">{t("hero.token.chains")}</span>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.75 }}
+            className="mt-10 flex flex-col items-center gap-2 text-slate-400"
+          >
+            <span className="text-xs uppercase tracking-widest">{t("hero.scrollLift")}</span>
+            <motion.div animate={{ y: [0, 6, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="flex flex-col items-center gap-1">
+              <ChevronDown className="w-5 h-5" />
+            </motion.div>
+          </motion.div>
+        </div>
       </motion.div>
-    </section>
+    </>
   );
 }
 
@@ -529,17 +588,32 @@ function VideoSection() {
           viewport={{ once: true }}
           className="glass-card rounded-2xl overflow-hidden border border-cyan-500/30"
         >
-          <div className="relative w-full" style={{ paddingBottom: '56.25%' }}>
-            <iframe
-              className="absolute inset-0 w-full h-full"
-              src="https://www.youtube.com/embed/H2Ge_hb5Gfc?si=sSHAAsfu5ZjwFFYz"
-              title="WaddleBet Gameplay Demo"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              referrerPolicy="strict-origin-when-cross-origin"
-              allowFullScreen
+          <a
+            href={`https://www.youtube.com/watch?v=${HERO_YOUTUBE_VIDEO_ID}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={t("video.watchYoutube")}
+            className="group relative block w-full overflow-hidden"
+            style={{ paddingBottom: "56.25%" }}
+          >
+            <img
+              src={`https://img.youtube.com/vi/${HERO_YOUTUBE_VIDEO_ID}/maxresdefault.jpg`}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
             />
-          </div>
+            <div className="absolute inset-0 bg-black/35 transition-colors group-hover:bg-black/25" />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
+              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600 text-white shadow-lg ring-4 ring-white/20 transition-transform group-hover:scale-105">
+                <span className="ml-1 block h-0 w-0 border-y-[10px] border-y-transparent border-l-[16px] border-l-white" aria-hidden />
+              </span>
+              <span className="text-sm font-semibold text-white drop-shadow md:text-base">
+                {t("video.watchYoutube")}
+              </span>
+            </div>
+          </a>
+          <p className="border-t border-white/10 bg-black/20 px-4 py-3 text-center text-sm text-slate-400">
+            {t("video.sameAsHero")}
+          </p>
         </motion.div>
 
         <motion.div

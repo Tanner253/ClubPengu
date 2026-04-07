@@ -72,6 +72,18 @@ export default {
         ru: 'Подождите — на этом экране нет действий с кошельком.',
         ar: 'انتظر — لا إجراءات محفظة على هذه الشاشة.',
     },
+    'loading.freezeWarning': {
+        en: 'The browser may freeze briefly while the 3D world builds — press "Wait" if prompted.',
+        zh: '3D 世界构建时浏览器可能会短暂冻结 — 如有提示请按"等待"。',
+        es: 'El navegador puede congelarse brevemente al construir el mundo 3D — pulsa "Esperar" si aparece.',
+        pt: 'O navegador pode congelar brevemente ao construir o mundo 3D — clique "Esperar" se solicitado.',
+        ko: '3D 세계를 구축하는 동안 브라우저가 잠시 멈출 수 있어요 — 표시되면 "대기"를 누르세요.',
+        ja: '3Dワールドの構築中にブラウザが一時フリーズすることがあります — 表示されたら「待つ」を押してください。',
+        fr: 'Le navigateur peut geler brièvement pendant la construction du monde 3D — cliquez "Attendre" si demandé.',
+        de: 'Der Browser kann beim Aufbau der 3D-Welt kurz einfrieren — drücke "Warten" falls gefragt.',
+        ru: 'Браузер может ненадолго зависнуть при построении 3D-мира — нажмите "Подождать" при запросе.',
+        ar: 'قد يتجمد المتصفح لفترة وجيزة أثناء بناء العالم ثلاثي الأبعاد — اضغط "انتظر" إذا طُلب منك.',
+    },
     'loading.footer': {
         en: 'First load can take a moment — thanks for your patience.',
         zh: '首次加载可能需要一点时间 — 感谢耐心等待。',

@@ -82,6 +82,8 @@ Features ship in phases; this is our roadmap.`,
   "hero.cta.play": "Play Now",
   "hero.token.chains": "BSC-native (Binance) · Metaverse on Solana & BSC",
   "hero.scroll": "Scroll",
+  "hero.videoBgTitle": "WaddleBet gameplay trailer (background)",
+  "hero.scrollLift": "Scroll to reveal the trailer",
 
   "video.kicker": "Gameplay",
   "video.title": "See WaddleBet in Action",
@@ -91,6 +93,9 @@ Features ship in phases; this is our roadmap.`,
   "video.badge1": "Real Gameplay",
   "video.badge2": "Active Development",
   "video.badge3": "Playable Now",
+  "video.sameAsHero":
+    "Same trailer as the hero above—open YouTube for sound and full controls.",
+  "video.watchYoutube": "Watch on YouTube",
 
   "about.kicker": "About",
   "about.title": "Waddle Into Web3",
@@ -260,6 +265,8 @@ const zhTW: Record<string, string> = {
   "hero.cta.play": "立即遊玩",
   "hero.token.chains": "BSC 原生（幣安）· 元宇宙支援 Solana 與 BSC",
   "hero.scroll": "向下捲動",
+  "hero.videoBgTitle": "WaddleBet 實機預告（背景）",
+  "hero.scrollLift": "捲動以揭開預告片",
 
   "video.kicker": "實機畫面",
   "video.title": "See WaddleBet in Action",
@@ -268,6 +275,8 @@ const zhTW: Record<string, string> = {
   "video.badge1": "真實遊玩",
   "video.badge2": "積極開發",
   "video.badge3": "可立即遊玩",
+  "video.sameAsHero": "與上方主視覺為同一支預告—在 YouTube 開啟可聽聲音並使用完整控制項。",
+  "video.watchYoutube": "在 YouTube 觀看",
 
   "about.kicker": "關於",
   "about.title": "搖搖晃晃進入 Web3",

@@ -167,12 +167,14 @@ const AppContent = () => {
     
     // Also sync penguinData when live appearance changes (e.g., equipping items from inventory)
     // This is separate from customization because appearance can change during gameplay
+    // NOTE: mountEnabled/greenCandlesEnabled/nametagStyle are settings-level toggles, NOT cosmetics.
+    // Propagating them into penguinData would trigger expensive mesh rebuilds for no reason.
     useEffect(() => {
         if (isAuthenticated && userData?.appearance) {
-            setPenguinData(prev => ({
-                ...prev,
-                ...userData.appearance
-            }));
+            setPenguinData(prev => {
+                const { mountEnabled, greenCandlesEnabled, nametagStyle, ...cosmeticProps } = userData.appearance;
+                return { ...prev, ...cosmeticProps };
+            });
         }
     }, [isAuthenticated, userData?.appearance]);
     
