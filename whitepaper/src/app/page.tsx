@@ -27,6 +27,7 @@ import Changelog from "../components/Changelog";
 import GachaSystemSection from "../components/GachaSystem";
 import { BscMigrationBanner } from "../components/BscMigrationBanner";
 import { FourMemeFeeDisclosure } from "../components/FourMemeFeeDisclosure";
+import { SolanaHistoryChart } from "../components/SolanaHistoryChart";
 import { BscRoadmapModal } from "../components/BscRoadmapModal";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import {
@@ -64,8 +65,11 @@ const TOKEN_DISPLAY_NAME = "企鹅俱乐部";
 const BSC_TOKEN_CONTRACT_ADDRESS =
   (typeof process !== "undefined" && process.env.NEXT_PUBLIC_BSC_TOKEN_CA) || "";
 
-/** Legacy Solana mint (historical reference only). */
-const SOLANA_LEGACY_TOKEN_MINT = "44E4BqVSZmRbGTbp6vXs9QTPpLZLk4YMzaSrNqVgpump";
+/** Original CPW3 SPL mint (first deployment; Dexscreener history / ~700k MC leg). */
+const CPW3_ORIGINAL_SOLANA_MINT = "63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump";
+
+/** Later Solana redeploy mint (e.g. Pump.fun leg). */
+const SOLANA_REDEPLOY_MINT = "44E4BqVSZmRbGTbp6vXs9QTPpLZLk4YMzaSrNqVgpump";
 
 // Snow effect component
 function Snowfall() {
@@ -1827,7 +1831,7 @@ function RoadmapSection() {
 function ContractAddress() {
   const { t } = useWhitepaperLanguage();
   const [copied, setCopied] = useState(false);
-  const [copiedLegacy, setCopiedLegacy] = useState(false);
+  const [copiedMintKey, setCopiedMintKey] = useState<"cpw3" | "redeploy" | null>(null);
 
   const hasBscCa =
     typeof BSC_TOKEN_CONTRACT_ADDRESS === "string" &&
@@ -1845,11 +1849,11 @@ function ContractAddress() {
     }
   };
 
-  const copyLegacy = async () => {
+  const copySolanaMint = async (address: string, key: "cpw3" | "redeploy") => {
     try {
-      await navigator.clipboard.writeText(SOLANA_LEGACY_TOKEN_MINT);
-      setCopiedLegacy(true);
-      setTimeout(() => setCopiedLegacy(false), 2000);
+      await navigator.clipboard.writeText(address);
+      setCopiedMintKey(key);
+      setTimeout(() => setCopiedMintKey(null), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
     }
@@ -1900,18 +1904,34 @@ function ContractAddress() {
             </div>
           </div>
         </div>
-        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-          <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{t("contract.legacyLabel")}</p>
-          <div className="flex items-center gap-2">
-            <code className="text-[11px] sm:text-xs text-slate-400 font-mono truncate flex-1">{SOLANA_LEGACY_TOKEN_MINT}</code>
-            <button
-              type="button"
-              onClick={copyLegacy}
-              className="p-1 rounded-md hover:bg-white/5 text-slate-500 hover:text-white shrink-0"
-              title={t("contract.copyLegacyTitle")}
-            >
-              {copiedLegacy ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-            </button>
+        <div className="space-y-2">
+          <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{t("contract.cpw3OriginalLabel")}</p>
+            <div className="flex items-center gap-2">
+              <code className="text-[11px] sm:text-xs text-slate-300 font-mono truncate flex-1">{CPW3_ORIGINAL_SOLANA_MINT}</code>
+              <button
+                type="button"
+                onClick={() => copySolanaMint(CPW3_ORIGINAL_SOLANA_MINT, "cpw3")}
+                className="p-1 rounded-md hover:bg-white/5 text-slate-500 hover:text-white shrink-0"
+                title={t("contract.copyCpw3Title")}
+              >
+                {copiedMintKey === "cpw3" ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-1">{t("contract.solanaRedeployLabel")}</p>
+            <div className="flex items-center gap-2">
+              <code className="text-[11px] sm:text-xs text-slate-400 font-mono truncate flex-1">{SOLANA_REDEPLOY_MINT}</code>
+              <button
+                type="button"
+                onClick={() => copySolanaMint(SOLANA_REDEPLOY_MINT, "redeploy")}
+                className="p-1 rounded-md hover:bg-white/5 text-slate-500 hover:text-white shrink-0"
+                title={t("contract.copyRedeployTitle")}
+              >
+                {copiedMintKey === "redeploy" ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+              </button>
+            </div>
           </div>
         </div>
         <p className="text-xs text-slate-500">{t("contract.note")}</p>
@@ -2030,8 +2050,9 @@ function WhitepaperPageContent() {
       <Snowfall />
       <Navigation />
       <BscMigrationBanner />
-      <FourMemeFeeDisclosure />
       <HeroSection />
+      <FourMemeFeeDisclosure />
+      <SolanaHistoryChart mint={CPW3_ORIGINAL_SOLANA_MINT} />
       <VideoSection />
       <AboutSection />
       <CustomizationSection />

@@ -133,11 +133,20 @@ Features ship in phases; this is our roadmap.`,
   "contract.liveOn": "Live on",
   "contract.platform": "four.meme (BSC)",
   "contract.caPending": "Coming soon",
-  "contract.legacyLabel": "Previous Solana mint (archived)",
-  "contract.copyLegacyTitle": "Copy Solana mint",
+  "contract.cpw3OriginalLabel": "Original CPW3 mint (Solana) — full on-chain history",
+  "contract.solanaRedeployLabel": "Later Solana mint (redeploy)",
+  "contract.copyCpw3Title": "Copy original CPW3 mint",
+  "contract.copyRedeployTitle": "Copy later Solana mint",
   "contract.note":
-    "New token 企鹅俱乐部 launches on four.meme (BSC). The Solana mint above is legacy; always verify the BSC contract on BscScan before trading.",
+    "企鹅俱乐部 launches on four.meme (BSC). Below: original CPW3 SPL mint (63RF…pump), then a later Solana redeploy (44E4…pump). Always verify contracts on BscScan / Solscan before trading.",
   "contract.copyTitle": "Copy BSC contract",
+
+  "chart.kicker": "Track record",
+  "chart.title": "Original CPW3 — market cap history (Dexscreener)",
+  "chart.sub":
+    "Live chart for the first CPW3 SPL mint. Community-reported peak around ~$700k MC during the Solana leg — confirm on Dexscreener.",
+  "chart.openDex": "Open on Dexscreener",
+  "chart.iframeTitle": "Dexscreener chart for original CPW3 token",
 
   "economy.tokenSubtitle": "BSC-native (Binance) · Ecosystem spans Solana & BSC",
 
@@ -303,11 +312,20 @@ const zhTW: Record<string, string> = {
   "contract.liveOn": "上線於",
   "contract.platform": "four.meme（BSC）",
   "contract.caPending": "即將推出",
-  "contract.legacyLabel": "先前 Solana 鑄幣地址（歸檔）",
-  "contract.copyLegacyTitle": "複製 Solana 鑄幣",
+  "contract.cpw3OriginalLabel": "原始 CPW3 鑄幣（Solana）— 完整鏈上紀錄",
+  "contract.solanaRedeployLabel": "後續 Solana 重新部署鑄幣",
+  "contract.copyCpw3Title": "複製原始 CPW3 鑄幣",
+  "contract.copyRedeployTitle": "複製後續 Solana 鑄幣",
   "contract.note":
-    "新代幣 企鹅俱乐部 於 four.meme（BSC）發行。上方 Solana 地址為舊版；交易前請務必在 BscScan 核對 BSC 合約。",
+    "企鹅俱乐部 於 four.meme（BSC）發行。下方依序為：原始 CPW3 SPL 鑄幣（63RF…pump）、之後的 Solana 重新部署（44E4…pump）。交易前請於 BscScan／Solscan 自行核對合約。",
   "contract.copyTitle": "複製 BSC 合約",
+
+  "chart.kicker": "歷史紀錄",
+  "chart.title": "原始 CPW3 — 市值走勢（Dexscreener）",
+  "chart.sub":
+    "第一個 CPW3 SPL 鑄幣的即時圖表。社群曾提及 Solana 階段約 ~70 萬美元市值高峰——請以 Dexscreener 為準。",
+  "chart.openDex": "於 Dexscreener 開啟",
+  "chart.iframeTitle": "原始 CPW3 代幣 Dexscreener 圖表",
 
   "economy.tokenSubtitle": "BSC 原生（幣安）· 生態涵蓋 Solana 與 BSC",
 
