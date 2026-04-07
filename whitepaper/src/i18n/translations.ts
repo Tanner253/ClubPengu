@@ -93,9 +93,6 @@ Features ship in phases; this is our roadmap.`,
   "video.badge1": "Real Gameplay",
   "video.badge2": "Active Development",
   "video.badge3": "Playable Now",
-  "video.sameAsHero":
-    "Same trailer as the hero above—open YouTube for sound and full controls.",
-  "video.watchYoutube": "Watch on YouTube",
 
   "about.kicker": "About",
   "about.title": "Waddle Into Web3",
@@ -275,8 +272,6 @@ const zhTW: Record<string, string> = {
   "video.badge1": "真實遊玩",
   "video.badge2": "積極開發",
   "video.badge3": "可立即遊玩",
-  "video.sameAsHero": "與上方主視覺為同一支預告—在 YouTube 開啟可聽聲音並使用完整控制項。",
-  "video.watchYoutube": "在 YouTube 觀看",
 
   "about.kicker": "關於",
   "about.title": "搖搖晃晃進入 Web3",

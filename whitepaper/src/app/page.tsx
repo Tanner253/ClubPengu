@@ -313,11 +313,13 @@ function Navigation() {
   );
 }
 
-// Hero Section — full-viewport YouTube under a blurred “glass” layer that lifts on first scroll
+/** Opening view: YouTube behind a blurred glass layer; first scroll lifts the glass, then the page is normal. */
 function HeroSection() {
   const { t, locale } = useWhitepaperLanguage();
   const liftProgress = useMotionValue(0);
-  const [spacerPx, setSpacerPx] = useState(1400);
+  const [spacerPx, setSpacerPx] = useState(800);
+  /** Fixed intro layers only while scroll is within the lift range (so the rest of the site scrolls normally). */
+  const [introActive, setIntroActive] = useState(true);
 
   const paneY = useTransform(liftProgress, [0, 1], ["0%", "-100%"]);
   const overlayBlur = useTransform(liftProgress, [0, 1], ["blur(28px)", "blur(0px)"]);
@@ -325,24 +327,26 @@ function HeroSection() {
 
   useEffect(() => {
     const liftRange = () => Math.max(420, window.innerHeight * 0.92);
-    const updateSpacer = () => {
-      const vh = window.innerHeight;
-      setSpacerPx(Math.round(liftRange() + vh * 0.65));
-    };
-    updateSpacer();
+    const updateSpacer = () => setSpacerPx(Math.round(liftRange()));
 
     const onScroll = () => {
-      const y = window.scrollY;
       const range = liftRange();
+      const y = window.scrollY;
       liftProgress.set(Math.max(0, Math.min(1, y / range)));
+      const active = y < range;
+      setIntroActive((prev) => (prev !== active ? active : prev));
     };
 
     const reduce =
       typeof window !== "undefined" &&
       window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
     if (reduce) {
       liftProgress.set(1);
+      setSpacerPx(0);
+      setIntroActive(false);
     } else {
+      updateSpacer();
       onScroll();
     }
 
@@ -359,33 +363,33 @@ function HeroSection() {
     };
   }, [liftProgress]);
 
-  const embedSrc = `https://www.youtube.com/embed/${HERO_YOUTUBE_VIDEO_ID}?autoplay=1&mute=1&loop=1&playlist=${HERO_YOUTUBE_VIDEO_ID}&controls=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1`;
+  const embedSrc = `https://www.youtube.com/embed/${HERO_YOUTUBE_VIDEO_ID}?autoplay=1&mute=1&loop=1&playlist=${HERO_YOUTUBE_VIDEO_ID}&controls=0&rel=0&playsinline=1&modestbranding=1&enablejsapi=1`;
 
   return (
     <>
-      {/* Fixed trailer — sits behind glass; z below nav + BSC banner */}
-      <div className="fixed inset-0 z-[1] overflow-hidden pointer-events-none" aria-hidden>
+      <div
+        className={`fixed inset-0 z-[6] overflow-hidden transition-opacity duration-200 ${
+          introActive ? "opacity-100" : "pointer-events-none opacity-0 invisible"
+        }`}
+        aria-hidden
+      >
         <iframe
           title={t("hero.videoBgTitle")}
           src={embedSrc}
-          className="absolute top-1/2 left-1/2 min-w-full min-h-full w-[177.77vh] h-[56.25vw] max-w-none -translate-x-1/2 -translate-y-1/2 border-0 scale-[1.15]"
+          className="pointer-events-none absolute top-1/2 left-1/2 min-h-full min-w-full max-w-none -translate-x-1/2 -translate-y-1/2 scale-[1.15] border-0 h-[56.25vw] w-[177.77vh]"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
           referrerPolicy="strict-origin-when-cross-origin"
         />
-        <div className="absolute inset-0 bg-black/25" />
+        <div className="pointer-events-none absolute inset-0 bg-black/25" aria-hidden />
       </div>
 
-      {/* Scroll height: first ~1 viewport of scroll lifts the glass, then continued scroll reads the page */}
-      <div
-        className="relative z-10 w-full shrink-0"
-        style={{ height: spacerPx }}
-        aria-hidden
-      />
+      <div className="relative z-10 w-full shrink-0" style={{ height: spacerPx }} aria-hidden />
 
-      {/* Glass pane + hero copy — lifts with scroll progress */}
       <motion.div
         style={{ y: paneY }}
-        className="fixed inset-0 z-20 flex flex-col justify-center pointer-events-none"
+        className={`fixed inset-0 z-20 flex flex-col justify-center pointer-events-none transition-opacity duration-200 ${
+          introActive ? "opacity-100" : "pointer-events-none opacity-0 invisible"
+        }`}
       >
         <motion.div
           className="absolute inset-0 bg-[rgb(8,12,21)] will-change-[opacity,backdrop-filter]"
@@ -550,25 +554,23 @@ function HeroSection() {
   );
 }
 
-// Video/Demo Section
 function VideoSection() {
   const { t, locale } = useWhitepaperLanguage();
   return (
-    <section id="demo" className="py-24 px-6 relative overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute inset-0">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-cyan-500/10 rounded-full blur-3xl" />
+    <section id="demo" className="relative z-10 bg-[rgb(8,12,21)] py-24 px-6">
+      <div className="absolute inset-0 overflow-hidden">
+        <div className="absolute left-1/2 top-1/2 h-[500px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-500/10 blur-3xl" />
       </div>
 
-      <div className="max-w-5xl mx-auto relative">
+      <div className="relative mx-auto max-w-5xl">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-12"
+          className="mb-12 text-center"
         >
-          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">{t("video.kicker")}</span>
-          <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
+          <span className="text-sm font-semibold uppercase tracking-widest text-cyan-400">{t("video.kicker")}</span>
+          <h2 className="mt-4 mb-6 text-4xl font-bold md:text-5xl">
             {locale === "zh-TW" ? (
               <span className="gradient-text-blue">{t("video.titleZh")}</span>
             ) : (
@@ -577,50 +579,32 @@ function VideoSection() {
               </>
             )}
           </h2>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            {t("video.desc")}
-          </p>
+          <p className="mx-auto max-w-2xl text-lg text-slate-400">{t("video.desc")}</p>
         </motion.div>
 
         <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
+          initial={{ opacity: 0, scale: 0.98 }}
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
-          className="glass-card rounded-2xl overflow-hidden border border-cyan-500/30"
+          className="glass-card overflow-hidden rounded-2xl border border-cyan-500/30"
         >
-          <a
-            href={`https://www.youtube.com/watch?v=${HERO_YOUTUBE_VIDEO_ID}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={t("video.watchYoutube")}
-            className="group relative block w-full overflow-hidden"
-            style={{ paddingBottom: "56.25%" }}
-          >
-            <img
-              src={`https://img.youtube.com/vi/${HERO_YOUTUBE_VIDEO_ID}/maxresdefault.jpg`}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+          <div className="relative w-full" style={{ paddingBottom: "56.25%" }}>
+            <iframe
+              className="absolute inset-0 h-full w-full"
+              src={`https://www.youtube.com/embed/${HERO_YOUTUBE_VIDEO_ID}?rel=0&modestbranding=1`}
+              title={t("video.title")}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              referrerPolicy="strict-origin-when-cross-origin"
+              allowFullScreen
             />
-            <div className="absolute inset-0 bg-black/35 transition-colors group-hover:bg-black/25" />
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center">
-              <span className="flex h-16 w-16 items-center justify-center rounded-full bg-red-600 text-white shadow-lg ring-4 ring-white/20 transition-transform group-hover:scale-105">
-                <span className="ml-1 block h-0 w-0 border-y-[10px] border-y-transparent border-l-[16px] border-l-white" aria-hidden />
-              </span>
-              <span className="text-sm font-semibold text-white drop-shadow md:text-base">
-                {t("video.watchYoutube")}
-              </span>
-            </div>
-          </a>
-          <p className="border-t border-white/10 bg-black/20 px-4 py-3 text-center text-sm text-slate-400">
-            {t("video.sameAsHero")}
-          </p>
+          </div>
         </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.15 }}
           className="mt-8 flex flex-wrap justify-center gap-4"
         >
           {[
@@ -630,7 +614,7 @@ function VideoSection() {
           ].map((item, i) => (
             <span
               key={i}
-              className="px-4 py-2 rounded-full bg-white/5 border border-cyan-500/20 text-slate-300 text-sm flex items-center gap-2"
+              className="flex items-center gap-2 rounded-full border border-cyan-500/20 bg-white/5 px-4 py-2 text-sm text-slate-300"
             >
               <span>{item.icon}</span>
               {item.label}
