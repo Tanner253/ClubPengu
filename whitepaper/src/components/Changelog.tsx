@@ -756,8 +756,8 @@ export default function Changelog() {
   const t = useWhitepaperT();
 
   return (
-    <section id="changelog" className="py-32 px-4 sm:px-6 relative">
-      <div className="section-divider mb-32" />
+    <section id="changelog" className="py-16 md:py-32 px-4 sm:px-6 relative">
+      <div className="section-divider mb-16 md:mb-32" />
       
       <div className="max-w-4xl mx-auto">
         {/* Header */}

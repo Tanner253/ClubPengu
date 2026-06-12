@@ -305,101 +305,11 @@ function Navigation() {
   );
 }
 
-/** Opening view: YouTube behind a blurred glass layer; first scroll lifts the glass, then the page is normal. */
-function HeroSection() {
+/** Shared hero copy: badge, headline, pills, stats, CTAs, and token chip. */
+function HeroContent({ showScrollHint = false }: { showScrollHint?: boolean }) {
   const { t, locale } = useWhitepaperLanguage();
-  const liftProgress = useMotionValue(0);
-  const [spacerPx, setSpacerPx] = useState(800);
-  /** Fixed intro layers only while scroll is within the lift range (so the rest of the site scrolls normally). */
-  const [introActive, setIntroActive] = useState(true);
-
-  const paneY = useTransform(liftProgress, [0, 1], ["0%", "-100%"]);
-  const overlayBlur = useTransform(liftProgress, [0, 1], ["blur(28px)", "blur(0px)"]);
-  const overlayTint = useTransform(liftProgress, [0, 1], [0.52, 0.08]);
-
-  useEffect(() => {
-    const liftRange = () => Math.max(420, window.innerHeight * 0.92);
-    const updateSpacer = () => setSpacerPx(Math.round(liftRange()));
-
-    const onScroll = () => {
-      const range = liftRange();
-      const y = window.scrollY;
-      liftProgress.set(Math.max(0, Math.min(1, y / range)));
-      const active = y < range;
-      setIntroActive((prev) => (prev !== active ? active : prev));
-    };
-
-    const reduce =
-      typeof window !== "undefined" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
-    if (reduce) {
-      liftProgress.set(1);
-      setSpacerPx(0);
-      setIntroActive(false);
-    } else {
-      updateSpacer();
-      onScroll();
-    }
-
-    const onResize = () => {
-      updateSpacer();
-      onScroll();
-    };
-
-    window.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onResize);
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onResize);
-    };
-  }, [liftProgress]);
-
-  const embedSrc = `https://www.youtube.com/embed/${HERO_YOUTUBE_VIDEO_ID}?autoplay=1&mute=1&loop=1&playlist=${HERO_YOUTUBE_VIDEO_ID}&controls=0&rel=0&playsinline=1&modestbranding=1&enablejsapi=1`;
-
   return (
     <>
-      <div
-        className={`fixed inset-0 z-[6] overflow-hidden transition-opacity duration-200 ${
-          introActive ? "opacity-100" : "pointer-events-none opacity-0 invisible"
-        }`}
-        aria-hidden
-      >
-        <iframe
-          title={t("hero.videoBgTitle")}
-          src={embedSrc}
-          className="pointer-events-none absolute top-1/2 left-1/2 min-h-full min-w-full max-w-none -translate-x-1/2 -translate-y-1/2 scale-[1.15] border-0 h-[56.25vw] w-[177.77vh]"
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          referrerPolicy="strict-origin-when-cross-origin"
-        />
-        <div className="pointer-events-none absolute inset-0 bg-black/25" aria-hidden />
-      </div>
-
-      <div className="relative z-10 w-full shrink-0" style={{ height: spacerPx }} aria-hidden />
-
-      <motion.div
-        style={{ y: paneY }}
-        className={`fixed inset-0 z-20 flex flex-col justify-center pointer-events-none transition-opacity duration-200 ${
-          introActive ? "opacity-100" : "pointer-events-none opacity-0 invisible"
-        }`}
-      >
-        <motion.div
-          className="absolute inset-0 bg-[rgb(8,12,21)] will-change-[opacity,backdrop-filter]"
-          style={{
-            opacity: overlayTint,
-            backdropFilter: overlayBlur,
-            WebkitBackdropFilter: overlayBlur,
-          }}
-        />
-        <div className="absolute inset-0 animated-bg opacity-[0.12]" aria-hidden />
-        <div
-          className="absolute inset-0 opacity-[0.03]"
-          style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-          }}
-        />
-
-        <div className="relative z-10 mx-auto w-full max-w-5xl px-6 text-center pointer-events-auto max-h-[100dvh] overflow-y-auto py-16 sm:py-20">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -529,17 +439,139 @@ function HeroSection() {
             <span className="text-slate-300 text-sm max-w-md">{t("hero.token.chains")}</span>
           </motion.div>
 
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.75 }}
-            className="mt-10 flex flex-col items-center gap-2 text-slate-400"
-          >
-            <span className="text-xs uppercase tracking-widest">{t("hero.scrollLift")}</span>
-            <motion.div animate={{ y: [0, 6, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="flex flex-col items-center gap-1">
-              <ChevronDown className="w-5 h-5" />
+          {showScrollHint && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.75 }}
+              className="mt-10 flex flex-col items-center gap-2 text-slate-400"
+            >
+              <span className="text-xs uppercase tracking-widest">{t("hero.scrollLift")}</span>
+              <motion.div animate={{ y: [0, 6, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="flex flex-col items-center gap-1">
+                <ChevronDown className="w-5 h-5" />
+              </motion.div>
             </motion.div>
-          </motion.div>
+          )}
+    </>
+  );
+}
+
+/**
+ * Opening view. Desktop (motion-safe): YouTube behind a blurred glass layer; first scroll lifts the glass,
+ * then the page is normal. Mobile / reduced motion: a plain centered hero — no video, no fixed layers,
+ * no nested scrolling.
+ */
+function HeroSection() {
+  const { t } = useWhitepaperLanguage();
+  const liftProgress = useMotionValue(0);
+  const [spacerPx, setSpacerPx] = useState(800);
+  /** Fixed intro layers only while scroll is within the lift range (so the rest of the site scrolls normally). */
+  const [introActive, setIntroActive] = useState(true);
+  /** True only on desktop without reduced motion — gates the YouTube embed and the scroll-lift effect. */
+  const [introEnabled, setIntroEnabled] = useState(false);
+
+  const paneY = useTransform(liftProgress, [0, 1], ["0%", "-100%"]);
+  const overlayBlur = useTransform(liftProgress, [0, 1], ["blur(28px)", "blur(0px)"]);
+  const overlayTint = useTransform(liftProgress, [0, 1], [0.52, 0.08]);
+
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 1024px)");
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const enabled = () => desktop.matches && !reduce.matches;
+    const liftRange = () => Math.max(420, window.innerHeight * 0.92);
+
+    const onScroll = () => {
+      if (!enabled()) return;
+      const range = liftRange();
+      const y = window.scrollY;
+      liftProgress.set(Math.max(0, Math.min(1, y / range)));
+      const active = y < range;
+      setIntroActive((prev) => (prev !== active ? active : prev));
+    };
+
+    const apply = () => {
+      if (enabled()) {
+        setIntroEnabled(true);
+        setSpacerPx(Math.round(liftRange()));
+        onScroll();
+      } else {
+        setIntroEnabled(false);
+        liftProgress.set(1);
+        setSpacerPx(0);
+        setIntroActive(false);
+      }
+    };
+
+    apply();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", apply);
+    desktop.addEventListener("change", apply);
+    reduce.addEventListener("change", apply);
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", apply);
+      desktop.removeEventListener("change", apply);
+      reduce.removeEventListener("change", apply);
+    };
+  }, [liftProgress]);
+
+  const embedSrc = `https://www.youtube.com/embed/${HERO_YOUTUBE_VIDEO_ID}?autoplay=1&mute=1&loop=1&playlist=${HERO_YOUTUBE_VIDEO_ID}&controls=0&rel=0&playsinline=1&modestbranding=1&enablejsapi=1`;
+
+  return (
+    <>
+      {/* Mobile / reduced-motion hero */}
+      <section className="relative overflow-hidden lg:motion-safe:hidden">
+        <div className="absolute inset-0 animated-bg" aria-hidden />
+        <div className="relative z-10 mx-auto w-full max-w-5xl px-5 pt-28 pb-16 text-center">
+          <HeroContent />
+        </div>
+      </section>
+
+      {/* Desktop intro: video layer behind the glass pane */}
+      <div
+        className={`fixed inset-0 z-[6] hidden overflow-hidden transition-opacity duration-200 lg:motion-safe:block ${
+          introActive ? "opacity-100" : "pointer-events-none opacity-0 invisible"
+        }`}
+        aria-hidden
+      >
+        {introEnabled && (
+          <iframe
+            title={t("hero.videoBgTitle")}
+            src={embedSrc}
+            className="pointer-events-none absolute top-1/2 left-1/2 min-h-full min-w-full max-w-none -translate-x-1/2 -translate-y-1/2 scale-[1.15] border-0 h-[56.25vw] w-[177.77vh]"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
+        )}
+        <div className="pointer-events-none absolute inset-0 bg-black/25" aria-hidden />
+      </div>
+
+      <div className="relative z-10 hidden w-full shrink-0 lg:motion-safe:block" style={{ height: spacerPx }} aria-hidden />
+
+      <motion.div
+        style={{ y: paneY }}
+        className={`fixed inset-0 z-20 hidden flex-col justify-center pointer-events-none transition-opacity duration-200 lg:motion-safe:flex ${
+          introActive ? "opacity-100" : "pointer-events-none opacity-0 invisible"
+        }`}
+      >
+        <motion.div
+          className="absolute inset-0 bg-[rgb(8,12,21)] will-change-[opacity,backdrop-filter]"
+          style={{
+            opacity: overlayTint,
+            backdropFilter: overlayBlur,
+            WebkitBackdropFilter: overlayBlur,
+          }}
+        />
+        <div className="absolute inset-0 animated-bg opacity-[0.12]" aria-hidden />
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}
+        />
+
+        <div className="relative z-10 mx-auto w-full max-w-5xl px-6 text-center pointer-events-auto max-h-[100dvh] overflow-y-auto py-16 sm:py-20">
+          <HeroContent showScrollHint />
         </div>
       </motion.div>
     </>
@@ -549,7 +581,7 @@ function HeroSection() {
 function VideoSection() {
   const { t, locale } = useWhitepaperLanguage();
   return (
-    <section id="demo" className="relative z-10 bg-[rgb(8,12,21)] py-24 px-6">
+    <section id="demo" className="relative z-10 bg-[rgb(8,12,21)] py-16 md:py-24 px-5 sm:px-6">
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute left-1/2 top-1/2 h-[500px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-500/10 blur-3xl" />
       </div>
@@ -622,7 +654,7 @@ function VideoSection() {
 function AboutSection() {
   const { t } = useWhitepaperLanguage();
   return (
-    <section id="about" className="py-32 px-6 relative">
+    <section id="about" className="py-16 md:py-32 px-5 sm:px-6 relative">
       <div className="max-w-6xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
@@ -805,8 +837,8 @@ function CustomizationSection() {
   ];
 
   return (
-    <section id="customization" className="py-32 px-4 sm:px-6 relative overflow-hidden">
-      <div className="section-divider mb-32" />
+    <section id="customization" className="py-16 md:py-32 px-4 sm:px-6 relative overflow-hidden">
+      <div className="section-divider mb-16 md:mb-32" />
       
       {/* Background decoration */}
       <div className="absolute inset-0 opacity-30">
@@ -819,7 +851,7 @@ function CustomizationSection() {
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-10 md:mb-16"
         >
           <span className="text-purple-400 text-sm font-semibold uppercase tracking-widest">Customization</span>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-6">
@@ -947,15 +979,15 @@ function CustomizationSection() {
 function EconomySection() {
   const { t } = useWhitepaperLanguage();
   return (
-    <section id="economy" className="py-32 px-6 relative">
-      <div className="section-divider mb-32" />
+    <section id="economy" className="py-16 md:py-32 px-5 sm:px-6 relative">
+      <div className="section-divider mb-16 md:mb-32" />
       
       <div className="max-w-6xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-10 md:mb-16"
         >
           <span className="text-yellow-400 text-sm font-semibold uppercase tracking-widest">Economy</span>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
@@ -1118,8 +1150,8 @@ function WhaleStatusSection() {
   ];
 
   return (
-    <section id="whale-status" className="py-32 px-6 relative overflow-hidden">
-      <div className="section-divider mb-32" />
+    <section id="whale-status" className="py-16 md:py-32 px-5 sm:px-6 relative overflow-hidden">
+      <div className="section-divider mb-16 md:mb-32" />
       
       {/* Background decoration */}
       <div className="absolute inset-0">
@@ -1132,7 +1164,7 @@ function WhaleStatusSection() {
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-10 md:mb-16"
         >
           <span className="text-yellow-400 text-sm font-semibold uppercase tracking-widest">Status System</span>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
@@ -1230,6 +1262,14 @@ function WhaleStatusSection() {
 
 // Wagering Section
 // Platform Economics Section
+const INDUSTRY_COMPARISON = [
+  { platform: "WaddleBet", rake: "5%", model: "P2P Rake", highlight: true },
+  { platform: "PokerStars", rake: "2.5-5%", model: "P2P Rake", highlight: false },
+  { platform: "Stake.com", rake: "1-5%", model: "House Edge", highlight: false },
+  { platform: "Vegas Casinos", rake: "2-15%", model: "House Edge", highlight: false },
+  { platform: "Betfair Exchange", rake: "2-5%", model: "P2P Commission", highlight: false },
+];
+
 function PlatformEconomicsSection() {
   const revenueStreams = [
     {
@@ -1253,8 +1293,8 @@ function PlatformEconomicsSection() {
   ];
 
   return (
-    <section id="economics" className="py-32 px-6 relative">
-      <div className="section-divider mb-32" />
+    <section id="economics" className="py-16 md:py-32 px-5 sm:px-6 relative">
+      <div className="section-divider mb-16 md:mb-32" />
       
       <div className="max-w-6xl mx-auto">
         {/* Header */}
@@ -1262,7 +1302,7 @@ function PlatformEconomicsSection() {
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-10 md:mb-16"
         >
           <span className="text-green-400 text-sm font-semibold uppercase tracking-widest">Sustainability</span>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
@@ -1435,7 +1475,23 @@ function PlatformEconomicsSection() {
           className="glass-card rounded-2xl p-8"
         >
           <h3 className="text-2xl font-bold mb-6 text-center">Industry Comparison</h3>
-          <div className="overflow-x-auto">
+          {/* Mobile: stacked centered cards (no side-scrolling) */}
+          <div className="space-y-3 sm:hidden">
+            {INDUSTRY_COMPARISON.map((row) => (
+              <div
+                key={row.platform}
+                className={`rounded-xl border px-4 py-3 text-center ${
+                  row.highlight ? "border-green-500/30 bg-green-500/5" : "border-white/10 bg-black/20"
+                }`}
+              >
+                <p className={`font-semibold ${row.highlight ? "text-green-400" : "text-slate-300"}`}>{row.platform}</p>
+                <p className={`font-mono text-lg ${row.highlight ? "text-green-400" : "text-slate-400"}`}>{row.rake}</p>
+                <p className="text-xs text-slate-500">{row.model}</p>
+              </div>
+            ))}
+          </div>
+          {/* Desktop: table */}
+          <div className="hidden sm:block">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-white/10">
@@ -1445,31 +1501,13 @@ function PlatformEconomicsSection() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
-                <tr className="bg-green-500/5">
-                  <td className="py-3 px-4 font-semibold text-green-400">WaddleBet</td>
-                  <td className="py-3 px-4 text-center font-mono text-green-400">5%</td>
-                  <td className="py-3 px-4 text-center text-slate-300">P2P Rake</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 text-slate-300">PokerStars</td>
-                  <td className="py-3 px-4 text-center font-mono text-slate-400">2.5-5%</td>
-                  <td className="py-3 px-4 text-center text-slate-400">P2P Rake</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 text-slate-300">Stake.com</td>
-                  <td className="py-3 px-4 text-center font-mono text-slate-400">1-5%</td>
-                  <td className="py-3 px-4 text-center text-slate-400">House Edge</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 text-slate-300">Vegas Casinos</td>
-                  <td className="py-3 px-4 text-center font-mono text-slate-400">2-15%</td>
-                  <td className="py-3 px-4 text-center text-slate-400">House Edge</td>
-                </tr>
-                <tr>
-                  <td className="py-3 px-4 text-slate-300">Betfair Exchange</td>
-                  <td className="py-3 px-4 text-center font-mono text-slate-400">2-5%</td>
-                  <td className="py-3 px-4 text-center text-slate-400">P2P Commission</td>
-                </tr>
+                {INDUSTRY_COMPARISON.map((row) => (
+                  <tr key={row.platform} className={row.highlight ? "bg-green-500/5" : ""}>
+                    <td className={`py-3 px-4 ${row.highlight ? "font-semibold text-green-400" : "text-slate-300"}`}>{row.platform}</td>
+                    <td className={`py-3 px-4 text-center font-mono ${row.highlight ? "text-green-400" : "text-slate-400"}`}>{row.rake}</td>
+                    <td className={`py-3 px-4 text-center ${row.highlight ? "text-slate-300" : "text-slate-400"}`}>{row.model}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
@@ -1485,7 +1523,7 @@ function PlatformEconomicsSection() {
           viewport={{ once: true }}
           className="mt-12 text-center"
         >
-          <div className="inline-flex items-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-green-500/20 to-cyan-500/20 border border-green-500/30">
+          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-green-500/20 to-cyan-500/20 border border-green-500/30">
             <span className="text-green-400 font-semibold">🔒 Transparent</span>
             <span className="text-slate-500">•</span>
             <span className="text-cyan-400 font-semibold">📊 Sustainable</span>
@@ -1501,15 +1539,15 @@ function PlatformEconomicsSection() {
 // Team Section
 function TeamSection() {
   return (
-    <section id="team" className="py-32 px-6 relative">
-      <div className="section-divider mb-32" />
+    <section id="team" className="py-16 md:py-32 px-5 sm:px-6 relative">
+      <div className="section-divider mb-16 md:mb-32" />
       
       <div className="max-w-4xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 40 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-16"
+          className="text-center mb-10 md:mb-16"
         >
           <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">Team</span>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
@@ -1742,8 +1780,8 @@ function RoadmapSection() {
     .reduce((acc, p) => acc + p.items.length, 0);
 
   return (
-    <section id="roadmap" className="py-32 px-6 relative">
-      <div className="section-divider mb-32" />
+    <section id="roadmap" className="py-16 md:py-32 px-5 sm:px-6 relative">
+      <div className="section-divider mb-16 md:mb-32" />
       
       <div className="max-w-5xl mx-auto">
         <motion.div
@@ -2072,7 +2110,7 @@ function Footer() {
 // Main Page
 function WhitepaperPageContent() {
   return (
-    <main className="relative min-h-screen bg-[rgb(8,12,21)] text-slate-100">
+    <main className="relative min-h-screen overflow-x-clip bg-[rgb(8,12,21)] text-slate-100">
       <Snowfall />
       <Navigation />
       <HeroSection />

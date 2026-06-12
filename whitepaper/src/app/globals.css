@@ -24,12 +24,15 @@ html {
   scroll-behavior: smooth;
   /* Prevent white flash under fixed nav / during paint (matches body) */
   background-color: rgb(8, 12, 21);
+  /* No sideways scrolling anywhere — wide decorative elements get clipped instead */
+  overflow-x: clip;
 }
 
 body {
   background: rgb(var(--background));
   color: rgb(var(--foreground));
   font-family: var(--font-sans), system-ui, sans-serif;
+  overflow-x: clip;
 }
 
 /* Custom scrollbar */

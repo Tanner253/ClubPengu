@@ -239,8 +239,8 @@ function RarityCard({ data, index }: { data: typeof RARITY_DATA[0]; index: numbe
 
 export default function GachaSystemSection() {
   return (
-    <section id="gacha-system" className="py-32 px-4 sm:px-6 relative overflow-hidden">
-      <div className="section-divider mb-32" />
+    <section id="gacha-system" className="py-16 md:py-32 px-4 sm:px-6 relative overflow-hidden">
+      <div className="section-divider mb-16 md:mb-32" />
       
       {/* Background effects */}
       <div className="absolute inset-0">
@@ -333,8 +333,35 @@ export default function GachaSystemSection() {
               ))}
             </div>
             
-            {/* Drop Rate Table */}
-            <div className="overflow-x-auto">
+            {/* Drop rates — mobile: stacked centered cards (no side-scrolling) */}
+            <div className="space-y-3 md:hidden">
+              {RARITY_DATA.map((r) => (
+                <div
+                  key={r.name}
+                  className={`rounded-xl border px-4 py-3 text-center ${r.borderColor} ${r.special ? "bg-cyan-500/5" : "bg-black/20"}`}
+                >
+                  <p className={`font-semibold ${r.color}`}>{r.emoji} {r.name}</p>
+                  <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                    <div>
+                      <p className="text-slate-500">Drop Rate</p>
+                      <p className={`font-mono ${r.color}`}>{r.rate}</p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500">Avg Cost</p>
+                      <p className="font-mono text-slate-300">
+                        {(parseFloat(r.oneInX.replace(",", "")) * 0.025).toFixed(2)} SOL
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-slate-500">Dupe Gold</p>
+                      <p className="font-mono text-yellow-400">{r.dupeGold} 🪙</p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Drop rates — desktop: table */}
+            <div className="hidden md:block">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-white/10">
