@@ -22,7 +22,7 @@ const MESSAGE_COLORS = {
 };
 
 const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = false, onNewMessage }) => {
-    const { chatMessages, playerName, playerId, sendChat, wsRef, getPlayersData } = useMultiplayer();
+    const { chatMessages, playerName, playerId, sendChat, getPlayersData } = useMultiplayer();
     const { t } = useLanguage();
     const [isActive, setIsActive] = useState(false);
     const [inputValue, setInputValue] = useState('');

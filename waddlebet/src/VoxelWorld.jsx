@@ -385,6 +385,7 @@ const VoxelWorld = ({
     
     // Snowball throwing state
     const snowballsRef = useRef([]); // Array of active snowballs { mesh, velocity, startTime }
+    const splatsRef = useRef([]); // Active splat effect meshes (avoids scanning scene.children every frame)
     const snowballCooldownRef = useRef(0); // Timestamp when cooldown ends
     const isSnowballModeRef = useRef(false); // True when holding snowball throw key
     const [isSnowballMode, setIsSnowballMode] = useState(false); // For cursor change
@@ -672,16 +673,50 @@ const VoxelWorld = ({
         // Hoist event handler references so cleanup can access them even when init is deferred
         let handleDown, handleUp, handleResize;
         let initCancelled = false;
+        let deferTimeout = null;
         
-        // Defer heavy world init by one frame so the loading screen can paint first.
-        // Without this, the synchronous zone spawning blocks the main thread before
-        // the browser ever gets a chance to render the loading screen.
+        // PERF: progress reporting + cooperative yielding for the chunked world build.
+        // Each yield returns control to the browser between build phases so the loading
+        // screen paints, animates, and shows the advert instead of one long freeze.
+        const reportLoadProgress = (progress) => {
+            try {
+                window.dispatchEvent(new CustomEvent('worldLoadProgress', { detail: { progress } }));
+            } catch { /* non-critical */ }
+        };
+        // Throws on cancellation so deeply nested chunked builders (rooms/zones) abort
+        // without every caller needing its own check. Caught at the initWorld() call site.
+        const loadYield = async (progress) => {
+            if (progress !== undefined) reportLoadProgress(progress);
+            await new Promise(resolve => { setTimeout(resolve, 0); });
+            if (initCancelled) throw new Error('world-load-cancelled');
+        };
+        // Creates a yield function that creeps progress from `from` to `to` over
+        // ~`estimatedSteps` calls — used by batched spawns (props, trees, AI penguins).
+        const makeYieldRange = (from, to, estimatedSteps) => {
+            let p = from;
+            const step = (to - from) / Math.max(1, estimatedSteps);
+            return () => {
+                p = Math.min(to, p + step);
+                return loadYield(p);
+            };
+        };
+        
+        // Defer heavy world init so the loading screen paints first. A rAF alone is NOT
+        // enough — rAF callbacks run BEFORE the browser paints that frame — so we hop
+        // through a macrotask, guaranteeing one painted frame before the first chunk runs.
         const deferTimer = requestAnimationFrame(() => {
-            if (initCancelled) return;
-            initWorld();
+            deferTimeout = setTimeout(() => {
+                if (!initCancelled) {
+                    initWorld().catch(err => {
+                        if (!initCancelled && err?.message !== 'world-load-cancelled') {
+                            console.error('World init failed:', err);
+                        }
+                    });
+                }
+            }, 0);
         });
         
-        function initWorld() {
+        async function initWorld() {
         const THREE = window.THREE;
         const OrbitControls = window.THREE.OrbitControls;
         
@@ -849,7 +884,8 @@ const VoxelWorld = ({
         snowfallSystemRef.current = snowfallSystem;
         
         // --- ICY ICEBERG ISLAND GENERATION ---
-        const generateCity = () => {
+        // Built in chunks (async) — yields between heavy phases keep the page responsive
+        const generateCity = async () => {
             const map = [];
             const dummy = new THREE.Object3D();
             
@@ -923,6 +959,8 @@ const VoxelWorld = ({
             scene.add(icePlane);
             
             // ==================== MOUNTAIN BACKGROUND ====================
+            await loadYield(0.2);
+            if (initCancelled) return null;
             // Create low-poly mountain range surrounding the map (3 rows for depth)
             try {
                 mountainBackgroundRef.current = createMountainBackground(THREE, scene, {
@@ -967,10 +1005,13 @@ const VoxelWorld = ({
             // No water ring - walls handle boundaries now
             
             // ==================== SPAWN TOWN CENTER PROPS ====================
+            await loadYield(0.3);
             // Create TownCenter room instance and spawn all props (trees, igloos, lamps, etc.)
+            // in small batches so no single block can trigger "Page Unresponsive"
             const townCenter = new TownCenter(THREE);
             townCenterRef.current = townCenter;
-            const { meshes: propMeshes, lights: propLights, collisionSystem } = townCenter.spawn(scene);
+            const { meshes: propMeshes, lights: propLights, collisionSystem } =
+                await townCenter.spawnChunked(scene, makeYieldRange(0.3, 0.42, 22));
             
             // Store prop lights for day/night cycle toggling
             propLightsRef.current = propLights;
@@ -978,15 +1019,17 @@ const VoxelWorld = ({
             console.log(`Town Center spawned: ${propMeshes.length} props, ${propLights.length} lights`);
             
             // ==================== SNOW FORTS ZONE (East of Town) ====================
+            // PERF: zones build in small batches so no single block can freeze the page
+            await loadYield(0.42);
             const snowFortsZone = new SnowFortsZone(THREE);
             snowFortsZoneRef.current = snowFortsZone;
-            snowFortsZone.spawn(scene);
+            await snowFortsZone.spawnChunked(scene, makeYieldRange(0.42, 0.5, 5));
             console.log('⛄ Snow Forts Zone loaded (east of town)');
             
             // ==================== FOREST TRAILS ZONE (South of Snow Forts) ====================
             const forestTrailsZone = new ForestTrailsZone(THREE);
             forestTrailsZoneRef.current = forestTrailsZone;
-            forestTrailsZone.spawn(scene);
+            await forestTrailsZone.spawnChunked(scene, makeYieldRange(0.5, 0.6, 14));
             console.log('🌲 Forest Trails Zone loaded (south of Snow Forts)');
             
             // Add casino as snow exclusion zone (snow shouldn't fall inside)
@@ -1208,7 +1251,9 @@ const VoxelWorld = ({
         let butterflyGroup = null;
         
         if (room === 'town') {
-            const cityResult = generateCity();
+            reportLoadProgress(0.1);
+            const cityResult = await generateCity();
+            if (initCancelled || !cityResult) return;
             butterflyGroup = cityResult.butterflyGroup;
             const townCenterX = CENTER_X;
             const townCenterZ = CENTER_Z;
@@ -1505,9 +1550,16 @@ const VoxelWorld = ({
             return sprite;
         };
 
-        // Build high-quality procedural buildings using extracted building classes
+        // Build high-quality procedural buildings using extracted building classes,
+        // one building per chunk (dojo/gift shop/pizza parlor builds are heavy)
+        await loadYield(0.62);
+        const buildingYield = makeYieldRange(0.62, 0.72, BUILDINGS.length);
         
-        BUILDINGS.forEach(building => {
+        // Reset portal list — entries reference meshes from this init; without this,
+        // re-inits (room changes) accumulate stale entries pointing at dead scenes.
+        portalsRef.current = [];
+        
+        for (const building of BUILDINGS) {
             let buildingGroup;
             const { w, h, d } = building.size;
             
@@ -1578,7 +1630,9 @@ const VoxelWorld = ({
                 },
                 radius: building.doorRadius
             });
-        });
+            
+            await buildingYield();
+        }
         } // End town-only building generation
         
         // --- PENGUIN BUILDER (extracted to PenguinBuilder.js) ---
@@ -2096,6 +2150,9 @@ const VoxelWorld = ({
         }
         
         // --- INITIALIZE/RESTORE AI AGENTS ---
+        // (own load chunk — builds a penguin mesh per NPC)
+        await loadYield(0.75);
+        if (initCancelled) return;
         // Performance: AI_AGENT_COUNT cap, no NPC puffles, exclude animated cosmetics (see roomConfig)
         const AI_ENABLED = AI_NPC_ENABLED;
         
@@ -2107,8 +2164,12 @@ const VoxelWorld = ({
             const mouthPool = Object.keys(ASSETS.MOUTH).filter(k => !AI_HEAVY_MOUTH.has(k));
             const pick = (arr, fallback) => (arr.length ? arr[Math.floor(Math.random() * arr.length)] : fallback);
 
-            // First time - create AI agents (limited count for frame budget)
-            AI_NAMES.slice(0, AI_AGENT_COUNT).forEach((name, i) => {
+            // First time - create AI agents (limited count for frame budget),
+            // yielding every few penguins (each buildPenguinMesh is a full voxel build)
+            const aiNamesToSpawn = AI_NAMES.slice(0, AI_AGENT_COUNT);
+            const aiYield = makeYieldRange(0.76, 0.84, Math.ceil(aiNamesToSpawn.length / 3));
+            for (let i = 0; i < aiNamesToSpawn.length; i++) {
+                const name = aiNamesToSpawn[i];
                 const aiData = {
                     skin: pick(skins, 'blue'),
                     hat: pick(hatPool, 'none'),
@@ -2197,7 +2258,9 @@ const VoxelWorld = ({
                     stuckCounter: 0,
                     lastRoomChange: Date.now()
                 });
-            });
+                
+                if ((i + 1) % 3 === 0) await aiYield();
+            }
         } else if (AI_ENABLED) {
             // Room changed - rebuild AI meshes and add to new scene
             aiAgentsRef.current.forEach(ai => {
@@ -2518,6 +2581,70 @@ const VoxelWorld = ({
         // OPTIMIZATION: Cache reusable Vector3 objects to avoid GC pressure
         const _cachedCamForward = new THREE.Vector3();
         const _cachedCamRight = new THREE.Vector3();
+
+        // OPTIMIZATION: Snowball collision scratch state — hoisted so the hot loop never
+        // allocates and never walks the full scene graph per snowball per frame.
+        const _snowballRaycaster = new THREE.Raycaster();
+        const _snowballVelDir = new THREE.Vector3();
+        const _snowballPrevPos = new THREE.Vector3();
+        const _snowballHitNormal = new THREE.Vector3();
+        const _snowballHitPoint = new THREE.Vector3();
+        const _splatLookTarget = new THREE.Vector3();
+        const _snowballCollidables = []; // Cached scene meshes, refreshed periodically while snowballs fly
+        const _snowballScratch = []; // Per-snowball filtered list (excludes the thrower)
+        const _mountTrailPos = { x: 0, z: 0 }; // Reused position object for trail updates
+        const _casinoZoomOffset = new THREE.Vector3(); // Reused during casino zoom transitions
+
+        // OPTIMIZATION: getObjectByName is a full subtree DFS. Mount groups/parts never change
+        // after a mesh is built (rebuilds create a fresh wrapper + userData, which clears these
+        // caches automatically), so memoize the lookups instead of walking the tree every frame.
+        const getMountGroup = (wrapper) => {
+            const cached = wrapper.userData._mountGroupCache;
+            if (cached && cached.parent !== null) return cached;
+            const g = wrapper.getObjectByName('mount') || null;
+            wrapper.userData._mountGroupCache = g;
+            return g;
+        };
+        const getMountPart = (group, name) => {
+            const cache = group.userData._mountParts || (group.userData._mountParts = {});
+            if (!(name in cache)) cache[name] = group.getObjectByName(name) || null;
+            return cache[name];
+        };
+
+        // OPTIMIZATION: skateboard spark material pool. Spawning previously allocated a
+        // MeshBasicMaterial per spark, and cleanup disposed the SHARED cached spark
+        // geometry (forcing a GPU re-upload on the next spark). Pool materials instead.
+        const _sparkMatPool = [];
+        const acquireSparkMaterial = (color) => {
+            const mat = _sparkMatPool.pop() || new THREE.MeshBasicMaterial({ transparent: true });
+            mat.color.set(color);
+            mat.opacity = 1;
+            return mat;
+        };
+        const releaseSparkMaterial = (mat) => {
+            if (_sparkMatPool.length < 50) _sparkMatPool.push(mat);
+            else mat.dispose();
+        };
+        let _snowballCollidablesFrame = -1000;
+        // Collect collidable meshes, tagging each with the player that owns it (for thrower exclusion)
+        const collectSnowballCollidables = (obj, ownerId, arr) => {
+            if (obj === playerRef.current) ownerId = '__local';
+            else if (obj.userData?.isPlayer && obj.userData.playerId) ownerId = obj.userData.playerId;
+            if (obj.isMesh &&
+                !obj.userData?.isSplat &&
+                !obj.userData?.isSnowball &&
+                !obj.userData?.isUI &&
+                !obj.userData?.isParticle &&
+                !obj.userData?.isBubble &&
+                !obj.userData?.isNameTag) {
+                obj.userData._snowballOwner = ownerId;
+                arr.push(obj);
+            }
+            const children = obj.children;
+            for (let c = 0; c < children.length; c++) {
+                collectSnowballCollidables(children[c], ownerId, arr);
+            }
+        };
         
         const update = () => {
             reqRef.current = requestAnimationFrame(update);
@@ -2593,7 +2720,9 @@ const VoxelWorld = ({
                 if (camController && !inMatch) {
                     camController.applyRotationInput(camDelta.deltaX, camDelta.deltaY, camSensitivity * 2);
                 }
-                cameraRotationRef.current = { deltaX: 0, deltaY: 0 };
+                // Reset in place — avoids allocating a new object every frame while dragging
+                camDelta.deltaX = 0;
+                camDelta.deltaY = 0;
             }
             
             // Handle jumping (with double jump/tricks for skateboard)
@@ -3895,17 +4024,12 @@ const VoxelWorld = ({
                 }
                 
                 // Trigger mood-based emotes periodically
+                // (per-frame call is intentional — the emote probability is tuned for 60fps rolls)
                 if (typeof playerPuffleRef.current.maybeShowEmote === 'function') {
                     playerPuffleRef.current.maybeShowEmote();
                 }
                 
-                // Update puffle mood periodically (every ~5 seconds)
-                if (!playerPuffleRef.current._lastMoodUpdate || time - playerPuffleRef.current._lastMoodUpdate > 5) {
-                    if (typeof playerPuffleRef.current.updateMood === 'function') {
-                        playerPuffleRef.current.updateMood();
-                    }
-                    playerPuffleRef.current._lastMoodUpdate = time;
-                }
+                // NOTE: mood updates are handled inside tick() (every ~0.5s) — no extra call needed here
                 
                 // --- MOOD-BASED EMOTE BROADCASTING ---
                 // Broadcast puffle's mood emotes to other players periodically
@@ -3924,8 +4048,16 @@ const VoxelWorld = ({
                 const showingEmote = playerPuffleRef.current.showingEmote;
                 const currentEmote = playerPuffleRef.current.currentEmote;
                 
-                // Get or create emote bubble sprite
-                let emoteBubble = puffleMesh.getObjectByName('puffleEmoteBubble');
+                // Get or create emote bubble sprite (cached — getObjectByName walks the subtree)
+                let emoteBubble = puffleMesh.userData._emoteBubble;
+                if (emoteBubble && emoteBubble.parent !== puffleMesh) {
+                    emoteBubble = puffleMesh.userData._emoteBubble = null; // stale (mesh rebuilt)
+                }
+                if (!emoteBubble) {
+                    // Fall back to a one-time name lookup (bubble may exist from an earlier path)
+                    emoteBubble = puffleMesh.getObjectByName('puffleEmoteBubble') || null;
+                    if (emoteBubble) puffleMesh.userData._emoteBubble = emoteBubble;
+                }
                 
                 if (showingEmote && currentEmote) {
                     // Create emote bubble if needed
@@ -3934,6 +4066,7 @@ const VoxelWorld = ({
                         emoteBubble.name = 'puffleEmoteBubble';
                         emoteBubble.position.y = 1.8;
                         puffleMesh.add(emoteBubble);
+                        puffleMesh.userData._emoteBubble = emoteBubble;
                     }
                     
                     // Update emote bubble content if emoji changed
@@ -3951,7 +4084,10 @@ const VoxelWorld = ({
                 }
                 
                 // Check proximity to other player puffles for social interaction
-                checkPuffleProximity(time);
+                // (throttled — 4-unit radius doesn't need 60Hz checks; ~6Hz is imperceptible)
+                if (frameCount % 10 === 0) {
+                    checkPuffleProximity(time);
+                }
             }
             
             if (playerRef.current) {
@@ -4035,24 +4171,26 @@ const VoxelWorld = ({
                         );
                     }
                     
-                    // Update trail system (fade trails, check effects)
-                    // Note: 'time' from clock.getElapsedTime() is used for consistent timing
-                    mountTrailSystemRef.current.update(time * 1000, { x: posRef.current.x, z: posRef.current.z });
+                // Update trail system (fade trails, check effects)
+                // Note: 'time' from clock.getElapsedTime() is used for consistent timing
+                _mountTrailPos.x = posRef.current.x;
+                _mountTrailPos.z = posRef.current.z;
+                mountTrailSystemRef.current.update(time * 1000, _mountTrailPos);
                 }
                 
                 // --- MOUNT ANIMATION ---
                 // Animate mount when player is moving (only if mount is enabled)
                 if (playerRef.current.userData?.mount && playerRef.current.userData?.mountData?.animated && mountEnabledRef.current) {
-                    const mountGroup = playerRef.current.getObjectByName('mount');
+                    const mountGroup = getMountGroup(playerRef.current);
                     const mountData = playerRef.current.userData.mountData;
                     
                     if (mountGroup) {
                         // Pengu mount waddle animation
                         if (mountData.animationType === 'penguin_waddle') {
-                            const leftFlipper = mountGroup.getObjectByName('left_flipper');
-                            const rightFlipper = mountGroup.getObjectByName('right_flipper');
-                            const leftFoot = mountGroup.getObjectByName('left_foot');
-                            const rightFoot = mountGroup.getObjectByName('right_foot');
+                            const leftFlipper = getMountPart(mountGroup, 'left_flipper');
+                            const rightFlipper = getMountPart(mountGroup, 'right_flipper');
+                            const leftFoot = getMountPart(mountGroup, 'left_foot');
+                            const rightFoot = getMountPart(mountGroup, 'right_foot');
                             
                             if (moving) {
                                 const waddleSpeed = 10;
@@ -4081,8 +4219,8 @@ const VoxelWorld = ({
                         }
                         // Skateboard grinding animation - sick tricks! 🛹
                         else if (mountData.animationType === 'skateboard_grind') {
-                            const frontTruck = mountGroup.getObjectByName('front_truck_pivot');
-                            const backTruck = mountGroup.getObjectByName('back_truck_pivot');
+                            const frontTruck = getMountPart(mountGroup, 'front_truck_pivot');
+                            const backTruck = getMountPart(mountGroup, 'back_truck_pivot');
                             
                             // Get turning input for carving/grinding direction
                             const turningLeft = keyLeft || mobileLeft || (joystickInputRef.current.x < -0.3);
@@ -4161,13 +4299,9 @@ const VoxelWorld = ({
                                     const sparkColors = mountData.sparkColors || ['#FFD700', '#FFA500', '#FF6600', '#FFFFFF'];
                                     const sparkColor = sparkColors[Math.floor(Math.random() * sparkColors.length)];
                                     
-                                    // Use cached geometry for performance
+                                    // Use cached geometry + pooled material for performance
                                     const sparkGeo = window._cachedSparkGeo || new THREE.SphereGeometry(0.02, 4, 4);
-                                    const sparkMat = new THREE.MeshBasicMaterial({ 
-                                        color: sparkColor,
-                                        transparent: true,
-                                        opacity: 1
-                                    });
+                                    const sparkMat = acquireSparkMaterial(sparkColor);
                                     const spark = new THREE.Mesh(sparkGeo, sparkMat);
                                     
                                     // Position at back wheels with some randomness
@@ -4202,8 +4336,8 @@ const VoxelWorld = ({
                                         const age = time - spark.userData.startTime;
                                         if (age > spark.userData.life) {
                                             sceneRef.current.remove(spark);
-                                            spark.geometry.dispose();
-                                            spark.material.dispose();
+                                            // Geometry is shared (window._cachedSparkGeo) — never dispose it here
+                                            releaseSparkMaterial(spark.material);
                                             return false;
                                         }
                                         // Update position with gravity
@@ -4246,10 +4380,10 @@ const VoxelWorld = ({
                         }
                         // UFO Disc hover animation 🛸
                         else if (mountData.animationType === 'ufo_hover') {
-                            const spinRing = mountGroup.getObjectByName('spin_ring_pivot');
-                            const abductionRay = mountGroup.getObjectByName('abduction_ray');
-                            const abductionRayInner = mountGroup.getObjectByName('abduction_ray_inner');
-                            const abductionLight = mountGroup.getObjectByName('abduction_light');
+                            const spinRing = getMountPart(mountGroup, 'spin_ring_pivot');
+                            const abductionRay = getMountPart(mountGroup, 'abduction_ray');
+                            const abductionRayInner = getMountPart(mountGroup, 'abduction_ray_inner');
+                            const abductionLight = getMountPart(mountGroup, 'abduction_light');
                             
                             const hoverSpeed = mountData.hoverSpeed || 3;
                             const hoverIntensity = mountData.hoverIntensity || 0.12;
@@ -4319,7 +4453,7 @@ const VoxelWorld = ({
                         }
                         // Giant Puffle bounce animation 🐾
                         else if (mountData.animationType === 'puffle_bounce') {
-                            const tuftPivot = mountGroup.getObjectByName('tuft_pivot');
+                            const tuftPivot = getMountPart(mountGroup, 'tuft_pivot');
                             
                             const bounceIntensity = mountData.bounceIntensity || 0.25;
                             const bounceSpeed = mountData.bounceSpeed || 10;
@@ -4390,9 +4524,9 @@ const VoxelWorld = ({
                         }
                         // Rocket Jetpack thrust animation 🚀
                         else if (mountData.animationType === 'jetpack_thrust') {
-                            const fireTrail = mountGroup.getObjectByName('fire_trail');
-                            const leftLight = mountGroup.getObjectByName('exhaust_light_left');
-                            const rightLight = mountGroup.getObjectByName('exhaust_light_right');
+                            const fireTrail = getMountPart(mountGroup, 'fire_trail');
+                            const leftLight = getMountPart(mountGroup, 'exhaust_light_left');
+                            const rightLight = getMountPart(mountGroup, 'exhaust_light_right');
                             
                             const hoverSpeed = mountData.hoverSpeed || 5;
                             const hoverIntensity = mountData.hoverIntensity || 0.06;
@@ -4512,10 +4646,10 @@ const VoxelWorld = ({
                         }
                         // Dragon flying animation 🐉 (All dragon types!)
                         else if (mountData.animationType === 'dragon_fly') {
-                            const leftWing = mountGroup.getObjectByName('left_wing_pivot');
-                            const rightWing = mountGroup.getObjectByName('right_wing_pivot');
-                            const dragonBreath = mountGroup.getObjectByName('dragon_breath');
-                            const breathGlow = mountGroup.getObjectByName('breath_glow');
+                            const leftWing = getMountPart(mountGroup, 'left_wing_pivot');
+                            const rightWing = getMountPart(mountGroup, 'right_wing_pivot');
+                            const dragonBreath = getMountPart(mountGroup, 'dragon_breath');
+                            const breathGlow = getMountPart(mountGroup, 'breath_glow');
                             
                             const flapSpeed = mountData.flapSpeed || 3;
                             const flapIntensity = mountData.flapIntensity || 0.7;
@@ -4639,8 +4773,8 @@ const VoxelWorld = ({
                             }
                             
                             // Eye glows
-                            const leftEyeGlow = mountGroup.getObjectByName('left_eye_glow');
-                            const rightEyeGlow = mountGroup.getObjectByName('right_eye_glow');
+                            const leftEyeGlow = getMountPart(mountGroup, 'left_eye_glow');
+                            const rightEyeGlow = getMountPart(mountGroup, 'right_eye_glow');
                             if (leftEyeGlow && rightEyeGlow) {
                                 const eyeBase = dragonState.isBreathing ? 0.8 : 0.4;
                                 const eyePulse = Math.sin(time * 3) * 0.2;
@@ -4760,10 +4894,10 @@ const VoxelWorld = ({
                         }
                         // Shopping Cart wobble animation 🛒
                         else if (mountData.animationType === 'cart_wobble') {
-                            const wheelFL = mountGroup.getObjectByName('wheel_fl_pivot');
-                            const wheelFR = mountGroup.getObjectByName('wheel_fr_pivot');
-                            const wheelBL = mountGroup.getObjectByName('wheel_bl_pivot');
-                            const wheelBR = mountGroup.getObjectByName('wheel_br_pivot');
+                            const wheelFL = getMountPart(mountGroup, 'wheel_fl_pivot');
+                            const wheelFR = getMountPart(mountGroup, 'wheel_fr_pivot');
+                            const wheelBL = getMountPart(mountGroup, 'wheel_bl_pivot');
+                            const wheelBR = getMountPart(mountGroup, 'wheel_br_pivot');
                             
                             const wobbleIntensity = mountData.wobbleIntensity || 0.08;
                             const wheelSpinSpeed = mountData.wheelSpinSpeed || 25;
@@ -4832,8 +4966,8 @@ const VoxelWorld = ({
                         }
                         // Boat rowing animation
                         else if (mountData.animationType === 'rowing' || mountData.leftOar) {
-                            const leftOarPivot = mountGroup.getObjectByName('left_oar_pivot');
-                            const rightOarPivot = mountGroup.getObjectByName('right_oar_pivot');
+                            const leftOarPivot = getMountPart(mountGroup, 'left_oar_pivot');
+                            const rightOarPivot = getMountPart(mountGroup, 'right_oar_pivot');
                         
                             if (leftOarPivot && rightOarPivot) {
                             // Check for turning input
@@ -5262,16 +5396,16 @@ const VoxelWorld = ({
                 
                 // Mount animation for other players (also throttled for distant players)
                 if (shouldAnimateThisFrame && meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData?.animated) {
-                    const mountGroup = meshData.mesh.getObjectByName('mount');
+                    const mountGroup = getMountGroup(meshData.mesh);
                     const mountData = meshData.mesh.userData.mountData;
                     
                     if (mountGroup) {
                         // Pengu mount waddle animation
                         if (mountData.animationType === 'penguin_waddle') {
-                            const leftFlipper = mountGroup.getObjectByName('left_flipper');
-                            const rightFlipper = mountGroup.getObjectByName('right_flipper');
-                            const leftFoot = mountGroup.getObjectByName('left_foot');
-                            const rightFoot = mountGroup.getObjectByName('right_foot');
+                            const leftFlipper = getMountPart(mountGroup, 'left_flipper');
+                            const rightFlipper = getMountPart(mountGroup, 'right_flipper');
+                            const leftFoot = getMountPart(mountGroup, 'left_foot');
+                            const rightFoot = getMountPart(mountGroup, 'right_foot');
                             
                             if (isMoving) {
                                 const waddleSpeed = 10;
@@ -5301,8 +5435,8 @@ const VoxelWorld = ({
                         }
                         // Skateboard grinding animation for other players 🛹
                         else if (mountData.animationType === 'skateboard_grind') {
-                            const frontTruck = mountGroup.getObjectByName('front_truck_pivot');
-                            const backTruck = mountGroup.getObjectByName('back_truck_pivot');
+                            const frontTruck = getMountPart(mountGroup, 'front_truck_pivot');
+                            const backTruck = getMountPart(mountGroup, 'back_truck_pivot');
                             
                             if (isMoving) {
                                 const grindSpeed = time * 15;
@@ -5329,11 +5463,9 @@ const VoxelWorld = ({
                                     const sparkColors = mountData.sparkColors || ['#FFD700', '#FFA500', '#FF6600', '#FFFFFF'];
                                     const sparkColor = sparkColors[Math.floor(Math.random() * sparkColors.length)];
                                     
-                                    // Use cached geometry for performance
+                                    // Use cached geometry + pooled material for performance
                                     const sparkGeo = window._cachedSparkGeo || new THREE.SphereGeometry(0.02, 4, 4);
-                                    const sparkMat = new THREE.MeshBasicMaterial({ 
-                                        color: sparkColor, transparent: true, opacity: 1
-                                    });
+                                    const sparkMat = acquireSparkMaterial(sparkColor);
                                     const spark = new THREE.Mesh(sparkGeo, sparkMat);
                                     
                                     const otherPos = meshData.mesh.position;
@@ -5361,8 +5493,8 @@ const VoxelWorld = ({
                                         const age = time - spark.userData.startTime;
                                         if (age > spark.userData.life) {
                                             sceneRef.current.remove(spark);
-                                            spark.geometry.dispose();
-                                            spark.material.dispose();
+                                            // Geometry is shared (window._cachedSparkGeo) — never dispose it here
+                                            releaseSparkMaterial(spark.material);
                                             return false;
                                         }
                                         spark.position.x += spark.userData.velocity.x * delta;
@@ -5385,10 +5517,10 @@ const VoxelWorld = ({
                         }
                         // UFO Disc hover animation for other players 🛸
                         else if (mountData.animationType === 'ufo_hover') {
-                            const spinRing = mountGroup.getObjectByName('spin_ring_pivot');
-                            const abductionRay = mountGroup.getObjectByName('abduction_ray');
-                            const abductionRayInner = mountGroup.getObjectByName('abduction_ray_inner');
-                            const abductionLight = mountGroup.getObjectByName('abduction_light');
+                            const spinRing = getMountPart(mountGroup, 'spin_ring_pivot');
+                            const abductionRay = getMountPart(mountGroup, 'abduction_ray');
+                            const abductionRayInner = getMountPart(mountGroup, 'abduction_ray_inner');
+                            const abductionLight = getMountPart(mountGroup, 'abduction_light');
                             
                             const hoverSpeed = mountData.hoverSpeed || 3;
                             const hoverIntensity = mountData.hoverIntensity || 0.12;
@@ -5432,7 +5564,7 @@ const VoxelWorld = ({
                         }
                         // Giant Puffle bounce animation for other players 🐾
                         else if (mountData.animationType === 'puffle_bounce') {
-                            const tuftPivot = mountGroup.getObjectByName('tuft_pivot');
+                            const tuftPivot = getMountPart(mountGroup, 'tuft_pivot');
                             const bounceIntensity = mountData.bounceIntensity || 0.25;
                             const bounceSpeed = mountData.bounceSpeed || 10;
                             const squishFactor = mountData.squishFactor || 0.12;
@@ -5469,9 +5601,9 @@ const VoxelWorld = ({
                         }
                         // Rocket Jetpack thrust animation for other players 🚀
                         else if (mountData.animationType === 'jetpack_thrust') {
-                            const fireTrail = mountGroup.getObjectByName('fire_trail');
-                            const leftLight = mountGroup.getObjectByName('exhaust_light_left');
-                            const rightLight = mountGroup.getObjectByName('exhaust_light_right');
+                            const fireTrail = getMountPart(mountGroup, 'fire_trail');
+                            const leftLight = getMountPart(mountGroup, 'exhaust_light_left');
+                            const rightLight = getMountPart(mountGroup, 'exhaust_light_right');
                             
                             const hoverSpeed = mountData.hoverSpeed || 5;
                             const hoverIntensity = mountData.hoverIntensity || 0.06;
@@ -5531,14 +5663,16 @@ const VoxelWorld = ({
                                 mountGroup.rotation.z += autoTilt;
                                 
                                 // Simulate FULL player body lean for multiplayer
-                                // Find the meshInner which contains all body parts
-                                wrapper.traverse((child) => {
-                                    if (child.name === 'meshInner') {
-                                        // Full body lean into movement
-                                        child.rotation.z = autoTilt * 2.0;  // Side-to-side lean
-                                        child.rotation.x = 0.3 + Math.sin(time * 1.5) * 0.1; // Forward lean while moving
-                                    }
-                                });
+                                // Find the meshInner which contains all body parts (cached — no per-frame traverse)
+                                if (wrapper.userData._meshInnerCache === undefined) {
+                                    wrapper.userData._meshInnerCache = wrapper.getObjectByName('meshInner') || null;
+                                }
+                                const jetpackMeshInner = wrapper.userData._meshInnerCache;
+                                if (jetpackMeshInner) {
+                                    // Full body lean into movement
+                                    jetpackMeshInner.rotation.z = autoTilt * 2.0;  // Side-to-side lean
+                                    jetpackMeshInner.rotation.x = 0.3 + Math.sin(time * 1.5) * 0.1; // Forward lean while moving
+                                }
                             } else {
                                 const idleHover = Math.sin(time * 2) * 0.03;
                                 mountGroup.position.y = (mountData.positionY || 0.6) + idleHover;
@@ -5548,10 +5682,10 @@ const VoxelWorld = ({
                         }
                         // Dragon flying animation for other players 🐉 (All types!)
                         else if (mountData.animationType === 'dragon_fly') {
-                            const leftWing = mountGroup.getObjectByName('left_wing_pivot');
-                            const rightWing = mountGroup.getObjectByName('right_wing_pivot');
-                            const dragonBreath = mountGroup.getObjectByName('dragon_breath');
-                            const breathGlow = mountGroup.getObjectByName('breath_glow');
+                            const leftWing = getMountPart(mountGroup, 'left_wing_pivot');
+                            const rightWing = getMountPart(mountGroup, 'right_wing_pivot');
+                            const dragonBreath = getMountPart(mountGroup, 'dragon_breath');
+                            const breathGlow = getMountPart(mountGroup, 'breath_glow');
                             
                             const flapSpeed = mountData.flapSpeed || 3;
                             const flapIntensity = mountData.flapIntensity || 0.7;
@@ -5656,8 +5790,8 @@ const VoxelWorld = ({
                             }
                             
                             // Eye glows
-                            const leftEyeGlow = mountGroup.getObjectByName('left_eye_glow');
-                            const rightEyeGlow = mountGroup.getObjectByName('right_eye_glow');
+                            const leftEyeGlow = getMountPart(mountGroup, 'left_eye_glow');
+                            const rightEyeGlow = getMountPart(mountGroup, 'right_eye_glow');
                             if (leftEyeGlow && rightEyeGlow) {
                                 const eyeBase = dragonState.isBreathing ? 0.8 : 0.4;
                                 const eyePulse = Math.sin(time * 3) * 0.2;
@@ -5712,10 +5846,10 @@ const VoxelWorld = ({
                         }
                         // Shopping Cart wobble animation for other players 🛒
                         else if (mountData.animationType === 'cart_wobble') {
-                            const wheelFL = mountGroup.getObjectByName('wheel_fl_pivot');
-                            const wheelFR = mountGroup.getObjectByName('wheel_fr_pivot');
-                            const wheelBL = mountGroup.getObjectByName('wheel_bl_pivot');
-                            const wheelBR = mountGroup.getObjectByName('wheel_br_pivot');
+                            const wheelFL = getMountPart(mountGroup, 'wheel_fl_pivot');
+                            const wheelFR = getMountPart(mountGroup, 'wheel_fr_pivot');
+                            const wheelBL = getMountPart(mountGroup, 'wheel_bl_pivot');
+                            const wheelBR = getMountPart(mountGroup, 'wheel_br_pivot');
                             
                             const wobbleIntensity = mountData.wobbleIntensity || 0.08;
                             const wheelSpinSpeed = mountData.wheelSpinSpeed || 25;
@@ -5747,8 +5881,8 @@ const VoxelWorld = ({
                         }
                         // Boat rowing animation
                         else if (mountData.animationType === 'rowing' || mountData.leftOar) {
-                            const leftOarPivot = mountGroup.getObjectByName('left_oar_pivot');
-                            const rightOarPivot = mountGroup.getObjectByName('right_oar_pivot');
+                            const leftOarPivot = getMountPart(mountGroup, 'left_oar_pivot');
+                            const rightOarPivot = getMountPart(mountGroup, 'right_oar_pivot');
                             
                             if (leftOarPivot && rightOarPivot) {
                                 if (isMoving) {
@@ -5981,7 +6115,11 @@ const VoxelWorld = ({
             if (roomRef.current === 'town' && !inParkourPerformanceMode) {
                 portalsRef.current.forEach(building => {
                     if (building.mesh && building.gameId) {
-                        const glow = building.mesh.getObjectByName(`door_glow_${building.id}`);
+                        // Cache the glow lookup — getObjectByName walks the building subtree
+                        if (building._doorGlow === undefined) {
+                            building._doorGlow = building.mesh.getObjectByName(`door_glow_${building.id}`) || null;
+                        }
+                        const glow = building._doorGlow;
                         if (glow && glow.material) {
                             glow.material.opacity = 0.2 + Math.sin(time * 2) * 0.15;
                         }
@@ -6008,7 +6146,7 @@ const VoxelWorld = ({
                     // Smooth zoom transition (only while transition is active)
                     const transition = casinoZoomTransitionRef.current;
                     if (transition?.active) {
-                        const offset = camera.position.clone().sub(controls.target);
+                        const offset = _casinoZoomOffset.copy(camera.position).sub(controls.target);
                         const currentDistance = offset.length();
                         const targetDistance = transition.targetDistance;
                         
@@ -6095,12 +6233,19 @@ const VoxelWorld = ({
             }
             
             // ==================== SNOWBALL PHYSICS UPDATE ====================
+            // Entire block is skipped when no snowballs/splats are active (the common case).
+            if (snowballsRef.current.length > 0) {
             const snowballNow = Date.now();
             const snowballsToRemove = [];
-            
-            // Reusable raycaster for collision detection
-            const snowballRaycaster = new THREE.Raycaster();
-            
+
+            // Refresh the cached collidable mesh list at most every 30 frames while snowballs fly.
+            // Mesh membership rarely changes mid-flight; world matrices stay live on the cached refs.
+            if (frameCount - _snowballCollidablesFrame >= 30) {
+                _snowballCollidables.length = 0;
+                collectSnowballCollidables(scene, null, _snowballCollidables);
+                _snowballCollidablesFrame = frameCount;
+            }
+
             for (let i = 0; i < snowballsRef.current.length; i++) {
                 const sb = snowballsRef.current[i];
                 
@@ -6114,7 +6259,7 @@ const VoxelWorld = ({
                 }
                 
                 // Store previous position for collision detection
-                const prevPos = sb.mesh.position.clone();
+                _snowballPrevPos.copy(sb.mesh.position);
                 
                 // Apply gravity to velocity
                 sb.velocity.y += SNOWBALL_GRAVITY * delta;
@@ -6143,56 +6288,38 @@ const VoxelWorld = ({
                 let hitNormal = null;
                 
                 // Method 1: Raycast in velocity direction to detect surfaces ahead
-                const velocityDir = new THREE.Vector3(sb.velocity.x, sb.velocity.y, sb.velocity.z).normalize();
+                _snowballVelDir.set(sb.velocity.x, sb.velocity.y, sb.velocity.z).normalize();
                 const speed = Math.sqrt(sb.velocity.x**2 + sb.velocity.y**2 + sb.velocity.z**2);
                 
                 if (speed > 0.1) {
-                    snowballRaycaster.set(prevPos, velocityDir);
-                    snowballRaycaster.far = speed * delta + 0.5; // Check slightly ahead of movement
+                    _snowballRaycaster.set(_snowballPrevPos, _snowballVelDir);
+                    _snowballRaycaster.far = speed * delta + 0.5; // Check slightly ahead of movement
                     
-                    // Get the thrower's mesh to exclude from collisions
-                    // For local snowballs, thrower is the local player
-                    // For remote snowballs, thrower is tracked by throwerId
-                    const localPlayerMesh = playerRef.current;
-                    const throwerId = sb.throwerId; // ID of player who threw this snowball
-                    
-                    // Get all collidable meshes (recursively check children for groups)
-                    // Excludes: splats, snowballs, UI, particles, the snowball itself, and the THROWER only
-                    const getCollidables = (obj, arr = []) => {
-                        // Skip the local player mesh if THEY threw this snowball
-                        if (obj === localPlayerMesh && (!throwerId || throwerId === playerId)) return arr;
-                        
-                        // Skip other player's mesh only if THEY threw this snowball
-                        if (obj.userData?.isPlayer && obj.userData?.playerId === throwerId) return arr;
-                        
-                        if (obj.isMesh && 
-                            !obj.userData?.isSplat && 
-                            !obj.userData?.isSnowball &&
-                            !obj.userData?.isUI &&
-                            !obj.userData?.isParticle &&
-                            !obj.userData?.isBubble &&
-                            !obj.userData?.isNameTag &&
-                            obj !== sb.mesh) {
-                            arr.push(obj);
-                        }
-                        if (obj.children) {
-                            for (const child of obj.children) {
-                                getCollidables(child, arr);
-                            }
-                        }
-                        return arr;
-                    };
-                    
-                    const collidables = getCollidables(scene);
-                    const intersects = snowballRaycaster.intersectObjects(collidables, false);
+                    // Filter the cached list per snowball: exclude the THROWER's meshes and this snowball.
+                    // Local throws have throwerId === playerId (or unset); owner tag '__local' marks our mesh.
+                    const throwerId = sb.throwerId;
+                    const throwerKey = (!throwerId || throwerId === playerId) ? '__local' : throwerId;
+                    _snowballScratch.length = 0;
+                    for (let m = 0; m < _snowballCollidables.length; m++) {
+                        const mesh = _snowballCollidables[m];
+                        if (mesh === sb.mesh) continue;
+                        const owner = mesh.userData._snowballOwner;
+                        if (owner === throwerKey || (owner === throwerId && throwerKey === '__local')) continue;
+                        _snowballScratch.push(mesh);
+                    }
+                    const intersects = _snowballRaycaster.intersectObjects(_snowballScratch, false);
                     
                     if (intersects.length > 0) {
                         hitSomething = true;
                         hitPoint = intersects[0].point;
-                        hitNormal = intersects[0].face?.normal?.clone() || new THREE.Vector3(0, 1, 0);
-                        // Transform normal to world space
-                        if (intersects[0].object.matrixWorld) {
-                            hitNormal.transformDirection(intersects[0].object.matrixWorld);
+                        if (intersects[0].face?.normal) {
+                            hitNormal = _snowballHitNormal.copy(intersects[0].face.normal);
+                            // Transform normal to world space
+                            if (intersects[0].object.matrixWorld) {
+                                hitNormal.transformDirection(intersects[0].object.matrixWorld);
+                            }
+                        } else {
+                            hitNormal = _snowballHitNormal.set(0, 1, 0);
                         }
                     }
                 }
@@ -6200,17 +6327,17 @@ const VoxelWorld = ({
                 // Method 2: Simple Y-level check for ground (fallback)
                 if (!hitSomething && sb.mesh.position.y <= 0.15) {
                     hitSomething = true;
-                    hitPoint = sb.mesh.position.clone();
+                    hitPoint = _snowballHitPoint.copy(sb.mesh.position);
                     hitPoint.y = 0;
-                    hitNormal = new THREE.Vector3(0, 1, 0); // Up normal for ground
+                    hitNormal = _snowballHitNormal.set(0, 1, 0); // Up normal for ground
                 }
                 
                 // Method 3: Check if below any reasonable ground level (deep fallback)
                 if (!hitSomething && sb.mesh.position.y < -1) {
                     hitSomething = true;
-                    hitPoint = sb.mesh.position.clone();
+                    hitPoint = _snowballHitPoint.copy(sb.mesh.position);
                     hitPoint.y = 0;
-                    hitNormal = new THREE.Vector3(0, 1, 0);
+                    hitNormal = _snowballHitNormal.set(0, 1, 0);
                 }
                 
                 // ========== CREATE SPLAT ==========
@@ -6233,11 +6360,12 @@ const VoxelWorld = ({
                     
                     // Orient splat to face along the surface normal
                     // Default is facing +Z, we want it to face along hitNormal
-                    splat.lookAt(splat.position.clone().add(hitNormal));
+                    splat.lookAt(_splatLookTarget.copy(splat.position).add(hitNormal));
                     
                     splat.userData.startTime = snowballNow;
                     splat.userData.isSplat = true;
                     scene.add(splat);
+                    splatsRef.current.push(splat);
                     
                     // Remove snowball
                     snowballsToRemove.push(i);
@@ -6256,24 +6384,28 @@ const VoxelWorld = ({
             for (let i = snowballsToRemove.length - 1; i >= 0; i--) {
                 snowballsRef.current.splice(snowballsToRemove[i], 1);
             }
+            } // end snowball physics block
             
-            // Fade out and remove splat effects
-            const SPLAT_DURATION = 800; // 0.8 seconds
-            scene.children.forEach((child) => {
-                if (child.userData?.isSplat) {
-                    const age = snowballNow - child.userData.startTime;
+            // Fade out and remove splat effects (tracked list — no scene.children scan)
+            if (splatsRef.current.length > 0) {
+                const SPLAT_DURATION = 800; // 0.8 seconds
+                const splatNow = Date.now();
+                for (let i = splatsRef.current.length - 1; i >= 0; i--) {
+                    const splat = splatsRef.current[i];
+                    const age = splatNow - splat.userData.startTime;
                     if (age > SPLAT_DURATION) {
-                        scene.remove(child);
-                        child.geometry.dispose();
-                        child.material.dispose();
+                        scene.remove(splat);
+                        splat.geometry.dispose();
+                        splat.material.dispose();
+                        splatsRef.current.splice(i, 1);
                     } else {
                         // Fade out and grow
-                        child.material.opacity = 0.8 * (1 - age / SPLAT_DURATION);
+                        splat.material.opacity = 0.8 * (1 - age / SPLAT_DURATION);
                         const scale = 1 + (age / SPLAT_DURATION) * 0.5;
-                        child.scale.set(scale, scale, 1);
+                        splat.scale.set(scale, scale, 1);
                     }
                 }
-            });
+            }
             
             // Performance tracking for render
             const renderStart = showPerfDebugRef.current ? performance.now() : 0;
@@ -6358,9 +6490,15 @@ const VoxelWorld = ({
             }
         };
 
-        // Pre-compile materials + prime raycast path before first RAF tick (reduces first-move hitch)
+        // Pre-compile materials + prime raycast path before first RAF tick (reduces first-move hitch).
+        // compileAsync uses KHR_parallel_shader_compile — shaders compile in the GPU driver
+        // without blocking the main thread (falls back to sync compile on old browsers).
+        await loadYield(0.85);
         try {
-            if (typeof renderer.compile === 'function') {
+            if (typeof renderer.compileAsync === 'function') {
+                await renderer.compileAsync(scene, camera);
+                if (initCancelled) return;
+            } else if (typeof renderer.compile === 'function') {
                 renderer.compile(scene, camera);
             }
         } catch (e) {
@@ -6375,7 +6513,48 @@ const VoxelWorld = ({
         } catch (e) {
             console.warn('Raycast warmup:', e);
         }
-
+        
+        // Pre-upload textures to the GPU behind the loading screen. Without this, canvas
+        // textures (signs, billboards, slot machines, banners) upload lazily the first time
+        // the camera reveals them — the cause of the post-load "look around and freeze" hitches.
+        await loadYield(0.92);
+        if (initCancelled) return;
+        try {
+            if (typeof renderer.initTexture === 'function') {
+                const seenTextures = new Set();
+                const textures = [];
+                const TEXTURE_SLOTS = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'alphaMap'];
+                scene.traverse(obj => {
+                    const mats = Array.isArray(obj.material) ? obj.material : (obj.material ? [obj.material] : []);
+                    for (const m of mats) {
+                        for (const slot of TEXTURE_SLOTS) {
+                            const tex = m[slot];
+                            if (tex && !seenTextures.has(tex)) {
+                                seenTextures.add(tex);
+                                textures.push(tex);
+                            }
+                        }
+                    }
+                });
+                // Upload in small batches so even large texture sets can't lock the page
+                const BATCH = 16;
+                for (let i = 0; i < textures.length; i += BATCH) {
+                    const end = Math.min(i + BATCH, textures.length);
+                    for (let j = i; j < end; j++) {
+                        renderer.initTexture(textures[j]);
+                    }
+                    if (end < textures.length) {
+                        await loadYield(0.92 + 0.07 * (end / textures.length));
+                        if (initCancelled) return;
+                    }
+                }
+                console.log(`🖼️ Pre-uploaded ${textures.length} textures to GPU`);
+            }
+        } catch (e) {
+            console.warn('Texture pre-upload:', e);
+        }
+        
+        reportLoadProgress(1);
         update();
         
         } // end initWorld()
@@ -6383,6 +6562,7 @@ const VoxelWorld = ({
         return () => {
             initCancelled = true;
             cancelAnimationFrame(deferTimer);
+            if (deferTimeout) clearTimeout(deferTimeout);
             cancelAnimationFrame(reqRef.current);
             if (handleDown) window.removeEventListener('keydown', handleDown);
             if (handleUp) window.removeEventListener('keyup', handleUp);
@@ -6403,6 +6583,11 @@ const VoxelWorld = ({
             if (snowFortsZoneRef.current) {
                 snowFortsZoneRef.current.cleanup();
                 snowFortsZoneRef.current = null;
+            }
+            // Cleanup Forest Trails Zone (was leaking ~200 trees' GPU buffers per room switch)
+            if (forestTrailsZoneRef.current) {
+                forestTrailsZoneRef.current.cleanup();
+                forestTrailsZoneRef.current = null;
             }
             // Cleanup Mountain Background
             if (mountainBackgroundRef.current) {
@@ -7214,6 +7399,7 @@ const VoxelWorld = ({
             const snowball = new THREE.Mesh(snowballGeom, snowballMat);
             snowball.position.set(startPos.x, startPos.y, startPos.z);
             snowball.castShadow = true;
+            snowball.userData.isSnowball = true;
             sceneRef.current.add(snowball);
             
             // Add to active snowballs
@@ -7352,7 +7538,24 @@ const VoxelWorld = ({
         const camera = cameraRef.current;
         const raycaster = raycasterRef.current;
         
+        // PERF: hover detection used to run a full scene traverse + raycast on EVERY mousemove.
+        // Now: throttled to 10Hz, and the static-scene classification (props/buildings/POIs,
+        // which never changes between room loads) is cached with a short TTL. Dynamic objects
+        // (players, puffles, sprites, banners) are still collected fresh each check.
+        let _lastHoverCheck = 0;
+        const HOVER_CHECK_INTERVAL_MS = 100;
+        let _staticHoverCache = null;
+        let _staticHoverCacheTime = 0;
+        const STATIC_HOVER_CACHE_TTL_MS = 3000;
+        const _spriteWorldPos = new window.THREE.Vector3();
+        const _rayToSprite = new window.THREE.Vector3();
+        const _closestPointOnRay = new window.THREE.Vector3();
+        
         const handleMouseMove = (event) => {
+            const hoverNow = performance.now();
+            if (hoverNow - _lastHoverCheck < HOVER_CHECK_INTERVAL_MS) return;
+            _lastHoverCheck = hoverNow;
+            
             // Skip if any UI element is being hovered
             const elementsAtPoint = document.elementsFromPoint(event.clientX, event.clientY);
             const isOverUI = elementsAtPoint.some(el => {
@@ -7454,60 +7657,73 @@ const VoxelWorld = ({
                 objectTypeMap.set(lordFishnuSpriteRef.current, 'banner');
             }
             
-            // Check scene for interactive props/buildings
+            // Check scene for interactive props/buildings (cached — this classification is
+            // expensive string matching over the whole graph and rarely changes)
             if (sceneRef.current) {
-                // Helper to check if obj or any parent has a name containing the search string
-                const hasNameInHierarchy = (obj, search) => {
-                    let current = obj;
-                    while (current) {
-                        if (current.name?.toLowerCase().includes(search.toLowerCase())) {
-                            return true;
+                if (!_staticHoverCache || hoverNow - _staticHoverCacheTime > STATIC_HOVER_CACHE_TTL_MS) {
+                    // Helper to check if obj or any parent has a name containing the search string
+                    const hasNameInHierarchy = (obj, search) => {
+                        let current = obj;
+                        while (current) {
+                            if (current.name?.toLowerCase().includes(search.toLowerCase())) {
+                                return true;
+                            }
+                            current = current.parent;
                         }
-                        current = current.parent;
-                    }
-                    return false;
-                };
+                        return false;
+                    };
+                    
+                    // POI names that should show the "?" cursor (explorable/interactable locations)
+                    const poiNames = [
+                        'lighthouse', 'dojo', 'nightclub', 'casino', 'puffle', 'pizza', 'plaza',
+                        'arcade', 'fishing', 'bench', 'parkour', 'skatepark', 'park', 'fountain',
+                        'signpost', 'mailbox', 'vending', 'slot', 'roulette', 'blackjack'
+                    ];
+                    
+                    const staticObjects = [];
+                    const staticTypeMap = new Map();
+                    sceneRef.current.traverse(obj => {
+                        if (obj.isMesh || obj.isSprite) {
+                            // Check for clickable interaction markers
+                            if (obj.userData?.isInteractive || obj.userData?.isBanner || obj.name?.includes('interaction')) {
+                                staticObjects.push(obj);
+                                staticTypeMap.set(obj, 'poi');
+                            }
+                            // Check for igloo markers (check entire hierarchy for "igloo" name)
+                            else if (hasNameInHierarchy(obj, 'igloo')) {
+                                staticObjects.push(obj);
+                                staticTypeMap.set(obj, 'igloo');
+                            }
+                            // Check for portal markers
+                            else if (obj.name?.includes('portal') || obj.userData?.isPortal) {
+                                staticObjects.push(obj);
+                                staticTypeMap.set(obj, 'poi');
+                            }
+                            // Check for POIs - buildings, props, interactables that show "?" cursor
+                            else if (poiNames.some(poi => hasNameInHierarchy(obj, poi))) {
+                                staticObjects.push(obj);
+                                staticTypeMap.set(obj, 'poi');
+                            }
+                            // Check for shop/building entrances
+                            else if (obj.name?.includes('shop') || obj.name?.includes('building') || 
+                                obj.name?.includes('entrance') || obj.userData?.isClickable) {
+                                staticObjects.push(obj);
+                                staticTypeMap.set(obj, 'poi');
+                            }
+                        }
+                    });
+                    _staticHoverCache = { objects: staticObjects, typeMap: staticTypeMap };
+                    _staticHoverCacheTime = hoverNow;
+                }
                 
-                // POI names that should show the "?" cursor (explorable/interactable locations)
-                const poiNames = [
-                    'lighthouse', 'dojo', 'nightclub', 'casino', 'puffle', 'pizza', 'plaza',
-                    'arcade', 'fishing', 'bench', 'parkour', 'skatepark', 'park', 'fountain',
-                    'signpost', 'mailbox', 'vending', 'slot', 'roulette', 'blackjack'
-                ];
-                
-                sceneRef.current.traverse(obj => {
-                    if (obj.isMesh || obj.isSprite) {
-                        // Skip if already mapped
-                        if (objectTypeMap.has(obj)) return;
-                        
-                        // Check for clickable interaction markers
-                        if (obj.userData?.isInteractive || obj.userData?.isBanner || obj.name?.includes('interaction')) {
-                            interactiveObjects.push(obj);
-                            objectTypeMap.set(obj, 'poi');
-                        }
-                        // Check for igloo markers (check entire hierarchy for "igloo" name)
-                        else if (hasNameInHierarchy(obj, 'igloo')) {
-                            interactiveObjects.push(obj);
-                            objectTypeMap.set(obj, 'igloo');
-                        }
-                        // Check for portal markers
-                        else if (obj.name?.includes('portal') || obj.userData?.isPortal) {
-                            interactiveObjects.push(obj);
-                            objectTypeMap.set(obj, 'poi');
-                        }
-                        // Check for POIs - buildings, props, interactables that show "?" cursor
-                        else if (poiNames.some(poi => hasNameInHierarchy(obj, poi))) {
-                            interactiveObjects.push(obj);
-                            objectTypeMap.set(obj, 'poi');
-                        }
-                        // Check for shop/building entrances
-                        else if (obj.name?.includes('shop') || obj.name?.includes('building') || 
-                            obj.name?.includes('entrance') || obj.userData?.isClickable) {
-                            interactiveObjects.push(obj);
-                            objectTypeMap.set(obj, 'poi');
-                        }
-                    }
-                });
+                // Merge static classification under dynamic entries (dynamic wins, matching
+                // the original traverse which skipped already-mapped objects)
+                for (const obj of _staticHoverCache.objects) {
+                    if (obj.parent === null) continue; // removed from scene since cache build
+                    if (objectTypeMap.has(obj)) continue;
+                    interactiveObjects.push(obj);
+                    objectTypeMap.set(obj, _staticHoverCache.typeMap.get(obj));
+                }
             }
             
             // Check for intersections
@@ -7540,17 +7756,16 @@ const VoxelWorld = ({
                 for (const sprite of spriteObjects) {
                     if (!sprite.visible) continue;
                     
-                    const spriteWorldPos = new THREE.Vector3();
-                    sprite.getWorldPosition(spriteWorldPos);
+                    sprite.getWorldPosition(_spriteWorldPos);
                     
-                    const rayToSprite = new THREE.Vector3().subVectors(spriteWorldPos, ray.origin);
-                    const rayDir = ray.direction.clone().normalize();
-                    const projectionLength = rayToSprite.dot(rayDir);
+                    _rayToSprite.subVectors(_spriteWorldPos, ray.origin);
+                    const rayDir = ray.direction; // already normalized
+                    const projectionLength = _rayToSprite.dot(rayDir);
                     
                     if (projectionLength < 0) continue; // Behind camera
                     
-                    const closestPointOnRay = ray.origin.clone().add(rayDir.clone().multiplyScalar(projectionLength));
-                    const distanceToRay = closestPointOnRay.distanceTo(spriteWorldPos);
+                    _closestPointOnRay.copy(ray.origin).addScaledVector(rayDir, projectionLength);
+                    const distanceToRay = _closestPointOnRay.distanceTo(_spriteWorldPos);
                     const spriteSize = Math.max(sprite.scale.x, sprite.scale.y) / 2;
                     
                     if (distanceToRay < spriteSize) {
@@ -7771,12 +7986,11 @@ const VoxelWorld = ({
                 continue; // On cooldown with this player
             }
             
-            // Check distance
+            // Check distance (squared — avoids sqrt per player per check)
             const dx = myPufflePos.x - otherData.pufflePosition.x;
             const dz = myPufflePos.z - otherData.pufflePosition.z;
-            const distance = Math.sqrt(dx * dx + dz * dz);
             
-            if (distance < PROXIMITY_DISTANCE) {
+            if (dx * dx + dz * dz < PROXIMITY_DISTANCE * PROXIMITY_DISTANCE) {
                 // Start interaction!
                 puffleInteractionActiveRef.current = {
                     playerId: otherId,
@@ -8701,11 +8915,28 @@ const VoxelWorld = ({
                 return;
             }
             
+            // PERF: furniture proximity dispatches fire every frame from the game loop with
+            // identical payloads. Returning the previous state object when nothing changed
+            // lets React bail out instead of re-rendering this whole component at 60fps.
+            const sameBenchPrompt = (prev, promptAction, promptEmote) => {
+                if (prev?.action !== promptAction || prev.emote !== promptEmote) return false;
+                if (prev.benchData === data) return true; // trigger zones reuse a stable zone object
+                if (!prev.benchData || !data) return false;
+                // Furniture-system payloads are fresh objects each frame — compare by seat coords
+                if (data.worldX === undefined || prev.benchData.worldX === undefined) return false;
+                return prev.benchData.worldX === data.worldX &&
+                    prev.benchData.worldZ === data.worldZ &&
+                    prev.benchData.worldRotation === data.worldRotation &&
+                    prev.benchData.seatHeight === data.seatHeight &&
+                    prev.benchData.platformHeight === data.platformHeight &&
+                    prev.benchData.dismountBack === data.dismountBack;
+            };
+            
             if (action === 'sit' && emote) {
                 // Don't show prompt if already seated
                 if (seatedRef.current) return;
                 // Pass bench data including snap points and world position
-                setNearbyInteraction({ 
+                setNearbyInteraction(prev => sameBenchPrompt(prev, action, emote) ? prev : { 
                     action, 
                     message: `${t('interact.pressE')} ${t('interact.toSit')}`, 
                     emote,
@@ -8715,7 +8946,7 @@ const VoxelWorld = ({
                 // Don't show prompt if already DJing
                 if (seatedRef.current) return;
                 // Pass DJ booth data
-                setNearbyInteraction({ 
+                setNearbyInteraction(prev => sameBenchPrompt(prev, action, emote || 'DJ') ? prev : { 
                     action, 
                     message: `🎧 ${t('interact.pressE')} ${t('interact.toDJ')}`,
                     emote: emote || 'DJ',
@@ -9752,6 +9983,7 @@ const VoxelWorld = ({
                 const snowball = new THREE.Mesh(snowballGeom, snowballMat);
                 snowball.position.set(data.startX, data.startY, data.startZ);
                 snowball.castShadow = true;
+                snowball.userData.isSnowball = true;
                 sceneRef.current.add(snowball);
                 
                 // Add to active snowballs with received velocity

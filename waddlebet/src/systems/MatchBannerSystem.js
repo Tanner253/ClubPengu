@@ -1330,13 +1330,6 @@ export function updateMatchBanners(params) {
                 renderBannerToCanvas(ctx, matchData);
             };
         }
-        
-        // Update stored banner data for zoom overlay to reflect latest state
-        if (bannerData.sprite.userData.bannerData) {
-            bannerData.sprite.userData.bannerData.renderFn = (ctx, w, h) => {
-                renderBannerToCanvas(ctx, matchData);
-            };
-        }
     }
 }
 

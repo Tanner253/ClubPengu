@@ -4,7 +4,7 @@
  * OPTIMIZED: Uses refs for real-time position data to avoid React re-renders
  */
 
-import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import GameManager from '../engine/GameManager';
 import { PhantomWallet } from '../wallet';
 
@@ -1875,7 +1875,9 @@ export function MultiplayerProvider({ children }) {
         };
     }, [connect]);
     
-    const value = {
+    // PERF: memoized so consumers only re-render when an exposed value actually changes,
+    // not whenever this provider re-renders for unrelated/internal reasons.
+    const value = useMemo(() => ({
         // Connection State
         connected,
         playerId,
@@ -1967,7 +1969,24 @@ export function MultiplayerProvider({ children }) {
         // Generic message handlers for component subscriptions
         addMessageHandler,
         removeMessageHandler
-    };
+    }), [
+        connected, playerId, playerName, playerCount, totalPlayerCount, playerList,
+        getPlayersData, chatMessages, serverRoom, connectionError,
+        isAuthenticated, walletAddress, authToken, userData, isNewUser, authError,
+        isAuthenticating, isRestoringSession,
+        connectWallet, disconnectWallet,
+        redeemPromoCode, promoLoading, promoResult, clearPromoResult,
+        spinSlot, slotSpinning, slotResult, clearSlotResult, activeSlotSpins,
+        startFishing, attemptCatch, cancelFishing, fishingActive, fishingResult, clearFishingResult,
+        adoptPuffle, puffleAdopting,
+        setName, joinRoom, sendPosition, sendChat, sendEmoteBubble, sendEmote, stopEmote,
+        changeRoom, updateAppearance, updatePuffle, sendPuffleEmote, syncPuffleState,
+        equipPuffleAccessory, unequipPuffleAccessory, equipPuffleToy,
+        sendBallKick, requestBallSync, sendSnowball, registerCallbacks,
+        syncCoins, updateUserCoins, changeUsername,
+        allCosmetics, fetchAllCosmetics, checkUsername,
+        send, addMessageHandler, removeMessageHandler
+    ]);
     
     return (
         <MultiplayerContext.Provider value={value}>

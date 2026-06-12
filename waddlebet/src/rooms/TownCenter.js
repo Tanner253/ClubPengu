@@ -879,7 +879,7 @@ class TownCenter {
     }
 
     /**
-     * Spawn all props into the scene
+     * Spawn all props into the scene (synchronous — used for room re-entry)
      */
     spawn(scene) {
         const C = TownCenter.CENTER;
@@ -887,7 +887,36 @@ class TownCenter {
         
         this.cleanup();
         
-        this.propPlacements.forEach(prop => {
+        this.propPlacements.forEach(prop => this._spawnProp(scene, prop, C, dojoOffset));
+        
+        return this._finishSpawn(scene, C);
+    }
+
+    /**
+     * Chunked spawn for the initial load: spawns props in small batches, awaiting
+     * `yieldFn` between batches so the main thread never blocks long enough to
+     * trigger the browser's "Page Unresponsive" dialog.
+     */
+    async spawnChunked(scene, yieldFn, batchSize = 8) {
+        const C = TownCenter.CENTER;
+        const dojoOffset = TownCenter.DOJO_OFFSET;
+        
+        this.cleanup();
+        
+        const placements = this.propPlacements;
+        for (let i = 0; i < placements.length; i++) {
+            this._spawnProp(scene, placements[i], C, dojoOffset);
+            if ((i + 1) % batchSize === 0) await yieldFn();
+        }
+        await yieldFn();
+        
+        return this._finishSpawn(scene, C);
+    }
+
+    /**
+     * Spawn a single prop placement (shared by spawn/spawnChunked)
+     */
+    _spawnProp(scene, prop, C, dojoOffset) {
             let mesh = null;
             
             switch (prop.type) {
@@ -2092,8 +2121,12 @@ class TownCenter {
                     (event, zoneData) => this._handleInteraction(event, zoneData)
                 );
             }
-        });
-        
+    }
+
+    /**
+     * Building collisions, wall boundary, and info boards (shared by spawn/spawnChunked)
+     */
+    _finishSpawn(scene, C) {
         // Add building collisions with NEW positions
         TownCenter.BUILDINGS.forEach(building => {
             const bx = C + building.position.x;
@@ -2710,9 +2743,15 @@ class TownCenter {
                 }
             });
             
-            // SKNY Igloo animations - same timing as nightclubs
+            // SKNY Igloo animations - same timing as nightclubs, distance culled like them too
             this._animatedCache.sknyIgloos.forEach(sknyProp => {
                 if (sknyProp.update) {
+                    const spos = sknyProp.group?.position || sknyProp.mesh?.position;
+                    if (spos) {
+                        const dx = px - spos.x;
+                        const dz = pz - spos.z;
+                        if (dx * dx + dz * dz > ANIMATION_DISTANCE_SQ) return;
+                    }
                     sknyProp.update(time);
                 }
             });
@@ -2790,10 +2829,15 @@ class TownCenter {
             });
         }
         
-        // OPTIMIZED: Christmas trees every 12th frame (was every 6th)
+        // OPTIMIZED: Christmas trees every 12th frame (was every 6th), distance culled
         if (frame % 12 === 0) {
             this._animatedCache.christmasTrees.forEach(mesh => {
-                if (mesh.userData.treeUpdate) mesh.userData.treeUpdate(time, nightFactor);
+                if (mesh.userData.treeUpdate) {
+                    const dx = px - mesh.position.x;
+                    const dz = pz - mesh.position.z;
+                    if (dx * dx + dz * dz > ANIMATION_DISTANCE_SQ) return;
+                    mesh.userData.treeUpdate(time, nightFactor);
+                }
             });
         }
         

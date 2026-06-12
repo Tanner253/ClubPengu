@@ -11,6 +11,7 @@ const LoadingScreen = ({ visible }) => {
     const { t } = useLanguage();
     const [dots, setDots] = useState(0);
     const [tipIndex, setTipIndex] = useState(0);
+    const [progress, setProgress] = useState(0);
 
     const tips = useMemo(() => TIP_KEYS.map((k) => t(k)), [t]);
 
@@ -18,6 +19,22 @@ const LoadingScreen = ({ visible }) => {
         if (!visible) return;
         const a = setInterval(() => setDots((d) => (d + 1) % 4), 400);
         return () => clearInterval(a);
+    }, [visible]);
+
+    // Real build progress from the chunked world loader (monotonic — never goes backwards)
+    useEffect(() => {
+        if (!visible) {
+            setProgress(0);
+            return undefined;
+        }
+        const onProgress = (e) => {
+            const p = e.detail?.progress;
+            if (typeof p === 'number') {
+                setProgress((prev) => Math.max(prev, Math.min(1, p)));
+            }
+        };
+        window.addEventListener('worldLoadProgress', onProgress);
+        return () => window.removeEventListener('worldLoadProgress', onProgress);
     }, [visible]);
 
     useEffect(() => {
@@ -52,13 +69,12 @@ const LoadingScreen = ({ visible }) => {
                     <p className="min-h-[3rem] text-sm leading-relaxed text-white/85 sm:text-base">
                         {tips[tipIndex]}
                     </p>
-                    <div className="mt-4 h-1 w-full overflow-hidden rounded-full bg-white/10">
-                        <div className="h-full w-2/5 animate-pulse rounded-full bg-gradient-to-r from-cyan-500 to-purple-500" />
+                    <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                        <div
+                            className="h-full animate-pulse rounded-full bg-gradient-to-r from-cyan-500 to-purple-500 transition-[width] duration-300 ease-out"
+                            style={{ width: `${Math.max(4, Math.round(progress * 100))}%` }}
+                        />
                     </div>
-                    <p className="mt-3 flex items-center gap-2 text-xs font-medium text-amber-400/90 sm:text-sm">
-                        <span className="inline-block animate-pulse">&#9888;</span>
-                        {t('loading.freezeWarning')}
-                    </p>
                     <p className="mt-2 text-xs text-white/55 sm:text-sm">{t('loading.footer')}</p>
                 </div>
             </div>

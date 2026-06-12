@@ -3,7 +3,7 @@
  * Handles inbox, challenges, active matches, and player profiles
  */
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import GameManager from '../engine/GameManager';
 import { sendSPLToken } from '../wallet/SolanaPayment';
@@ -63,7 +63,6 @@ export function ChallengeProvider({ children }) {
         // Access the WebSocket through window for now (we'll improve this)
         // The multiplayer context exposes the ws through a ref
         const checkWs = setInterval(() => {
-            const mp = document.querySelector('[data-multiplayer-ws]');
             if (window.__multiplayerWs) {
                 wsRef.current = window.__multiplayerWs;
                 clearInterval(checkWs);
@@ -811,7 +810,8 @@ export function ChallengeProvider({ children }) {
         setShouldDance(false);
     }, []);
     
-    const value = {
+    // PERF: memoized so consumers only re-render when an exposed value actually changes
+    const value = useMemo(() => ({
         // State
         inbox,
         unreadCount,
@@ -851,7 +851,16 @@ export function ChallengeProvider({ children }) {
         showNotification,
         updateLocalPosition, // For VoxelWorld to update local player position
         clearDance
-    };
+    }), [
+        inbox, unreadCount, selectedPlayer, selectedPlayerStats, activeMatch, matchState,
+        matchResult, isInMatch, activeMatches, spectatingMatch, activePveActivities,
+        showInbox, showWagerModal, wagerGameType, notification, pendingChallenges,
+        shouldDance, isSigningWager,
+        selectPlayer, clearSelectedPlayer, openWagerModal, closeWagerModal,
+        sendChallenge, acceptChallenge, denyChallenge, cancelChallenge, deleteInboxMessage,
+        playCard, forfeitMatch, clearMatch, syncCoins, toggleInbox, showNotification,
+        updateLocalPosition, clearDance
+    ]);
     
     return (
         <ChallengeContext.Provider value={value}>

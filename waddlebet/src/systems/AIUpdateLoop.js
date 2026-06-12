@@ -13,6 +13,24 @@
 
 import { AI_CONVERSATIONS } from '../config/roomConfig';
 
+// PERF: lookup maps are rebuilt only when the agent/puffle arrays change
+// (identity or length), not on every frame.
+const _puffleMap = new Map();
+const _aiMap = new Map();
+let _lastPufflesArr = null;
+let _lastPufflesLen = -1;
+let _lastAgentsArr = null;
+let _lastAgentsLen = -1;
+let _wizardParticleGeo = null; // shared by all AI wizard-trail particles
+
+// Town igloo positions AI must walk around (offsets from town center)
+const IGLOO_POSITIONS = [
+    { x: -75, z: -75 }, { x: -50, z: -78 }, { x: -25, z: -75 },
+    { x: 25, z: -75 }, { x: 50, z: -78 }, { x: 75, z: -75 },
+    { x: -70, z: -15 }, { x: -40, z: -18 },
+    { x: 40, z: -18 }, { x: 70, z: -15 }
+];
+
 /**
  * Update all AI agents in the game loop
  * @param {Object} params - All required parameters
@@ -58,12 +76,21 @@ export function updateAIAgents(params) {
     const { dojoBx, dojoBz, dojoHd } = dojoCoords;
     const { CITY_SIZE, BUILDING_SCALE, BUILDINGS } = constants;
 
-    // Build lookup maps for O(1) access
-    const puffleMap = new Map();
-    aiPuffles.forEach(entry => puffleMap.set(entry.id, entry));
-    
-    const aiMap = new Map();
-    aiAgents.forEach(ai => aiMap.set(ai.id, ai));
+    // Build lookup maps for O(1) access (cached — only rebuilt when membership changes)
+    if (aiPuffles !== _lastPufflesArr || aiPuffles.length !== _lastPufflesLen) {
+        _puffleMap.clear();
+        aiPuffles.forEach(entry => _puffleMap.set(entry.id, entry));
+        _lastPufflesArr = aiPuffles;
+        _lastPufflesLen = aiPuffles.length;
+    }
+    if (aiAgents !== _lastAgentsArr || aiAgents.length !== _lastAgentsLen) {
+        _aiMap.clear();
+        aiAgents.forEach(ai => _aiMap.set(ai.id, ai));
+        _lastAgentsArr = aiAgents;
+        _lastAgentsLen = aiAgents.length;
+    }
+    const puffleMap = _puffleMap;
+    const aiMap = _aiMap;
 
     // OPTIMIZATION: Only run full AI logic every 2nd frame (60fps -> 30fps AI updates)
     const runFullAILogic = frameCount % 2 === 0;
@@ -336,8 +363,7 @@ function updateAIBehavior(ai, ctx) {
                         now > other.conversationCooldown) {
                         const dx = other.pos.x - ai.pos.x;
                         const dz = other.pos.z - ai.pos.z;
-                        const dist = Math.sqrt(dx*dx + dz*dz);
-                        if (dist < 6) {
+                        if (dx*dx + dz*dz < 36) { // 6 units, squared — avoids sqrt
                             foundPartner = other;
                             break;
                         }
@@ -660,20 +686,14 @@ function getValidTownTarget(ai, ctx) {
         
         // Check against igloo positions
         if (validTarget) {
-            const iglooPositions = [
-                { x: -75, z: -75 }, { x: -50, z: -78 }, { x: -25, z: -75 },
-                { x: 25, z: -75 }, { x: 50, z: -78 }, { x: 75, z: -75 },
-                { x: -70, z: -15 }, { x: -40, z: -18 },
-                { x: 40, z: -18 }, { x: 70, z: -15 }
-            ];
             const iglooRadius = 8;
             
-            for (const igloo of iglooPositions) {
+            for (const igloo of IGLOO_POSITIONS) {
                 const ix = centerX + igloo.x;
                 const iz = centerZ + igloo.z;
                 const dx = tx - ix;
                 const dz = tz - iz;
-                if (Math.sqrt(dx*dx + dz*dz) < iglooRadius) {
+                if (dx*dx + dz*dz < iglooRadius * iglooRadius) {
                     validTarget = false;
                     break;
                 }
@@ -913,9 +933,14 @@ function updateAIWizardTrail(ai, ctx) {
         trailGroup.userData.particles = [];
         const particleCount = 15;
         
+        // Share one sphere geometry across all trail particles (was 15 geometries per wizard AI)
+        if (!_wizardParticleGeo) {
+            _wizardParticleGeo = new THREE.SphereGeometry(0.08, 6, 6);
+        }
+        
         for (let i = 0; i < particleCount; i++) {
             const particle = new THREE.Mesh(
-                new THREE.SphereGeometry(0.08, 6, 6),
+                _wizardParticleGeo,
                 new THREE.MeshBasicMaterial({ 
                     color: Math.random() > 0.5 ? 0x8844ff : 0x44ffaa,
                     transparent: true,

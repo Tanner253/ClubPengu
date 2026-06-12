@@ -193,9 +193,28 @@ class BaseRoom {
         });
         this.props = [];
         
-        // Remove direct meshes
+        // Remove direct meshes and dispose nested GPU resources.
+        // Groups added via addMesh can contain children whose geometries/materials were
+        // never registered in this.geometries/this.materials — without the traverse they
+        // leaked VRAM on every room switch. (Same pattern as ForestTrailsZone.cleanup.)
         this.meshes.forEach(mesh => {
             if (mesh.parent) mesh.parent.remove(mesh);
+            if (mesh.traverse) {
+                mesh.traverse(child => {
+                    if (child.geometry?.dispose) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => {
+                                if (m.map?.dispose) m.map.dispose();
+                                m.dispose();
+                            });
+                        } else {
+                            if (child.material.map?.dispose) child.material.map.dispose();
+                            child.material.dispose();
+                        }
+                    }
+                });
+            }
         });
         this.meshes = [];
         

@@ -145,6 +145,42 @@ class ForestTrailsZone {
     }
     
     /**
+     * Chunked spawn for the initial load: builds the zone in small batches,
+     * awaiting `yieldFn` between batches so the main thread stays responsive.
+     */
+    async spawnChunked(scene, yieldFn, treeBatchSize = 20) {
+        const THREE = this.THREE;
+        const C = ForestTrailsZone.CENTER;
+        const OX = ForestTrailsZone.WORLD_OFFSET_X;
+        const OZ = ForestTrailsZone.WORLD_OFFSET_Z;
+        
+        this._createGroundPlane(scene, THREE, OX, OZ);
+        this._createPaths(scene, THREE, OX, OZ, C);
+        await yieldFn();
+        
+        // Dense forest in tree batches (~200 trees — the heaviest part of this zone)
+        const treePositions = this._collectTreePositions();
+        for (let i = 0; i < treePositions.length; i++) {
+            this._spawnTree(scene, THREE, OX, OZ, treePositions[i]);
+            if ((i + 1) % treeBatchSize === 0) await yieldFn();
+        }
+        console.log(`🌲 Forest: Spawned ${treePositions.length} trees`);
+        await yieldFn();
+        
+        this._createCampfireClearing(scene, THREE, OX, OZ, C);
+        this._createStream(scene, THREE, OX, OZ, C);
+        await yieldFn();
+        
+        this._createRestAreas(scene, THREE, OX, OZ, C);
+        this._createBoundaryCollisions(C);
+        this._createLighting(scene, THREE, OX, OZ, C);
+        
+        console.log(`🌲 Forest Trails Zone spawned: ${this.meshes.length} meshes, ${this.lights.length} lights`);
+        
+        return this;
+    }
+    
+    /**
      * Create the forest ground (darker, more earthy than snow)
      */
     _createGroundPlane(scene, THREE, OX, OZ) {
@@ -232,7 +268,15 @@ class ForestTrailsZone {
      * Create dense forest with varied tree sizes
      */
     _createForest(scene, THREE, OX, OZ, C) {
-        // Tree positions - dense coverage avoiding paths and campsites
+        const treePositions = this._collectTreePositions();
+        treePositions.forEach(pos => this._spawnTree(scene, THREE, OX, OZ, pos));
+        console.log(`🌲 Forest: Spawned ${treePositions.length} trees`);
+    }
+    
+    /**
+     * Compute tree positions - dense coverage avoiding paths and campsites
+     */
+    _collectTreePositions() {
         const treePositions = [];
         
         // Campsite centers to avoid (local coordinates)
@@ -276,33 +320,35 @@ class ForestTrailsZone {
             }
         }
         
-        // Spawn trees
-        treePositions.forEach(pos => {
-            try {
-                const treeProp = createProp(THREE, null, PROP_TYPES.PINE_TREE, 0, 0, 0, { 
-                    size: pos.size,
-                    snowCovered: true // Forest still has snow on trees
-                });
-                const mesh = attachPropData(treeProp, treeProp.group);
-                mesh.position.set(OX + pos.x, 0, OZ + pos.z);
-                // Random rotation for variety
-                mesh.rotation.y = Math.sin(pos.x + pos.z) * Math.PI;
-                scene.add(mesh);
-                this.meshes.push(mesh);
-                
-                // Add tree collision (smaller radius for dense forest navigation)
-                this.collisionSystem.addCollider(
-                    pos.x, pos.z,
-                    { type: 'circle', radius: 1.0, height: 8 },
-                    1, // SOLID
-                    { name: 'pine_tree' }
-                );
-            } catch (e) {
-                // Silently skip failed trees
-            }
-        });
-        
-        console.log(`🌲 Forest: Spawned ${treePositions.length} trees`);
+        return treePositions;
+    }
+    
+    /**
+     * Spawn a single forest tree with collision
+     */
+    _spawnTree(scene, THREE, OX, OZ, pos) {
+        try {
+            const treeProp = createProp(THREE, null, PROP_TYPES.PINE_TREE, 0, 0, 0, { 
+                size: pos.size,
+                snowCovered: true // Forest still has snow on trees
+            });
+            const mesh = attachPropData(treeProp, treeProp.group);
+            mesh.position.set(OX + pos.x, 0, OZ + pos.z);
+            // Random rotation for variety
+            mesh.rotation.y = Math.sin(pos.x + pos.z) * Math.PI;
+            scene.add(mesh);
+            this.meshes.push(mesh);
+            
+            // Add tree collision (smaller radius for dense forest navigation)
+            this.collisionSystem.addCollider(
+                pos.x, pos.z,
+                { type: 'circle', radius: 1.0, height: 8 },
+                1, // SOLID
+                { name: 'pine_tree' }
+            );
+        } catch (e) {
+            // Silently skip failed trees
+        }
     }
     
     /**

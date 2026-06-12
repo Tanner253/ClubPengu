@@ -3,7 +3,7 @@
  * Handles igloo data fetching, rental UI state, and entry access checks
  */
 
-import React, { createContext, useContext, useState, useCallback, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext.jsx';
 import { IGLOO_CONFIG } from '../config/solana.js';
 
@@ -674,7 +674,8 @@ export const IglooProvider = ({ children }) => {
         }
     }, []);
     
-    const value = {
+    // PERF: memoized so consumers only re-render when an exposed value actually changes
+    const value = useMemo(() => ({
         // Data
         igloos,
         myRentals,
@@ -719,7 +720,14 @@ export const IglooProvider = ({ children }) => {
         
         // Config
         config: IGLOO_CONFIG
-    };
+    }), [
+        igloos, myRentals, selectedIgloo, entryCheckResult, walletAddress, currentIglooRoom,
+        showRentalModal, showSettingsPanel, showEntryModal, showDetailsPanel,
+        showRequirementsPanel, isLoading,
+        checkIglooEntry, openRentalModal, openDetailsPanel, openRequirementsPanel,
+        openSettingsPanel, updateSettings, payRent, enterIglooDemo, enterIglooRoom,
+        leaveIglooRoom, getIgloo, isOwner, getBannerInfo, userClearance
+    ]);
     
     return (
         <IglooContext.Provider value={value}>

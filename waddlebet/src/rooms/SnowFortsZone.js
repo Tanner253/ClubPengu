@@ -131,6 +131,37 @@ class SnowFortsZone {
         console.log(`⛄ Snow Forts Zone spawned: ${this.meshes.length} meshes, ${this.lights.length} lights`);
     }
     
+    /**
+     * Chunked spawn for the initial load: builds the zone phase by phase,
+     * awaiting `yieldFn` between phases so the main thread stays responsive.
+     */
+    async spawnChunked(scene, yieldFn) {
+        const SIZE = SnowFortsZone.ZONE_SIZE;
+        const C = SnowFortsZone.CENTER;
+        const OX = SnowFortsZone.WORLD_OFFSET_X;
+        const OZ = SnowFortsZone.WORLD_OFFSET_Z;
+        
+        this.cleanup();
+        
+        this._createGroundPlane(scene, SIZE, C, OX, OZ);
+        this._createPaths(scene, SIZE, C, OX, OZ);
+        await yieldFn();
+        
+        this._createSnowForts(scene, SIZE, C, OX, OZ);
+        await yieldFn();
+        
+        this._createIceRink(scene, SIZE, C, OX, OZ);
+        await yieldFn();
+        
+        this._createEnvironment(scene, SIZE, C, OX, OZ);
+        await yieldFn();
+        
+        this._createLighting(scene, SIZE, C, OX, OZ);
+        this._createBoundaryWalls(SIZE, C);
+        
+        console.log(`⛄ Snow Forts Zone spawned: ${this.meshes.length} meshes, ${this.lights.length} lights`);
+    }
+    
     _createGroundPlane(scene, SIZE, C, OX, OZ) {
         const THREE = this.THREE;
         
