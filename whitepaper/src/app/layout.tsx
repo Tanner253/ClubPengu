@@ -1,14 +1,15 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Inter, Noto_Sans_TC } from "next/font/google";
+import { Baloo_2, Figtree, Noto_Sans_TC } from "next/font/google";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
+const baloo = Baloo_2({
   subsets: ["latin"],
   variable: "--font-display",
+  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 
-const inter = Inter({
+const figtree = Figtree({
   subsets: ["latin"],
   variable: "--font-sans",
   display: "swap",
@@ -61,7 +62,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="scroll-smooth">
       <body
-        className={`${spaceGrotesk.variable} ${inter.variable} ${notoSansTc.variable} antialiased`}
+        className={`${baloo.variable} ${figtree.variable} ${notoSansTc.variable} antialiased`}
         suppressHydrationWarning
       >
         {children}

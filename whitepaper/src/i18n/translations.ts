@@ -146,6 +146,11 @@ const en: Record<string, string> = {
   "roadmap.status.complete": "✓ Complete",
   "roadmap.status.current": "● In Progress",
   "roadmap.status.next": "◐ Next",
+
+  "finalCta.title": "Ready to waddle in?",
+  "finalCta.sub":
+    "Everything you just read is live right now. Hop into the world, customize your penguin, and pull up a seat at the table.",
+  "finalCta.community": "Join the Community",
 };
 
 const zhTW: Record<string, string> = {
@@ -286,6 +291,10 @@ const zhTW: Record<string, string> = {
   "roadmap.status.complete": "✓ 已完成",
   "roadmap.status.current": "● 進行中",
   "roadmap.status.next": "◐ 下一步",
+
+  "finalCta.title": "準備好搖搖擺擺進場了嗎？",
+  "finalCta.sub": "你剛讀到的一切現在都已上線。進入世界、打造你的企鵝，在牌桌前入座。",
+  "finalCta.community": "加入社群",
 };
 
 const BUNDLES: Record<WhitepaperLocale, Record<string, string>> = {

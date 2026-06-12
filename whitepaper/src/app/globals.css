@@ -1,21 +1,21 @@
 @import "tailwindcss";
 
-@theme {
-  --font-geist-sans: "Geist", system-ui, sans-serif;
-  --font-geist-mono: "Geist Mono", monospace;
-  --font-display: "Space Grotesk", system-ui, sans-serif;
-}
+/*
+ * WaddleBet whitepaper design system — styled after the game itself:
+ * dark glassy HUD panels with thin colored borders, candy-gradient buttons
+ * with press feedback, shadowed "retro" game text, and a winter-night palette.
+ */
 
 @layer base {
   :root {
-    --background: 8 12 21;
-    --foreground: 255 255 255;
-    --primary: 0 212 255;
-    --primary-dark: 0 150 199;
-    --accent: 255 107 107;
-    --accent-gold: 255 215 0;
-    --card: 15 23 42;
-    --card-border: 30 41 59;
+    --background: 10 14 26; /* winter night */
+    --foreground: 238 246 255; /* snow */
+    --primary: 34 211 238; /* HUD cyan */
+    --primary-dark: 2 132 199;
+    --accent: 192 132 252; /* arcade purple */
+    --accent-gold: 251 191 36; /* coin amber */
+    --card: 20 20 30;
+    --card-border: 42 53 80;
     --muted: 148 163 184;
   }
 }
@@ -23,7 +23,7 @@
 html {
   scroll-behavior: smooth;
   /* Prevent white flash under fixed nav / during paint (matches body) */
-  background-color: rgb(8, 12, 21);
+  background-color: rgb(10, 14, 26);
   /* No sideways scrolling anywhere — wide decorative elements get clipped instead */
   overflow-x: clip;
 }
@@ -31,8 +31,35 @@ html {
 body {
   background: rgb(var(--background));
   color: rgb(var(--foreground));
-  font-family: var(--font-sans), system-ui, sans-serif;
+  font-family: var(--font-sans), var(--font-noto-tc), system-ui, sans-serif;
   overflow-x: clip;
+}
+
+/* Display type: chunky and rounded, in the spirit of the game's lettering */
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display), var(--font-noto-tc), system-ui, sans-serif;
+  letter-spacing: 0.01em;
+}
+
+.font-display {
+  font-family: var(--font-display), var(--font-noto-tc), system-ui, sans-serif;
+}
+
+/* Game text — same treatment as the in-game .retro-text */
+.retro-text {
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+/* HUD labels — small bold caps with the game's text shadow */
+.hud-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.55);
 }
 
 /* Custom scrollbar */
@@ -53,9 +80,9 @@ body {
   background: rgb(var(--primary-dark));
 }
 
-/* Gradient text */
+/* Gradient text — icy blue, like the game's water and HUD */
 .gradient-text {
-  background: linear-gradient(135deg, rgb(var(--primary)) 0%, rgb(var(--accent)) 50%, rgb(var(--accent-gold)) 100%);
+  background: linear-gradient(135deg, #7dd3fc 0%, #22d3ee 45%, #818cf8 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -74,22 +101,76 @@ body {
 }
 
 .glow-gold {
-  box-shadow: 0 0 40px rgba(255, 215, 0, 0.3);
+  box-shadow: 0 0 40px rgba(251, 191, 36, 0.3);
 }
 
-/* Glass card */
+/* Panel — the game's .glass-panel: dark glass, thin border, deep soft shadow */
 .glass-card {
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(16px);
+  background: rgba(20, 20, 30, 0.85);
+  backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+/* HUD chip — black glass with a thin colored border, like the in-game counters */
+.hud-chip {
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 0.5rem;
+}
+
+/* Candy buttons — gradient pills with the game's hover/press scale feedback */
+.btn-game {
+  font-family: var(--font-display), var(--font-noto-tc), system-ui, sans-serif;
+  font-weight: 700;
+  border-radius: 0.75rem;
+  color: white;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.55);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.btn-game:hover {
+  transform: scale(1.05);
+}
+
+.btn-game:active {
+  transform: scale(0.95);
+}
+
+.btn-play {
+  background: linear-gradient(90deg, rgba(8, 145, 178, 0.9), rgba(37, 99, 235, 0.9));
+}
+
+.btn-play:hover {
+  background: linear-gradient(90deg, rgb(6, 182, 212), rgb(59, 130, 246));
+}
+
+.btn-alt {
+  background: linear-gradient(90deg, rgba(147, 51, 234, 0.85), rgba(219, 39, 119, 0.85));
+}
+
+.btn-alt:hover {
+  background: linear-gradient(90deg, rgb(168, 85, 247), rgb(236, 72, 153));
+}
+
+.btn-ghost {
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.btn-ghost:hover {
+  background: rgba(0, 0, 0, 0.75);
+  border-color: rgba(255, 255, 255, 0.45);
 }
 
 /* Animated background */
 .animated-bg {
-  background: 
+  background:
     radial-gradient(circle at 20% 80%, rgba(0, 212, 255, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 80% 20%, rgba(255, 107, 107, 0.08) 0%, transparent 50%),
-    radial-gradient(circle at 50% 50%, rgba(255, 215, 0, 0.05) 0%, transparent 50%);
+    radial-gradient(circle at 80% 20%, rgba(192, 132, 252, 0.07) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(251, 191, 36, 0.04) 0%, transparent 50%);
 }
 
 /* Snow effect */
@@ -121,9 +202,32 @@ body {
   background: linear-gradient(90deg, transparent, rgba(0, 212, 255, 0.5), transparent);
 }
 
+/* Ticker marquee strip */
+@keyframes ticker-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-track {
+  display: inline-flex;
+  white-space: nowrap;
+  animation: ticker-scroll 36s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ticker-track {
+    animation: none;
+  }
+}
+
 /* Pulse animation for CTA */
 @keyframes pulse-glow {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
   }
   50% {

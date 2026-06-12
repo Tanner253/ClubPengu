@@ -26,6 +26,7 @@ import {
 import Changelog from "../components/Changelog";
 import GachaSystemSection from "../components/GachaSystem";
 import { SolanaHistoryChart } from "../components/SolanaHistoryChart";
+import { ChapterTag } from "../components/ChapterTag";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import {
   WhitepaperLanguageProvider,
@@ -98,6 +99,29 @@ function Snowfall() {
   );
 }
 
+/** Marquee strip under the hero — fast facts on repeat, like an arcade attract screen. */
+function TickerStrip() {
+  const items = [
+    "NO KYC",
+    "WAGER ANY SPL TOKEN",
+    "700+ PEAK CONCURRENT",
+    "8+ MINIGAMES",
+    "INSTANT ON-CHAIN SETTLEMENT",
+    "267+ COSMETICS",
+    "P2P — NO HOUSE",
+    "OPEN SOURCE",
+  ];
+  const run = items.map((item) => `${item}  ◆  `).join("");
+  return (
+    <div className="relative z-10 overflow-hidden border-y border-cyan-400/30 bg-black/70 py-3 backdrop-blur-md" aria-hidden>
+      <div className="ticker-track">
+        <span className="hud-label text-cyan-300">{run}</span>
+        <span className="hud-label text-cyan-300">{run}</span>
+      </div>
+    </div>
+  );
+}
+
 // Navigation
 function Navigation() {
   const { t } = useWhitepaperLanguage();
@@ -140,18 +164,18 @@ function Navigation() {
         initial={{ y: -100 }}
         animate={{ y: 0 }}
         className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-          scrolled ? "bg-[rgb(8,12,21)]/90 backdrop-blur-xl border-b border-white/5" : ""
+          scrolled ? "bg-black/70 backdrop-blur-md border-b border-white/10" : ""
         }`}
       >
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
           {/* Logo */}
           <a href="#" className="flex items-center gap-2 sm:gap-3">
             <img 
               src="/character.png" 
               alt="WaddleBet" 
-              className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg object-cover"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl object-cover border-2 border-white/15"
             />
-            <span className="font-bold text-lg sm:text-xl tracking-tight">
+            <span className="font-display font-bold text-lg sm:text-xl tracking-tight retro-text">
               Waddle<span className="gradient-text-blue">Bet</span>
             </span>
           </a>
@@ -215,16 +239,26 @@ function Navigation() {
             
             <div className="w-px h-6 bg-white/10" />
             
-            <span className="px-3 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-sm font-medium max-w-[10rem] truncate" title={TOKEN_DISPLAY_NAME}>
-              {TOKEN_DISPLAY_NAME}
-            </span>
+            <a
+              href="https://waddle.bet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-game btn-play px-4 py-2 text-sm"
+            >
+              {t("nav.play")}
+            </a>
           </div>
 
           {/* Mobile Menu Button */}
           <div className="flex md:hidden items-center gap-3">
-            <span className="px-2 py-1 rounded-full bg-gradient-to-r from-cyan-500/20 to-blue-500/20 border border-cyan-500/30 text-cyan-400 text-xs font-medium max-w-[7rem] truncate" title={TOKEN_DISPLAY_NAME}>
-              {TOKEN_DISPLAY_NAME}
-            </span>
+            <a
+              href="https://waddle.bet"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn-game btn-play px-3 py-1.5 text-xs"
+            >
+              {t("nav.play")}
+            </a>
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-all"
@@ -241,7 +275,7 @@ function Navigation() {
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -20 }}
-          className="fixed top-[72px] left-0 right-0 z-40 bg-[rgb(8,12,21)]/95 backdrop-blur-xl border-b border-white/5 md:hidden"
+          className="fixed top-[72px] left-0 right-0 z-40 bg-[rgb(10,14,26)]/95 backdrop-blur-xl border-b border-white/5 md:hidden"
         >
           <div className="px-4 py-6 space-y-2">
             {/* Main Nav Links */}
@@ -314,20 +348,20 @@ function HeroContent({ showScrollHint = false }: { showScrollHint?: boolean }) {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.15 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 border border-white/15 mb-8 backdrop-blur-sm"
+            className="hud-chip hud-label inline-flex items-center gap-2 px-4 py-2 border-green-400/50 text-green-300 mb-8"
           >
             <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-green-400" />
             </span>
-            <span className="text-sm text-slate-200">{t("hero.badge")}</span>
+            {t("hero.badge")}
           </motion.div>
 
           <motion.h1
             initial={{ opacity: 0, y: 26 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.22 }}
-            className="text-4xl sm:text-5xl md:text-7xl lg:text-8xl font-bold tracking-tight mb-6 drop-shadow-lg"
+            className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-extrabold tracking-tight mb-6 drop-shadow-lg"
           >
             <span className="block text-white">Waddle</span>
             <span className="gradient-text">Bet</span>
@@ -337,7 +371,7 @@ function HeroContent({ showScrollHint = false }: { showScrollHint?: boolean }) {
             initial={{ opacity: 0, y: 22 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.28 }}
-            className="text-xl md:text-2xl text-slate-200 mb-4 max-w-2xl mx-auto drop-shadow"
+            className="font-display text-xl md:text-2xl text-slate-200 mb-4 max-w-2xl mx-auto drop-shadow"
           >
             {locale === "zh-TW" ? (
               <span className="text-cyan-300 font-semibold">{t("hero.taglineSingle")}</span>
@@ -354,7 +388,7 @@ function HeroContent({ showScrollHint = false }: { showScrollHint?: boolean }) {
             initial={{ opacity: 0, y: 22 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.34 }}
-            className="text-lg text-slate-300 mb-6 max-w-2xl mx-auto drop-shadow"
+            className="text-lg text-slate-300 mb-7 max-w-2xl mx-auto drop-shadow"
           >
             {t("hero.sub")}
           </motion.p>
@@ -363,19 +397,16 @@ function HeroContent({ showScrollHint = false }: { showScrollHint?: boolean }) {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="flex flex-wrap justify-center gap-2 mb-8 max-w-2xl mx-auto"
+            className="flex flex-wrap justify-center gap-2.5 mb-9 max-w-2xl mx-auto"
           >
             {[
-              { label: t("pill.noKyc"), color: "from-green-500/25 to-emerald-500/25 border-green-500/40 text-green-300" },
-              { label: t("pill.x403"), color: "from-cyan-500/25 to-blue-500/25 border-cyan-500/40 text-cyan-300" },
-              { label: t("pill.x402"), color: "from-purple-500/25 to-pink-500/25 border-purple-500/40 text-purple-300" },
-              { label: t("pill.anySpl"), color: "from-yellow-500/25 to-orange-500/25 border-yellow-500/40 text-yellow-300" },
-              { label: t("pill.cults"), color: "from-pink-500/25 to-red-500/25 border-pink-500/40 text-pink-300" },
+              { label: t("pill.noKyc"), color: "border-emerald-400/40 text-emerald-300" },
+              { label: t("pill.x403"), color: "border-cyan-400/40 text-cyan-300" },
+              { label: t("pill.x402"), color: "border-purple-400/40 text-purple-300" },
+              { label: t("pill.anySpl"), color: "border-amber-400/40 text-amber-300" },
+              { label: t("pill.cults"), color: "border-pink-400/40 text-pink-300" },
             ].map((pill, i) => (
-              <span
-                key={i}
-                className={`px-3 py-1.5 rounded-full bg-gradient-to-r ${pill.color} text-xs font-semibold border backdrop-blur-sm`}
-              >
+              <span key={i} className={`hud-chip retro-text px-3 py-1 text-xs font-semibold ${pill.color}`}>
                 {pill.label}
               </span>
             ))}
@@ -385,22 +416,18 @@ function HeroContent({ showScrollHint = false }: { showScrollHint?: boolean }) {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.45 }}
-            className="flex justify-center gap-8 mb-12"
+            className="flex justify-center gap-4 sm:gap-6 mb-12"
           >
-            <div className="text-center">
-              <div className="text-2xl md:text-3xl font-bold text-white drop-shadow">700+</div>
-              <div className="text-xs text-slate-400 uppercase tracking-wider">{t("hero.stat.peak")}</div>
-            </div>
-            <div className="w-px h-12 bg-white/20" />
-            <div className="text-center">
-              <div className="text-2xl md:text-3xl font-bold text-white drop-shadow">7+</div>
-              <div className="text-xs text-slate-400 uppercase tracking-wider">{t("hero.stat.p2p")}</div>
-            </div>
-            <div className="w-px h-12 bg-white/20" />
-            <div className="text-center">
-              <div className="text-2xl md:text-3xl font-bold text-white drop-shadow">{t("hero.stat.live")}</div>
-              <div className="text-xs text-slate-400 uppercase tracking-wider">{t("hero.stat.mainnet")}</div>
-            </div>
+            {[
+              { value: "700+", label: t("hero.stat.peak") },
+              { value: "7+", label: t("hero.stat.p2p") },
+              { value: t("hero.stat.live"), label: t("hero.stat.mainnet") },
+            ].map((stat, i) => (
+              <div key={i} className="glass-card rounded-xl px-4 py-3 sm:px-6 text-center">
+                <div className="font-display text-2xl md:text-3xl font-bold text-white">{stat.value}</div>
+                <div className="hud-label mt-1 text-slate-400">{stat.label}</div>
+              </div>
+            ))}
           </motion.div>
 
           <motion.div
@@ -410,20 +437,20 @@ function HeroContent({ showScrollHint = false }: { showScrollHint?: boolean }) {
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <a
-              href="#about"
-              className="group px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold flex items-center gap-2 hover:opacity-95 transition-all pulse-glow text-sm sm:text-base shadow-lg"
-            >
-              {t("hero.cta.explore")}
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </a>
-            <a
               href="https://waddle.bet"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-6 sm:px-8 py-3 sm:py-4 rounded-xl bg-white/15 border border-white/25 text-white font-semibold flex items-center gap-2 hover:bg-white/25 transition-all text-sm sm:text-base backdrop-blur-sm"
+              className="btn-game btn-play pulse-glow flex items-center gap-2 px-7 sm:px-9 py-3.5 sm:py-4 text-base sm:text-lg"
             >
               {t("hero.cta.play")}
               <ExternalLink className="w-4 h-4" />
+            </a>
+            <a
+              href="#about"
+              className="btn-game btn-ghost group flex items-center gap-2 px-7 sm:px-9 py-3.5 sm:py-4 text-base sm:text-lg"
+            >
+              {t("hero.cta.explore")}
+              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
             </a>
           </motion.div>
 
@@ -431,10 +458,10 @@ function HeroContent({ showScrollHint = false }: { showScrollHint?: boolean }) {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.58 }}
-            className="mt-14 inline-flex flex-wrap items-center justify-center gap-3 px-6 py-3 rounded-2xl bg-black/25 border border-yellow-500/30 backdrop-blur-sm"
+            className="hud-chip mt-14 inline-flex flex-wrap items-center justify-center gap-3 px-6 py-3 rounded-2xl border-amber-400/40"
           >
-            <Coins className="w-5 h-5 text-yellow-400" />
-            <span className="text-yellow-400 font-bold">{TOKEN_DISPLAY_NAME}</span>
+            <Coins className="w-5 h-5 text-amber-400" />
+            <span className="font-display retro-text text-amber-300 font-bold">{TOKEN_DISPLAY_NAME}</span>
             <span className="text-slate-500">•</span>
             <span className="text-slate-300 text-sm max-w-md">{t("hero.token.chains")}</span>
           </motion.div>
@@ -446,7 +473,7 @@ function HeroContent({ showScrollHint = false }: { showScrollHint?: boolean }) {
               transition={{ delay: 0.75 }}
               className="mt-10 flex flex-col items-center gap-2 text-slate-400"
             >
-              <span className="text-xs uppercase tracking-widest">{t("hero.scrollLift")}</span>
+              <span className="hud-label">{t("hero.scrollLift")}</span>
               <motion.div animate={{ y: [0, 6, 0] }} transition={{ repeat: Infinity, duration: 2 }} className="flex flex-col items-center gap-1">
                 <ChevronDown className="w-5 h-5" />
               </motion.div>
@@ -555,7 +582,7 @@ function HeroSection() {
         }`}
       >
         <motion.div
-          className="absolute inset-0 bg-[rgb(8,12,21)] will-change-[opacity,backdrop-filter]"
+          className="absolute inset-0 bg-[rgb(10,14,26)] will-change-[opacity,backdrop-filter]"
           style={{
             opacity: overlayTint,
             backdropFilter: overlayBlur,
@@ -581,7 +608,7 @@ function HeroSection() {
 function VideoSection() {
   const { t, locale } = useWhitepaperLanguage();
   return (
-    <section id="demo" className="relative z-10 bg-[rgb(8,12,21)] py-16 md:py-24 px-5 sm:px-6">
+    <section id="demo" className="relative z-10 bg-[rgb(10,14,26)] py-16 md:py-24 px-5 sm:px-6">
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute left-1/2 top-1/2 h-[500px] w-[800px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-cyan-500/10 blur-3xl" />
       </div>
@@ -593,7 +620,7 @@ function VideoSection() {
           viewport={{ once: true }}
           className="mb-12 text-center"
         >
-          <span className="text-sm font-semibold uppercase tracking-widest text-cyan-400">{t("video.kicker")}</span>
+          <ChapterTag no="01">{t("video.kicker")}</ChapterTag>
           <h2 className="mt-4 mb-6 text-4xl font-bold md:text-5xl">
             {locale === "zh-TW" ? (
               <span className="gradient-text-blue">{t("video.titleZh")}</span>
@@ -662,7 +689,7 @@ function AboutSection() {
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">{t("about.kicker")}</span>
+          <ChapterTag no="02">{t("about.kicker")}</ChapterTag>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
             {t("about.title").replace(t("about.title.web3"), "").trim()}{" "}
             <span className="gradient-text-blue">{t("about.title.web3")}</span>
@@ -853,7 +880,7 @@ function CustomizationSection() {
           viewport={{ once: true }}
           className="text-center mb-10 md:mb-16"
         >
-          <span className="text-purple-400 text-sm font-semibold uppercase tracking-widest">Customization</span>
+          <ChapterTag no="03">Customization</ChapterTag>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold mt-4 mb-6">
             Make Your Penguin <span className="text-purple-400">Unique</span>
           </h2>
@@ -989,7 +1016,7 @@ function EconomySection() {
           viewport={{ once: true }}
           className="text-center mb-10 md:mb-16"
         >
-          <span className="text-yellow-400 text-sm font-semibold uppercase tracking-widest">Economy</span>
+          <ChapterTag no="06">Economy</ChapterTag>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
             The <span className="text-yellow-400">Native</span> Token
           </h2>
@@ -1166,7 +1193,7 @@ function WhaleStatusSection() {
           viewport={{ once: true }}
           className="text-center mb-10 md:mb-16"
         >
-          <span className="text-yellow-400 text-sm font-semibold uppercase tracking-widest">Status System</span>
+          <ChapterTag no="04">Status System</ChapterTag>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
             Whale <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 via-purple-400 to-cyan-400">Status</span>
           </h2>
@@ -1304,7 +1331,7 @@ function PlatformEconomicsSection() {
           viewport={{ once: true }}
           className="text-center mb-10 md:mb-16"
         >
-          <span className="text-green-400 text-sm font-semibold uppercase tracking-widest">Sustainability</span>
+          <ChapterTag no="07">Sustainability</ChapterTag>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
             Platform <span className="text-green-400">Economics</span>
           </h2>
@@ -1549,7 +1576,7 @@ function TeamSection() {
           viewport={{ once: true }}
           className="text-center mb-10 md:mb-16"
         >
-          <span className="text-cyan-400 text-sm font-semibold uppercase tracking-widest">Team</span>
+          <ChapterTag no="08">Team</ChapterTag>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
             Built by <span className="text-cyan-400">Builders</span>
           </h2>
@@ -1790,7 +1817,7 @@ function RoadmapSection() {
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <span className="text-purple-400 text-sm font-semibold uppercase tracking-widest">{t("roadmap.kicker")}</span>
+          <ChapterTag no="09">{t("roadmap.kicker")}</ChapterTag>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
             {locale === "zh-TW" ? (
               <span className="text-purple-400">{t("roadmap.title")}</span>
@@ -1862,13 +1889,17 @@ function RoadmapSection() {
                 i % 2 === 0 ? "md:flex-row" : "md:flex-row-reverse"
               }`}
             >
-              {/* Dot */}
-              <div className={`absolute left-4 md:left-1/2 w-4 h-4 rounded-full border-4 border-[rgb(8,12,21)] md:-translate-x-1/2 z-10 ${
-                phase.status === "complete" ? "bg-green-500" :
-                phase.status === "current" ? "bg-cyan-500 animate-pulse" :
-                phase.status === "upcoming" ? "bg-purple-500" :
-                "bg-slate-500"
-              }`} />
+              {/* Level badge on the line */}
+              <div
+                className={`absolute left-4 md:left-1/2 -translate-x-1/2 z-10 flex h-9 w-9 items-center justify-center rounded-full border-4 border-[rgb(10,14,26)] font-display text-sm font-bold shadow-lg ${
+                  phase.status === "complete" ? "bg-emerald-400 text-emerald-950" :
+                  phase.status === "current" ? "bg-cyan-400 text-cyan-950 animate-pulse" :
+                  phase.status === "upcoming" ? "bg-sky-300 text-sky-950" :
+                  "bg-slate-500 text-slate-950"
+                }`}
+              >
+                {phase.status === "complete" ? "✓" : i + 1}
+              </div>
 
               {/* Content */}
               <div className={`ml-12 md:ml-0 md:w-1/2 ${i % 2 === 0 ? "md:pr-12 md:text-right" : "md:pl-12"}`}>
@@ -2007,6 +2038,49 @@ function ContractAddress() {
 }
 
 // Footer
+/** Closing CTA — one last glass panel pushing the reader into the game. */
+function FinalCtaSection() {
+  const { t } = useWhitepaperLanguage();
+  return (
+    <section className="relative z-10 px-4 sm:px-6 py-16 md:py-24">
+      <motion.div
+        initial={{ opacity: 0, y: 24 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true }}
+        className="glass-card mx-auto max-w-3xl rounded-3xl px-6 py-12 text-center sm:px-12"
+      >
+        <div className="mb-4 text-5xl" aria-hidden>
+          🐧
+        </div>
+        <h2 className="retro-text mb-4 text-3xl font-bold sm:text-4xl md:text-5xl">
+          {t("finalCta.title")}
+        </h2>
+        <p className="mx-auto mb-8 max-w-xl text-slate-300">{t("finalCta.sub")}</p>
+        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+          <a
+            href="https://waddle.bet"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-game btn-play pulse-glow flex items-center gap-2 px-8 py-4 text-lg"
+          >
+            {t("hero.cta.play")}
+            <ExternalLink className="h-4 w-4" />
+          </a>
+          <a
+            href={SOCIAL_LINKS.x}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-game btn-alt flex items-center gap-2 px-8 py-4 text-lg"
+          >
+            {t("finalCta.community")}
+            <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
+      </motion.div>
+    </section>
+  );
+}
+
 function Footer() {
   const { t } = useWhitepaperLanguage();
   const socialLinks = [
@@ -2110,10 +2184,11 @@ function Footer() {
 // Main Page
 function WhitepaperPageContent() {
   return (
-    <main className="relative min-h-screen overflow-x-clip bg-[rgb(8,12,21)] text-slate-100">
+    <main className="relative min-h-screen overflow-x-clip bg-[rgb(10,14,26)] text-slate-100">
       <Snowfall />
       <Navigation />
       <HeroSection />
+      <TickerStrip />
       <VideoSection />
       <AboutSection />
       <CustomizationSection />
@@ -2124,6 +2199,7 @@ function WhitepaperPageContent() {
       <TeamSection />
       <RoadmapSection />
       <Changelog />
+      <FinalCtaSection />
       <Footer />
     </main>
   );

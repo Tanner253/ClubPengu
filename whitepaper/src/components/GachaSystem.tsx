@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronRight, Sparkles, Gift, Trophy, Star, Gem, Crown, Zap } from "lucide-react";
+import { ChapterTag } from "./ChapterTag";
 
 // ============== DATA ==============
 
@@ -257,7 +258,7 @@ export default function GachaSystemSection() {
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <span className="text-pink-400 text-sm font-semibold uppercase tracking-widest">Cosmetic Gacha</span>
+          <ChapterTag no="05">Cosmetic Gacha</ChapterTag>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
             🎰 <span className="text-transparent bg-clip-text bg-gradient-to-r from-pink-400 via-yellow-400 to-cyan-400">Slot Machine System</span>
           </h2>
