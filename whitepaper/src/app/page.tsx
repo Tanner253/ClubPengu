@@ -25,10 +25,7 @@ import {
 } from "lucide-react";
 import Changelog from "../components/Changelog";
 import GachaSystemSection from "../components/GachaSystem";
-import { BscMigrationBanner } from "../components/BscMigrationBanner";
-import { FourMemeFeeDisclosure } from "../components/FourMemeFeeDisclosure";
 import { SolanaHistoryChart } from "../components/SolanaHistoryChart";
-import { BscRoadmapModal } from "../components/BscRoadmapModal";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import {
   WhitepaperLanguageProvider,
@@ -52,18 +49,13 @@ const XIcon = ({ className }: { className?: string }) => (
 const SOCIAL_LINKS = {
   github: "https://github.com/Tanner253/ClubPengu",
   x: "https://x.com/i/communities/1998537610592137381",
-  fourmeme: "https://four.meme",
 };
 
-/** Display name for the BSC token (four.meme). */
-const TOKEN_DISPLAY_NAME = "企鹅俱乐部";
+/** Display name for the token. */
+const TOKEN_DISPLAY_NAME = "$WADDLE";
 
-/**
- * BEP-20 contract on BSC after four.meme deploy. Paste 0x… here when live.
- * Optional: set NEXT_PUBLIC_BSC_TOKEN_CA in env at build time instead.
- */
-const BSC_TOKEN_CONTRACT_ADDRESS =
-  (typeof process !== "undefined" && process.env.NEXT_PUBLIC_BSC_TOKEN_CA) || "";
+/** $WADDLE SPL mint on Solana — same mint the game uses. */
+const WADDLE_SOLANA_MINT = "9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump";
 
 /** Original $CPW3 SPL mint (~$700k ATH on Solana). */
 const CPW3_ORIGINAL_SOLANA_MINT = "63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump";
@@ -1693,7 +1685,7 @@ function RoadmapSection() {
       title: "Rebranding",
       status: "complete",
       items: [
-        "✅ Token launch — 企鹅俱乐部 (BSC / four.meme)",
+        "✅ New Token Launch ($WADDLE)",
         "✅ OG Holder Airdrop",
         "✅ Brand Refresh to WaddleBet",
         "✅ Shrimp Character & Feathers",
@@ -1896,15 +1888,9 @@ function ContractAddress() {
   const [copied, setCopied] = useState(false);
   const [copiedCpw3, setCopiedCpw3] = useState(false);
 
-  const hasBscCa =
-    typeof BSC_TOKEN_CONTRACT_ADDRESS === "string" &&
-    BSC_TOKEN_CONTRACT_ADDRESS.startsWith("0x") &&
-    BSC_TOKEN_CONTRACT_ADDRESS.length >= 42;
-
-  const copyBsc = async () => {
-    if (!hasBscCa) return;
+  const copyWaddleMint = async () => {
     try {
-      await navigator.clipboard.writeText(BSC_TOKEN_CONTRACT_ADDRESS);
+      await navigator.clipboard.writeText(WADDLE_SOLANA_MINT);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -1922,10 +1908,6 @@ function ContractAddress() {
     }
   };
 
-  const bscscanUrl = hasBscCa
-    ? `https://bscscan.com/token/${BSC_TOKEN_CONTRACT_ADDRESS}`
-    : "";
-
   return (
     <div className="glass-card rounded-xl p-4 sm:p-6 border border-purple-500/30 bg-gradient-to-br from-purple-500/5 to-cyan-500/5">
       <div className="flex flex-col gap-4">
@@ -1939,7 +1921,7 @@ function ContractAddress() {
               <p className="text-sm font-medium text-slate-300">
                 {t("contract.liveOn")}{" "}
                 <a
-                  href={bscscanUrl || SOCIAL_LINKS.fourmeme}
+                  href={`https://dexscreener.com/solana/${WADDLE_SOLANA_MINT}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-cyan-400 hover:underline"
@@ -1953,13 +1935,12 @@ function ContractAddress() {
           <div className="flex-1 w-full sm:w-auto">
             <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 border border-purple-500/20">
               <code className="text-xs sm:text-sm text-cyan-400 font-mono truncate flex-1">
-                {hasBscCa ? BSC_TOKEN_CONTRACT_ADDRESS : t("contract.caPending")}
+                {WADDLE_SOLANA_MINT}
               </code>
               <button
                 type="button"
-                onClick={copyBsc}
-                disabled={!hasBscCa}
-                className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0 disabled:opacity-40 disabled:pointer-events-none"
+                onClick={copyWaddleMint}
+                className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0"
                 title={t("contract.copyTitle")}
               >
                 {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
@@ -2090,15 +2071,11 @@ function Footer() {
 
 // Main Page
 function WhitepaperPageContent() {
-  const [bscRoadmapOpen, setBscRoadmapOpen] = useState(false);
-
   return (
     <main className="relative min-h-screen bg-[rgb(8,12,21)] text-slate-100">
       <Snowfall />
       <Navigation />
-      <BscMigrationBanner />
       <HeroSection />
-      <FourMemeFeeDisclosure />
       <VideoSection />
       <AboutSection />
       <CustomizationSection />
@@ -2108,9 +2085,8 @@ function WhitepaperPageContent() {
       <PlatformEconomicsSection />
       <TeamSection />
       <RoadmapSection />
-      <Changelog onOpenBscRoadmap={() => setBscRoadmapOpen(true)} />
+      <Changelog />
       <Footer />
-      <BscRoadmapModal open={bscRoadmapOpen} onClose={() => setBscRoadmapOpen(false)} />
     </main>
   );
 }

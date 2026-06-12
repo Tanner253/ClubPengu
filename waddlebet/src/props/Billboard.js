@@ -149,7 +149,7 @@ class Billboard extends BaseProp {
             advert.userData.bannerData = {
                 type: 'image',
                 title: 'About Waddlebet',
-                description: 'Built by Tanner253\n📦 GitHub: github.com/Tanner253/ClubPengu\n🐦 Contact: @oSKNYo_dev\n💰 $WADDLE — waddle.bet • BSC migration in progress (SPL mint unchanged; no pump.fun CA)',
+                description: 'Built by Tanner253\n📦 GitHub: github.com/Tanner253/ClubPengu\n🐦 Contact: @oSKNYo_dev\n💰 $WADDLE — waddle.bet',
                 imagePath: imagePath
             };
         } else {

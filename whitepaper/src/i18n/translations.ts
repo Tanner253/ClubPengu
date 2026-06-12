@@ -12,43 +12,6 @@ const en: Record<string, string> = {
   "lang.zhTW": "繁體中文",
   "lang.switchAria": "Language",
 
-  "bsc.banner.title": "BSC migration in development",
-  "bsc.banner.body":
-    "We are building toward Binance Smart Chain (BSC) as the primary home for 企鹅俱乐部 (four.meme)—supporting Binance, BNB, and BEP-20. Full details are in the Changelog section below.",
-  "bsc.banner.cta": "Open roadmap",
-  "bsc.modal.title": "BSC roadmap & what’s next",
-  "bsc.modal.body": `We are actively developing a migration toward Binance Smart Chain (BSC). Volatility among Solana holders has made it harder to build a stable long-term economy on a single chain—so we are integrating Binance, BNB, and BEP-20 into the product. Over time, BSC will become the primary chain for 企鹅俱乐部; contract (CA) updates and timing will be announced as we ship each phase.
-
-What we are working on:
-• Chain & wallet: BSC RPC, deposits and withdrawals, and safe settlement.
-• 企鹅俱乐部 on BSC (four.meme): contract updates will be announced with timing—nothing changes until we publish details.
-• “Create wallet for me”: optional account so you can play without an external wallet or Phantom—sign in like a normal game (custodial / email-linked; exact flow TBD).
-• Wagers: extend today’s economy to tokens you hold on BSC—not only SPL.
-• Chinese players: stronger 中文 UX, clearer onboarding, and regional options as we grow BSC.
-• Guests: PvP minigames vs each other with no wallet and no wagers—casual matches for everyone.
-
-Features ship in phases; this is our roadmap.`,
-  "bsc.modal.dismiss": "Got it",
-
-  "bsc.roadmapCard.phase": "Phase · In progress",
-  "bsc.roadmapCard.title": "BSC migration — primary chain for 企鹅俱乐部",
-  "bsc.roadmapCard.summary":
-    "Binance Smart Chain support via four.meme, BNB & BEP-20, and 企鹅俱乐部 as the primary chain over time. Open for the full plan.",
-  "bsc.roadmapCard.cta": "View full roadmap",
-
-  "tokenFee.kicker": "BSC launch · Tax token",
-  "tokenFee.title": "企鹅俱乐部 on four.meme — on-chain fee split",
-  "tokenFee.intro":
-    "We are launching on four.meme with tax-token mode enabled. Total transaction fee: 3%. That fee is split as follows (percentages are shares of the 3% pool; figures in parentheses are approximate effect on each taxed trade):",
-  "tokenFee.bulletRecipient":
-    "Treasury / recipient wallet: 50% of the fee (~1.5% of trade volume) to fund development and operations.",
-  "tokenFee.bulletDividend":
-    "Holder dividends: 10% of the fee (~0.3%). four.meme “Min sharing” is set to 250,000 tokens — holders below that threshold do not receive the dividend slice.",
-  "tokenFee.bulletLiq": "Liquidity: 20% of the fee (~0.6%) added to the pool.",
-  "tokenFee.bulletBurn": "Burn: 20% of the fee (~0.6%) removed from circulation.",
-  "tokenFee.footer":
-    "Final behavior is defined by the deployed BEP-20 contract and DEX routing. Always confirm parameters on BscScan and the live four.meme page before trading. Not financial advice.",
-
   "nav.product": "Product",
   "nav.economics": "Economics",
   "nav.team": "Team",
@@ -62,7 +25,7 @@ Features ship in phases; this is our roadmap.`,
   "nav.play": "Play Now",
   "nav.whitepaper": "Whitepaper",
 
-  "hero.badge": "Multi-chain: Binance BSC & Solana",
+  "hero.badge": "Now Building on Solana",
   "hero.taglineStart": "The First ",
   "hero.taglineHighlight": "Permissionless",
   "hero.taglineEnd": " Social Wagering Platform",
@@ -80,7 +43,7 @@ Features ship in phases; this is our roadmap.`,
   "hero.stat.live": "Live",
   "hero.cta.explore": "Explore Whitepaper",
   "hero.cta.play": "Play Now",
-  "hero.token.chains": "BSC-native (Binance) · Metaverse on Solana & BSC",
+  "hero.token.chains": "SPL token on Solana · Powers the WaddleBet metaverse",
   "hero.scroll": "Scroll",
   "hero.videoBgTitle": "WaddleBet gameplay trailer (background)",
   "hero.scrollLift": "Scroll to reveal the trailer",
@@ -131,15 +94,14 @@ Features ship in phases; this is our roadmap.`,
   "about.quick5": "P2P Wagers",
   "about.quick6": "Instant Settle",
 
-  "contract.tokenLabel": "企鹅俱乐部",
+  "contract.tokenLabel": "$WADDLE",
   "contract.liveOn": "Live on",
-  "contract.platform": "four.meme (BSC)",
-  "contract.caPending": "Coming soon",
+  "contract.platform": "Solana",
   "contract.cpw3OriginalLabel": "Original $CPW3 (Solana) — ~$700k ATH",
   "contract.copyCpw3Title": "Copy original $CPW3 mint",
   "contract.note":
-    "企鹅俱乐部 on BSC (four.meme) is coming soon above. The SPL mint below is the original $CPW3 token that ran on Solana. Verify any contract before trading.",
-  "contract.copyTitle": "Copy BSC contract",
+    "$WADDLE is the live SPL token above. The mint below is the original $CPW3 token that ran on Solana, shown for track record only. Verify any contract before trading.",
+  "contract.copyTitle": "Copy contract address",
 
   "chart.kicker": "Track record",
   "chart.title": "Original token $CPW3",
@@ -147,11 +109,11 @@ Features ship in phases; this is our roadmap.`,
   "chart.mintLabel": "SPL mint (contract address)",
   "chart.copyMint": "Copy mint address",
 
-  "economy.tokenSubtitle": "BSC-native (Binance) · Ecosystem spans Solana & BSC",
+  "economy.tokenSubtitle": "SPL token on Solana",
 
   "footer.tagline": "Permissionless Social Wagering",
   "footer.builtOn": "Built on",
-  "footer.chains": "Solana & BSC",
+  "footer.chains": "Solana",
   "footer.community": "Community",
   "footer.devNoticeTitle": "Development Notice",
   "footer.disclaimerTitle": "Disclaimer",
@@ -191,43 +153,6 @@ const zhTW: Record<string, string> = {
   "lang.zhTW": "繁體中文",
   "lang.switchAria": "語言",
 
-  "bsc.banner.title": "BSC 遷移開發中",
-  "bsc.banner.body":
-    "我們正將主戰場移向幣安智能鏈（BSC）上的 企鹅俱乐部（four.meme），支援 Binance、BNB 與 BEP-20。完整說明見下方「更新日誌」區塊。",
-  "bsc.banner.cta": "開啟路線圖",
-  "bsc.modal.title": "BSC 路線圖與後續計畫",
-  "bsc.modal.body": `我們正積極開發遷移至幣安智能鏈（BSC）。Solana 持幣者波動使單一鏈上長期穩定經濟更難建立——因此我們將 Binance、BNB 與 BEP-20 整合進產品。隨著各階段上線，BSC 將成為 企鹅俱乐部 的主鏈；合約（CA）與時程將另行公告。
-
-推進中的工作：
-• 鏈與錢包：BSC RPC、充提與安全結算。
-• BSC 上的 企鹅俱乐部（four.meme）：合約更新將與時程一併公告——正式公布前不變。
-•「幫我建立錢包」：可選帳戶，無需外接錢包或 Phantom 也能遊玩——像一般遊戲登入（託管／信箱連結等流程待定）。
-• 下注：將現有經濟擴展至您在 BSC 持有的代幣——不限於 SPL。
-• 中文玩家：隨 BSC 擴展，強化中文體驗、引導與在地選項。
-• 訪客：無需錢包、無下注，即可與他人進行小遊戲 PvP——人人可玩的休閒對戰。
-
-功能將分階段上線；本文為路線圖說明。`,
-  "bsc.modal.dismiss": "知道了",
-
-  "bsc.roadmapCard.phase": "階段 · 進行中",
-  "bsc.roadmapCard.title": "BSC 遷移 — 企鹅俱乐部 主鏈",
-  "bsc.roadmapCard.summary":
-    "透過 four.meme 支援幣安智能鏈、BNB 與 BEP-20，企鹅俱乐部 將逐步以 BSC 為主鏈。開啟以檢視完整計畫。",
-  "bsc.roadmapCard.cta": "查看完整路線圖",
-
-  "tokenFee.kicker": "BSC 上線 · 稅制代幣",
-  "tokenFee.title": "企鹅俱乐部 · four.meme 手續費分配",
-  "tokenFee.intro":
-    "於 four.meme 以「稅制代幣」模式發行，每筆應課稅交易總費率 3%。以下為該 3% 的分配（百分比為佔 3% 池的比例；括號內為對單筆交易量的大約影響）：",
-  "tokenFee.bulletRecipient":
-    "專案／收款錢包：費用的 50%（約佔交易量 1.5%），用於開發與營運。",
-  "tokenFee.bulletDividend":
-    "持幣分紅：費用的 10%（約 0.3%）。four.meme「最低分潤持幣」設為 250,000 枚——低於門檻者不參與該分紅份額。",
-  "tokenFee.bulletLiq": "自動流動性：費用的 20%（約 0.6%）注入流動性。",
-  "tokenFee.bulletBurn": "銷毀：費用的 20%（約 0.6%）永久移出流通。",
-  "tokenFee.footer":
-    "實際行為以已部署的 BEP-20 合約與 DEX 路由為準。交易前請務必於 BscScan 與 four.meme 頁面再次確認參數。本文非投資建議。",
-
   "nav.product": "產品",
   "nav.economics": "經濟",
   "nav.team": "團隊",
@@ -241,7 +166,7 @@ const zhTW: Record<string, string> = {
   "nav.play": "立即遊玩",
   "nav.whitepaper": "白皮書",
 
-  "hero.badge": "多鏈：幣安 BSC 與 Solana",
+  "hero.badge": "正在 Solana 上打造",
   "hero.taglineStart": "",
   "hero.taglineHighlight": "",
   "hero.taglineEnd": "",
@@ -260,7 +185,7 @@ const zhTW: Record<string, string> = {
   "hero.stat.live": "已上線",
   "hero.cta.explore": "閱讀白皮書",
   "hero.cta.play": "立即遊玩",
-  "hero.token.chains": "BSC 原生（幣安）· 元宇宙支援 Solana 與 BSC",
+  "hero.token.chains": "Solana 上的 SPL 代幣 · 驅動 WaddleBet 元宇宙",
   "hero.scroll": "向下捲動",
   "hero.videoBgTitle": "WaddleBet 實機預告（背景）",
   "hero.scrollLift": "捲動以揭開預告片",
@@ -309,15 +234,14 @@ const zhTW: Record<string, string> = {
   "about.quick5": "P2P 對賭",
   "about.quick6": "即時結算",
 
-  "contract.tokenLabel": "企鹅俱乐部",
+  "contract.tokenLabel": "$WADDLE",
   "contract.liveOn": "上線於",
-  "contract.platform": "four.meme（BSC）",
-  "contract.caPending": "即將推出",
+  "contract.platform": "Solana",
   "contract.cpw3OriginalLabel": "原始 $CPW3（Solana）— 約 70 萬美元 ATH",
   "contract.copyCpw3Title": "複製原始 $CPW3 鑄幣",
   "contract.note":
-    "上方即將推出 BSC 上的 企鹅俱乐部（four.meme）。下方為曾在 Solana 上的原始 $CPW3 SPL 鑄幣。交易前請自行核對合約。",
-  "contract.copyTitle": "複製 BSC 合約",
+    "上方為現行的 $WADDLE SPL 代幣。下方為曾在 Solana 上的原始 $CPW3 SPL 鑄幣，僅作歷史紀錄。交易前請自行核對合約。",
+  "contract.copyTitle": "複製合約地址",
 
   "chart.kicker": "歷史紀錄",
   "chart.title": "原始代幣 $CPW3",
@@ -325,11 +249,11 @@ const zhTW: Record<string, string> = {
   "chart.mintLabel": "SPL 鑄幣地址",
   "chart.copyMint": "複製鑄幣地址",
 
-  "economy.tokenSubtitle": "BSC 原生（幣安）· 生態涵蓋 Solana 與 BSC",
+  "economy.tokenSubtitle": "Solana 上的 SPL 代幣",
 
   "footer.tagline": "無需許可的社交博弈",
   "footer.builtOn": "建置於",
-  "footer.chains": "Solana 與 BSC",
+  "footer.chains": "Solana",
   "footer.community": "社群",
   "footer.devNoticeTitle": "開發中提醒",
   "footer.disclaimerTitle": "免責聲明",
