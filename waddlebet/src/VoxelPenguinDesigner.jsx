@@ -1920,6 +1920,74 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         setCharacterType('penguin');
     };
 
+    const renderEnterWorldCTA = () => {
+        if (isAuthenticated && isNewUser && (!username || username.length < 3 || usernameStatus === 'taken')) {
+            return (
+                <div className={isPortrait && isMobileView ? '' : 'mt-4'}>
+                    <button 
+                        disabled
+                        className="w-full py-3 bg-gray-600 text-gray-400 font-bold rounded-lg retro-text text-xs border-b-4 border-gray-700 flex justify-center items-center gap-2 cursor-not-allowed"
+                    >
+                        <IconWorld size={16} /> {usernameStatus === 'taken' ? t('creator.usernameTaken') : t('creator.chooseUsername')}
+                    </button>
+                    <p className="text-xs text-amber-400 text-center mt-2">
+                        {t('creator.pickUsername')}
+                    </p>
+                </div>
+            );
+        }
+        if (!isCustomizationValid) {
+            return (
+                <div className={isPortrait && isMobileView ? '' : 'mt-4'}>
+                    <button 
+                        disabled
+                        className="w-full py-3 bg-red-900/50 text-red-400 font-bold rounded-lg retro-text text-xs border-b-4 border-red-900 flex justify-center items-center gap-2 cursor-not-allowed"
+                    >
+                        <IconWorld size={16} /> 🔒 {t('creator.invalidCosmetics')}
+                    </button>
+                    <p className="text-xs text-red-400 text-center mt-2">
+                        {isAuthenticated 
+                            ? `⚠️ ${t('creator.unequipLocked')}`
+                            : `⚠️ ${t('creator.guestDefault')}`
+                        }
+                    </p>
+                </div>
+            );
+        }
+        if (!turnstileVerified) {
+            return (
+                <div className={isPortrait && isMobileView ? '' : 'mt-4'}>
+                    <button 
+                        disabled
+                        className="w-full py-3 bg-orange-900/50 text-orange-400 font-bold rounded-lg retro-text text-xs border-b-4 border-orange-900 flex justify-center items-center gap-2 cursor-not-allowed"
+                    >
+                        <IconWorld size={16} /> ⏳ {t('creator.verifying')}
+                    </button>
+                    <p className="text-xs text-orange-400 text-center mt-2">
+                        {t('creator.completeCheck')}
+                    </p>
+                </div>
+            );
+        }
+        return (
+            <div className={isPortrait && isMobileView ? '' : 'mt-4'}>
+                <button 
+                    onClick={() => onEnterWorld(turnstileToken)}
+                    className="w-full py-3.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg shadow-lg transform active:scale-95 transition-all retro-text text-sm border-b-4 border-yellow-700 flex justify-center items-center gap-2"
+                >
+                    <IconWorld size={16} /> {isAuthenticated ? t('menu.enterWorld') : t('creator.playAsGuest')}
+                </button>
+                {!isAuthenticated && (
+                    <p className="text-xs text-amber-400 text-center mt-2">
+                        ⚠️ {t('creator.guestWarning')}
+                    </p>
+                )}
+            </div>
+        );
+    };
+
+    const mobileBottomInset = 'calc(1rem + env(safe-area-inset-bottom, 0px) + 2.75rem)';
+
     return (
         <div className="relative w-full h-full bg-gray-900 overflow-hidden font-sans">
             {/* 3D Canvas - in portrait mode, only show top portion */}
@@ -1953,14 +2021,19 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             {/* Settings Panel - bottom sheet on mobile portrait, side panel on landscape/desktop */}
             <div className={`absolute z-10 pointer-events-auto ${
                 isPortrait && isMobileView 
-                    ? 'bottom-0 left-0 right-0 w-full px-3 pb-3' 
+                    ? 'bottom-0 left-0 right-0 w-full' 
                     : 'bottom-10 right-10 w-80'
             }`}>
-                <div className={`glass-panel rounded-2xl flex flex-col gap-3 overflow-y-auto ${
+                <div className={`glass-panel rounded-2xl flex flex-col ${
                     isPortrait && isMobileView 
-                        ? 'p-4 max-h-[60vh] rounded-b-none' 
-                        : 'p-6 max-h-[80vh]'
+                        ? 'max-h-[62vh] rounded-b-none overflow-hidden' 
+                        : 'p-6 max-h-[80vh] gap-3 overflow-y-auto'
                 }`}>
+                <div className={
+                    isPortrait && isMobileView
+                        ? 'overflow-y-auto flex-1 min-h-0 p-4 flex flex-col gap-3'
+                        : 'flex flex-col gap-3'
+                }>
                     <h2 className={`text-white font-bold flex items-center gap-2 sticky top-0 bg-gray-900/50 p-2 rounded backdrop-blur-md z-20 ${isPortrait && isMobileView ? 'text-base mb-1' : 'text-lg mb-2'}`}>
                         <IconSettings size={isPortrait && isMobileView ? 16 : 20} /> {characterType === 'penguin' ? t('creator.title') : currentCharacter?.name || t('creator.character')}
                     </h2>
@@ -2850,61 +2923,17 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         </div>
                     )}
                     
-                    {/* Enter World Button */}
-                    {isAuthenticated && isNewUser && (!username || username.length < 3 || usernameStatus === 'taken') ? (
-                        <div className="mt-4">
-                            <button 
-                                disabled
-                                className="w-full py-3 bg-gray-600 text-gray-400 font-bold rounded-lg retro-text text-xs border-b-4 border-gray-700 flex justify-center items-center gap-2 cursor-not-allowed"
-                            >
-                                <IconWorld size={16} /> {usernameStatus === 'taken' ? t('creator.usernameTaken') : t('creator.chooseUsername')}
-                            </button>
-                            <p className="text-xs text-amber-400 text-center mt-2">
-                                {t('creator.pickUsername')}
-                            </p>
-                        </div>
-                    ) : !isCustomizationValid ? (
-                        <div className="mt-4">
-                            <button 
-                                disabled
-                                className="w-full py-3 bg-red-900/50 text-red-400 font-bold rounded-lg retro-text text-xs border-b-4 border-red-900 flex justify-center items-center gap-2 cursor-not-allowed"
-                            >
-                                <IconWorld size={16} /> 🔒 {t('creator.invalidCosmetics')}
-                            </button>
-                            <p className="text-xs text-red-400 text-center mt-2">
-                                {isAuthenticated 
-                                    ? `⚠️ ${t('creator.unequipLocked')}`
-                                    : `⚠️ ${t('creator.guestDefault')}`
-                                }
-                            </p>
-                        </div>
-                    ) : !turnstileVerified ? (
-                        <div className="mt-4">
-                            <button 
-                                disabled
-                                className="w-full py-3 bg-orange-900/50 text-orange-400 font-bold rounded-lg retro-text text-xs border-b-4 border-orange-900 flex justify-center items-center gap-2 cursor-not-allowed"
-                            >
-                                <IconWorld size={16} /> ⏳ {t('creator.verifying')}
-                            </button>
-                            <p className="text-xs text-orange-400 text-center mt-2">
-                                {t('creator.completeCheck')}
-                            </p>
-                        </div>
-                    ) : (
-                        <div className="mt-4">
-                            <button 
-                                onClick={() => onEnterWorld(turnstileToken)}
-                                className="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg shadow-lg transform active:scale-95 transition-all retro-text text-xs border-b-4 border-yellow-700 flex justify-center items-center gap-2"
-                            >
-                                <IconWorld size={16} /> {isAuthenticated ? t('menu.enterWorld') : t('creator.playAsGuest')}
-                            </button>
-                            {!isAuthenticated && (
-                                <p className="text-xs text-amber-400 text-center mt-2">
-                                    ⚠️ {t('creator.guestWarning')}
-                                </p>
-                            )}
-                        </div>
-                    )}
+                    {/* Enter World — desktop/landscape stays in scroll; mobile portrait pins below */}
+                    {!(isPortrait && isMobileView) && renderEnterWorldCTA()}
+                </div>
+                {isPortrait && isMobileView && (
+                    <div
+                        className="shrink-0 border-t border-white/10 bg-gray-900/95 backdrop-blur-md px-4 pt-3 shadow-[0_-10px_28px_rgba(0,0,0,0.45)]"
+                        style={{ paddingBottom: mobileBottomInset }}
+                    >
+                        {renderEnterWorldCTA()}
+                    </div>
+                )}
                 </div>
             </div>
             
@@ -2920,8 +2949,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 )}
             </div>
             
-            {/* Cloudflare Badge - Centered at bottom */}
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+            {/* Cloudflare Badge - hidden on mobile portrait (bottom sheet + browser chrome) */}
+            <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 ${isPortrait && isMobileView ? 'hidden' : ''}`}>
                 <a 
                     href="https://www.cloudflare.com" 
                     target="_blank" 
