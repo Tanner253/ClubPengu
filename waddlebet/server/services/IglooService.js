@@ -385,7 +385,7 @@ class IglooService {
             {
                 transactionType: 'igloo_entry_fee',
                 iglooId,
-                tokenSymbol: igloo.entryFee.tokenSymbol || '$WADDLE'
+                tokenSymbol: igloo.entryFee.tokenSymbol || '$CP'
             }
         );
         

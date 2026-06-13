@@ -44,7 +44,7 @@ describe('Challenge Model - Wager Token Fields', () => {
             wagerAmount: 100,
             wagerToken: {
                 tokenAddress: '63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump',
-                tokenSymbol: '$WADDLE',
+                tokenSymbol: '$CP',
                 tokenDecimals: 6,
                 tokenAmount: 50,
                 amountRaw: '50000000'
@@ -57,7 +57,7 @@ describe('Challenge Model - Wager Token Fields', () => {
         // Verify structure
         expect(challengeData.wagerToken).toBeDefined();
         expect(challengeData.wagerToken.tokenAddress).toBe('63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump');
-        expect(challengeData.wagerToken.tokenSymbol).toBe('$WADDLE');
+        expect(challengeData.wagerToken.tokenSymbol).toBe('$CP');
         expect(challengeData.wagerToken.tokenDecimals).toBe(6);
         expect(challengeData.wagerToken.tokenAmount).toBe(50);
         expect(challengeData.wagerToken.amountRaw).toBe('50000000');
@@ -133,7 +133,7 @@ describe('Match Model - Wager Token Fields', () => {
             wagerAmount: 100,
             wagerToken: {
                 tokenAddress: '63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump',
-                tokenSymbol: '$WADDLE',
+                tokenSymbol: '$CP',
                 tokenDecimals: 6,
                 tokenAmount: 50,
                 amountRaw: '50000000'
@@ -226,7 +226,7 @@ describe('Wager Token Config', () => {
             return String(Math.floor(amount * Math.pow(10, decimals)));
         };
         
-        // 50 \$WADDLE with 6 decimals
+        // 50 $CP with 6 decimals
         expect(calculateRawAmount(50, 6)).toBe('50000000');
         
         // 100 USDC with 6 decimals
@@ -243,11 +243,11 @@ describe('Wager Token Config', () => {
 describe('X402 Wager Payment', () => {
     it('should create wager payment payload with token details', () => {
         const wagerDetails = {
-            amount: '50000000', // 50 \$WADDLE raw
+            amount: '50000000', // 50 $CP raw
             challengeId: 'chal_test123',
             opponentWallet: 'opponent_wallet_address',
             tokenAddress: '63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump',
-            tokenSymbol: '$WADDLE'
+            tokenSymbol: '$CP'
         };
         
         // Simulate payload creation
@@ -267,10 +267,10 @@ describe('X402 Wager Payment', () => {
         expect(payload.recipient).toBe('opponent_wallet_address');
         expect(payload.amount).toBe('50000000');
         expect(payload.memo).toContain('wager:');
-        expect(payload.memo).toContain('$WADDLE');
+        expect(payload.memo).toContain('$CP');
     });
     
-    it('should default to \$WADDLE token if not specified', () => {
+    it('should default to $CP token if not specified', () => {
         const wagerDetails = {
             amount: '100000000',
             challengeId: 'chal_test',

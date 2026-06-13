@@ -14,6 +14,7 @@
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useChallenge } from '../challenge';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
 import gsap from 'gsap';
@@ -885,7 +886,7 @@ const P2PBlackjack = ({ onMatchEnd }) => {
                     <span className={`text-gray-400 tracking-widest ${isMobile && isPortrait ? 'text-[9px]' : 'text-xs'}`}>POT</span>
                     <span className={`font-black text-yellow-400 ${isMobile && isPortrait ? 'text-base' : 'text-lg sm:text-2xl'}`}>${totalPot}</span>
                     {wagerToken && (
-                        <span className={`text-cyan-400 ${isMobile && isPortrait ? 'text-xs' : 'text-sm'}`}>+{wagerToken.tokenAmount * 2} {wagerToken.tokenSymbol}</span>
+                        <span className={`text-cyan-400 ${isMobile && isPortrait ? 'text-xs' : 'text-sm'}`}>+{wagerToken.tokenAmount * 2} {displayTokenSymbol(wagerToken.tokenSymbol)}</span>
                     )}
                 </div>
             </div>
@@ -1099,10 +1100,10 @@ const P2PBlackjack = ({ onMatchEnd }) => {
                                 isMobile && isPortrait ? 'text-base' : 'text-lg sm:text-xl'
                             }`}>
                                 {isDraw 
-                                    ? `${wagerToken.tokenAmount} ${wagerToken.tokenSymbol} returned`
+                                    ? `${wagerToken.tokenAmount} ${displayTokenSymbol(wagerToken.tokenSymbol)} returned`
                                     : didWin 
-                                        ? `+${tokenWon} ${tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol}` 
-                                        : `-${tokenLost} ${wagerToken.tokenSymbol}`
+                                        ? `+${tokenWon} ${displayTokenSymbol(tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol)}` 
+                                        : `-${tokenLost} ${displayTokenSymbol(wagerToken.tokenSymbol)}`
                                 } 💎
                             </div>
                         )}

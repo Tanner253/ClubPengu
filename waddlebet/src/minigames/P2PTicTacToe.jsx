@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useChallenge } from '../challenge';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 // Helper to generate Solscan link
 const getSolscanLink = (txSignature, isDevnet = false) => {
@@ -180,9 +181,9 @@ const P2PTicTacToe = ({ onMatchEnd }) => {
                             {/* Token Wager */}
                             {wagerToken && (
                                 <div className={`${isDraw ? 'text-gray-400' : didWin ? 'text-cyan-400' : 'text-red-400'} text-lg font-bold mt-1`}>
-                                    {isDraw ? `${wagerToken.tokenAmount} ${wagerToken.tokenSymbol} REFUNDED` :
-                                     didWin ? `+${tokenWon} ${tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol}` :
-                                     `-${tokenLost} ${wagerToken.tokenSymbol}`} 💎
+                                    {isDraw ? `${wagerToken.tokenAmount} ${displayTokenSymbol(wagerToken.tokenSymbol)} REFUNDED` :
+                                     didWin ? `+${tokenWon} ${displayTokenSymbol(tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol)}` :
+                                     `-${tokenLost} ${displayTokenSymbol(wagerToken.tokenSymbol)}`} 💎
                                 </div>
                             )}
                             {/* Solscan Link */}
@@ -325,9 +326,9 @@ const P2PTicTacToe = ({ onMatchEnd }) => {
                             {/* Token Wager */}
                             {wagerToken && (
                                 <p className={`${isDraw ? 'text-gray-400' : didWin ? 'text-cyan-400' : 'text-red-400'} text-lg font-bold mt-2`}>
-                                    {isDraw ? `${wagerToken.tokenAmount} ${wagerToken.tokenSymbol} REFUNDED` :
-                                     didWin ? `+${tokenWon} ${tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol}` :
-                                     `-${tokenLost} ${wagerToken.tokenSymbol}`} 💎
+                                    {isDraw ? `${wagerToken.tokenAmount} ${displayTokenSymbol(wagerToken.tokenSymbol)} REFUNDED` :
+                                     didWin ? `+${tokenWon} ${displayTokenSymbol(tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol)}` :
+                                     `-${tokenLost} ${displayTokenSymbol(wagerToken.tokenSymbol)}`} 💎
                                 </p>
                             )}
                         </div>

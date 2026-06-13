@@ -6,7 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext.jsx';
 import { payIglooEntryFee } from '../wallet/SolanaPayment.js';
-import { displayTokenSymbol } from '../utils/tokenDisplay.js';
+import { displayTokenSymbol, formatTokenText } from '../utils/tokenDisplay.js';
 
 /**
  * Abbreviate a wallet address: "abc123...xyz789"
@@ -179,7 +179,7 @@ const IglooRequirementsPanel = ({
                 // Check if token gate is met (entry fee check comes after payment)
                 if (eligibilityCheck.tokenGateRequired && !eligibilityCheck.tokenGateMet) {
                     console.log('❌ Token gate not met');
-                    setError(eligibilityCheck.message || 'You do not meet the token requirement');
+                    setError(formatTokenText(eligibilityCheck.message) || 'You do not meet the token requirement');
                     setPaymentLoading(false);
                     return;
                 }
@@ -215,7 +215,7 @@ const IglooRequirementsPanel = ({
                 
                 if (!paymentResult.success) {
                     console.error('Payment failed:', paymentResult);
-                    setError(paymentResult.message || 'Payment failed. Please try again.');
+                    setError(formatTokenText(paymentResult.message) || 'Payment failed. Please try again.');
                     setPaymentLoading(false);
                     return;
                 }
@@ -297,7 +297,7 @@ const IglooRequirementsPanel = ({
                             onClose();
                         }
                     } else {
-                        setError(msg.error || msg.message || 'Payment failed');
+                        setError(formatTokenText(msg.error || msg.message) || 'Payment failed');
                     }
                 }
                 

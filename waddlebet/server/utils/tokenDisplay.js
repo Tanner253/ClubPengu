@@ -1,6 +1,5 @@
 /**
- * Display-only token symbol mapping.
- * Maps legacy WADDLE/CPw3 identifiers to $CP for all user-facing UI.
+ * Normalize legacy WADDLE/CPw3 tickers to $CP in user-facing strings.
  */
 
 const LEGACY_CP_SYMBOLS = new Set(['$WADDLE', 'WADDLE', '$CPw3', 'CPw3', '$CP']);
@@ -14,7 +13,6 @@ export function displayTokenSymbol(symbol) {
     return s;
 }
 
-/** Replace legacy token tickers in free-form server/UI strings */
 export function formatTokenText(text) {
     if (text == null || text === '') return text;
     return String(text)

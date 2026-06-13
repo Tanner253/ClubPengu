@@ -225,7 +225,7 @@ class X402Service {
             matchId, 
             opponentWallet,
             tokenAddress = CPW3_TOKEN_ADDRESS,
-            tokenSymbol = '$WADDLE'
+            tokenSymbol = '$CP'
         } = wagerDetails;
         
         // Use challengeId for pre-match, matchId once match starts

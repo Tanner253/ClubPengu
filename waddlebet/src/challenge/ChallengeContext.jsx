@@ -7,7 +7,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useMultiplayer } from '../multiplayer';
 import GameManager from '../engine/GameManager';
 import { sendSPLToken } from '../wallet/SolanaPayment';
-import { displayTokenSymbol } from '../utils/tokenDisplay.js';
+import { displayTokenSymbol, formatTokenText } from '../utils/tokenDisplay.js';
 
 // Server custodial wallet for holding wager deposits
 // Uses dedicated custodial wallet, falls back to rent wallet for backwards compatibility
@@ -154,7 +154,7 @@ export function ChallengeProvider({ children }) {
                     break;
                     
                 case 'challenge_error':
-                    showNotification(`❌ ${message.message}`, 'error');
+                    showNotification(`❌ ${formatTokenText(message.message)}`, 'error');
                     break;
                     
                 case 'challenge_cancelled':

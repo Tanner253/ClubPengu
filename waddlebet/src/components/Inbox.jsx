@@ -7,6 +7,7 @@ import { useChallenge } from '../challenge';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import { useClickOutside } from '../hooks';
 import { getTokenBalance } from '../wallet/SolanaPayment';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 /**
  * TokenWagerInfo - Displays token wager details with copy CA, Solscan link, and balance check
@@ -58,7 +59,7 @@ const TokenWagerInfo = ({ wagerToken, walletAddress }) => {
             <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-1.5 min-w-0">
                     <span className="text-purple-400 font-medium text-sm">
-                        💎 {requiredAmount} {wagerToken.tokenSymbol}
+                        💎 {requiredAmount} {displayTokenSymbol(wagerToken.tokenSymbol)}
                     </span>
                 </div>
                 
@@ -113,7 +114,7 @@ const TokenWagerInfo = ({ wagerToken, walletAddress }) => {
             {/* Contextual help message */}
             {needsMore && (
                 <p className="text-red-300/70 text-[10px] mt-1.5">
-                    ⚠️ You need to buy {wagerToken.tokenSymbol} to accept this challenge. Copy CA above!
+                    ⚠️ You need to buy {displayTokenSymbol(wagerToken.tokenSymbol)} to accept this challenge. Copy CA above!
                 </p>
             )}
             {hasEnough && (

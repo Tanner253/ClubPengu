@@ -9,6 +9,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useMultiplayer } from '../multiplayer';
+import { formatTokenText } from '../utils/tokenDisplay.js';
 
 // Generate secure random nonce for replay protection
 const generateNonce = () => {
@@ -186,7 +187,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                     ) : status?.error ? (
                         <div className="text-center py-8">
                             <div className="text-4xl mb-4">⚠️</div>
-                            <p className="text-red-400 text-sm">{status.message || status.error}</p>
+                            <p className="text-red-400 text-sm">{formatTokenText(status.message || status.error)}</p>
                         </div>
                     ) : (
                         <>
@@ -310,7 +311,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                                 {claimResult.success ? 'Bonus Claimed!' : 'Claim Failed'}
                                             </div>
                                             <p className="text-white/60 text-sm mt-1">
-                                                {claimResult.message}
+                                                {formatTokenText(claimResult.message)}
                                             </p>
                                             {claimResult.txSignature && (
                                                 <a 

@@ -12,6 +12,7 @@
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { useChallenge } from '../challenge';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
 import gsap from 'gsap';
@@ -1473,7 +1474,7 @@ const P2PBattleship = ({ onMatchEnd }) => {
                         </div>
                         {wagerToken && (
                             <div className={`text-xl font-bold mb-4 ${didWin ? 'text-cyan-400' : 'text-red-400'}`}>
-                                {didWin ? `+${tokenWon} ${tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol}` : `-${tokenLost} ${wagerToken.tokenSymbol}`} 💎
+                                {didWin ? `+${tokenWon} ${displayTokenSymbol(tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol)}` : `-${tokenLost} ${displayTokenSymbol(wagerToken.tokenSymbol)}`} 💎
                             </div>
                         )}
                         {solscanLink && (

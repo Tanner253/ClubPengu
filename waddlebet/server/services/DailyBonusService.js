@@ -425,9 +425,9 @@ class DailyBonusService {
                     success: true,
                     txSignature: txResult.txId,
                     amount: CONFIG.REWARD_AMOUNT,
-                    tokenSymbol: '$WADDLE',
+                    tokenSymbol: '$CP',
                     claimId,
-                    message: `Successfully claimed ${CONFIG.REWARD_AMOUNT.toLocaleString()} $WADDLE!`
+                    message: `Successfully claimed ${CONFIG.REWARD_AMOUNT.toLocaleString()} $CP!`
                 };
                 
             } else {

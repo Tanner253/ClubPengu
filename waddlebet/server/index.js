@@ -46,6 +46,7 @@ import wagerSettlementService from './services/WagerSettlementService.js';
 import dailyBonusService from './services/DailyBonusService.js';
 import { initializeReferralService, getReferralService } from './services/ReferralService.js';
 import { validateWalletAddress, validateTransactionSignature, validateAmount } from './utils/securityValidation.js';
+import { displayTokenSymbol } from './utils/tokenDisplay.js';
 
 const PORT = process.env.PORT || 3001;
 const MAX_CONNECTIONS_PER_IP = 2;
@@ -3227,7 +3228,7 @@ async function handleMessage(playerId, message) {
                         sendToPlayer(playerId, {
                             type: 'challenge_error',
                             error: 'INSUFFICIENT_TOKEN_BALANCE',
-                            message: `You need ${message.wagerToken.tokenAmount} ${message.wagerToken.tokenSymbol} to wager`
+                            message: `You need ${message.wagerToken.tokenAmount} ${displayTokenSymbol(message.wagerToken.tokenSymbol)} to wager`
                         });
                         break;
                     }

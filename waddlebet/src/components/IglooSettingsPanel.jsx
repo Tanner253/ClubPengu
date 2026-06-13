@@ -41,7 +41,7 @@ const BANNER_FONTS = [
 // Tokens for Token Gate (community/meme tokens that make sense for holder gating)
 const TOKEN_GATE_TOKENS = [
     { 
-        symbol: '$WADDLE', 
+        symbol: '$CP', 
         name: 'WaddleBet',
         address: '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump'
     },
@@ -60,7 +60,7 @@ const TOKEN_GATE_TOKENS = [
 // Tokens for Entry Fee (includes stables and SOL for payments)
 const ENTRY_FEE_TOKENS = [
     { 
-        symbol: '$WADDLE', 
+        symbol: '$CP', 
         name: 'WaddleBet',
         address: '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump'
     },
@@ -103,7 +103,7 @@ const TokenQuickSelect = ({ tokens, onSelect, currentAddress }) => (
                 }`}
                 title={`${token.name}\n${token.address}`}
             >
-                {token.symbol}
+                {displayTokenSymbol(token.symbol)}
             </button>
         ))}
     </div>

@@ -6,6 +6,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useChallenge } from '../challenge';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 // Helper to generate Solscan link
 const getSolscanLink = (txSignature) => `https://solscan.io/tx/${txSignature}`;
@@ -294,7 +295,7 @@ const P2PCardJitsu = ({ onMatchEnd }) => {
                             </div>
                             {wagerToken && (
                                 <div className={`${didWin ? 'text-cyan-400' : 'text-red-400'} text-lg font-bold mb-3`}>
-                                    {didWin ? `+${tokenWon} ${tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol}` : `-${tokenLost} ${wagerToken.tokenSymbol}`} 💎
+                                    {didWin ? `+${tokenWon} ${displayTokenSymbol(tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol)}` : `-${tokenLost} ${displayTokenSymbol(wagerToken.tokenSymbol)}`} 💎
                                 </div>
                             )}
                             {solscanLink && (
@@ -472,7 +473,7 @@ const P2PCardJitsu = ({ onMatchEnd }) => {
                             </p>
                             {wagerToken && (
                                 <p className={`${didWin ? 'text-cyan-400' : 'text-red-400'} text-lg font-bold mt-2`}>
-                                    {didWin ? `+${tokenWon} ${tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol}` : `-${tokenLost} ${wagerToken.tokenSymbol}`} 💎
+                                    {didWin ? `+${tokenWon} ${displayTokenSymbol(tokenSettlement?.tokenSymbol || wagerToken.tokenSymbol)}` : `-${tokenLost} ${displayTokenSymbol(wagerToken.tokenSymbol)}`} 💎
                                 </p>
                             )}
                         </div>

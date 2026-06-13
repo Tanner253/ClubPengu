@@ -4,6 +4,7 @@
  */
 
 import mongoose from 'mongoose';
+import { displayTokenSymbol } from '../../utils/tokenDisplay.js';
 
 const iglooSchema = new mongoose.Schema({
     // ========== IDENTITY ==========
@@ -164,7 +165,7 @@ iglooSchema.methods.canEnter = function(walletAddress, options = {}) {
                 return { 
                     canEnter: false, 
                     reason: 'TOKEN_REQUIRED',
-                    message: `Hold ${this.tokenGate.minimumBalance} ${this.tokenGate.tokenSymbol || 'tokens'} to enter`,
+                    message: `Hold ${this.tokenGate.minimumBalance} ${displayTokenSymbol(this.tokenGate.tokenSymbol) || 'tokens'} to enter`,
                     tokenRequired: {
                         address: this.tokenGate.tokenAddress,
                         symbol: this.tokenGate.tokenSymbol,
@@ -194,7 +195,7 @@ iglooSchema.methods.canEnter = function(walletAddress, options = {}) {
                         tokenAddress: this.entryFee.tokenAddress,
                         tokenSymbol: tokenSymbol
                     },
-                    message: `Entry fee: ${this.entryFee.amount} ${tokenSymbol}`
+                    message: `Entry fee: ${this.entryFee.amount} ${displayTokenSymbol(tokenSymbol)}`
                 };
             }
         }
