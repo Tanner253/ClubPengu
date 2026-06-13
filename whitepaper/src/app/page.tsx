@@ -1797,6 +1797,54 @@ function RoadmapSection() {
         "🌐 Metaverse Interoperability",
       ],
     },
+    {
+      phase: "Phase 9",
+      title: "MMORPG Foundation",
+      status: "upcoming",
+      items: [
+        "📊 Player XP & Levels",
+        "🎯 Daily Challenges (XP + Gold)",
+        "🚪 First Zone Gates",
+        "📈 Level HUD & Profile Badges",
+        "🧊 Ice Fields Gate (Lv 10)",
+      ],
+    },
+    {
+      phase: "Phase 10",
+      title: "Gathering World",
+      status: "planned",
+      items: [
+        "🧊 Ice Fields Zone — Fishing Relocated",
+        "🌲 Forest Woodcutting",
+        "🎒 Material Inventory & Stash",
+        "🏠 Igloo Storage for Renters",
+        "🪓 Woodcutting & Fishing Skills v1",
+      ],
+    },
+    {
+      phase: "Phase 11",
+      title: "Living Economy",
+      status: "planned",
+      items: [
+        "🏪 Material Marketplace",
+        "🔨 Crafting — Tools & Bait",
+        "📅 Weekly Challenge Tiers",
+        "🪙 Capped $CP Weekly Rewards",
+        "⚖️ Gold Sinks & NPC Vendors",
+      ],
+    },
+    {
+      phase: "Phase 12",
+      title: "Seasons & Properties",
+      status: "planned",
+      items: [
+        "⭐ Full Skill Progression",
+        "🏆 Tournaments & Leaderboards",
+        "🎫 Season Pass (Light)",
+        "🏘️ Property Expansion (Community-Driven)",
+        "👥 Guilds & World Events",
+      ],
+    },
   ];
 
   // Progress stats
@@ -1830,6 +1878,42 @@ function RoadmapSection() {
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">
             {t("roadmap.lead")}
           </p>
+        </motion.div>
+
+        {/* MMORPG pivot — condensed summary */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="glass-card rounded-2xl p-6 md:p-8 mb-12 border border-purple-500/30 bg-gradient-to-br from-purple-500/5 via-transparent to-cyan-500/5"
+        >
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
+            <div className="flex-1">
+              <p className="text-xs uppercase tracking-wider text-purple-400 font-semibold mb-2">
+                {t("roadmap.mmorpg.kicker")}
+              </p>
+              <h3 className="text-xl md:text-2xl font-bold text-white mb-3">
+                {t("roadmap.mmorpg.title")}
+              </h3>
+              <p className="text-slate-400 text-sm md:text-base leading-relaxed mb-4">
+                {t("roadmap.mmorpg.lead")}
+              </p>
+              <ul className="grid sm:grid-cols-2 gap-2 text-sm text-slate-300">
+                <li className="flex gap-2"><span className="text-cyan-400">→</span>{t("roadmap.mmorpg.bullet1")}</li>
+                <li className="flex gap-2"><span className="text-cyan-400">→</span>{t("roadmap.mmorpg.bullet2")}</li>
+                <li className="flex gap-2"><span className="text-cyan-400">→</span>{t("roadmap.mmorpg.bullet3")}</li>
+                <li className="flex gap-2"><span className="text-cyan-400">→</span>{t("roadmap.mmorpg.bullet4")}</li>
+              </ul>
+            </div>
+            <a
+              href={t("roadmap.mmorpg.fullDocHref")}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 text-purple-200 text-sm font-semibold transition-colors"
+            >
+              {t("roadmap.mmorpg.fullDoc")} ↗
+            </a>
+          </div>
         </motion.div>
 
         {/* Progress Bar */}
@@ -1933,6 +2017,9 @@ function RoadmapSection() {
                     )}
                     {phase.status === "upcoming" && (
                       <span className="text-xs text-purple-400">{t("roadmap.status.next")}</span>
+                    )}
+                    {phase.status === "planned" && (
+                      <span className="text-xs text-slate-500">{t("roadmap.status.planned")}</span>
                     )}
                   </div>
                   <h3 className="text-lg font-bold mb-3">{phase.title}</h3>
