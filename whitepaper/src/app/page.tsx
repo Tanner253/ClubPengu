@@ -53,10 +53,10 @@ const SOCIAL_LINKS = {
 };
 
 /** Display name for the token. */
-const TOKEN_DISPLAY_NAME = "$WADDLE";
+const TOKEN_DISPLAY_NAME = "$CP";
 
-/** $WADDLE SPL mint on Solana — same mint the game uses. */
-const WADDLE_SOLANA_MINT = "9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump";
+/** $CP SPL mint on Solana — redeployed after $CPW3 chart issues; same mint the game uses. */
+const CP_SOLANA_MINT = "9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump";
 
 /** Original $CPW3 SPL mint (~$700k ATH on Solana). */
 const CPW3_ORIGINAL_SOLANA_MINT = "63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump";
@@ -1750,7 +1750,7 @@ function RoadmapSection() {
       title: "Rebranding",
       status: "complete",
       items: [
-        "✅ New Token Launch ($WADDLE)",
+        "✅ New Token Launch ($CP)",
         "✅ OG Holder Airdrop",
         "✅ Brand Refresh to WaddleBet",
         "✅ Shrimp Character & Feathers",
@@ -1957,9 +1957,9 @@ function ContractAddress() {
   const [copied, setCopied] = useState(false);
   const [copiedCpw3, setCopiedCpw3] = useState(false);
 
-  const copyWaddleMint = async () => {
+  const copyCpMint = async () => {
     try {
-      await navigator.clipboard.writeText(WADDLE_SOLANA_MINT);
+      await navigator.clipboard.writeText(CP_SOLANA_MINT);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -1990,7 +1990,7 @@ function ContractAddress() {
               <p className="text-sm font-medium text-slate-300">
                 {t("contract.liveOn")}{" "}
                 <a
-                  href={`https://dexscreener.com/solana/${WADDLE_SOLANA_MINT}`}
+                  href={`https://dexscreener.com/solana/${CP_SOLANA_MINT}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-cyan-400 hover:underline"
@@ -2004,11 +2004,11 @@ function ContractAddress() {
           <div className="flex-1 w-full sm:w-auto">
             <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 border border-purple-500/20">
               <code className="text-xs sm:text-sm text-cyan-400 font-mono truncate flex-1">
-                {WADDLE_SOLANA_MINT}
+                {CP_SOLANA_MINT}
               </code>
               <button
                 type="button"
-                onClick={copyWaddleMint}
+                onClick={copyCpMint}
                 className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0"
                 title={t("contract.copyTitle")}
               >
@@ -2031,6 +2031,7 @@ function ContractAddress() {
             </button>
           </div>
         </div>
+        <p className="text-xs leading-relaxed text-slate-400">{t("contract.redeployStory")}</p>
         <p className="text-xs text-slate-500">{t("contract.note")}</p>
       </div>
     </div>

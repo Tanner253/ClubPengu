@@ -94,18 +94,21 @@ const en: Record<string, string> = {
   "about.quick5": "P2P Wagers",
   "about.quick6": "Instant Settle",
 
-  "contract.tokenLabel": "$WADDLE",
+  "contract.tokenLabel": "$CP",
   "contract.liveOn": "Live on",
   "contract.platform": "Solana",
   "contract.cpw3OriginalLabel": "Original $CPW3 (Solana) — ~$700k ATH",
   "contract.copyCpw3Title": "Copy original $CPW3 mint",
   "contract.note":
-    "$WADDLE is the live SPL token above. The mint below is the original $CPW3 token that ran on Solana, shown for track record only. Verify any contract before trading.",
+    "$CP above is the live platform token. The $CPW3 mint below is the original deployment — shown for track record only. Verify any contract before trading.",
+  "contract.redeployStory":
+    "$CP is a clean redeploy after the original $CPW3 chart became unusable. $CPW3 was never a taggable ticker on X, which made discovery and community growth nearly impossible. After peaking near ~$700k market cap on Solana, a massive sell-off left the chart exposed: a third party bundled roughly 40% of supply and effectively held the chart hostage. We redeployed as $CP — a proper, taggable ticker — so the community and product could move forward on a chart we control.",
   "contract.copyTitle": "Copy contract address",
 
   "chart.kicker": "Track record",
   "chart.title": "Original token $CPW3",
-  "chart.sub": "All-time high about $700k market cap on Solana.",
+  "chart.sub":
+    "The original $CPW3 token reached roughly ~$700k market cap on Solana — proof of real demand for what we were building. $CPW3 was not a taggable ticker on X. After a steep sell-off from that ATH, a third party bundled about 40% of supply and held the chart hostage, prompting our redeploy as $CP.",
   "chart.mintLabel": "SPL mint (contract address)",
   "chart.copyMint": "Copy mint address",
 
@@ -239,18 +242,21 @@ const zhTW: Record<string, string> = {
   "about.quick5": "P2P 對賭",
   "about.quick6": "即時結算",
 
-  "contract.tokenLabel": "$WADDLE",
+  "contract.tokenLabel": "$CP",
   "contract.liveOn": "上線於",
   "contract.platform": "Solana",
   "contract.cpw3OriginalLabel": "原始 $CPW3（Solana）— 約 70 萬美元 ATH",
   "contract.copyCpw3Title": "複製原始 $CPW3 鑄幣",
   "contract.note":
-    "上方為現行的 $WADDLE SPL 代幣。下方為曾在 Solana 上的原始 $CPW3 SPL 鑄幣，僅作歷史紀錄。交易前請自行核對合約。",
+    "上方為現行平台代幣 $CP。下方 $CPW3 鑄幣為原始部署，僅作歷史紀錄。交易前請自行核對合約。",
+  "contract.redeployStory":
+    "$CP 是在原始 $CPW3 圖表無法再使用後的重新部署。$CPW3 在 X 上無法被標記（tag），幾乎無法被發現與建立社群。在 Solana 上市值曾接近約 70 萬美元 ATH 後，大量拋售使圖表暴露風險：第三方捆綁約 40% 供應量，實質上綁架了圖表。我們以 $CP 重新部署——可在 X 上正確標記的代幣——讓社群與產品能在我們可掌控的圖表上繼續前進。",
   "contract.copyTitle": "複製合約地址",
 
   "chart.kicker": "歷史紀錄",
   "chart.title": "原始代幣 $CPW3",
-  "chart.sub": "Solana 上歷史高點約 70 萬美元市值。",
+  "chart.sub":
+    "原始 $CPW3 在 Solana 上曾達約 70 萬美元市值 ATH，證明我們所打造內容的真實需求。$CPW3 在 X 上無法被標記。ATH 後的大幅拋售中，第三方捆綁約 40% 供應量並綁架圖表，促使我們以 $CP 重新部署。",
   "chart.mintLabel": "SPL 鑄幣地址",
   "chart.copyMint": "複製鑄幣地址",
 
