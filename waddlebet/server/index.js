@@ -55,6 +55,29 @@ const IS_DEV = process.env.NODE_ENV !== 'production';
 // Timestamp helper for debugging
 const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
 
+/** Canonical player appearance — server is source of truth; all clients receive this shape. */
+function normalizeAppearance(appearance = {}) {
+    return {
+        skin: appearance.skin || 'blue',
+        hat: appearance.hat || 'none',
+        eyes: appearance.eyes || 'normal',
+        mouth: appearance.mouth || 'beak',
+        bodyItem: appearance.bodyItem || 'none',
+        mount: appearance.mount || 'none',
+        characterType: appearance.characterType || 'penguin',
+        dogPrimaryColor: appearance.dogPrimaryColor,
+        dogSecondaryColor: appearance.dogSecondaryColor,
+        frogPrimaryColor: appearance.frogPrimaryColor,
+        frogSecondaryColor: appearance.frogSecondaryColor,
+        shrimpPrimaryColor: appearance.shrimpPrimaryColor,
+        tortoisePrimaryColor: appearance.tortoisePrimaryColor,
+        tortoiseSecondaryColor: appearance.tortoiseSecondaryColor,
+        mountEnabled: appearance.mountEnabled !== false,
+        nametagStyle: appearance.nametagStyle || 'default',
+        greenCandlesEnabled: appearance.greenCandlesEnabled === true
+    };
+}
+
 // ==================== GAME STATE ====================
 const players = new Map(); // playerId -> { id, name, room, position, rotation, appearance, puffle, ip, walletAddress, isAuthenticated, ... }
 const rooms = new Map(); // roomId -> Set of playerIds
@@ -1957,7 +1980,7 @@ async function handleMessage(playerId, message) {
                         ? clientAppearance.characterType 
                         : (userPlain.characterType || 'penguin');
                     
-                    player.appearance = {
+                    player.appearance = normalizeAppearance({
                         skin: dbCustomization.skin || 'blue',
                         hat: dbCustomization.hat || 'none',
                         eyes: dbCustomization.eyes || 'normal',
@@ -1972,10 +1995,10 @@ async function handleMessage(playerId, message) {
                         tortoisePrimaryColor: dbCustomization.tortoisePrimaryColor,
                         tortoiseSecondaryColor: dbCustomization.tortoiseSecondaryColor,
                         characterType: resolvedCharacterType,
-                        // Preserve client-side settings that aren't stored in DB
                         mountEnabled: clientAppearance.mountEnabled,
-                        nametagStyle: clientAppearance.nametagStyle
-                    };
+                        nametagStyle: clientAppearance.nametagStyle,
+                        greenCandlesEnabled: clientAppearance.greenCandlesEnabled
+                    });
                     
                     console.log(`[${ts()}] 🎨 Player appearance set: characterType=${resolvedCharacterType} (client=${clientAppearance.characterType}, db=${userPlain.characterType})`);
                     
@@ -2144,24 +2167,7 @@ async function handleMessage(playerId, message) {
                 // Guest user - use client appearance directly
                 // Ensure all appearance fields including characterType are preserved
                 const guestAppearance = message.appearance || {};
-                player.appearance = {
-                    skin: guestAppearance.skin || 'blue',
-                    hat: guestAppearance.hat || 'none',
-                    eyes: guestAppearance.eyes || 'normal',
-                    mouth: guestAppearance.mouth || 'beak',
-                    bodyItem: guestAppearance.bodyItem || 'none',
-                    mount: guestAppearance.mount || 'none',
-                    characterType: guestAppearance.characterType || 'penguin',
-                    dogPrimaryColor: guestAppearance.dogPrimaryColor,
-                    dogSecondaryColor: guestAppearance.dogSecondaryColor,
-                    frogPrimaryColor: guestAppearance.frogPrimaryColor,
-                    frogSecondaryColor: guestAppearance.frogSecondaryColor,
-                    shrimpPrimaryColor: guestAppearance.shrimpPrimaryColor,
-                    tortoisePrimaryColor: guestAppearance.tortoisePrimaryColor,
-                    tortoiseSecondaryColor: guestAppearance.tortoiseSecondaryColor,
-                    mountEnabled: guestAppearance.mountEnabled,
-                    nametagStyle: guestAppearance.nametagStyle
-                };
+                player.appearance = normalizeAppearance(guestAppearance);
                 console.log(`[${ts()}] 👤 Guest ${player.name} appearance set: characterType=${player.appearance.characterType}`);
             }
             
@@ -2718,12 +2724,11 @@ async function handleMessage(playerId, message) {
         }
         
         case 'update_appearance': {
-            // Merge new appearance with existing, ensuring characterType is preserved
             const newAppearance = message.appearance || {};
-            player.appearance = {
+            player.appearance = normalizeAppearance({
                 ...player.appearance,
                 ...newAppearance
-            };
+            });
             
             console.log(`[${ts()}] 🎨 Appearance update for ${player.name}: characterType=${player.appearance.characterType}`);
             

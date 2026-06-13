@@ -21,6 +21,18 @@ const getServerUrl = () => {
     return 'ws://localhost:3001';
 };
 
+/** Cosmetic fields that require rebuilding the voxel mesh (not settings toggles). */
+const APPEARANCE_COSMETIC_KEYS = [
+    'skin', 'hat', 'eyes', 'mouth', 'bodyItem', 'mount', 'characterType',
+    'dogPrimaryColor', 'dogSecondaryColor', 'frogPrimaryColor', 'frogSecondaryColor',
+    'shrimpPrimaryColor', 'tortoisePrimaryColor', 'tortoiseSecondaryColor'
+];
+
+function appearanceCosmeticsChanged(before, after) {
+    if (!before || !after) return true;
+    return APPEARANCE_COSMETIC_KEYS.some((key) => before[key] !== after[key]);
+}
+
 export function MultiplayerProvider({ children }) {
     const wsRef = useRef(null);
     const reconnectTimeoutRef = useRef(null);
@@ -978,12 +990,14 @@ export function MultiplayerProvider({ children }) {
                 message.players.forEach(p => {
                     console.log(`  - ${p.name} (${p.appearance?.characterType || 'penguin'})`, p.puffle ? `with ${p.puffle.color} puffle` : '(no puffle)', p.emote ? `emoting: ${p.emote}` : '', p.isAfk ? '(AFK)' : '', p.isAuthenticated ? '✓' : '');
                     const existingPlayer = playersDataRef.current.get(p.id);
+                    const incomingAppearance = p.appearance || existingPlayer?.appearance;
+                    const cosmeticsChanged = appearanceCosmeticsChanged(existingPlayer?.appearance, p.appearance);
                     const playerData = {
                         id: p.id,
                         name: p.name,
                         position: p.position || existingPlayer?.position,
                         rotation: p.rotation || existingPlayer?.rotation,
-                        appearance: p.appearance || existingPlayer?.appearance,
+                        appearance: incomingAppearance,
                         puffle: p.puffle || existingPlayer?.puffle || null,
                         pufflePosition: p.pufflePosition || existingPlayer?.pufflePosition || null,
                         emote: p.emote || existingPlayer?.emote || null,
@@ -995,8 +1009,8 @@ export function MultiplayerProvider({ children }) {
                         chatTime: p.isAfk ? Date.now() : (existingPlayer?.chatTime || null),
                         isAfkBubble: p.isAfk || existingPlayer?.isAfkBubble || false,
                         isAuthenticated: p.isAuthenticated || existingPlayer?.isAuthenticated || false,
-                        needsMesh: existingPlayer ? existingPlayer.needsMesh : true, // Preserve needsMesh if player already exists
-                        needsMeshRebuild: existingPlayer?.needsMeshRebuild || false // Preserve needsMeshRebuild flag
+                        needsMesh: existingPlayer ? (existingPlayer.needsMesh || cosmeticsChanged) : true,
+                        needsMeshRebuild: (existingPlayer?.needsMeshRebuild || false) || cosmeticsChanged
                     };
                     playersDataRef.current.set(p.id, playerData);
                     ids.push(p.id);
@@ -1008,28 +1022,49 @@ export function MultiplayerProvider({ children }) {
             case 'player_joined':
                 console.log(`👋 ${message.player.name} joined (characterType=${message.player.appearance?.characterType || 'penguin'})`, message.player.isAuthenticated ? '✓' : '(guest)');
                 console.log(`   📦 Full appearance received:`, JSON.stringify(message.player.appearance));
-                const joinedPlayerData = {
-                    id: message.player.id,
-                    name: message.player.name,
-                    position: message.player.position,
-                    rotation: message.player.rotation,
-                    appearance: message.player.appearance,
-                    puffle: message.player.puffle || null,
-                    pufflePosition: message.player.pufflePosition || null,
-                    emote: message.player.emote || null,
-                    emoteStartTime: message.player.emote ? Date.now() : null,
-                    seatedOnFurniture: message.player.seatedOnFurniture || false,
-                    isAfk: message.player.isAfk || false,
-                    afkMessage: message.player.afkMessage || null,
-                    chatMessage: message.player.isAfk ? message.player.afkMessage : null,
-                    chatTime: message.player.isAfk ? Date.now() : null,
-                    isAfkBubble: message.player.isAfk || false,
-                    isAuthenticated: message.player.isAuthenticated || false,
-                    needsMesh: true
-                };
-                playersDataRef.current.set(message.player.id, joinedPlayerData);
-                setPlayerList(prev => [...prev, message.player.id]);
-                setPlayerCount(prev => prev + 1);
+                const existingJoined = playersDataRef.current.get(message.player.id);
+                if (existingJoined) {
+                    const prevJoinedAppearance = existingJoined.appearance;
+                    existingJoined.name = message.player.name;
+                    existingJoined.position = message.player.position;
+                    existingJoined.rotation = message.player.rotation;
+                    existingJoined.appearance = message.player.appearance;
+                    existingJoined.puffle = message.player.puffle || null;
+                    existingJoined.pufflePosition = message.player.pufflePosition || null;
+                    existingJoined.emote = message.player.emote || null;
+                    existingJoined.emoteStartTime = message.player.emote ? Date.now() : null;
+                    existingJoined.seatedOnFurniture = message.player.seatedOnFurniture || false;
+                    existingJoined.isAfk = message.player.isAfk || false;
+                    existingJoined.afkMessage = message.player.afkMessage || null;
+                    existingJoined.isAuthenticated = message.player.isAuthenticated || false;
+                    existingJoined.needsMesh = true;
+                    if (appearanceCosmeticsChanged(prevJoinedAppearance, message.player.appearance)) {
+                        existingJoined.needsMeshRebuild = true;
+                    }
+                } else {
+                    const joinedPlayerData = {
+                        id: message.player.id,
+                        name: message.player.name,
+                        position: message.player.position,
+                        rotation: message.player.rotation,
+                        appearance: message.player.appearance,
+                        puffle: message.player.puffle || null,
+                        pufflePosition: message.player.pufflePosition || null,
+                        emote: message.player.emote || null,
+                        emoteStartTime: message.player.emote ? Date.now() : null,
+                        seatedOnFurniture: message.player.seatedOnFurniture || false,
+                        isAfk: message.player.isAfk || false,
+                        afkMessage: message.player.afkMessage || null,
+                        chatMessage: message.player.isAfk ? message.player.afkMessage : null,
+                        chatTime: message.player.isAfk ? Date.now() : null,
+                        isAfkBubble: message.player.isAfk || false,
+                        isAuthenticated: message.player.isAuthenticated || false,
+                        needsMesh: true
+                    };
+                    playersDataRef.current.set(message.player.id, joinedPlayerData);
+                    setPlayerList(prev => prev.includes(message.player.id) ? prev : [...prev, message.player.id]);
+                    setPlayerCount(prev => prev + 1);
+                }
                 callbacksRef.current.onPlayerJoined?.(message.player);
                 break;
                 
@@ -1071,16 +1106,22 @@ export function MultiplayerProvider({ children }) {
                 callbacksRef.current.onPlayerEmote?.(message.playerId, message.emote);
                 break;
                 
-            case 'player_appearance':
+            case 'player_appearance': {
                 const appearancePlayer = playersDataRef.current.get(message.playerId);
                 if (appearancePlayer) {
+                    const prevAppearance = appearancePlayer.appearance;
                     console.log(`🎨 Received appearance update for ${appearancePlayer.name} (characterType=${message.appearance?.characterType || 'penguin'})`);
                     appearancePlayer.appearance = message.appearance;
-                    appearancePlayer.needsMeshRebuild = true;
+                    // Settings-only updates (mount toggle, nametag, etc.) skip full mesh rebuild —
+                    // VoxelWorld game loop handles mount visibility without respawning the mesh.
+                    if (appearanceCosmeticsChanged(prevAppearance, message.appearance)) {
+                        appearancePlayer.needsMeshRebuild = true;
+                    }
                 } else {
                     console.warn(`⚠️ Received appearance update for unknown player ${message.playerId}`);
                 }
                 break;
+            }
                 
             case 'all_cosmetics':
                 // All cosmetic templates loaded from database

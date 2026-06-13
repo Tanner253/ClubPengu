@@ -158,21 +158,31 @@ const AppContent = () => {
                 });
                 syncedWalletRef.current = walletAddress;
             }
-        } else if (!isAuthenticated && !isRestoringSession) {
-            // Guest mode - use defaults and clear synced wallet
+        } else if (!isAuthenticated) {
+            // Guest mode — never reset penguinData here; designer customizations live in App state.
+            // Resetting on isRestoringSession/session changes was wiping guest cosmetics before join.
             syncedWalletRef.current = null;
-            setPenguinData(DEFAULT_PENGUIN);
         }
-    }, [isAuthenticated, userData?.customization, userData?.characterType, isRestoringSession, walletAddress]);
+    }, [isAuthenticated, userData?.customization, userData?.characterType, walletAddress]);
     
     // Also sync penguinData when live appearance changes (e.g., equipping items from inventory)
     // This is separate from customization because appearance can change during gameplay
     // NOTE: mountEnabled/greenCandlesEnabled/nametagStyle are settings-level toggles, NOT cosmetics.
     // Propagating them into penguinData would trigger expensive mesh rebuilds for no reason.
+    const APPEARANCE_COSMETIC_KEYS = [
+        'skin', 'hat', 'eyes', 'mouth', 'bodyItem', 'mount', 'characterType',
+        'dogPrimaryColor', 'dogSecondaryColor',
+        'frogPrimaryColor', 'frogSecondaryColor', 'shrimpPrimaryColor',
+        'tortoisePrimaryColor', 'tortoiseSecondaryColor'
+    ];
     useEffect(() => {
         if (isAuthenticated && userData?.appearance) {
             setPenguinData(prev => {
                 const { mountEnabled, greenCandlesEnabled, nametagStyle, ...cosmeticProps } = userData.appearance;
+                const cosmeticsChanged = APPEARANCE_COSMETIC_KEYS.some(
+                    (key) => prev[key] !== cosmeticProps[key]
+                );
+                if (!cosmeticsChanged) return prev;
                 return { ...prev, ...cosmeticProps };
             });
         }

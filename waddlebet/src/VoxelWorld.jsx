@@ -248,6 +248,7 @@ const VoxelWorld = ({
         chatMessages,
         worldTimeRef: serverWorldTimeRef, // Server-synchronized world time
         isAuthenticated, // For determining persistence mode
+        isRestoringSession,
         walletAddress, // User's wallet address for igloo ownership checks
         // Slot machine
         spinSlot,
@@ -273,6 +274,17 @@ const VoxelWorld = ({
     useEffect(() => {
         penguinDataRef.current = penguinData;
     }, [penguinData]);
+
+    useEffect(() => {
+        playerListRef.current = playerList;
+    }, [playerList]);
+
+    // Allow a fresh join message after disconnect/reconnect
+    useEffect(() => {
+        if (!connected) {
+            hasSentJoinRef.current = false;
+        }
+    }, [connected]);
     
     // Rebuild local player mesh when penguinData changes (e.g., after saving customization)
     const prevPenguinDataRef = useRef(penguinData);
@@ -287,7 +299,12 @@ const VoxelWorld = ({
         // Visibility flags (mountEnabled, greenCandlesEnabled, nametagStyle) are handled
         // by their own event listeners and should NOT trigger a full mesh rebuild.
         const prev = prevPenguinDataRef.current;
-        const cosmeticKeys = ['skin', 'hat', 'eyes', 'mouth', 'bodyItem', 'mount', 'characterType', 'dogPrimaryColor', 'dogSecondaryColor'];
+        const cosmeticKeys = [
+            'skin', 'hat', 'eyes', 'mouth', 'bodyItem', 'mount', 'characterType',
+            'dogPrimaryColor', 'dogSecondaryColor',
+            'frogPrimaryColor', 'frogSecondaryColor', 'shrimpPrimaryColor',
+            'tortoisePrimaryColor', 'tortoiseSecondaryColor'
+        ];
         if (prev && penguinData) {
             const cosmeticsChanged = cosmeticKeys.some(key => prev[key] !== penguinData[key]);
             if (!cosmeticsChanged) {
@@ -297,6 +314,23 @@ const VoxelWorld = ({
         }
         
         prevPenguinDataRef.current = penguinData;
+        
+        // Broadcast the new cosmetics to other players. Critical for authenticated users:
+        // the initial join fires with DEFAULT_PENGUIN before customization loads from the
+        // server, so this is what propagates real cosmetics/mounts to everyone else.
+        if (hasSentJoinRef.current && mpUpdateAppearanceRef.current && penguinData) {
+            try {
+                const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
+                mpUpdateAppearanceRef.current({
+                    ...penguinData,
+                    mountEnabled: settings.mountEnabled !== false,
+                    nametagStyle: isAuthenticated ? (settings.nametagStyle || 'day1') : 'default',
+                    greenCandlesEnabled: settings.greenCandlesEnabled === true
+                });
+            } catch {
+                mpUpdateAppearanceRef.current({ ...penguinData });
+            }
+        }
         
         if (!playerRef.current || !buildPenguinMeshRef.current || !sceneRef.current || !penguinData) return;
         
@@ -338,7 +372,7 @@ const VoxelWorld = ({
         newMesh.userData._animatedPartsCache = cacheAnimatedParts(newMesh);
         
         console.log('🔄 Rebuilt local player mesh with updated appearance');
-    }, [penguinData]);
+    }, [penguinData, isAuthenticated]);
     
     // Challenge context for position updates and dance trigger
     const { updateLocalPosition, shouldDance, clearDance } = useChallenge();
@@ -365,6 +399,12 @@ const VoxelWorld = ({
     const otherPlayerMeshesRef = useRef(new Map()); // playerId -> { mesh, bubble, puffle }
     const lastPositionSentRef = useRef({ x: 0, y: 0, z: 0, rot: 0, time: 0 });
     const buildPenguinMeshRef = useRef(null); // Will be set in useEffect
+    const hasSentJoinRef = useRef(false); // One join per connection — room changes use change_room
+    const [meshBuilderReady, setMeshBuilderReady] = useState(false); // Re-triggers other-player mesh creation
+    const [meshSyncVersion, setMeshSyncVersion] = useState(0); // Bumps when game loop detects missing remote meshes
+    const playerListRef = useRef(playerList);
+    const lastMissingMeshCheckRef = useRef(0);
+    const meshSyncBumpScheduledRef = useRef(false);
     
     // OPTIMIZATION: Reusable vectors to avoid GC pressure in update loop
     const tempVec3Ref = useRef(null);
@@ -669,6 +709,14 @@ const VoxelWorld = ({
 
     useEffect(() => {
         if (!mountRef.current || !window.THREE) return;
+
+        // New room / world rebuild — drop stale mesh handles from the previous scene
+        setMeshBuilderReady(false);
+        buildPenguinMeshRef.current = null;
+        for (const [, data] of otherPlayerMeshesRef.current) {
+            if (data.goldRainSystem) data.goldRainSystem.dispose();
+        }
+        otherPlayerMeshesRef.current.clear();
         
         // Hoist event handler references so cleanup can access them even when init is deferred
         let handleDown, handleUp, handleResize;
@@ -1641,17 +1689,7 @@ const VoxelWorld = ({
         
         // Store buildPenguinMesh for multiplayer to use
         buildPenguinMeshRef.current = buildPenguinMesh;
-        
-        // NOTE: cacheAnimatedParts and animateCosmeticsFromCache are imported from PenguinBuilder.js
-        // The inline versions below handle the animation loop specifics
-        
-        // Wrapper that uses imported functions but passes VOXEL_SIZE
-        const animateCosmetics = (cache, time, delta) => {
-            animateCosmeticsFromCache(cache, time, delta, VOXEL_SIZE);
-        };
-        
-        // Store buildPenguinMesh for multiplayer to use
-        buildPenguinMeshRef.current = buildPenguinMesh;
+        setMeshBuilderReady(true);
         
         // OPTIMIZATION: Cache animated cosmetic parts to avoid traverse() every frame
         // This function should be called once after building a mesh
@@ -5067,6 +5105,24 @@ const VoxelWorld = ({
             const lerpFactor = calculateLerpFactor(delta, 10);
             const yLerpFactor = calculateLerpFactor(delta, 15);
             
+            // Backstop: remote players in the room but missing a mesh (e.g. builder-ready race)
+            if (time - lastMissingMeshCheckRef.current > 1) {
+                lastMissingMeshCheckRef.current = time;
+                for (const id of playerListRef.current) {
+                    if (otherMeshes.has(id)) continue;
+                    const missingData = playersData.get(id);
+                    if (!missingData?.appearance) continue;
+                    if (!meshSyncBumpScheduledRef.current) {
+                        meshSyncBumpScheduledRef.current = true;
+                        Promise.resolve().then(() => {
+                            meshSyncBumpScheduledRef.current = false;
+                            setMeshSyncVersion((v) => v + 1);
+                        });
+                    }
+                    break;
+                }
+            }
+            
             // OPTIMIZATION: Cache local player position for distance checks
             const localPosX = posRef.current?.x || 0;
             const localPosZ = posRef.current?.z || 0;
@@ -5110,14 +5166,13 @@ const VoxelWorld = ({
                         newMesh.add(bubble);
                     }
                     
-                    // Hide mount if player has mountEnabled set to false
-                    if (playerData.appearance?.mountEnabled === false) {
-                        const mountGroup = newMesh.getObjectByName('mount');
-                        if (mountGroup) {
-                            mountGroup.visible = false;
-                            newMesh.userData.mountVisible = false;
-                        }
+                    // Apply mount visibility from server appearance
+                    const rebuildMountVisible = playerData.appearance?.mountEnabled !== false;
+                    const rebuildMountGroup = newMesh.getObjectByName('mount');
+                    if (rebuildMountGroup) {
+                        rebuildMountGroup.visible = rebuildMountVisible;
                     }
+                    newMesh.userData.mountVisible = rebuildMountVisible;
                     
                     // Update mesh reference
                     meshData.mesh = newMesh;
@@ -6651,6 +6706,12 @@ const VoxelWorld = ({
             }
             // Cleanup player name sprite ref
             playerNameSpriteRef.current = null;
+            buildPenguinMeshRef.current = null;
+            setMeshBuilderReady(false);
+            for (const [, data] of otherPlayerMeshesRef.current) {
+                if (data.goldRainSystem) data.goldRainSystem.dispose();
+            }
+            otherPlayerMeshesRef.current.clear();
         };
     }, [room]); // eslint-disable-line react-hooks/exhaustive-deps -- penguinData reads use penguinDataRef; the line-279 useEffect handles mesh rebuilds
     
@@ -9733,64 +9794,72 @@ const VoxelWorld = ({
         return () => window.removeEventListener('nametagChanged', handleNametagChange);
     }, [createNameSprite, isAuthenticated, playerName]);
     
-    // Join room when connected and scene is ready
+    // Join room once per connection when world + mesh builder are ready (room changes use change_room)
     useEffect(() => {
-        if (connected && sceneRef.current && playerId) {
-            console.log(`🔗 Join room effect triggered - penguinData.characterType=${penguinData?.characterType || 'undefined'}`);
-            const puffleData = playerPuffle ? {
-                id: playerPuffle.id,
-                color: playerPuffle.color,
-                name: playerPuffle.name
-            } : null;
+        if (!connected || !sceneRef.current || !playerId || !penguinData) return;
+        if (isRestoringSession) return;
+        if (!meshBuilderReady) return;
+        if (hasSentJoinRef.current) return;
+
+        hasSentJoinRef.current = true;
+        console.log(`🔗 Join room effect triggered - penguinData.characterType=${penguinData?.characterType || 'undefined'}`);
+        const puffleData = playerPuffle ? {
+            id: playerPuffle.id,
+            color: playerPuffle.color,
+            name: playerPuffle.name
+        } : null;
+        
+        // Include current mount enabled state, nametag style, and green candles from settings
+        // Guests always get 'default' nametag style - only authenticated users get special styles
+        let mountEnabled = true;
+        let nametagStyle = 'default';
+        let greenCandlesEnabled = false;
+        try {
+            const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
+            mountEnabled = settings.mountEnabled !== false;
+            // Only authenticated users can use non-default nametag styles
+            nametagStyle = isAuthenticated ? (settings.nametagStyle || 'day1') : 'default';
+            greenCandlesEnabled = settings.greenCandlesEnabled === true;
+        } catch { /* use default */ }
+        
+        const appearanceWithMount = {
+            ...penguinData,
+            mountEnabled,
+            nametagStyle,  // Broadcast nametag style to all players
+            greenCandlesEnabled  // Broadcast green candles setting to all players
+        };
+        
+        console.log(`🚀 Joining room ${room} with appearance: characterType=${appearanceWithMount.characterType || 'undefined'}`);
+        mpJoinRoom(room, appearanceWithMount, puffleData, turnstileToken);
+        // Reinforce appearance on server after join — fixes guest cosmetics and late auth customization
+        if (mpUpdateAppearanceRef.current) {
+            mpUpdateAppearanceRef.current(appearanceWithMount);
+        }
+        
+        // Add player's own name tag (so they can see their username)
+        if (playerRef.current && playerName && !playerNameSpriteRef.current) {
             
-            // Include current mount enabled state, nametag style, and green candles from settings
-            // Guests always get 'default' nametag style - only authenticated users get special styles
-            let mountEnabled = true;
-            let nametagStyle = 'default';
-            let greenCandlesEnabled = false;
-            try {
-                const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
-                mountEnabled = settings.mountEnabled !== false;
-                // Only authenticated users can use non-default nametag styles
-                nametagStyle = isAuthenticated ? (settings.nametagStyle || 'day1') : 'default';
-                greenCandlesEnabled = settings.greenCandlesEnabled === true;
-            } catch { /* use default */ }
-            
-            const appearanceWithMount = {
-                ...penguinData,
-                mountEnabled,
-                nametagStyle,  // Broadcast nametag style to all players
-                greenCandlesEnabled  // Broadcast green candles setting to all players
-            };
-            
-            console.log(`🚀 Joining room ${room} with appearance: characterType=${appearanceWithMount.characterType || 'undefined'}`);
-            mpJoinRoom(room, appearanceWithMount, puffleData, turnstileToken);
-            
-            // Add player's own name tag (so they can see their username)
-            if (playerRef.current && playerName && !playerNameSpriteRef.current) {
+            const nameSprite = createNameSprite(playerName, nametagStyle);
+            if (nameSprite) {
+                const nameHeight = penguinData?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : penguinData?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
+                nameSprite.position.set(0, nameHeight, 0);
+                playerRef.current.add(nameSprite);
+                playerNameSpriteRef.current = nameSprite;
                 
-                const nameSprite = createNameSprite(playerName, nametagStyle);
-                if (nameSprite) {
-                    const nameHeight = penguinData?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : penguinData?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
-                    nameSprite.position.set(0, nameHeight, 0);
-                    playerRef.current.add(nameSprite);
-                    playerNameSpriteRef.current = nameSprite;
-                    
-                    // Create world-space particle rain for Day 1 or Whale nametag
-                    if ((nametagStyle === 'day1' || nametagStyle === 'whale') && sceneRef.current && !playerGoldRainRef.current) {
-                        const THREE = window.THREE;
-                        if (THREE) {
-                            const playerPos = playerRef.current.position;
-                            const preset = nametagStyle === 'day1' ? 'goldRain' : 'whaleRain';
-                            const particleRain = new LocalizedParticleSystem(THREE, sceneRef.current, preset);
-                            particleRain.create({ x: playerPos.x, y: playerPos.y, z: playerPos.z });
-                            playerGoldRainRef.current = particleRain;
-                        }
+                // Create world-space particle rain for Day 1 or Whale nametag
+                if ((nametagStyle === 'day1' || nametagStyle === 'whale') && sceneRef.current && !playerGoldRainRef.current) {
+                    const THREE = window.THREE;
+                    if (THREE) {
+                        const playerPos = playerRef.current.position;
+                        const preset = nametagStyle === 'day1' ? 'goldRain' : 'whaleRain';
+                        const particleRain = new LocalizedParticleSystem(THREE, sceneRef.current, preset);
+                        particleRain.create({ x: playerPos.x, y: playerPos.y, z: playerPos.z });
+                        playerGoldRainRef.current = particleRain;
                     }
                 }
             }
         }
-    }, [connected, playerId, room, penguinData, playerName, createNameSprite]);
+    }, [connected, playerId, penguinData, room, playerName, createNameSprite, isAuthenticated, playerPuffle, turnstileToken, mpJoinRoom, meshBuilderReady, isRestoringSession]);
     
     // Send position updates (throttled) - OPTIMIZED: 100ms interval, only when changed
     useEffect(() => {
@@ -10078,14 +10147,13 @@ const VoxelWorld = ({
             
             scene.add(mesh);
             
-            // Hide mount if player has mountEnabled set to false
-            if (playerData.appearance?.mountEnabled === false) {
-                const mountGroup = mesh.getObjectByName('mount');
-                if (mountGroup) {
-                    mountGroup.visible = false;
-                    mesh.userData.mountVisible = false;
-                }
+            // Apply mount visibility from server appearance (explicit — undefined means visible)
+            const mountVisible = playerData.appearance?.mountEnabled !== false;
+            const mountGroup = mesh.getObjectByName('mount');
+            if (mountGroup) {
+                mountGroup.visible = mountVisible;
             }
+            mesh.userData.mountVisible = mountVisible;
             
             // Create name tag - adjust height for character type
             // Use player's chosen nametag style from appearance (default to 'day1')
@@ -10159,11 +10227,12 @@ const VoxelWorld = ({
                 hasAnimatedCosmetics
             });
             
-            // Clear the needsMesh flag
+            // Clear pending flags — mesh is now in the scene
             playerData.needsMesh = false;
+            playerData.needsMeshRebuild = false;
             console.log(`🐧 Created mesh for ${playerData.name}, emote: ${playerData.emote}, seatedOnFurniture: ${playerData.seatedOnFurniture}`);
         }
-    }, [playerList, createNameSprite]);
+    }, [playerList, createNameSprite, meshBuilderReady, meshSyncVersion]);
     
     // Notify server when changing rooms
     useEffect(() => {
