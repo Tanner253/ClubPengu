@@ -1774,14 +1774,11 @@ function RoadmapSection() {
     {
       phase: "Phase 7",
       title: "NFTs & Expansion",
-      status: "current",
+      status: "complete",
       items: [
         "✅ NFT Minting (Metaplex Integration)",
         "✅ Photo Booth for NFT Images",
         "✅ NFT Metadata Standard Compliance",
-        "🔄 Tradeable NFT Cosmetics on Marketplaces",
-        "🔄 Tournament System",
-        "🔄 VIP & Rakeback Program",
       ],
     },
     {
@@ -1789,24 +1786,20 @@ function RoadmapSection() {
       title: "Ecosystem",
       status: "planned",
       items: [
-        "📱 Mobile App (iOS/Android)",
-        "🏛️ DAO Governance",
-        "💰 Revenue Sharing for Holders",
-        "🎮 Third-party Game SDK",
-        "🔗 Cross-chain Expansion",
-        "🌐 Metaverse Interoperability",
+        "⏸️ Skipped for now — mobile app, DAO, revenue sharing, and cross-chain on hold",
+        "📋 Will return in a future phase after MMORPG rollout",
       ],
     },
     {
       phase: "Phase 9",
       title: "MMORPG Foundation",
-      status: "upcoming",
+      status: "current",
       items: [
-        "📊 Player XP & Levels",
-        "🎯 Daily Challenges (XP + Gold)",
-        "🚪 First Zone Gates",
-        "📈 Level HUD & Profile Badges",
-        "🧊 Ice Fields Gate (Lv 10)",
+        "🔄 Player XP & Levels",
+        "🔄 Daily Challenges (XP + Gold)",
+        "🔄 First Zone Gates",
+        "🔄 Level HUD & Profile Badges",
+        "🔄 Ice Fields Gate (Lv 10)",
       ],
     },
     {
