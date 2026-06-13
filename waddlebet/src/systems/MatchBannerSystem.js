@@ -3,6 +3,8 @@
  * Extracted from VoxelWorld.jsx - preserves original functionality exactly
  */
 
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
+
 /**
  * Create a canvas for rendering match banners
  * @param {string} gameType - The type of game (monopoly needs taller canvas)
@@ -71,10 +73,10 @@ function formatWagerText(wager, wagerToken) {
     
     if (wagerToken?.tokenAmount > 0 && wager > 0) {
         // Both coins and tokens
-        return `💰 ${wager} + ${formatTokenAmount(wagerToken.tokenAmount)} ${wagerToken.tokenSymbol}`;
+        return `💰 ${wager} + ${formatTokenAmount(wagerToken.tokenAmount)} ${displayTokenSymbol(wagerToken.tokenSymbol)}`;
     } else if (wagerToken?.tokenAmount > 0) {
         // Only tokens (crypto wager)
-        return `🪙 ${formatTokenAmount(wagerToken.tokenAmount)} ${wagerToken.tokenSymbol}`;
+        return `🪙 ${formatTokenAmount(wagerToken.tokenAmount)} ${displayTokenSymbol(wagerToken.tokenSymbol)}`;
     } else if (wager > 0) {
         // Only coins
         return `💰 ${wager}`;

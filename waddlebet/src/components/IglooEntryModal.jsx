@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext.jsx';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 const IglooEntryModal = ({ 
     isOpen, 
@@ -83,7 +84,7 @@ const IglooEntryModal = ({
     
     // Get entry fee token info from igloo data
     const entryFeeToken = iglooData?.entryFeeToken || iglooData?.entryFee;
-    const feeTokenSymbol = entryFeeToken?.tokenSymbol || 'TOKEN';
+    const feeTokenSymbol = displayTokenSymbol(entryFeeToken?.tokenSymbol || 'TOKEN');
     const feeTokenAddress = entryFeeToken?.tokenAddress;
     
     // Determine display based on denial reason

@@ -8,6 +8,7 @@ import { IGLOO_BANNER_STYLES } from '../config/roomConfig.js';
 import { useIgloo } from '../igloo/IglooContext.jsx';
 import { payIglooRent } from '../wallet/SolanaPayment.js';
 import { RENT_WALLET_ADDRESS, CPW3_TOKEN_ADDRESS, IGLOO_CONFIG } from '../config/solana.js';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 // Predefined gradient presets
 const GRADIENT_PRESETS = [
@@ -260,7 +261,7 @@ const IglooSettingsPanel = ({
         try {
             console.log('💰 Starting rent payment...');
             console.log(`   Igloo: ${iglooData.iglooId}`);
-            console.log(`   Amount: ${IGLOO_CONFIG.DAILY_RENT_CPW3} $WADDLE`);
+            console.log(`   Amount: ${IGLOO_CONFIG.DAILY_RENT_CPW3} $CP`);
             
             // Step 1: Send the Solana transaction
             const paymentResult = await payIglooRent(
@@ -913,7 +914,7 @@ const IglooSettingsPanel = ({
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-400">Total Rent Paid:</span>
                                     <span className="text-yellow-400 font-mono">
-                                        {iglooData?.stats?.totalRentPaid?.toLocaleString() || 0} $WADDLE
+                                        {iglooData?.stats?.totalRentPaid?.toLocaleString() || 0} $CP
                                     </span>
                                 </div>
                                 
@@ -927,7 +928,7 @@ const IglooSettingsPanel = ({
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-400">Entry Fees Collected:</span>
                                     <span className="text-green-400 font-mono">
-                                        {iglooData?.stats?.totalEntryFeesCollected?.toLocaleString() || 0} {iglooData?.entryFee?.tokenSymbol || 'tokens'}
+                                        {iglooData?.stats?.totalEntryFeesCollected?.toLocaleString() || 0} {displayTokenSymbol(iglooData?.entryFee?.tokenSymbol) || 'tokens'}
                                     </span>
                                 </div>
                             </div>
@@ -973,7 +974,7 @@ const IglooSettingsPanel = ({
                                             ? '⏳ Processing Payment...' 
                                             : rentPaymentSuccess 
                                                 ? '✅ Payment Sent!'
-                                                : `💰 Pay Rent (${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $WADDLE)`}
+                                                : `💰 Pay Rent (${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $CP)`}
                                     </button>
                                 </div>
                             )}

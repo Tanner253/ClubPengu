@@ -5844,7 +5844,7 @@ async function handleMessage(playerId, message) {
         }
         
         case 'daily_bonus_claim': {
-            // Claim the daily bonus (sends WADDLE tokens)
+            // Claim the daily bonus (sends $CP tokens)
             if (!player.isAuthenticated || !player.walletAddress) {
                 sendToPlayer(playerId, {
                     type: 'daily_bonus_result',

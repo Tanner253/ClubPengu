@@ -44,7 +44,7 @@ class SKNYIgloo extends BaseProp {
         // SKNY GANG ticker sign
         this._createTickerSign(group, neonPink, neonCyan, goldMat);
         
-        // $WADDLE logo
+        // $CP logo
         this._createWADDLELogo(group, neonGreen, goldMat);
         
         // Entrance with VIP rope and lights
@@ -216,7 +216,7 @@ class SKNYIgloo extends BaseProp {
     _createWADDLELogo(group, neonGreen, goldMat) {
         const THREE = this.THREE;
         
-        // $WADDLE sign on side
+        // $CP sign on side
         const signGroup = new THREE.Group();
         
         // Dollar sign
@@ -225,12 +225,12 @@ class SKNYIgloo extends BaseProp {
         dollar.position.set(-0.7, 0, 0);
         signGroup.add(dollar);
         
-        // WADDLE letters
-        const waddleLetters = ['W', 'A', 'D', 'D', 'L', 'E'];
-        waddleLetters.forEach((letter, i) => {
-            const lGeo = new THREE.BoxGeometry(0.16, 0.35, 0.05);
+        // $CP letters (after dollar sign)
+        const cpLetters = ['C', 'P'];
+        cpLetters.forEach((letter, i) => {
+            const lGeo = new THREE.BoxGeometry(0.2, 0.35, 0.05);
             const lMesh = new THREE.Mesh(lGeo, goldMat);
-            lMesh.position.set(-0.45 + i * 0.22, 0, 0);
+            lMesh.position.set(-0.35 + i * 0.28, 0, 0);
             signGroup.add(lMesh);
         });
         

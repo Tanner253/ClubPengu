@@ -1,10 +1,10 @@
 /**
- * DailyBonusService - Daily login bonus with WADDLE token rewards
+ * DailyBonusService - Daily login bonus with $CP token rewards
  * 
  * REQUIREMENTS:
  * 1. User must spend 1 hour on server to be eligible
  * 2. Can claim once every 24 hours
- * 3. Claims 10,000 WADDLE from custodial wallet
+ * 3. Claims $CP from custodial wallet
  * 4. Protections against replay attacks and double claims
  */
 
@@ -24,11 +24,11 @@ const CONFIG = {
     COOLDOWN_HOURS: 24,                     // 24 hour cooldown between claims
     
     // Reward amount
-    REWARD_AMOUNT: 5000,                    // 5,000 $WADDLE
+    REWARD_AMOUNT: 5000,                    // 5,000 $CP
     
     // Token config (loaded after env)
     getTokenAddress: () => process.env.CPW3_TOKEN_ADDRESS || '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump',
-    TOKEN_DECIMALS: 6,                      // WADDLE has 6 decimals
+    TOKEN_DECIMALS: 6,                      // $CP has 6 decimals
     
     // Security
     NONCE_EXPIRY_MINUTES: 5,                // Nonce expires after 5 minutes
@@ -231,7 +231,7 @@ class DailyBonusService {
                 sessionMinutes,                                    // current session time
                 requiredMinutes: CONFIG.REQUIRED_SESSION_MINUTES,  // required time
                 minutesRemaining,                                  // minutes until eligible
-                rewardAmount: CONFIG.REWARD_AMOUNT,                // 10,000 WADDLE
+                rewardAmount: CONFIG.REWARD_AMOUNT,                // $CP reward amount
                 totalClaimed: user.dailyBonus?.totalClaimed || 0,
                 totalWaddleEarned: user.dailyBonus?.totalWaddleEarned || 0,
                 lastClaimAt: lastClaim,
@@ -246,7 +246,7 @@ class DailyBonusService {
     
     /**
      * Claim the daily bonus
-     * Sends WADDLE tokens from custodial wallet to user
+     * Sends $CP tokens from custodial wallet to user
      * 
      * @param {string} walletAddress - User's wallet address
      * @param {string} clientNonce - Client-generated nonce for replay protection
@@ -379,7 +379,7 @@ class DailyBonusService {
             
             console.log(`🎁 [DailyBonus] Processing claim for ${walletAddress.slice(0, 8)}...`);
             console.log(`   Claim ID: ${claimId}`);
-            console.log(`   Reward: ${CONFIG.REWARD_AMOUNT} WADDLE`);
+            console.log(`   Reward: ${CONFIG.REWARD_AMOUNT} $CP`);
             
             // ═══════════════════════════════════════════════════════════════
             // SEND TOKENS FROM CUSTODIAL WALLET

@@ -368,9 +368,9 @@ class X402Service {
     }
     
     /**
-     * Check if wallet has minimum WADDLE (cpw3 mint) balance for renting
+     * Check if wallet has minimum $CP balance for renting
      * @param {string} walletAddress - Wallet to check
-     * @param {number} minimumBalance - Required WADDLE balance (same SPL mint as CPW3_TOKEN_ADDRESS)
+     * @param {number} minimumBalance - Required $CP balance (CPW3_TOKEN_ADDRESS mint)
      * @returns {Promise<Object>}
      */
     async checkRentEligibility(walletAddress, minimumBalance) {

@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext.jsx';
 import { payIglooEntryFee } from '../wallet/SolanaPayment.js';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 /**
  * Abbreviate a wallet address: "abc123...xyz789"
@@ -104,13 +105,13 @@ const IglooRequirementsPanel = ({
     // Normalize token gate info
     const tokenGateData = tokenGateInfo || tokenGate || {};
     const tokenAddress = tokenGateData.tokenAddress;
-    const tokenSymbol = tokenGateData.symbol || tokenGateData.tokenSymbol || 'TOKEN';
+    const tokenSymbol = displayTokenSymbol(tokenGateData.symbol || tokenGateData.tokenSymbol || 'TOKEN');
     const minBalance = tokenGateData.minimumBalance || tokenGateData.minimum || 1;
     
     // Normalize entry fee info
     const entryFeeData = entryFeeToken || entryFee || {};
     const feeTokenAddress = entryFeeData.tokenAddress;
-    const feeTokenSymbol = entryFeeData.tokenSymbol || 'TOKEN';
+    const feeTokenSymbol = displayTokenSymbol(entryFeeData.tokenSymbol || 'TOKEN');
     const feeAmount = entryFeeAmount || entryFee?.amount || 0;
     
     // Determine what requirements exist

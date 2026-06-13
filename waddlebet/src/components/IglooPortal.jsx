@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { IGLOO_CONFIG } from '../config/solana.js';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 /**
  * Abbreviate a wallet address: "abc123...xyz789"
@@ -53,8 +54,8 @@ const IglooPortal = ({
             return {
                 emoji: '🏷️',
                 title: 'IGLOO FOR RENT',
-                subtitle: `${IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString() || '10,000'} $WADDLE/day`,
-                description: `Min balance: ${IGLOO_CONFIG.MINIMUM_BALANCE_CPW3?.toLocaleString() || '70,000'} $WADDLE`,
+                subtitle: `${IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString() || '10,000'} $CP/day`,
+                description: `Min balance: ${IGLOO_CONFIG.MINIMUM_BALANCE_CPW3?.toLocaleString() || '70,000'} $CP`,
                 color: 'emerald',
                 canEnter: false,
                 actionText: 'VIEW DETAILS',
@@ -98,9 +99,9 @@ const IglooPortal = ({
         // IMPORTANT: Check requirements BEFORE checking for public access
         // 'both' = Token Gate + Entry Fee
         if (accessType === 'both' && (hasTokenGate || hasEntryFee)) {
-            const tokenSymbol = tokenGateInfo?.tokenSymbol || tokenGateInfo?.symbol || 'TOKEN';
+            const tokenSymbol = displayTokenSymbol(tokenGateInfo?.tokenSymbol || tokenGateInfo?.symbol || 'TOKEN');
             const minBalance = tokenGateInfo?.minimumBalance || tokenGateInfo?.minimum || 1;
-            const feeTokenSymbol = iglooData?.entryFeeToken?.tokenSymbol || iglooData?.entryFee?.tokenSymbol || 'TOKEN';
+            const feeTokenSymbol = displayTokenSymbol(iglooData?.entryFeeToken?.tokenSymbol || iglooData?.entryFee?.tokenSymbol || 'TOKEN');
             
             // Show partial status if user has some requirements met
             const tokenMet = userClearance?.tokenGateMet;
@@ -133,7 +134,7 @@ const IglooPortal = ({
         
         // Token gated only
         if (accessType === 'token' || hasTokenGate) {
-            const tokenSymbol = tokenGateInfo?.tokenSymbol || tokenGateInfo?.symbol || 'TOKEN';
+            const tokenSymbol = displayTokenSymbol(tokenGateInfo?.tokenSymbol || tokenGateInfo?.symbol || 'TOKEN');
             const minBalance = tokenGateInfo?.minimumBalance || tokenGateInfo?.minimum || 1;
             const tokenMet = userClearance?.tokenGateMet;
             
@@ -158,7 +159,7 @@ const IglooPortal = ({
         
         // Entry fee only
         if (accessType === 'fee' || hasEntryFee) {
-            const feeTokenSymbol = iglooData?.entryFeeToken?.tokenSymbol || iglooData?.entryFee?.tokenSymbol || 'TOKEN';
+            const feeTokenSymbol = displayTokenSymbol(iglooData?.entryFeeToken?.tokenSymbol || iglooData?.entryFee?.tokenSymbol || 'TOKEN');
             const feePaid = userClearance?.entryFeePaid;
             
             return {
@@ -275,7 +276,7 @@ const IglooPortal = ({
                     <div className="bg-black/30 rounded-lg p-2 mb-2 text-xs">
                         <div className="flex items-center justify-center gap-2 text-emerald-300">
                             <span>📅 Daily:</span>
-                            <span className="font-mono">{IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString()} $WADDLE</span>
+                            <span className="font-mono">{IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString()} $CP</span>
                         </div>
                         <div className="text-white/50 mt-1">
                             Grace period: {IGLOO_CONFIG.GRACE_PERIOD_HOURS}h

@@ -7,6 +7,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 import { useMultiplayer } from '../multiplayer';
 import GameManager from '../engine/GameManager';
 import { sendSPLToken } from '../wallet/SolanaPayment';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 // Server custodial wallet for holding wager deposits
 // Uses dedicated custodial wallet, falls back to rent wallet for backwards compatibility
@@ -274,7 +275,7 @@ export function ChallengeProvider({ children }) {
                     } else if (result.winnerPlayerId === playerId) {
                         // Build token won message if applicable
                         const tokenMsg = result.tokenSettlement ? 
-                            ` + ${result.tokenSettlement.amount} ${result.tokenSettlement.tokenSymbol}` : '';
+                            ` + ${result.tokenSettlement.amount} ${displayTokenSymbol(result.tokenSettlement.tokenSymbol)}` : '';
                         showNotification(`🏆 You won ${result.coinsWon} coins${tokenMsg}!`, 'success');
                     } else {
                         showNotification(`😔 You lost the match.`, 'info');
@@ -613,7 +614,7 @@ export function ChallengeProvider({ children }) {
             }
             
             setIsSigningWager(true);
-            showNotification(`Sending ${tokenWager.tokenAmount} ${tokenWager.tokenSymbol} wager deposit...`, 'info');
+            showNotification(`Sending ${tokenWager.tokenAmount} ${displayTokenSymbol(tokenWager.tokenSymbol)} wager deposit...`, 'info');
             
             try {
                 console.log('💰 Sending wager deposit to custodial wallet...');
@@ -675,7 +676,7 @@ export function ChallengeProvider({ children }) {
             const wagerToken = challengeData.wagerToken;
             
             setIsSigningWager(true);
-            showNotification(`Sending ${wagerToken.tokenAmount} ${wagerToken.tokenSymbol} wager deposit...`, 'info');
+            showNotification(`Sending ${wagerToken.tokenAmount} ${displayTokenSymbol(wagerToken.tokenSymbol)} wager deposit...`, 'info');
             
             try {
                 console.log('💰 Sending wager deposit to custodial wallet (accepting)...');

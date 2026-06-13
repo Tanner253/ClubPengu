@@ -226,7 +226,7 @@ describe('Wager Token Config', () => {
             return String(Math.floor(amount * Math.pow(10, decimals)));
         };
         
-        // 50 $WADDLE with 6 decimals
+        // 50 \$WADDLE with 6 decimals
         expect(calculateRawAmount(50, 6)).toBe('50000000');
         
         // 100 USDC with 6 decimals
@@ -243,7 +243,7 @@ describe('Wager Token Config', () => {
 describe('X402 Wager Payment', () => {
     it('should create wager payment payload with token details', () => {
         const wagerDetails = {
-            amount: '50000000', // 50 $WADDLE raw
+            amount: '50000000', // 50 \$WADDLE raw
             challengeId: 'chal_test123',
             opponentWallet: 'opponent_wallet_address',
             tokenAddress: '63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump',
@@ -270,7 +270,7 @@ describe('X402 Wager Payment', () => {
         expect(payload.memo).toContain('$WADDLE');
     });
     
-    it('should default to WADDLE token if not specified', () => {
+    it('should default to \$WADDLE token if not specified', () => {
         const wagerDetails = {
             amount: '100000000',
             challengeId: 'chal_test',

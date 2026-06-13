@@ -116,7 +116,7 @@ describe('SolanaTransaction Model', () => {
                 amount: 10000,
                 amountRaw: '10000000000',
                 tokenMint: 'CPw3token',
-                tokenSymbol: '$WADDLE',
+                tokenSymbol: '\$WADDLE',
                 iglooId: 'igloo5',
                 status: 'verified'
             };

@@ -2,7 +2,7 @@
  * WagerTokenSelector - Collapsible dropdown for selecting SPL tokens for wagering
  * 
  * Features:
- * - Quick-select buttons for popular tokens ($WADDLE, SOL, USDC, BONK)
+ * - Quick-select buttons for popular tokens ($CP, SOL, USDC, BONK)
  * - Custom CA input with live validation
  * - User's balance display
  * - Validation status indicator (like username availability check)
@@ -17,6 +17,7 @@ import {
     getJupiterSwapUrl, 
     isValidSolanaAddress 
 } from '../config/wagerTokens';
+import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 /**
  * Token Quick Select Button
@@ -35,7 +36,7 @@ const TokenQuickButton = ({ token, isSelected, onSelect, disabled }) => (
         }`}
         title={token.name}
     >
-        {token.symbol}
+        {displayTokenSymbol(token.symbol)}
     </button>
 );
 
@@ -210,7 +211,7 @@ const WagerTokenSelector = ({
                     <span>🪙</span>
                     <span>
                         {hasTokenWager 
-                            ? `+ ${selectedToken.tokenAmount} ${selectedToken.tokenSymbol}`
+                            ? `+ ${selectedToken.tokenAmount} ${displayTokenSymbol(selectedToken.tokenSymbol)}`
                             : 'Add Token Wager (Optional)'
                         }
                     </span>
@@ -266,7 +267,7 @@ const WagerTokenSelector = ({
                                 </label>
                                 {userBalance > 0 && (
                                     <span className="text-[10px] text-slate-500">
-                                        Balance: {userBalance.toLocaleString()} {tokenMetadata?.symbol || selectedToken?.tokenSymbol}
+                                        Balance: {userBalance.toLocaleString()} {displayTokenSymbol(tokenMetadata?.symbol || selectedToken?.tokenSymbol)}
                                     </span>
                                 )}
                             </div>
@@ -282,7 +283,7 @@ const WagerTokenSelector = ({
                                     disabled={disabled}
                                 />
                                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">
-                                    {tokenMetadata?.symbol || selectedToken?.tokenSymbol || 'TOKEN'}
+                                    {displayTokenSymbol(tokenMetadata?.symbol || selectedToken?.tokenSymbol) || 'TOKEN'}
                                 </span>
                             </div>
                             

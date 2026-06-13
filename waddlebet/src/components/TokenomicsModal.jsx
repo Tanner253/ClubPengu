@@ -1,5 +1,5 @@
 /**
- * TokenomicsModal - $WADDLE Token Utility & Tokenomics Information
+ * TokenomicsModal - $CP Token Utility & Tokenomics Information
  */
 
 import React, { useRef, useMemo } from 'react';

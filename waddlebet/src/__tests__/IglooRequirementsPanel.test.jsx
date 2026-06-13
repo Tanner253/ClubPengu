@@ -37,7 +37,7 @@ describe('IglooRequirementsPanel', () => {
                 enabled: true,
                 amount: 500,
                 tokenAddress: 'feeToken456',
-                tokenSymbol: '$WADDLE'
+                tokenSymbol: '$CP'
             }
         },
         walletAddress: 'visitorWallet987',

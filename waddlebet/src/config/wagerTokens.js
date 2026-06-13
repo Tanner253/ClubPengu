@@ -42,7 +42,7 @@ export const WAGER_TOKENS = [
 // ==================== HELPER FUNCTIONS ====================
 
 /**
- * Get default wager token ($WADDLE)
+ * Get default wager token ($CP display, $WADDLE on-chain/API)
  */
 export const getDefaultWagerToken = () => {
     return WAGER_TOKENS.find(t => t.isDefault) || WAGER_TOKENS[0];

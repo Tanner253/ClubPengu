@@ -126,7 +126,7 @@ describe('IglooPortal', () => {
             );
             // Should show token requirement info
             const container = document.body;
-            expect(container.textContent).toMatch(/TOKEN|Hold|\$WADDLE/i);
+            expect(container.textContent).toMatch(/TOKEN|Hold|\$CP/i);
         });
     });
     

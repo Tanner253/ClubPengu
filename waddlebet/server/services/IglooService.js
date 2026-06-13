@@ -199,7 +199,7 @@ class IglooService {
             };
         }
         
-        // Check balance eligibility using $WADDLE token
+        // Check balance eligibility using $CP token
         const cpw3TokenAddress = process.env.CPW3_TOKEN_ADDRESS || '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump';
         const balanceCheck = await solanaPaymentService.checkMinimumBalance(
             walletAddress, 
@@ -211,7 +211,7 @@ class IglooService {
             return { 
                 canRent: false, 
                 error: 'INSUFFICIENT_BALANCE',
-                message: `Minimum balance of ${this.minimumBalance} $WADDLE required (7 days rent)`,
+                message: `Minimum balance of ${this.minimumBalance} $CP required (7 days rent)`,
                 required: this.minimumBalance,
                 current: balanceCheck.balance
             };
@@ -268,7 +268,7 @@ class IglooService {
         console.log(`   Timestamp:    ${new Date().toISOString()}`);
         console.log(`   Igloo:        ${iglooId}`);
         console.log(`   New Owner:    ${username} (${walletAddress.slice(0, 8)}...)`);
-        console.log(`   Rent Paid:    ${this.dailyRent} $WADDLE`);
+        console.log(`   Rent Paid:    ${this.dailyRent} $CP`);
         console.log(`   TX Signature: ${settlement.transactionHash.slice(0, 16)}...`);
         console.log(`   Solscan:      https://solscan.io/tx/${settlement.transactionHash}`);
         console.log(`═══════════════════════════════════════════════════════════`);
