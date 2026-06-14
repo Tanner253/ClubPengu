@@ -292,6 +292,7 @@ class Casino extends BaseBuilding {
                     baseRadius: 1.8
                 });
                 this.exteriorProps.push(diceTower);
+                if (diceTower.group) diceTower.group.userData.skipGeometryMerge = true;
             });
         } else {
             // Mobile: Single smaller dice tower
@@ -302,6 +303,7 @@ class Casino extends BaseBuilding {
                 baseRadius: 1.5
             });
             this.exteriorProps.push(diceTower);
+            if (diceTower.group) diceTower.group.userData.skipGeometryMerge = true;
         }
         
         // ==================== NEON CARD SUITS ====================
@@ -435,6 +437,7 @@ class Casino extends BaseBuilding {
         this.rouletteWheelProp = rouletteWheel;
         if (rouletteWheel.group) {
             this.rouletteWheel = rouletteWheel.group;
+            rouletteWheel.group.userData.skipGeometryMerge = true;
         }
 
         // ==================== FLOATING "CASINO" TEXT (Vegas Style - In front of wheel) ====================
@@ -509,6 +512,9 @@ class Casino extends BaseBuilding {
             frameColor: 0xFFD700
         });
         this.slotMachineDisplay = slotDisplay;
+        if (slotDisplay.group) {
+            slotDisplay.group.userData.skipGeometryMerge = true;
+        }
 
         // ==================== NEON OUTLINE (ABOVE ENTRANCE) ====================
         const neonMat = this.getMaterial(neonPink, {
@@ -1296,6 +1302,36 @@ class Casino extends BaseBuilding {
     }
     
     /**
+     * Meshes inside animated props (dice towers, slot reels, roulette) must not be
+     * merged — baking them into static geometry freezes all exterior animation.
+     * @private
+     */
+    _isProtectedAnimatedMesh(obj) {
+        if (!obj?.isMesh) return false;
+
+        if (obj.userData.isWoofer || obj.userData.isLED || obj.userData.isNeonStrip ||
+            obj.userData.bulbMat || obj.userData.bulbIndex !== undefined ||
+            obj.userData.cornerGem !== undefined) {
+            return true;
+        }
+
+        let node = obj;
+        while (node) {
+            if (node.userData?.skipGeometryMerge) return true;
+
+            const name = (node.name || '').toLowerCase();
+            if (name.includes('bulb') || name.includes('neon') || name.includes('roulette') ||
+                name.includes('slot') || name.includes('dice') || name.includes('reel') ||
+                name.includes('speaker') || name.includes('woofer') || name.includes('wheel') ||
+                name.includes('golden_dice') || name.includes('pbr_slot')) {
+                return true;
+            }
+            node = node.parent;
+        }
+        return false;
+    }
+
+    /**
      * Optimize static meshes by merging geometries that share the same material
      * This dramatically reduces draw calls while preserving visual appearance
      * @private
@@ -1310,15 +1346,8 @@ class Casino extends BaseBuilding {
         
         // First pass: identify special meshes that need to stay separate
         group.traverse(obj => {
-            if (obj.isMesh) {
-                // Skip animated elements
-                if (obj.userData.isWoofer || obj.userData.isLED || obj.userData.isNeonStrip ||
-                    obj.userData.bulbMat || obj.userData.bulbIndex !== undefined ||
-                    obj.name?.includes('bulb') || obj.name?.includes('neon') ||
-                    obj.parent?.name?.includes('roulette') || obj.parent?.name?.includes('slot') ||
-                    obj.parent?.name?.includes('dice') || obj.parent?.name?.includes('speaker')) {
-                    specialMeshes.add(obj);
-                }
+            if (this._isProtectedAnimatedMesh(obj)) {
+                specialMeshes.add(obj);
             }
         });
         
@@ -1681,24 +1710,30 @@ class Casino extends BaseBuilding {
      * @param {number} delta - Time since last frame
      */
     update(time, delta) {
+        // Exterior landmarks — always animate (dice, neon suits, roulette, slot reels)
+        if (this.exteriorProps?.length) {
+            this.exteriorProps.forEach(prop => {
+                if (prop.update) prop.update(time, delta);
+            });
+        }
+        if (this.rouletteWheelProp?.update) {
+            this.rouletteWheelProp.update(time, delta);
+        }
+        if (this.slotMachineDisplay?.update) {
+            this.slotMachineDisplay.update(time, delta);
+        }
+
         // ==================== APPLE/MOBILE THROTTLING ====================
-        // Skip every other frame on mobile for major performance gains
+        // Skip every other frame on mobile for heavy interior/marquee work
         if (this.needsOptimization) {
             this._frameCount = (this._frameCount || 0) + 1;
             if (this._frameCount % 2 === 0) {
-                // Only update essential animations on even frames
-                if (this.rouletteWheelProp && this.rouletteWheelProp.update) {
-                    this.rouletteWheelProp.update(time, delta * 2);
-                }
-                if (this.slotMachineDisplay && this.slotMachineDisplay.update) {
-                    this.slotMachineDisplay.update(time, delta * 2);
-                }
                 if (this.lobbyDecorProps) {
                     this.lobbyDecorProps.forEach(prop => {
                         if (prop.update) prop.update(time, delta * 2);
                     });
                 }
-                return; // Skip all other animations
+                return;
             }
         }
         
@@ -1731,14 +1766,10 @@ class Casino extends BaseBuilding {
         }
         
         // ==================== ROULETTE WHEEL ====================
-        if (this.rouletteWheelProp && this.rouletteWheelProp.update) {
-            this.rouletteWheelProp.update(time, delta);
-        }
-        
+        // Updated at top of update() with dice towers and slot reels
+
         // ==================== SLOT MACHINE ====================
-        if (this.slotMachineDisplay && this.slotMachineDisplay.update) {
-            this.slotMachineDisplay.update(time, delta);
-        }
+        // Updated at top of update() with dice towers and slot reels
 
         // ==================== LOBBY DECOR (slot machines) ====================
         if (this.lobbyDecorProps) {
@@ -1753,21 +1784,6 @@ class Casino extends BaseBuilding {
             const bobSpeed = this.needsOptimization ? 1 : 1.5;
             const bobAmount = this.needsOptimization ? 0.15 : 0.3;
             this.floatingText.position.y = baseY + Math.sin(time * bobSpeed) * bobAmount;
-        }
-        
-        // ==================== EXTERIOR PROPS ====================
-        // Skip on mobile - already reduced in build()
-        if (this.exteriorProps && this.exteriorProps.length > 0 && !this.needsOptimization) {
-            this.exteriorProps.forEach(prop => {
-                if (prop.update) {
-                    prop.update(time, delta);
-                }
-            });
-        } else if (this.exteriorProps && this.needsOptimization) {
-            // Mobile: Only update first prop (reduced set)
-            if (this.exteriorProps[0] && this.exteriorProps[0].update) {
-                this.exteriorProps[0].update(time, delta);
-            }
         }
         
         // ==================== COIN STACKS ====================

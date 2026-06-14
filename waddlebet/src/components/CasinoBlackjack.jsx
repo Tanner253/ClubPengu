@@ -840,7 +840,9 @@ class BlackjackGame {
 }
 
 // --- MAIN COMPONENT ---
-const CasinoBlackjack = ({ tableId, onLeave }) => {
+const DEMO_BANKROLL = 1000;
+
+const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
     const { send, userData, updateUserCoins, isAuthenticated } = useMultiplayer();
     const containerRef = useRef(null);
     const engineRef = useRef(null);
@@ -859,7 +861,7 @@ const CasinoBlackjack = ({ tableId, onLeave }) => {
     const [isPortrait, setIsPortrait] = useState(false);
     
     // Use ref to track balance to avoid stale closure issues
-    const balanceRef = useRef(userData?.coins ?? GameManager.getInstance().getCoins() ?? 0);
+    const balanceRef = useRef(isDemo ? DEMO_BANKROLL : (userData?.coins ?? GameManager.getInstance().getCoins() ?? 0));
     const [displayBalance, setDisplayBalance] = useState(balanceRef.current);
     
     const CHIP_VALUES = [10, 50, 100, 500, 1000];
@@ -868,34 +870,35 @@ const CasinoBlackjack = ({ tableId, onLeave }) => {
     
     // Update balance helper that updates both ref and display state
     const updateBalance = useCallback((newBalance) => {
-        console.log('🎰 Blackjack updating balance to:', newBalance);
         balanceRef.current = newBalance;
         setDisplayBalance(newBalance);
-        GameManager.getInstance().setCoinsFromServer(newBalance);
-    }, []);
+        if (!isDemo) {
+            GameManager.getInstance().setCoinsFromServer(newBalance);
+        }
+    }, [isDemo]);
     
-    // Sync from server/userData when it changes
+    // Sync from server/userData when it changes (authenticated play only)
     useEffect(() => {
+        if (isDemo) return;
         const serverBalance = userData?.coins;
         if (serverBalance !== undefined && serverBalance !== balanceRef.current) {
-            console.log('🎰 Blackjack server sync:', serverBalance);
             balanceRef.current = serverBalance;
             setDisplayBalance(serverBalance);
         }
-    }, [userData?.coins]);
+    }, [userData?.coins, isDemo]);
     
-    // Poll for balance changes as fallback
+    // Poll for balance changes as fallback (authenticated play only)
     useEffect(() => {
+        if (isDemo) return;
         const interval = setInterval(() => {
             const gmBalance = GameManager.getInstance().getCoins();
             if (gmBalance !== balanceRef.current) {
-                console.log('🎰 Blackjack poll sync:', gmBalance);
                 balanceRef.current = gmBalance;
                 setDisplayBalance(gmBalance);
             }
         }, 300);
         return () => clearInterval(interval);
-    }, []);
+    }, [isDemo]);
     
     // Initialize engine
     useEffect(() => {
@@ -969,9 +972,10 @@ const CasinoBlackjack = ({ tableId, onLeave }) => {
         const newBalance = balanceRef.current - pendingBet;
         updateBalance(newBalance);
         
-        // Send to server for persistence
-        console.log('🎰 Sending blackjack_deduct_bet:', pendingBet);
-        send({ type: 'blackjack_deduct_bet', amount: pendingBet });
+        // Send to server for persistence (skip in guest demo mode)
+        if (!isDemo) {
+            send({ type: 'blackjack_deduct_bet', amount: pendingBet });
+        }
         
         gameRef.current.currentBet = pendingBet;
         setBet(pendingBet);
@@ -1005,7 +1009,7 @@ const CasinoBlackjack = ({ tableId, onLeave }) => {
         if (dealResult?.result) {
             finishGame(dealResult);
         }
-    }, [pendingBet, send, updateBalance]);
+    }, [pendingBet, send, updateBalance, isDemo]);
     
     const hit = useCallback(() => {
         if (!gameRef.current || phase !== 'playing') return;
@@ -1049,8 +1053,9 @@ const CasinoBlackjack = ({ tableId, onLeave }) => {
         const newBalance = balanceRef.current - bet;
         updateBalance(newBalance);
         
-        console.log('🎰 Double down - deducting:', bet);
-        send({ type: 'blackjack_deduct_bet', amount: bet });
+        if (!isDemo) {
+            send({ type: 'blackjack_deduct_bet', amount: bet });
+        }
         
         // Add chip for double
         const x = MathUtils.randFloat(-2, 2);
@@ -1072,7 +1077,7 @@ const CasinoBlackjack = ({ tableId, onLeave }) => {
             const standResult = await gameRef.current.stand();
             finishGame(standResult);
         }
-    }, [phase, bet, send, updateBalance]);
+    }, [phase, bet, send, updateBalance, isDemo]);
     
     const finishGame = useCallback((gameResult) => {
         setPhase('result');
@@ -1104,35 +1109,32 @@ const CasinoBlackjack = ({ tableId, onLeave }) => {
         const playerHandData = gameRef.current?.playerHand?.map(c => ({ suit: c.suit, value: c.value }));
         const dealerHandData = gameRef.current?.dealerHand?.map(c => ({ suit: c.suit, value: c.value }));
         
-        if (winAmount > 0) {
-            // Optimistically add winnings to balance immediately
-            const newBal = balanceRef.current + winAmount;
-            console.log('🎰 Blackjack WIN - updating balance:', balanceRef.current, '+', winAmount, '=', newBal);
-            updateBalance(newBal);
-            
-            // Send to server for persistence (includes hands/scores for spectator display)
-            console.log('🎰 Sending blackjack_payout:', winAmount, gameResult.result);
-            send({ 
-                type: 'blackjack_payout', 
-                amount: winAmount, 
-                result: gameResult.result,
-                playerScore: gameResult.playerScore,
-                dealerScore: gameResult.dealerScore,
-                playerHand: playerHandData,
-                dealerHand: dealerHandData
-            });
-        } else {
-            // Even on loss, send payout (amount: 0) so spectators see the result
-            console.log('🎰 Blackjack LOSS - sending result for spectators, bet was:', bet);
-            send({ 
-                type: 'blackjack_payout', 
-                amount: 0, 
-                result: gameResult.result,
-                playerScore: gameResult.playerScore,
-                dealerScore: gameResult.dealerScore,
-                playerHand: playerHandData,
-                dealerHand: dealerHandData
-            });
+        if (!isDemo) {
+            if (winAmount > 0) {
+                const newBal = balanceRef.current + winAmount;
+                updateBalance(newBal);
+                send({ 
+                    type: 'blackjack_payout', 
+                    amount: winAmount, 
+                    result: gameResult.result,
+                    playerScore: gameResult.playerScore,
+                    dealerScore: gameResult.dealerScore,
+                    playerHand: playerHandData,
+                    dealerHand: dealerHandData
+                });
+            } else {
+                send({ 
+                    type: 'blackjack_payout', 
+                    amount: 0, 
+                    result: gameResult.result,
+                    playerScore: gameResult.playerScore,
+                    dealerScore: gameResult.dealerScore,
+                    playerHand: playerHandData,
+                    dealerHand: dealerHandData
+                });
+            }
+        } else if (winAmount > 0) {
+            updateBalance(balanceRef.current + winAmount);
         }
         
         // Auto-loop back to betting phase after showing result briefly
@@ -1145,8 +1147,11 @@ const CasinoBlackjack = ({ tableId, onLeave }) => {
             setResult(null);
             setPayout(0);
             engineRef.current?.clearCards();
-        }, 2500); // Show result for 2.5 seconds then auto-reset
-    }, [bet, send, updateBalance]);
+            if (isDemo && balanceRef.current < MIN_BET) {
+                updateBalance(DEMO_BANKROLL);
+            }
+        }, 2500);
+    }, [bet, send, updateBalance, isDemo]);
     
     const newGame = useCallback(() => {
         gameRef.current?.reset();
@@ -1193,8 +1198,17 @@ const CasinoBlackjack = ({ tableId, onLeave }) => {
                                 boxShadow: '0 10px 30px rgba(0,0,0,0.5)'
                             }}
                         >
-                            <div className={`text-[#aaa] uppercase tracking-wider ${isPortrait ? 'text-[10px]' : 'text-xs'}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>Bankroll</div>
-                            <div className={`text-[#ffd700] font-black ${isPortrait ? 'text-lg' : 'text-2xl'}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>${displayBalance.toLocaleString()}</div>
+                            <div className={`text-[#aaa] uppercase tracking-wider ${isPortrait ? 'text-[10px]' : 'text-xs'}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                {isDemo ? 'Demo Chips' : 'Bankroll'}
+                            </div>
+                            <div className={`font-black ${isPortrait ? 'text-lg' : 'text-2xl'} ${isDemo ? 'text-green-400' : 'text-[#ffd700]'}`} style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                ${displayBalance.toLocaleString()}
+                            </div>
+                            {isDemo && (
+                                <div className="text-[10px] text-yellow-400/80 mt-0.5" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+                                    Fun play — sign in for real gold
+                                </div>
+                            )}
                         </div>
                         <button
                             onClick={onLeave}

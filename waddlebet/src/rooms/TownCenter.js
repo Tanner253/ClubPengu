@@ -1395,6 +1395,7 @@ class TownCenter {
                     
                     // Store park instance for animation
                     this.parkInstance = parkMesh.userData.parkInstance;
+                    this.parkWorldPos = { x: prop.x, z: prop.z };
                     
                     // Add collision for fountain (center)
                     if (prop.withFountain !== false) {
@@ -2692,7 +2693,9 @@ class TownCenter {
                 // Street light strings (Christmas lights between lamp posts)
                 if (mesh.name === 'light_string' && mesh.userData.streetLightBulbs) {
                     this._animatedCache.streetLightStrings.push({
-                        bulbs: mesh.userData.streetLightBulbs
+                        bulbs: mesh.userData.streetLightBulbs,
+                        worldX: mesh.position.x,
+                        worldZ: mesh.position.z
                     });
                 }
             });
@@ -2710,34 +2713,29 @@ class TownCenter {
         const px = playerPos?.x || 0;
         const pz = playerPos?.z || 0;
         
-        // Nightclub animations - distance culled like other props for performance
-        this._animatedCache.nightclubs.forEach(mesh => {
-            if (mesh.userData.nightclubUpdate) {
-                // Distance check for nightclub
+        // Casino exterior animations — every frame when player is nearby
+        this._animatedCache.casinos.forEach(mesh => {
+            if (mesh.userData.update) {
                 const dx = px - mesh.position.x;
                 const dz = pz - mesh.position.z;
                 if (dx * dx + dz * dz < ANIMATION_DISTANCE_SQ) {
-                    mesh.userData.nightclubUpdate(time);
+                    mesh.userData.update(time, delta);
                 }
             }
         });
         
-        // Casino exterior animations - every 2nd frame with distance check
+        // Nightclub + SKNY igloos — every 2nd frame
         if (frame % 2 === 0) {
-            
-            // Casino exterior animations - Vegas marquee, slot machines, searchlights, etc.
-            this._animatedCache.casinos.forEach(mesh => {
-                if (mesh.userData.update) {
-                    // Distance check for casino
+            this._animatedCache.nightclubs.forEach(mesh => {
+                if (mesh.userData.nightclubUpdate) {
                     const dx = px - mesh.position.x;
                     const dz = pz - mesh.position.z;
                     if (dx * dx + dz * dz < ANIMATION_DISTANCE_SQ) {
-                        mesh.userData.update(time, delta);
+                        mesh.userData.nightclubUpdate(time);
                     }
                 }
             });
-            
-            // SKNY Igloo animations - same timing as nightclubs, distance culled like them too
+
             this._animatedCache.sknyIgloos.forEach(sknyProp => {
                 if (sknyProp.update) {
                     const spos = sknyProp.group?.position || sknyProp.mesh?.position;
@@ -2782,9 +2780,13 @@ class TownCenter {
             });
         }
         
-        // Garden park animations (butterflies, fountain) every 2nd frame
-        if (frame % 2 === 0 && this.parkInstance) {
-            this.parkInstance.animate(delta);
+        // Garden park animations (butterflies, fountain) every 2nd frame, distance culled
+        if (frame % 2 === 0 && this.parkInstance && this.parkWorldPos) {
+            const pdx = px - this.parkWorldPos.x;
+            const pdz = pz - this.parkWorldPos.z;
+            if (pdx * pdx + pdz * pdz < ANIMATION_DISTANCE_SQ) {
+                this.parkInstance.animate(delta);
+            }
         }
         
         // Game room portal — pulsing floor ring + sign bob (only when visible/nearby)
@@ -2835,9 +2837,14 @@ class TownCenter {
             });
         }
         
-        // Street light strings - twinkle animation for Christmas ambiance
+        // Street light strings - twinkle animation for Christmas ambiance (distance culled)
+        const STREET_LIGHT_DIST_SQ = 70 * 70;
         if (frame % 3 === 0 && this._animatedCache.streetLightStrings.length > 0) {
-            this._animatedCache.streetLightStrings.forEach(({ bulbs }) => {
+            this._animatedCache.streetLightStrings.forEach(({ bulbs, worldX, worldZ }) => {
+                const sdx = px - (worldX ?? px);
+                const sdz = pz - (worldZ ?? pz);
+                if (sdx * sdx + sdz * sdz > STREET_LIGHT_DIST_SQ) return;
+
                 bulbs.forEach(bulb => {
                     const idx = bulb.userData.lightIndex;
                     const phase = bulb.userData.twinklePhase;

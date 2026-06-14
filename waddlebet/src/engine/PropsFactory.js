@@ -2287,7 +2287,18 @@ class PropsFactory {
         
         // ==================== UPDATE FUNCTION ====================
         // EPIC Animation update function (ORIGINAL from commit 1a99d74)
+        let animTick = 0;
+        const stageLightMeshes = [];
+        const starBurstMeshes = [];
+        const groundLensMeshes = [];
+        group.traverse(child => {
+            if (child.userData.isStageLight) stageLightMeshes.push(child);
+            if (child.userData.isStarBurst) starBurstMeshes.push(child);
+            if (child.userData.isGroundLens) groundLensMeshes.push(child);
+        });
+
         const update = (time) => {
+            animTick++;
             // Animate speaker woofers - bass "bounce" (MORE INTENSE)
             const bassIntensity = Math.sin(time * 15) * 0.5 + 0.5;
             const bassOffset = bassIntensity * 0.25; // Bigger bounce!
@@ -2333,8 +2344,8 @@ class PropsFactory {
             });
             
             
-            // Smoke particles
-            if (smoke && smoke.geometry) {
+            // Smoke particles — buffer upload every other tick
+            if (animTick % 2 === 0 && smoke && smoke.geometry) {
                 const positions = smoke.geometry.attributes.position.array;
                 const velocities = smoke.userData.velocities;
                 
@@ -2374,37 +2385,34 @@ class PropsFactory {
                 light.intensity = 2 + bassIntensity * 3 + Math.sin(phase) * 0.5;
             });
             
-            // Sign animation (color cycling + dramatic wave movement)
-            group.traverse(child => {
-                if (child.userData.isNightclubSign && child.userData.drawSign) {
-                    // Color cycling animation (faster hue shift for more energy)
-                    const hueOffset = (time * 45) % 360; // Full cycle every 8 seconds
-                    child.userData.drawSign(hueOffset);
-                    child.userData.signTexture.needsUpdate = true;
-                    
-                    // Dramatic wave movement (more intense bob + sway)
-                    const baseY = child.userData.baseY || (h + 3.5);
-                    const baseScale = child.userData.baseScale || 28;
-                    child.position.y = baseY + Math.sin(time * 2.5) * 0.35 + Math.sin(time * 5) * 0.1;
-                    child.position.x = Math.sin(time * 1.8) * 0.25;
-                    
-                    // More dramatic pulse with bass-like beat
-                    const pulse = 1 + Math.sin(time * 6) * 0.04 + Math.abs(Math.sin(time * 12)) * 0.02;
-                    child.scale.set(baseScale * pulse, 7 * pulse, 1);
+            // Sign animation — throttle canvas redraw (expensive GPU upload)
+            if (signSprite) {
+                if (animTick % 8 === 0) {
+                    const hueOffset = (time * 45) % 360;
+                    signSprite.userData.drawSign(hueOffset);
+                    signSprite.userData.signTexture.needsUpdate = true;
                 }
-                if (child.userData.isStageLight) {
-                    const lightPhase = time * 5 + child.userData.lightIndex * 0.8;
-                    child.material.emissiveIntensity = 0.5 + Math.sin(lightPhase) * 0.5;
-                }
-                if (child.userData.isStarBurst) {
-                    // Twinkle stars
-                    const twinkle = Math.sin(time * 8 + child.userData.starIndex * 0.8);
-                    child.material.emissiveIntensity = 0.5 + twinkle * 0.5;
-                    child.scale.setScalar(0.8 + twinkle * 0.3);
-                }
-                if (child.userData.isGroundLens) {
-                    child.material.emissiveIntensity = 0.5 + bassIntensity * 0.8;
-                }
+
+                const baseY = signSprite.userData.baseY || (h + 3.5);
+                const baseScale = signSprite.userData.baseScale || 28;
+                signSprite.position.y = baseY + Math.sin(time * 2.5) * 0.35 + Math.sin(time * 5) * 0.1;
+                signSprite.position.x = Math.sin(time * 1.8) * 0.25;
+
+                const pulse = 1 + Math.sin(time * 6) * 0.04 + Math.abs(Math.sin(time * 12)) * 0.02;
+                signSprite.scale.set(baseScale * pulse, 7 * pulse, 1);
+            }
+
+            stageLightMeshes.forEach(child => {
+                const lightPhase = time * 5 + child.userData.lightIndex * 0.8;
+                child.material.emissiveIntensity = 0.5 + Math.sin(lightPhase) * 0.5;
+            });
+            starBurstMeshes.forEach(child => {
+                const twinkle = Math.sin(time * 8 + child.userData.starIndex * 0.8);
+                child.material.emissiveIntensity = 0.5 + twinkle * 0.5;
+                child.scale.setScalar(0.8 + twinkle * 0.3);
+            });
+            groundLensMeshes.forEach(child => {
+                child.material.emissiveIntensity = 0.5 + bassIntensity * 0.8;
             });
         };
         

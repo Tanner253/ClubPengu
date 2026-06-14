@@ -1582,8 +1582,12 @@ export function MultiplayerProvider({ children }) {
         send({ type: 'stop_emote' });
     }, [send]);
     
-    const changeRoom = useCallback((newRoom) => {
-        send({ type: 'change_room', room: newRoom });
+    const changeRoom = useCallback((newRoom, position = null) => {
+        const payload = { type: 'change_room', room: newRoom };
+        if (position?.x != null && position?.z != null) {
+            payload.position = position;
+        }
+        send(payload);
     }, [send]);
     
     const updateAppearance = useCallback((appearance) => {

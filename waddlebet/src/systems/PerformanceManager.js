@@ -456,6 +456,43 @@ class PerformanceManager {
     }
     
     /**
+     * WebGL context options for initial renderer creation.
+     * Antialias and precision are fixed at construction time — live preset changes only
+     * tune DPR and shadows via applyRendererTuning(). Using lightweight bootstrap options
+     * on refresh matches the fast Potato→Ultra path users get mid-session.
+     */
+    getBootstrapRendererOptions(isAppleDevice = false, isAndroidDevice = false) {
+        const isMobile = isAppleDevice || isAndroidDevice;
+
+        if (isMobile) {
+            return {
+                antialias: false,
+                powerPreference: 'high-performance',
+                depth: true,
+                precision: 'mediump',
+                stencil: false,
+            };
+        }
+
+        const privacyOptimized = this._needsPrivacyBrowserOpts();
+        return {
+            antialias: false,
+            powerPreference: privacyOptimized ? 'low-power' : 'high-performance',
+            depth: true,
+            precision: 'mediump',
+            stencil: false,
+        };
+    }
+
+    /**
+     * Full-scene shader compile + texture pre-upload at Ultra/High init is heavier than
+     * the live preset path and causes sustained stutter after refresh.
+     */
+    shouldSkipSceneWarmup() {
+        return this.currentPreset === 'ultra' || this.currentPreset === 'high';
+    }
+
+    /**
      * Get renderer options based on current settings
      * @param {boolean} isAppleDevice - True if Apple device
      * @param {boolean} isAndroidDevice - True if Android device

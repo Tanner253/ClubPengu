@@ -52,6 +52,64 @@ import { displayTokenSymbol } from './utils/tokenDisplay.js';
 
 const PORT = process.env.PORT || 3001;
 const MAX_CONNECTIONS_PER_IP = 2;
+const LOCATION_PERSIST_INTERVAL_MS = 15000;
+
+function getDefaultSpawnForRoom(roomId) {
+    if (roomId === WORLD_SPAWN_ROOM) {
+        return { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
+    }
+    if (roomId === 'town') {
+        return { x: 110, y: 0, z: 110 };
+    }
+    if (roomId === 'dojo') {
+        return { x: 0, y: 0, z: 14 };
+    }
+    if (roomId === 'pizza') {
+        return { x: 0, y: 0, z: 12 };
+    }
+    if (roomId === 'casino_game_room') {
+        return { x: 10, y: 0, z: 10 };
+    }
+    if (roomId?.startsWith('igloo')) {
+        return { x: 0, y: 0, z: 10 };
+    }
+    return { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
+}
+
+async function persistPlayerLocation(walletAddress, room, position) {
+    if (!walletAddress || !room || !position) return;
+    if (position.x == null || position.z == null) return;
+    try {
+        await User.updateOne(
+            { walletAddress },
+            {
+                lastRoom: room,
+                lastPosition: {
+                    x: position.x,
+                    y: position.y ?? 0,
+                    z: position.z
+                }
+            }
+        );
+    } catch (error) {
+        console.error('Failed to persist player location:', error);
+    }
+}
+
+async function getSavedSpawnForUser(user, roomId) {
+    if (
+        user?.lastRoom === roomId &&
+        user.lastPosition?.x != null &&
+        user.lastPosition?.z != null
+    ) {
+        return {
+            x: user.lastPosition.x,
+            y: user.lastPosition.y ?? 0,
+            z: user.lastPosition.z
+        };
+    }
+    return getDefaultSpawnForRoom(roomId);
+}
 const HEARTBEAT_INTERVAL = 45000;  // 45s - slightly longer to accommodate wallet popups
 const IS_DEV = process.env.NODE_ENV !== 'production';
 
@@ -1366,6 +1424,11 @@ wss.on('connection', (ws, req) => {
                 }
             }
             
+            // Save last room/position before clearing connection state
+            if (player.walletAddress && player.room && player.position) {
+                await persistPlayerLocation(player.walletAddress, player.room, player.position);
+            }
+            
             // Update user connection state in DB
             if (player.walletAddress) {
                 await authService.logout(player.walletAddress, player.authToken);
@@ -1804,6 +1867,9 @@ async function handleMessage(playerId, message) {
         }
         
         case 'auth_logout': {
+            if (player.walletAddress && player.room && player.position) {
+                await persistPlayerLocation(player.walletAddress, player.room, player.position);
+            }
             if (player.walletAddress) {
                 await authService.logout(player.walletAddress, player.authToken);
             }
@@ -1946,14 +2012,14 @@ async function handleMessage(playerId, message) {
             const roomId = message.room || WORLD_SPAWN_ROOM;
             joinRoom(playerId, roomId);
             
-            // Set spawn position
-            if (roomId === WORLD_SPAWN_ROOM) {
-                player.position = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
-            } else if (roomId === 'town') {
-                player.position = { x: 110, y: 0, z: 110 };
-            } else if (roomId === 'dojo') {
-                player.position = { x: 0, y: 0, z: 14 };
+            let spawnPos = getDefaultSpawnForRoom(roomId);
+            if (player.walletAddress) {
+                const user = await userService.getUser(player.walletAddress);
+                if (user) {
+                    spawnPos = await getSavedSpawnForUser(user, roomId);
+                }
             }
+            player.position = { ...spawnPos };
             
             if (player.puffle) {
                 player.pufflePosition = {
@@ -2308,6 +2374,14 @@ async function handleMessage(playerId, message) {
                     moveMessage.trailPoints = message.trailPoints;
                 }
                 broadcastToRoom(player.room, moveMessage, playerId);
+            }
+
+            if (player.walletAddress && player.room && posChanged) {
+                const now = Date.now();
+                if (!player._lastLocationPersist || now - player._lastLocationPersist >= LOCATION_PERSIST_INTERVAL_MS) {
+                    player._lastLocationPersist = now;
+                    persistPlayerLocation(player.walletAddress, player.room, player.position);
+                }
             }
             break;
         }
@@ -2690,12 +2764,18 @@ async function handleMessage(playerId, message) {
             if (newRoom && newRoom !== oldRoom) {
                 joinRoom(playerId, newRoom);
                 
-                if (newRoom === WORLD_SPAWN_ROOM) {
-                    player.position = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
-                } else if (newRoom === 'town') {
-                    player.position = { x: 110, y: 0, z: 110 };
-                } else if (newRoom === 'dojo') {
-                    player.position = { x: 0, y: 0, z: 14 };
+                if (message.position?.x != null && message.position?.z != null) {
+                    player.position = {
+                        x: message.position.x,
+                        y: message.position.y ?? 0,
+                        z: message.position.z
+                    };
+                } else {
+                    player.position = { ...getDefaultSpawnForRoom(newRoom) };
+                }
+
+                if (player.walletAddress) {
+                    persistPlayerLocation(player.walletAddress, newRoom, player.position);
                 }
                 
                 const existingPlayers = getPlayersInRoom(newRoom, playerId);
@@ -5236,10 +5316,12 @@ async function handleMessage(playerId, message) {
         
         case 'blackjack_deduct_bet': {
             // Simple PvE blackjack - just deduct coins (activity starts on first update with cards)
-            const { amount } = message;
+            const { amount, isDemo } = message;
             
-            if (!player.isAuthenticated || !player.walletAddress) {
-                sendToPlayer(playerId, { type: 'blackjack_error', error: 'Must be authenticated' });
+            if (isDemo || !player.isAuthenticated || !player.walletAddress) {
+                if (!isDemo && (!player.isAuthenticated || !player.walletAddress)) {
+                    sendToPlayer(playerId, { type: 'blackjack_error', error: 'Must be authenticated' });
+                }
                 break;
             }
             
@@ -5297,7 +5379,12 @@ async function handleMessage(playerId, message) {
         
         case 'blackjack_payout': {
             // Simple PvE blackjack payout - add coins and end PvE activity
-            const { amount, result, playerScore, dealerScore, playerHand, dealerHand } = message;
+            const { amount, result, playerScore, dealerScore, playerHand, dealerHand, isDemo } = message;
+            
+            if (isDemo) {
+                endPveActivity(playerId);
+                break;
+            }
             
             if (!player.isAuthenticated || !player.walletAddress) {
                 sendToPlayer(playerId, {

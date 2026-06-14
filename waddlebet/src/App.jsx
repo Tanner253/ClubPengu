@@ -11,6 +11,7 @@ import P2PUno from './minigames/P2PUno';
 import P2PBlackjack from './minigames/P2PBlackjack';
 import P2PBattleship from './minigames/P2PBattleship';
 import GameManager from './engine/GameManager';
+import { getResumeRoom } from './utils/playerSession';
 import { MultiplayerProvider, useMultiplayer } from './multiplayer';
 import { ChallengeProvider, useChallenge } from './challenge';
 import { IglooProvider, useIgloo } from './igloo';
@@ -203,6 +204,7 @@ const AppContent = () => {
     
     // Custom spawn position (when exiting dojo/igloo to town)
     const [spawnPosition, setSpawnPosition] = useState(null);
+    const sessionResumeRef = useRef(false);
     
     // Tip notification state
     const [incomingTip, setIncomingTip] = useState(null);
@@ -245,10 +247,13 @@ const AppContent = () => {
     // Turnstile token for bot protection
     const [turnstileToken, setTurnstileToken] = useState(null);
     
-    // Full-screen loading between designer and world (min duration + world ready)
+    // Full-screen loading between designer/world and between room transitions
     const [entryLoading, setEntryLoading] = useState(false);
     const entryLoadStartedAt = useRef(0);
     const entryDismissTimer = useRef(null);
+    const pendingInitialEntryRef = useRef(false);
+    const LOAD_READY_BUFFER_MS = 1000;
+    const ENTRY_MIN_LOAD_MS = 3000;
     
     const dismissEntryLoading = useCallback(() => {
         if (entryDismissTimer.current) {
@@ -258,9 +263,13 @@ const AppContent = () => {
         setEntryLoading(false);
     }, []);
     
-    const scheduleDismissEntryLoading = useCallback(() => {
+    const scheduleDismissEntryLoading = useCallback((options = {}) => {
+        const { isInitialEntry = false } = options;
         const elapsed = Date.now() - entryLoadStartedAt.current;
-        const wait = Math.max(0, 3000 - elapsed);
+        let wait = LOAD_READY_BUFFER_MS;
+        if (isInitialEntry) {
+            wait += Math.max(0, ENTRY_MIN_LOAD_MS - elapsed);
+        }
         if (entryDismissTimer.current) clearTimeout(entryDismissTimer.current);
         entryDismissTimer.current = setTimeout(dismissEntryLoading, wait);
     }, [dismissEntryLoading]);
@@ -271,13 +280,18 @@ const AppContent = () => {
             setTurnstileToken(token);
         }
         entryLoadStartedAt.current = Date.now();
+        pendingInitialEntryRef.current = true;
         setEntryLoading(true);
-        GameManager.getInstance().setRoom('nightclub');
-        setCurrentRoom('nightclub');
+        sessionResumeRef.current = true;
+        const resumeRoom = getResumeRoom(isAuthenticated, userData);
+        GameManager.getInstance().setRoom(resumeRoom);
+        setSpawnPosition(null);
+        setCurrentRoom(resumeRoom);
     };
     
     const handleWorldReady = useCallback(() => {
-        scheduleDismissEntryLoading();
+        scheduleDismissEntryLoading({ isInitialEntry: pendingInitialEntryRef.current });
+        pendingInitialEntryRef.current = false;
     }, [scheduleDismissEntryLoading]);
     
     // If world never signals ready, do not block forever
@@ -312,10 +326,16 @@ const AppContent = () => {
     // Change room/layer (town -> dojo, dojo -> town, etc.)
     // Memoized to prevent useEffect re-runs in VoxelWorld igloo tracking
     const handleChangeRoom = useCallback((newRoom, exitSpawnPos = null) => {
+        if (currentRoom !== null && newRoom !== currentRoom) {
+            entryLoadStartedAt.current = Date.now();
+            pendingInitialEntryRef.current = false;
+            setEntryLoading(true);
+        }
+        sessionResumeRef.current = false;
         GameManager.getInstance().setRoom(newRoom);
-        setSpawnPosition(exitSpawnPos); // Will be used by VoxelWorld for spawn location
+        setSpawnPosition(exitSpawnPos);
         setCurrentRoom(newRoom);
-    }, []);
+    }, [currentRoom]);
     
     // Start a minigame (overlays the current room)
     const handleStartMinigame = (gameId) => {
@@ -389,6 +409,7 @@ const AppContent = () => {
                         playerPuffle={playerPuffle}
                         onPuffleChange={setPlayerPuffle}
                         customSpawnPos={spawnPosition}
+                        sessionResumeRef={sessionResumeRef}
                         onPlayerClick={handlePlayerClick}
                         turnstileToken={turnstileToken}
                         isInMatch={isInMatch}

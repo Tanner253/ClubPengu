@@ -64,6 +64,7 @@ import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners,
 import { readLiveWebGLInfo } from './utils/browserCapabilities.js';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
+import { savePlayerSession, getResumePosition } from './utils/playerSession';
 import CasinoBlackjack from './components/CasinoBlackjack';
 import BattleshipGame from './minigames/BattleshipGame';
 import FlappyPenguinGame from './minigames/FlappyPenguinGame';
@@ -83,6 +84,7 @@ const VoxelWorld = ({
     playerPuffle, 
     onPuffleChange,
     customSpawnPos,  // Custom spawn position (when returning from dojo/igloo)
+    sessionResumeRef = null, // One-shot: restore logout position on Enter World
     onPlayerClick,   // Callback when clicking another player (for challenge system)
     isInMatch = false, // True when player is in a P2P match (disable movement input)
     activeMatches = [], // Active matches in the room (for spectator banners)
@@ -131,11 +133,16 @@ const VoxelWorld = ({
     const penguinDataRef = useRef(null); // Ref for current penguin data
     const onWorldReadyRef = useRef(onWorldReady);
     const worldReadyFiredRef = useRef(false);
+
+    useEffect(() => {
+        worldReadyFiredRef.current = false;
+    }, [room]);
     useEffect(() => {
         onWorldReadyRef.current = onWorldReady;
     }, [onWorldReady]);
     
     const wasInCasinoRef = useRef(false); // Track if player was inside casino (for one-time zoom)
+    const nearTownFurnitureRef = useRef(null); // Cached furniture proximity (throttled scan)
     const casinoZoomTransitionRef = useRef({ active: false, targetDistance: 20, progress: 0 }); // Casino zoom state
     const slotMachineSystemRef = useRef(null); // Slot machine interaction system
     const goldLobbySlotSystemRef = useRef(null); // Town casino lobby gold slots
@@ -292,6 +299,13 @@ const VoxelWorld = ({
         send: mpSend
     } = useMultiplayer();
     
+    const userDataRef = useRef(userData);
+    const isAuthenticatedRef = useRef(isAuthenticated);
+    useEffect(() => {
+        userDataRef.current = userData;
+        isAuthenticatedRef.current = isAuthenticated;
+    }, [userData, isAuthenticated]);
+
     // Keep refs updated for use in event handlers (must be after useMultiplayer destructuring)
     useEffect(() => {
         mpUpdateAppearanceRef.current = mpUpdateAppearance;
@@ -686,22 +700,11 @@ const VoxelWorld = ({
         localStorage.setItem('game_settings', JSON.stringify(gameSettings));
     }, [gameSettings]);
     
-    // Save player position periodically and on unmount
+    // Save player position periodically and on unmount (all rooms)
     useEffect(() => {
         const savePosition = () => {
-            if (posRef.current && (roomRef.current === 'town' || roomRef.current === WORLD_SPAWN_ROOM)) {
-                try {
-                    const posData = {
-                        x: posRef.current.x,
-                        y: posRef.current.y,
-                        z: posRef.current.z,
-                        room: roomRef.current,
-                        savedAt: Date.now()
-                    };
-                    localStorage.setItem('player_position', JSON.stringify(posData));
-                } catch (e) {
-                    // Ignore position save errors
-                }
+            if (posRef.current && roomRef.current) {
+                savePlayerSession(roomRef.current, posRef.current);
             }
         };
         
@@ -857,14 +860,11 @@ const VoxelWorld = ({
         const isMobile = isAppleDevice || isAndroidDevice;
         const needsOptimization = isMobile; // Keep for backward compat
         
-        // Get renderer options from performance manager
-        const rendererOptions = performanceManager.getRendererOptions(isAppleDevice, isAndroidDevice);
+        // Bootstrap WebGL context (antialias off) — preset DPR/shadows applied below and on live changes
+        const rendererOptions = performanceManager.getBootstrapRendererOptions(isAppleDevice, isAndroidDevice);
         
         const renderer = new THREE.WebGLRenderer(rendererOptions);
-        
-        // DPR from performance manager (mobile always 1.0, PC based on preset)
-        const dpr = performanceManager.getDPR(isMobile);
-        renderer.setPixelRatio(dpr);
+        performanceManager.applyRendererTuning(renderer, THREE, null, isMobile);
         renderer.setSize(window.innerWidth, window.innerHeight);
         
         // Mobile: flat rendering (faster), fixes Metal rendering issues
@@ -879,17 +879,15 @@ const VoxelWorld = ({
                 console.log('🍎 iOS device detected - applied GPU optimizations: antialias=false, dpr=1.0, mediump precision');
             }
         } else {
-            const preset = performanceManager.getPreset();
             const settings = performanceManager.getSettings();
+            const dpr = performanceManager.getDPR(isMobile);
             const privacyNote = performanceManager._needsPrivacyBrowserOpts()
                 ? (window._isOperaBrowser ? ' [Opera optimizations]' : ' [Brave optimizations]')
                 : '';
-            console.log(`🎮 PC Performance: "${settings.name}" preset (DPR=${dpr}, antialias=${settings.antialias}, shadows=${settings.shadowType})${privacyNote}`);
+            console.log(`🎮 PC Performance: "${settings.name}" preset (DPR=${dpr}, bootstrap antialias=false, shadows=${settings.shadowType})${privacyNote}`);
         }
         
-        // Shadows from performance manager
         renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = performanceManager.getShadowMapType(THREE, isMobile);
         if (isMobile) {
             console.log('📱 Mobile: Using BasicShadowMap for better performance');
         }
@@ -997,7 +995,7 @@ const VoxelWorld = ({
             const groundWidth = CITY_SIZE * BUILDING_SCALE + GROUND_EXTEND; // Extend west only
             const groundDepth = CITY_SIZE * BUILDING_SCALE + GROUND_EXTEND * 2; // Extend north and south
             
-            const iceGeo = new THREE.PlaneGeometry(groundWidth, groundDepth, 32, 32);
+            const iceGeo = new THREE.PlaneGeometry(groundWidth, groundDepth, 16, 16);
             iceGeo.rotateX(-Math.PI / 2);
             
             // Add vertex color variation for organic look
@@ -2157,10 +2155,8 @@ const VoxelWorld = ({
             }
         } catch (e) { /* ignore */ }
         
-        // Spawn position: use custom spawn (from portal exit) or default room spawn
+        // Spawn position: portal exit, session resume, or room default
         if (customSpawnPos && room === 'town') {
-            // Exiting dojo/igloo: spawn at portal location in town
-            // customSpawnPos is an OFFSET from town center, so add center coordinates
             const townCenterX = CENTER_X;
             const townCenterZ = CENTER_Z;
             posRef.current = { 
@@ -2168,52 +2164,45 @@ const VoxelWorld = ({
                 y: 0, 
                 z: townCenterZ + customSpawnPos.z 
             };
-        } else if (room === 'town') {
-            // Town room: check localStorage for saved position FIRST
-            let loadedFromStorage = false;
-            try {
-                const savedPos = localStorage.getItem('player_position');
-                if (savedPos) {
-                    const parsed = JSON.parse(savedPos);
-                    if (parsed.room === 'town' && parsed.x !== undefined && parsed.z !== undefined) {
-                        posRef.current = { x: parsed.x, y: parsed.y || 0, z: parsed.z };
-                        loadedFromStorage = true;
-                        console.log('✅ Restored player position from localStorage:', parsed);
-                    }
-                }
-            } catch (e) {
-                // Ignore position load errors
-            }
-            
-            // If no saved position, use town center
-            if (!loadedFromStorage) {
+        } else if (sessionResumeRef?.current) {
+            const resumed = getResumePosition(
+                room,
+                isAuthenticatedRef.current,
+                userDataRef.current
+            );
+            if (resumed) {
+                posRef.current = resumed;
+                console.log(`✅ Restored session position in ${room}:`, resumed);
+            } else if (room === 'town') {
                 posRef.current = { x: CENTER_X, y: 0, z: CENTER_Z };
                 rotRef.current = 0;
-            }
-        } else if (room === WORLD_SPAWN_ROOM) {
-            let loadedFromStorage = false;
-            try {
-                const savedPos = localStorage.getItem('player_position');
-                if (savedPos) {
-                    const parsed = JSON.parse(savedPos);
-                    if (parsed.room === WORLD_SPAWN_ROOM && parsed.x !== undefined && parsed.z !== undefined) {
-                        posRef.current = { x: parsed.x, y: parsed.y || 0, z: parsed.z };
-                        loadedFromStorage = true;
-                    }
-                }
-            } catch (e) {
-                // Ignore position load errors
-            }
-
-            if (!loadedFromStorage) {
+            } else if (room === WORLD_SPAWN_ROOM) {
+                posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
+                rotRef.current = 0;
+            } else if (roomData?.spawnPos) {
+                posRef.current = {
+                    x: roomData.spawnPos.x,
+                    y: roomData.spawnPos.y ?? 0,
+                    z: roomData.spawnPos.z
+                };
+            } else {
                 posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
                 rotRef.current = 0;
             }
+            sessionResumeRef.current = false;
+        } else if (room === 'town') {
+            posRef.current = { x: CENTER_X, y: 0, z: CENTER_Z };
+            rotRef.current = 0;
+        } else if (room === WORLD_SPAWN_ROOM) {
+            posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
+            rotRef.current = 0;
         } else if (roomData && roomData.spawnPos) {
-            // Other rooms: use room's spawn position
-            posRef.current = { x: roomData.spawnPos.x, y: 0, z: roomData.spawnPos.z };
+            posRef.current = {
+                x: roomData.spawnPos.x,
+                y: roomData.spawnPos.y ?? 0,
+                z: roomData.spawnPos.z
+            };
         } else {
-            // Fallback spawn — nightclub interior (same as /spawn command)
             posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
             rotRef.current = 0;
         }
@@ -3842,82 +3831,61 @@ const VoxelWorld = ({
                 posRef.current.x = finalX;
                 posRef.current.z = finalZ;
                 
-                // Check town furniture proximity for interaction (roof couch, park benches)
-                // Also check casino furniture (stools, couch on 2nd floor)
-                // And Snow Forts / Forest furniture (benches, log seats)
-                let nearFurniture = null;
+                // Check town furniture proximity — throttled + distSq (no sqrt)
+                let nearFurniture = nearTownFurnitureRef.current;
                 const playerY = posRef.current.y;
-                
-                // Check which zone the player is in
-                const TOWN_EAST_EDGE = 220;
-                const SNOW_FORTS_SOUTH_EDGE = 220;
-                const inSnowFortsZone = finalX > TOWN_EAST_EDGE && finalZ < SNOW_FORTS_SOUTH_EDGE;
-                const inForestZone = finalX > TOWN_EAST_EDGE && finalZ >= SNOW_FORTS_SOUTH_EDGE;
-                
-                // Check Forest furniture if in that zone
-                if (inForestZone && forestTrailsZoneRef.current) {
-                    const forestFurniture = forestTrailsZoneRef.current.getFurniture();
-                    for (const furn of forestFurniture) {
-                        const dx = finalX - furn.position.x;
-                        const dz = finalZ - furn.position.z;
-                        const dist = Math.sqrt(dx * dx + dz * dz);
-                        const furnY = furn.platformHeight || 0;
-                        const yMatch = Math.abs(playerY - furnY) < 2;
-                        if (dist < furn.interactionRadius && yMatch) {
+
+                if (frameCount % 2 === 0) {
+                    nearFurniture = null;
+                    const TOWN_EAST_EDGE = 220;
+                    const SNOW_FORTS_SOUTH_EDGE = 220;
+                    const inSnowFortsZone = finalX > TOWN_EAST_EDGE && finalZ < SNOW_FORTS_SOUTH_EDGE;
+                    const inForestZone = finalX > TOWN_EAST_EDGE && finalZ >= SNOW_FORTS_SOUTH_EDGE;
+
+                    const checkFurnitureList = (list, yMatcher) => {
+                        for (const furn of list) {
+                            const dx = finalX - furn.position.x;
+                            const dz = finalZ - furn.position.z;
+                            const r = furn.interactionRadius;
+                            if (dx * dx + dz * dz >= r * r) continue;
+                            if (!yMatcher(furn)) continue;
                             nearFurniture = furn;
-                            break;
+                            return true;
                         }
+                        return false;
+                    };
+
+                    if (inForestZone && forestTrailsZoneRef.current) {
+                        checkFurnitureList(forestTrailsZoneRef.current.getFurniture(), (furn) => {
+                            const furnY = furn.platformHeight || 0;
+                            return Math.abs(playerY - furnY) < 2;
+                        });
                     }
-                }
-                
-                // Check Snow Forts furniture if in that zone
-                if (!nearFurniture && inSnowFortsZone && snowFortsZoneRef.current) {
-                    const snowFortsFurniture = snowFortsZoneRef.current.getFurniture();
-                    for (const furn of snowFortsFurniture) {
-                        const dx = finalX - furn.position.x;
-                        const dz = finalZ - furn.position.z;
-                        const dist = Math.sqrt(dx * dx + dz * dz);
-                        const furnY = furn.platformHeight || 0;
-                        const yMatch = Math.abs(playerY - furnY) < 2;
-                        if (dist < furn.interactionRadius && yMatch) {
-                            nearFurniture = furn;
-                            break;
-                        }
+
+                    if (!nearFurniture && inSnowFortsZone && snowFortsZoneRef.current) {
+                        checkFurnitureList(snowFortsZoneRef.current.getFurniture(), (furn) => {
+                            const furnY = furn.platformHeight || 0;
+                            return Math.abs(playerY - furnY) < 2;
+                        });
                     }
-                }
-                
-                // First check regular town furniture (only if not in Snow Forts)
-                if (!nearFurniture && !inSnowFortsZone && roomData && roomData.furniture) {
-                    for (const furn of roomData.furniture) {
-                        const dx = finalX - furn.position.x;
-                        const dz = finalZ - furn.position.z;
-                        const dist = Math.sqrt(dx * dx + dz * dz);
-                        // Only interact if player is at the right height (on the roof)
-                        const furnY = furn.platformHeight || 0;
-                        const yMatch = Math.abs(playerY - furnY) < 2; // Within 2 units height
-                        if (dist < furn.interactionRadius && yMatch) {
-                            nearFurniture = furn;
-                            break;
-                        }
+
+                    if (!nearFurniture && !inSnowFortsZone && roomData?.furniture) {
+                        checkFurnitureList(roomData.furniture, (furn) => {
+                            const furnY = furn.platformHeight || 0;
+                            return Math.abs(playerY - furnY) < 2;
+                        });
                     }
-                }
-                
-                // Then check casino furniture (elevated on 2nd floor) - only if not in Snow Forts
-                if (!nearFurniture && !inSnowFortsZone && townCenterRef.current) {
-                    const casinoFurniture = townCenterRef.current.getCasinoFurniture();
-                    for (const furn of casinoFurniture) {
-                        const dx = finalX - furn.position.x;
-                        const dz = finalZ - furn.position.z;
-                        const dist = Math.sqrt(dx * dx + dz * dz);
-                        const furnY = furn.elevated ? (furn.seatHeight - 1.0) : (furn.platformHeight ?? 0);
-                        const yMatch = furn.elevated
-                            ? Math.abs(playerY - furnY) < 2
-                            : playerY < 1.5;
-                        if (dist < furn.interactionRadius && yMatch) {
-                            nearFurniture = furn;
-                            break;
-                        }
+
+                    if (!nearFurniture && !inSnowFortsZone && townCenterRef.current) {
+                        checkFurnitureList(townCenterRef.current.getCasinoFurniture(), (furn) => {
+                            const furnY = furn.elevated ? (furn.seatHeight - 1.0) : (furn.platformHeight ?? 0);
+                            return furn.elevated
+                                ? Math.abs(playerY - furnY) < 2
+                                : playerY < 1.5;
+                        });
                     }
+
+                    nearTownFurnitureRef.current = nearFurniture;
                 }
                 
                 // Dispatch interaction event
@@ -6234,7 +6202,7 @@ const VoxelWorld = ({
             
             // Animate building door glows (pulse for interactive doors, town only)
             // Skip door glow animations when in parkour performance mode
-            if (roomRef.current === 'town' && !inParkourPerformanceMode) {
+            if (roomRef.current === 'town' && !inParkourPerformanceMode && frameCount % 2 === 0) {
                 portalsRef.current.forEach(building => {
                     if (building.mesh && building.gameId) {
                         // Cache the glow lookup — getObjectByName walks the building subtree
@@ -6344,11 +6312,28 @@ const VoxelWorld = ({
                     setDayTime(daySpeedRef.current === 0 ? dayTimeRef.current : serverTime);
                 }
             }
+
+            // Tighten shadow frustum around player — huge ±100 shadow maps tank town FPS
+            if (room === 'town' && sunLightRef.current && frameCount % 2 === 0) {
+                const shadowCam = sunLightRef.current.shadow.camera;
+                const half = 45;
+                const px = posRef.current.x;
+                const pz = posRef.current.z;
+                shadowCam.left = px - half;
+                shadowCam.right = px + half;
+                shadowCam.top = pz + half;
+                shadowCam.bottom = pz - half;
+                shadowCam.updateProjectionMatrix();
+                sunLightRef.current.target.position.set(px, 0, pz);
+                sunLightRef.current.target.updateMatrixWorld();
+            }
             
             // ==================== SNOWFALL UPDATE ====================
             if (room === 'town' && snowfallSystemRef.current && gameSettingsRef.current.snowEnabled !== false) {
                 const serverTime = serverWorldTimeRef?.current ?? 0.35;
-                snowfallSystemRef.current.update(time, delta, posRef.current, serverTime);
+                if (frameCount % 2 === 0) {
+                    snowfallSystemRef.current.update(time, delta, posRef.current, serverTime);
+                }
                 snowfallSystemRef.current.setVisible(true);
             } else if (snowfallSystemRef.current) {
                 snowfallSystemRef.current.setVisible(false);
@@ -6613,69 +6598,70 @@ const VoxelWorld = ({
             }
         };
 
-        // Pre-compile materials + prime raycast path before first RAF tick (reduces first-move hitch).
-        // compileAsync uses KHR_parallel_shader_compile — shaders compile in the GPU driver
-        // without blocking the main thread (falls back to sync compile on old browsers).
-        await loadYield(0.85);
-        try {
-            if (typeof renderer.compileAsync === 'function') {
-                await renderer.compileAsync(scene, camera);
-                if (initCancelled) return;
-            } else if (typeof renderer.compile === 'function') {
-                renderer.compile(scene, camera);
+        // Ultra/High: skip full-scene warmup — it only runs on refresh and costs more than live preset tuning.
+        const skipSceneWarmup = performanceManager.shouldSkipSceneWarmup();
+        if (skipSceneWarmup) {
+            console.log('⚡ Skipping scene warmup (matches live preset upgrade path)');
+        } else {
+            await loadYield(0.85);
+            try {
+                if (typeof renderer.compileAsync === 'function') {
+                    await renderer.compileAsync(scene, camera);
+                    if (initCancelled) return;
+                } else if (typeof renderer.compile === 'function') {
+                    renderer.compile(scene, camera);
+                }
+            } catch (e) {
+                console.warn('Shader pre-compile:', e);
             }
-        } catch (e) {
-            console.warn('Shader pre-compile:', e);
-        }
-        try {
-            const rc = raycasterRef.current;
-            if (rc && camera) {
-                rc.setFromCamera(new THREE.Vector2(0, 0), camera);
-                rc.intersectObjects(scene.children, true);
+            try {
+                const rc = raycasterRef.current;
+                if (rc && camera) {
+                    rc.setFromCamera(new THREE.Vector2(0, 0), camera);
+                    rc.intersectObjects(scene.children, true);
+                }
+            } catch (e) {
+                console.warn('Raycast warmup:', e);
             }
-        } catch (e) {
-            console.warn('Raycast warmup:', e);
-        }
-        
-        // Pre-upload textures to the GPU behind the loading screen. Without this, canvas
-        // textures (signs, billboards, slot machines, banners) upload lazily the first time
-        // the camera reveals them — the cause of the post-load "look around and freeze" hitches.
-        await loadYield(0.92);
-        if (initCancelled) return;
-        try {
-            if (typeof renderer.initTexture === 'function') {
-                const seenTextures = new Set();
-                const textures = [];
-                const TEXTURE_SLOTS = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'alphaMap'];
-                scene.traverse(obj => {
-                    const mats = Array.isArray(obj.material) ? obj.material : (obj.material ? [obj.material] : []);
-                    for (const m of mats) {
-                        for (const slot of TEXTURE_SLOTS) {
-                            const tex = m[slot];
-                            if (tex && !seenTextures.has(tex)) {
-                                seenTextures.add(tex);
-                                textures.push(tex);
+
+            await loadYield(0.92);
+            if (initCancelled) return;
+            try {
+                if (typeof renderer.initTexture === 'function') {
+                    const seenTextures = new Set();
+                    const textures = [];
+                    const TEXTURE_SLOTS = ['map', 'emissiveMap', 'normalMap', 'roughnessMap', 'metalnessMap', 'alphaMap'];
+                    scene.traverse(obj => {
+                        const mats = Array.isArray(obj.material) ? obj.material : (obj.material ? [obj.material] : []);
+                        for (const m of mats) {
+                            for (const slot of TEXTURE_SLOTS) {
+                                const tex = m[slot];
+                                if (tex && !seenTextures.has(tex)) {
+                                    seenTextures.add(tex);
+                                    textures.push(tex);
+                                }
                             }
                         }
+                    });
+                    const BATCH = 16;
+                    for (let i = 0; i < textures.length; i += BATCH) {
+                        const end = Math.min(i + BATCH, textures.length);
+                        for (let j = i; j < end; j++) {
+                            renderer.initTexture(textures[j]);
+                        }
+                        if (end < textures.length) {
+                            await loadYield(0.92 + 0.07 * (end / textures.length));
+                            if (initCancelled) return;
+                        }
                     }
-                });
-                // Upload in small batches so even large texture sets can't lock the page
-                const BATCH = 16;
-                for (let i = 0; i < textures.length; i += BATCH) {
-                    const end = Math.min(i + BATCH, textures.length);
-                    for (let j = i; j < end; j++) {
-                        renderer.initTexture(textures[j]);
-                    }
-                    if (end < textures.length) {
-                        await loadYield(0.92 + 0.07 * (end / textures.length));
-                        if (initCancelled) return;
-                    }
+                    console.log(`🖼️ Pre-uploaded ${textures.length} textures to GPU`);
                 }
-                console.log(`🖼️ Pre-uploaded ${textures.length} textures to GPU`);
+            } catch (e) {
+                console.warn('Texture pre-upload:', e);
             }
-        } catch (e) {
-            console.warn('Texture pre-upload:', e);
         }
+
+        performanceManager.applyRendererTuning(renderer, THREE, sunLight, isMobile);
         
         reportLoadProgress(1);
         update();
@@ -8458,13 +8444,18 @@ const VoxelWorld = ({
         }
         
         if (nearestTable) {
-            const playerCoins = userData?.coins || GameManager.getInstance().getCoins();
-            const canPlay = playerCoins >= 10; // Minimum bet
+            const isDemo = !isAuthenticated;
+            const DEMO_BANKROLL = 1000;
+            const playerCoins = isDemo
+                ? DEMO_BANKROLL
+                : (userData?.coins || GameManager.getInstance().getCoins());
+            const canPlay = isDemo || playerCoins >= 10;
             
             const newInteraction = {
                 tableId: nearestTable.tableId,
                 table: nearestTable,
                 canPlay,
+                isDemo,
                 balance: playerCoins
             };
             
@@ -8644,6 +8635,7 @@ const VoxelWorld = ({
                 localStorage.setItem('player_position', JSON.stringify({
                     x: roofX, y: roofY, z: roofZ, room: 'town', savedAt: Date.now()
                 }));
+                savePlayerSession('town', { x: roofX, y: roofY, z: roofZ });
             } catch (e) { /* ignore */ }
             
             setNearbyPortal(null);
@@ -10430,12 +10422,12 @@ const VoxelWorld = ({
         }
     }, [playerList, createNameSprite, meshBuilderReady, meshSyncVersion]);
     
-    // Notify server when changing rooms
+    // Notify server when changing rooms (include position once spawn is ready)
     useEffect(() => {
-        if (connected && playerId) {
-            mpChangeRoom(room);
+        if (connected && playerId && posRef.current) {
+            mpChangeRoom(room, posRef.current);
         }
-    }, [room, connected, playerId]);
+    }, [room, connected, playerId, mpChangeRoom]);
     
     // Track igloo room entry/exit for eligibility checks
     useEffect(() => {
@@ -10570,6 +10562,7 @@ const VoxelWorld = ({
                 <CasinoBlackjack
                     tableId={blackjackTableId}
                     seatIndex={0}
+                    isDemo={!isAuthenticated}
                     onLeave={handleBlackjackLeave}
                 />
              )}
@@ -10883,7 +10876,11 @@ const VoxelWorld = ({
              {/* Blackjack Table Interaction Prompt - Positioned ABOVE sit prompts */}
              {blackjackInteraction && !slotInteraction && !goldSlotInteraction && !nearbyPortal && room === 'casino_game_room' && !blackjackGameActive && (
                 <div 
-                    className={`absolute bg-gradient-to-b from-green-900/95 to-emerald-950/95 backdrop-blur-sm rounded-xl border border-emerald-500/50 text-center z-30 shadow-lg shadow-emerald-500/20 ${
+                    className={`absolute bg-gradient-to-b from-green-900/95 to-emerald-950/95 backdrop-blur-sm rounded-xl border text-center z-30 shadow-lg ${
+                        blackjackInteraction.isDemo
+                            ? 'border-green-500/50 shadow-green-500/20'
+                            : 'border-emerald-500/50 shadow-emerald-500/20'
+                    } ${
                         isMobile 
                             ? isLandscape 
                                 ? 'bottom-[280px] right-28 p-3' 
@@ -10891,40 +10888,58 @@ const VoxelWorld = ({
                             : 'bottom-44 left-1/2 -translate-x-1/2 p-4'
                     }`}
                 >
-                    {/* Blackjack icon */}
-                    <div className={`mb-1 ${isMobile && !isLandscape ? 'text-2xl' : 'text-3xl'}`}>🂡</div>
+                    <div className={`mb-1 ${isMobile && !isLandscape ? 'text-2xl' : 'text-3xl'}`}>
+                        {blackjackInteraction.isDemo ? '🎁' : '🂡'}
+                    </div>
+
+                    {blackjackInteraction.isDemo && (
+                        <div className="bg-green-500/20 border border-green-500/50 rounded-full px-3 py-0.5 mb-2 inline-block">
+                            <span className="text-green-400 text-xs font-bold">✨ FREE DEMO</span>
+                        </div>
+                    )}
                     
-                    {/* Balance display */}
-                    <div className="bg-yellow-500/20 border border-yellow-500/50 rounded-full px-3 py-0.5 mb-2 inline-block">
-                        <span className={`text-yellow-400 font-bold ${isMobile && !isLandscape ? 'text-[10px]' : 'text-xs'}`}>
-                            💰 {blackjackInteraction.balance?.toLocaleString() || 0}
+                    <div className={`rounded-full px-3 py-0.5 mb-2 inline-block ${
+                        blackjackInteraction.isDemo
+                            ? 'bg-green-500/20 border border-green-500/50'
+                            : 'bg-yellow-500/20 border border-yellow-500/50'
+                    }`}>
+                        <span className={`font-bold ${isMobile && !isLandscape ? 'text-[10px]' : 'text-xs'} ${
+                            blackjackInteraction.isDemo ? 'text-green-400' : 'text-yellow-400'
+                        }`}>
+                            {blackjackInteraction.isDemo ? '🎮 Demo Chips' : `💰 ${blackjackInteraction.balance?.toLocaleString() || 0}`}
                         </span>
                     </div>
                     
-                    {/* Simple prompt - NO Press E */}
                     <p className={`retro-text mb-2 ${isMobile && !isLandscape ? 'text-xs' : 'text-sm'} ${
+                        blackjackInteraction.isDemo ? 'text-green-400' :
                         blackjackInteraction.canPlay ? 'text-emerald-400' : 'text-gray-400'
                     }`}>
-                        {blackjackInteraction.canPlay ? 'Min $10 • Max $5000' : 'Need 10+ coins to play'}
+                        {blackjackInteraction.isDemo
+                            ? 'Fun play — no real gold wagered'
+                            : blackjackInteraction.canPlay ? 'Min $10 • Max $5000' : 'Need 10+ coins to play'}
                     </p>
                     
-                    {/* Play Button - Click to play, no E key */}
                     {blackjackInteraction.canPlay && (
                         <button
-                            className={`w-full font-bold rounded-lg retro-text transition-all active:scale-95 shadow-lg bg-gradient-to-b from-emerald-400 to-emerald-600 hover:from-emerald-300 hover:to-emerald-500 text-black ${
-                                isMobile && !isLandscape ? 'px-4 py-2 text-xs' : 'px-6 py-2 text-sm'
-                            }`}
+                            className={`w-full font-bold rounded-lg retro-text transition-all active:scale-95 shadow-lg ${
+                                blackjackInteraction.isDemo
+                                    ? 'bg-gradient-to-b from-green-400 to-green-600 hover:from-green-300 hover:to-green-500 text-black'
+                                    : 'bg-gradient-to-b from-emerald-400 to-emerald-600 hover:from-emerald-300 hover:to-emerald-500 text-black'
+                            } ${isMobile && !isLandscape ? 'px-4 py-2 text-xs' : 'px-6 py-2 text-sm'}`}
                             onClick={handleBlackjackStart}
                         >
-                            🂡 PLAY BLACKJACK
+                            {blackjackInteraction.isDemo ? '🎁 TRY FREE!' : '🂡 PLAY BLACKJACK'}
                         </button>
                     )}
                     
-                    {/* Can't play hint */}
                     {!blackjackInteraction.canPlay && (
                         <p className={`text-yellow-400/80 mt-2 ${isMobile && !isLandscape ? 'text-[10px]' : 'text-xs'}`}>
                             Earn coins at slot machines!
                         </p>
+                    )}
+
+                    {blackjackInteraction.isDemo && (
+                        <p className="text-xs text-yellow-400/80 mt-2">🔑 Login to play for real gold!</p>
                     )}
                 </div>
              )}
