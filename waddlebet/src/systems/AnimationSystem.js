@@ -251,7 +251,10 @@ export function animateMesh(
         
         // Default mount pose (sitting) - boat, pengu mount, etc
         const defaultRiderY = mountData?.riderOffset?.y ?? (mountName === 'minecraftBoat' ? 0.8 : 1.2);
-        meshInner.position.y = defaultRiderY;
+        const defaultRiderZ = mountData?.riderOffset?.z ?? 0;
+        const mountBounceY = meshInner.parent?.userData?.mountBounceY || 0;
+        meshInner.position.y = defaultRiderY + mountBounceY;
+        meshInner.position.z = defaultRiderZ;
         if(footL) {
             footL.rotation.x = -Math.PI / 2.5;
             footL.position.z = 2.5;

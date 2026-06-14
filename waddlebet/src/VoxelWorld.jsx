@@ -4269,7 +4269,9 @@ const VoxelWorld = ({
                                 
                                 // Waddle the whole mount side to side and bob up/down
                                 mountGroup.rotation.z = Math.sin(time * waddleSpeed) * 0.06;
-                                mountGroup.position.y = 0.65 + Math.abs(Math.sin(time * waddleSpeed * 0.5)) * 0.08;
+                                const mountBounce = Math.abs(Math.sin(time * waddleSpeed * 0.5)) * 0.08;
+                                mountGroup.position.y = 0.65 + mountBounce;
+                                playerRef.current.userData.mountBounceY = mountBounce;
                             } else {
                                 // Return to rest position smoothly
                                 if (leftFlipper) leftFlipper.position.y *= 0.85;
@@ -4278,6 +4280,7 @@ const VoxelWorld = ({
                                 if (rightFoot) rightFoot.position.y *= 0.85;
                                 mountGroup.rotation.z *= 0.9;
                                 mountGroup.position.y = 0.65 + (mountGroup.position.y - 0.65) * 0.9;
+                                playerRef.current.userData.mountBounceY = Math.max(0, mountGroup.position.y - 0.65);
                             }
                         }
                         // Skateboard grinding animation - sick tricks! 🛹
@@ -5501,7 +5504,10 @@ const VoxelWorld = ({
                                 
                                 // Waddle the whole mount side to side and bob up/down
                                 mountGroup.rotation.z = Math.sin(time * waddleSpeed) * 0.06;
-                                mountGroup.position.y = (mountData.positionY || 0.65) + Math.abs(Math.sin(time * waddleSpeed * 0.5)) * 0.08;
+                                const restY = mountData.positionY || 0.65;
+                                const mountBounce = Math.abs(Math.sin(time * waddleSpeed * 0.5)) * 0.08;
+                                mountGroup.position.y = restY + mountBounce;
+                                meshData.mesh.userData.mountBounceY = mountBounce;
                             } else {
                                 // Return to rest position smoothly
                                 if (leftFlipper) leftFlipper.position.y *= 0.85;
@@ -5511,6 +5517,7 @@ const VoxelWorld = ({
                                 mountGroup.rotation.z *= 0.9;
                                 const restY = mountData.positionY || 0.65;
                                 mountGroup.position.y = restY + (mountGroup.position.y - restY) * 0.9;
+                                meshData.mesh.userData.mountBounceY = Math.max(0, mountGroup.position.y - restY);
                             }
                         }
                         // Skateboard grinding animation for other players 🛹

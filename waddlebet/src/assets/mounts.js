@@ -1938,8 +1938,8 @@ export const MOUNTS = {
         animated: true,
         animationType: 'penguin_waddle', // Custom animation for pengu mount
         hidesFeet: true,
-        seatOffset: { y: 0 },
-        riderOffset: { y: -1 },
+        seatOffset: { y: 2 },
+        riderOffset: { y: 1.05, z: -0.4 },
         speedBoost: 1.05, // 5% movement speed buff
         scale: 0.3125, // 25% bigger again (0.25 * 1.25)
         positionY: 0.65 // Higher to compensate for larger size
