@@ -44,7 +44,7 @@ import LanguageToggle from './components/LanguageToggle';
 import WebGLStatusBanner from './components/WebGLStatusBanner';
 import { useLanguage } from './i18n';
 import performanceManager from './systems/PerformanceManager';
-import { initBrowserCapabilities, usesPrivacyBrowserOptimizations } from './utils/browserCapabilities';
+import { initBrowserCapabilities, usesPrivacyBrowserOptimizations, readLiveWebGLInfo } from './utils/browserCapabilities';
 
 function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const mountRef = useRef(null);
@@ -638,6 +638,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const reqRef = useRef(null);
     const rendererRef = useRef(null);
     const cameraRef = useRef(null);
+    const [sceneReady, setSceneReady] = useState(false);
     
     // Refs for animated skin colors (cosmic, galaxy, rainbow, nebula)
     const animatedSkinMaterialsRef = useRef([]);
@@ -812,6 +813,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             : THREE.PCFSoftShadowMap;
         mountRef.current.appendChild(renderer.domElement);
         rendererRef.current = renderer;
+        readLiveWebGLInfo(renderer);
 
         const ambient = new THREE.AmbientLight(0xffffff, 0.5);
         scene.add(ambient);
@@ -883,6 +885,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         const penguinGroup = new THREE.Group();
         scene.add(penguinGroup);
         penguinRef.current = penguinGroup;
+        setSceneReady(true);
         
         const reflectionGroup = new THREE.Group();
         reflectionGroup.scale.set(1, 1, -1);
@@ -1032,6 +1035,10 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
 
         return () => {
             cancelled = true;
+            setSceneReady(false);
+            sceneRef.current = null;
+            penguinRef.current = null;
+            reflectionRef.current = null;
             cancelAnimationFrame(reqRef.current);
             if (rendererRef.current && mountRef.current) {
                 mountRef.current.removeChild(rendererRef.current.domElement);
@@ -1042,7 +1049,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
 
     // --- REBUILD PENGUIN ---
     useEffect(() => {
-        if (!scriptsLoaded || !sceneRef.current || !penguinRef.current) return;
+        if (!scriptsLoaded || !sceneReady || !sceneRef.current || !penguinRef.current) return;
         
         spinRef.current = Math.PI * 2;
         const THREE = window.THREE;
@@ -1834,7 +1841,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             createCosmicStars(group);
         }
 
-    }, [scriptsLoaded, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, tortoisePrimaryColor, tortoiseSecondaryColor]);
+    }, [scriptsLoaded, sceneReady, skinColor, hat, eyes, mouth, bodyItem, mount, characterType, dogPrimaryColor, dogSecondaryColor, frogPrimaryColor, frogSecondaryColor, shrimpPrimaryColor, tortoisePrimaryColor, tortoiseSecondaryColor]);
 
     // Get available skin colors - base + unlocked premium
     const availableSkinColors = useMemo(() => {

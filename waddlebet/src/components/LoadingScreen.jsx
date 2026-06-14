@@ -12,8 +12,18 @@ const LoadingScreen = ({ visible }) => {
     const [dots, setDots] = useState(0);
     const [tipIndex, setTipIndex] = useState(0);
     const [progress, setProgress] = useState(0);
+    const [slowLoad, setSlowLoad] = useState(false);
 
     const tips = useMemo(() => TIP_KEYS.map((k) => t(k)), [t]);
+
+    useEffect(() => {
+        if (!visible) {
+            setSlowLoad(false);
+            return undefined;
+        }
+        const timer = setTimeout(() => setSlowLoad(true), 25000);
+        return () => clearTimeout(timer);
+    }, [visible]);
 
     useEffect(() => {
         if (!visible) return;
@@ -76,6 +86,11 @@ const LoadingScreen = ({ visible }) => {
                         />
                     </div>
                     <p className="mt-2 text-xs text-white/55 sm:text-sm">{t('loading.footer')}</p>
+                    {slowLoad && (
+                        <p className="mt-3 text-xs leading-relaxed text-amber-200/90 sm:text-sm">
+                            {t('loading.slowHint')}
+                        </p>
+                    )}
                 </div>
             </div>
         </div>

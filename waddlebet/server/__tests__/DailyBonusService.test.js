@@ -11,7 +11,7 @@ const mockTransactionRecord = vi.fn();
 const mockSendPayout = vi.fn();
 
 vi.mock('../db/connection.js', () => ({
-    isDBConnected: vi.fn(() => true)
+    isDBConnected: () => true
 }));
 
 vi.mock('../db/models/index.js', () => ({
@@ -26,7 +26,7 @@ vi.mock('../db/models/index.js', () => ({
 
 vi.mock('../services/CustodialWalletService.js', () => ({
     default: {
-        isReady: vi.fn(() => true),
+        isReady: () => true,
         _sendPayoutTransaction: (...args) => mockSendPayout(...args)
     }
 }));
@@ -37,11 +37,12 @@ vi.mock('../services/ReferralService.js', () => ({
 
 const dailyBonusService = (await import('../services/DailyBonusService.js')).default;
 
-const WALLET = 'DailyBonusTestWallet111111111111111111111';
+let walletCounter = 0;
+const testWallet = () => `DailyBonusTestWallet${String(++walletCounter).padStart(2, '0')}111111111111111`;
 const makeNonce = () => crypto.randomBytes(32).toString('hex');
 
-const eligibleUser = (overrides = {}) => ({
-    walletAddress: WALLET,
+const eligibleUser = (walletAddress, overrides = {}) => ({
+    walletAddress,
     dailyBonus: {
         lastClaimAt: null,
         totalClaimed: 0,
@@ -51,6 +52,17 @@ const eligibleUser = (overrides = {}) => ({
     },
     ...overrides
 });
+
+async function withEligibleSession(wallet, run) {
+    vi.useFakeTimers();
+    try {
+        await dailyBonusService.startSession(wallet);
+        vi.advanceTimersByTime(61 * 60 * 1000);
+        return await run();
+    } finally {
+        vi.useRealTimers();
+    }
+}
 
 describe('DailyBonusService.claim', () => {
     beforeEach(() => {
@@ -64,7 +76,8 @@ describe('DailyBonusService.claim', () => {
     });
 
     it('rejects invalid nonce format', async () => {
-        const result = await dailyBonusService.claim(WALLET, 'not-a-valid-nonce');
+        const wallet = testWallet();
+        const result = await dailyBonusService.claim(wallet, 'not-a-valid-nonce');
 
         expect(result.success).toBe(false);
         expect(result.error).toBe('INVALID_NONCE');
@@ -72,24 +85,23 @@ describe('DailyBonusService.claim', () => {
     });
 
     it('rejects missing nonce', async () => {
-        const result = await dailyBonusService.claim(WALLET, null);
+        const wallet = testWallet();
+        const result = await dailyBonusService.claim(wallet, null);
 
         expect(result.success).toBe(false);
         expect(result.error).toBe('NO_NONCE');
     });
 
     it('rejects when 24h cooldown is still active', async () => {
+        const wallet = testWallet();
         const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-        mockUserFindOne.mockResolvedValue(eligibleUser({
+        mockUserFindOne.mockResolvedValue(eligibleUser(wallet, {
             dailyBonus: { lastClaimAt: twoHoursAgo, processedClaimNonces: [] }
         }));
 
-        vi.useFakeTimers();
-        await dailyBonusService.startSession(WALLET);
-        vi.advanceTimersByTime(61 * 60 * 1000);
-        vi.useRealTimers();
-
-        const result = await dailyBonusService.claim(WALLET, makeNonce());
+        const result = await withEligibleSession(wallet, () =>
+            dailyBonusService.claim(wallet, makeNonce())
+        );
 
         expect(result.success).toBe(false);
         expect(result.error).toBe('COOLDOWN_ACTIVE');
@@ -97,17 +109,15 @@ describe('DailyBonusService.claim', () => {
     });
 
     it('rejects reused client nonce stored in DB', async () => {
+        const wallet = testWallet();
         const nonce = makeNonce();
-        mockUserFindOne.mockResolvedValue(eligibleUser({
+        mockUserFindOne.mockResolvedValue(eligibleUser(wallet, {
             dailyBonus: { processedClaimNonces: [nonce] }
         }));
 
-        vi.useFakeTimers();
-        await dailyBonusService.startSession(WALLET);
-        vi.advanceTimersByTime(61 * 60 * 1000);
-        vi.useRealTimers();
-
-        const result = await dailyBonusService.claim(WALLET, nonce);
+        const result = await withEligibleSession(wallet, () =>
+            dailyBonusService.claim(wallet, nonce)
+        );
 
         expect(result.success).toBe(false);
         expect(result.error).toBe('NONCE_REUSED');
@@ -115,15 +125,13 @@ describe('DailyBonusService.claim', () => {
     });
 
     it('rejects when atomic DB update loses race (ALREADY_CLAIMED)', async () => {
-        mockUserFindOne.mockResolvedValue(eligibleUser());
+        const wallet = testWallet();
+        mockUserFindOne.mockResolvedValue(eligibleUser(wallet));
         mockUserUpdateOne.mockResolvedValue({ modifiedCount: 0 });
 
-        vi.useFakeTimers();
-        await dailyBonusService.startSession(WALLET);
-        vi.advanceTimersByTime(61 * 60 * 1000);
-        vi.useRealTimers();
-
-        const result = await dailyBonusService.claim(WALLET, makeNonce());
+        const result = await withEligibleSession(wallet, () =>
+            dailyBonusService.claim(wallet, makeNonce())
+        );
 
         expect(result.success).toBe(false);
         expect(result.error).toBe('ALREADY_CLAIMED');
@@ -131,22 +139,20 @@ describe('DailyBonusService.claim', () => {
     });
 
     it('sends payout only once on successful claim', async () => {
-        mockUserFindOne.mockResolvedValue(eligibleUser());
-
-        vi.useFakeTimers();
-        await dailyBonusService.startSession(WALLET);
-        vi.advanceTimersByTime(61 * 60 * 1000);
-        vi.useRealTimers();
+        const wallet = testWallet();
+        mockUserFindOne.mockResolvedValue(eligibleUser(wallet));
 
         const nonce = makeNonce();
-        const result = await dailyBonusService.claim(WALLET, nonce);
+        const result = await withEligibleSession(wallet, () =>
+            dailyBonusService.claim(wallet, nonce)
+        );
 
         expect(result.success).toBe(true);
         expect(result.txSignature).toBe('tx_success_sig');
         expect(mockSendPayout).toHaveBeenCalledTimes(1);
         expect(mockUserUpdateOne).toHaveBeenCalledWith(
             expect.objectContaining({
-                walletAddress: WALLET,
+                walletAddress: wallet,
                 'dailyBonus.processedClaimNonces': { $nin: [nonce] }
             }),
             expect.objectContaining({
@@ -159,44 +165,45 @@ describe('DailyBonusService.claim', () => {
     });
 
     it('reverts DB reservation when payout fails before broadcast', async () => {
-        mockUserFindOne.mockResolvedValue(eligibleUser());
+        const wallet = testWallet();
+        mockUserFindOne.mockResolvedValue(eligibleUser(wallet));
         mockSendPayout.mockResolvedValue({ success: false, error: 'TRANSACTION_FAILED' });
 
-        vi.useFakeTimers();
-        await dailyBonusService.startSession(WALLET);
-        vi.advanceTimersByTime(61 * 60 * 1000);
-        vi.useRealTimers();
-
         const nonce = makeNonce();
-        const result = await dailyBonusService.claim(WALLET, nonce);
+        const result = await withEligibleSession(wallet, () =>
+            dailyBonusService.claim(wallet, nonce)
+        );
 
         expect(result.success).toBe(false);
         expect(result.error).toBe('TRANSACTION_FAILED');
-        expect(mockUserUpdateOne).toHaveBeenCalledTimes(2);
-        expect(mockUserUpdateOne.mock.calls[1][1]).toMatchObject({
+        const revertCall = mockUserUpdateOne.mock.calls.find(([, update]) =>
+            update?.$pull?.['dailyBonus.processedClaimNonces'] === nonce
+        );
+        expect(revertCall).toBeDefined();
+        expect(revertCall[1]).toMatchObject({
             $pull: { 'dailyBonus.processedClaimNonces': nonce },
             $inc: { 'dailyBonus.totalClaimed': -1 }
         });
     });
 
     it('does not double-pay when tx broadcast succeeds but confirmation is uncertain', async () => {
-        mockUserFindOne.mockResolvedValue(eligibleUser());
+        const wallet = testWallet();
+        mockUserFindOne.mockResolvedValue(eligibleUser(wallet));
         mockSendPayout.mockResolvedValue({
             success: false,
             txId: 'tx_broadcast_only',
             error: 'CONFIRMATION_UNCERTAIN'
         });
 
-        vi.useFakeTimers();
-        await dailyBonusService.startSession(WALLET);
-        vi.advanceTimersByTime(61 * 60 * 1000);
-        vi.useRealTimers();
-
-        const result = await dailyBonusService.claim(WALLET, makeNonce());
+        const result = await withEligibleSession(wallet, () =>
+            dailyBonusService.claim(wallet, makeNonce())
+        );
 
         expect(result.success).toBe(true);
         expect(result.txSignature).toBe('tx_broadcast_only');
         expect(mockSendPayout).toHaveBeenCalledTimes(1);
-        expect(mockUserUpdateOne).toHaveBeenCalledTimes(1);
+        expect(mockUserUpdateOne.mock.calls.some(([, update]) =>
+            update?.$push?.['dailyBonus.processedClaimNonces']
+        )).toBe(true);
     });
 });

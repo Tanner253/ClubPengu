@@ -7,6 +7,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useLanguage } from '../i18n';
 import { performanceManager, PERFORMANCE_PRESETS } from '../systems';
+import { formatSupportDiagnostics } from '../utils/browserCapabilities';
 import ReferralPanel from './ReferralPanel';
 import LanguageToggle from './LanguageToggle';
 
@@ -633,6 +634,33 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                     <span className="text-white/30 group-hover:text-white/60 transition-colors">↗</span>
                                 </div>
                             </a>
+
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    const text = formatSupportDiagnostics({
+                                        lastFps: performanceManager.getLastRecordedFps(),
+                                        activePreset: performanceManager.getPreset()
+                                    });
+                                    try {
+                                        await navigator.clipboard.writeText(text);
+                                        alert(t('settings.diagnosticsCopied'));
+                                    } catch {
+                                        window.prompt(t('settings.copyDiagnostics'), text);
+                                    }
+                                }}
+                                className="w-full p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all text-left group"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <span className="text-xl">🩺</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="text-white font-bold">{t('settings.copyDiagnostics')}</div>
+                                        <p className="text-white/40 text-xs">{t('settings.copyDiagnosticsDesc')}</p>
+                                    </div>
+                                </div>
+                            </button>
                             
                             {/* Version Info */}
                             <div className="text-center text-white/20 text-xs pt-4">

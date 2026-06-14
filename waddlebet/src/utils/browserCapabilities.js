@@ -7,7 +7,8 @@ export const WEBGL_STATUS = {
     OK: 'ok',
     UNAVAILABLE: 'unavailable',
     HARDWARE_DISABLED: 'hardware_disabled',
-    SOFTWARE_RENDERER: 'software_renderer'
+    SOFTWARE_RENDERER: 'software_renderer',
+    INTEGRATED_GPU: 'integrated_gpu'
 };
 
 const SOFTWARE_RENDERER_PATTERNS = [
@@ -36,6 +37,109 @@ function readRendererString(gl) {
 
 function isSoftwareRenderer(renderer) {
     return SOFTWARE_RENDERER_PATTERNS.some((re) => re.test(renderer));
+}
+
+const INTEGRATED_GPU_PATTERNS = [
+    /intel.*uhd/i,
+    /intel.*hd graphics/i,
+    /intel.*iris/i,
+    /amd.*radeon.*graphics/i,
+    /microsoft basic render/i
+];
+
+const DISCRETE_GPU_PATTERNS = [
+    /nvidia/i,
+    /geforce/i,
+    /\brtx\b/i,
+    /\bgtx\b/i,
+    /radeon.*(rx|vega|pro)/i
+];
+
+/**
+ * Classify the active GPU string (from WebGL debug info).
+ */
+export function analyzeGpuRenderer(renderer = '') {
+    const name = renderer || '';
+    return {
+        renderer: name,
+        isSoftware: isSoftwareRenderer(name),
+        isIntegrated: INTEGRATED_GPU_PATTERNS.some((re) => re.test(name)),
+        isDiscrete: DISCRETE_GPU_PATTERNS.some((re) => re.test(name))
+    };
+}
+
+/**
+ * Read the GPU actually used by a live WebGLRenderer (more accurate than pre-probe).
+ */
+export function readLiveWebGLInfo(renderer) {
+    if (!renderer?.getContext) {
+        return { renderer: '', vendor: '', analysis: analyzeGpuRenderer('') };
+    }
+
+    try {
+        const gl = renderer.getContext();
+        const info = readRendererString(gl);
+        const vendorExt = gl.getExtension('WEBGL_debug_renderer_info');
+        const vendor = vendorExt
+            ? gl.getParameter(vendorExt.UNMASKED_VENDOR_WEBGL) || ''
+            : '';
+
+        const analysis = analyzeGpuRenderer(info);
+        const result = { renderer: info, vendor, analysis };
+
+        if (typeof window !== 'undefined') {
+            window._liveGpuInfo = result;
+            if (analysis.isSoftware) {
+                window._webglStatus = {
+                    ...(window._webglStatus || probeWebGLStatus()),
+                    status: WEBGL_STATUS.SOFTWARE_RENDERER,
+                    softwareRenderer: true,
+                    renderer: info
+                };
+            } else if (analysis.isIntegrated && !analysis.isDiscrete) {
+                window._webglStatus = {
+                    ...(window._webglStatus || probeWebGLStatus()),
+                    status: WEBGL_STATUS.INTEGRATED_GPU,
+                    renderer: info
+                };
+            }
+            window.dispatchEvent(new CustomEvent('liveGpuInfoReady', { detail: result }));
+        }
+
+        return result;
+    } catch {
+        return { renderer: '', vendor: '', analysis: analyzeGpuRenderer('') };
+    }
+}
+
+/**
+ * Support bundle players can paste when reporting lag (Settings → Copy diagnostics).
+ */
+export function buildSupportDiagnostics(extra = {}) {
+    const caps = (typeof window !== 'undefined' && window._browserCapabilities) || {};
+    const live = (typeof window !== 'undefined' && window._liveGpuInfo) || {};
+    const webgl = (typeof window !== 'undefined' && window._webglStatus) || probeWebGLStatus();
+
+    return {
+        timestamp: new Date().toISOString(),
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : '',
+        platform: typeof navigator !== 'undefined' ? navigator.platform : '',
+        devicePixelRatio: typeof window !== 'undefined' ? window.devicePixelRatio : 1,
+        screen: typeof screen !== 'undefined' ? `${screen.width}x${screen.height}` : '',
+        performancePreset: typeof localStorage !== 'undefined'
+            ? localStorage.getItem('waddlebet_performance')
+            : null,
+        webglStatus: webgl.status,
+        gpuRenderer: live.renderer || caps.renderer || webgl.renderer || '',
+        gpuVendor: live.vendor || '',
+        isBrave: caps.isBrave,
+        isOpera: caps.isOpera,
+        ...extra
+    };
+}
+
+export function formatSupportDiagnostics(extra = {}) {
+    return JSON.stringify(buildSupportDiagnostics(extra), null, 2);
 }
 
 /**

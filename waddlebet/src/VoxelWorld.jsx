@@ -59,6 +59,7 @@ import {
     IGLOO_BANNER_CONTENT
 } from './config';
 import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem, createMountainBackground, performanceManager, PERFORMANCE_PRESETS } from './systems';
+import { readLiveWebGLInfo } from './utils/browserCapabilities.js';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
 import CasinoBlackjack from './components/CasinoBlackjack';
@@ -202,22 +203,37 @@ const VoxelWorld = ({
     
     // Performance preset change listener - apply dynamic settings
     useEffect(() => {
+        const applyLiveTuning = () => {
+            const THREE = window.THREE;
+            performanceManager.applyRendererTuning(
+                rendererRef.current,
+                THREE,
+                sunLightRef.current,
+                window._isMobileGPU
+            );
+        };
+
         const handlePresetChange = (e) => {
-            const { preset, settings } = e.detail;
+            const { settings } = e.detail;
             console.log(`🎮 Performance preset changed to: ${settings.name}`);
+            applyLiveTuning();
             
-            // Note: Renderer settings (DPR, antialias, shadows) require page refresh
-            // But distance-based LOD and update throttling apply immediately via performanceManager
-            
-            // Update snowfall if system exists
             if (snowfallSystemRef.current && settings.snowParticles) {
-                // Snowfall will use new settings on next respawn cycle
                 console.log(`❄️ Snow particles will update: ${settings.snowParticles}`);
             }
         };
+
+        const handleEmergencyDowngrade = (e) => {
+            console.warn(`🎮 Auto-tuned performance: ${e.detail.from} → ${e.detail.to} (${e.detail.avgFps} FPS)`);
+            applyLiveTuning();
+        };
         
         window.addEventListener('performancePresetChanged', handlePresetChange);
-        return () => window.removeEventListener('performancePresetChanged', handlePresetChange);
+        window.addEventListener('performanceEmergencyDowngrade', handleEmergencyDowngrade);
+        return () => {
+            window.removeEventListener('performancePresetChanged', handlePresetChange);
+            window.removeEventListener('performanceEmergencyDowngrade', handleEmergencyDowngrade);
+        };
     }, []);
     
     
@@ -871,6 +887,7 @@ const VoxelWorld = ({
         }
         mountRef.current.appendChild(renderer.domElement);
         rendererRef.current = renderer;
+        readLiveWebGLInfo(renderer);
         
         // Initialize raycaster for player click detection
         raycasterRef.current = new THREE.Raycaster();
@@ -919,10 +936,10 @@ const VoxelWorld = ({
         const sunLight = new THREE.DirectionalLight(0xF8F8FF, 1.0); // Cold bright sun
         sunLight.position.set(80, 100, 60);
         sunLight.castShadow = true;
-        // Shadow map size from performance preset (Brave / low-end auto-downgrade included)
+        // Shadow map size from performance preset (capped at 1024 on desktop — pre-tuning behavior)
         const shadowMapSize = needsOptimization
             ? 512
-            : performanceManager.getSettings().shadowMapSize;
+            : performanceManager.getWorldShadowMapSize(false);
         sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
         sunLight.shadow.camera.left = -100;
         sunLight.shadow.camera.right = 100;
@@ -2702,6 +2719,7 @@ const VoxelWorld = ({
             if (delta > MAX_DELTA) {
                 delta = MAX_DELTA;
             }
+            performanceManager.recordFrame(delta);
             
             // Base speed with mount speed boost (pengu mount gives 5% boost)
             let speed = BASE_SPEED * delta;
@@ -6475,6 +6493,7 @@ const VoxelWorld = ({
             
             if (frameCount >= MIN_FRAMES_BEFORE_WORLD_READY && !worldReadyFiredRef.current && onWorldReadyRef.current) {
                 worldReadyFiredRef.current = true;
+                performanceManager.markGameplayReady();
                 try {
                     onWorldReadyRef.current();
                 } catch (e) {

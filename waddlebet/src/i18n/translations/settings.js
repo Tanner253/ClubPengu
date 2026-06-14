@@ -251,4 +251,16 @@ export default {
     'settings.languageHint': {
         en: 'Tap a flag to change language', zh: '点击旗帜切换语言', es: 'Toca una bandera', pt: 'Toque numa bandeira', ko: '깃발을 눌러 변경', ja: '旗をタップ', fr: 'Touchez un drapeau', de: 'Flagge antippen', ru: 'Нажмите флаг', ar: 'اضغط على علم',
     },
+    'settings.copyDiagnostics': {
+        en: 'Copy performance diagnostics', zh: '复制性能诊断信息', es: 'Copiar diagnósticos', pt: 'Copiar diagnósticos', ko: '성능 진단 복사', ja: '診断情報をコピー', fr: 'Copier les diagnostics', de: 'Diagnose kopieren', ru: 'Копировать диагностику', ar: 'نسخ تشخيص الأداء',
+    },
+    'settings.copyDiagnosticsDesc': {
+        en: 'GPU, WebGL, and graphics preset — paste to support if the game is slow', zh: 'GPU、WebGL 与画质预设 — 游戏卡顿时发给支持', es: 'GPU, WebGL y preset — pega a soporte si va lento', pt: 'GPU, WebGL e preset — cole no suporte se estiver lento', ko: 'GPU, WebGL, 프리셋 — 느리면 지원팀에 붙여넣기', ja: 'GPU・WebGL・プリセット — 遅い場合はサポートへ', fr: 'GPU, WebGL, preset — collez au support si lent', de: 'GPU, WebGL, Preset — bei Lag an Support senden', ru: 'GPU, WebGL, пресет — при лагах отправьте в поддержку', ar: 'GPU وWebGL والإعداد — أرسل للدعم إذا كان بطيئاً',
+    },
+    'settings.diagnosticsCopied': {
+        en: 'Diagnostics copied to clipboard', zh: '诊断信息已复制', es: 'Diagnósticos copiados', pt: 'Diagnósticos copiados', ko: '진단 정보가 복사되었습니다', ja: '診断をコピーしました', fr: 'Diagnostics copiés', de: 'Diagnose kopiert', ru: 'Диагностика скопирована', ar: 'تم نسخ التشخيص',
+    },
+    'settings.perfAutoTune': {
+        en: 'Graphics lowered automatically ({preset}) — avg {fps} FPS. Change in Settings → Graphics.', zh: '已自动降低画质（{preset}）— 平均 {fps} FPS。可在设置 → 图形 中调整。', es: 'Gráficos reducidos automáticamente ({preset}) — {fps} FPS prom.', pt: 'Gráficos reduzidos automaticamente ({preset}) — {fps} FPS méd.', ko: '그래픽이 자동으로 낮춰졌습니다 ({preset}) — 평균 {fps} FPS', ja: '画質を自動で下げました（{preset}）— 平均 {fps} FPS', fr: 'Graphismes réduits auto ({preset}) — {fps} FPS moy.', de: 'Grafik automatisch gesenkt ({preset}) — Ø {fps} FPS', ru: 'Графика снижена автоматически ({preset}) — ~{fps} FPS', ar: 'تم خفض الرسومات تلقائياً ({preset}) — متوسط {fps} إطار',
+    },
 };

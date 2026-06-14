@@ -15,6 +15,9 @@ import { MultiplayerProvider, useMultiplayer } from './multiplayer';
 import { ChallengeProvider, useChallenge } from './challenge';
 import { IglooProvider, useIgloo } from './igloo';
 import { LanguageProvider } from './i18n';
+import { useLanguage } from './i18n';
+import performanceManager from './systems/PerformanceManager';
+import { formatSupportDiagnostics } from './utils/browserCapabilities';
 import ProfileMenu from './components/ProfileMenu';
 import WagerModal from './components/WagerModal';
 import Inbox from './components/Inbox';
@@ -131,6 +134,9 @@ const BackgroundMusic = () => {
  * Inner app content that uses challenge context
  */
 const AppContent = () => {
+    const { t } = useLanguage();
+    const [perfAutoTuneToast, setPerfAutoTuneToast] = useState(null);
+    
     // Current room/layer: 'town', 'dojo', etc.
     const [currentRoom, setCurrentRoom] = useState(null); // null = designer
     
@@ -282,6 +288,20 @@ const AppContent = () => {
         }, 45000);
         return () => clearTimeout(maxWait);
     }, [entryLoading, dismissEntryLoading]);
+
+    useEffect(() => {
+        const handler = (e) => {
+            const { to, avgFps, settings } = e.detail || {};
+            setPerfAutoTuneToast({
+                preset: settings?.name || to,
+                fps: avgFps
+            });
+            setTimeout(() => setPerfAutoTuneToast(null), 8000);
+        };
+
+        window.addEventListener('performanceEmergencyDowngrade', handler);
+        return () => window.removeEventListener('performanceEmergencyDowngrade', handler);
+    }, []);
     
     // Exit to designer
     const handleExitToDesigner = () => {
@@ -336,6 +356,16 @@ const AppContent = () => {
             <Styles />
             
             {entryLoading && <LoadingScreen visible={entryLoading} />}
+
+            {perfAutoTuneToast && (
+                <div className="fixed top-20 left-1/2 z-[90] w-[min(92vw,28rem)] -translate-x-1/2 animate-fade-in">
+                    <div className="rounded-xl border border-amber-400/30 bg-amber-950/90 px-4 py-3 text-sm text-amber-100 shadow-2xl backdrop-blur-md">
+                        {t('settings.perfAutoTune')
+                            .replace('{preset}', perfAutoTuneToast.preset)
+                            .replace('{fps}', String(perfAutoTuneToast.fps))}
+                    </div>
+                </div>
+            )}
             
             {/* Designer Mode */}
             {!inGameWorld && (

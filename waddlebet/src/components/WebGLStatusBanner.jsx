@@ -26,6 +26,11 @@ const ISSUE_META = {
         titleKey: 'creator.webgl.software.title',
         descKey: 'creator.webgl.software.desc',
         severity: 'warning'
+    },
+    [WEBGL_STATUS.INTEGRATED_GPU]: {
+        titleKey: 'creator.webgl.integrated.title',
+        descKey: 'creator.webgl.integrated.desc',
+        severity: 'warning'
     }
 };
 
@@ -38,7 +43,8 @@ const STEP_KEYS = {
 
 const HINT_KEYS = {
     brave: 'creator.webgl.hintBrave',
-    opera: 'creator.webgl.hintOpera'
+    opera: 'creator.webgl.hintOpera',
+    integrated: 'creator.webgl.hintIntegrated'
 };
 
 const WebGLStatusBanner = () => {
@@ -48,21 +54,37 @@ const WebGLStatusBanner = () => {
     const [fixSteps, setFixSteps] = useState([]);
 
     useEffect(() => {
-        const status = probeWebGLStatus();
-        if (status.status === WEBGL_STATUS.OK) {
-            setIssue(null);
-            return;
-        }
+        const applyStatus = (status) => {
+            if (!status || status.status === WEBGL_STATUS.OK) {
+                setIssue(null);
+                return;
+            }
+            setIssue(status);
+        };
 
-        setIssue(status);
+        applyStatus(probeWebGLStatus());
+
+        const onLiveGpu = () => {
+            const live = window._webglStatus;
+            if (live?.status && live.status !== WEBGL_STATUS.OK) {
+                applyStatus(live);
+            }
+        };
 
         initBrowserCapabilities().then((caps) => {
             const { steps, browserHint: hint } = getWebGLFixSteps(caps);
             setFixSteps(steps);
-            setBrowserHint(hint);
+            if (hint) {
+                setBrowserHint(hint);
+            } else if (window._liveGpuInfo?.analysis?.isIntegrated && !window._liveGpuInfo?.analysis?.isDiscrete) {
+                setBrowserHint('integrated');
+            }
         }).catch(() => {
             setFixSteps(getWebGLFixSteps().steps);
         });
+
+        window.addEventListener('liveGpuInfoReady', onLiveGpu);
+        return () => window.removeEventListener('liveGpuInfoReady', onLiveGpu);
     }, []);
 
     if (!issue || issue.status === WEBGL_STATUS.OK) {

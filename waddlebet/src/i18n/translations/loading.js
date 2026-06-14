@@ -108,4 +108,16 @@ export default {
         ru: 'WaddleBet',
         ar: 'WaddleBet',
     },
+    'loading.slowHint': {
+        en: 'Still loading? Try Settings → Graphics → Low or Potato, enable your dedicated GPU in Windows graphics settings, or copy diagnostics from Settings → Info and send them to support.',
+        zh: '仍在加载？请在设置 → 图形 中选择 Low 或 Potato，在 Windows 图形设置中启用独立显卡，或在设置 → 信息 中复制诊断信息发给支持团队。',
+        es: '¿Sigue cargando? Prueba Ajustes → Gráficos → Low o Potato, activa la GPU dedicada en Windows o copia diagnósticos en Ajustes → Info.',
+        pt: 'Ainda carregando? Tente Configurações → Gráficos → Low ou Potato, ative a GPU dedicada no Windows ou copie diagnósticos em Configurações → Info.',
+        ko: '아직 로딩 중인가요? 설정 → 그래픽 → Low/Potato, Windows에서 전용 GPU 활성화, 또는 설정 → 정보에서 진단 복사.',
+        ja: 'まだ読み込み中？設定→グラフィック→Low/Potato、Windowsで専用GPUを有効化、または設定→情報で診断をコピー。',
+        fr: 'Toujours en chargement ? Réglages → Graphismes → Low/Potato, GPU dédié dans Windows, ou copiez les diagnostics.',
+        de: 'Lädt noch? Einstellungen → Grafik → Low/Potato, dedizierte GPU in Windows aktivieren oder Diagnose kopieren.',
+        ru: 'Всё ещё грузится? Настройки → Графика → Low/Potato, включите дискретную GPU в Windows или скопируйте диагностику.',
+        ar: 'ما زال التحميل جارياً؟ جرّب الإعدادات → الرسومات → Low أو Potato، أو فعّل كرت الشاشة المخصص في Windows.',
+    },
 };

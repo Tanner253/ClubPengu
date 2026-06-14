@@ -139,6 +139,11 @@ class PerformanceManager {
         this.isOperaBrowser = false;
         this._autoPresetApplied = false;
         this._userPresetSaved = false;
+        this._fpsSamples = [];
+        this._emergencyDowngradeDone = false;
+        this._lastRecordedFps = 0;
+        this._gameplayReady = false;
+        this._gameplayReadyAt = 0;
         
         // Load saved preference (or sync GPU probe fallback)
         this.loadSettings();
@@ -201,6 +206,110 @@ class PerformanceManager {
             isBrave: this.isBraveBrowser,
             isOpera: this.isOperaBrowser
         });
+    }
+
+    /**
+     * Call once the world has finished loading — avoids false downgrades during heavy init.
+     */
+    markGameplayReady() {
+        this._gameplayReady = true;
+        this._gameplayReadyAt = performance.now();
+        this._fpsSamples = [];
+    }
+
+    /**
+     * Desktop shadow maps were historically capped at 1024 regardless of Ultra preset.
+     */
+    getWorldShadowMapSize(isMobile = false) {
+        if (isMobile) return 512;
+        return Math.min(this.getSettings().shadowMapSize, 1024);
+    }
+
+    /**
+     * Sample frame delta — triggers emergency downgrade if sustained FPS is very low.
+     */
+    recordFrame(delta) {
+        if (!this._gameplayReady) return;
+        // Ignore the first 8s after world load — init spikes would false-trigger downgrade.
+        if (performance.now() - this._gameplayReadyAt < 8000) return;
+
+        if (!delta || delta <= 0 || delta > 1) return;
+
+        const fps = 1 / delta;
+        this._lastRecordedFps = fps;
+        this._fpsSamples.push(fps);
+        if (this._fpsSamples.length > 180) {
+            this._fpsSamples.shift();
+        }
+
+        if (this._emergencyDowngradeDone || this._fpsSamples.length < 120) {
+            return;
+        }
+
+        const avg = this._fpsSamples.reduce((sum, value) => sum + value, 0) / this._fpsSamples.length;
+        if (avg < 20) {
+            this.emergencyDowngrade(avg);
+        }
+    }
+
+    getLastRecordedFps() {
+        return Math.round(this._lastRecordedFps);
+    }
+
+    /**
+     * Drop quality when runtime FPS proves the current preset is too heavy.
+     * Persists so a saved Ultra preset cannot trap low-end GPU paths.
+     */
+    emergencyDowngrade(avgFps) {
+        const order = ['ultra', 'high', 'medium', 'low', 'potato'];
+        const currentIdx = Math.max(0, order.indexOf(this.currentPreset));
+        const targetIdx = Math.min(order.length - 1, currentIdx + 2);
+        const target = order[targetIdx];
+
+        if (target === this.currentPreset) {
+            this._emergencyDowngradeDone = true;
+            return;
+        }
+
+        const previous = this.currentPreset;
+        this._emergencyDowngradeDone = true;
+        this._applyPreset(target, true);
+        this.notifyListeners();
+
+        window.dispatchEvent(new CustomEvent('performanceEmergencyDowngrade', {
+            detail: {
+                from: previous,
+                to: target,
+                avgFps: Math.round(avgFps),
+                settings: this.getSettings()
+            }
+        }));
+
+        window.dispatchEvent(new CustomEvent('performancePresetChanged', {
+            detail: { preset: target, settings: this.getSettings() }
+        }));
+
+        console.warn(`🎮 Emergency performance downgrade: ${previous} → ${target} (avg ${Math.round(avgFps)} FPS)`);
+    }
+
+    /**
+     * Apply live renderer tuning after a preset change (DPR, shadows).
+     */
+    applyRendererTuning(renderer, THREE, sunLight = null, isMobile = false) {
+        if (!renderer || !THREE) return;
+
+        const dpr = this.getDPR(isMobile);
+        renderer.setPixelRatio(dpr);
+        renderer.shadowMap.type = this.getShadowMapType(THREE, isMobile);
+
+        if (sunLight?.shadow?.mapSize) {
+            const shadowMapSize = isMobile ? 512 : this.getWorldShadowMapSize(false);
+            sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
+            if (sunLight.shadow.map) {
+                sunLight.shadow.map.dispose();
+                sunLight.shadow.map = null;
+            }
+        }
     }
 
     _applyPreset(presetName, persist = true) {
