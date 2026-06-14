@@ -81,6 +81,35 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.2.1",
+    date: "June 14, 2026",
+    title: "🎰 Casino Overhaul, Gold Slots & Session Resume",
+    description:
+      "Major casino pass: lobby gold slots with server-authoritative payouts, guest blackjack demo, exterior animation fixes, and spawn/portal polish. Players now resume where they logged out. Town igloos get a visual upgrade and the personal igloo wardrobe flow is removed.",
+    highlight: true,
+    stats: { filesChanged: 33, additions: 3329, deletions: 3135 },
+    changes: [
+      { type: "feature", text: "Gold lobby slot machines — walk up to casino lobby slots, bet 25 gold per spin, server-authoritative reels and payouts via GoldSlotsService (~93% RTP)" },
+      { type: "feature", text: "GoldLobbySlotSystem — independent per-machine state, canvas-texture SlotMachineDisplay reels, and multiplayer spin sync so other players see your spins" },
+      { type: "feature", text: "Guest blackjack demo — unauthenticated players get a FREE DEMO table with $1,000 demo chips; no real coin deducts or payouts" },
+      { type: "feature", text: "Session resume — log back in where you left off; server persists lastRoom/lastPosition for authenticated users, localStorage covers guests and refresh" },
+      { type: "improvement", text: "playerSession.js — getResumeRoom() and getResumePosition() restore room and coordinates on Enter World instead of always spawning at nightclub" },
+      { type: "improvement", text: "Casino lobby interior expanded — more lobby slot machines, decor, and interaction data wired through Casino.js and TownCenter" },
+      { type: "improvement", text: "Casino game-room portal moved to the red carpet east approach — enter and exit spawn at the same spot in front of the building" },
+      { type: "content", text: "Town igloo visual overhaul — icy blue gradient domes, hexagonal ice panels, block ring grooves, entrance tunnels, icicles, and snow mounds" },
+      { type: "content", text: "Personal igloo wardrobe removed — PenguinCreatorOverlay retired; community igloos (igloo1–10) remain the social housing layer" },
+      { type: "content", text: "Pizza Parlor bar polish — martini glasses on the counter and dining tables" },
+      { type: "fix", text: "Casino exterior animations restored — dice towers, front slot reels, and roof roulette no longer baked into static merged geometry (_isProtectedAnimatedMesh + skipGeometryMerge)" },
+      { type: "fix", text: "Casino landmark updates run every frame when the player is within 80 units — dice spin and slot reels stay smooth on Ultra graphics" },
+      { type: "performance", text: "Ultra/High refresh stutter fix — lightweight bootstrap renderer options and skip scene warmup on Ultra/High so refresh matches mid-session Potato→Ultra smoothness" },
+      { type: "performance", text: "TownCenter animation cache — nightclub exterior, casino, park, and campfire updates distance-culled and frame-throttled to cut idle CPU cost" },
+      { type: "performance", text: "PropsFactory nightclub exterior update path optimized — fewer redundant traversals on distant buildings" },
+      { type: "backend", text: "persistPlayerLocation() — saves room and position on disconnect, logout, room change, and throttled movement; join restores saved spawn per room" },
+      { type: "backend", text: "blackjack_deduct_bet / blackjack_payout no-op safely when isDemo so guest tables cannot touch real balances" },
+      { type: "backend", text: "goldSlots.js server config — weighted reel stops, paytable, and GoldSlotsService spin lifecycle" },
+    ],
+  },
+  {
     version: "1.2.0",
     date: "June 12, 2026",
     title: "⚡ Load Performance Overhaul & MMORPG Pivot",
