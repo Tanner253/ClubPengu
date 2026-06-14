@@ -41,7 +41,10 @@ import {
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 import LanguageToggle from './components/LanguageToggle';
+import WebGLStatusBanner from './components/WebGLStatusBanner';
 import { useLanguage } from './i18n';
+import performanceManager from './systems/PerformanceManager';
+import { initBrowserCapabilities, usesPrivacyBrowserOptimizations } from './utils/browserCapabilities';
 
 function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const mountRef = useRef(null);
@@ -761,7 +764,15 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     useEffect(() => {
         if (!scriptsLoaded || !mountRef.current) return;
 
+        let cancelled = false;
+
+        const setupScene = async () => {
+        await initBrowserCapabilities();
+        await performanceManager.ensureAutoPreset();
+        if (cancelled || !mountRef.current) return;
+
         const THREE = window.THREE;
+        const privacyOpts = usesPrivacyBrowserOptimizations();
         
         // Detect mobile GPU for performance optimizations
         const isIOSDevice = /iPhone|iPad|iPod/i.test(navigator.userAgent) || 
@@ -782,22 +793,23 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         camera.position.set(20, 20, 30);
         cameraRef.current = camera;
         
-        // Mobile: disable antialias for performance
+        // Mobile + Brave/Opera GX: disable antialias for performance
         const rendererOptions = {
-            antialias: !isMobileGPU,
-            alpha: false
+            antialias: !isMobileGPU && !privacyOpts,
+            alpha: false,
+            powerPreference: privacyOpts ? 'low-power' : 'high-performance',
+            precision: (isMobileGPU || privacyOpts) ? 'mediump' : undefined
         };
-        if (isMobileGPU) {
-            rendererOptions.precision = 'mediump';
-        }
         const renderer = new THREE.WebGLRenderer(rendererOptions);
         renderer.setSize(containerWidth, containerHeight);
-        // Mobile: cap DPR at 1.0 to avoid rendering 4-9x more pixels
-        const dpr = isMobileGPU ? Math.min(window.devicePixelRatio, 1.0) : Math.min(window.devicePixelRatio, 2);
+        const dpr = isMobileGPU
+            ? Math.min(window.devicePixelRatio, 1.0)
+            : (privacyOpts ? 1.0 : Math.min(window.devicePixelRatio, 2));
         renderer.setPixelRatio(dpr);
         renderer.shadowMap.enabled = true;
-        // Mobile: BasicShadowMap (fastest), Desktop: PCFSoftShadowMap (best quality)
-        renderer.shadowMap.type = isMobileGPU ? THREE.BasicShadowMap : THREE.PCFSoftShadowMap;
+        renderer.shadowMap.type = isMobileGPU || privacyOpts
+            ? THREE.BasicShadowMap
+            : THREE.PCFSoftShadowMap;
         mountRef.current.appendChild(renderer.domElement);
         rendererRef.current = renderer;
 
@@ -808,13 +820,13 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         dirLight.position.set(10, 20, 10);
         dirLight.castShadow = true;
         // Mobile: smaller shadow map for performance
-        const shadowMapSize = isMobileGPU ? 512 : 2048;
+        const shadowMapSize = isMobileGPU || privacyOpts ? 512 : 2048;
         dirLight.shadow.mapSize.width = shadowMapSize;
         dirLight.shadow.mapSize.height = shadowMapSize;
         scene.add(dirLight);
         
-        // Mobile: skip expensive point and spot lights (ambient + directional is enough)
-        if (!isMobileGPU) {
+        // Mobile / privacy browsers: skip expensive point and spot lights
+        if (!isMobileGPU && !privacyOpts) {
             const warmLight = new THREE.PointLight(0xFFDDAA, 1.2, 50);
             warmLight.position.set(0, 15, 5);
             scene.add(warmLight);
@@ -1012,8 +1024,14 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             renderer.render(scene, camera);
         };
         animate();
+        };
+
+        setupScene().catch((err) => {
+            console.error('Creator scene init failed:', err);
+        });
 
         return () => {
+            cancelled = true;
             cancelAnimationFrame(reqRef.current);
             if (rendererRef.current && mountRef.current) {
                 mountRef.current.removeChild(rendererRef.current.domElement);
@@ -2000,6 +2018,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 }}
             />
             
+            <WebGLStatusBanner />
+
             {/* Title + whitepaper — link is pointer-events-auto so canvas stays clickable elsewhere */}
             <div className={`absolute top-0 left-0 z-10 w-full ${isPortrait && isMobileView ? 'p-3' : 'p-6'}`}>
                 <div className="flex flex-wrap items-start justify-between gap-2">

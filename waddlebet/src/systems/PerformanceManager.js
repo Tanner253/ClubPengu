@@ -6,7 +6,7 @@
  * Provides distance-based LOD and update throttling.
  */
 
-import { initBrowserCapabilities, probeWebGLConstraints } from '../utils/browserCapabilities.js';
+import { initBrowserCapabilities, probeWebGLConstraints, usesPrivacyBrowserOptimizations } from '../utils/browserCapabilities.js';
 
 // ==================== UNIVERSAL LOD THRESHOLDS ====================
 // These apply to ALL quality presets for consistent optimization
@@ -136,6 +136,7 @@ class PerformanceManager {
         this.frameCount = 0;
         this.listeners = new Set();
         this.isBraveBrowser = false;
+        this.isOperaBrowser = false;
         this._autoPresetApplied = false;
         this._userPresetSaved = false;
         
@@ -171,7 +172,7 @@ class PerformanceManager {
     }
 
     /**
-     * Async browser probe — Brave WebGL protections need lower quality settings.
+     * Async browser probe — Brave/Opera GX WebGL protections need lower quality settings.
      * Call before main renderer init when no user-saved preset exists.
      */
     async ensureAutoPreset() {
@@ -182,12 +183,24 @@ class PerformanceManager {
 
         const caps = await initBrowserCapabilities();
         this.isBraveBrowser = caps.isBrave;
+        this.isOperaBrowser = caps.isOpera;
 
         if (caps.recommendPreset) {
             this._applyPreset(caps.recommendPreset, false);
-            const reason = caps.isBrave ? 'Brave browser detected' : (caps.renderer || 'GPU probe');
+            const reason = caps.isBrave
+                ? 'Brave browser detected'
+                : caps.isOpera
+                    ? 'Opera browser detected'
+                    : (caps.renderer || 'GPU probe');
             console.log(`🎮 Performance: Auto-applied "${this.settings.name}" (${reason})`);
         }
+    }
+
+    _needsPrivacyBrowserOpts() {
+        return usesPrivacyBrowserOptimizations({
+            isBrave: this.isBraveBrowser,
+            isOpera: this.isOperaBrowser
+        });
     }
 
     _applyPreset(presetName, persist = true) {
@@ -352,16 +365,16 @@ class PerformanceManager {
             };
         }
         
-        // Brave: WebGL fingerprinting protections add heavy per-frame overhead
-        const braveOptimized = this.isBraveBrowser || (typeof window !== 'undefined' && window._isBraveBrowser);
+        // Brave / Opera GX: WebGL fingerprinting protections add heavy per-frame overhead
+        const privacyOptimized = this._needsPrivacyBrowserOpts();
 
         // PC uses preset settings
         return {
-            antialias: braveOptimized ? false : this.settings.antialias,
-            powerPreference: braveOptimized ? 'low-power' : 'high-performance',
+            antialias: privacyOptimized ? false : this.settings.antialias,
+            powerPreference: privacyOptimized ? 'low-power' : 'high-performance',
             depth: true,
-            precision: braveOptimized ? 'mediump' : (this.settings.antialias ? 'highp' : 'mediump'),
-            stencil: braveOptimized ? false : this.settings.antialias,
+            precision: privacyOptimized ? 'mediump' : (this.settings.antialias ? 'highp' : 'mediump'),
+            stencil: privacyOptimized ? false : this.settings.antialias,
         };
     }
     
@@ -371,8 +384,8 @@ class PerformanceManager {
      */
     getDPR(isMobile = false) {
         if (isMobile) return 1.0;
-        const braveCap = (this.isBraveBrowser || window._isBraveBrowser) ? 1.0 : this.settings.dpr;
-        return Math.min(window.devicePixelRatio, braveCap);
+        const privacyCap = this._needsPrivacyBrowserOpts() ? 1.0 : this.settings.dpr;
+        return Math.min(window.devicePixelRatio, privacyCap);
     }
     
     /**

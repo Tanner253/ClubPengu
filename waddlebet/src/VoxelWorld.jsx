@@ -857,8 +857,10 @@ const VoxelWorld = ({
         } else {
             const preset = performanceManager.getPreset();
             const settings = performanceManager.getSettings();
-            const braveNote = performanceManager.isBraveBrowser ? ' [Brave optimizations]' : '';
-            console.log(`🎮 PC Performance: "${settings.name}" preset (DPR=${dpr}, antialias=${settings.antialias}, shadows=${settings.shadowType})${braveNote}`);
+            const privacyNote = performanceManager._needsPrivacyBrowserOpts()
+                ? (window._isOperaBrowser ? ' [Opera optimizations]' : ' [Brave optimizations]')
+                : '';
+            console.log(`🎮 PC Performance: "${settings.name}" preset (DPR=${dpr}, antialias=${settings.antialias}, shadows=${settings.shadowType})${privacyNote}`);
         }
         
         // Shadows from performance manager
