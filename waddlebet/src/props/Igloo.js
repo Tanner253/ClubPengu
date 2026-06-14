@@ -1,17 +1,27 @@
 /**
- * Igloo - Enhanced quality igloo with improved visual details
+ * Igloo - Enhanced quality igloo with icy blue gradient and block pattern
  * 
  * BALANCED FOR QUALITY + PERFORMANCE:
- * - Smoother dome (24x16 segments)
- * - Ice block pattern overlay
- * - Detailed entrance with arch
+ * - Vertical blue gradient on dome (dark base → light crown)
+ * - Hexagonal ice panel overlay
+ * - Block ring grooves
+ * - Detailed entrance tunnel
  * - Icicles and snow mounds
- * - Warm interior glow
  */
 
 import BaseProp from './BaseProp';
-import { PropColors } from './PropColors';
 import { getMaterialManager } from './PropMaterials';
+
+/** Icy palette — avoids near-white surfaces that blow out in daylight */
+const ICE_PALETTE = {
+    deep: 0x1e4a66,
+    dark: 0x2d6080,
+    mid: 0x4a8aad,
+    light: 0x6eb0cc,
+    pale: 0x8ec8e3,
+    frost: 0xa8d8ec,
+    snow: 0xc0dce8,
+};
 
 class Igloo extends BaseProp {
     /**
@@ -31,68 +41,135 @@ class Igloo extends BaseProp {
         const group = this.createGroup(scene);
         group.name = 'igloo';
         group.position.set(x, y, z);
-        
-        // Enhanced material palette
-        const iceWhite = this.matManager.get(0xF0F8FF, { roughness: 0.25, metalness: 0.05 });
-        const iceMedium = this.matManager.get(0xE0EEF8, { roughness: 0.35, metalness: 0.03 });
-        const iceBlue = this.matManager.get(0xD8EAF5, { roughness: 0.3, metalness: 0.08 });
-        const iceShadow = this.matManager.get(0xC8D8E8, { roughness: 0.4, metalness: 0.02 });
-        const darkMat = this.matManager.get('#030810', { roughness: 1 });
-        const snowMat = this.matManager.get(PropColors.snowLight, { roughness: 0.5 });
-        const warmGlow = this.matManager.get(0xFFAA44, { 
-            emissive: 0xFF8833, 
-            emissiveIntensity: 0.5,
+
+        const iceDeep = this.matManager.get(ICE_PALETTE.deep, { roughness: 0.45, metalness: 0.08 });
+        const iceDark = this.matManager.get(ICE_PALETTE.dark, { roughness: 0.38, metalness: 0.1 });
+        const iceMid = this.matManager.get(ICE_PALETTE.mid, { roughness: 0.32, metalness: 0.12 });
+        const iceLight = this.matManager.get(ICE_PALETTE.light, { roughness: 0.28, metalness: 0.14 });
+        const icePale = this.matManager.get(ICE_PALETTE.pale, { roughness: 0.25, metalness: 0.1 });
+        const darkMat = this.matManager.get('#061018', { roughness: 1 });
+        const snowMat = this.matManager.get(ICE_PALETTE.snow, { roughness: 0.55 });
+        const warmGlow = this.matManager.get(0xFFAA44, {
+            emissive: 0xFF8833,
+            emissiveIntensity: 0.45,
             transparent: true,
-            opacity: 0.7
+            opacity: 0.65
         });
-        
-        // Main dome - smooth quality (24x16 segments)
+
+        // Main dome with vertical icy gradient (dark base → lighter crown)
         const domeGeo = new THREE.SphereGeometry(this.domeRadius, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-        const dome = new THREE.Mesh(domeGeo, iceWhite);
+        this.applyDomeGradient(domeGeo);
+        const domeMat = this.createMaterial({
+            vertexColors: true,
+            roughness: 0.32,
+            metalness: 0.12,
+        });
+        const dome = new THREE.Mesh(domeGeo, domeMat);
         dome.scale.y = this.domeHeight / this.domeRadius;
         dome.castShadow = true;
         dome.receiveShadow = true;
         this.addMesh(dome, group);
-        
-        // Ice block pattern rings (subtle visual detail)
-        this.createBlockRings(group, iceShadow);
-        
-        // Enhanced entrance tunnel
+
+        // Hexagonal ice panels + horizontal groove rings
+        this.createIcePanels(group, iceDeep, iceMid, iceLight);
+        this.createBlockRings(group, iceDeep);
+
+        // Frosted base band where dome meets ground
+        const baseBandGeo = new THREE.TorusGeometry(this.domeRadius * 0.98, 0.12, 8, 32);
+        const baseBand = new THREE.Mesh(baseBandGeo, iceDeep);
+        baseBand.rotation.x = Math.PI / 2;
+        baseBand.position.y = 0.08;
+        this.addMesh(baseBand, group);
+
         if (this.withEntrance) {
-            this.createEntranceEnhanced(group, iceMedium, iceBlue, snowMat, warmGlow, darkMat);
+            this.createEntranceEnhanced(group, iceDark, iceMid, icePale, snowMat, warmGlow, darkMat);
         }
-        
-        // Snow drift ring at base
+
+        // Blue-tinted snow drift at base (not pure white)
         const driftGeo = new THREE.TorusGeometry(this.domeRadius + 0.5, 0.7, 10, 24);
         const drift = new THREE.Mesh(driftGeo, snowMat);
         drift.rotation.x = Math.PI / 2;
         drift.position.y = 0.2;
         drift.scale.y = 0.35;
         this.addMesh(drift, group);
-        
-        // Snow mounds around base
+
         this.createSnowMounds(group, snowMat);
-        
-        // Icicles hanging from dome edge
         this.createIcicles(group);
-        
+
         return this;
+    }
+
+    /**
+     * Paint dome vertices: deep blue at base transitioning to pale ice at the crown
+     */
+    applyDomeGradient(geometry) {
+        const THREE = this.THREE;
+        const positions = geometry.attributes.position;
+        const colors = new Float32Array(positions.count * 3);
+        const colorBottom = new THREE.Color(ICE_PALETTE.dark);
+        const colorTop = new THREE.Color(ICE_PALETTE.pale);
+        const maxY = this.domeRadius;
+
+        for (let i = 0; i < positions.count; i++) {
+            const y = positions.getY(i);
+            const t = Math.pow(Math.max(0, Math.min(1, y / maxY)), 0.85);
+            const c = colorBottom.clone().lerp(colorTop, t);
+            colors[i * 3] = c.r;
+            colors[i * 3 + 1] = c.g;
+            colors[i * 3 + 2] = c.b;
+        }
+
+        geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    }
+
+    /**
+     * Hexagonal ice block panels on the dome surface (SKNY-style layout, icy colors)
+     */
+    createIcePanels(group, deepMat, midMat, lightMat) {
+        const THREE = this.THREE;
+        const panelCount = 22;
+        const rowCount = 4;
+        const mats = [deepMat, midMat, lightMat, midMat];
+
+        for (let i = 0; i < panelCount; i++) {
+            const angle = (i / panelCount) * Math.PI * 2;
+            for (let row = 0; row < rowCount; row++) {
+                const t = (row + 0.5) / (rowCount + 1);
+                const rowY = t * this.domeHeight * 0.88;
+                const rowRadius = this.domeRadius * Math.sqrt(1 - Math.pow(t * 0.88, 2)) * 0.97;
+                if (rowRadius < 0.7) continue;
+
+                // Skip entrance opening (front / +Z)
+                if (Math.abs(Math.sin(angle)) < 0.35 && Math.cos(angle) > 0.2) continue;
+
+                const hexGeo = new THREE.CircleGeometry(0.2 - row * 0.02, 6);
+                const hex = new THREE.Mesh(hexGeo, mats[row % mats.length]);
+                hex.position.set(
+                    Math.sin(angle) * rowRadius,
+                    rowY,
+                    Math.cos(angle) * rowRadius
+                );
+                hex.lookAt(0, rowY, 0);
+                hex.castShadow = true;
+                this.addMesh(hex, group);
+            }
+        }
     }
     
     /**
-     * Create subtle ice block ring pattern on dome
+     * Horizontal groove rings — darker blue seams between block rows
      */
-    createBlockRings(group, shadowMat) {
+    createBlockRings(group, grooveMat) {
         const THREE = this.THREE;
-        const ringCount = 4;
-        
+        const ringCount = 5;
+
         for (let i = 0; i < ringCount; i++) {
             const t = (i + 1) / (ringCount + 1);
-            const y = this.domeHeight * t * 0.85;
-            const ringRadius = this.domeRadius * Math.cos(Math.asin(t * 0.85)) * 1.01;
-            
-            const ringGeo = new THREE.TorusGeometry(ringRadius, 0.04, 4, 32);
-            const ring = new THREE.Mesh(ringGeo, shadowMat);
+            const y = this.domeHeight * t * 0.88;
+            const ringRadius = this.domeRadius * Math.cos(Math.asin(t * 0.88)) * 1.005;
+
+            const ringGeo = new THREE.TorusGeometry(ringRadius, 0.055, 4, 32);
+            const ring = new THREE.Mesh(ringGeo, grooveMat);
             ring.rotation.x = Math.PI / 2;
             ring.position.y = y;
             this.addMesh(ring, group);
@@ -100,70 +177,62 @@ class Igloo extends BaseProp {
     }
     
     /**
-     * Enhanced entrance with arch and details
+     * Enhanced entrance — same tunnel geometry as SKNY igloo (flat roof, arch frame)
      */
-    createEntranceEnhanced(group, iceMedium, iceBlue, snowMat, warmGlow, darkMat) {
+    createEntranceEnhanced(group, iceDark, iceMid, icePale, snowMat, warmGlow, darkMat) {
         const THREE = this.THREE;
-        const tunnelW = 1.5;
-        const tunnelH = 1.5;
+        const tunnelZ = this.domeRadius * 0.6;
+        const tunnelW = 1.6;
+        const tunnelH = 1.8;
         const tunnelD = 2.2;
-        const tunnelZ = this.domeRadius * 0.55;
-        
-        // Tunnel walls (left and right)
-        const wallGeo = new THREE.BoxGeometry(0.25, tunnelH, tunnelD);
+
+        const wallGeo = new THREE.BoxGeometry(0.2, tunnelH, tunnelD);
         [-1, 1].forEach(side => {
-            const wall = new THREE.Mesh(wallGeo, iceMedium);
+            const wall = new THREE.Mesh(wallGeo, iceDark);
             wall.position.set(side * (tunnelW / 2 + 0.1), tunnelH / 2, tunnelZ + tunnelD / 2);
             wall.castShadow = true;
             wall.receiveShadow = true;
             this.addMesh(wall, group);
         });
-        
-        // Arched roof
-        const roofGeo = new THREE.CylinderGeometry(tunnelW / 2 + 0.15, tunnelW / 2 + 0.15, tunnelD, 12, 1, true, 0, Math.PI);
-        const roof = new THREE.Mesh(roofGeo, iceMedium);
-        roof.rotation.x = Math.PI / 2;
-        roof.rotation.z = Math.PI / 2;
-        roof.position.set(0, tunnelH, tunnelZ + tunnelD / 2);
+
+        const roofGeo = new THREE.BoxGeometry(tunnelW + 0.4, 0.15, tunnelD);
+        const roof = new THREE.Mesh(roofGeo, iceMid);
+        roof.position.set(0, tunnelH + 0.08, tunnelZ + tunnelD / 2);
         roof.castShadow = true;
         this.addMesh(roof, group);
-        
-        // Tunnel floor
+
         const floorGeo = new THREE.BoxGeometry(tunnelW + 0.4, 0.08, tunnelD + 0.4);
-        const floor = new THREE.Mesh(floorGeo, iceMedium);
+        const floor = new THREE.Mesh(floorGeo, iceDark);
         floor.position.set(0, 0.04, tunnelZ + tunnelD / 2);
         floor.receiveShadow = true;
         this.addMesh(floor, group);
-        
-        // Entrance arch frame (decorative blocks)
-        const archBlockCount = 5;
-        for (let i = 0; i < archBlockCount; i++) {
-            const angle = (i / (archBlockCount - 1)) * Math.PI;
-            const archRadius = tunnelW / 2 + 0.3;
-            const blockGeo = new THREE.BoxGeometry(0.25, 0.18, 0.18);
-            const block = new THREE.Mesh(blockGeo, iceBlue);
-            block.position.set(
+
+        const archBeadCount = 12;
+        const beadHighlight = this.matManager.get(ICE_PALETTE.frost, { roughness: 0.2, metalness: 0.18 });
+        for (let i = 0; i < archBeadCount; i++) {
+            const angle = (i / (archBeadCount - 1)) * Math.PI;
+            const archRadius = tunnelW / 2 + 0.35;
+            const beadGeo = new THREE.SphereGeometry(0.08, 8, 8);
+            const bead = new THREE.Mesh(beadGeo, i % 2 === 0 ? icePale : beadHighlight);
+            bead.position.set(
                 Math.cos(angle) * archRadius,
-                tunnelH * 0.55 + Math.sin(angle) * archRadius * 0.6,
-                tunnelZ + tunnelD + 0.1
+                tunnelH * 0.5 + Math.sin(angle) * (tunnelH * 0.5 + 0.2),
+                tunnelZ + tunnelD + 0.12
             );
-            block.rotation.z = angle - Math.PI / 2;
-            this.addMesh(block, group);
+            bead.castShadow = true;
+            this.addMesh(bead, group);
         }
-        
-        // Warm glow from interior
+
         const glowGeo = new THREE.CircleGeometry(tunnelW * 0.45, 12);
         const glow = new THREE.Mesh(glowGeo, warmGlow);
-        glow.position.set(0, tunnelH * 0.55, tunnelZ - 0.1);
+        glow.position.set(0, tunnelH * 0.5, tunnelZ - 0.1);
         this.addMesh(glow, group);
-        
-        // Dark interior void
+
         const interiorGeo = new THREE.CircleGeometry(tunnelW * 0.5, 12);
         const interior = new THREE.Mesh(interiorGeo, darkMat);
-        interior.position.set(0, tunnelH * 0.55, tunnelZ - 0.15);
+        interior.position.set(0, tunnelH * 0.5, tunnelZ - 0.15);
         this.addMesh(interior, group);
-        
-        // Snow piles at entrance sides
+
         [-1, 1].forEach(side => {
             const pile = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), snowMat);
             pile.position.set(side * 1.3, 0.2, tunnelZ + tunnelD + 0.6);
@@ -202,11 +271,11 @@ class Igloo extends BaseProp {
      */
     createIcicles(group) {
         const THREE = this.THREE;
-        const icicleMat = this.matManager.get(0xE8F4FF, { 
-            roughness: 0.1, 
-            metalness: 0.1,
+        const icicleMat = this.matManager.get(ICE_PALETTE.pale, {
+            roughness: 0.08,
+            metalness: 0.2,
             transparent: true,
-            opacity: 0.85
+            opacity: 0.8
         });
         
         const icicleCount = 8;

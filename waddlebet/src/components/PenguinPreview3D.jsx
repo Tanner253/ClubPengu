@@ -1,6 +1,6 @@
 /**
  * PenguinPreview3D - Renders a 3D rotating penguin preview
- * Used in ProfileMenu and PenguinCreatorOverlay for consistent penguin previews
+ * Used in ProfileMenu for consistent penguin previews
  */
 
 import React, { useEffect, useRef } from 'react';

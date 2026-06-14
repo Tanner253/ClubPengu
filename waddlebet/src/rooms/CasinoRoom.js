@@ -1335,7 +1335,7 @@ class CasinoRoom extends BaseRoom {
             z: z + 2,
             radius: 2,
             targetRoom: 'town',
-            targetSpawn: { x: -50, z: 3 }  // Casino exterior position
+            targetSpawn: { x: -30.8, z: 2.8 }  // Red carpet in front of casino
         });
     }
     

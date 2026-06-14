@@ -141,9 +141,9 @@ export const ROOM_PORTALS = {
             emoji: '🎰',
             description: 'Enter the Casino',
             targetRoom: 'casino_game_room',
-            position: { x: -42, z: 3 },  // Centered on main casino floor
+            position: { x: -30.8, z: 2.8 },  // Red carpet in front of casino (east approach)
             doorRadius: 3.5,
-            exitSpawnPos: { x: -42, z: 6 }  // Spawn near center when exiting game room
+            exitSpawnPos: { x: -30.8, z: 2.8 }  // Same spot when exiting game room
         },
         // NORTH ROW IGLOOS (north of T-bar, rotation: 0, door faces SOUTH toward street)
         // Igloos at z ~ -75, doors at z ~ -70, exit spawn at z ~ -62 (on street)
@@ -357,8 +357,8 @@ export const ROOM_PORTALS = {
             // Exit door at center-x (40), near back wall (87+2)
             position: { x: 40, z: 89 },
             doorRadius: 3,
-            // Spawn at the centered game room portal inside casino
-            exitSpawnPos: { x: -42, z: 6 }
+            // Spawn on red carpet in front of casino when exiting game room
+            exitSpawnPos: { x: -30.8, z: 2.8 }
         }
     ]
 };

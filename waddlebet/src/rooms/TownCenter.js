@@ -454,22 +454,6 @@ class TownCenter {
             { type: 'igloo', x: C + 70, z: C - 18, rotation: Math.PI },  // igloo10
         );
         
-        // ==================== PERSONAL IGLOO - PENGUIN CREATOR ====================
-        // Special igloo that opens the in-game penguin customizer
-        props.push({
-            type: 'personal_igloo',
-            x: C + 67.6,
-            z: C + 78.7,
-            rotation: Math.PI  // Face north toward spawn
-        });
-        
-        // Street lights near wardrobe igloo for visibility
-        props.push(
-            { type: 'lamp_post', x: C + 60, z: C + 72, isOn: true },   // Left of wardrobe
-            { type: 'lamp_post', x: C + 75, z: C + 72, isOn: true },   // Right of wardrobe
-            { type: 'lamp_post', x: C + 67.6, z: C + 86, isOn: true }  // Behind wardrobe
-        );
-        
         // ==================== BENCHES - OUTSIDE WALKWAYS ====================
         // T-stem walkway is x = C ± 14, so benches at x = C ± 22
         props.push(
@@ -939,130 +923,6 @@ class TownCenter {
                     // Store the prop for animation updates
                     if (!this.sknyIgloos) this.sknyIgloos = [];
                     this.sknyIgloos.push(sknyProp);
-                    break;
-                }
-                case 'personal_igloo': {
-                    // Personal Igloo - Special wardrobe igloo with floating cosmetics
-                    const personalIglooProp = createProp(this.THREE, null, PROP_TYPES.IGLOO, 0, 0, 0, { withEntrance: true });
-                    mesh = attachPropData(personalIglooProp, personalIglooProp.group);
-                    
-                    // Recolor the igloo to golden/legendary theme
-                    mesh.traverse((child) => {
-                        if (child.isMesh && child.material) {
-                            // Clone material to not affect other igloos
-                            child.material = child.material.clone();
-                            // Give it a golden/purple legendary look
-                            if (child.material.color) {
-                                const originalColor = child.material.color.getHex();
-                                // Make whites golden, grays purple-tinted
-                                if (originalColor > 0xAAAAAA) {
-                                    child.material.color.setHex(0xFFD700); // Gold
-                                    child.material.emissive = new this.THREE.Color(0x332200);
-                                    child.material.emissiveIntensity = 0.3;
-                                } else if (originalColor > 0x555555) {
-                                    child.material.color.setHex(0x9966FF); // Purple
-                                    child.material.emissive = new this.THREE.Color(0x220033);
-                                    child.material.emissiveIntensity = 0.2;
-                                }
-                            }
-                        }
-                    });
-                    
-                    // Mark this as a personal igloo for interaction handling
-                    mesh.userData.isPersonalIgloo = true;
-                    mesh.userData.interactionType = 'penguin_creator';
-                    
-                    // === FLOATING COSMETICS - OPTIMIZED ===
-                    // OLD CODE created 1 mesh per voxel = 800+ draw calls for 4 hats!
-                    // NEW: Simple orbiting gem indicators (4 meshes total)
-                    const floatingGroup = new this.THREE.Group();
-                    floatingGroup.position.set(0, 6, 0); // Above igloo
-                    mesh.add(floatingGroup);
-                    
-                    // Simple orbiting indicators - just 4 simple meshes total
-                    const colors = [0xFFD700, 0x9B59B6, 0x3498DB, 0xE74C3C]; // gold, purple, blue, red
-                    const sharedGeo = new this.THREE.OctahedronGeometry(0.5, 0); // Simple diamond shape
-                    
-                    colors.forEach((color, i) => {
-                        const mat = new this.THREE.MeshStandardMaterial({
-                            color: color,
-                            emissive: color,
-                            emissiveIntensity: 0.5,
-                            metalness: 0.8,
-                            roughness: 0.2
-                        });
-                        const gem = new this.THREE.Mesh(sharedGeo, mat);
-                        
-                        // Create orbit container
-                        const orbit = new this.THREE.Group();
-                        orbit.userData.orbitSpeed = 0.3 + i * 0.1;
-                        orbit.userData.yOffset = Math.sin(i * 1.5) * 0.3;
-                        gem.position.set(3, 0, 0); // Orbit radius
-                        orbit.add(gem);
-                        orbit.rotation.y = (i / 4) * Math.PI * 2;
-                        floatingGroup.add(orbit);
-                    });
-                    
-                    // Store for animation
-                    mesh.userData.floatingGroup = floatingGroup;
-                    
-                    // === SIGN BANNER ===
-                    const signCanvas = document.createElement('canvas');
-                    signCanvas.width = 800;
-                    signCanvas.height = 200;
-                    const ctx = signCanvas.getContext('2d');
-                    
-                    // Gradient background
-                    const gradient = ctx.createLinearGradient(0, 0, 800, 0);
-                    gradient.addColorStop(0, '#1a0a2e');
-                    gradient.addColorStop(0.5, '#2d1b4e');
-                    gradient.addColorStop(1, '#1a0a2e');
-                    ctx.fillStyle = gradient;
-                    ctx.fillRect(0, 0, 800, 200);
-                    
-                    // Golden border
-                    ctx.strokeStyle = '#FFD700';
-                    ctx.lineWidth = 8;
-                    ctx.strokeRect(8, 8, 784, 184);
-                    
-                    // Inner glow border
-                    ctx.strokeStyle = '#9966FF';
-                    ctx.lineWidth = 4;
-                    ctx.strokeRect(16, 16, 768, 168);
-                    
-                    // Text with glow
-                    ctx.shadowColor = '#FFD700';
-                    ctx.shadowBlur = 20;
-                    ctx.fillStyle = '#FFD700';
-                    ctx.font = 'bold 56px Arial';
-                    ctx.textAlign = 'center';
-                    ctx.fillText('✨ WARDROBE ✨', 400, 85);
-                    
-                    ctx.shadowColor = '#00FFFF';
-                    ctx.shadowBlur = 15;
-                    ctx.fillStyle = '#00FFFF';
-                    ctx.font = 'bold 36px Arial';
-                    ctx.fillText('Change Your Look', 400, 145);
-                    ctx.shadowBlur = 0;
-                    
-                    const signTexture = new this.THREE.CanvasTexture(signCanvas);
-                    const signMaterial = new this.THREE.SpriteMaterial({ map: signTexture, transparent: true });
-                    const signSprite = new this.THREE.Sprite(signMaterial);
-                    signSprite.scale.set(12, 3, 1);
-                    signSprite.position.set(0, 12, 0);
-                    mesh.add(signSprite);
-                    
-                    // === AMBIENT LIGHTS (subtle - no harsh glow) ===
-                    // Single soft spotlight on igloo
-                    const spotlight = new this.THREE.SpotLight(0xFFD700, 0.5, 15, Math.PI / 3, 0.8);
-                    spotlight.position.set(0, 12, 5);
-                    spotlight.target.position.set(0, 0, 0);
-                    mesh.add(spotlight);
-                    mesh.add(spotlight.target);
-                    
-                    // Store lights for potential animation (removed intense colored lights)
-                    mesh.userData.wardrobeLights = { spotlight };
-                    
                     break;
                 }
                 case 'lamp_post': {
@@ -2614,7 +2474,7 @@ class TownCenter {
 
     update(time, delta, nightFactor = 0.5, playerPos = null) {
         if (!this._animatedCache) {
-            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], wardrobeIgloos: [], streetLightStrings: [], frameCounter: 0 };
+            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], streetLightStrings: [], frameCounter: 0 };
             // === VISIBILITY CULLING CACHE ===
             // Store elements that should be hidden at distance (with state tracking to avoid freeze)
             // Billboard STRUCTURE stays visible, only the ADVERT IMAGE is hidden at distance
@@ -2623,24 +2483,9 @@ class TownCenter {
                 nightclubSign: null,  // Nightclub title sprite
                 casinoSign: null,     // Casino title sprite
                 floatingTitles: [],   // ARCADE, FISHING signs
-                wardrobeGroup: null,  // Personal igloo floating cosmetics
             };
             
             this.propMeshes.forEach(mesh => {
-                // Wardrobe/Personal igloo with floating cosmetics
-                if (mesh.userData.isPersonalIgloo && mesh.userData.floatingGroup) {
-                    this._animatedCache.wardrobeIgloos.push({
-                        mesh: mesh,
-                        floatingGroup: mesh.userData.floatingGroup,
-                        lights: mesh.userData.wardrobeLights
-                    });
-                    // Cache for visibility culling
-                    this._cullCache.wardrobeGroup = {
-                        mesh: mesh,
-                        floatingGroup: mesh.userData.floatingGroup,
-                        wasVisible: true
-                    };
-                }
                 if (mesh.name === 'campfire') {
                     // Store the Campfire instance reference for clean single-point animation
                     this._animatedCache.campfires.push({
@@ -2753,59 +2598,6 @@ class TownCenter {
                         if (dx * dx + dz * dz > ANIMATION_DISTANCE_SQ) return;
                     }
                     sknyProp.update(time);
-                }
-            });
-            
-            // Wardrobe igloo floating cosmetics animation - DISTANCE CULLED like nightclub
-            // NOTE: Do NOT toggle .visible - just skip animation updates
-            this._animatedCache.wardrobeIgloos.forEach(({ mesh, floatingGroup, lights }) => {
-                // Distance check - skip animation if too far (matches nightclub pattern)
-                if (mesh) {
-                    const dx = px - mesh.position.x;
-                    const dz = pz - mesh.position.z;
-                    if (dx * dx + dz * dz > ANIMATION_DISTANCE_SQ) {
-                        return; // Skip animation, do NOT toggle visibility
-                    }
-                }
-                
-                if (floatingGroup) {
-                    // Rotate each floating item in its orbit
-                    floatingGroup.children.forEach((orbit, index) => {
-                        const speed = orbit.userData.orbitSpeed || 0.5;
-                        const yOffset = orbit.userData.yOffset || 0;
-                        
-                        // Rotate around center
-                        orbit.rotation.y = time * speed + (index * Math.PI * 0.5);
-                        
-                        // Gentle vertical bobbing
-                        orbit.position.y = yOffset + Math.sin(time * 2 + index) * 0.3;
-                        
-                        // Make each item spin on its own axis
-                        if (orbit.children[0]) {
-                            orbit.children[0].rotation.y = time * 2;
-                            orbit.children[0].rotation.x = Math.sin(time + index) * 0.2;
-                        }
-                    });
-                    
-                    // Pulse the entire floating group
-                    const pulse = 1 + Math.sin(time * 1.5) * 0.05;
-                    floatingGroup.scale.setScalar(pulse);
-                }
-                
-                // Animate lights
-                if (lights) {
-                    // Pulse purple light
-                    if (lights.purpleLight) {
-                        lights.purpleLight.intensity = 2 + Math.sin(time * 3) * 0.5;
-                    }
-                    // Pulse cyan light (offset)
-                    if (lights.cyanLight) {
-                        lights.cyanLight.intensity = 2 + Math.sin(time * 3 + Math.PI) * 0.5;
-                    }
-                    // Ground glow pulse
-                    if (lights.groundGlow) {
-                        lights.groundGlow.intensity = 1.5 + Math.sin(time * 2) * 0.3;
-                    }
                 }
             });
         }
@@ -2976,19 +2768,6 @@ class TownCenter {
                     : distSq < SHOW_DIST_SQ;
                 updateVisibility(entry.sprite, shouldShow, entry);
             });
-            
-            // Wardrobe igloo floating cosmetics
-            if (this._cullCache.wardrobeGroup) {
-                const entry = this._cullCache.wardrobeGroup;
-                const dx = px - entry.mesh.position.x;
-                const dz = pz - entry.mesh.position.z;
-                const distSq = dx * dx + dz * dz;
-                
-                const shouldShow = entry.wasVisible 
-                    ? distSq < HIDE_DIST_SQ 
-                    : distSq < SHOW_DIST_SQ;
-                updateVisibility(entry.floatingGroup, shouldShow, entry);
-            }
         }
     }
 

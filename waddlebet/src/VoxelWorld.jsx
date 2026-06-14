@@ -9,7 +9,6 @@ import IglooPortal from './components/IglooPortal';
 import BannerZoomOverlay from './components/BannerZoomOverlay';
 import IglooRentalGuide from './components/IglooRentalGuide';
 import GachaDropRatesGuide from './components/GachaDropRatesGuide';
-import PenguinCreatorOverlay from './components/PenguinCreatorOverlay';
 import PufflePanel from './components/PufflePanel';
 import PuffleShopModal from './components/PuffleShopModal';
 import VirtualJoystick from './components/VirtualJoystick';
@@ -589,9 +588,6 @@ const VoxelWorld = ({
     useEffect(() => {
         arcadeGameActiveRef.current = arcadeGameActive;
     }, [arcadeGameActive]);
-    
-    // Penguin Creator Overlay State (for in-game wardrobe)
-    const [penguinCreatorOpen, setPenguinCreatorOpen] = useState(false);
     
     // Lord Fishnu Interaction State
     const [lordFishnuInteraction, setLordFishnuInteraction] = useState(null); // { canPayRespects, prompt }
@@ -8496,40 +8492,8 @@ const VoxelWorld = ({
         }
     };
     
-    // State for wardrobe igloo interaction
-    const [wardrobeInteraction, setWardrobeInteraction] = useState(null);
-    
     // State for puffle shop modal (opened via portal interaction)
     const [showPuffleShop, setShowPuffleShop] = useState(false);
-    
-    // Check for wardrobe/personal igloo proximity (town only)
-    const checkWardrobeIgloo = () => {
-        if (room !== 'town' || penguinCreatorOpen) {
-            if (wardrobeInteraction) setWardrobeInteraction(null);
-            return;
-        }
-        
-        const playerPos = posRef.current;
-        // Personal igloo position (from TownCenter.js: C + 67.6, C + 78.7)
-        const wardrobeX = CENTER_X + 67.6;
-        const wardrobeZ = CENTER_Z + 78.7;
-        const interactionRadius = 6;
-        
-        const dx = playerPos.x - wardrobeX;
-        const dz = playerPos.z - wardrobeZ;
-        const distance = Math.sqrt(dx * dx + dz * dz);
-        
-        if (distance < interactionRadius) {
-            if (!wardrobeInteraction) {
-                setWardrobeInteraction({
-                    prompt: `✨ ${t('interact.pressE')} ${t('interact.toCustomize')}`,
-                    type: 'wardrobe'
-                });
-            }
-        } else if (wardrobeInteraction) {
-            setWardrobeInteraction(null);
-        }
-    };
     
     useEffect(() => {
         const interval = setInterval(() => {
@@ -8540,10 +8504,9 @@ const VoxelWorld = ({
             checkFishingSpots();
             checkLordFishnu();
             checkArcadeMachines();
-            checkWardrobeIgloo();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, wardrobeInteraction, showPuffleShop, penguinCreatorOpen, userData?.coins, isAuthenticated]);
+    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, isAuthenticated]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -8719,12 +8682,6 @@ const VoxelWorld = ({
     useEffect(() => {
         lordFishnuInteractionRef.current = lordFishnuInteraction;
     }, [lordFishnuInteraction]);
-    
-    // Wardrobe interaction ref for E key handler
-    const wardrobeInteractionRef = useRef(null);
-    useEffect(() => {
-        wardrobeInteractionRef.current = wardrobeInteraction;
-    }, [wardrobeInteraction]);
     
     // Holy messages for Lord Fishnu
     const LORD_FISHNU_MESSAGES = [
@@ -8969,22 +8926,6 @@ const VoxelWorld = ({
         window.addEventListener('keydown', handleFishnuKeyPress);
         return () => window.removeEventListener('keydown', handleFishnuKeyPress);
     }, [nearbyPortal, fishingInteraction, emoteWheelOpen, room, handlePayRespects]);
-    
-    // E key handler for Wardrobe Igloo (Penguin Creator)
-    useEffect(() => {
-        const handleWardrobeKeyPress = (e) => {
-            if (e.code === 'KeyE' && room === 'town' && !penguinCreatorOpen) {
-                const wi = wardrobeInteractionRef.current;
-                // Only trigger if near wardrobe and NOT near other interactions
-                if (wi?.type === 'wardrobe' && !nearbyPortal && !fishingInteraction && !emoteWheelOpen && !arcadeInteraction) {
-                    setPenguinCreatorOpen(true);
-                    setWardrobeInteraction(null);
-                }
-            }
-        };
-        window.addEventListener('keydown', handleWardrobeKeyPress);
-        return () => window.removeEventListener('keydown', handleWardrobeKeyPress);
-    }, [nearbyPortal, fishingInteraction, emoteWheelOpen, arcadeInteraction, room, penguinCreatorOpen]);
     
     // Handle town interactions (benches, snowmen, etc.)
     useEffect(() => {
@@ -10472,61 +10413,6 @@ const VoxelWorld = ({
                 onClose={() => setGachaDropRatesGuideOpen(false)}
              />
              
-             {/* Penguin Creator Overlay (Wardrobe Igloo) */}
-             <PenguinCreatorOverlay
-                isOpen={penguinCreatorOpen}
-                onClose={() => setPenguinCreatorOpen(false)}
-                currentData={penguinData}
-                onSave={(newData) => {
-                    console.log('🎨 Saving appearance from golden igloo wardrobe:', newData);
-                    
-                    // Update local state immediately (for instant visual feedback)
-                    if (onPenguinDataChange) {
-                        onPenguinDataChange(newData);
-                    }
-                    
-                    // Update appearance on server (broadcasts to all players)
-                    // Ensure all appearance fields are included
-                    const fullAppearance = {
-                        ...newData,
-                        // Ensure mountEnabled is preserved if it exists
-                        mountEnabled: newData.mountEnabled !== undefined ? newData.mountEnabled : true
-                    };
-                    mpUpdateAppearance(fullAppearance);
-                    console.log('📤 Sent appearance update to server:', fullAppearance);
-                    
-                    // Force a position update to ensure other players see us moving
-                    // This fixes the issue where players appear stuck after appearance update
-                    // Use setTimeout to ensure position is sent after appearance update is processed
-                    setTimeout(() => {
-                        if (posRef.current && sendPosition && playerRef.current) {
-                            const rot = playerRef.current.rotation.y || 0;
-                            const pufflePos = playerPuffleRef.current?.position || null;
-                            sendPosition(
-                                { x: posRef.current.x, y: posRef.current.y, z: posRef.current.z },
-                                rot,
-                                pufflePos
-                            );
-                            console.log('📍 Sent position update after appearance change (100ms delay)');
-                        }
-                    }, 100);
-                    
-                    // Send another position update after a longer delay to ensure it's received
-                    setTimeout(() => {
-                        if (posRef.current && sendPosition && playerRef.current) {
-                            const rot = playerRef.current.rotation.y || 0;
-                            const pufflePos = playerPuffleRef.current?.position || null;
-                            sendPosition(
-                                { x: posRef.current.x, y: posRef.current.y, z: posRef.current.z },
-                                rot,
-                                pufflePos
-                            );
-                            console.log('📍 Sent position update after appearance change (500ms delay)');
-                        }
-                    }, 500);
-                }}
-             />
-             
              {/* Casino TV is now rendered in 3D space with real data from DexScreener API */}
              
              {/* Mobile PUBG-style Joystick - LEFT side (or right if left-handed) */}
@@ -10941,42 +10827,6 @@ const VoxelWorld = ({
                 );
              })()}
              
-             {/* Wardrobe Igloo Interaction UI (Penguin Creator) */}
-             {wardrobeInteraction && room === 'town' && !fishingInteraction && !nearbyPortal && !penguinCreatorOpen && (
-                <div 
-                    className={`absolute bg-gradient-to-b from-purple-900/95 to-indigo-900/95 backdrop-blur-sm rounded-xl border border-yellow-500/50 text-center z-20 shadow-lg shadow-yellow-500/30 ${
-                        isMobile 
-                            ? isLandscape 
-                                ? 'bottom-[180px] right-28 p-3' 
-                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
-                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
-                    }`}
-                >
-                    <div className="text-3xl mb-1">✨</div>
-                    <p className="text-yellow-300 retro-text text-sm mb-2">
-                        {isMobile 
-                            ? `👔 ${t('interact.tapToCustomize')}`
-                            : wardrobeInteraction.prompt
-                        }
-                    </p>
-                    
-                    <button
-                        className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm transition-all active:scale-95 shadow-lg bg-gradient-to-b from-yellow-400 to-amber-600 hover:from-yellow-300 hover:to-amber-500 text-black"
-                        onClick={() => {
-                            setPenguinCreatorOpen(true);
-                            setWardrobeInteraction(null);
-                        }}
-                    >
-                        🐧 {t('interact.customize')}
-                    </button>
-                    
-                    {/* Desktop hint */}
-                    {!isMobile && (
-                        <p className="text-white/50 text-[10px] mt-1 retro-text">{t('interact.orPressE')}</p>
-                    )}
-                </div>
-             )}
-
              {/* Town Interaction Prompt - Clickable like dojo enter */}
              {/* Hide when blackjack interaction is showing to prevent overlap */}
              {nearbyInteraction && !nearbyPortal && !slotInteraction && !blackjackInteraction && (

@@ -994,10 +994,10 @@ class Casino extends BaseBuilding {
         });
 
         // ==================== GAME ROOM FLOOR TRIGGER ZONE ====================
-        // Floor glow at CENTER of main casino floor for easy visibility
-        // This creates a visible floor area where players can enter the game room
-        const gameRoomTriggerX = 0;      // Center of casino width
-        const gameRoomTriggerZ = d / 4;  // Center of main floor area (d/4 = 8 for d=32)
+        // Floor glow on red carpet in front of casino (town offset x: -30.8, z: 2.8)
+        // Casino at C-50, C+3 with rotation PI/2 → local (-0.2, -19.2)
+        const gameRoomTriggerX = -0.2;
+        const gameRoomTriggerZ = -19.2;
         
         // Floor glow circle
         const floorGlowMat = this.getMaterial(neonCyan, {
@@ -1281,8 +1281,8 @@ class Casino extends BaseBuilding {
         };
         // Store game room floor trigger location (used by getPortalTrigger)
         group.userData.portalRoom = {
-            x: 0,     // Local X for floor trigger (center of casino)
-            z: d / 4, // Local Z for floor trigger (center of main floor)
+            x: -0.2,
+            z: -19.2,
             radius: 3.5
         };
         group.userData.entranceWidth = 12;
@@ -2118,17 +2118,12 @@ class Casino extends BaseBuilding {
 
     /**
      * Get portal trigger data
-     * Floor trigger in back-left corner where "Game Room" text is rendered
-     * User-specified world coords: x: C + -60.6, z: C + 17.4 (where C = 110)
+     * Red carpet in front of casino — town offset x: C + -30.8, z: C + 2.8
      */
     getPortalTrigger(x, z, rotation = 0) {
-        // Calculate local coordinates that produce the correct world position
-        // With casino at (C-50, C+3) = (60, 113) and rotation PI/2:
-        // worldX = 60 - localZ, worldZ = 113 + localX
-        // Target: worldX = 49.4, worldZ = 127.4
-        // So: localZ = 10.6, localX = 14.4
-        const localX = 14.4;
-        const localZ = 10.6;
+        // Casino at (C-50, C+3) with rotation PI/2 → local (-0.2, -19.2)
+        const localX = -0.2;
+        const localZ = -19.2;
         
         // Transform to world coordinates
         const cos = Math.cos(rotation);

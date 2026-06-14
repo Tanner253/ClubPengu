@@ -51,8 +51,7 @@ All 8 new animated skins have been implemented with:
 | `src/assets/index.js` | Unified asset exports |
 | `src/constants.js` | `PALETTE` - hex colors for skins |
 | `src/engine/PenguinBuilder.js` | `ANIMATED_SKIN_COLORS` config + build logic |
-| `src/VoxelPenguinDesigner.jsx` | Designer UI + cosmetic selection |
-| `src/components/PenguinCreatorOverlay.jsx` | Overlay picker + animated skin config |
+| `src/VoxelPenguinDesigner.jsx` | Designer UI + cosmetic selection + animated skin config |
 
 ---
 
@@ -64,9 +63,8 @@ All 8 new animated skins have been implemented with:
 1. src/constants.js                          → Add to PALETTE (hex value)
 2. src/engine/PenguinBuilder.js              → Add to ANIMATED_SKIN_COLORS
 3. src/VoxelPenguinDesigner.jsx              → Add to ANIMATED_SKIN_COLORS + PREMIUM_SKIN_COLORS
-4. src/components/PenguinCreatorOverlay.jsx  → Add to ANIMATED_SKIN_COLORS + PREMIUM_SKIN_COLORS
-5. server/scripts/seedCosmetics.js           → Add to GACHA_SKIN_COLORS
-6. RUN: node server/scripts/seedCosmetics.js → Populate database
+4. server/scripts/seedCosmetics.js           → Add to GACHA_SKIN_COLORS
+5. RUN: node server/scripts/seedCosmetics.js → Populate database
 ```
 
 ### For FEATHERS/HATS (3 items)
@@ -106,7 +104,7 @@ All 8 new animated skins have been implemented with:
 ## 🎨 ANIMATED SKINS (8 items)
 
 > **Rarity:** Epic (animated) or Legendary (animated + glow)
-> **Files:** constants.js, PenguinBuilder.js, VoxelPenguinDesigner.jsx, PenguinCreatorOverlay.jsx, seedCosmetics.js
+> **Files:** constants.js, PenguinBuilder.js, VoxelPenguinDesigner.jsx, seedCosmetics.js
 
 ### Skin 1: Lava
 - [ ] **Status:** Not Started
