@@ -31,8 +31,11 @@ const CONFIG = {
     TOKEN_DECIMALS: 6,                      // $CP has 6 decimals
     
     // Security
-    NONCE_EXPIRY_MINUTES: 5,                // Nonce expires after 5 minutes
+    NONCE_EXPIRY_MINUTES: 5,                // Legacy in-memory cleanup interval (see claim nonce retention)
+    CLAIM_NONCE_RETENTION_MS: 24 * 60 * 60 * 1000, // Match cooldown — block replay for 24h
 };
+
+const CLIENT_NONCE_REGEX = /^[a-f0-9]{64}$/i;
 
 // Track active sessions (walletAddress -> session info)
 const _activeSessions = new Map();
@@ -264,6 +267,10 @@ class DailyBonusService {
         if (!clientNonce) {
             return { success: false, error: 'NO_NONCE', message: 'Request nonce required' };
         }
+
+        if (!CLIENT_NONCE_REGEX.test(clientNonce)) {
+            return { success: false, error: 'INVALID_NONCE', message: 'Invalid claim request' };
+        }
         
         // 🚨 CRITICAL: Rate limit - prevent rapid-fire claim attempts
         const lastAttempt = _claimAttempts.get(walletAddress);
@@ -300,6 +307,9 @@ class DailyBonusService {
         
         // Mark claim in progress
         _claimsInProgress.add(walletAddress);
+
+        let reservedClaimId = null;
+        let previousLastClaim = null;
         
         try {
             // ═══════════════════════════════════════════════════════════════
@@ -309,6 +319,15 @@ class DailyBonusService {
             const user = await User.findOne({ walletAddress });
             if (!user) {
                 return { success: false, error: 'USER_NOT_FOUND' };
+            }
+
+            const processedNonces = user.dailyBonus?.processedClaimNonces || [];
+            if (processedNonces.includes(clientNonce)) {
+                return {
+                    success: false,
+                    error: 'NONCE_REUSED',
+                    message: 'This claim request was already processed'
+                };
             }
             
             const now = new Date();
@@ -350,20 +369,25 @@ class DailyBonusService {
             // Mark nonce as used BEFORE sending transaction
             _usedNonces.set(clientNonce, Date.now());
             
-            // Update user BEFORE blockchain tx (marks as claimed to prevent double-spend)
-            // Use atomic operation with nonce check
+            // Update user BEFORE blockchain tx (marks claimed to prevent double-spend)
             const updateResult = await User.updateOne(
                 { 
                     walletAddress,
-                    // Ensure cooldown hasn't been bypassed by another request
+                    'dailyBonus.processedClaimNonces': { $nin: [clientNonce] },
                     $or: [
                         { 'dailyBonus.lastClaimAt': null },
-                        { 'dailyBonus.lastClaimAt': { $lt: new Date(now - cooldownMs) } }
+                        { 'dailyBonus.lastClaimAt': { $lt: new Date(now.getTime() - cooldownMs) } }
                     ]
                 },
                 {
                     'dailyBonus.lastClaimAt': now,
                     'dailyBonus.claimNonce': claimId,
+                    $push: {
+                        'dailyBonus.processedClaimNonces': {
+                            $each: [clientNonce],
+                            $slice: -50
+                        }
+                    },
                     $inc: {
                         'dailyBonus.totalClaimed': 1,
                         'dailyBonus.totalWaddleEarned': CONFIG.REWARD_AMOUNT
@@ -373,9 +397,12 @@ class DailyBonusService {
             
             // If no document was modified, another claim beat us
             if (updateResult.modifiedCount === 0) {
-                _usedNonces.delete(clientNonce); // Allow retry
+                _usedNonces.delete(clientNonce);
                 return { success: false, error: 'ALREADY_CLAIMED', message: 'Bonus already claimed' };
             }
+
+            reservedClaimId = claimId;
+            previousLastClaim = lastClaim;
             
             console.log(`🎁 [DailyBonus] Processing claim for ${walletAddress.slice(0, 8)}...`);
             console.log(`   Claim ID: ${claimId}`);
@@ -395,9 +422,13 @@ class DailyBonusService {
                 claimId
             );
             
-            if (txResult.success) {
+            if (txResult.success || txResult.txId) {
+                const txSignature = txResult.txId;
+                if (!txResult.success) {
+                    console.warn(`🎁 [DailyBonus] Tx broadcast but confirmation uncertain: ${txSignature}`);
+                }
                 console.log(`🎁 [DailyBonus] ✅ Claim successful!`);
-                console.log(`   Tx: ${txResult.txId}`);
+                console.log(`   Tx: ${txSignature}`);
                 
                 // Record transaction
                 if (isDBConnected()) {
@@ -410,20 +441,21 @@ class DailyBonusService {
                             currency: 'WADDLE',
                             relatedData: {
                                 claimId,
-                                txSignature: txResult.txId,
-                                sessionMinutes
+                                clientNonce,
+                                txSignature,
+                                sessionMinutes,
+                                confirmationUncertain: !txResult.success
                             },
                             reason: 'Daily login bonus claim'
                         });
                     } catch (txErr) {
-                        // Non-critical - log but don't fail
                         console.warn('[DailyBonus] Failed to record transaction:', txErr.message);
                     }
                 }
                 
                 return {
                     success: true,
-                    txSignature: txResult.txId,
+                    txSignature,
                     amount: CONFIG.REWARD_AMOUNT,
                     tokenSymbol: '$CP',
                     claimId,
@@ -437,13 +469,16 @@ class DailyBonusService {
                 await User.updateOne(
                     { walletAddress, 'dailyBonus.claimNonce': claimId },
                     {
-                        'dailyBonus.lastClaimAt': lastClaim, // Restore previous claim time
+                        'dailyBonus.lastClaimAt': previousLastClaim,
+                        $pull: { 'dailyBonus.processedClaimNonces': clientNonce },
                         $inc: {
                             'dailyBonus.totalClaimed': -1,
                             'dailyBonus.totalWaddleEarned': -CONFIG.REWARD_AMOUNT
                         }
                     }
                 );
+                
+                _usedNonces.delete(clientNonce);
                 
                 return {
                     success: false,
@@ -454,6 +489,26 @@ class DailyBonusService {
             
         } catch (error) {
             console.error('[DailyBonus] Claim error:', error.message);
+
+            if (reservedClaimId) {
+                try {
+                    await User.updateOne(
+                        { walletAddress, 'dailyBonus.claimNonce': reservedClaimId },
+                        {
+                            'dailyBonus.lastClaimAt': previousLastClaim,
+                            $pull: { 'dailyBonus.processedClaimNonces': clientNonce },
+                            $inc: {
+                                'dailyBonus.totalClaimed': -1,
+                                'dailyBonus.totalWaddleEarned': -CONFIG.REWARD_AMOUNT
+                            }
+                        }
+                    );
+                    _usedNonces.delete(clientNonce);
+                } catch (revertErr) {
+                    console.error('[DailyBonus] Failed to revert reserved claim:', revertErr.message);
+                }
+            }
+
             return { success: false, error: 'CLAIM_FAILED', message: error.message };
             
         } finally {
@@ -467,7 +522,7 @@ class DailyBonusService {
      * @private
      */
     _cleanupNonces() {
-        const expiryMs = CONFIG.NONCE_EXPIRY_MINUTES * 60 * 1000;
+        const expiryMs = CONFIG.CLAIM_NONCE_RETENTION_MS;
         const now = Date.now();
         
         // Clean old nonces

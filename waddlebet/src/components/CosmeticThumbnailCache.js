@@ -195,14 +195,13 @@ class CosmeticThumbnailCache {
     _initRenderer() {
         if (this.initialized) return;
         
-        // Create off-screen renderer
+        // Create off-screen renderer (no preserveDrawingBuffer — expensive in Brave)
         this.renderer = new THREE.WebGLRenderer({
-            antialias: true,
+            antialias: false,
             alpha: true,
-            preserveDrawingBuffer: true, // Required for toDataURL
             powerPreference: 'low-power'
         });
-        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        this.renderer.setPixelRatio(1);
         
         // Scene
         this.scene = new THREE.Scene();
@@ -414,11 +413,42 @@ class CosmeticThumbnailCache {
             });
         }
         
-        // Render
+        // Render to off-screen target (single pass — no preserveDrawingBuffer)
+        return this._captureToDataURL(size);
+    }
+
+    /**
+     * Read framebuffer via render target (avoids preserveDrawingBuffer GPU cost).
+     */
+    _captureToDataURL(size) {
+        if (!this._renderTarget || this._renderTarget.width !== size) {
+            this._renderTarget?.dispose();
+            this._renderTarget = new THREE.WebGLRenderTarget(size, size, {
+                format: THREE.RGBAFormat,
+                type: THREE.UnsignedByteType
+            });
+        }
+
+        this.renderer.setRenderTarget(this._renderTarget);
         this.renderer.render(this.scene, this.camera);
-        
-        // Get data URL
-        return this.renderer.domElement.toDataURL('image/png');
+        this.renderer.setRenderTarget(null);
+
+        const pixels = new Uint8Array(size * size * 4);
+        this.renderer.readRenderTargetPixels(this._renderTarget, 0, 0, size, size, pixels);
+
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        const imageData = ctx.createImageData(size, size);
+
+        for (let y = 0; y < size; y++) {
+            const srcRow = (size - 1 - y) * size * 4;
+            imageData.data.set(pixels.subarray(srcRow, srcRow + size * 4), y * size * 4);
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        return canvas.toDataURL('image/png');
     }
     
     /**

@@ -20,6 +20,7 @@ const generateNonce = () => {
 
 const DailyBonusModal = ({ isOpen, onClose }) => {
     const menuRef = useRef(null);
+    const claimInFlightRef = useRef(false);
     const { send, registerCallbacks, isAuthenticated } = useMultiplayer();
     
     // State
@@ -52,9 +53,19 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
             },
             onDailyBonusResult: (msg) => {
                 setIsClaiming(false);
+                claimInFlightRef.current = false;
                 setClaimResult(msg);
                 if (msg.success) {
-                    // Refresh status after successful claim
+                    setStatus((prev) => prev ? {
+                        ...prev,
+                        canClaim: false,
+                        cooldownExpired: false,
+                        timeUntilClaim: 24 * 60 * 60 * 1000,
+                        totalClaimed: (prev.totalClaimed || 0) + 1,
+                        totalWaddleEarned: (prev.totalWaddleEarned || 0) + (msg.amount || 5000),
+                        lastClaimAt: new Date().toISOString()
+                    } : prev);
+                    setReceivedAt(Date.now());
                     setTimeout(() => {
                         send({ type: 'daily_bonus_status' });
                     }, 500);
@@ -123,8 +134,9 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
     
     // Claim handler
     const handleClaim = useCallback(() => {
-        if (isClaiming || !status?.canClaim) return;
+        if (claimInFlightRef.current || isClaiming || !status?.canClaim) return;
         
+        claimInFlightRef.current = true;
         setIsClaiming(true);
         setClaimResult(null);
         

@@ -757,6 +757,7 @@ class CustodialWalletService {
     }
 
     async _sendPayoutTransaction(recipientWallet, tokenAddress, amount, memo) {
+        let signature = null;
         try {
             const recipientPubkey = new PublicKey(recipientWallet);
             const mintPubkey = new PublicKey(tokenAddress);
@@ -844,8 +845,7 @@ class CustodialWalletService {
             // Sign the transaction
             transaction.sign(_keypair);
             
-            // Send the signed transaction
-            const signature = await this.connection.sendRawTransaction(
+            signature = await this.connection.sendRawTransaction(
                 transaction.serialize(),
                 { skipPreflight: false, preflightCommitment: 'confirmed' }
             );
@@ -861,6 +861,14 @@ class CustodialWalletService {
         } catch (error) {
             // Log error type but not details that might expose sensitive info
             console.error('🚨 Payout transaction failed:', error.message?.slice(0, 100));
+
+            if (signature) {
+                return {
+                    success: false,
+                    txId: signature,
+                    error: 'CONFIRMATION_UNCERTAIN'
+                };
+            }
             
             if (error.message?.includes('insufficient funds')) {
                 return { success: false, error: 'INSUFFICIENT_SOL_FOR_FEES' };

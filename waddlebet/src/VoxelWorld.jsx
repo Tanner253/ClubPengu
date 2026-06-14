@@ -765,6 +765,8 @@ const VoxelWorld = ({
         });
         
         async function initWorld() {
+        await performanceManager.ensureAutoPreset();
+
         const THREE = window.THREE;
         const OrbitControls = window.THREE.OrbitControls;
         
@@ -855,7 +857,8 @@ const VoxelWorld = ({
         } else {
             const preset = performanceManager.getPreset();
             const settings = performanceManager.getSettings();
-            console.log(`🎮 PC Performance: "${settings.name}" preset (DPR=${dpr}, antialias=${settings.antialias}, shadows=${settings.shadowType})`);
+            const braveNote = performanceManager.isBraveBrowser ? ' [Brave optimizations]' : '';
+            console.log(`🎮 PC Performance: "${settings.name}" preset (DPR=${dpr}, antialias=${settings.antialias}, shadows=${settings.shadowType})${braveNote}`);
         }
         
         // Shadows from performance manager
@@ -914,8 +917,10 @@ const VoxelWorld = ({
         const sunLight = new THREE.DirectionalLight(0xF8F8FF, 1.0); // Cold bright sun
         sunLight.position.set(80, 100, 60);
         sunLight.castShadow = true;
-        // Apple (Mac + iOS) + Android: 512 shadow map (faster), PC: 1024 (better quality)
-        const shadowMapSize = needsOptimization ? 512 : 1024;
+        // Shadow map size from performance preset (Brave / low-end auto-downgrade included)
+        const shadowMapSize = needsOptimization
+            ? 512
+            : performanceManager.getSettings().shadowMapSize;
         sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
         sunLight.shadow.camera.left = -100;
         sunLight.shadow.camera.right = 100;

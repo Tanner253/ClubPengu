@@ -318,6 +318,7 @@ const userSchema = new mongoose.Schema({
         totalClaimed: { type: Number, default: 0 },          // Total claims made
         totalWaddleEarned: { type: Number, default: 0 },     // Total $CP earned from daily bonus (legacy field name)
         claimNonce: { type: String, default: null },         // Last claim ID for anti-replay
+        processedClaimNonces: { type: [String], default: [] }, // Client nonces used for completed claims
         currentSessionMinutes: { type: Number, default: 0 }, // Session time tracking
         sessionStartTime: { type: Date, default: null }      // Current session start
     },

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { initBrowserCapabilities } from './utils/browserCapabilities.js';
 import VoxelPenguinDesigner from './VoxelPenguinDesigner';
 import VoxelWorld from './VoxelWorld';
 import CardJitsu from './minigames/CardJitsu';
@@ -616,6 +617,10 @@ clearOldGameData();
  * Main App - Wraps providers
  */
 const App = () => {
+    useEffect(() => {
+        initBrowserCapabilities().catch(() => {});
+    }, []);
+
     return (
         <LanguageProvider>
             <MultiplayerProvider>

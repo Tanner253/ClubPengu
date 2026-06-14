@@ -6,6 +6,8 @@
  * Provides distance-based LOD and update throttling.
  */
 
+import { initBrowserCapabilities, probeWebGLConstraints } from '../utils/browserCapabilities.js';
+
 // ==================== UNIVERSAL LOD THRESHOLDS ====================
 // These apply to ALL quality presets for consistent optimization
 // AGGRESSIVE thresholds for expanded map (matching mobile performance)
@@ -129,12 +131,15 @@ export const PERFORMANCE_PRESETS = {
 
 class PerformanceManager {
     constructor() {
-        this.currentPreset = 'ultra';
-        this.settings = { ...PERFORMANCE_PRESETS.ultra };
+        this.currentPreset = 'high';
+        this.settings = { ...PERFORMANCE_PRESETS.high };
         this.frameCount = 0;
         this.listeners = new Set();
+        this.isBraveBrowser = false;
+        this._autoPresetApplied = false;
+        this._userPresetSaved = false;
         
-        // Load saved preference
+        // Load saved preference (or sync GPU probe fallback)
         this.loadSettings();
     }
     
@@ -149,11 +154,49 @@ class PerformanceManager {
                 if (PERFORMANCE_PRESETS[parsed.preset]) {
                     this.currentPreset = parsed.preset;
                     this.settings = { ...PERFORMANCE_PRESETS[parsed.preset] };
+                    this._userPresetSaved = true;
                     console.log(`🎮 Performance: Loaded "${this.settings.name}" preset`);
+                    return;
                 }
             }
         } catch (e) {
             console.warn('Failed to load performance settings:', e);
+        }
+
+        const webgl = probeWebGLConstraints();
+        if (webgl.recommendPreset) {
+            this._applyPreset(webgl.recommendPreset, false);
+            console.log(`🎮 Performance: Auto-applied "${this.settings.name}" (${webgl.renderer || 'WebGL probe'})`);
+        }
+    }
+
+    /**
+     * Async browser probe — Brave WebGL protections need lower quality settings.
+     * Call before main renderer init when no user-saved preset exists.
+     */
+    async ensureAutoPreset() {
+        if (this._autoPresetApplied || this._userPresetSaved) {
+            return;
+        }
+        this._autoPresetApplied = true;
+
+        const caps = await initBrowserCapabilities();
+        this.isBraveBrowser = caps.isBrave;
+
+        if (caps.recommendPreset) {
+            this._applyPreset(caps.recommendPreset, false);
+            const reason = caps.isBrave ? 'Brave browser detected' : (caps.renderer || 'GPU probe');
+            console.log(`🎮 Performance: Auto-applied "${this.settings.name}" (${reason})`);
+        }
+    }
+
+    _applyPreset(presetName, persist = true) {
+        if (!PERFORMANCE_PRESETS[presetName]) return;
+        this.currentPreset = presetName;
+        this.settings = { ...PERFORMANCE_PRESETS[presetName] };
+        if (persist) {
+            this._userPresetSaved = true;
+            this.saveSettings();
         }
     }
     
@@ -180,9 +223,7 @@ class PerformanceManager {
             return;
         }
         
-        this.currentPreset = presetName;
-        this.settings = { ...PERFORMANCE_PRESETS[presetName] };
-        this.saveSettings();
+        this._applyPreset(presetName, true);
         
         console.log(`🎮 Performance: Set to "${this.settings.name}" preset`);
         
@@ -311,13 +352,16 @@ class PerformanceManager {
             };
         }
         
+        // Brave: WebGL fingerprinting protections add heavy per-frame overhead
+        const braveOptimized = this.isBraveBrowser || (typeof window !== 'undefined' && window._isBraveBrowser);
+
         // PC uses preset settings
         return {
-            antialias: this.settings.antialias,
-            powerPreference: 'high-performance',
+            antialias: braveOptimized ? false : this.settings.antialias,
+            powerPreference: braveOptimized ? 'low-power' : 'high-performance',
             depth: true,
-            precision: this.settings.antialias ? 'highp' : 'mediump',
-            stencil: this.settings.antialias,
+            precision: braveOptimized ? 'mediump' : (this.settings.antialias ? 'highp' : 'mediump'),
+            stencil: braveOptimized ? false : this.settings.antialias,
         };
     }
     
@@ -327,7 +371,8 @@ class PerformanceManager {
      */
     getDPR(isMobile = false) {
         if (isMobile) return 1.0;
-        return Math.min(window.devicePixelRatio, this.settings.dpr);
+        const braveCap = (this.isBraveBrowser || window._isBraveBrowser) ? 1.0 : this.settings.dpr;
+        return Math.min(window.devicePixelRatio, braveCap);
     }
     
     /**
