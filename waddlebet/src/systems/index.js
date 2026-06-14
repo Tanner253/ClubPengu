@@ -75,6 +75,9 @@ export { default as CameraController } from './CameraController';
 // Slot machine system (casino slots interaction and spectator bubbles)
 export { default as SlotMachineSystem, SPIN_COST as SLOT_SPIN_COST, RARITY_SYMBOLS as SLOT_RARITY_SYMBOLS } from './SlotMachineSystem';
 
+// Gold lobby slot machines (town casino — gold currency)
+export { default as GoldLobbySlotSystem } from './GoldLobbySlotSystem';
+
 // Jackpot celebration system (disco ball, confetti, lasers)
 export { default as JackpotCelebration } from './JackpotCelebration';
 

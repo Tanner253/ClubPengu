@@ -25,6 +25,7 @@ import {
     UserService,
     PromoCodeService,
     SlotService,
+    GoldSlotsService,
     FishingService,
     IglooService,
     BlackjackService,
@@ -37,6 +38,7 @@ import { handleIglooMessage } from './handlers/iglooHandlers.js';
 import { handleTippingMessage } from './handlers/tippingHandlers.js';
 import { handleMarketplaceMessage } from './handlers/marketplaceHandlers.js';
 import { handleGiftMessage } from './handlers/giftHandlers.js';
+import { WORLD_SPAWN, WORLD_SPAWN_ROOM } from '../src/config/roomConfig.js';
 import { initializeNFTServices, handleNFTMessage, handleGetImage, handleGetMetadata } from './handlers/nftHandlers.js';
 import nftOwnershipService from './services/NFTOwnershipService.js';
 import rentScheduler from './schedulers/RentScheduler.js';
@@ -404,6 +406,7 @@ const getPveActivitiesInRoom = (roomId) => {
 const challengeService = new ChallengeService(inboxService, statsService);
 const matchService = new MatchService(statsService, userService, broadcastToRoom, sendToPlayer);
 const slotService = new SlotService(userService, broadcastToRoom, sendToPlayer);
+const goldSlotsService = new GoldSlotsService(userService, broadcastToRoom, sendToPlayer);
 const fishingService = new FishingService(userService, broadcastToRoom, sendToPlayer);
 const blackjackService = new BlackjackService(userService, broadcastToRoom, sendToPlayer);
 const gachaService = new GachaService(userService, broadcastToRoom, sendToPlayer, broadcastToAll);
@@ -938,6 +941,7 @@ function cleanupStaleWalletConnection(walletAddress, excludePlayerId = null) {
             playerTrailPoints.delete(existingPlayerId);
             playerChatTimestamps.delete(existingPlayerId);
             slotService.handleDisconnect(existingPlayerId);
+            goldSlotsService.handleDisconnect(existingPlayerId);
             fishingService.handleDisconnect(existingPlayerId);
             
             // End any PvE activities
@@ -1289,6 +1293,7 @@ wss.on('connection', (ws, req) => {
         if (player) {
             // Handle slot disconnect (cancel any active spin)
             slotService.handleDisconnect(playerId);
+            goldSlotsService.handleDisconnect(playerId);
             fishingService.handleDisconnect(playerId);
             
             // End daily bonus session tracking
@@ -1938,11 +1943,13 @@ async function handleMessage(playerId, message) {
             
             console.log(`[${ts()}] 📥 Join request: name=${player.name}, characterType=${message.appearance?.characterType || 'none'}, authenticated=${!!player.walletAddress}`);
             
-            const roomId = message.room || 'town';
+            const roomId = message.room || WORLD_SPAWN_ROOM;
             joinRoom(playerId, roomId);
             
             // Set spawn position
-            if (roomId === 'town') {
+            if (roomId === WORLD_SPAWN_ROOM) {
+                player.position = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
+            } else if (roomId === 'town') {
                 player.position = { x: 110, y: 0, z: 110 };
             } else if (roomId === 'dojo') {
                 player.position = { x: 0, y: 0, z: 14 };
@@ -2231,6 +2238,11 @@ async function handleMessage(playerId, message) {
             const activeSlotSpins = slotService.getActiveSlotSpins(roomId);
             if (activeSlotSpins.length > 0) {
                 sendToPlayer(playerId, { type: 'slot_active_spins', spins: activeSlotSpins });
+            }
+
+            const activeGoldSlotSpins = goldSlotsService.getActiveSpins(roomId);
+            if (activeGoldSlotSpins.length > 0) {
+                sendToPlayer(playerId, { type: 'gold_slot_active_spins', spins: activeGoldSlotSpins });
             }
             
             console.log(`[${ts()}] ${player.name} joined ${roomId}${player.isAuthenticated ? ' (authenticated)' : ' (guest)'}`);
@@ -2678,7 +2690,9 @@ async function handleMessage(playerId, message) {
             if (newRoom && newRoom !== oldRoom) {
                 joinRoom(playerId, newRoom);
                 
-                if (newRoom === 'town') {
+                if (newRoom === WORLD_SPAWN_ROOM) {
+                    player.position = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
+                } else if (newRoom === 'town') {
                     player.position = { x: 110, y: 0, z: 110 };
                 } else if (newRoom === 'dojo') {
                     player.position = { x: 0, y: 0, z: 14 };
@@ -4798,6 +4812,84 @@ async function handleMessage(playerId, message) {
             });
             break;
         }
+
+        // ==================== GOLD LOBBY SLOTS ====================
+        case 'gold_slot_spin': {
+            const { machineId } = message;
+
+            console.log(`[GoldSlot] ${player.name} (${playerId.slice(0, 8)}) spin request machine=${machineId} room=${player.room} auth=${!!player.walletAddress}`);
+
+            if (!machineId) {
+                sendToPlayer(playerId, {
+                    type: 'gold_slot_error',
+                    error: 'INVALID_MACHINE',
+                    message: 'Invalid slot machine',
+                    machineId: null
+                });
+                break;
+            }
+
+            const spinResult = await goldSlotsService.spin(
+                playerId,
+                player.walletAddress,
+                player.room,
+                machineId,
+                player.name,
+                player.position
+            );
+
+            if (spinResult.error || spinResult.allowed === false) {
+                console.log(`[GoldSlot] Rejected: ${spinResult.error} — ${spinResult.message}`);
+                sendToPlayer(playerId, {
+                    type: 'gold_slot_error',
+                    error: spinResult.error,
+                    message: spinResult.message,
+                    machineId,
+                    coinBalance: spinResult.coinBalance,
+                    required: spinResult.required
+                });
+            } else {
+                console.log(`[GoldSlot] Accepted: ${player.name} on ${spinResult.machineId}, bet ${spinResult.bet}g, balance ${spinResult.newCoinBalance}`);
+                sendToPlayer(playerId, {
+                    type: 'gold_slot_spin_started',
+                    machineId: spinResult.machineId,
+                    bet: spinResult.bet,
+                    newCoinBalance: spinResult.newCoinBalance
+                });
+
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: spinResult.newCoinBalance
+                });
+
+                broadcastToRoom(player.room, {
+                    type: 'gold_slot_player_spinning',
+                    playerId,
+                    playerName: player.name,
+                    playerPosition: player.position,
+                    machineId
+                }, playerId);
+            }
+            break;
+        }
+
+        case 'gold_slot_info': {
+            sendToPlayer(playerId, {
+                type: 'gold_slot_info',
+                info: GoldSlotsService.getInfo()
+            });
+            break;
+        }
+
+        case 'gold_slot_sync': {
+            if (player.room) {
+                sendToPlayer(playerId, {
+                    type: 'gold_slot_active_spins',
+                    spins: goldSlotsService.getActiveSpins(player.room)
+                });
+            }
+            break;
+        }
         
         case 'slot_sync': {
             // Get active slot spins in the current room
@@ -6489,6 +6581,7 @@ setInterval(async () => {
             
             // Handle slot disconnect
             slotService.handleDisconnect(playerId);
+            goldSlotsService.handleDisconnect(playerId);
             fishingService.handleDisconnect(playerId);
             
             // End any PvE activities

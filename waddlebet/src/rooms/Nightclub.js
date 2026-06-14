@@ -14,6 +14,7 @@ import {
     DiscoSpotlight,
     NightclubCouch
 } from '../props/nightclub';
+import { WORLD_SPAWN } from '../config/roomConfig';
 
 class Nightclub extends BaseRoom {
     static ID = 'nightclub';
@@ -637,8 +638,8 @@ class Nightclub extends BaseRoom {
 
     getSpawnPosition() {
         return {
-            x: Nightclub.CENTER_X,
-            z: Nightclub.ROOM_DEPTH - 5
+            x: WORLD_SPAWN.x,
+            z: WORLD_SPAWN.z
         };
     }
     

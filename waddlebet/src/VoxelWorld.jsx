@@ -17,6 +17,7 @@ import SettingsMenu from './components/SettingsMenu';
 import ChangelogModal from './components/ChangelogModal';
 import EmoteWheel from './components/EmoteWheel';
 import GameManager from './engine/GameManager';
+import { GOLD_SLOT_BET } from './config/goldSlots';
 import Puffle from './engine/Puffle';
 import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PenguinBuilder';
 import TownCenter from './rooms/TownCenter';
@@ -54,10 +55,12 @@ import {
     NAME_HEIGHT_MARCUS,
     NAME_HEIGHT_WHALE,
     ROOM_PORTALS,
+    WORLD_SPAWN,
+    WORLD_SPAWN_ROOM,
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './config';
-import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, JackpotCelebration, IceFishingSystem, createMountainBackground, performanceManager, PERFORMANCE_PRESETS } from './systems';
+import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, GoldLobbySlotSystem, JackpotCelebration, IceFishingSystem, createMountainBackground, performanceManager, PERFORMANCE_PRESETS } from './systems';
 import { readLiveWebGLInfo } from './utils/browserCapabilities.js';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
@@ -135,6 +138,8 @@ const VoxelWorld = ({
     const wasInCasinoRef = useRef(false); // Track if player was inside casino (for one-time zoom)
     const casinoZoomTransitionRef = useRef({ active: false, targetDistance: 20, progress: 0 }); // Casino zoom state
     const slotMachineSystemRef = useRef(null); // Slot machine interaction system
+    const goldLobbySlotSystemRef = useRef(null); // Town casino lobby gold slots
+    const goldLobbySlotSyncedRef = useRef(false);
     const jackpotCelebrationRef = useRef(null); // Jackpot celebration effects (disco ball, confetti, lasers)
     const iceFishingSystemRef = useRef(null); // Ice fishing interaction system
     
@@ -270,6 +275,12 @@ const VoxelWorld = ({
         slotSpinning,
         slotResult,
         activeSlotSpins,
+        spinGoldSlot,
+        goldSlotSpinning,
+        goldSlotResult,
+        clearGoldSlotResult,
+        syncGoldSlots,
+        activeGoldSlotSpins,
         // Ice fishing
         startFishing,
         attemptCatch,
@@ -566,6 +577,7 @@ const VoxelWorld = ({
     
     // Slot Machine Interaction State
     const [slotInteraction, setSlotInteraction] = useState(null); // { machine, prompt, canSpin }
+    const [goldSlotInteraction, setGoldSlotInteraction] = useState(null);
     
     // Blackjack Table Interaction State
     const [blackjackInteraction, setBlackjackInteraction] = useState(null); // { tableId, prompt, canPlay }
@@ -677,13 +689,13 @@ const VoxelWorld = ({
     // Save player position periodically and on unmount
     useEffect(() => {
         const savePosition = () => {
-            if (posRef.current && roomRef.current === 'town') {
+            if (posRef.current && (roomRef.current === 'town' || roomRef.current === WORLD_SPAWN_ROOM)) {
                 try {
                     const posData = {
                         x: posRef.current.x,
                         y: posRef.current.y,
                         z: posRef.current.z,
-                        room: 'town',
+                        room: roomRef.current,
                         savedAt: Date.now()
                     };
                     localStorage.setItem('player_position', JSON.stringify(posData));
@@ -1118,6 +1130,17 @@ const VoxelWorld = ({
                 iceFishingSystemRef.current.initForTown(townCenter.fishingSpots, scene);
                 // Set players ref for positioning catch bubbles above players
                 iceFishingSystemRef.current.setPlayersRef(() => playersDataRef.current);
+            }
+
+            // ==================== GOLD LOBBY SLOT MACHINES ====================
+            if (townCenter.casinoLobbySlots?.length > 0) {
+                if (!goldLobbySlotSystemRef.current) {
+                    goldLobbySlotSystemRef.current = new GoldLobbySlotSystem();
+                }
+                goldLobbySlotSystemRef.current.init(
+                    townCenter.casinoLobbySlots,
+                    townCenter.casinoLobbySlotDisplays || []
+                );
             }
             
             // ==================== IGLOO OCCUPANCY BUBBLES ====================
@@ -2162,23 +2185,37 @@ const VoxelWorld = ({
                 // Ignore position load errors
             }
             
-            // If no saved position, use default spawn at TOWN CENTER (same as /spawn command)
+            // If no saved position, use town center
             if (!loadedFromStorage) {
-                const townCenterX = CENTER_X;
-                const townCenterZ = CENTER_Z;
-                // Spawn at town center - same location as /spawn command
-                posRef.current = { x: townCenterX, y: 0, z: townCenterZ };
-                rotRef.current = 0; // Face south (default orientation)
+                posRef.current = { x: CENTER_X, y: 0, z: CENTER_Z };
+                rotRef.current = 0;
+            }
+        } else if (room === WORLD_SPAWN_ROOM) {
+            let loadedFromStorage = false;
+            try {
+                const savedPos = localStorage.getItem('player_position');
+                if (savedPos) {
+                    const parsed = JSON.parse(savedPos);
+                    if (parsed.room === WORLD_SPAWN_ROOM && parsed.x !== undefined && parsed.z !== undefined) {
+                        posRef.current = { x: parsed.x, y: parsed.y || 0, z: parsed.z };
+                        loadedFromStorage = true;
+                    }
+                }
+            } catch (e) {
+                // Ignore position load errors
+            }
+
+            if (!loadedFromStorage) {
+                posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
+                rotRef.current = 0;
             }
         } else if (roomData && roomData.spawnPos) {
             // Other rooms: use room's spawn position
             posRef.current = { x: roomData.spawnPos.x, y: 0, z: roomData.spawnPos.z };
         } else {
-            // Fallback spawn at TOWN CENTER (same as /spawn command)
-            const townCenterX = CENTER_X;
-            const townCenterZ = CENTER_Z;
-            posRef.current = { x: townCenterX, y: 0, z: townCenterZ };
-            rotRef.current = 0; // Face south (default orientation)
+            // Fallback spawn — nightclub interior (same as /spawn command)
+            posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
+            rotRef.current = 0;
         }
         
         // CRITICAL: Sync mesh position with posRef IMMEDIATELY after spawn logic
@@ -3872,9 +3909,10 @@ const VoxelWorld = ({
                         const dx = finalX - furn.position.x;
                         const dz = finalZ - furn.position.z;
                         const dist = Math.sqrt(dx * dx + dz * dz);
-                        // Casino furniture is elevated - check player is on 2nd floor
-                        const furnY = furn.seatHeight - 1.0; // Platform is ~1 below seat
-                        const yMatch = Math.abs(playerY - furnY) < 2;
+                        const furnY = furn.elevated ? (furn.seatHeight - 1.0) : (furn.platformHeight ?? 0);
+                        const yMatch = furn.elevated
+                            ? Math.abs(playerY - furnY) < 2
+                            : playerY < 1.5;
                         if (dist < furn.interactionRadius && yMatch) {
                             nearFurniture = furn;
                             break;
@@ -3895,7 +3933,8 @@ const VoxelWorld = ({
                                 worldRotation: nearFurniture.rotation,
                                 snapPoints: nearFurniture.snapPoints,
                                 seatHeight: nearFurniture.seatHeight,
-                                platformHeight: nearFurniture.platformHeight || (nearFurniture.seatHeight - 1.0),
+                                platformHeight: nearFurniture.platformHeight ?? 0,
+                                dismountBack: nearFurniture.dismountBack || false,
                                 bidirectionalSit: nearFurniture.bidirectionalSit || false
                             }
                         }
@@ -8279,8 +8318,68 @@ const VoxelWorld = ({
         sprite.scale.set(w * scale, h * scale, 1);
     };
     
+    useEffect(() => {
+        if (!goldSlotResult) return;
+        const timer = setTimeout(() => clearGoldSlotResult(), 4000);
+        return () => clearTimeout(timer);
+    }, [goldSlotResult, clearGoldSlotResult]);
+
     // Portal check effect
     // Check for nearby slot machines (casino only)
+    const checkGoldLobbySlots = () => {
+        if (room !== 'town') {
+            if (goldSlotInteraction) setGoldSlotInteraction(null);
+            return;
+        }
+
+        if (!townCenterRef.current?.isPlayerInCasino(posRef.current.x, posRef.current.z)) {
+            if (goldSlotInteraction) setGoldSlotInteraction(null);
+            goldLobbySlotSyncedRef.current = false;
+            return;
+        }
+
+        if (!goldLobbySlotSyncedRef.current && syncGoldSlots) {
+            goldLobbySlotSyncedRef.current = true;
+            syncGoldSlots();
+        }
+
+        const tc = townCenterRef.current;
+        if (!tc?.casinoLobbySlots?.length) return;
+
+        if (!goldLobbySlotSystemRef.current) {
+            goldLobbySlotSystemRef.current = new GoldLobbySlotSystem();
+        }
+        goldLobbySlotSystemRef.current.init(
+            tc.casinoLobbySlots,
+            tc.casinoLobbySlotDisplays || []
+        );
+
+        const playerPos = posRef.current;
+        const playerCoins = isAuthenticated
+            ? (userData?.coins ?? 0)
+            : (GameManager.getInstance().getCoins() || 0);
+        const interaction = goldLobbySlotSystemRef.current.checkInteraction(
+            playerPos.x,
+            playerPos.z,
+            playerCoins,
+            isAuthenticated,
+            playerPos.y || 0
+        );
+
+        if (interaction) {
+            const changed = !goldSlotInteraction
+                || goldSlotInteraction.machine?.id !== interaction.machine?.id
+                || goldSlotInteraction.prompt !== interaction.prompt
+                || goldSlotInteraction.canSpin !== interaction.canSpin
+                || goldSlotInteraction.isSpinning !== interaction.isSpinning;
+            if (changed) {
+                setGoldSlotInteraction(interaction);
+            }
+        } else if (goldSlotInteraction) {
+            setGoldSlotInteraction(null);
+        }
+    };
+
     const checkSlotMachines = () => {
         if (room !== 'casino_game_room') {
             if (slotInteraction) setSlotInteraction(null);
@@ -8499,6 +8598,7 @@ const VoxelWorld = ({
         const interval = setInterval(() => {
             checkPortals();
             checkIglooProximity();
+            checkGoldLobbySlots();
             checkSlotMachines();
             checkBlackjackTables();
             checkFishingSpots();
@@ -8506,7 +8606,7 @@ const VoxelWorld = ({
             checkArcadeMachines();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, isAuthenticated]);
+    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, isAuthenticated]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -8664,6 +8764,11 @@ const VoxelWorld = ({
     useEffect(() => {
         slotInteractionRef.current = slotInteraction;
     }, [slotInteraction]);
+
+    const goldSlotInteractionRef = useRef(goldSlotInteraction);
+    useEffect(() => {
+        goldSlotInteractionRef.current = goldSlotInteraction;
+    }, [goldSlotInteraction]);
     
     // Blackjack interaction ref for E key handler
     const blackjackInteractionRef = useRef(null);
@@ -8707,6 +8812,7 @@ const VoxelWorld = ({
     
     // Ref-based lock to prevent E spam (React state updates too slowly)
     const spinLockRef = useRef(false);
+    const goldSpinLockRef = useRef(false);
     const fishingLockRef = useRef(false);
     
     const handleSlotSpin = useCallback(async () => {
@@ -8737,10 +8843,48 @@ const VoxelWorld = ({
             setTimeout(() => { spinLockRef.current = false; }, 500);
         });
     }, [spinSlot, playerId, playerName]);
+
+    const handleGoldSlotSpin = useCallback(async () => {
+        if (goldSpinLockRef.current) return;
+
+        const current = goldSlotInteractionRef.current;
+        if (!current?.canSpin || !current?.machine) return;
+
+        const machineId = current.machine.id;
+        goldSpinLockRef.current = true;
+
+        setGoldSlotInteraction({
+            ...current,
+            canSpin: false,
+            isSpinning: true,
+            prompt: 'Spinning...',
+            reason: 'MACHINE_IN_USE'
+        });
+
+        if (goldLobbySlotSystemRef.current) {
+            goldLobbySlotSystemRef.current.startLocalSpin(machineId);
+        }
+
+        spinGoldSlot(machineId).then(result => {
+            if (result.error) {
+                setGoldSlotInteraction(current);
+                if (goldLobbySlotSystemRef.current) {
+                    goldLobbySlotSystemRef.current.handleSpinError(machineId);
+                }
+            }
+        }).finally(() => {
+            setTimeout(() => { goldSpinLockRef.current = false; }, 500);
+        });
+    }, [spinGoldSlot]);
     
     useEffect(() => {
         const handleSlotKeyPress = (e) => {
             if (e.code === 'KeyE') {
+                if (goldSlotInteractionRef.current?.canSpin && room === 'town'
+                    && !nearbyPortal && !emoteWheelOpen && !goldSlotSpinning && !goldSpinLockRef.current) {
+                    handleGoldSlotSpin();
+                    return;
+                }
                 if (slotInteractionRef.current?.canSpin && !nearbyPortal && !emoteWheelOpen && !slotSpinning && !spinLockRef.current) {
                     handleSlotSpin();
                 }
@@ -8748,8 +8892,8 @@ const VoxelWorld = ({
         };
         window.addEventListener('keydown', handleSlotKeyPress);
         return () => window.removeEventListener('keydown', handleSlotKeyPress);
-    }, [nearbyPortal, emoteWheelOpen, slotSpinning, handleSlotSpin]);
-    
+    }, [nearbyPortal, emoteWheelOpen, slotSpinning, goldSlotSpinning, handleSlotSpin, handleGoldSlotSpin, room]);
+
     // Blackjack lock ref to prevent E spam
     const blackjackLockRef = useRef(false);
     
@@ -9357,9 +9501,8 @@ const VoxelWorld = ({
             }
             
             if (command === 'spawn') {
-                // ALWAYS teleport to town center spawn - no questions asked
-                const townCenterX = CENTER_X;
-                const townCenterZ = CENTER_Z;
+                const spawnX = WORLD_SPAWN.x;
+                const spawnZ = WORLD_SPAWN.z;
                 
                 // Clear any seated state first
                 if (seatedRef.current) {
@@ -9369,26 +9512,23 @@ const VoxelWorld = ({
                     mpSendEmote(null);
                 }
                 
-                // If not in town, change room to town first
-                if (roomRef.current !== 'town') {
-                    // Change to town room
+                // Always return to nightclub interior spawn
+                if (roomRef.current !== WORLD_SPAWN_ROOM) {
                     if (onChangeRoom) {
-                        onChangeRoom('town', null);
+                        onChangeRoom(WORLD_SPAWN_ROOM, null);
                     }
                 } else {
-                    // Already in town - just teleport
-                    posRef.current.x = townCenterX;
+                    posRef.current.x = spawnX;
                     posRef.current.y = 0;
-                    posRef.current.z = townCenterZ;
+                    posRef.current.z = spawnZ;
                     velRef.current = { x: 0, y: 0, z: 0 };
                     
-                    // Update mesh position
                     if (playerRef.current) {
-                        playerRef.current.position.set(townCenterX, 0, townCenterZ);
+                        playerRef.current.position.set(spawnX, 0, spawnZ);
                     }
                 }
                 
-                console.log('🌟 Teleported to Town Center spawn:', { x: townCenterX, z: townCenterZ });
+                console.log('🌟 Teleported to nightclub spawn:', { x: spawnX, z: spawnZ });
             }
         };
         
@@ -9804,7 +9944,12 @@ const VoxelWorld = ({
         };
         
         console.log(`🚀 Joining room ${room} with appearance: characterType=${appearanceWithMount.characterType || 'undefined'}`);
-        mpJoinRoom(room, appearanceWithMount, puffleData, turnstileToken);
+        const joinSent = mpJoinRoom(room, appearanceWithMount, puffleData, turnstileToken);
+        if (!joinSent) {
+            hasSentJoinRef.current = false;
+            console.warn('⚠️ Failed to send join — will retry when socket is ready');
+            return;
+        }
         // Reinforce appearance on server after join — fixes guest cosmetics and late auth customization
         if (mpUpdateAppearanceRef.current) {
             mpUpdateAppearanceRef.current(appearanceWithMount);
@@ -9990,6 +10135,83 @@ const VoxelWorld = ({
                             );
                         });
                     }
+                }
+            },
+            onGoldSlotSpinStarted: (data) => {
+                if (goldLobbySlotSystemRef.current && data.machineId) {
+                    const display = goldLobbySlotSystemRef.current.getDisplay(data.machineId);
+                    if (display && !display.isServerSpinning) {
+                        goldLobbySlotSystemRef.current.startLocalSpin(data.machineId);
+                    }
+                }
+            },
+            onGoldSlotReelReveal: (data) => {
+                if (goldLobbySlotSystemRef.current) {
+                    goldLobbySlotSystemRef.current.revealReel(
+                        data.machineId,
+                        data.reelIndex,
+                        data.symbol
+                    );
+                }
+            },
+            onGoldSlotResult: (data) => {
+                if (goldLobbySlotSystemRef.current) {
+                    goldLobbySlotSystemRef.current.completeSpin(
+                        data.machineId,
+                        data.reels,
+                        data.payout,
+                        data.isJackpot
+                    );
+                }
+                if (data.isJackpot && jackpotCelebrationRef.current) {
+                    jackpotCelebrationRef.current.triggerJackpot();
+                }
+            },
+            onGoldSlotPlayerSpinning: (data) => {
+                if (goldLobbySlotSystemRef.current && data.playerId !== playerId) {
+                    goldLobbySlotSystemRef.current.handleRemoteSpinStart(
+                        data.machineId,
+                        data.playerName
+                    );
+                }
+            },
+            onGoldSlotComplete: (data) => {
+                if (goldLobbySlotSystemRef.current && data.playerId !== playerId) {
+                    goldLobbySlotSystemRef.current.completeSpin(
+                        data.machineId,
+                        data.reels,
+                        data.payout,
+                        data.isJackpot,
+                        data.playerName
+                    );
+                }
+            },
+            onGoldSlotInterrupted: (data) => {
+                if (goldLobbySlotSystemRef.current) {
+                    goldLobbySlotSystemRef.current.handleInterrupted(data.machineId);
+                }
+            },
+            onGoldSlotActiveSpins: (spins) => {
+                if (goldLobbySlotSystemRef.current) {
+                    for (const spin of spins) {
+                        goldLobbySlotSystemRef.current.handleRemoteSpinStart(
+                            spin.machineId,
+                            spin.playerName
+                        );
+                        spin.reels?.forEach((symbol, idx) => {
+                            goldLobbySlotSystemRef.current.revealReel(
+                                spin.machineId,
+                                idx,
+                                symbol
+                            );
+                        });
+                    }
+                }
+            },
+            onGoldSlotError: (data) => {
+                const machineId = data.machineId || goldSlotInteractionRef.current?.machine?.id;
+                if (goldLobbySlotSystemRef.current && machineId) {
+                    goldLobbySlotSystemRef.current.handleSpinError(machineId);
                 }
             },
             // Ice Fishing callbacks - simple catch bubble display
@@ -10546,8 +10768,65 @@ const VoxelWorld = ({
                 />
              )}
              
+             {/* Gold Lobby Slot Prompt (town casino) */}
+             {goldSlotInteraction && !nearbyPortal && room === 'town' && (
+                <div
+                    className={`absolute bg-gradient-to-b from-amber-900/95 to-black/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg border-yellow-500/50 shadow-yellow-500/20 ${
+                        isMobile
+                            ? isLandscape
+                                ? 'bottom-[180px] right-28 p-3'
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    }`}
+                >
+                    <div className="text-3xl mb-1">🎰</div>
+                    {(goldSlotSpinning || goldSlotInteraction.isSpinning) ? (
+                        <p className="retro-text mb-2 text-sm text-yellow-300 animate-pulse">
+                            🎰 SPINNING...
+                        </p>
+                    ) : (
+                        <p className={`retro-text mb-2 text-sm ${goldSlotInteraction.canSpin ? 'text-yellow-400' : 'text-gray-400'}`}>
+                            {goldSlotInteraction.prompt}
+                        </p>
+                    )}
+                    {goldSlotInteraction.canSpin && !goldSlotSpinning && (
+                        <button
+                            className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm bg-gradient-to-b from-yellow-400 to-yellow-600 hover:from-yellow-300 hover:to-yellow-500 text-black transition-all active:scale-95 shadow-lg"
+                            onClick={handleGoldSlotSpin}
+                            disabled={goldSlotSpinning}
+                        >
+                            {`🎰 SPIN (${GOLD_SLOT_BET}g)`}
+                        </button>
+                    )}
+                    <p className="text-gray-500 text-xs mt-2">🍒🍋🍊 3× match pays · Gold 7 = 200×</p>
+                </div>
+             )}
+
+             {goldSlotResult && (
+                <div className="fixed top-28 left-1/2 -translate-x-1/2 z-50 pointer-events-none">
+                    <div className={`px-6 py-3 rounded-xl border backdrop-blur-md shadow-xl text-center ${
+                        goldSlotResult.error
+                            ? 'bg-red-900/90 border-red-400 text-red-200'
+                            : goldSlotResult.payout > 0
+                            ? 'bg-green-900/90 border-green-400 text-green-200'
+                            : 'bg-gray-900/90 border-gray-500 text-gray-300'
+                    }`}>
+                        <p className="font-bold text-lg">
+                            {goldSlotResult.error
+                                ? `❌ ${goldSlotResult.message || 'Spin failed'}`
+                                : goldSlotResult.payout > 0
+                                ? `🎉 Won ${goldSlotResult.payout} gold!`
+                                : 'No win — try again!'}
+                        </p>
+                        {goldSlotResult.isJackpot && !goldSlotResult.error && (
+                            <p className="text-yellow-300 text-sm animate-pulse">💰 JACKPOT! 💰</p>
+                        )}
+                    </div>
+                </div>
+             )}
+
              {/* Slot Machine Interaction Prompt */}
-             {slotInteraction && !nearbyPortal && room === 'casino_game_room' && (
+             {slotInteraction && !goldSlotInteraction && !nearbyPortal && room === 'casino_game_room' && (
                 <div 
                     className={`absolute bg-gradient-to-b from-purple-900/95 to-black/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${
                         slotInteraction.isDemo 
@@ -10602,7 +10881,7 @@ const VoxelWorld = ({
              )}
              
              {/* Blackjack Table Interaction Prompt - Positioned ABOVE sit prompts */}
-             {blackjackInteraction && !slotInteraction && !nearbyPortal && room === 'casino_game_room' && !blackjackGameActive && (
+             {blackjackInteraction && !slotInteraction && !goldSlotInteraction && !nearbyPortal && room === 'casino_game_room' && !blackjackGameActive && (
                 <div 
                     className={`absolute bg-gradient-to-b from-green-900/95 to-emerald-950/95 backdrop-blur-sm rounded-xl border border-emerald-500/50 text-center z-30 shadow-lg shadow-emerald-500/20 ${
                         isMobile 
@@ -10829,7 +11108,7 @@ const VoxelWorld = ({
              
              {/* Town Interaction Prompt - Clickable like dojo enter */}
              {/* Hide when blackjack interaction is showing to prevent overlap */}
-             {nearbyInteraction && !nearbyPortal && !slotInteraction && !blackjackInteraction && (
+             {nearbyInteraction && !nearbyPortal && !slotInteraction && !goldSlotInteraction && !blackjackInteraction && (
                 <div 
                     className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border border-white/20 text-center z-20 ${
                         isMobile 

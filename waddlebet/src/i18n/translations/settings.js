@@ -236,6 +236,24 @@ export default {
     'settings.whitepaperDesc': {
         en: 'Read the full documentation', zh: '阅读完整文档', es: 'Lee la documentación', pt: 'Leia a documentação', ko: '전체 문서 읽기', ja: '全文を読む', fr: 'Lire la documentation', de: 'Dokumentation lesen', ru: 'Полная документация', ar: 'اقرأ الوثائق',
     },
+    'settings.linksSection': {
+        en: '$CP & Resources', zh: '$CP 与资源', es: '$CP y recursos', pt: '$CP e recursos', ko: '$CP 및 자료', ja: '$CP とリソース', fr: '$CP et ressources', de: '$CP & Ressourcen', ru: '$CP и ресурсы', ar: '$CP والموارد',
+    },
+    'settings.linksHint': {
+        en: 'Whitepaper, tokenomics, and live chart', zh: '白皮书、代币经济与实时图表', es: 'Whitepaper, tokenomics y gráfico', pt: 'Whitepaper, tokenomics e gráfico', ko: '백서, 토크노믹스, 실시간 차트', ja: 'ホワイトペーパー・トークノミクス・チャート', fr: 'Livre blanc, tokenomics et graphique', de: 'Whitepaper, Tokenomics und Chart', ru: 'Whitepaper, токеномика и график', ar: 'الورقة البيضاء واقتصاد الرمز والرسم',
+    },
+    'settings.tokenomicsBtn': {
+        en: '$CP Tokenomics', zh: '$CP 代币经济', es: 'Tokenomics $CP', pt: 'Tokenomics $CP', ko: '$CP 토크노믹스', ja: '$CP トークノミクス', fr: 'Tokenomics $CP', de: '$CP Tokenomics', ru: 'Токеномика $CP', ar: 'اقتصاد رمز $CP',
+    },
+    'settings.tokenomicsDesc': {
+        en: 'Supply, distribution, and utility', zh: '供应、分配与用途', es: 'Suministro, distribución y utilidad', pt: 'Oferta, distribuição e utilidade', ko: '공급, 분배, 유틸리티', ja: '供給・配分・ユーティリティ', fr: 'Offre, distribution et utilité', de: 'Angebot, Verteilung und Nutzen', ru: 'Эмиссия, распределение и применение', ar: 'العرض والتوزيع والفائدة',
+    },
+    'settings.dexscreenerBtn': {
+        en: 'DEX Screener Chart', zh: 'DEX Screener 图表', es: 'Gráfico DEX Screener', pt: 'Gráfico DEX Screener', ko: 'DEX Screener 차트', ja: 'DEX Screener チャート', fr: 'Graphique DEX Screener', de: 'DEX Screener Chart', ru: 'График DEX Screener', ar: 'رسم DEX Screener',
+    },
+    'settings.dexscreenerDesc': {
+        en: 'View live $CP price and volume', zh: '查看 $CP 实时价格与成交量', es: 'Precio y volumen de $CP en vivo', pt: 'Preço e volume de $CP ao vivo', ko: '$CP 실시간 가격 및 거래량', ja: '$CP のリアルタイム価格と出来高', fr: 'Prix et volume $CP en direct', de: 'Live-Preis und Volumen von $CP', ru: 'Цена и объём $CP в реальном времени', ar: 'سعر وحجم $CP المباشر',
+    },
     'settings.versionFooter': {
         en: 'WaddleBet v2.0 • © 2026', zh: 'WaddleBet v2.0 • © 2026', es: 'WaddleBet v2.0 • © 2026', pt: 'WaddleBet v2.0 • © 2026', ko: 'WaddleBet v2.0 • © 2026', ja: 'WaddleBet v2.0 • © 2026', fr: 'WaddleBet v2.0 • © 2026', de: 'WaddleBet v2.0 • © 2026', ru: 'WaddleBet v2.0 • © 2026', ar: 'WaddleBet v2.0 • © 2026',
     },

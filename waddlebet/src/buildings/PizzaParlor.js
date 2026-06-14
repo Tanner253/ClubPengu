@@ -296,6 +296,29 @@ export function generatePizzaInterior(THREE, scene) {
         group.add(mesh);
         return mesh;
     };
+
+    const addBottle = (x, y, z, color, height = 0.55) => {
+        addMesh(
+            new THREE.CylinderGeometry(0.11, 0.14, height, 10),
+            new THREE.MeshStandardMaterial({ color, roughness: 0.2, transparent: true, opacity: 0.9 }),
+            x, y + height / 2, z,
+            { castShadow: true }
+        );
+    };
+
+    const addMartiniGlass = (x, y, z) => {
+        const glassMat = new THREE.MeshStandardMaterial({
+            color: 0xccddee, transparent: true, opacity: 0.45, roughness: 0.05
+        });
+        addMesh(new THREE.CylinderGeometry(0.2, 0.13, 0.09, 12), glassMat, x, y + 0.045, z);
+        addMesh(new THREE.CylinderGeometry(0.035, 0.035, 0.28, 8), glassMat, x, y + 0.18, z);
+        addMesh(new THREE.CylinderGeometry(0.16, 0.2, 0.09, 12), glassMat, x, y + 0.36, z);
+        addMesh(
+            new THREE.SphereGeometry(0.065, 8, 8),
+            new THREE.MeshStandardMaterial({ color: 0x3d6b2c, roughness: 0.6 }),
+            x, y + 0.43, z
+        );
+    };
     
     // Checkered floor
     const tileSize = 2;
@@ -361,6 +384,16 @@ export function generatePizzaInterior(THREE, scene) {
         stoolGroup.rotation.y = Math.PI;
         scene.add(stoolGroup);
     });
+
+    // Bar top — bottles and martini glasses
+    const barTopY = COUNTER_HEIGHT + 0.2;
+    const bottleColors = [0x8B0000, 0x2d5016, 0xFFD700, 0x4169E1, 0x8B4513, 0x006400];
+    barStoolPositions.forEach((x, i) => {
+        addBottle(x - 0.4, barTopY, COUNTER_Z - 0.3, bottleColors[i % bottleColors.length], 0.48 + (i % 2) * 0.08);
+        if (i % 2 === 0) {
+            addMartiniGlass(x + 0.5, barTopY, COUNTER_Z + 0.2);
+        }
+    });
     
     // Round tables with chairs
     const tablePositions = [{ x: -8, z: 2 }, { x: 8, z: 2 }, { x: -8, z: 9 }, { x: 8, z: 9 }];
@@ -376,6 +409,11 @@ export function generatePizzaInterior(THREE, scene) {
         addToGroup(tableGroup, new THREE.CylinderGeometry(2.1, 2.3, 0.05, 24), tableclothMat, 0, 2.72, 0);
         tableGroup.position.set(table.x, 0, table.z);
         scene.add(tableGroup);
+
+        // Tabletop drinks
+        const tableTopY = 2.75;
+        addMartiniGlass(table.x - 0.5, tableTopY, table.z + 0.3);
+        addBottle(table.x + 0.6, tableTopY, table.z - 0.2, bottleColors[(table.x + table.z) % bottleColors.length], 0.52);
         
         // 4 chairs around each table
         for (let i = 0; i < 4; i++) {

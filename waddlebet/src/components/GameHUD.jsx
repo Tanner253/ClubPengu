@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import GameManager from '../engine/GameManager';
 import InboxButton from './InboxButton';
-import TokenomicsModal from './TokenomicsModal';
 import WalletButton from './WalletButton';
 import StatsModal from './StatsModal';
 import PebblesPurchaseModal from './PebblesPurchaseModal';
@@ -20,7 +19,6 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     const [coins, setCoins] = useState(0);
     const [showStatsModal, setShowStatsModal] = useState(false);  // Full stats modal
     const [recentReward, setRecentReward] = useState(null);
-    const [showTokenomics, setShowTokenomics] = useState(false);
     const [showPebblesPurchase, setShowPebblesPurchase] = useState(false);
     const [showInventory, setShowInventory] = useState(false);
     const [showMarketplace, setShowMarketplace] = useState(false);
@@ -171,38 +169,6 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 
                 {/* Portrait: Vertical sidebar on right */}
                 <div className="absolute top-12 right-1 z-20 flex flex-col gap-1 bg-black/50 backdrop-blur-sm rounded-lg p-1">
-                    {/* Whitepaper - NEW */}
-                    <a
-                        href="https://whitepaper.waddle.bet"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`${compactBtn} bg-gradient-to-r from-cyan-600/80 to-blue-600/80`}
-                        title={t('hud.whitepaper')}
-                    >
-                        📄
-                    </a>
-                    
-                    {/* Tokenomics */}
-                    <button
-                        onClick={() => setShowTokenomics(true)}
-                        className={`${compactBtn} bg-gradient-to-r from-purple-600/80 to-pink-600/80 relative`}
-                        title={t('hud.tokenomicsShort')}
-                    >
-                        ❗
-                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-yellow-400 rounded-full animate-ping" />
-                    </button>
-                    
-                    {/* Chart */}
-                    <a
-                        href="https://dexscreener.com/solana/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`${compactBtn} bg-gradient-to-r from-green-600/80 to-emerald-600/80`}
-                        title={t('hud.viewChartShort')}
-                    >
-                        📈
-                    </a>
-                    
                     {/* Daily Bonus */}
                     {isAuthenticated && (
                         <button
@@ -268,12 +234,6 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     </div>
                 )}
                 
-                {/* Tokenomics Modal */}
-                <TokenomicsModal 
-                    isOpen={showTokenomics} 
-                    onClose={() => setShowTokenomics(false)} 
-                />
-                
                 {/* Full Stats Modal */}
                 <StatsModal
                     isOpen={showStatsModal}
@@ -326,39 +286,6 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
             <div className={`absolute top-4 right-4 z-20 flex items-center gap-1.5 sm:gap-2 ${
                 isNarrow && !isPortrait ? 'flex-wrap justify-end max-w-xs' : ''
             }`}>
-                {/* Whitepaper - NEW */}
-                <a
-                    href="https://whitepaper.waddle.bet"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-gradient-to-r from-cyan-600/80 to-blue-600/80 hover:from-cyan-500 hover:to-blue-500 active:from-cyan-700 active:to-blue-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center hover:scale-105 active:scale-95"
-                    title={t('hud.whitepaperLong')}
-                >
-                    📄
-                </a>
-                
-                {/* Tokenomics Button - Animated Exclamation */}
-                <button
-                    onClick={() => setShowTokenomics(true)}
-                    className="relative bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500 hover:to-pink-500 active:from-purple-700 active:to-pink-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center animate-bounce-hud group"
-                    title={t('hud.tokenomics')}
-                >
-                    <span className="group-hover:scale-125 transition-transform">❗</span>
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full animate-ping" />
-                    <span className="absolute -top-1 -right-1 w-2 h-2 bg-yellow-400 rounded-full" />
-                </button>
-                
-                {/* Chart Button - DEX Screener Link */}
-                <a
-                    href="https://dexscreener.com/solana/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="bg-gradient-to-r from-green-600/80 to-emerald-600/80 hover:from-green-500 hover:to-emerald-500 active:from-green-700 active:to-emerald-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center hover:scale-105 active:scale-95"
-                    title={t('hud.viewChart')}
-                >
-                    📈
-                </a>
-                
                 {/* Daily Bonus Button */}
                 {isAuthenticated && (
                     <button
@@ -478,12 +405,6 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     </div>
                 </div>
             )}
-            
-            {/* Tokenomics Modal */}
-            <TokenomicsModal 
-                isOpen={showTokenomics} 
-                onClose={() => setShowTokenomics(false)} 
-            />
             
             {/* Full Stats Modal */}
             <StatsModal

@@ -17,8 +17,8 @@ const BOT_CONFIG = {
     id: 'dev_bot_wager',
     name: '🤖 WagerBot',
     // Static position near spawn in town (visible area)
-    position: { x: 105, y: 0, z: 100 },
-    room: 'town',
+    position: { x: 8.2, y: 0, z: 11.2 },
+    room: 'nightclub',
     // Appearance matches client's expected format (see src/constants.js PALETTE)
     appearance: {
         characterType: 'doginal',  // Doginal character

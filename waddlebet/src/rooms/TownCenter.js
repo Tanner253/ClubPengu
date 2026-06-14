@@ -250,6 +250,13 @@ class TownCenter {
             rotation: Math.PI / 2  // Door faces east (toward street like pizza)
         });
         
+        // Game room portal — visible marker on red carpet in front of casino
+        props.push({
+            type: 'casino_game_room_portal',
+            x: C - 30.8,
+            z: C + 2.8
+        });
+        
         // ==================== SKATE PARK ====================
         // Behind the casino - half pipes, rails, and ramps for skateboarding
         // Positioned further west to avoid clipping with casino
@@ -1191,6 +1198,11 @@ class TownCenter {
                     this.casinoFurniture = casinoMesh.userData.getFurnitureData(
                         prop.x, prop.z, prop.rotation || 0
                     );
+
+                    this.casinoLobbySlots = casinoMesh.userData.getLobbySlotData?.(
+                        prop.x, prop.z, prop.rotation || 0
+                    ) || [];
+                    this.casinoLobbySlotDisplays = casinoMesh.userData.lobbySlotDisplays || [];
                     
                     // Store casino bounds for visibility checks
                     // Casino is rotated, so width/depth swap in world space
@@ -1257,6 +1269,12 @@ class TownCenter {
                         console.log('📺 Casino TV created with real $CP data');
                     });
                     break;
+                
+                case 'casino_game_room_portal': {
+                    mesh = this._createGameRoomPortalMarker(prop);
+                    mesh.name = 'casino_game_room_portal';
+                    break;
+                }
                 
                 case 'skate_park':
                     // Skate park with half pipes, rails, and ramps
@@ -2319,6 +2337,112 @@ class TownCenter {
         return mesh;
     }
 
+    /**
+     * Visible game room portal marker — glow ring + floating sign on casino red carpet.
+     * Hidden until player is nearby (proximity culling in update()).
+     */
+    _createGameRoomPortalMarker(prop) {
+        const THREE = this.THREE;
+        const group = new THREE.Group();
+        
+        const neonCyan = 0x00FFFF;
+        const gold = 0xFFD700;
+        
+        // Inner glow disc (sits on existing casino entrance carpet)
+        const glowMat = new THREE.MeshStandardMaterial({
+            color: neonCyan,
+            emissive: neonCyan,
+            emissiveIntensity: 0.7,
+            transparent: true,
+            opacity: 0.5,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -4,
+            polygonOffsetUnits: -4
+        });
+        const glow = new THREE.Mesh(new THREE.CircleGeometry(2.8, 32), glowMat);
+        glow.rotation.x = -Math.PI / 2;
+        glow.position.y = 0.06;
+        glow.renderOrder = 5;
+        group.add(glow);
+        
+        // Outer pulsing ring
+        const ringMat = new THREE.MeshStandardMaterial({
+            color: gold,
+            emissive: gold,
+            emissiveIntensity: 0.9,
+            transparent: true,
+            opacity: 0.85,
+            depthWrite: false,
+            side: THREE.DoubleSide
+        });
+        const ring = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.2, 32), ringMat);
+        ring.rotation.x = -Math.PI / 2;
+        ring.position.y = 0.07;
+        ring.renderOrder = 6;
+        group.add(ring);
+        
+        // Floating billboard sign
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        const grad = ctx.createLinearGradient(0, 0, 512, 0);
+        grad.addColorStop(0, '#1a0a2e');
+        grad.addColorStop(0.5, '#2d1b4e');
+        grad.addColorStop(1, '#1a0a2e');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, 512, 128);
+        ctx.strokeStyle = '#FFD700';
+        ctx.lineWidth = 6;
+        ctx.strokeRect(6, 6, 500, 116);
+        ctx.shadowColor = '#00FFFF';
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = '#00FFFF';
+        ctx.font = 'bold 44px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('🎰 GAME ROOM', 256, 64);
+        
+        const signTexture = new THREE.CanvasTexture(canvas);
+        const spriteMat = new THREE.SpriteMaterial({
+            map: signTexture,
+            transparent: true,
+            depthWrite: false
+        });
+        const sprite = new THREE.Sprite(spriteMat);
+        sprite.scale.set(8, 2, 1);
+        const signY = 3.5;
+        sprite.position.set(0, signY, 0);
+        group.add(sprite);
+        
+        // Soft point light (skip on mobile GPUs)
+        const isMobileGPU = typeof window !== 'undefined' && (window._isMobileGPU || window._isAppleDevice);
+        let portalLight = null;
+        if (!isMobileGPU) {
+            portalLight = new THREE.PointLight(neonCyan, 0.6, 10);
+            portalLight.position.set(0, 1.5, 0);
+            group.add(portalLight);
+            this.lights.push(portalLight);
+        }
+        
+        // Hidden until player approaches (proximity culling in update())
+        group.visible = false;
+        
+        group.userData.portalAnim = {
+            worldX: prop.x,
+            worldZ: prop.z,
+            glow,
+            ring,
+            sprite,
+            portalLight,
+            baseY: signY,
+            group
+        };
+        
+        return group;
+    }
+
     _handleInteraction(event, zone) {
         if (event.type === 'enter') {
             console.log(`🎯 Trigger ENTER: ${zone.action} at player (${event.playerX?.toFixed(1)}, ${event.playerZ?.toFixed(1)})`);
@@ -2359,7 +2483,21 @@ class TownCenter {
         }
         
         // Then check casino stairs (dynamic height like Nightclub)
-        if (this.casinoStairData) {
+        // Skip near lobby couches — their footprint overlaps the stair run and would snap players onto steps
+        let skipCasinoStairs = false;
+        if (this.casinoFurniture) {
+            for (const furn of this.casinoFurniture) {
+                if (furn.elevated || !furn.name?.startsWith('casino_lobby_couch')) continue;
+                const dx = x - furn.position.x;
+                const dz = z - furn.position.z;
+                if (dx * dx + dz * dz < (furn.interactionRadius + 0.5) ** 2) {
+                    skipCasinoStairs = true;
+                    break;
+                }
+            }
+        }
+
+        if (this.casinoStairData && !skipCasinoStairs) {
             const st = this.casinoStairData;
             
             // For rotated stairs (runs along X axis in world space)
@@ -2474,15 +2612,16 @@ class TownCenter {
 
     update(time, delta, nightFactor = 0.5, playerPos = null) {
         if (!this._animatedCache) {
-            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], streetLightStrings: [], frameCounter: 0 };
+            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], gameRoomPortals: [], streetLightStrings: [], frameCounter: 0 };
             // === VISIBILITY CULLING CACHE ===
             // Store elements that should be hidden at distance (with state tracking to avoid freeze)
             // Billboard STRUCTURE stays visible, only the ADVERT IMAGE is hidden at distance
             this._cullCache = {
-                billboardAdverts: [], // Just the advertisement planes (not whole billboard)
-                nightclubSign: null,  // Nightclub title sprite
-                casinoSign: null,     // Casino title sprite
-                floatingTitles: [],   // ARCADE, FISHING signs
+                billboardAdverts: [],
+                nightclubSign: null,
+                casinoSign: null,
+                floatingTitles: [],
+                gameRoomPortal: null,
             };
             
             this.propMeshes.forEach(mesh => {
@@ -2512,6 +2651,16 @@ class TownCenter {
                     if (casinoSign) {
                         this._cullCache.casinoSign = { sprite: casinoSign, parentMesh: mesh, wasVisible: true };
                     }
+                }
+                // Game room portal marker (proximity visibility + animation)
+                if (mesh.name === 'casino_game_room_portal' && mesh.userData.portalAnim) {
+                    this._animatedCache.gameRoomPortals.push(mesh.userData.portalAnim);
+                    this._cullCache.gameRoomPortal = {
+                        group: mesh,
+                        worldX: mesh.position.x,
+                        worldZ: mesh.position.z,
+                        wasVisible: false
+                    };
                 }
                 // Floating title signs - cache for visibility culling
                 if (mesh.name === 'floating_title' && mesh.userData.floatingSign) {
@@ -2638,6 +2787,30 @@ class TownCenter {
             this.parkInstance.animate(delta);
         }
         
+        // Game room portal — pulsing floor ring + sign bob (only when visible/nearby)
+        const PORTAL_SHOW_DIST_SQ = 50 * 50;
+        if (frame % 2 === 0) {
+            this._animatedCache.gameRoomPortals.forEach((anim) => {
+                if (!anim.group?.visible) return;
+                const dx = px - anim.worldX;
+                const dz = pz - anim.worldZ;
+                if (dx * dx + dz * dz > PORTAL_SHOW_DIST_SQ) return;
+                
+                const pulse = 1 + Math.sin(time * 2.5) * 0.12;
+                if (anim.ring) anim.ring.scale.set(pulse, pulse, 1);
+                if (anim.glow?.material) {
+                    anim.glow.material.opacity = 0.45 + Math.sin(time * 3) * 0.2;
+                    anim.glow.material.emissiveIntensity = 0.7 + Math.sin(time * 3) * 0.3;
+                }
+                if (anim.sprite && anim.baseY) {
+                    anim.sprite.position.y = anim.baseY + Math.sin(time * 1.5) * 0.25;
+                }
+                if (anim.portalLight) {
+                    anim.portalLight.intensity = 0.5 + Math.sin(time * 3) * 0.2;
+                }
+            });
+        }
+        
         // Floating signs - gentle bobbing animation every 2nd frame - DISTANCE CULLED
         // NOTE: Do NOT toggle .visible - that causes GPU recompilation freezes!
         // Instead, just skip animation updates like nightclub does
@@ -2701,8 +2874,10 @@ class TownCenter {
         // Uses hysteresis: hide at HIDE_DIST, show at SHOW_DIST (prevents flickering at boundary)
         // Billboard adverts visible from further (100 units), other UI from closer (75 units)
         if (frame % 15 === 0 && this._cullCache) {
-            const HIDE_DIST_SQ = 75 * 75;           // Hide UI when > 75 units away
-            const SHOW_DIST_SQ = 60 * 60;           // Show UI when < 60 units away
+            const HIDE_DIST_SQ = 75 * 75;
+            const SHOW_DIST_SQ = 60 * 60;
+            const PORTAL_HIDE_DIST_SQ = 55 * 55;
+            const PORTAL_SHOW_DIST_SQ = 45 * 45;
             const BILLBOARD_HIDE_SQ = 120 * 120;    // Billboards visible from further (120 units)
             const BILLBOARD_SHOW_SQ = 100 * 100;    // Show billboard when < 100 units
             
@@ -2768,6 +2943,18 @@ class TownCenter {
                     : distSq < SHOW_DIST_SQ;
                 updateVisibility(entry.sprite, shouldShow, entry);
             });
+
+            // Game room portal marker (glow + sign — only near casino entrance)
+            if (this._cullCache.gameRoomPortal) {
+                const entry = this._cullCache.gameRoomPortal;
+                const dx = px - entry.worldX;
+                const dz = pz - entry.worldZ;
+                const distSq = dx * dx + dz * dz;
+                const shouldShow = entry.wasVisible
+                    ? distSq < PORTAL_HIDE_DIST_SQ
+                    : distSq < PORTAL_SHOW_DIST_SQ;
+                updateVisibility(entry.group, shouldShow, entry);
+            }
         }
     }
 

@@ -14,6 +14,7 @@
 import BaseBuilding from './BaseBuilding';
 import AnimatedRouletteWheel from '../props/casino/AnimatedRouletteWheel';
 import PBRSlotReels from '../props/casino/PBRSlotReels';
+import SlotMachineDisplay from '../props/casino/SlotMachineDisplay';
 import GoldenDiceTower from '../props/casino/GoldenDiceTower';
 import NeonTubing from '../props/casino/NeonTubing';
 
@@ -32,6 +33,8 @@ class Casino extends BaseBuilding {
         this.exteriorProps = [];
         this.coinStacks = [];
         this.spotlights = [];
+        this.lobbyDecorProps = [];
+        this.lobbySlotDisplays = [];
         
         // Mobile/Apple GPU detection for performance optimizations
         this.isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
@@ -749,6 +752,18 @@ class Casino extends BaseBuilding {
         couchGroup.rotation.y = -Math.PI / 2;
         group.add(couchGroup);
 
+        // Ground floor lobby couches (face center aisle — reuse velvet materials above)
+        const groundFloorCouches = [
+            { localX: -10, localZ: 2, faceRotation: Math.PI / 2 },
+            { localX: 13, localZ: 2, faceRotation: -Math.PI / 2 },
+        ];
+        groundFloorCouches.forEach(def => {
+            this._addLobbyCouch(group, def.localX, def.localZ, def.faceRotation, couchMat, cushionMat, couchGoldMat);
+        });
+        group.userData.groundFloorCouches = groundFloorCouches;
+
+        this._createLobbyDecor(group, w, d);
+
         // ==================== TV SCREEN (2nd Floor) ====================
         const tvGroup = new THREE.Group();
         
@@ -993,73 +1008,6 @@ class Casino extends BaseBuilding {
             group.add(leg);
         });
 
-        // ==================== GAME ROOM FLOOR TRIGGER ZONE ====================
-        // Floor glow on red carpet in front of casino (town offset x: -30.8, z: 2.8)
-        // Casino at C-50, C+3 with rotation PI/2 → local (-0.2, -19.2)
-        const gameRoomTriggerX = -0.2;
-        const gameRoomTriggerZ = -19.2;
-        
-        // Floor glow circle
-        const floorGlowMat = this.getMaterial(neonCyan, {
-            emissive: neonCyan,
-            emissiveIntensity: 0.6,
-            transparent: true,
-            opacity: 0.4
-        });
-        const floorGlowGeo = new THREE.CircleGeometry(3, 32);
-        const floorGlow = new THREE.Mesh(floorGlowGeo, floorGlowMat);
-        floorGlow.rotation.x = -Math.PI / 2;
-        floorGlow.position.set(gameRoomTriggerX, 0.03, gameRoomTriggerZ);
-        floorGlow.userData.isGameRoomFloorGlow = true;
-        group.add(floorGlow);
-        
-        // Outer ring for better visibility
-        const floorRingMat = this.getMaterial(neonCyan, {
-            emissive: neonCyan,
-            emissiveIntensity: 0.9,
-            transparent: true,
-            opacity: 0.7
-        });
-        const floorRingGeo = new THREE.RingGeometry(2.8, 3.2, 32);
-        const floorRing = new THREE.Mesh(floorRingGeo, floorRingMat);
-        floorRing.rotation.x = -Math.PI / 2;
-        floorRing.position.set(gameRoomTriggerX, 0.04, gameRoomTriggerZ);
-        group.add(floorRing);
-        
-        // "GAME ROOM" text above floor glow
-        const floorSignCanvas = document.createElement('canvas');
-        floorSignCanvas.width = 256;
-        floorSignCanvas.height = 64;
-        const floorCtx = floorSignCanvas.getContext('2d');
-        floorCtx.fillStyle = 'transparent';
-        floorCtx.clearRect(0, 0, 256, 64);
-        floorCtx.fillStyle = '#00FFFF';
-        floorCtx.font = 'bold 28px Arial';
-        floorCtx.textAlign = 'center';
-        floorCtx.shadowColor = '#00FFFF';
-        floorCtx.shadowBlur = 10;
-        floorCtx.fillText('GAME ROOM', 128, 40);
-        
-        const floorSignTexture = new THREE.CanvasTexture(floorSignCanvas);
-        const floorSignMat = new THREE.MeshBasicMaterial({ 
-            map: floorSignTexture, 
-            transparent: true,
-            side: THREE.DoubleSide
-        });
-        const floorSignGeo = new THREE.PlaneGeometry(4, 1);
-        const floorSign = new THREE.Mesh(floorSignGeo, floorSignMat);
-        floorSign.rotation.x = -Math.PI / 2;
-        floorSign.position.set(gameRoomTriggerX, 0.05, gameRoomTriggerZ - 4);
-        group.add(floorSign);
-        
-        // Point light to illuminate the floor zone - Apple/Mobile: skip
-        if (!this.needsOptimization) {
-            const floorZoneLight = new THREE.PointLight(neonCyan, 0.8, 8);
-            floorZoneLight.position.set(gameRoomTriggerX, 2, gameRoomTriggerZ);
-            group.add(floorZoneLight);
-            this.lights.push(floorZoneLight);
-        }
-
         // ==================== NEON DECORATIONS ====================
         const neonTrimMat = this.getMaterial(neonPink, {
             emissive: neonPink,
@@ -1278,12 +1226,6 @@ class Casino extends BaseBuilding {
             stepHeight: stairHeight,
             numSteps: numStairs,
             direction: -1
-        };
-        // Store game room floor trigger location (used by getPortalTrigger)
-        group.userData.portalRoom = {
-            x: -0.2,
-            z: -19.2,
-            radius: 3.5
         };
         group.userData.entranceWidth = 12;
         
@@ -1751,6 +1693,11 @@ class Casino extends BaseBuilding {
                 if (this.slotMachineDisplay && this.slotMachineDisplay.update) {
                     this.slotMachineDisplay.update(time, delta * 2);
                 }
+                if (this.lobbyDecorProps) {
+                    this.lobbyDecorProps.forEach(prop => {
+                        if (prop.update) prop.update(time, delta * 2);
+                    });
+                }
                 return; // Skip all other animations
             }
         }
@@ -1791,6 +1738,13 @@ class Casino extends BaseBuilding {
         // ==================== SLOT MACHINE ====================
         if (this.slotMachineDisplay && this.slotMachineDisplay.update) {
             this.slotMachineDisplay.update(time, delta);
+        }
+
+        // ==================== LOBBY DECOR (slot machines) ====================
+        if (this.lobbyDecorProps) {
+            this.lobbyDecorProps.forEach(prop => {
+                if (prop.update) prop.update(time, delta);
+            });
         }
         
         // ==================== FLOATING TEXT ====================
@@ -1847,6 +1801,105 @@ class Casino extends BaseBuilding {
     }
     
     /**
+     * Simple row of decorative slot machines along the back wall
+     */
+    _createLobbyDecor(group, w, d) {
+        const THREE = this.THREE;
+
+        const slotWidth = 2.5;
+        const slotHeight = 2.2;
+        const frameThickness = Math.min(0.14, slotWidth * 0.05);
+        const slotFloorY = slotHeight / 2 + 0.28 + frameThickness + 0.08;
+        const backWallZ = -d / 2 + 1.0;
+
+        const slotCount = this.needsOptimization ? 3 : 5;
+        const spacing = Math.min(5.5, (w - 8) / (slotCount - 1));
+        const startX = -((slotCount - 1) * spacing) / 2;
+
+        const frameColors = [0xFFD700, 0xD4AF37, 0xFFD700, 0xD4AF37, 0xFFD700];
+        const lobbySlots = [];
+        this.lobbySlotDisplays = [];
+
+        for (let i = 0; i < slotCount; i++) {
+            const localX = startX + i * spacing;
+            const machineId = `casino_lobby_slot_${i}`;
+            const slot = new SlotMachineDisplay(THREE);
+            slot.spawn(group, localX, slotFloorY, backWallZ, {
+                width: slotWidth,
+                height: slotHeight,
+                frameColor: frameColors[i % frameColors.length],
+                theme: 'classic',
+                headerText: 'SLOTS',
+                interactive: true,
+                machineId
+            });
+            this.lobbyDecorProps.push(slot);
+            this.lobbySlotDisplays.push(slot);
+            lobbySlots.push({ localX, localZ: backWallZ, machineId, displayIndex: i });
+        }
+
+        group.userData.lobbySlotMachines = lobbySlots;
+        group.userData.lobbySlotDisplays = this.lobbySlotDisplays;
+    }
+
+    /**
+     * World-space lobby slot machine positions for gold slot interaction
+     */
+    getLobbySlotData(buildingX, buildingZ, rotation = 0) {
+        const machines = this.group.userData.lobbySlotMachines || [];
+        const adjustedRotation = rotation + Math.PI;
+        const cos = Math.cos(adjustedRotation);
+        const sin = Math.sin(adjustedRotation);
+
+        return machines.map(m => ({
+            id: m.machineId,
+            displayIndex: m.displayIndex,
+            x: buildingX + m.localX * cos - m.localZ * sin,
+            z: buildingZ + m.localX * sin + m.localZ * cos
+        }));
+    }
+
+    /**
+     * Compact lobby couch for ground floor (same style as 2nd floor couch, nightclub scale)
+     */
+    _addLobbyCouch(group, localX, localZ, faceRotation, couchMat, cushionMat, goldMat) {
+        const THREE = this.THREE;
+        const couchGroup = new THREE.Group();
+        const w = 5;
+        const d = 2;
+
+        const base = new THREE.Mesh(new THREE.BoxGeometry(w, 0.5, d), couchMat);
+        base.position.y = 0.25;
+        couchGroup.add(base);
+
+        const back = new THREE.Mesh(new THREE.BoxGeometry(w, 1.2, 0.4), couchMat);
+        back.position.set(0, 0.85, -d / 2 + 0.2);
+        couchGroup.add(back);
+
+        [-1, 1].forEach(side => {
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.7, d), couchMat);
+            arm.position.set(side * (w / 2 - 0.2), 0.6, 0);
+            couchGroup.add(arm);
+        });
+
+        for (let i = 0; i < 3; i++) {
+            const cushion = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.2, 1.4), cushionMat);
+            cushion.position.set(-1.5 + i * 1.5, 0.6, 0.05);
+            couchGroup.add(cushion);
+        }
+
+        [[-2.2, -0.7], [2.2, -0.7], [-2.2, 0.7], [2.2, 0.7]].forEach(([x, z]) => {
+            const foot = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.1, 0.2), goldMat);
+            foot.position.set(x, 0.05, z);
+            couchGroup.add(foot);
+        });
+
+        couchGroup.position.set(localX, 0, localZ);
+        couchGroup.rotation.y = faceRotation;
+        group.add(couchGroup);
+    }
+
+    /**
      * Get decoration colliders for exterior props
      * Returns world-space collider positions
      */
@@ -1879,7 +1932,42 @@ class Casino extends BaseBuilding {
                 name: `casino_column_${idx}`
             });
         });
-        
+
+        // Ground floor lobby couch collision boxes
+        const adjustedRotation = rotation + Math.PI;
+        const cosAdj = Math.cos(adjustedRotation);
+        const sinAdj = Math.sin(adjustedRotation);
+        const groundCouches = this.group.userData.groundFloorCouches || [];
+        groundCouches.forEach((couch, idx) => {
+            const worldX = buildingX + couch.localX * cosAdj - couch.localZ * sinAdj;
+            const worldZ = buildingZ + couch.localX * sinAdj + couch.localZ * cosAdj;
+            colliders.push({
+                type: 'box',
+                worldX,
+                worldZ,
+                width: 5,
+                depth: 2,
+                height: 1.2,
+                name: `casino_lobby_couch_${idx}`
+            });
+        });
+
+        // Lobby decorative slot machines
+        const lobbySlots = this.group.userData.lobbySlotMachines || [];
+        lobbySlots.forEach((slot, idx) => {
+            const worldX = buildingX + slot.localX * cosAdj - slot.localZ * sinAdj;
+            const worldZ = buildingZ + slot.localX * sinAdj + slot.localZ * cosAdj;
+            colliders.push({
+                type: 'box',
+                worldX,
+                worldZ,
+                width: 2.8,
+                depth: 1.8,
+                height: 3.2,
+                name: `casino_lobby_slot_${idx}`
+            });
+        });
+
         return colliders;
     }
 
@@ -1918,15 +2006,15 @@ class Casino extends BaseBuilding {
             });
         });
         
-        // Couch (same format as Nightclub / SKNY Igloo)
+        // Couch (2nd floor)
         const couchPos = this.group.userData.couchPosition;
         if (couchPos) {
             const worldPos = transform(couchPos.localX, couchPos.localZ);
             furniture.push({
                 type: 'couch',
                 position: { x: worldPos.x, z: worldPos.z },
-                rotation: adjustedRotation + Math.PI / 2,  // Face toward TV/bar (rotated 180 from before)
-                seatHeight: secondFloorHeight + 1.2,  // 2nd floor + couch seat height (raised to not clip through cushion)
+                rotation: adjustedRotation + Math.PI / 2,
+                seatHeight: secondFloorHeight + 1.2,
                 snapPoints: [
                     { x: -1.5, z: 0 },
                     { x: 0, z: 0 },
@@ -1938,6 +2026,30 @@ class Casino extends BaseBuilding {
                 name: 'casino_couch'
             });
         }
+
+        // Ground floor lobby couches
+        const groundCouches = this.group.userData.groundFloorCouches || [];
+        groundCouches.forEach((couch, idx) => {
+            const worldPos = transform(couch.localX, couch.localZ);
+            furniture.push({
+                type: 'couch',
+                position: { x: worldPos.x, z: worldPos.z },
+                // Match mesh rotation: adjustedRotation - faceRotation (same convention as 2nd floor couch)
+                rotation: adjustedRotation - couch.faceRotation,
+                seatHeight: 0.55,
+                snapPoints: [
+                    { x: -1.5, z: 0 },
+                    { x: 0, z: 0 },
+                    { x: 1.5, z: 0 }
+                ],
+                interactionRadius: 3,
+                maxOccupants: 3,
+                elevated: false,
+                platformHeight: 0,
+                dismountBack: true,
+                name: `casino_lobby_couch_${idx}`
+            });
+        });
         
         return furniture;
     }
@@ -2116,30 +2228,6 @@ class Casino extends BaseBuilding {
         };
     }
 
-    /**
-     * Get portal trigger data
-     * Red carpet in front of casino — town offset x: C + -30.8, z: C + 2.8
-     */
-    getPortalTrigger(x, z, rotation = 0) {
-        // Casino at (C-50, C+3) with rotation PI/2 → local (-0.2, -19.2)
-        const localX = -0.2;
-        const localZ = -19.2;
-        
-        // Transform to world coordinates
-        const cos = Math.cos(rotation);
-        const sin = Math.sin(rotation);
-        const worldX = x + localX * cos - localZ * sin;
-        const worldZ = z + localX * sin + localZ * cos;
-
-        return {
-            x: worldX,
-            z: worldZ,
-            radius: 3.5, // Trigger zone radius
-            action: 'enter_casino_game_room',
-            message: '🎰 Enter Game Room (Press E)',
-            destination: 'casino_game_room'
-        };
-    }
 }
 
 /**
@@ -2154,9 +2242,10 @@ export function createCasino(THREE, config = {}) {
     mesh.userData.getCollisionData = (x, z, rot) => casino.getCollisionData(x, z, rot);
     mesh.userData.getLandingSurfaces = (x, z, rot) => casino.getLandingSurfaces(x, z, rot);
     mesh.userData.getStairData = (x, z, rot) => casino.getStairData(x, z, rot);
-    mesh.userData.getPortalTrigger = (x, z, rot) => casino.getPortalTrigger(x, z, rot);
     mesh.userData.getFurnitureData = (x, z, rot) => casino.getFurnitureData(x, z, rot);
     mesh.userData.getDecorationColliders = (x, z, rot) => casino.getDecorationColliders(x, z, rot);
+    mesh.userData.getLobbySlotData = (x, z, rot) => casino.getLobbySlotData(x, z, rot);
+    mesh.userData.lobbySlotDisplays = casino.lobbySlotDisplays;
     mesh.userData.lights = casino.lights;
     
     // Expose update function for animated marquee and neon

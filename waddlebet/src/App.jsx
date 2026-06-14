@@ -272,8 +272,8 @@ const AppContent = () => {
         }
         entryLoadStartedAt.current = Date.now();
         setEntryLoading(true);
-        GameManager.getInstance().setRoom('town');
-        setCurrentRoom('town');
+        GameManager.getInstance().setRoom('nightclub');
+        setCurrentRoom('nightclub');
     };
     
     const handleWorldReady = useCallback(() => {

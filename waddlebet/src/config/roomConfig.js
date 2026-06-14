@@ -11,6 +11,17 @@ export const BUILDING_SCALE = 4;
 export const CENTER_X = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
 export const CENTER_Z = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
 
+/** Default world spawn offset from center (nightclub interior) */
+export const WORLD_SPAWN_OFFSET = { x: -101.8, z: -98.8 };
+
+/** Default world spawn — nightclub interior at C-101.8, C-98.8 */
+export const WORLD_SPAWN = {
+    x: CENTER_X + WORLD_SPAWN_OFFSET.x,
+    z: CENTER_Z + WORLD_SPAWN_OFFSET.z,
+};
+
+export const WORLD_SPAWN_ROOM = 'nightclub';
+
 // Building definitions for the town
 export const BUILDINGS = [
     { 
@@ -114,7 +125,7 @@ export const ROOM_SPAWNS = {
     town: { x: 0, z: 0 },
     dojo: { x: 0, z: 12 },
     pizza: { x: 0, z: 12 },
-    nightclub: { x: 20, z: 28 },
+    nightclub: { x: WORLD_SPAWN.x, z: WORLD_SPAWN.z },
     igloo: { x: 0, z: 10 },
     casino_game_room: { x: 10, z: 10 }  // Near entrance from casino portal room
 };

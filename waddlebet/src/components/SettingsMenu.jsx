@@ -10,6 +10,10 @@ import { performanceManager, PERFORMANCE_PRESETS } from '../systems';
 import { formatSupportDiagnostics } from '../utils/browserCapabilities';
 import ReferralPanel from './ReferralPanel';
 import LanguageToggle from './LanguageToggle';
+import TokenomicsModal from './TokenomicsModal';
+
+const WHITEPAPER_URL = 'https://whitepaper.waddle.bet';
+const DEXSCREENER_URL = 'https://dexscreener.com/solana/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump';
 
 // Default keybinds
 const DEFAULT_KEYBINDS = {
@@ -52,6 +56,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
     const menuRef = useRef(null);
     const [activeTab, setActiveTab] = useState('general');
     const [rebindingKey, setRebindingKey] = useState(null); // Which keybind is being rebound
+    const [showTokenomics, setShowTokenomics] = useState(false);
     
     // Use shared hooks for click outside and escape key
     useClickOutside(menuRef, onClose, isOpen && !rebindingKey);
@@ -86,8 +91,6 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [rebindingKey, settings, onSettingsChange]);
-    
-    if (!isOpen) return null;
     
     const keybinds = settings.keybinds || DEFAULT_KEYBINDS;
     
@@ -182,6 +185,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
     };
     
     return (
+        <>
+        {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-2 sm:p-4">
             <div 
                 ref={menuRef}
@@ -246,6 +251,73 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                 </div>
                                 <LanguageToggle variant="inline" />
                             </div>
+
+                            <div className="py-3 border-b border-white/5 space-y-2">
+                                <div className="flex items-center gap-3 mb-1">
+                                    <span className="text-lg">🔗</span>
+                                    <div>
+                                        <div className="text-white text-sm font-medium">{t('settings.linksSection')}</div>
+                                        <div className="text-white/40 text-xs">{t('settings.linksHint')}</div>
+                                    </div>
+                                </div>
+
+                                <a
+                                    href={WHITEPAPER_URL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full p-3 rounded-xl bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 hover:border-cyan-500/40 transition-all text-left group block"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                            <span className="text-lg">📄</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-white text-sm font-bold">{t('settings.whitepaperBtn')}</div>
+                                            <p className="text-white/40 text-xs truncate">{t('settings.whitepaperDesc')}</p>
+                                        </div>
+                                        <span className="text-white/30 group-hover:text-white/60 transition-colors">↗</span>
+                                    </div>
+                                </a>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowTokenomics(true);
+                                        onClose();
+                                    }}
+                                    className="w-full p-3 rounded-xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 hover:border-purple-500/40 transition-all text-left group"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                            <span className="text-lg">❗</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-white text-sm font-bold">{t('settings.tokenomicsBtn')}</div>
+                                            <p className="text-white/40 text-xs truncate">{t('settings.tokenomicsDesc')}</p>
+                                        </div>
+                                        <span className="text-white/30 group-hover:text-white/60 transition-colors">→</span>
+                                    </div>
+                                </button>
+
+                                <a
+                                    href={DEXSCREENER_URL}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="w-full p-3 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 hover:border-green-500/40 transition-all text-left group block"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                            <span className="text-lg">📈</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-white text-sm font-bold">{t('settings.dexscreenerBtn')}</div>
+                                            <p className="text-white/40 text-xs truncate">{t('settings.dexscreenerDesc')}</p>
+                                        </div>
+                                        <span className="text-white/30 group-hover:text-white/60 transition-colors">↗</span>
+                                    </div>
+                                </a>
+                            </div>
+
                             <SettingRow
                                 icon="🖐️"
                                 title={t('settings.leftHanded')}
@@ -617,24 +689,6 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                 </div>
                             </button>
                             
-                            <a
-                                href="https://whitepaper.waddle.bet"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="w-full p-4 rounded-2xl bg-gradient-to-r from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 hover:border-cyan-500/40 transition-all text-left group block"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                        <span className="text-xl">📄</span>
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="text-white font-bold">{t('settings.whitepaperBtn')}</div>
-                                        <p className="text-white/40 text-xs">{t('settings.whitepaperDesc')}</p>
-                                    </div>
-                                    <span className="text-white/30 group-hover:text-white/60 transition-colors">↗</span>
-                                </div>
-                            </a>
-
                             <button
                                 type="button"
                                 onClick={async () => {
@@ -681,6 +735,12 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                 </div>
             </div>
         </div>
+        )}
+        <TokenomicsModal
+            isOpen={showTokenomics}
+            onClose={() => setShowTokenomics(false)}
+        />
+        </>
     );
 };
 

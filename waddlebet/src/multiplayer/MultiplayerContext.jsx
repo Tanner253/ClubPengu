@@ -93,6 +93,11 @@ export function MultiplayerProvider({ children }) {
     const [slotResult, setSlotResult] = useState(null);
     const [activeSlotSpins, setActiveSlotSpins] = useState([]); // Other players spinning
     const slotCallbackRef = useRef(null);
+
+    const [goldSlotSpinning, setGoldSlotSpinning] = useState(false);
+    const [goldSlotResult, setGoldSlotResult] = useState(null);
+    const [activeGoldSlotSpins, setActiveGoldSlotSpins] = useState([]);
+    const goldSlotCallbackRef = useRef(null);
     
     // Ice fishing state
     const [fishingActive, setFishingActive] = useState(false);
@@ -370,8 +375,7 @@ export function MultiplayerProvider({ children }) {
                 // Server-authoritative coin update
                 if (message.coins !== undefined) {
                     GameManager.getInstance().setCoinsFromServer(message.coins);
-                    // Also update userData to keep context in sync
-                    setUserData(prev => prev ? { ...prev, coins: message.coins } : prev);
+                    setUserData(prev => ({ ...(prev || {}), coins: message.coins }));
                 }
                 break;
                 
@@ -803,6 +807,83 @@ export function MultiplayerProvider({ children }) {
                     slotCallbackRef.current = null;
                 }
                 callbacksRef.current.onSlotError?.(message);
+                break;
+            }
+
+            // ==================== GOLD LOBBY SLOT MESSAGES ====================
+            case 'gold_slot_spin_started': {
+                setGoldSlotSpinning(true);
+                setGoldSlotResult(null);
+                console.log(`🎰 Server accepted gold slot spin: ${message.machineId}, bet=${message.bet}g, balance=${message.newCoinBalance}`);
+                if (message.newCoinBalance !== undefined) {
+                    GameManager.getInstance().setCoinsFromServer(message.newCoinBalance);
+                    setUserData(prev => ({ ...(prev || {}), coins: message.newCoinBalance }));
+                }
+                callbacksRef.current.onGoldSlotSpinStarted?.(message);
+                break;
+            }
+
+            case 'gold_slot_reel_reveal': {
+                callbacksRef.current.onGoldSlotReelReveal?.(message);
+                break;
+            }
+
+            case 'gold_slot_result': {
+                setGoldSlotSpinning(false);
+                setGoldSlotResult(message);
+                if (message.newCoinBalance !== undefined) {
+                    GameManager.getInstance().setCoinsFromServer(message.newCoinBalance);
+                    setUserData(prev => ({ ...(prev || {}), coins: message.newCoinBalance }));
+                }
+                if (goldSlotCallbackRef.current) {
+                    goldSlotCallbackRef.current(message);
+                    goldSlotCallbackRef.current = null;
+                }
+                callbacksRef.current.onGoldSlotResult?.(message);
+                break;
+            }
+
+            case 'gold_slot_player_spinning': {
+                setActiveGoldSlotSpins(prev => [...prev, {
+                    playerId: message.playerId,
+                    playerName: message.playerName,
+                    machineId: message.machineId,
+                    playerPosition: message.playerPosition
+                }]);
+                callbacksRef.current.onGoldSlotPlayerSpinning?.(message);
+                break;
+            }
+
+            case 'gold_slot_complete': {
+                setActiveGoldSlotSpins(prev => prev.filter(s => s.playerId !== message.playerId));
+                callbacksRef.current.onGoldSlotComplete?.(message);
+                break;
+            }
+
+            case 'gold_slot_interrupted': {
+                setActiveGoldSlotSpins(prev => prev.filter(s => s.playerId !== message.playerId));
+                callbacksRef.current.onGoldSlotInterrupted?.(message);
+                break;
+            }
+
+            case 'gold_slot_active_spins': {
+                setActiveGoldSlotSpins(message.spins || []);
+                callbacksRef.current.onGoldSlotActiveSpins?.(message.spins);
+                break;
+            }
+
+            case 'gold_slot_error': {
+                setGoldSlotSpinning(false);
+                setGoldSlotResult({
+                    error: true,
+                    message: message.message || 'Spin failed',
+                    machineId: message.machineId
+                });
+                if (goldSlotCallbackRef.current) {
+                    goldSlotCallbackRef.current({ error: message.error, message: message.message });
+                    goldSlotCallbackRef.current = null;
+                }
+                callbacksRef.current.onGoldSlotError?.(message);
                 break;
             }
             
@@ -1326,11 +1407,14 @@ export function MultiplayerProvider({ children }) {
         }
     }, [dispatchToHandlers]);
     
-    // Send message to server
+    // Send message to server — returns false if socket is not open
     const send = useCallback((message) => {
         if (wsRef.current?.readyState === WebSocket.OPEN) {
             wsRef.current.send(JSON.stringify(message));
+            return true;
         }
+        console.warn('[Multiplayer] WebSocket not open, dropped message:', message?.type);
+        return false;
     }, []);
     
     // ==================== AUTHENTICATION ====================
@@ -1456,15 +1540,15 @@ export function MultiplayerProvider({ children }) {
         sessionRestoredRef.current = false;
     }, [send]);
     
-    // Join a room
+    // Join a room — returns false if the message could not be sent
     const joinRoom = useCallback((room, appearance, puffle = null, turnstileToken = null) => {
-        send({
+        return send({
             type: 'join',
             room,
             name: playerName,
             appearance,
             puffle,
-            turnstileToken // Cloudflare Turnstile verification token
+            turnstileToken
         });
     }, [send, playerName]);
     
@@ -1722,6 +1806,55 @@ export function MultiplayerProvider({ children }) {
             }, 10000);
         });
     }, [connected, isAuthenticated, send]);
+
+    const spinGoldSlot = useCallback((machineId) => {
+        return new Promise((resolve) => {
+            if (!connected) {
+                resolve({ error: 'NOT_CONNECTED', message: 'Not connected to server' });
+                return;
+            }
+            if (!isAuthenticated) {
+                resolve({ error: 'NOT_AUTHENTICATED', message: 'Sign in to play for gold' });
+                return;
+            }
+            if (!machineId) {
+                resolve({ error: 'INVALID_MACHINE', message: 'Invalid slot machine' });
+                return;
+            }
+
+            setGoldSlotSpinning(true);
+            setGoldSlotResult(null);
+            goldSlotCallbackRef.current = resolve;
+
+            const sent = send({ type: 'gold_slot_spin', machineId });
+            if (!sent) {
+                setGoldSlotSpinning(false);
+                goldSlotCallbackRef.current = null;
+                resolve({ error: 'NOT_CONNECTED', message: 'Lost connection to server — rejoin town and try again' });
+                return;
+            }
+
+            console.log(`🎰 Sent gold_slot_spin for ${machineId}`);
+
+            setTimeout(() => {
+                if (goldSlotCallbackRef.current === resolve) {
+                    setGoldSlotSpinning(false);
+                    goldSlotCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, isAuthenticated, send]);
+
+    const clearGoldSlotResult = useCallback(() => {
+        setGoldSlotResult(null);
+    }, []);
+
+    const syncGoldSlots = useCallback(() => {
+        if (connected) {
+            send({ type: 'gold_slot_sync' });
+        }
+    }, [connected, send]);
     
     const clearSlotResult = useCallback(() => {
         setSlotResult(null);
@@ -1959,6 +2092,13 @@ export function MultiplayerProvider({ children }) {
         slotResult,
         clearSlotResult,
         activeSlotSpins,
+
+        spinGoldSlot,
+        goldSlotSpinning,
+        goldSlotResult,
+        clearGoldSlotResult,
+        syncGoldSlots,
+        activeGoldSlotSpins,
         
         // Ice Fishing Actions
         startFishing,
@@ -2018,6 +2158,7 @@ export function MultiplayerProvider({ children }) {
         connectWallet, disconnectWallet,
         redeemPromoCode, promoLoading, promoResult, clearPromoResult,
         spinSlot, slotSpinning, slotResult, clearSlotResult, activeSlotSpins,
+        spinGoldSlot, goldSlotSpinning, goldSlotResult, clearGoldSlotResult, syncGoldSlots, activeGoldSlotSpins,
         startFishing, attemptCatch, cancelFishing, fishingActive, fishingResult, clearFishingResult,
         adoptPuffle, puffleAdopting,
         setName, joinRoom, sendPosition, sendChat, sendEmoteBubble, sendEmote, stopEmote,
