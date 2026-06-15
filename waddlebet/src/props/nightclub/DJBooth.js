@@ -33,7 +33,7 @@ class DJBooth extends BaseProp {
         for (let i = 0; i < 3; i++) {
             const stepGeo = new THREE.BoxGeometry(3.5, 0.24, 1.2);
             const step = new THREE.Mesh(stepGeo, stepMat);
-            step.position.set(-4.5, stepHeights[2-i] / 2, 4.2 + i * 1.2);
+            step.position.set(-4.5, stepHeights[2-i] / 2, 3.6 + i * 1.2);
             step.castShadow = true;
             step.receiveShadow = true;
             this.addMesh(step, group);
@@ -43,7 +43,7 @@ class DJBooth extends BaseProp {
         for (let i = 0; i < 3; i++) {
             const stepGeo = new THREE.BoxGeometry(3.5, 0.24, 1.2);
             const step = new THREE.Mesh(stepGeo, stepMat);
-            step.position.set(4.5, stepHeights[2-i] / 2, 4.2 + i * 1.2);
+            step.position.set(4.5, stepHeights[2-i] / 2, 3.6 + i * 1.2);
             step.castShadow = true;
             step.receiveShadow = true;
             this.addMesh(step, group);

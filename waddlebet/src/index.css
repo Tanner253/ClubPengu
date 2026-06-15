@@ -178,8 +178,25 @@
 .rs-chat-msg--market .rs-chat-msg-name,
 .rs-chat-msg--market .rs-chat-msg-body { color: #7dffb2; }
 
-.rs-chat-msg--afk .rs-chat-msg-name,
-.rs-chat-msg--afk .rs-chat-msg-body { color: #999999; }
+.rs-chat-msg--afk .rs-chat-msg-name { color: #b0b0cc; }
+.rs-chat-msg--afk .rs-chat-msg-self { color: #d4d4ff; }
+.rs-chat-msg--afk .rs-chat-msg-body { color: #cccccc; }
+
+@keyframes rs-chat-rgb {
+  0% { color: #ff3366; }
+  16% { color: #ff9933; }
+  33% { color: #ffee33; }
+  50% { color: #33ff88; }
+  66% { color: #33ccff; }
+  83% { color: #cc66ff; }
+  100% { color: #ff3366; }
+}
+
+.rs-chat-staff-tag {
+  font-weight: bold;
+  animation: rs-chat-rgb 2.5s linear infinite;
+  text-shadow: 1px 1px 0 #000, 0 0 6px rgba(255, 255, 255, 0.35);
+}
 
 .rs-chat-footer {
   display: flex;

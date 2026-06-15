@@ -275,7 +275,7 @@ const VoxelWorld = ({
         requestBallSync: mpRequestBallSync,
         sendSnowball: mpSendSnowball,
         registerCallbacks,
-        chatMessages,
+        registerChatBubbleCallback,
         setMobileChatOpen,
         setWorldGameplayOverlay,
         worldTimeRef: serverWorldTimeRef, // Server-synchronized world time
@@ -578,6 +578,7 @@ const VoxelWorld = ({
     
     // Portal State
     const [nearbyPortal, setNearbyPortal] = useState(null);
+    const nearbyPortalRef = useRef(null);
     const portalsRef = useRef([]);
     
     // Town Interaction State
@@ -2934,20 +2935,25 @@ const VoxelWorld = ({
                     // Stand up - move to clear the seat
                     const seatData = seatedRef.current;
                     const benchRot = seatData.benchRotation || 0;
-                    const dismountDist = 1.5; // Distance to clear seat
+                    const dismountDist = seatData.dismountDist ?? 1.5;
                     
-                    // Check if we should dismount backwards (for bar stools facing counter)
-                    // INVERTED: dismountBack=true now goes FORWARD (opposite of face direction)
-                    const dismountBackward = seatData.dismountBack === true;
-                    const direction = dismountBackward ? 1 : -1; // INVERTED: 1 = forwards (behind stool), -1 = backwards
-                    
-                    // Calculate dismount direction based on seat rotation
-                    const offsetX = Math.sin(benchRot) * dismountDist * direction;
-                    const offsetZ = Math.cos(benchRot) * dismountDist * direction;
-                    
-                    // Move player in dismount direction from seat
-                    posRef.current.x = seatData.worldPos.x + offsetX;
-                    posRef.current.z = seatData.worldPos.z + offsetZ;
+                    if (seatData.dismountOffset) {
+                        posRef.current.x = seatData.worldPos.x + seatData.dismountOffset.x;
+                        posRef.current.z = seatData.worldPos.z + seatData.dismountOffset.z;
+                    } else {
+                        // Check if we should dismount backwards (for bar stools facing counter)
+                        // INVERTED: dismountBack=true now goes FORWARD (opposite of face direction)
+                        const dismountBackward = seatData.dismountBack === true;
+                        const direction = dismountBackward ? 1 : -1; // INVERTED: 1 = forwards (behind stool), -1 = backwards
+                        
+                        // Calculate dismount direction based on seat rotation
+                        const offsetX = Math.sin(benchRot) * dismountDist * direction;
+                        const offsetZ = Math.cos(benchRot) * dismountDist * direction;
+                        
+                        // Move player in dismount direction from seat
+                        posRef.current.x = seatData.worldPos.x + offsetX;
+                        posRef.current.z = seatData.worldPos.z + offsetZ;
+                    }
                     
                     // Calculate dismount Y: stay at platform height if elevated, otherwise ground
                     // If seat has platformHeight (rooftop benches), stay at that height
@@ -3843,7 +3849,8 @@ const VoxelWorld = ({
                                     worldX: dj.position.x,
                                     worldZ: dj.position.z,
                                     worldRotation: dj.rotation,
-                                    seatHeight: dj.standHeight
+                                    seatHeight: dj.standHeight,
+                                    dismountOffset: dj.dismountOffset
                                 }
                             }
                         }));
@@ -8038,45 +8045,27 @@ const VoxelWorld = ({
         return () => clearTimeout(timeout);
     }, [activeBubble]);
     
-    // Listen for our own chat messages to show local bubble
+    // Live room chat only — history reloads must not re-trigger bubbles
     const lastChatIdRef = useRef(null);
     useEffect(() => {
-        // Guard: need chatMessages array with content and valid playerId
-        if (!chatMessages?.length || !playerId) return;
-        
-        const latestMsg = chatMessages[chatMessages.length - 1];
-        if (!latestMsg) return;
-        
-        // Only process if it's a new message from us
-        if (latestMsg.id === lastChatIdRef.current) return;
-        if (latestMsg.playerId !== playerId && latestMsg.name !== playerName) return;
-        
-        lastChatIdRef.current = latestMsg.id;
-        
-        // Don't show bubbles for whispers - they're private
-        if (latestMsg.isWhisper) return;
-        
-        // Don't show bubbles for system messages
-        if (latestMsg.isSystem) return;
-        
-        // Handle AFK messages
-        if (latestMsg.text?.toLowerCase().startsWith('/afk') || latestMsg.text?.startsWith('💤')) {
-            const afkText = latestMsg.text.startsWith('💤') ? latestMsg.text : `💤 ${latestMsg.text.slice(4).trim() || 'AFK'}`;
-            isAfkRef.current = true;
-            afkMessageRef.current = afkText;
-            setActiveBubble(afkText);
-        } else {
-            // Regular message - clear AFK if was AFK
+        if (!playerId) return undefined;
+
+        return registerChatBubbleCallback(({ text, playerId: senderId, id, isSystem }) => {
+            if (!text || !id || senderId !== playerId) return;
+            if (id === lastChatIdRef.current) return;
+            if (isSystem) return;
+
+            lastChatIdRef.current = id;
+
             if (isAfkRef.current) {
                 isAfkRef.current = false;
                 afkMessageRef.current = null;
             }
-            setActiveBubble(latestMsg.text);
-        }
-        
-        // Track chat stat (coins are awarded server-side in chat handler)
-        GameManager.getInstance().incrementStat('chatsSent');
-    }, [chatMessages, playerId, playerName]);
+            setActiveBubble(text);
+
+            GameManager.getInstance().incrementStat('chatsSent');
+        });
+    }, [playerId, registerChatBubbleCallback]);
 
     // Puffle management - supports multiple ownership, 1 equipped at a time
     const handleAdoptPuffle = (newPuffle) => {
@@ -8239,6 +8228,13 @@ const VoxelWorld = ({
         }
     };
     
+    // Clear stale portal/interaction prompts when the room changes
+    useEffect(() => {
+        nearbyPortalRef.current = null;
+        setNearbyPortal(null);
+        setNearbyInteraction(null);
+    }, [room]);
+
     // Check for nearby portals (room-specific)
     const checkPortals = () => {
         const playerPos = posRef.current;
@@ -8263,16 +8259,19 @@ const VoxelWorld = ({
             const dist = Math.sqrt(dx * dx + dz * dz);
             
             if (dist < portal.doorRadius) {
-                if (nearbyPortal?.id !== portal.id) {
+                if (nearbyPortalRef.current?.id !== portal.id) {
                     // Enrich igloo portals with dynamic state data
                     if (portal.targetRoom?.startsWith('igloo')) {
                         const iglooData = getIgloo(portal.targetRoom);
-                        setNearbyPortal({
+                        const enriched = {
                             ...portal,
                             isIgloo: true,
                             iglooData: iglooData || null
-                        });
+                        };
+                        nearbyPortalRef.current = enriched;
+                        setNearbyPortal(enriched);
                     } else {
+                        nearbyPortalRef.current = portal;
                         setNearbyPortal(portal);
                     }
                 }
@@ -8280,7 +8279,8 @@ const VoxelWorld = ({
             }
         }
         
-        if (nearbyPortal) {
+        if (nearbyPortalRef.current) {
+            nearbyPortalRef.current = null;
             setNearbyPortal(null);
         }
     };
@@ -8703,7 +8703,8 @@ const VoxelWorld = ({
         // Special action portals (no room transition)
         if (nearbyPortal.action === 'puffle_shop') {
             setShowPuffleShop(true);
-            setNearbyPortal(null); // Clear portal state
+            nearbyPortalRef.current = null;
+            setNearbyPortal(null);
             return;
         }
         
@@ -8735,6 +8736,7 @@ const VoxelWorld = ({
                 savePlayerSession('town', { x: roofX, y: roofY, z: roofZ });
             } catch (e) { /* ignore */ }
             
+            nearbyPortalRef.current = null;
             setNearbyPortal(null);
             return;
         }
@@ -8796,6 +8798,8 @@ const VoxelWorld = ({
                                     iglooEntrySpawnRef.current = exitSpawnPos;
                                 }
                                 
+                                nearbyPortalRef.current = null;
+                                setNearbyPortal(null);
                                 onChangeRoom(iglooId, exitSpawnPos);
                             });
                             return; // Wait for server response
@@ -8824,12 +8828,16 @@ const VoxelWorld = ({
             }
             
             // Pass exit spawn position if available (for returning to town)
+            nearbyPortalRef.current = null;
+            setNearbyPortal(null);
             onChangeRoom(nearbyPortal.targetRoom, exitSpawnPos);
             return;
         }
         
         // Start minigame
         if (nearbyPortal.minigame && onStartMinigame) {
+            nearbyPortalRef.current = null;
+            setNearbyPortal(null);
             onStartMinigame(nearbyPortal.minigame);
             return;
         }
@@ -9423,7 +9431,8 @@ const VoxelWorld = ({
                         seatHeight: djHeight,
                         benchRotation: djRotation,
                         benchDepth: 1,
-                        dismountBack: true, // Step back when exiting DJ booth
+                        dismountBack: true,
+                        dismountOffset: djData.dismountOffset,
                         platformHeight: djHeight
                     };
                     setSeatedOnBench(seatData);
@@ -9584,6 +9593,14 @@ const VoxelWorld = ({
                 return;
             }
             
+            if (command === 'afk') {
+                const afkText = e.detail.message || '💤 AFK';
+                isAfkRef.current = true;
+                afkMessageRef.current = afkText;
+                setActiveBubble(afkText);
+                return;
+            }
+
             if (command === 'spawn') {
                 const spawnX = WORLD_SPAWN.x;
                 const spawnZ = WORLD_SPAWN.z;
@@ -10848,7 +10865,7 @@ const VoxelWorld = ({
              
              {/* Door/Portal Prompt - Use IglooPortal for igloos, regular Portal otherwise */}
              {/* Always get fresh iglooData from context to ensure real-time updates */}
-             {nearbyPortal?.isIgloo ? (
+             {nearbyPortal && (ROOM_PORTALS[room] || []).some((p) => p.id === nearbyPortal.id) && nearbyPortal?.isIgloo ? (
                 <IglooPortal
                     portal={nearbyPortal}
                     iglooData={getIgloo(nearbyPortal.targetRoom)}
@@ -10860,7 +10877,7 @@ const VoxelWorld = ({
                     isAuthenticated={isAuthenticated}
                     userClearance={userClearance?.[nearbyPortal?.targetRoom]}
                 />
-             ) : (
+             ) : nearbyPortal && (ROOM_PORTALS[room] || []).some((p) => p.id === nearbyPortal.id) ? (
                 <Portal 
                     name={nearbyPortal?.name}
                     emoji={nearbyPortal?.emoji}
@@ -10870,7 +10887,7 @@ const VoxelWorld = ({
                     color={nearbyPortal?.targetRoom || nearbyPortal?.minigame || nearbyPortal?.teleportToRoof || nearbyPortal?.action ? 'green' : 'gray'}
                     hasGame={!!(nearbyPortal?.targetRoom || nearbyPortal?.minigame || nearbyPortal?.teleportToRoof || nearbyPortal?.action)}
                 />
-             )}
+             ) : null}
              
              {/* Gold Lobby Slot Prompt (town casino) */}
              {goldSlotInteraction && !nearbyPortal && room === 'town' && (
@@ -11234,7 +11251,7 @@ const VoxelWorld = ({
              
              {/* Town Interaction Prompt - Clickable like dojo enter */}
              {/* Hide when blackjack interaction is showing to prevent overlap */}
-             {nearbyInteraction && !nearbyPortal && !slotInteraction && !goldSlotInteraction && !blackjackInteraction && (
+             {nearbyInteraction && (room === 'town' || (room === 'nightclub' && ['sit', 'dj'].includes(nearbyInteraction.action))) && !nearbyPortal && !slotInteraction && !goldSlotInteraction && !blackjackInteraction && (
                 <div 
                     className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border border-white/20 text-center z-20 ${
                         isMobile 
@@ -11345,6 +11362,7 @@ const VoxelWorld = ({
                                     benchRotation: djRotation,
                                     benchDepth: 1,
                                     dismountBack: true,
+                                    dismountOffset: djData.dismountOffset,
                                     platformHeight: djHeight
                                 };
                                 setSeatedOnBench(seatData);

@@ -687,7 +687,7 @@ class Nightclub extends BaseRoom {
         const leftStepX = CX_DJ - 4.5;
         if (px >= leftStepX - djStepWidth/2 && px <= leftStepX + djStepWidth/2) {
             for (let i = 0; i < 3; i++) {
-                const stepZ = CZ_DJ + 4.2 + i * djStepDepth;
+                const stepZ = CZ_DJ + 3.6 + i * djStepDepth;
                 const stepTop = djStepHeights[i];
                 if (pz >= stepZ - djStepDepth/2 && pz <= stepZ + djStepDepth/2) {
                     if (py <= stepTop + 0.3 && stepTop > groundHeight) {
@@ -702,7 +702,7 @@ class Nightclub extends BaseRoom {
         const rightStepX = CX_DJ + 4.5;
         if (px >= rightStepX - djStepWidth/2 && px <= rightStepX + djStepWidth/2) {
             for (let i = 0; i < 3; i++) {
-                const stepZ = CZ_DJ + 4.2 + i * djStepDepth;
+                const stepZ = CZ_DJ + 3.6 + i * djStepDepth;
                 const stepTop = djStepHeights[i];
                 if (pz >= stepZ - djStepDepth/2 && pz <= stepZ + djStepDepth/2) {
                     if (py <= stepTop + 0.3 && stepTop > groundHeight) {
@@ -879,14 +879,16 @@ class Nightclub extends BaseRoom {
                     position: { x: CX - 2.2, z: 2.85 },
                     standHeight: 0.75,
                     rotation: 0,
-                    interactionRadius: 1.5
+                    interactionRadius: 1.5,
+                    dismountOffset: { x: -2.5, z: -2.5 }
                 },
                 {
                     id: 'dj_right',
                     position: { x: CX + 2.2, z: 2.85 },
                     standHeight: 0.75,
                     rotation: 0,
-                    interactionRadius: 1.5
+                    interactionRadius: 1.5,
+                    dismountOffset: { x: 2.5, z: -2.5 }
                 }
             ]
         };

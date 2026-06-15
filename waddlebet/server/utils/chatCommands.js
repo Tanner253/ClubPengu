@@ -31,6 +31,7 @@ export function isClientOnlyCommand(text) {
     const lower = text.trim().toLowerCase();
     if (isHelpCommand(lower)) return true;
     if (lower === '/spawn') return true;
+    if (lower.match(/^\/afk(\s+.*)?$/)) return true;
     return false;
 }
 

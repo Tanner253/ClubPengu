@@ -40,7 +40,8 @@ class ChatService {
             isWhisper: channel === 'whisper',
             fromName: metadata.fromName || null,
             toName: metadata.toName || null,
-            rarity: metadata.rarity || null
+            rarity: metadata.rarity || null,
+            senderRole: metadata.senderRole || null
         };
 
         if (channel === 'whisper' && viewerPlayerId) {

@@ -22,6 +22,17 @@ export const CHAT_TAB_CONFIG = [
 
 export const MAX_CHAT_PER_CHANNEL = 1000;
 
+export function getMessageSenderRole(msg) {
+    const role = msg?.senderRole || msg?.metadata?.senderRole;
+    return role === 'admin' || role === 'moderator' ? role : null;
+}
+
+export function getStaffChatTag(role) {
+    if (role === 'admin') return 'ADMIN';
+    if (role === 'moderator') return 'MOD';
+    return null;
+}
+
 export function createEmptyChatState() {
     return Object.fromEntries(CHAT_CHANNELS.map((ch) => [ch, []]));
 }
@@ -32,22 +43,23 @@ export function normalizeChatMessage(msg, playerId = null) {
         || (msg.isWhisper ? 'whisper' : msg.isSystem ? 'announcement' : 'room');
     let type = 'local';
 
-    if (channel === 'local' || msg.localOnly) {
+    if (msg.metadata?.isAfk || msg.text?.startsWith('💤')) {
+        type = 'afk';
+    } else if (channel === 'local' || msg.localOnly) {
         type = 'system';
     } else if (msg.isWhisper || channel === 'whisper') {
         type = msg.whisperDirection === 'out' || msg.fromMe ? 'whisperOut' : 'whisperIn';
-    } else if (msg.metadata?.isAfk || msg.text?.startsWith('💤')) {
-        type = 'afk';
     } else if (msg.isSystem || ['casino', 'announcement', 'market'].includes(channel)) {
         type = 'system';
     }
 
-    return {
+        return {
         ...msg,
         channel: channel === 'local' || msg.localOnly ? 'local' : channel,
         type,
         localOnly: channel === 'local' || msg.localOnly || false,
         displayText: msg.text,
+        senderRole: msg.senderRole || msg.metadata?.senderRole || null,
         id: msg.id || `${channel}_${msg.timestamp}_${Math.random().toString(36).slice(2, 6)}`,
         fromMe: msg.fromMe ?? (msg.playerId === playerId)
     };

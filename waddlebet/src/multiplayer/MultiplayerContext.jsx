@@ -149,7 +149,10 @@ export function MultiplayerProvider({ children }) {
             callbacksRef.current.onChatMessage?.(normalized);
             chatBubbleCallbackRef.current?.({
                 senderName: normalized.name,
-                text: normalized.text
+                text: normalized.text,
+                playerId: message.playerId,
+                id: normalized.id,
+                isSystem: normalized.isSystem
             });
         }
     }, [maybeMarkChatTabUnread]);
@@ -1465,17 +1468,6 @@ export function MultiplayerProvider({ children }) {
                     }
                 }
                 
-                if (message.playerId === playerIdRef.current && message.isAfk) {
-                    ingestChatMessage({
-                        id: `afk_${Date.now()}`,
-                        channel: 'room',
-                        playerId: message.playerId,
-                        name: message.name || playerNameRef.current,
-                        text: message.afkMessage,
-                        timestamp: Date.now(),
-                        metadata: { isAfk: true }
-                    });
-                }
                 console.log(`${message.isAfk ? '💤' : '👋'} ${message.name || message.playerId} is ${message.isAfk ? 'now AFK' : 'back'}`);
                 break;
             }
@@ -1749,6 +1741,10 @@ export function MultiplayerProvider({ children }) {
     
     const sendChat = useCallback((text, channel = 'room') => {
         send({ type: 'chat', text, channel });
+    }, [send]);
+
+    const sendAfk = useCallback((message = 'AFK') => {
+        send({ type: 'afk', message });
     }, [send]);
 
     const registerChatBubbleCallback = useCallback((callback) => {
@@ -2325,6 +2321,7 @@ export function MultiplayerProvider({ children }) {
         joinRoom,
         sendPosition,
         sendChat,
+        sendAfk,
         sendEmoteBubble,
         sendEmote,
         stopEmote,
@@ -2374,7 +2371,7 @@ export function MultiplayerProvider({ children }) {
         spinGoldSlot, goldSlotSpinning, goldSlotResult, clearGoldSlotResult, syncGoldSlots, activeGoldSlotSpins,
         startFishing, attemptCatch, cancelFishing, fishingActive, fishingResult, clearFishingResult,
         adoptPuffle, puffleAdopting,
-        setName, joinRoom, sendPosition, sendChat, sendEmoteBubble, sendEmote, stopEmote,
+        setName, joinRoom, sendPosition, sendChat, sendAfk, sendEmoteBubble, sendEmote, stopEmote,
         markChatTabRead, registerChatBubbleCallback, addLocalChatMessage,
         changeRoom, updateAppearance, updatePuffle, sendPuffleEmote, syncPuffleState,
         equipPuffleAccessory, unequipPuffleAccessory, equipPuffleToy,

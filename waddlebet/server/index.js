@@ -1752,6 +1752,7 @@ async function handleMessage(playerId, message) {
                 player.walletAddress = walletAddress;
                 player.authToken = authResult.token;
                 player.name = authResult.user.username;
+                player.role = authResult.user.role || null;
                 // Include characterType from top-level user field (not in customization subdoc)
                 player.appearance = {
                     ...authResult.user.customization,
@@ -2057,6 +2058,7 @@ async function handleMessage(playerId, message) {
                 player.walletAddress = walletAddress;
                 player.authToken = token;
                 player.name = user.username;
+                player.role = user.role || null;
                 // Include characterType from top-level user field (not in customization subdoc)
                 const userObj = user.toObject();
                 player.appearance = {
@@ -2707,15 +2709,6 @@ async function handleMessage(playerId, message) {
                         isAfk: true,
                         afkMessage: player.afkMessage
                     });
-                    await publishChatMessage({
-                        channel: 'room',
-                        scopeKey: player.room,
-                        roomId: player.room,
-                        senderId: playerId,
-                        senderName: player.name,
-                        text: player.afkMessage,
-                        metadata: { isAfk: true }
-                    });
                 } else {
                     if (player.isAfk) {
                         player.isAfk = false;
@@ -2729,6 +2722,10 @@ async function handleMessage(playerId, message) {
 
                     const channel = message.channel === 'global' ? 'global' : 'room';
                     const scopeKey = channel === 'global' ? 'global' : player.room;
+                    const chatMetadata = {};
+                    if (player.role === 'admin' || player.role === 'moderator') {
+                        chatMetadata.senderRole = player.role;
+                    }
                     await publishChatMessage({
                         channel,
                         scopeKey,
@@ -2736,7 +2733,7 @@ async function handleMessage(playerId, message) {
                         senderId: playerId,
                         senderName: player.name,
                         text,
-                        metadata: {}
+                        metadata: chatMetadata
                     });
                     
                     // Track chat stat and maybe award coins
@@ -2846,6 +2843,23 @@ async function handleMessage(playerId, message) {
             break;
         }
         
+        case 'afk': {
+            if (!player.room) break;
+
+            const afkMessage = (message.message || '').trim() || 'AFK';
+            player.isAfk = true;
+            player.afkMessage = `💤 ${afkMessage}`;
+
+            broadcastToRoomAll(player.room, {
+                type: 'player_afk',
+                playerId,
+                name: player.name,
+                isAfk: true,
+                afkMessage: player.afkMessage
+            });
+            break;
+        }
+
         case 'emote': {
             player.emote = message.emote;
             player.seatedOnFurniture = message.seatedOnFurniture || false;

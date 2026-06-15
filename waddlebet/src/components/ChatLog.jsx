@@ -5,7 +5,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { useLanguage } from '../i18n';
-import { CHAT_TAB_CONFIG } from '../utils/chatChannels';
+import { CHAT_TAB_CONFIG, getMessageSenderRole, getStaffChatTag } from '../utils/chatChannels';
 import {
     buildCommandInput,
     canExecuteCommand,
@@ -35,6 +35,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         chatByChannel,
         playerName,
         sendChat,
+        sendAfk,
         getPlayersData,
         userData,
         addLocalChatMessage,
@@ -223,6 +224,20 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
             return;
         }
 
+        const afkMatch = text.match(/^\/afk(?:\s+(.*))?$/i);
+        if (afkMatch) {
+            const afkText = (afkMatch[1] || '').trim() || 'AFK';
+            const displayMsg = `💤 ${afkText}`;
+            addLocalChatMessage(displayMsg, { metadata: { isAfk: true }, name: playerName });
+            setActiveChatTab('local');
+            sendAfk(afkText);
+            window.dispatchEvent(new CustomEvent('chatCommand', {
+                detail: { command: 'afk', message: displayMsg }
+            }));
+            finishSendInput();
+            return;
+        }
+
         const channel = activeChatTab === 'global' ? 'global' : 'room';
         sendChat(text, channel);
         finishSendInput();
@@ -282,6 +297,21 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
+    const renderPlayerChatLine = (msg, body) => {
+        const isPublicChat = msg.channel === 'room' || msg.channel === 'global';
+        const staffRole = isPublicChat ? getMessageSenderRole(msg) : null;
+        const staffTag = getStaffChatTag(staffRole);
+        const nameClass = msg.name === playerName ? 'rs-chat-msg-self' : 'rs-chat-msg-name';
+
+        return (
+            <>
+                {staffTag && <span className="rs-chat-staff-tag">[{staffTag}] </span>}
+                <span className={nameClass}>{msg.name}:</span>
+                <span className="rs-chat-msg-body"> {body}</span>
+            </>
+        );
+    };
+
     const renderMessage = (msg, idx) => {
         const typeClass = (msg.type === 'system' && MESSAGE_TYPE_CLASS[msg.channel])
             ? MESSAGE_TYPE_CLASS[msg.channel]
@@ -311,12 +341,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
                     </>
                 )}
                 {(msg.type === 'local' || msg.type === 'afk' || (!msg.type && !msg.channel)) && (
-                    <>
-                        <span className={msg.name === playerName ? 'rs-chat-msg-self' : 'rs-chat-msg-name'}>
-                            {msg.name}:
-                        </span>
-                        <span className="rs-chat-msg-body"> {body}</span>
-                    </>
+                    renderPlayerChatLine(msg, body)
                 )}
             </div>
         );
