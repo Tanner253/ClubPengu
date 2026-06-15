@@ -2,9 +2,18 @@
  * Vitest Configuration for Server Tests
  */
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
+const serverRoot = path.dirname(fileURLToPath(import.meta.url));
+
 export default defineConfig({
+    // Keep Vite from walking up to waddlebet/postcss.config.js (needs tailwindcss).
+    root: serverRoot,
+    css: {
+        postcss: false,
+    },
     test: {
         // Test environment
         environment: 'node',
