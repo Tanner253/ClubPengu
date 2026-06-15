@@ -57,6 +57,19 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
     const [activeTab, setActiveTab] = useState('general');
     const [rebindingKey, setRebindingKey] = useState(null); // Which keybind is being rebound
     const [showTokenomics, setShowTokenomics] = useState(false);
+    const [lowEndActive, setLowEndActive] = useState(() => performanceManager.isLowEndMode());
+    
+    useEffect(() => {
+        if (isOpen) {
+            setLowEndActive(performanceManager.isLowEndMode());
+        }
+    }, [isOpen, settings._perfUpdate]);
+
+    useEffect(() => {
+        const syncLowEnd = () => setLowEndActive(true);
+        window.addEventListener('lowEndModeActivated', syncLowEnd);
+        return () => window.removeEventListener('lowEndModeActivated', syncLowEnd);
+    }, []);
     
     // Use shared hooks for click outside and escape key
     useClickOutside(menuRef, onClose, isOpen && !rebindingKey);
@@ -126,6 +139,17 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
         low: 'settings.perfLow',
         potato: 'settings.perfPotato',
     };
+
+    const handleLowEndToggle = () => {
+        if (lowEndActive) {
+            performanceManager.resetLowEnd();
+            window.location.reload();
+            return;
+        }
+        performanceManager.activateLowEnd();
+        setLowEndActive(true);
+        onSettingsChange({ ...settings, _perfUpdate: Date.now() });
+    };
     
     // Toggle component
     const Toggle = ({ enabled, onChange, color = 'cyan' }) => {
@@ -152,13 +176,17 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
     };
     
     // Setting Row component
-    const SettingRow = ({ icon, title, description, children, noPadding = false }) => (
+    const SettingRow = ({ icon, title, description, children, noPadding = false, wrapDescription = false }) => (
         <div className={`flex items-center justify-between gap-3 ${noPadding ? '' : 'py-3'} border-b border-white/5 last:border-b-0`}>
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
                 {icon && <span className="text-lg shrink-0">{icon}</span>}
-                <div className="min-w-0">
-                    <div className="text-white text-sm font-medium truncate">{title}</div>
-                    {description && <div className="text-white/40 text-xs truncate">{description}</div>}
+                <div className="min-w-0 flex-1">
+                    <div className="text-white text-sm font-medium">{title}</div>
+                    {description && (
+                        <div className={`text-white/40 text-xs ${wrapDescription ? 'leading-snug' : 'truncate'}`}>
+                            {description}
+                        </div>
+                    )}
                 </div>
             </div>
             <div className="shrink-0">{children}</div>
@@ -626,6 +654,18 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                     <div className="mt-2 text-white/30 text-[10px] text-center">
                                         {t(perfPresetHintKey[performanceManager.getPreset()] || 'settings.perfMedium')}
                                     </div>
+                                    <SettingRow
+                                        icon="🚀"
+                                        title={t('settings.lowEndToggle')}
+                                        description={t('settings.lowEndToggleDesc')}
+                                        wrapDescription
+                                    >
+                                        <Toggle
+                                            enabled={lowEndActive}
+                                            onChange={handleLowEndToggle}
+                                            color="cyan"
+                                        />
+                                    </SettingRow>
                                 </div>
                             )}
                             
@@ -694,7 +734,8 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                 onClick={async () => {
                                     const text = formatSupportDiagnostics({
                                         lastFps: performanceManager.getLastRecordedFps(),
-                                        activePreset: performanceManager.getPreset()
+                                        activePreset: performanceManager.getPreset(),
+                                        lowEndMode: performanceManager.isLowEndMode()
                                     });
                                     try {
                                         await navigator.clipboard.writeText(text);

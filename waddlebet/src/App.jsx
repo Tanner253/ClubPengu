@@ -355,17 +355,30 @@ const AppContent = () => {
     }, [entryLoading, dismissEntryLoading]);
 
     useEffect(() => {
-        const handler = (e) => {
+        const onEmergencyDowngrade = (e) => {
             const { to, avgFps, settings } = e.detail || {};
             setPerfAutoTuneToast({
+                kind: 'preset',
                 preset: settings?.name || to,
                 fps: avgFps
             });
             setTimeout(() => setPerfAutoTuneToast(null), 8000);
         };
 
-        window.addEventListener('performanceEmergencyDowngrade', handler);
-        return () => window.removeEventListener('performanceEmergencyDowngrade', handler);
+        const onLowEndActivated = (e) => {
+            setPerfAutoTuneToast({
+                kind: 'lowEnd',
+                fps: e.detail?.fps
+            });
+            setTimeout(() => setPerfAutoTuneToast(null), 10000);
+        };
+
+        window.addEventListener('performanceEmergencyDowngrade', onEmergencyDowngrade);
+        window.addEventListener('lowEndModeActivated', onLowEndActivated);
+        return () => {
+            window.removeEventListener('performanceEmergencyDowngrade', onEmergencyDowngrade);
+            window.removeEventListener('lowEndModeActivated', onLowEndActivated);
+        };
     }, []);
     
     // Exit to designer
@@ -432,10 +445,14 @@ const AppContent = () => {
 
             {perfAutoTuneToast && (
                 <div className="fixed top-20 left-1/2 z-[90] w-[min(92vw,28rem)] -translate-x-1/2 animate-fade-in">
-                    <div className="rounded-xl border border-amber-400/30 bg-amber-950/90 px-4 py-3 text-sm text-amber-100 shadow-2xl backdrop-blur-md">
-                        {t('settings.perfAutoTune')
-                            .replace('{preset}', perfAutoTuneToast.preset)
-                            .replace('{fps}', String(perfAutoTuneToast.fps))}
+                    <div className={`rounded-xl border px-4 py-3 text-sm shadow-2xl backdrop-blur-md ${
+                        perfAutoTuneToast.kind === 'lowEnd'
+                            ? 'border-sky-400/30 bg-sky-950/90 text-sky-100'
+                            : 'border-amber-400/30 bg-amber-950/90 text-amber-100'
+                    }`}>
+                        {(perfAutoTuneToast.kind === 'lowEnd' ? t('settings.perfLowEnd') : t('settings.perfAutoTune'))
+                            .replace('{preset}', perfAutoTuneToast.preset || '')
+                            .replace('{fps}', String(perfAutoTuneToast.fps ?? '?'))}
                     </div>
                 </div>
             )}

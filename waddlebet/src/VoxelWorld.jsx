@@ -63,6 +63,7 @@ import {
 } from './config';
 import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, GoldLobbySlotSystem, JackpotCelebration, IceFishingSystem, createMountainBackground, performanceManager, PERFORMANCE_PRESETS } from './systems';
 import { readLiveWebGLInfo } from './utils/browserCapabilities.js';
+import { applyLowEndMode } from './utils/lowEndRender.js';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
 import { savePlayerSession, getResumePosition } from './utils/playerSession';
@@ -220,6 +221,14 @@ const VoxelWorld = ({
     
     // Performance preset change listener - apply dynamic settings
     useEffect(() => {
+        const applyLowEnd = () => {
+            applyLowEndMode({
+                renderer: rendererRef.current,
+                scene: sceneRef.current,
+                THREE: window.THREE
+            });
+        };
+
         const applyLiveTuning = () => {
             const THREE = window.THREE;
             performanceManager.applyRendererTuning(
@@ -228,6 +237,11 @@ const VoxelWorld = ({
                 sunLightRef.current,
                 window._isMobileGPU
             );
+            // Re-assert low-end overrides — applyRendererTuning resets DPR/shadow type,
+            // which would otherwise undo the low-end render scale / shadow disable.
+            if (performanceManager.isLowEndMode()) {
+                applyLowEnd();
+            }
         };
 
         const handlePresetChange = (e) => {
@@ -244,14 +258,38 @@ const VoxelWorld = ({
             console.warn(`🎮 Auto-tuned performance: ${e.detail.from} → ${e.detail.to} (${e.detail.avgFps} FPS)`);
             applyLiveTuning();
         };
-        
+
+        const handleLowEndActivated = () => applyLowEnd();
+
         window.addEventListener('performancePresetChanged', handlePresetChange);
         window.addEventListener('performanceEmergencyDowngrade', handleEmergencyDowngrade);
+        window.addEventListener('lowEndModeActivated', handleLowEndActivated);
         return () => {
             window.removeEventListener('performancePresetChanged', handlePresetChange);
             window.removeEventListener('performanceEmergencyDowngrade', handleEmergencyDowngrade);
+            window.removeEventListener('lowEndModeActivated', handleLowEndActivated);
         };
     }, []);
+
+    // Re-apply low-end material simplification after room loads and for late-spawned meshes.
+    useEffect(() => {
+        if (!performanceManager.isLowEndMode()) return undefined;
+
+        const refreshLowEnd = () => {
+            applyLowEndMode({
+                renderer: rendererRef.current,
+                scene: sceneRef.current,
+                THREE: window.THREE
+            });
+        };
+
+        const timers = [500, 2500, 8000].map((ms) => setTimeout(refreshLowEnd, ms));
+        const interval = setInterval(refreshLowEnd, 15000);
+        return () => {
+            timers.forEach(clearTimeout);
+            clearInterval(interval);
+        };
+    }, [room]);
     
     
     // Multiplayer - OPTIMIZED: use refs for positions, state only for player list changes
@@ -6765,7 +6803,13 @@ const VoxelWorld = ({
         }
 
         performanceManager.applyRendererTuning(renderer, THREE, sunLight, isMobile);
-        
+
+        // If a prior session already flagged this environment as low-end, apply the
+        // cheap render path now (before first frame) so it never has to suffer again.
+        if (performanceManager.isLowEndMode()) {
+            applyLowEndMode({ renderer, scene, THREE });
+        }
+
         reportLoadProgress(1);
         update();
         

@@ -26,12 +26,10 @@ const ISSUE_META = {
         titleKey: 'creator.webgl.software.title',
         descKey: 'creator.webgl.software.desc',
         severity: 'warning'
-    },
-    [WEBGL_STATUS.INTEGRATED_GPU]: {
-        titleKey: 'creator.webgl.integrated.title',
-        descKey: 'creator.webgl.integrated.desc',
-        severity: 'warning'
     }
+    // NOTE: integrated GPUs are intentionally NOT warned about — they are a valid,
+    // hardware-accelerated configuration (laptops/ThinkPads, phones) and run fine
+    // with adaptive resolution. Only genuine failures above are surfaced.
 };
 
 const STEP_KEYS = {
