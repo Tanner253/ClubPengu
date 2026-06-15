@@ -15,6 +15,7 @@ import {
     NightclubCouch
 } from '../props/nightclub';
 import { WORLD_SPAWN } from '../config/roomConfig';
+import { createShopSignSprite } from '../npcs/NpcStandBuilder';
 
 class Nightclub extends BaseRoom {
     static ID = 'nightclub';
@@ -46,6 +47,7 @@ class Nightclub extends BaseRoom {
         // Disco mode state
         this.discoMode = false;
         this.discoStartTime = 0;
+        this.exitSignSprite = null;
         
         // Mobile GPU detection
         this.isMobileGPU = typeof window !== 'undefined' && window._isMobileGPU;
@@ -115,6 +117,7 @@ class Nightclub extends BaseRoom {
         
         // ==================== UNIQUE ELEMENTS ====================
         this._createExitDoor(scene, 2, D - 5);
+        this._createExitBanner(scene, 2, D - 5);
         this._createRecordsCrate(scene, 5, 0, 8);
         this._createStairs(scene, W - 4, CZ + 5, H);
         this._createMicStand(scene, W - 6, 0, CZ - 2);
@@ -354,35 +357,32 @@ class Nightclub extends BaseRoom {
         star.position.set(0.25, 3.5, 0);
         group.add(star);
         
-        // EXIT sign above door (GREEN like original)
-        const signMat = this.createMaterial({
-            color: 0x00FF00,
-            emissive: 0x00FF00,
-            emissiveIntensity: 0.8
-        });
-        const signBackMat = this.createMaterial({ color: 0x111111 });
-        const signBackGeo = new THREE.BoxGeometry(0.3, 0.6, 1.5);
-        const signBack = new THREE.Mesh(signBackGeo, signBackMat);
-        signBack.position.set(0.3, 5.5, 0);
-        group.add(signBack);
-        
-        // EXIT letters (E X I T along Z axis)
-        const letterWidth = 0.2;
-        const letterHeight = 0.35;
-        const letterGeo = new THREE.BoxGeometry(0.1, letterHeight, letterWidth);
-        const exitLetters = [-0.5, -0.2, 0.1, 0.4]; // Z positions for E X I T
-        exitLetters.forEach((zPos) => {
-            const letter = new THREE.Mesh(letterGeo, signMat);
-            letter.position.set(0.42, 5.5, zPos); // Moved forward by 0.02
-            group.add(letter);
-        });
-        
         // Position against left wall (no rotation needed - door faces into room along +X)
         group.position.set(0, 0, z);
         scene.add(group);
         this.meshes.push(group);
         
         // Note: Exit trigger handled by VoxelWorld portal system (ROOM_PORTALS)
+    }
+
+    /** Floating billboard above exit — same sprite style as merchant NPC signs */
+    _createExitBanner(scene, x, z) {
+        const sign = createShopSignSprite(this.THREE, {
+            title: 'EXIT TO TOWN',
+            subtitle: 'Waddlebet Plaza · Press E',
+            emoji: '🚪',
+            accent: ['#14532d', '#22c55e', '#14532d'],
+            border: '#86efac',
+            text: '#ffffff',
+            scale: [4.4, 1.4, 1]
+        });
+        sign.position.set(x + 0.5, 6.5, z);
+        sign.renderOrder = 10;
+        sign.userData.baseY = 6.5;
+        sign.name = 'nightclub_exit_sign';
+        scene.add(sign);
+        this.meshes.push(sign);
+        this.exitSignSprite = sign;
     }
 
     _createDanceContestSign(scene, x, y, z) {
@@ -618,6 +618,12 @@ class Nightclub extends BaseRoom {
         this.stageLightProps.forEach((light, idx) => {
             light.updateWithBeat(time, beatPhase, idx);
         });
+
+        // Gentle bob on exit banner (matches merchant shop signs)
+        if (this.exitSignSprite?.userData?.baseY != null) {
+            this.exitSignSprite.position.y =
+                this.exitSignSprite.userData.baseY + Math.sin(time * 1.8) * 0.08;
+        }
     }
 
     cleanup() {
@@ -634,6 +640,7 @@ class Nightclub extends BaseRoom {
         this.discoSpotlightProps = [];
         this.couchProp = null;
         this.discoMode = false;
+        this.exitSignSprite = null;
     }
 
     getSpawnPosition() {

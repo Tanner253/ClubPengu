@@ -549,3 +549,5 @@ function attachToFlipper(flipper, buildPartMerged, voxels, pivot, offset, name) 
     prop.name = name;
     flipper.add(prop);
 }
+
+export { createShopSignSprite };
