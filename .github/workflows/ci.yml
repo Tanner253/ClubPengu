@@ -11,40 +11,47 @@ on:
 
 env:
   NODE_VERSION: '18'
+  CLIENT_DIR: waddlebet
+  SERVER_DIR: waddlebet/server
 
 jobs:
   # ==================== CLIENT TESTS ====================
   test-client:
     name: Client Tests
     runs-on: ubuntu-latest
-    
+
+    defaults:
+      run:
+        working-directory: ${{ env.CLIENT_DIR }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      
+          cache-dependency-path: ${{ env.CLIENT_DIR }}/package-lock.json
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run client tests
         run: npm test -- --coverage
-      
+
       - name: Upload client coverage
         uses: codecov/codecov-action@v4
         if: always()
         with:
-          files: ./coverage/lcov.info
+          files: ./${{ env.CLIENT_DIR }}/coverage/lcov.info
           flags: client
           name: client-coverage
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      
+
       - name: Check coverage thresholds
         run: |
           echo "📊 Checking client coverage thresholds..."
@@ -53,13 +60,13 @@ jobs:
             const coverage = require('./coverage/coverage-summary.json');
             const total = coverage.total;
             const minCoverage = 70;
-            
+
             console.log('Coverage Summary:');
             console.log('  Lines:', total.lines.pct + '%');
             console.log('  Statements:', total.statements.pct + '%');
             console.log('  Functions:', total.functions.pct + '%');
             console.log('  Branches:', total.branches.pct + '%');
-            
+
             if (total.lines.pct < minCoverage) {
               console.error('❌ Line coverage (' + total.lines.pct + '%) is below threshold (' + minCoverage + '%)');
               process.exit(1);
@@ -72,42 +79,42 @@ jobs:
   test-server:
     name: Server Tests
     runs-on: ubuntu-latest
-    
+
     defaults:
       run:
-        working-directory: server
-    
+        working-directory: ${{ env.SERVER_DIR }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-          cache-dependency-path: server/package-lock.json
-      
+          cache-dependency-path: ${{ env.SERVER_DIR }}/package-lock.json
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run server tests
         run: npm test -- --coverage
         env:
           NODE_ENV: test
           JWT_SECRET: test-secret-for-ci
-      
+
       - name: Upload server coverage
         uses: codecov/codecov-action@v4
         if: always()
         with:
-          files: ./server/coverage/lcov.info
+          files: ./${{ env.SERVER_DIR }}/coverage/lcov.info
           flags: server
           name: server-coverage
           fail_ci_if_error: false
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-      
+
       - name: Check coverage thresholds
         run: |
           echo "📊 Checking server coverage thresholds..."
@@ -116,13 +123,13 @@ jobs:
             const coverage = require('./coverage/coverage-summary.json');
             const total = coverage.total;
             const minCoverage = 70;
-            
+
             console.log('Coverage Summary:');
             console.log('  Lines:', total.lines.pct + '%');
             console.log('  Statements:', total.statements.pct + '%');
             console.log('  Functions:', total.functions.pct + '%');
             console.log('  Branches:', total.branches.pct + '%');
-            
+
             if (total.lines.pct < minCoverage) {
               console.error('❌ Line coverage (' + total.lines.pct + '%) is below threshold (' + minCoverage + '%)');
               process.exit(1);
@@ -135,20 +142,25 @@ jobs:
   lint:
     name: Lint Check
     runs-on: ubuntu-latest
-    
+
+    defaults:
+      run:
+        working-directory: ${{ env.CLIENT_DIR }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      
+          cache-dependency-path: ${{ env.CLIENT_DIR }}/package-lock.json
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Run ESLint
         run: npm run lint
         continue-on-error: true
@@ -158,28 +170,33 @@ jobs:
     name: Build Check
     runs-on: ubuntu-latest
     needs: [test-client, test-server]
-    
+
+    defaults:
+      run:
+        working-directory: ${{ env.CLIENT_DIR }}
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
-      
+          cache-dependency-path: ${{ env.CLIENT_DIR }}/package-lock.json
+
       - name: Install dependencies
         run: npm ci
-      
+
       - name: Build application
         run: npm run build
-      
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist/
+          path: ${{ env.CLIENT_DIR }}/dist/
           retention-days: 7
 
   # ==================== DEPLOYMENT GATE ====================
@@ -188,7 +205,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test-client, test-server, build]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    
+
     steps:
       - name: Deployment Check
         run: |
@@ -207,7 +224,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [test-client, test-server, build]
     if: failure()
-    
+
     steps:
       - name: Report Failure
         run: |
@@ -216,7 +233,5 @@ jobs:
           echo "One or more checks failed. Deployment is blocked."
           echo "Please review the failed jobs above and fix the issues."
           exit 1
-
-
 
 
