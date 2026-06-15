@@ -927,9 +927,14 @@ const VoxelWorld = ({
         // OPTIMIZATION: Cache commonly used geometries/materials to avoid creating in render loop
         if (!window._cachedSparkGeo) {
             window._cachedSparkGeo = new THREE.SphereGeometry(0.02, 4, 4);
-            window._cachedSnowballGeoLarge = new THREE.SphereGeometry(0.18, 8, 8); // Local player snowballs
-            window._cachedSnowballGeoSmall = new THREE.SphereGeometry(0.15, 8, 8); // Other player snowballs
-            console.log('⚡ Cached spark and snowball geometries');
+        }
+        if (!window._cachedSnowballGeoLarge) {
+            window._cachedSnowballGeoLarge = new THREE.SphereGeometry(0.18, 8, 8);
+            window._cachedSnowballGeoSmall = new THREE.SphereGeometry(0.15, 8, 8);
+            window._cachedSnowballMatLarge = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            window._cachedSnowballMatSmall = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            window._cachedSplatGeo = new THREE.CircleGeometry(0.4, 12);
+            console.log('⚡ Cached snowball and splat geometries');
         }
         
         // Initialize wizard trail particle system
@@ -2829,25 +2834,74 @@ const VoxelWorld = ({
             if (_sparkMatPool.length < 50) _sparkMatPool.push(mat);
             else mat.dispose();
         };
+        const _splatMatPool = [];
+        const releaseSnowballMesh = (mesh) => {
+            scene.remove(mesh);
+            // Geometry/material are shared caches — never dispose per throw.
+        };
+        const acquireSplatMesh = () => {
+            if (!window._cachedSplatGeo) {
+                window._cachedSplatGeo = new THREE.CircleGeometry(0.4, 12);
+            }
+            const mat = _splatMatPool.pop() || new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.8,
+                side: THREE.DoubleSide
+            });
+            mat.opacity = 0.8;
+            const splat = new THREE.Mesh(window._cachedSplatGeo, mat);
+            splat.scale.set(1, 1, 1);
+            return splat;
+        };
+        const releaseSplatMesh = (splat) => {
+            scene.remove(splat);
+            if (_splatMatPool.length < 24) {
+                _splatMatPool.push(splat.material);
+            } else {
+                splat.material.dispose();
+            }
+        };
         let _snowballCollidablesFrame = -1000;
-        // Collect collidable meshes, tagging each with the player that owns it (for thrower exclusion)
-        const collectSnowballCollidables = (obj, ownerId, arr) => {
+        // Only collision-tagged props + player meshes — not every voxel face in town.
+        const collectSnowballCollidables = (obj, ownerId, arr, inColliderSubtree = false) => {
             if (obj === playerRef.current) ownerId = '__local';
             else if (obj.userData?.isPlayer && obj.userData.playerId) ownerId = obj.userData.playerId;
+
+            const inCollider = inColliderSubtree || !!obj.userData?.collision;
+            const isPlayerMesh = !!(obj.userData?.isPlayer && obj.userData.playerId);
+
             if (obj.isMesh &&
                 !obj.userData?.isSplat &&
                 !obj.userData?.isSnowball &&
                 !obj.userData?.isUI &&
                 !obj.userData?.isParticle &&
                 !obj.userData?.isBubble &&
-                !obj.userData?.isNameTag) {
+                !obj.userData?.isNameTag &&
+                (isPlayerMesh || inCollider)) {
                 obj.userData._snowballOwner = ownerId;
                 arr.push(obj);
             }
             const children = obj.children;
             for (let c = 0; c < children.length; c++) {
-                collectSnowballCollidables(children[c], ownerId, arr);
+                collectSnowballCollidables(children[c], ownerId, arr, inCollider);
             }
+        };
+        const snowballHitsRoomCollider = (pos, colliders) => {
+            if (!colliders?.length) return null;
+            for (let c = 0; c < colliders.length; c++) {
+                const col = colliders[c];
+                const hw = col.hw ?? 0.5;
+                const hd = col.hd ?? 0.5;
+                const bottom = col.y ?? 0;
+                const top = bottom + (col.height ?? col.hh * 2 ?? 2);
+                if (pos.x >= col.x - hw && pos.x <= col.x + hw &&
+                    pos.z >= col.z - hd && pos.z <= col.z + hd &&
+                    pos.y >= bottom - 0.2 && pos.y <= top + 0.5) {
+                    return { y: Math.max(bottom, Math.min(pos.y, top)) };
+                }
+            }
+            return null;
         };
         
         const update = () => {
@@ -6486,13 +6540,15 @@ const VoxelWorld = ({
             const snowballNow = Date.now();
             const snowballsToRemove = [];
 
-            // Refresh the cached collidable mesh list at most every 30 frames while snowballs fly.
+            // Refresh the cached collidable mesh list at most every 60 frames while snowballs fly.
             // Mesh membership rarely changes mid-flight; world matrices stay live on the cached refs.
-            if (frameCount - _snowballCollidablesFrame >= 30) {
+            if (frameCount - _snowballCollidablesFrame >= 60) {
                 _snowballCollidables.length = 0;
                 collectSnowballCollidables(scene, null, _snowballCollidables);
                 _snowballCollidablesFrame = frameCount;
             }
+
+            const roomColliders = roomDataRef.current?.colliders;
 
             for (let i = 0; i < snowballsRef.current.length; i++) {
                 const sb = snowballsRef.current[i];
@@ -6500,9 +6556,7 @@ const VoxelWorld = ({
                 // Check if snowball should be removed (lifetime exceeded)
                 if (snowballNow - sb.startTime > SNOWBALL_LIFETIME_MS) {
                     snowballsToRemove.push(i);
-                    scene.remove(sb.mesh);
-                    sb.mesh.geometry.dispose();
-                    sb.mesh.material.dispose();
+                    releaseSnowballMesh(sb.mesh);
                     continue;
                 }
                 
@@ -6530,21 +6584,28 @@ const VoxelWorld = ({
                 const snowballAge = snowballNow - sb.startTime;
                 if (snowballAge < SNOWBALL_SAFE_PERIOD_MS) continue;
                 
-                // Check for collision with ANY surface (walls, floor, furniture, etc.)
+                // Check for collision with surfaces (room AABBs, props, players, ground)
                 let hitSomething = false;
                 let hitPoint = null;
                 let hitNormal = null;
+
+                const colliderHit = snowballHitsRoomCollider(sb.mesh.position, roomColliders);
+                if (colliderHit) {
+                    hitSomething = true;
+                    hitPoint = _snowballHitPoint.set(sb.mesh.position.x, colliderHit.y, sb.mesh.position.z);
+                    hitNormal = _snowballHitNormal.set(0, 1, 0);
+                }
                 
-                // Method 1: Raycast in velocity direction to detect surfaces ahead
+                // Raycast props/players only when not already hitting a room collider
+                if (!hitSomething) {
                 _snowballVelDir.set(sb.velocity.x, sb.velocity.y, sb.velocity.z).normalize();
                 const speed = Math.sqrt(sb.velocity.x**2 + sb.velocity.y**2 + sb.velocity.z**2);
                 
-                if (speed > 0.1) {
+                if (speed > 0.1 && _snowballCollidables.length > 0) {
                     _snowballRaycaster.set(_snowballPrevPos, _snowballVelDir);
                     _snowballRaycaster.far = speed * delta + 0.5; // Check slightly ahead of movement
                     
                     // Filter the cached list per snowball: exclude the THROWER's meshes and this snowball.
-                    // Local throws have throwerId === playerId (or unset); owner tag '__local' marks our mesh.
                     const throwerId = sb.throwerId;
                     const throwerKey = (!throwerId || throwerId === playerId) ? '__local' : throwerId;
                     _snowballScratch.length = 0;
@@ -6555,14 +6616,15 @@ const VoxelWorld = ({
                         if (owner === throwerKey || (owner === throwerId && throwerKey === '__local')) continue;
                         _snowballScratch.push(mesh);
                     }
-                    const intersects = _snowballRaycaster.intersectObjects(_snowballScratch, false);
+                    const intersects = _snowballScratch.length > 0
+                        ? _snowballRaycaster.intersectObjects(_snowballScratch, false)
+                        : [];
                     
                     if (intersects.length > 0) {
                         hitSomething = true;
                         hitPoint = intersects[0].point;
                         if (intersects[0].face?.normal) {
                             hitNormal = _snowballHitNormal.copy(intersects[0].face.normal);
-                            // Transform normal to world space
                             if (intersects[0].object.matrixWorld) {
                                 hitNormal.transformDirection(intersects[0].object.matrixWorld);
                             }
@@ -6570,6 +6632,7 @@ const VoxelWorld = ({
                             hitNormal = _snowballHitNormal.set(0, 1, 0);
                         }
                     }
+                }
                 }
                 
                 // Method 2: Simple Y-level check for ground (fallback)
@@ -6592,22 +6655,13 @@ const VoxelWorld = ({
                 if (hitSomething && !sb.hasSplatted) {
                     sb.hasSplatted = true;
                     
-                    // Create splat effect oriented to the surface!
-                    const splatGeom = new THREE.CircleGeometry(0.4, 12);
-                    const splatMat = new THREE.MeshBasicMaterial({
-                        color: 0xffffff,
-                        transparent: true,
-                        opacity: 0.8,
-                        side: THREE.DoubleSide
-                    });
-                    const splat = new THREE.Mesh(splatGeom, splatMat);
+                    const splat = acquireSplatMesh();
                     
                     // Position splat at hit point, offset slightly along normal to prevent z-fighting
                     splat.position.copy(hitPoint);
                     splat.position.addScaledVector(hitNormal, 0.02);
                     
                     // Orient splat to face along the surface normal
-                    // Default is facing +Z, we want it to face along hitNormal
                     splat.lookAt(_splatLookTarget.copy(splat.position).add(hitNormal));
                     
                     splat.userData.startTime = snowballNow;
@@ -6617,15 +6671,11 @@ const VoxelWorld = ({
                     
                     // Remove snowball
                     snowballsToRemove.push(i);
-                    scene.remove(sb.mesh);
-                    sb.mesh.geometry.dispose();
-                    sb.mesh.material.dispose();
+                    releaseSnowballMesh(sb.mesh);
                 } else if (sb.mesh.position.y < -10) {
                     // Ultimate failsafe: remove snowballs that fell way too deep
                     snowballsToRemove.push(i);
-                    scene.remove(sb.mesh);
-                    sb.mesh.geometry.dispose();
-                    sb.mesh.material.dispose();
+                    releaseSnowballMesh(sb.mesh);
                 }
             }
             // Remove finished snowballs (reverse order to preserve indices)
@@ -6642,9 +6692,7 @@ const VoxelWorld = ({
                     const splat = splatsRef.current[i];
                     const age = splatNow - splat.userData.startTime;
                     if (age > SPLAT_DURATION) {
-                        scene.remove(splat);
-                        splat.geometry.dispose();
-                        splat.material.dispose();
+                        releaseSplatMesh(splat);
                         splatsRef.current.splice(i, 1);
                     } else {
                         // Fade out and grow
@@ -7632,6 +7680,22 @@ const VoxelWorld = ({
         };
         
         // Helper function to throw snowball to target location (Club Penguin style)
+        let _throwRaycaster;
+        let _throwMouse;
+        let _throwGroundPlane;
+        let _throwTarget;
+        const ensureThrowHelpers = () => {
+            const T = window.THREE;
+            if (!T) return null;
+            if (!_throwRaycaster) {
+                _throwRaycaster = new T.Raycaster();
+                _throwMouse = new T.Vector2();
+                _throwGroundPlane = new T.Plane(new T.Vector3(0, 1, 0), 0);
+                _throwTarget = new T.Vector3();
+            }
+            return T;
+        };
+
         const throwSnowballToTarget = (targetX, targetZ) => {
             const now = Date.now();
             // Check cooldown
@@ -7641,8 +7705,10 @@ const VoxelWorld = ({
             }
             
             if (!playerRef.current || !sceneRef.current) return false;
-            
+
             const THREE = window.THREE;
+            if (!THREE) return false;
+            
             const playerPos = playerRef.current.position;
             
             // Start position (penguin's hand height)
@@ -7697,18 +7763,11 @@ const VoxelWorld = ({
             // Set cooldown
             snowballCooldownRef.current = now + SNOWBALL_COOLDOWN_MS;
             
-            // Create snowball mesh (use cached geometry)
             const snowballGeom = window._cachedSnowballGeoLarge || new THREE.SphereGeometry(0.18, 8, 8);
-            const snowballMat = new THREE.MeshStandardMaterial({
-                color: 0xffffff,
-                roughness: 0.6,
-                metalness: 0.1,
-                emissive: 0xaaddff,
-                emissiveIntensity: 0.1
-            });
+            const snowballMat = window._cachedSnowballMatLarge || new THREE.MeshBasicMaterial({ color: 0xffffff });
             const snowball = new THREE.Mesh(snowballGeom, snowballMat);
             snowball.position.set(startPos.x, startPos.y, startPos.z);
-            snowball.castShadow = true;
+            snowball.castShadow = false;
             snowball.userData.isSnowball = true;
             sceneRef.current.add(snowball);
             
@@ -7733,7 +7792,6 @@ const VoxelWorld = ({
                 velocityZ: vz
             });
             
-            console.log(`❄️ Threw snowball! Distance: ${clampedDist.toFixed(1)}m, Flight time: ${flightTime.toFixed(2)}s`);
             return true;
         };
         
@@ -7741,30 +7799,20 @@ const VoxelWorld = ({
         const handleClick = (event) => {
             // If in snowball mode, throw a snowball to clicked location
             if (isSnowballModeRef.current && playerRef.current && cameraRef.current) {
-                const THREE = window.THREE;
+                const THREE = ensureThrowHelpers();
+                if (!THREE) return;
                 const camera = cameraRef.current;
                 
-                // Convert mouse position to normalized device coordinates
-                const mouse = new THREE.Vector2(
+                _throwMouse.set(
                     (event.clientX / window.innerWidth) * 2 - 1,
                     -(event.clientY / window.innerHeight) * 2 + 1
                 );
                 
-                // Raycast to find where the click intersects the ground plane (y = 0)
-                const raycaster = new THREE.Raycaster();
-                raycaster.setFromCamera(mouse, camera);
+                _throwRaycaster.setFromCamera(_throwMouse, camera);
                 
-                // Create a ground plane at y = 0
-                const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-                const targetPoint = new THREE.Vector3();
-                
-                // Find intersection with ground
-                const intersected = raycaster.ray.intersectPlane(groundPlane, targetPoint);
-                
-                if (intersected) {
-                    // Throw snowball to that location!
-                    throwSnowballToTarget(targetPoint.x, targetPoint.z);
-                    return; // Don't process normal click interaction
+                if (_throwRaycaster.ray.intersectPlane(_throwGroundPlane, _throwTarget)) {
+                    throwSnowballToTarget(_throwTarget.x, _throwTarget.z);
+                    return;
                 }
             }
             
@@ -7799,24 +7847,20 @@ const VoxelWorld = ({
             if (touchDuration < 400 && !touchMoved) {
                 // If in snowball mode, throw to tapped location (mobile Club Penguin style!)
                 if (isSnowballModeRef.current && playerRef.current && cameraRef.current) {
-                    const THREE = window.THREE;
+                    const THREE = ensureThrowHelpers();
+                    if (!THREE) return;
                     const camera = cameraRef.current;
                     
-                    // Convert touch position to normalized device coordinates
-                    const mouse = new THREE.Vector2(
+                    _throwMouse.set(
                         (touch.clientX / window.innerWidth) * 2 - 1,
                         -(touch.clientY / window.innerHeight) * 2 + 1
                     );
                     
-                    // Raycast to find ground intersection
-                    const raycaster = new THREE.Raycaster();
-                    raycaster.setFromCamera(mouse, camera);
-                    const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-                    const targetPoint = new THREE.Vector3();
+                    _throwRaycaster.setFromCamera(_throwMouse, camera);
                     
-                    if (raycaster.ray.intersectPlane(groundPlane, targetPoint)) {
-                        throwSnowballToTarget(targetPoint.x, targetPoint.z);
-                        return; // Don't process as regular interaction
+                    if (_throwRaycaster.ray.intersectPlane(_throwGroundPlane, _throwTarget)) {
+                        throwSnowballToTarget(_throwTarget.x, _throwTarget.z);
+                        return;
                     }
                 }
                 
@@ -10491,14 +10535,10 @@ const VoxelWorld = ({
                 
                 // Create snowball mesh at received position (use cached geometry)
                 const snowballGeom = window._cachedSnowballGeoSmall || new THREE.SphereGeometry(0.15, 8, 8);
-                const snowballMat = new THREE.MeshStandardMaterial({
-                    color: 0xffffff,
-                    roughness: 0.8,
-                    metalness: 0.1
-                });
+                const snowballMat = window._cachedSnowballMatSmall || new THREE.MeshBasicMaterial({ color: 0xffffff });
                 const snowball = new THREE.Mesh(snowballGeom, snowballMat);
                 snowball.position.set(data.startX, data.startY, data.startZ);
-                snowball.castShadow = true;
+                snowball.castShadow = false;
                 snowball.userData.isSnowball = true;
                 sceneRef.current.add(snowball);
                 
