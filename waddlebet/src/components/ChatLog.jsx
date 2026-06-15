@@ -2,7 +2,7 @@
  * ChatLog - RuneScape-styled tabbed chat (global, room, guild, whisper, casino, announcements, market)
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { useLanguage } from '../i18n';
 import { CHAT_TAB_CONFIG, getMessageSenderRole, getStaffChatTag } from '../utils/chatChannels';
@@ -61,6 +61,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
     const [inputReadonly, setInputReadonly] = useState(true);
     const messagesEndRef = useRef(null);
     const messagesRef = useRef(null);
+    const isNearBottomRef = useRef(true);
     const panelRef = useRef(null);
     const inputRef = useRef(null);
     const containerRef = useRef(null);
@@ -107,14 +108,47 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         return () => panelEl.removeEventListener('wheel', handleChatWheel);
     }, [handleChatWheel, isMinimized, isMobile, isOpen]);
 
+    const scrollMessagesToBottom = useCallback((instant = false) => {
+        const el = messagesRef.current;
+        if (!el) return;
+        const top = Math.max(0, el.scrollHeight - el.clientHeight);
+        if (instant || isMobile) {
+            el.scrollTop = top;
+        } else {
+            el.scrollTo({ top, behavior: 'smooth' });
+        }
+        isNearBottomRef.current = true;
+    }, [isMobile]);
+
+    useEffect(() => {
+        const el = messagesRef.current;
+        if (!el) return undefined;
+
+        const onScroll = () => {
+            const threshold = 64;
+            isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+        };
+        el.addEventListener('scroll', onScroll, { passive: true });
+        return () => el.removeEventListener('scroll', onScroll);
+    }, [isMobile, isOpen, isMinimized, activeChatTab]);
+
     useEffect(() => {
         if (!onNewMessage) return undefined;
         return registerChatBubbleCallback(onNewMessage);
     }, [onNewMessage, registerChatBubbleCallback]);
 
-    useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, [activeMessages, activeChatTab]);
+    // scrollIntoView breaks inside mobile fixed modals (jumps to top). Scroll the list directly.
+    useLayoutEffect(() => {
+        if (isMobile && !isOpen) return;
+        if (!isNearBottomRef.current) return;
+        scrollMessagesToBottom(isMobile);
+    }, [activeMessages, activeChatTab, isMobile, isOpen, scrollMessagesToBottom]);
+
+    useLayoutEffect(() => {
+        if (!isMobile || !isOpen) return;
+        isNearBottomRef.current = true;
+        scrollMessagesToBottom(true);
+    }, [isMobile, isOpen, activeChatTab, scrollMessagesToBottom]);
 
     const resetFadeTimer = useCallback(() => {
         setIsActive(true);
@@ -203,11 +237,13 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         setLastTabInput('');
         setSuggestionIndex(0);
         if (isMobile) {
+            scrollMessagesToBottom(true);
             inputRef.current?.focus();
+            requestAnimationFrame(() => scrollMessagesToBottom(true));
         } else {
             inputRef.current?.blur();
         }
-    }, [isMobile, resetFadeTimer]);
+    }, [isMobile, resetFadeTimer, scrollMessagesToBottom]);
 
     const handleSend = () => {
         if (!inputValue.trim() || !canWrite) return;
