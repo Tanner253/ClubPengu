@@ -89,17 +89,16 @@ export function readLiveWebGLInfo(renderer) {
 
         if (typeof window !== 'undefined') {
             window._liveGpuInfo = result;
+            // NOTE: integrated GPUs (Intel UHD/Iris, AMD Radeon Graphics) are a
+            // valid, hardware-accelerated configuration — most laptops/ThinkPads and
+            // all phones use them, and adaptive resolution keeps them smooth. We only
+            // escalate to a warning for genuine failures (software rasterizer); having
+            // an integrated GPU is NOT an error and must not trigger the banner.
             if (analysis.isSoftware) {
                 window._webglStatus = {
                     ...(window._webglStatus || probeWebGLStatus()),
                     status: WEBGL_STATUS.SOFTWARE_RENDERER,
                     softwareRenderer: true,
-                    renderer: info
-                };
-            } else if (analysis.isIntegrated && !analysis.isDiscrete) {
-                window._webglStatus = {
-                    ...(window._webglStatus || probeWebGLStatus()),
-                    status: WEBGL_STATUS.INTEGRATED_GPU,
                     renderer: info
                 };
             }

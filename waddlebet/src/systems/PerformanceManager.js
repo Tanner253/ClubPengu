@@ -129,6 +129,20 @@ export const PERFORMANCE_PRESETS = {
     },
 };
 
+// ==================== LOW-END AUTO-DETECTION ====================
+// A minority of environments (older/integrated GPUs, some Macs, old iPhones)
+// are fill-rate bound and can't sustain the full PBR + soft-shadow render path,
+// while the majority run it smoothly. Rather than downgrading everyone, we watch
+// runtime FPS and, only when a machine PROVES it's struggling, switch it to a
+// cheap render path (see utils/lowEndRender.js). The decision is persisted so
+// repeat visits start light immediately. Healthy machines (~60 FPS) never trip this.
+const LOW_END = {
+    FPS_THRESHOLD: 40,   // sustained EMA below this → struggling environment
+    FPS_RECOVER: 46,     // hysteresis: clears the "struggling" timer
+    SUSTAIN_MS: 3000,    // must stay below threshold this long before activating
+    STORAGE_KEY: 'waddlebet_lowend',
+};
+
 class PerformanceManager {
     constructor() {
         this.currentPreset = 'high';
@@ -145,9 +159,27 @@ class PerformanceManager {
         this._gameplayReady = false;
         this._gameplayReadyAt = 0;
         this._overlayActive = false;
-        
+
+        // Low-end auto-detection state
+        this._lowEndEma = 0;
+        this._lowEndBelowSince = 0;
+        this._lowEndMode = false;
+        this._lowEndDecided = false;
+
         // Load saved preference (or sync GPU probe fallback)
         this.loadSettings();
+        this._loadLowEnd();
+    }
+
+    _loadLowEnd() {
+        try {
+            if (localStorage.getItem(LOW_END.STORAGE_KEY) === '1') {
+                this._lowEndMode = true;
+                this._lowEndDecided = true;
+            }
+        } catch {
+            // ignore
+        }
     }
 
     /**
@@ -253,6 +285,24 @@ class PerformanceManager {
 
         const fps = 1 / delta;
         this._lastRecordedFps = fps;
+
+        // Low-end auto-detection: if a machine sustains sub-target FPS, switch it to
+        // the cheap render path once (and remember the decision). Smooth machines
+        // (~60 FPS) never satisfy this, so their quality is untouched.
+        if (!this._lowEndDecided) {
+            this._lowEndEma = this._lowEndEma ? (this._lowEndEma * 0.92 + fps * 0.08) : fps;
+            const now = performance.now();
+            if (this._lowEndEma < LOW_END.FPS_THRESHOLD) {
+                if (!this._lowEndBelowSince) {
+                    this._lowEndBelowSince = now;
+                } else if (now - this._lowEndBelowSince > LOW_END.SUSTAIN_MS) {
+                    this.activateLowEnd();
+                }
+            } else if (this._lowEndEma > LOW_END.FPS_RECOVER) {
+                this._lowEndBelowSince = 0;
+            }
+        }
+
         this._fpsSamples.push(fps);
         if (this._fpsSamples.length > 180) {
             this._fpsSamples.shift();
@@ -270,6 +320,44 @@ class PerformanceManager {
 
     getLastRecordedFps() {
         return Math.round(this._lastRecordedFps);
+    }
+
+    /**
+     * Switch this environment to the low-end render path (once). Persisted so the
+     * next visit starts light. Dispatches 'lowEndModeActivated' for the renderer to act on.
+     */
+    activateLowEnd() {
+        if (this._lowEndMode) return;
+        this._lowEndMode = true;
+        this._lowEndDecided = true;
+        try {
+            localStorage.setItem(LOW_END.STORAGE_KEY, '1');
+        } catch {
+            // ignore
+        }
+        console.warn(`🎮 Low-end mode enabled (sustained ~${Math.round(this._lowEndEma)} FPS): shadows off, lower render scale, simplified materials`);
+        if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('lowEndModeActivated', {
+                detail: { fps: Math.round(this._lowEndEma) }
+            }));
+        }
+    }
+
+    isLowEndMode() {
+        return this._lowEndMode;
+    }
+
+    /** Clear the persisted low-end decision (debug / opt back into full quality). */
+    resetLowEnd() {
+        this._lowEndMode = false;
+        this._lowEndDecided = false;
+        this._lowEndBelowSince = 0;
+        this._lowEndEma = 0;
+        try {
+            localStorage.removeItem(LOW_END.STORAGE_KEY);
+        } catch {
+            // ignore
+        }
     }
 
     /**
