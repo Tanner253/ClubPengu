@@ -81,6 +81,28 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.2.3",
+    date: "June 15, 2026",
+    title: "🚀 Smooth-Play Graphics & Chat UX",
+    description:
+      "Adaptive smooth-play rendering for fill-rate-limited devices — on by default with a Settings toggle to restore full quality. Runtime FPS detection persists the lighter path (shadows off, lower render scale, simplified materials) without blanket integrated-GPU warnings. Chat minimizes cleanly in minigames with fixed scroll and consistent bottom-left placement.",
+    highlight: true,
+    stats: { filesChanged: 13, additions: 540, deletions: 65 },
+    changes: [
+      { type: "performance", text: "Smooth-play mode — default-on lightweight render path: disables shadow pass, lowers render scale, and converts MeshStandardMaterial → MeshLambertMaterial for struggling GPUs" },
+      { type: "performance", text: "Runtime FPS auto-detection — sustained sub-40 FPS after world load triggers smooth-play once; decision persisted in localStorage for instant lighter loads on return visits" },
+      { type: "feature", text: "Settings → Display smooth-play toggle — turn off to restore full graphics (page reload); turn on to opt back into the lighter path without console hacks" },
+      { type: "improvement", text: "Smooth-play re-applies on room change and on a timed refresh so late-spawned meshes (players, props) stay simplified while mode is active" },
+      { type: "improvement", text: "Activation toast — blue in-game notice when smooth-play engages, matching the existing emergency preset downgrade toast pattern" },
+      { type: "fix", text: "Integrated GPU warning removed — laptops and phones with Intel/AMD integrated graphics no longer flagged; only genuine software rasterizer failures surface in WebGL banner" },
+      { type: "feature", text: "Chat minimize (desktop) — header − button collapses to a compact 💬 bar; state persisted in localStorage across sessions" },
+      { type: "fix", text: "Chat positioning in minigames — panel stays bottom-left instead of center-screen so blackjack and casino UI stay visible" },
+      { type: "fix", text: "Chat scroll container — vertical scrollbar and mouse wheel now target the message log only, not the tab navigation row" },
+      { type: "improvement", text: "Nightclub exit banner — floating green EXIT TO TOWN sign at the teleporter replaces old voxel letters; bob animation on update" },
+      { type: "backend", text: "Performance diagnostics export — support clipboard bundle now includes lowEndMode flag alongside FPS and active preset" },
+    ],
+  },
+  {
     version: "1.2.2",
     date: "June 14, 2026",
     title: "💬 RuneScape Chat, Town Stability & Ship Polish",
