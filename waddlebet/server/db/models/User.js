@@ -688,7 +688,8 @@ userSchema.methods.getFullData = function() {
         createdAt: this.createdAt,
         lastUsernameChangeAt: this.lastUsernameChangeAt,
         canChangeUsername: this.canChangeUsername(),
-        isEstablishedUser: isEstablished  // Tells client if user has entered world before
+        isEstablishedUser: isEstablished,  // Tells client if user has entered world before
+        role: this.role || null
     };
 };
 

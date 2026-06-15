@@ -31,14 +31,16 @@ import {
     BlackjackService,
     GachaService,
     PebbleService,
+    ChatService,
     ROLL_PRICE_PEBBLES
 } from './services/index.js';
 import custodialWalletService from './services/CustodialWalletService.js';
 import { handleIglooMessage } from './handlers/iglooHandlers.js';
 import { handleTippingMessage } from './handlers/tippingHandlers.js';
 import { handleMarketplaceMessage } from './handlers/marketplaceHandlers.js';
+import { getHelpLines, isHelpCommand, isClientOnlyCommand, isWarpCommand } from './utils/chatCommands.js';
 import { handleGiftMessage } from './handlers/giftHandlers.js';
-import { WORLD_SPAWN, WORLD_SPAWN_ROOM } from '../src/config/roomConfig.js';
+import { WORLD_SPAWN, WORLD_SPAWN_ROOM, isInvalidNightclubPosition } from '../src/config/roomConfig.js';
 import { initializeNFTServices, handleNFTMessage, handleGetImage, handleGetMetadata } from './handlers/nftHandlers.js';
 import nftOwnershipService from './services/NFTOwnershipService.js';
 import rentScheduler from './schedulers/RentScheduler.js';
@@ -102,11 +104,15 @@ async function getSavedSpawnForUser(user, roomId) {
         user.lastPosition?.x != null &&
         user.lastPosition?.z != null
     ) {
-        return {
+        const saved = {
             x: user.lastPosition.x,
             y: user.lastPosition.y ?? 0,
             z: user.lastPosition.z
         };
+        if (roomId === WORLD_SPAWN_ROOM && isInvalidNightclubPosition(saved)) {
+            return getDefaultSpawnForRoom(roomId);
+        }
+        return saved;
     }
     return getDefaultSpawnForRoom(roomId);
 }
@@ -368,12 +374,103 @@ const broadcastToAll = (message) => {
     }
 };
 
+/** Persist and broadcast a categorized chat message */
+async function publishChatMessage({
+    channel,
+    scopeKey,
+    roomId = null,
+    senderId = 'system',
+    senderName,
+    text,
+    metadata = {},
+    whisperFrom = null,
+    whisperTo = null,
+    targetPlayerIds = null
+}) {
+    const saved = await ChatService.save({
+        channel,
+        scopeKey,
+        roomId,
+        senderId,
+        senderName,
+        text,
+        metadata,
+        whisperFrom,
+        whisperTo
+    });
+
+    const basePayload = { type: 'chat_message', ...ChatService.toClientPayload(saved) };
+
+    if (targetPlayerIds?.length) {
+        for (const pid of targetPlayerIds) {
+            const payload = channel === 'whisper'
+                ? { ...basePayload, ...ChatService.toClientPayload(saved, pid) }
+                : basePayload;
+            sendToPlayer(pid, payload);
+        }
+        if (channel === 'whisper') return saved;
+    }
+
+    if (channel === 'room' && roomId) {
+        broadcastToRoomAll(roomId, basePayload);
+        return saved;
+    }
+
+    broadcastToAll(basePayload);
+    return saved;
+}
+
+async function sendChatHistory(playerId, roomId) {
+    const player = players.get(playerId);
+    if (!player) return;
+
+    const history = await ChatService.getLoginHistory(
+        player.walletAddress,
+        roomId,
+        player.name
+    );
+    const channels = ChatService.formatHistoryForPlayer(history, playerId, player.walletAddress);
+
+    sendToPlayer(playerId, {
+        type: 'chat_history',
+        channels,
+        roomId
+    });
+}
+
 sendToPlayer = (playerId, message) => {
     const player = players.get(playerId);
     if (player?.ws?.readyState === 1) {
         player.ws.send(JSON.stringify(message));
     }
 };
+
+function sendChatFeedback(playerId, text) {
+    sendToPlayer(playerId, {
+        type: 'chat_feedback',
+        text,
+        timestamp: Date.now()
+    });
+}
+
+async function sendChatHelp(playerId, player) {
+    let isStaff = false;
+    if (player.walletAddress) {
+        const user = await User.findOne({ walletAddress: player.walletAddress }, 'role');
+        isStaff = user?.role === 'admin' || user?.role === 'moderator';
+    }
+    sendToPlayer(playerId, {
+        type: 'chat_help',
+        lines: getHelpLines({ isStaff }),
+        timestamp: Date.now()
+    });
+}
+
+async function isPlayerStaff(player) {
+    if (!player?.walletAddress) return false;
+    const user = await User.findOne({ walletAddress: player.walletAddress }, 'role');
+    return user?.role === 'admin' || user?.role === 'moderator';
+}
 
 // ==================== PvE ACTIVITY SPECTATING ====================
 // Start a PvE activity (fishing, blackjack, etc.) - broadcasts to room
@@ -464,10 +561,10 @@ const getPveActivitiesInRoom = (roomId) => {
 const challengeService = new ChallengeService(inboxService, statsService);
 const matchService = new MatchService(statsService, userService, broadcastToRoom, sendToPlayer);
 const slotService = new SlotService(userService, broadcastToRoom, sendToPlayer);
-const goldSlotsService = new GoldSlotsService(userService, broadcastToRoom, sendToPlayer);
+const goldSlotsService = new GoldSlotsService(userService, broadcastToRoom, sendToPlayer, publishChatMessage);
 const fishingService = new FishingService(userService, broadcastToRoom, sendToPlayer);
 const blackjackService = new BlackjackService(userService, broadcastToRoom, sendToPlayer);
-const gachaService = new GachaService(userService, broadcastToRoom, sendToPlayer, broadcastToAll);
+const gachaService = new GachaService(userService, broadcastToRoom, sendToPlayer, broadcastToAll, publishChatMessage);
 const pebbleService = new PebbleService(solanaPaymentService, custodialWalletService, sendToPlayer);
 
 // Initialize ReferralService with DailyBonusService for playtime tracking
@@ -804,27 +901,46 @@ setInterval(() => {
     }
 }, TIME_BROADCAST_INTERVAL);
 
-// Room counts for igloo occupancy
-setInterval(() => {
-    const roomCounts = {};
+/** Build per-room occupancy (counts + player names) for HUD popup and igloo bubbles */
+function buildServerPopulation() {
+    const counts = {};
+    const population = {};
+
     for (const [roomId, playerSet] of rooms) {
-        if (roomId.startsWith('igloo')) {
-            roomCounts[roomId] = playerSet.size;
+        if (!playerSet || playerSet.size === 0) continue;
+
+        const names = [];
+        for (const pid of playerSet) {
+            const p = players.get(pid);
+            if (p?.name) names.push(p.name);
+        }
+        names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+
+        counts[roomId] = playerSet.size;
+        population[roomId] = { count: playerSet.size, players: names };
+    }
+
+    return { counts, population, totalPlayers: players.size };
+}
+
+function broadcastServerPopulation() {
+    const data = buildServerPopulation();
+    const message = JSON.stringify({
+        type: 'room_counts',
+        counts: data.counts,
+        population: data.population,
+        totalPlayers: data.totalPlayers
+    });
+
+    for (const [, player] of players) {
+        if (player.ws?.readyState === 1) {
+            player.ws.send(message);
         }
     }
-    
-    const townPlayers = rooms.get('town');
-    if (!townPlayers || townPlayers.size === 0) return;
-    
-    const countsMessage = JSON.stringify({ type: 'room_counts', counts: roomCounts });
-    
-    for (const playerId of townPlayers) {
-        const player = players.get(playerId);
-        if (player?.ws?.readyState === 1) {
-            player.ws.send(countsMessage);
-        }
-    }
-}, 3000);
+}
+
+// Live room population — all clients, all non-empty rooms
+setInterval(broadcastServerPopulation, 3000);
 
 // ==================== TURNSTILE VERIFICATION ====================
 // Track verified players (playerId -> true) to avoid re-verification
@@ -1040,6 +1156,8 @@ function joinRoom(playerId, roomId) {
             player.ws._roomJoinTimeout = null;
         }
     }
+
+    broadcastServerPopulation();
 }
 
 function getPlayersInRoom(roomId, excludeId = null) {
@@ -1441,6 +1559,8 @@ wss.on('connection', (ws, req) => {
                 const room = rooms.get(player.room);
                 if (room) room.delete(playerId);
             }
+
+            broadcastServerPopulation();
         }
         
         players.delete(playerId);
@@ -1505,7 +1625,7 @@ async function handleMessage(playerId, message) {
             }
             return null;
         };
-        const handled = await handleMarketplaceMessage(playerId, player, message, sendToPlayer, broadcastToAll, getPlayerByWallet);
+        const handled = await handleMarketplaceMessage(playerId, player, message, sendToPlayer, broadcastToAll, getPlayerByWallet, publishChatMessage);
         if (handled) return;
     }
     
@@ -1649,6 +1769,10 @@ async function handleMessage(playerId, message) {
                     isNewUser: authResult.isNewUser,
                     referralApplied: authResult.referralApplied || false
                 });
+
+                if (player.room) {
+                    await sendChatHistory(playerId, player.room);
+                }
                 
                 console.log(`🔐 ${authResult.user.username} authenticated (${walletAddress.slice(0, 8)}...)${authResult.referralApplied ? ' [REFERRED]' : ''}`);
                 
@@ -1964,6 +2088,10 @@ async function handleMessage(playerId, message) {
                     isNewUser: false,
                     restored: true
                 });
+
+                if (player.room) {
+                    await sendChatHistory(playerId, player.room);
+                }
                 
                 console.log(`[${ts()}] 🔄 Session restored: ${user.username} (${walletAddress.slice(0, 8)}...)`);
                 
@@ -2310,6 +2438,8 @@ async function handleMessage(playerId, message) {
             if (activeGoldSlotSpins.length > 0) {
                 sendToPlayer(playerId, { type: 'gold_slot_active_spins', spins: activeGoldSlotSpins });
             }
+
+            await sendChatHistory(playerId, roomId);
             
             console.log(`[${ts()}] ${player.name} joined ${roomId}${player.isAuthenticated ? ' (authenticated)' : ' (guest)'}`);
             } catch (joinError) {
@@ -2410,44 +2540,53 @@ async function handleMessage(playerId, message) {
                 timestamps.push(now);
                 
                 const text = message.text.substring(0, 200);
+
+                if (isHelpCommand(text)) {
+                    await sendChatHelp(playerId, player);
+                    break;
+                }
+
+                if (isClientOnlyCommand(text)) {
+                    break;
+                }
+
+                const warpMatch = isWarpCommand(text);
+                if (warpMatch) {
+                    if (!player.walletAddress) {
+                        sendChatFeedback(playerId, '❌ You must be authenticated to use this command.');
+                        break;
+                    }
+                    if (!(await isPlayerStaff(player))) {
+                        sendChatFeedback(playerId, '❌ You do not have permission to use this command.');
+                        break;
+                    }
+                    sendToPlayer(playerId, {
+                        type: 'parkour_warp',
+                        stage: warpMatch[1],
+                        timestamp: Date.now()
+                    });
+                    break;
+                }
                 
                 // Handle /tp command (admin/moderator only)
                 if (text.toLowerCase().startsWith('/tp ')) {
                     // Check if user is authenticated
                     if (!player.walletAddress) {
-                        sendToPlayer(playerId, {
-                            type: 'chat',
-                            playerId: 'system',
-                            name: 'System',
-                            text: '❌ You must be authenticated to use this command.',
-                            timestamp: Date.now()
-                        });
+                        sendChatFeedback(playerId, '❌ You must be authenticated to use this command.');
                         break;
                     }
                     
                     // Check if user has admin or moderator role
                     const user = await User.findOne({ walletAddress: player.walletAddress }, 'role');
                     if (!user || (user.role !== 'admin' && user.role !== 'moderator')) {
-                        sendToPlayer(playerId, {
-                            type: 'chat',
-                            playerId: 'system',
-                            name: 'System',
-                            text: '❌ You do not have permission to use this command.',
-                            timestamp: Date.now()
-                        });
+                        sendChatFeedback(playerId, '❌ You do not have permission to use this command.');
                         break;
                     }
                     
                     // Parse command: /tp {teleportingplayername} {destination player}
                     const parts = text.slice(4).trim().split(/\s+/);
                     if (parts.length < 2) {
-                        sendToPlayer(playerId, {
-                            type: 'chat',
-                            playerId: 'system',
-                            name: 'System',
-                            text: '❌ Usage: /tp <teleportingplayername> <destination player>',
-                            timestamp: Date.now()
-                        });
+                        sendChatFeedback(playerId, '❌ Usage: /tp <teleportingplayername> <destination player>');
                         break;
                     }
                     
@@ -2491,35 +2630,17 @@ async function handleMessage(playerId, message) {
                     }
                     
                     if (!teleportingPlayer) {
-                        sendToPlayer(playerId, {
-                            type: 'chat',
-                            playerId: 'system',
-                            name: 'System',
-                            text: `❌ Player "${teleportingPlayerName}" not found.`,
-                            timestamp: Date.now()
-                        });
+                        sendChatFeedback(playerId, `❌ Player "${teleportingPlayerName}" not found.`);
                         break;
                     }
                     
                     if (!destinationPlayer) {
-                        sendToPlayer(playerId, {
-                            type: 'chat',
-                            playerId: 'system',
-                            name: 'System',
-                            text: `❌ Player "${destinationPlayerName}" not found.`,
-                            timestamp: Date.now()
-                        });
+                        sendChatFeedback(playerId, `❌ Player "${destinationPlayerName}" not found.`);
                         break;
                     }
                     
                     if (!destinationPlayer.position) {
-                        sendToPlayer(playerId, {
-                            type: 'chat',
-                            playerId: 'system',
-                            name: 'System',
-                            text: `❌ Destination player "${destinationPlayerName}" has no position.`,
-                            timestamp: Date.now()
-                        });
+                        sendChatFeedback(playerId, `❌ Destination player "${destinationPlayerName}" has no position.`);
                         break;
                     }
                     
@@ -2566,22 +2687,10 @@ async function handleMessage(playerId, message) {
                         });
                         
                         // Send confirmation to admin/moderator
-                        sendToPlayer(playerId, {
-                            type: 'chat',
-                            playerId: 'system',
-                            name: 'System',
-                            text: `✅ Teleported ${teleportingPlayer.name} to ${destinationPlayer.name}`,
-                            timestamp: Date.now()
-                        });
+                        sendChatFeedback(playerId, `✅ Teleported ${teleportingPlayer.name} to ${destinationPlayer.name}`);
                         
                         // Notify teleported player
-                        sendToPlayer(teleportingPlayer.id, {
-                            type: 'chat',
-                            playerId: 'system',
-                            name: 'System',
-                            text: `✨ You have been teleported to ${destinationPlayer.name}`,
-                            timestamp: Date.now()
-                        });
+                        sendChatFeedback(teleportingPlayer.id, `✨ You have been teleported to ${destinationPlayer.name}`);
                     }
                     break;
                 }
@@ -2598,6 +2707,15 @@ async function handleMessage(playerId, message) {
                         isAfk: true,
                         afkMessage: player.afkMessage
                     });
+                    await publishChatMessage({
+                        channel: 'room',
+                        scopeKey: player.room,
+                        roomId: player.room,
+                        senderId: playerId,
+                        senderName: player.name,
+                        text: player.afkMessage,
+                        metadata: { isAfk: true }
+                    });
                 } else {
                     if (player.isAfk) {
                         player.isAfk = false;
@@ -2608,13 +2726,17 @@ async function handleMessage(playerId, message) {
                             isAfk: false
                         });
                     }
-                    
-                    broadcastToRoomAll(player.room, {
-                        type: 'chat',
-                        playerId,
-                        name: player.name,
+
+                    const channel = message.channel === 'global' ? 'global' : 'room';
+                    const scopeKey = channel === 'global' ? 'global' : player.room;
+                    await publishChatMessage({
+                        channel,
+                        scopeKey,
+                        roomId: player.room,
+                        senderId: playerId,
+                        senderName: player.name,
                         text,
-                        timestamp: Date.now()
+                        metadata: {}
                     });
                     
                     // Track chat stat and maybe award coins
@@ -2675,19 +2797,39 @@ async function handleMessage(playerId, message) {
             }
             
             if (targetPlayer?.ws?.readyState === 1) {
+                const fromKey = player.walletAddress || player.name;
+                const toKey = targetPlayer.walletAddress || targetPlayer.name;
+                const scopeKey = ChatService.whisperScopeKey(fromKey, toKey);
+
+                const saved = await ChatService.save({
+                    channel: 'whisper',
+                    scopeKey,
+                    senderId: playerId,
+                    senderName: player.name,
+                    text,
+                    whisperFrom: player.walletAddress || null,
+                    whisperTo: targetPlayer.walletAddress || null,
+                    metadata: {
+                        fromName: player.name,
+                        toName: targetPlayer.name,
+                        senderPlayerId: playerId,
+                        targetPlayerId: targetId
+                    }
+                });
+
                 targetPlayer.ws.send(JSON.stringify({
-                    type: 'whisper',
-                    fromId: playerId,
-                    fromName: player.name,
-                    text,
-                    timestamp: Date.now()
+                    type: 'chat_message',
+                    ...ChatService.toClientPayload(saved, targetId),
+                    whisperDirection: 'in',
+                    fromName: player.name
                 }));
-                
+
                 sendToPlayer(playerId, {
-                    type: 'whisper_sent',
-                    toName: targetPlayer.name,
-                    text,
-                    timestamp: Date.now()
+                    type: 'chat_message',
+                    ...ChatService.toClientPayload(saved, playerId),
+                    whisperDirection: 'out',
+                    name: `To [${targetPlayer.name}]`,
+                    toName: targetPlayer.name
                 });
                 
                 // Track whisper stats
@@ -2757,6 +2899,22 @@ async function handleMessage(playerId, message) {
             break;
         }
         
+        case 'get_chat_history': {
+            await sendChatHistory(playerId, player.room || message.room);
+            break;
+        }
+
+        case 'get_server_population': {
+            const data = buildServerPopulation();
+            sendToPlayer(playerId, {
+                type: 'room_counts',
+                counts: data.counts,
+                population: data.population,
+                totalPlayers: data.totalPlayers
+            });
+            break;
+        }
+
         case 'change_room': {
             const newRoom = message.room;
             const oldRoom = player.room;
@@ -2814,6 +2972,13 @@ async function handleMessage(playerId, message) {
                 // Send active PvE activities in new room
                 const pveActivitiesInNewRoom = getPveActivitiesInRoom(newRoom);
                 sendToPlayer(playerId, { type: 'active_pve_activities', activities: pveActivitiesInNewRoom });
+
+                const roomHistory = await ChatService.getScopeHistory('room', newRoom);
+                sendToPlayer(playerId, {
+                    type: 'chat_history_room',
+                    room: newRoom,
+                    messages: roomHistory.map((doc) => ChatService.toClientPayload(doc, playerId))
+                });
             }
             break;
         }

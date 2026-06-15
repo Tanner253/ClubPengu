@@ -17,7 +17,6 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import gsap from 'gsap';
 import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PenguinBuilder';
 import { PALETTE } from '../constants';
-import ChatLog from '../components/ChatLog';
 
 // Helper to generate Solscan link
 const getSolscanLink = (txSignature) => `https://solscan.io/tx/${txSignature}`;
@@ -998,7 +997,7 @@ const P2PMonopoly = ({ onMatchEnd }) => {
     const engineRef = useRef(null);
     
     // Get connection status for mobile handling
-    const { connected } = useMultiplayer();
+    const { connected, registerChatBubbleCallback, setMobileChatOpen } = useMultiplayer();
     
     // UI State
     const [showDice, setShowDice] = useState(false);
@@ -1007,7 +1006,6 @@ const P2PMonopoly = ({ onMatchEnd }) => {
     const [showEventModal, setShowEventModal] = useState(false);
     const [currentEvent, setCurrentEvent] = useState(null);
     const [showDisconnected, setShowDisconnected] = useState(false);
-    const [showMobileChat, setShowMobileChat] = useState(false);
     
     // Check if mobile
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -1020,6 +1018,8 @@ const P2PMonopoly = ({ onMatchEnd }) => {
         if (isPlayer1) engineRef.current.showChatBubble(0, msg.text);
         else if (isPlayer2) engineRef.current.showChatBubble(1, msg.text);
     }, [activeMatch]);
+
+    useEffect(() => registerChatBubbleCallback(handleChatMessage), [handleChatMessage, registerChatBubbleCallback]);
     
     // Refs for tracking state changes
     const initedRef = useRef(false);
@@ -1502,29 +1502,13 @@ const P2PMonopoly = ({ onMatchEnd }) => {
                 </div>
             )}
 
-            {/* === CHAT === */}
-            {isMobile ? (
-                <>
-                    {/* Mobile: Toggle button */}
-                    {!showMobileChat && (
-                        <button
-                            onClick={() => setShowMobileChat(true)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 z-30 bg-black/80 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg border border-white/20"
-                        >
-                            💬
-                        </button>
-                    )}
-                    {/* Mobile: Chat overlay */}
-                    <ChatLog 
-                        isMobile={true}
-                        isOpen={showMobileChat}
-                        onClose={() => setShowMobileChat(false)}
-                        onNewMessage={handleChatMessage}
-                    />
-                </>
-            ) : (
-                /* Desktop: Middle-left positioning */
-                <ChatLog minigameMode={true} onNewMessage={handleChatMessage} />
+            {isMobile && (
+                <button
+                    onClick={() => setMobileChatOpen(true)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-30 bg-black/80 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg border border-white/20"
+                >
+                    💬
+                </button>
             )}
         </div>
     );

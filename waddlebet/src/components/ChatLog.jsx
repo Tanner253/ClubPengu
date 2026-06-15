@@ -1,535 +1,519 @@
 /**
- * ChatLog - MapleStory/PoE style chat system
- * - Docked bottom-left, always visible (fades when inactive)
- * - Whisper support: /w username message
- * - Different colors for message types
- * - Scrollable history
- * - Mobile: toggleable overlay
+ * ChatLog - RuneScape-styled tabbed chat (global, room, guild, whisper, casino, announcements, market)
  */
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { useLanguage } from '../i18n';
+import { CHAT_TAB_CONFIG } from '../utils/chatChannels';
+import {
+    buildCommandInput,
+    canExecuteCommand,
+    completeChatInput,
+    getCommandSuggestions,
+    getHelpMessages,
+    isDevEnvironment,
+    isHelpCommand,
+    isStaffRole,
+    shouldShowCommandSuggestions
+} from '../utils/chatCommands';
 
-// Message type colors (MapleStory inspired)
-const MESSAGE_COLORS = {
-    local: 'text-white',           // Regular chat
-    whisperIn: 'text-yellow-300',  // Whisper received
-    whisperOut: 'text-pink-300',   // Whisper sent
-    system: 'text-cyan-400',       // System messages
-    afk: 'text-gray-400',          // AFK messages
-    emote: 'text-orange-300',      // Emotes/actions
+const MESSAGE_TYPE_CLASS = {
+    local: 'rs-chat-msg--local',
+    whisperIn: 'rs-chat-msg--whisperIn',
+    whisperOut: 'rs-chat-msg--whisperOut',
+    system: 'rs-chat-msg--system',
+    afk: 'rs-chat-msg--afk',
+    emote: 'rs-chat-msg--system',
+    casino: 'rs-chat-msg--casino',
+    announcement: 'rs-chat-msg--announcement',
+    market: 'rs-chat-msg--market'
 };
 
 const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = false, onNewMessage }) => {
-    const { chatMessages, playerName, playerId, sendChat, getPlayersData } = useMultiplayer();
+    const {
+        chatByChannel,
+        playerName,
+        sendChat,
+        getPlayersData,
+        userData,
+        addLocalChatMessage,
+        unreadChatTabs,
+        hasWhisperActivity,
+        activeChatTab,
+        setActiveChatTab,
+        registerChatBubbleCallback
+    } = useMultiplayer();
     const { t } = useLanguage();
+
     const [isActive, setIsActive] = useState(false);
     const [inputValue, setInputValue] = useState('');
-    const [localMessages, setLocalMessages] = useState([]); // Combined local + server messages
-    const [autocompleteIndex, setAutocompleteIndex] = useState(0); // Track which suggestion we're on
-    const [lastTabInput, setLastTabInput] = useState(''); // Track input when tab was first pressed
+    const [autocompleteIndex, setAutocompleteIndex] = useState(0);
+    const [lastTabInput, setLastTabInput] = useState('');
+    const [suggestionIndex, setSuggestionIndex] = useState(0);
+    const [inputReadonly, setInputReadonly] = useState(true);
     const messagesEndRef = useRef(null);
     const inputRef = useRef(null);
     const containerRef = useRef(null);
     const fadeTimeoutRef = useRef(null);
-    
-    // Merge server messages into local state with type info
+
+    const visibleTabs = useMemo(() => {
+        return CHAT_TAB_CONFIG.filter((tab) => {
+            if (tab.conditional && !hasWhisperActivity) return false;
+            return true;
+        });
+    }, [hasWhisperActivity]);
+
+    const activeTabConfig = CHAT_TAB_CONFIG.find((tab) => tab.id === activeChatTab) || CHAT_TAB_CONFIG[1];
+    const activeMessages = chatByChannel[activeChatTab] || [];
+    const canWrite = activeTabConfig.writable && !activeTabConfig.comingSoon;
+    const enterPlaceholder = `[${t('chat.enterToChat')}]`;
+
     useEffect(() => {
-        if (chatMessages.length === 0) return;
-        
-        const latestServerMsg = chatMessages[chatMessages.length - 1];
-        
-        // Check if we already have this message
-        const exists = localMessages.some(m => m.id === latestServerMsg.id);
-        if (exists) return;
-        
-        // Determine message type
-        let type = 'local';
-        let displayText = latestServerMsg.text;
-        
-        if (latestServerMsg.text?.startsWith('💤')) {
-            type = 'afk';
-        } else if (latestServerMsg.isWhisper) {
-            type = latestServerMsg.fromMe ? 'whisperOut' : 'whisperIn';
-        }
-        
-        setLocalMessages(prev => [...prev.slice(-100), {
-            ...latestServerMsg,
-            type,
-            displayText
-        }]);
-        
-        // Notify parent for 3D chat bubbles in minigames
-        if (onNewMessage && !latestServerMsg.isWhisper) {
-            onNewMessage({
-                senderName: latestServerMsg.name,
-                text: latestServerMsg.text
-            });
-        }
-        
-        // Show chat briefly when new message arrives
-        resetFadeTimer();
-    }, [chatMessages, onNewMessage]);
-    
-    // Auto-scroll to bottom
+        if (!onNewMessage) return undefined;
+        return registerChatBubbleCallback(onNewMessage);
+    }, [onNewMessage, registerChatBubbleCallback]);
+
     useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-        }
-    }, [localMessages]);
-    
-    // Fade timer management
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [activeMessages, activeChatTab]);
+
     const resetFadeTimer = useCallback(() => {
         setIsActive(true);
-        if (fadeTimeoutRef.current) {
-            clearTimeout(fadeTimeoutRef.current);
-        }
+        if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current);
         fadeTimeoutRef.current = setTimeout(() => {
-            if (document.activeElement !== inputRef.current) {
-                setIsActive(false);
-            }
-        }, 8000); // Fade after 8 seconds of inactivity
+            if (document.activeElement !== inputRef.current) setIsActive(false);
+        }, 8000);
     }, []);
-    
-    // Handle input focus
+
     const handleFocus = () => {
+        setInputReadonly(false);
         setIsActive(true);
-        if (fadeTimeoutRef.current) {
-            clearTimeout(fadeTimeoutRef.current);
-        }
+        if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current);
     };
-    
-    // Handle input blur
+
     const handleBlur = () => {
+        setInputReadonly(true);
         resetFadeTimer();
     };
-    
-    // Exit chat input when clicking outside chat panel
+
     useEffect(() => {
         const handleGlobalClick = (e) => {
-            // Check if input is focused
             if (document.activeElement !== inputRef.current) return;
-            
-            // Check if click is outside the chat container
             if (containerRef.current && !containerRef.current.contains(e.target)) {
                 inputRef.current?.blur();
             }
         };
-        
-        // Use capture phase to catch clicks before other handlers
         document.addEventListener('click', handleGlobalClick, true);
-        
-        return () => {
-            document.removeEventListener('click', handleGlobalClick, true);
-        };
+        return () => document.removeEventListener('click', handleGlobalClick, true);
     }, []);
-    
-    // Handle sending message
+
+    const getAllOnlinePlayerNames = useCallback(() => {
+        const playersData = getPlayersData?.();
+        const names = new Set();
+        if (playerName) names.add(playerName);
+        playersData?.forEach((player) => {
+            if (player.name) names.add(player.name);
+        });
+        return [...names].sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
+    }, [getPlayersData, playerName]);
+
+    const isStaff = isStaffRole(userData);
+    const isDev = isDevEnvironment();
+
+    const commandSuggestions = useMemo(
+        () => getCommandSuggestions(inputValue, { isStaff, isDev }),
+        [inputValue, isStaff, isDev]
+    );
+    const showCommandSuggestions = canWrite
+        && shouldShowCommandSuggestions(inputValue)
+        && commandSuggestions.length > 0;
+
+    useEffect(() => {
+        setSuggestionIndex(0);
+    }, [inputValue, commandSuggestions.length]);
+
+    const applyCommandSuggestion = useCallback((cmd) => {
+        setInputValue(buildCommandInput(cmd));
+        setSuggestionIndex(0);
+        setAutocompleteIndex(0);
+        setLastTabInput('');
+        inputRef.current?.focus();
+    }, []);
+
+    const handleTabCompletion = useCallback(() => {
+        const result = completeChatInput(inputValue, {
+            playerNames: getAllOnlinePlayerNames(),
+            selfName: playerName,
+            isStaff,
+            isDev,
+            autocompleteIndex,
+            lastTabInput
+        });
+        if (!result) return false;
+
+        setInputValue(result.newInput);
+        setAutocompleteIndex(result.autocompleteIndex);
+        setLastTabInput(result.lastTabInput);
+        return true;
+    }, [inputValue, getAllOnlinePlayerNames, playerName, isStaff, isDev, autocompleteIndex, lastTabInput]);
+
+    const finishSendInput = useCallback(() => {
+        setInputValue('');
+        resetFadeTimer();
+        setAutocompleteIndex(0);
+        setLastTabInput('');
+        setSuggestionIndex(0);
+        if (isMobile) {
+            inputRef.current?.focus();
+        } else {
+            inputRef.current?.blur();
+        }
+    }, [isMobile, resetFadeTimer]);
+
     const handleSend = () => {
-        if (!inputValue.trim()) return;
-        
+        if (!inputValue.trim() || !canWrite) return;
         const text = inputValue.trim();
-        
-        // Check for whisper command: /w username message or /whisper username message
-        const whisperMatch = text.match(/^\/w(?:hisper)?\s+(\S+)\s+(.+)$/i);
-        if (whisperMatch) {
-            const targetName = whisperMatch[1];
-            const message = whisperMatch[2];
-            
-            // Send whisper via WebSocket - server will echo back confirmation
-            if (window.__multiplayerWs?.readyState === 1) {
-                window.__multiplayerWs.send(JSON.stringify({
-                    type: 'whisper',
-                    targetName: targetName,
-                    text: message
-                }));
-            }
-            
-            // Don't add locally - wait for server confirmation (whisper_sent)
-            // This prevents duplicates and handles errors properly
-            
-            setInputValue('');
-            resetFadeTimer();
-            inputRef.current?.blur(); // Auto-blur so player can move again
+
+        if (shouldShowCommandSuggestions(text) && commandSuggestions.length > 0 && !canExecuteCommand(text)) {
+            applyCommandSuggestion(commandSuggestions[suggestionIndex] || commandSuggestions[0]);
             return;
         }
-        
-        // Check for reply command: /r message (reply to last whisper)
+
+        const whisperMatch = text.match(/^\/w(?:hisper)?\s+(\S+)\s+(.+)$/i);
+        if (whisperMatch) {
+            const [, targetName, message] = whisperMatch;
+            if (window.__multiplayerWs?.readyState === 1) {
+                window.__multiplayerWs.send(JSON.stringify({ type: 'whisper', targetName, text: message }));
+            }
+            setActiveChatTab('whisper');
+            finishSendInput();
+            return;
+        }
+
         const replyMatch = text.match(/^\/r\s+(.+)$/i);
         if (replyMatch) {
-            // Find last incoming whisper
-            const lastWhisper = [...localMessages].reverse().find(m => m.type === 'whisperIn');
-            if (lastWhisper && lastWhisper.fromName) {
-                const message = replyMatch[1];
-                
-                // Send whisper via WebSocket - server will echo back confirmation
+            const whispers = chatByChannel.whisper || [];
+            const lastWhisper = [...whispers].reverse().find((m) => m.type === 'whisperIn' || m.whisperDirection === 'in');
+            if (lastWhisper?.fromName) {
                 if (window.__multiplayerWs?.readyState === 1) {
                     window.__multiplayerWs.send(JSON.stringify({
                         type: 'whisper',
                         targetName: lastWhisper.fromName,
-                        text: message
+                        text: replyMatch[1]
                     }));
                 }
-                
-                // Don't add locally - wait for server confirmation
-            } else {
-                // No one to reply to
-                setLocalMessages(prev => [...prev.slice(-100), {
-                    id: Date.now(),
-                    type: 'system',
-                    name: 'System',
-                    text: 'No one to reply to.',
-                    timestamp: Date.now()
-                }]);
+                setActiveChatTab('whisper');
             }
-            
-            setInputValue('');
-            resetFadeTimer();
-            inputRef.current?.blur(); // Auto-blur so player can move again
+            finishSendInput();
             return;
         }
-        
-        // Check for spawn command: /spawn - teleport to spawn point if stuck
+
+        if (isHelpCommand(text)) {
+            getHelpMessages({ isStaff, isDev }).forEach((line) => {
+                addLocalChatMessage(line);
+            });
+            finishSendInput();
+            return;
+        }
+
         if (text.toLowerCase() === '/spawn') {
-            // Dispatch event to VoxelWorld to handle spawn teleport
             window.dispatchEvent(new CustomEvent('chatCommand', { detail: { command: 'spawn' } }));
-            
-            setLocalMessages(prev => [...prev.slice(-100), {
-                id: Date.now(),
-                type: 'system',
-                name: 'System',
-                text: '✨ Teleporting to spawn point...',
-                timestamp: Date.now()
-            }]);
-            
-            setInputValue('');
-            resetFadeTimer();
-            inputRef.current?.blur();
+            finishSendInput();
             return;
         }
-        
-        // DEV ONLY: Parkour warp commands /warp pk1, /warp pk2, etc.
-        const pkMatch = text.toLowerCase().match(/^\/warp\s+(pk[1-6])$/);
-        if (pkMatch && process.env.NODE_ENV === 'development') {
-            const stage = pkMatch[1];
-            const stageNames = {
-                pk1: 'Stage 1 (Blue)',
-                pk2: 'Stage 2 (Purple)',
-                pk3: 'Stage 3 (Green)',
-                pk4: 'Stage 4 (Orange)',
-                pk5: 'Stage 5 (Red)',
-                pk6: 'Stage 6 (Cyan) - The Gauntlet'
-            };
-            
-            window.dispatchEvent(new CustomEvent('chatCommand', { detail: { command: stage } }));
-            
-            setLocalMessages(prev => [...prev.slice(-100), {
-                id: Date.now(),
-                type: 'system',
-                name: 'System',
-                text: `🎮 Warping to Parkour ${stageNames[stage]}...`,
-                timestamp: Date.now()
-            }]);
-            
-            setInputValue('');
-            resetFadeTimer();
-            inputRef.current?.blur();
-            return;
-        }
-        
-        // Regular chat message
-        sendChat(text);
-        setInputValue('');
-        resetFadeTimer();
-        
-        // Auto-blur so player can move again
-        inputRef.current?.blur();
+
+        const channel = activeChatTab === 'global' ? 'global' : 'room';
+        sendChat(text, channel);
+        finishSendInput();
     };
-    
-    // Get online player names for autocomplete
-    const getOnlinePlayerNames = useCallback(() => {
-        const playersData = getPlayersData?.();
-        if (!playersData) return [];
-        
-        const names = [];
-        playersData.forEach((player) => {
-            if (player.name && player.name !== playerName) {
-                names.push(player.name);
-            }
-        });
-        return names.sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase()));
-    }, [getPlayersData, playerName]);
-    
-    // Handle tab completion for /tp command
-    const handleTabCompletion = useCallback(() => {
-        const input = inputValue.toLowerCase();
-        
-        // Check if input is a /tp command
-        const tpMatch = input.match(/^\/tp\s+(\S*)\s*(\S*)$/);
-        if (!tpMatch) return false;
-        
-        const [, firstArg, secondArg] = tpMatch;
-        const onlinePlayers = getOnlinePlayerNames();
-        
-        if (onlinePlayers.length === 0) return false;
-        
-        // Determine which argument we're completing (first or second)
-        const isCompletingSecond = firstArg && !secondArg.includes(' ') && input.includes(' ' + firstArg + ' ');
-        const partialName = isCompletingSecond ? secondArg : firstArg;
-        
-        // Filter players matching partial input
-        const matches = onlinePlayers.filter(name => 
-            name.toLowerCase().startsWith(partialName.toLowerCase())
-        );
-        
-        if (matches.length === 0) return false;
-        
-        // Track if this is a new tab press or cycling through options
-        const baseInput = inputValue.substring(0, inputValue.lastIndexOf(partialName) || inputValue.length);
-        
-        // If input changed since last tab, reset index
-        if (lastTabInput !== baseInput + partialName) {
-            setAutocompleteIndex(0);
-            setLastTabInput(baseInput + partialName);
-        }
-        
-        // Get the match at current index (cycle through)
-        const matchIndex = autocompleteIndex % matches.length;
-        const completedName = matches[matchIndex];
-        
-        // Build the completed input
-        let newInput;
-        if (isCompletingSecond) {
-            // Completing second argument (destination player)
-            const firstPart = inputValue.substring(0, inputValue.lastIndexOf(' ') + 1);
-            newInput = firstPart + completedName;
-        } else {
-            // Completing first argument (player to teleport)
-            newInput = '/tp ' + completedName + ' ';
-        }
-        
-        setInputValue(newInput);
-        setAutocompleteIndex(prev => prev + 1);
-        
-        return true;
-    }, [inputValue, getOnlinePlayerNames, autocompleteIndex, lastTabInput]);
-    
-    // Handle key press
+
     const handleKeyDown = (e) => {
+        if (showCommandSuggestions) {
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                e.stopPropagation();
+                setSuggestionIndex((i) => Math.min(i + 1, commandSuggestions.length - 1));
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                e.stopPropagation();
+                setSuggestionIndex((i) => Math.max(i - 1, 0));
+                return;
+            }
+        }
+
         if (e.key === 'Enter') {
             e.preventDefault();
             e.stopPropagation();
             handleSend();
-            // Reset autocomplete state
-            setAutocompleteIndex(0);
-            setLastTabInput('');
         }
         if (e.key === 'Tab') {
             e.preventDefault();
             e.stopPropagation();
-            handleTabCompletion();
+            if (showCommandSuggestions) {
+                applyCommandSuggestion(commandSuggestions[suggestionIndex] || commandSuggestions[0]);
+            } else {
+                handleTabCompletion();
+            }
         }
         if (e.key === 'Escape') {
+            if (showCommandSuggestions && inputValue.length > 1) {
+                e.preventDefault();
+                e.stopPropagation();
+                setInputValue('/');
+                setSuggestionIndex(0);
+                return;
+            }
             inputRef.current?.blur();
-            // Reset autocomplete state
             setAutocompleteIndex(0);
             setLastTabInput('');
+            setSuggestionIndex(0);
         }
     };
-    
-    // Format timestamp
+
+    const focusInput = () => {
+        if (canWrite) inputRef.current?.focus();
+    };
+
     const formatTime = (timestamp) => {
         const date = new Date(timestamp);
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
-    
-    // Click anywhere on chat to focus input
-    const handleContainerClick = (e) => {
-        if (e.target === containerRef.current || e.target.closest('.chat-messages')) {
-            inputRef.current?.focus();
-        }
-    };
-    
-    // Don't render if mobile and closed
-    if (isMobile && !isOpen) return null;
-    
-    // Mobile: render with backdrop
-    if (isMobile) {
+
+    const renderMessage = (msg, idx) => {
+        const typeClass = (msg.type === 'system' && MESSAGE_TYPE_CLASS[msg.channel])
+            ? MESSAGE_TYPE_CLASS[msg.channel]
+            : MESSAGE_TYPE_CLASS[msg.type] || MESSAGE_TYPE_CLASS.local;
+        const body = msg.text || msg.displayText;
+        const timeLabel = msg.timestamp ? formatTime(msg.timestamp) : null;
+
         return (
-            <div 
-                className="fixed inset-0 z-40 pointer-events-auto flex items-center justify-center p-4"
-                onClick={(e) => {
-                    if (e.target === e.currentTarget) onClose?.();
-                }}
-                data-no-camera="true"
-            >
-                {/* Semi-transparent backdrop */}
-                <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-                
-                {/* Chat panel - centered */}
-                <div 
-                    ref={containerRef}
-                    onClick={(e) => e.stopPropagation()}
-                    className="relative w-full max-w-sm bg-black/95 rounded-xl border border-white/20 overflow-hidden"
-                >
-                    {/* Mobile Header with Close Button */}
-                    <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
-                        <span className="text-white text-sm retro-text">💬 Chat</span>
-                        <button 
-                            onClick={onClose}
-                            className="text-white/60 hover:text-white text-xl leading-none p-1"
-                        >
-                            ✕
-                        </button>
-                    </div>
-                    
-                    {/* Messages Container - fixed height with scroll */}
-                    <div className="chat-messages h-40 overflow-y-auto overflow-x-hidden overscroll-contain scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
-                        <div className="p-3 space-y-1 min-h-full">
-                            {localMessages.length === 0 ? (
-                                <div className="text-white/30 text-sm py-4 text-center">
-                                    No messages yet
-                                </div>
-                            ) : (
-                                localMessages.map((msg, idx) => (
-                                    <div 
-                                        key={`${msg.id}-${idx}`} 
-                                        className={`text-sm leading-relaxed break-words overflow-hidden ${MESSAGE_COLORS[msg.type] || MESSAGE_COLORS.local}`}
-                                        style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-                                    >
-                                        <span className="text-white/30 mr-1 text-xs">[{formatTime(msg.timestamp)}]</span>
-                                        {msg.type === 'whisperIn' && (
-                                            <span className="text-yellow-400">[From {msg.name}]: </span>
-                                        )}
-                                        {msg.type === 'whisperOut' && (
-                                            <span className="text-pink-400">{msg.name}: </span>
-                                        )}
-                                        {msg.type === 'system' && (
-                                            <span className="text-cyan-400">[{msg.name}] </span>
-                                        )}
-                                        {(msg.type === 'local' || msg.type === 'afk') && (
-                                            <span className={msg.name === playerName ? 'text-green-400' : 'text-blue-300'}>
-                                                {msg.name}: 
-                                            </span>
-                                        )}
-                                        <span className="ml-1 break-words">{msg.text || msg.displayText}</span>
-                                    </div>
-                                ))
-                            )}
-                            <div ref={messagesEndRef} />
-                        </div>
-                    </div>
-                    
-                    {/* Input Area */}
-                    <div className="p-3 border-t border-white/10">
-                        <div className="flex items-center gap-2">
-                            <input
-                                ref={inputRef}
-                                id="chat-input-field"
-                                type="text"
-                                value={inputValue}
-                                onChange={(e) => setInputValue(e.target.value)}
-                                onKeyDown={handleKeyDown}
-                                onFocus={handleFocus}
-                                onBlur={handleBlur}
-                                placeholder="Type message..."
-                                className="flex-1 bg-white/10 rounded-xl px-4 py-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500 placeholder-white/30"
-                                maxLength={200}
-                                autoFocus
-                            />
-                            <button 
-                                onClick={handleSend}
-                                className="bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white px-5 py-3 rounded-xl text-sm retro-text transition-colors"
-                            >
-                                Send
-                            </button>
-                        </div>
-                        <div className="text-[10px] text-white/40 mt-2 text-center">
-                            /w name msg • /r reply • /afk • /spawn
-                        </div>
-                    </div>
+            <div key={`${msg.id}-${idx}`} className={`rs-chat-msg ${typeClass}`}>
+                {timeLabel && <span className="rs-chat-msg-time">[{timeLabel}] </span>}
+                {msg.type === 'whisperIn' && (
+                    <>
+                        <span className="rs-chat-msg-name">[From {msg.fromName || msg.name}]: </span>
+                        <span className="rs-chat-msg-body">{body}</span>
+                    </>
+                )}
+                {msg.type === 'whisperOut' && (
+                    <>
+                        <span className="rs-chat-msg-name">{msg.name}: </span>
+                        <span className="rs-chat-msg-body">{body}</span>
+                    </>
+                )}
+                {(msg.type === 'system' || ['casino', 'announcement', 'market'].includes(msg.channel)) && (
+                    <>
+                        <span className="rs-chat-msg-name">[{msg.name}] </span>
+                        <span className="rs-chat-msg-body">{body}</span>
+                    </>
+                )}
+                {(msg.type === 'local' || msg.type === 'afk' || (!msg.type && !msg.channel)) && (
+                    <>
+                        <span className={msg.name === playerName ? 'rs-chat-msg-self' : 'rs-chat-msg-name'}>
+                            {msg.name}:
+                        </span>
+                        <span className="rs-chat-msg-body"> {body}</span>
+                    </>
+                )}
+            </div>
+        );
+    };
+
+    const renderInputArea = () => {
+        if (!canWrite) {
+            return <span className="rs-chat-readonly">{t('chat.readOnlyTab')}</span>;
+        }
+
+        const inputField = (
+            <input
+                ref={inputRef}
+                id="chat-input-field"
+                type="text"
+                name="waddlebet-chat-input"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
+                placeholder={enterPlaceholder}
+                className={`rs-chat-input ${isMobile ? '' : 'w-full'}`}
+                maxLength={200}
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                readOnly={inputReadonly}
+                enterKeyHint="send"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-form-type="other"
+            />
+        );
+
+        const suggestions = showCommandSuggestions && (
+            <div className="rs-chat-suggestions chat-scroll" role="listbox" aria-label={t('chat.commandSuggestions')}>
+                {commandSuggestions.map((cmd, index) => (
+                    <button
+                        key={cmd.usage}
+                        type="button"
+                        role="option"
+                        aria-selected={index === suggestionIndex}
+                        className={`rs-chat-suggestion${index === suggestionIndex ? ' rs-chat-suggestion--active' : ''}`}
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            applyCommandSuggestion(cmd);
+                        }}
+                        onTouchEnd={(e) => {
+                            e.preventDefault();
+                            applyCommandSuggestion(cmd);
+                        }}
+                        onMouseEnter={() => setSuggestionIndex(index)}
+                    >
+                        <span className="rs-chat-suggestion-cmd">{cmd.usage}</span>
+                        <span className="rs-chat-suggestion-desc">{cmd.description}</span>
+                    </button>
+                ))}
+                <div className="rs-chat-suggestion-hint">
+                    {isMobile ? t('chat.suggestionHintMobile') : t('chat.suggestionHint')}
                 </div>
             </div>
         );
-    }
-    
-    // Desktop version
-    return (
-        <div 
-            ref={containerRef}
-            onClick={handleContainerClick}
-            onMouseEnter={() => setIsActive(true)}
-            onMouseLeave={() => !document.activeElement?.closest('.chat-log') && resetFadeTimer()}
-            className={`chat-log fixed z-30 pointer-events-auto transition-all duration-300 left-4 w-80 ${
-                minigameMode ? 'top-1/2 -translate-y-1/2' : 'bottom-20'
-            } ${
-                isActive ? 'opacity-100' : 'opacity-40 hover:opacity-100'
-            }`}
-            data-no-camera="true"
-        >
-            {/* Messages Container */}
-            <div 
-                className="chat-messages bg-black/70 backdrop-blur-sm overflow-y-auto overflow-x-hidden scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent rounded-t-lg max-h-48"
-            >
-                <div className="p-2 space-y-0.5">
-                    {localMessages.length === 0 ? (
-                        <div className="text-white/30 text-xs py-2 text-center">
-                            {t('chat.enterToChat')} • {t('chat.whisperHint')}
-                        </div>
+
+        if (isMobile) {
+            return (
+                <div className="rs-chat-input-row" onClick={(e) => { e.stopPropagation(); focusInput(); }}>
+                    <div className="rs-chat-input-wrap">
+                        {suggestions}
+                        {inputField}
+                    </div>
+                    <button
+                        type="button"
+                        className="rs-chat-send"
+                        onClick={handleSend}
+                        disabled={!inputValue.trim()}
+                        aria-label={t('chat.send')}
+                    >
+                        {t('chat.send')}
+                    </button>
+                </div>
+            );
+        }
+
+        return (
+            <div className="rs-chat-input-wrap" onClick={(e) => e.stopPropagation()}>
+                {suggestions}
+                {inputField}
+            </div>
+        );
+    };
+
+    const renderPanel = (showClose) => (
+        <div className={`rs-chat-panel flex flex-col min-h-0 overflow-hidden${isMobile ? ' rs-chat-panel--mobile' : ''}`}>
+            <div className="rs-chat-header">
+                <span className="rs-chat-header-icon" aria-hidden="true">{activeTabConfig.icon}</span>
+                <span className="rs-chat-header-title">{t(activeTabConfig.headerKey)}</span>
+                {showClose && (
+                    <button type="button" className="rs-chat-close" onClick={onClose} aria-label={t('common.close')}>
+                        ×
+                    </button>
+                )}
+            </div>
+
+            <div className="rs-chat-tabs chat-scroll-x">
+                {visibleTabs.map((tab) => {
+                    const isActiveTab = activeChatTab === tab.id;
+                    const unread = !!unreadChatTabs[tab.id];
+                    return (
+                        <button
+                            key={tab.id}
+                            type="button"
+                            onClick={() => setActiveChatTab(tab.id)}
+                            className={`rs-chat-tab${isActiveTab ? ' rs-chat-tab--active' : ''}${unread ? ' rs-chat-tab--unread' : ''}`}
+                            title={tab.comingSoon ? t('chat.tab.comingSoon') : t(tab.labelKey)}
+                            aria-label={t(tab.labelKey)}
+                        >
+                            <span className="rs-chat-tab-icon" aria-hidden="true">{tab.icon}</span>
+                        </button>
+                    );
+                })}
+            </div>
+
+            <div className={`rs-chat-messages chat-scroll chat-messages overflow-y-auto overflow-x-hidden overscroll-contain flex-1 min-h-0 ${isMobile ? '' : 'h-36'}`}>
+                <div className="px-2 py-1.5 space-y-0.5">
+                    {activeTabConfig.comingSoon ? (
+                        <div className="rs-chat-empty">{t('chat.tab.comingSoon')}</div>
+                    ) : activeMessages.length === 0 ? (
+                        <div className="rs-chat-empty">{t('chat.noMessages')}</div>
                     ) : (
-                        localMessages.map((msg, idx) => (
-                            <div 
-                                key={`${msg.id}-${idx}`} 
-                                className={`text-xs leading-relaxed break-words overflow-hidden ${MESSAGE_COLORS[msg.type] || MESSAGE_COLORS.local}`}
-                                style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}
-                            >
-                                <span className="text-white/30 mr-1">[{formatTime(msg.timestamp)}]</span>
-                                {msg.type === 'whisperIn' && (
-                                    <span className="text-yellow-400">[From {msg.name}]: </span>
-                                )}
-                                {msg.type === 'whisperOut' && (
-                                    <span className="text-pink-400">{msg.name}: </span>
-                                )}
-                                {msg.type === 'system' && (
-                                    <span className="text-cyan-400">[{msg.name}] </span>
-                                )}
-                                {(msg.type === 'local' || msg.type === 'afk') && (
-                                    <span className={msg.name === playerName ? 'text-green-400' : 'text-blue-300'}>
-                                        {msg.name}: 
-                                    </span>
-                                )}
-                                <span className="ml-1 break-words">{msg.text || msg.displayText}</span>
-                            </div>
-                        ))
+                        activeMessages.map(renderMessage)
                     )}
                     <div ref={messagesEndRef} />
                 </div>
             </div>
-            
-            {/* Input Area */}
-            <div className="bg-black/80 border-t border-white/10 rounded-b-lg">
-                <input
-                    ref={inputRef}
-                    id="chat-input-field"
-                    type="text"
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    onFocus={handleFocus}
-                    onBlur={handleBlur}
-                    placeholder={t('chat.placeholder')}
-                    className="w-full bg-transparent text-white text-xs focus:outline-none placeholder-white/30 px-3 py-2"
-                    maxLength={200}
-                />
+
+            <div
+                className={`rs-chat-footer${isMobile ? ' rs-chat-footer--mobile' : ''}`}
+                onClick={isMobile ? undefined : focusInput}
+            >
+                {isMobile ? (
+                    <>
+                        <div className="rs-chat-player-row" title={playerName}>
+                            💬 {playerName || t('chat.guest')}
+                        </div>
+                        {renderInputArea()}
+                    </>
+                ) : (
+                    <>
+                        <span className="rs-chat-player" title={playerName}>
+                            💬 {playerName || t('chat.guest')}
+                        </span>
+                        {renderInputArea()}
+                    </>
+                )}
             </div>
-            
-            {/* Help tooltip when focused */}
-            {isActive && document.activeElement === inputRef.current && (
-                <div className="absolute -top-6 left-0 text-[10px] text-white/40">
-                    /w name msg • /r msg (reply) • /afk msg
+        </div>
+    );
+
+    if (isMobile && !isOpen) return null;
+
+    if (isMobile) {
+        return (
+            <div
+                className={`fixed inset-0 pointer-events-auto flex items-center justify-center p-4 ${
+                    minigameMode ? 'z-[10050]' : 'z-40'
+                }`}
+                onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+                data-no-camera="true"
+            >
+                <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+                <div
+                    ref={containerRef}
+                    onClick={(e) => e.stopPropagation()}
+                    className="relative flex w-full max-w-md min-h-0 flex-col"
+                    style={{ height: 'min(75dvh, calc(100dvh - 2rem))' }}
+                >
+                    {renderPanel(true)}
                 </div>
-            )}
+            </div>
+        );
+    }
+
+    return (
+        <div
+            ref={containerRef}
+            onMouseEnter={() => setIsActive(true)}
+            onMouseLeave={() => !document.activeElement?.closest('.chat-log') && resetFadeTimer()}
+            className={`chat-log fixed pointer-events-auto transition-opacity duration-300 left-4 w-[30rem] flex flex-col ${
+                minigameMode ? 'z-[10050]' : 'z-30'
+            } ${
+                minigameMode ? 'top-1/2 -translate-y-1/2' : 'bottom-20'
+            } ${isActive ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}
+            data-no-camera="true"
+        >
+            {renderPanel(false)}
         </div>
     );
 };

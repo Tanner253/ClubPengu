@@ -18,7 +18,6 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PenguinBuilder';
 import { PALETTE } from '../constants';
-import ChatLog from '../components/ChatLog';
 
 // Helper to generate Solscan link
 const getSolscanLink = (txSignature) => `https://solscan.io/tx/${txSignature}`;
@@ -1083,9 +1082,8 @@ const P2PBattleship = ({ onMatchEnd }) => {
     const pendingCameraMoveRef = useRef(null); // Store pending camera target after animation
     const { activeMatch, matchState, playCard, forfeitMatch, clearMatch } = useChallenge();
     const [selectedCell, setSelectedCell] = useState(null); // Mobile: selected target cell
-    const { connected, playerId } = useMultiplayer();
+    const { connected, playerId, registerChatBubbleCallback, setMobileChatOpen } = useMultiplayer();
     
-    const [showMobileChat, setShowMobileChat] = useState(false);
     const [showDisconnected, setShowDisconnected] = useState(false);
     
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -1098,6 +1096,8 @@ const P2PBattleship = ({ onMatchEnd }) => {
         if (isPlayer1) engineRef.current.showChatBubble(0, msg.text);
         else if (isPlayer2) engineRef.current.showChatBubble(1, msg.text);
     }, [activeMatch]);
+
+    useEffect(() => registerChatBubbleCallback(handleChatMessage), [handleChatMessage, registerChatBubbleCallback]);
 
     // Initialize engine
     useEffect(() => {
@@ -1493,26 +1493,13 @@ const P2PBattleship = ({ onMatchEnd }) => {
                 </div>
             )}
 
-            {/* === CHAT === */}
-            {isMobile ? (
-                <>
-                    {!showMobileChat && (
-                        <button
-                            onClick={() => setShowMobileChat(true)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 z-30 bg-black/80 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg border border-white/20"
-                        >
-                            💬
-                        </button>
-                    )}
-                    <ChatLog 
-                        isMobile={true}
-                        isOpen={showMobileChat}
-                        onClose={() => setShowMobileChat(false)}
-                        onNewMessage={handleChatMessage}
-                    />
-                </>
-            ) : (
-                <ChatLog minigameMode={true} onNewMessage={handleChatMessage} />
+            {isMobile && (
+                <button
+                    onClick={() => setMobileChatOpen(true)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-30 bg-black/80 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg border border-white/20"
+                >
+                    💬
+                </button>
             )}
         </div>
     );

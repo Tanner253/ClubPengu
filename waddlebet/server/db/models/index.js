@@ -25,4 +25,7 @@ export { default as PebbleWithdrawal } from './PebbleWithdrawal.js';
 // Marketplace
 export { default as MarketListing } from './MarketListing.js';
 
+// Chat
+export { default as ChatMessage, CHAT_CHANNELS } from './ChatMessage.js';
+
 

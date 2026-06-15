@@ -81,12 +81,39 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.2.2",
+    date: "June 14, 2026",
+    title: "💬 RuneScape Chat, Town Stability & Ship Polish",
+    description:
+      "Full tabbed chat system with global/room/whisper channels, slash commands, and minigame access on mobile. Town performance and interaction regressions fixed — portals, blackjack prompts, and walk-away dismissals work everywhere again. Unread tab glow, nightclub reconnect spawn fix, and server test suite brought current.",
+    highlight: true,
+    stats: { filesChanged: 36, additions: 2800, deletions: 950 },
+    changes: [
+      { type: "feature", text: "RuneScape-style tabbed chat — Global, Room, Whisper, Casino, Announcements, Market, and Local console with channel routing and 1,000-message server history cap" },
+      { type: "feature", text: "ChatService + ChatMessage model — persisted messages, history on join, and staff command routing (/help, /warp, whisper, /r reply)" },
+      { type: "feature", text: "Slash command UX — Tab autocomplete for player names and commands, private command feedback to Local tab, suggestion dropdown on desktop and mobile" },
+      { type: "feature", text: "Unread tab notifications — gold pulse glow on any chat tab with new messages until opened; mobile FAB glows when chat is closed" },
+      { type: "feature", text: "Global chat in minigames — MobileChatOpener FAB and overlay mode so P2P matches, solo Card Jitsu, and world overlays keep chat reachable" },
+      { type: "feature", text: "Server population popup — live per-room player counts for staff and curious explorers" },
+      { type: "improvement", text: "ChatLog RuneScape UI — tabbed header, custom scrollbar, z-index fixes for minigame overlays, and Enter-to-send on mobile" },
+      { type: "fix", text: "Nightclub reconnect spawn — invalid corner (0,0) positions rejected on save/resume; reconnect snaps to /spawn instead of map edge" },
+      { type: "fix", text: "Portal and interaction regressions — proximity interval restored for all rooms (nightclub exit, casino blackjack, igloo/dojo doors); prompts dismiss when walking away" },
+      { type: "fix", text: "isMobile initialization crash — jump touch listeners moved after mobile state declaration (TDZ ReferenceError)" },
+      { type: "performance", text: "Town WebGL memory — disposeThreeObject() on player mesh rebuild, room teardown, and other-player leave paths; full scene dispose on unmount" },
+      { type: "performance", text: "TownCenter casino TV interval cleared on dispose; AI agents, ice fishing, and gold rain cleaned up on room change" },
+      { type: "performance", text: "meshSyncVersion retry cap — stops infinite missing-appearance poll loop for remote players" },
+      { type: "performance", text: "Duplicate RAF guard via updateLoopGenerationRef — prevents stacked game loops on fast room transitions" },
+      { type: "backend", text: "getSavedSpawnForUser — server falls back to default nightclub spawn when saved nightclub position is invalid" },
+      { type: "backend", text: "Server test suite updated — DevBot, gift handlers, igloo accessType, and MarketplaceService mocks aligned with current code (392 tests passing)" },
+    ],
+  },
+  {
     version: "1.2.1",
     date: "June 14, 2026",
     title: "🎰 Casino Overhaul, Gold Slots & Session Resume",
     description:
       "Major casino pass: lobby gold slots with server-authoritative payouts, guest blackjack demo, exterior animation fixes, and spawn/portal polish. Players now resume where they logged out. Town igloos get a visual upgrade and the personal igloo wardrobe flow is removed.",
-    highlight: true,
+    highlight: false,
     stats: { filesChanged: 33, additions: 3329, deletions: 3135 },
     changes: [
       { type: "feature", text: "Gold lobby slot machines — walk up to casino lobby slots, bet 25 gold per spin, server-authoritative reels and payouts via GoldSlotsService (~93% RTP)" },

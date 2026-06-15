@@ -20,7 +20,7 @@ import User from '../db/models/User.js';
  * @param {Function} getPlayerByWallet - Get player by wallet address (for seller notifications)
  * @returns {boolean} - True if message was handled
  */
-export async function handleMarketplaceMessage(playerId, player, message, sendToPlayer, broadcastToAll, getPlayerByWallet) {
+export async function handleMarketplaceMessage(playerId, player, message, sendToPlayer, broadcastToAll, getPlayerByWallet, publishChatMessage = null) {
     switch (message.type) {
         
         // ==================== BROWSE LISTINGS ====================
@@ -152,6 +152,24 @@ export async function handleMarketplaceMessage(playerId, player, message, sendTo
                             serialNumber: listing.itemSnapshot?.serialNumber
                         }
                     });
+
+                    const listingText = `🏪 ${listing.sellerUsername || 'Someone'} listed ${listing.itemSnapshot?.name || 'Unknown Item'}${listing.itemSnapshot?.serialNumber ? ` #${listing.itemSnapshot.serialNumber}` : ''} for ${listing.price?.toLocaleString()} Pebbles!`;
+                    if (publishChatMessage) {
+                        await publishChatMessage({
+                            channel: 'announcement',
+                            scopeKey: 'announcements',
+                            senderId: 'market',
+                            senderName: '📢 Announcements',
+                            text: listingText,
+                            metadata: {
+                                event: 'new_listing',
+                                itemName: listing.itemSnapshot?.name,
+                                rarity: listing.itemSnapshot?.rarity,
+                                price: listing.price,
+                                sellerUsername: listing.sellerUsername
+                            }
+                        });
+                    }
                     
                     console.log(`🏪 Broadcasted new listing: ${listing.itemSnapshot?.name} by ${listing.sellerUsername}`);
                 }
@@ -315,6 +333,24 @@ export async function handleMarketplaceMessage(playerId, player, message, sendTo
                             buyerUsername: player.name || 'Someone'
                         }
                     });
+
+                    const saleText = `💰 ${player.name || 'Someone'} purchased ${result.item?.name || 'Unknown Item'} for ${result.pebblesPaid?.toLocaleString()} Pebbles!`;
+                    if (publishChatMessage) {
+                        await publishChatMessage({
+                            channel: 'market',
+                            scopeKey: 'market',
+                            senderId: 'market',
+                            senderName: '🏪 Market',
+                            text: saleText,
+                            metadata: {
+                                event: 'sale',
+                                itemName: result.item?.name,
+                                rarity: result.item?.rarity,
+                                price: result.pebblesPaid,
+                                buyerUsername: player.name
+                            }
+                        });
+                    }
                     
                     // Notify seller if they're online
                     if (result.sellerWallet && result.sellerNewPebbles !== undefined) {

@@ -317,16 +317,17 @@ describe('BOT_CONFIG', () => {
     it('should have required properties', () => {
         expect(BOT_CONFIG.id).toBe('dev_bot_wager');
         expect(BOT_CONFIG.name).toBe('🤖 WagerBot');
-        expect(BOT_CONFIG.room).toBe('town');
-        expect(BOT_CONFIG.position).toEqual({ x: 105, y: 0, z: 100 });
+        expect(BOT_CONFIG.room).toBe('nightclub');
+        expect(BOT_CONFIG.position).toEqual({ x: 8.2, y: 0, z: 11.2 });
     });
     
     it('should have appearance settings matching client format', () => {
         expect(BOT_CONFIG.appearance).toBeDefined();
+        expect(BOT_CONFIG.appearance.characterType).toBe('doginal');
         expect(BOT_CONFIG.appearance.skin).toBe('purple');
-        expect(BOT_CONFIG.appearance.hat).toBe('tophat');
-        expect(BOT_CONFIG.appearance.eyes).toBe('normal');
-        expect(BOT_CONFIG.appearance.mouth).toBe('beak');
+        expect(BOT_CONFIG.appearance.hat).toBe('none');
+        expect(BOT_CONFIG.appearance.eyes).toBe('none');
+        expect(BOT_CONFIG.appearance.mouth).toBe('none');
     });
 });
 

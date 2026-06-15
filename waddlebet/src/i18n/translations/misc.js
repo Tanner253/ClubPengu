@@ -300,7 +300,7 @@ export default {
         ar: '/w اسم رسالة للهمس',
     },
     'chat.enterToChat': {
-        en: 'Press Enter to chat',
+        en: 'Press Enter to Chat',
         zh: '按回车键聊天',
         es: 'Presiona Enter para chatear',
         pt: 'Pressione Enter para conversar',
@@ -310,6 +310,88 @@ export default {
         de: 'Drücke Enter zum Chatten',
         ru: 'Нажмите Enter для чата',
         ar: 'اضغط Enter للدردشة',
+    },
+    'chat.guest': {
+        en: 'Guest', zh: '访客', es: 'Invitado', pt: 'Convidado', ko: '게스트', ja: 'ゲスト', fr: 'Invité', de: 'Gast', ru: 'Гость', ar: 'ضيف',
+    },
+    'chat.header.all': {
+        en: 'All Chat', zh: '全服聊天', es: 'Chat global', pt: 'Chat global', ko: '전체 채팅', ja: '全体チャット', fr: 'Chat global', de: 'Globaler Chat', ru: 'Общий чат', ar: 'الدردشة العامة',
+    },
+    'chat.header.public': {
+        en: 'Public Chat', zh: '公共聊天', es: 'Chat público', pt: 'Chat público', ko: '공개 채팅', ja: 'パブリックチャット', fr: 'Chat public', de: 'Öffentlicher Chat', ru: 'Публичный чат', ar: 'الدردشة العامة',
+    },
+    'chat.header.clan': {
+        en: 'Clan Chat', zh: '公会聊天', es: 'Chat de clan', pt: 'Chat de clã', ko: '클랜 채팅', ja: 'クランチャット', fr: 'Chat de clan', de: 'Clan-Chat', ru: 'Чат клана', ar: 'دردشة العشيرة',
+    },
+    'chat.header.private': {
+        en: 'Private Chat', zh: '私聊', es: 'Chat privado', pt: 'Chat privado', ko: '귓속말', ja: 'プライベートチャット', fr: 'Chat privé', de: 'Privater Chat', ru: 'Личный чат', ar: 'دردشة خاصة',
+    },
+    'chat.header.game': {
+        en: 'Game Messages', zh: '游戏消息', es: 'Mensajes del juego', pt: 'Mensagens do jogo', ko: '게임 메시지', ja: 'ゲームメッセージ', fr: 'Messages du jeu', de: 'Spielnachrichten', ru: 'Игровые сообщения', ar: 'رسائل اللعبة',
+    },
+    'chat.header.news': {
+        en: 'News', zh: '公告', es: 'Noticias', pt: 'Notícias', ko: '공지', ja: 'ニュース', fr: 'Actualités', de: 'Neuigkeiten', ru: 'Новости', ar: 'الأخبار',
+    },
+    'chat.header.trade': {
+        en: 'Trade', zh: '交易', es: 'Comercio', pt: 'Comércio', ko: '거래', ja: 'トレード', fr: 'Échange', de: 'Handel', ru: 'Торговля', ar: 'التجارة',
+    },
+    'chat.header.local': {
+        en: 'Console', zh: '控制台', es: 'Consola', pt: 'Console', ko: '콘솔', ja: 'コンソール', fr: 'Console', de: 'Konsole', ru: 'Консоль', ar: 'وحدة التحكم',
+    },
+    'chat.tab.local': {
+        en: 'Console', zh: '控制台', es: 'Consola', pt: 'Console', ko: '콘솔', ja: 'コンソール', fr: 'Console', de: 'Konsole', ru: 'Консоль', ar: 'وحدة التحكم',
+    },
+    'chat.title': {
+        en: 'Chat', zh: '聊天', es: 'Chat', pt: 'Chat', ko: '채팅', ja: 'チャット', fr: 'Chat', de: 'Chat', ru: 'Чат', ar: 'الدردشة',
+    },
+    'chat.send': {
+        en: 'Send', zh: '发送', es: 'Enviar', pt: 'Enviar', ko: '보내기', ja: '送信', fr: 'Envoyer', de: 'Senden', ru: 'Отправить', ar: 'إرسال',
+    },
+    'chat.noMessages': {
+        en: 'No messages in this channel yet', zh: '此频道暂无消息', es: 'Sin mensajes en este canal', pt: 'Sem mensagens neste canal', ko: '이 채널에 메시지 없음', ja: 'このチャンネルにメッセージはありません', fr: 'Aucun message dans ce canal', de: 'Keine Nachrichten in diesem Kanal', ru: 'В этом канале пока нет сообщений', ar: 'لا توجد رسائل في هذه القناة بعد',
+    },
+    'chat.readOnlyTab': {
+        en: 'Read-only channel', zh: '只读频道', es: 'Canal de solo lectura', pt: 'Canal somente leitura', ko: '읽기 전용 채널', ja: '読み取り専用チャンネル', fr: 'Canal en lecture seule', de: 'Nur-Lesen-Kanal', ru: 'Канал только для чтения', ar: 'قناة للقراءة فقط',
+    },
+    'chat.placeholderGlobal': {
+        en: 'Message everyone...', zh: '向所有人发送消息...', es: 'Mensaje global...', pt: 'Mensagem global...', ko: '전체 메시지...', ja: '全体にメッセージ...', fr: 'Message global...', de: 'Nachricht an alle...', ru: 'Сообщение всем...', ar: 'رسالة للجميع...',
+    },
+    'chat.tab.global': { en: 'Global', zh: '全球', es: 'Global', pt: 'Global', ko: '전체', ja: '全体', fr: 'Global', de: 'Global', ru: 'Глобал', ar: 'عالمي' },
+    'chat.tab.room': { en: 'Room', zh: '房间', es: 'Sala', pt: 'Sala', ko: '방', ja: 'ルーム', fr: 'Salle', de: 'Raum', ru: 'Комната', ar: 'غرفة' },
+    'chat.tab.guild': { en: 'Guild', zh: '公会', es: 'Gremio', pt: 'Guilda', ko: '길드', ja: 'ギルド', fr: 'Guilde', de: 'Gilde', ru: 'Гильдия', ar: 'نقابة' },
+    'chat.tab.whisper': { en: 'Whispers', zh: '私聊', es: 'Susurros', pt: 'Sussurros', ko: '귓속말', ja: 'ささやき', fr: 'Chuchotements', de: 'Flüstern', ru: 'Шёпот', ar: 'همس' },
+    'chat.tab.casino': { en: 'Casino', zh: '赌场', es: 'Casino', pt: 'Cassino', ko: '카지노', ja: 'カジノ', fr: 'Casino', de: 'Casino', ru: 'Казино', ar: 'كازينو' },
+    'chat.tab.announcement': { en: 'News', zh: '公告', es: 'Anuncios', pt: 'Anúncios', ko: '공지', ja: 'お知らせ', fr: 'Annonces', de: 'News', ru: 'Новости', ar: 'إعلانات' },
+    'chat.tab.market': { en: 'Market', zh: '市场', es: 'Mercado', pt: 'Mercado', ko: '마켓', ja: 'マーケット', fr: 'Marché', de: 'Markt', ru: 'Рынок', ar: 'السوق' },
+    'chat.tab.comingSoon': {
+        en: 'Guild chat coming soon', zh: '公会聊天即将推出', es: 'Chat de gremio próximamente', pt: 'Chat de guilda em breve', ko: '길드 채팅 곧 출시', ja: 'ギルドチャットは近日公開', fr: 'Chat de guilde bientôt', de: 'Gilden-Chat kommt bald', ru: 'Чат гильдии скоро', ar: 'دردشة النقابة قريباً',
+    },
+    'chat.commandSuggestions': {
+        en: 'Command suggestions', zh: '命令建议', es: 'Sugerencias de comandos', pt: 'Sugestões de comandos', ko: '명령어 제안', ja: 'コマンド候補', fr: 'Suggestions de commandes', de: 'Befehlsvorschläge', ru: 'Подсказки команд', ar: 'اقتراحات الأوامر',
+    },
+    'chat.suggestionHint': {
+        en: '↑↓ navigate · Tab/Enter select · Esc close',
+        zh: '↑↓ 导航 · Tab/Enter 选择 · Esc 关闭',
+        es: '↑↓ navegar · Tab/Enter seleccionar · Esc cerrar',
+        pt: '↑↓ navegar · Tab/Enter selecionar · Esc fechar',
+        ko: '↑↓ 이동 · Tab/Enter 선택 · Esc 닫기',
+        ja: '↑↓ 移動 · Tab/Enter 選択 · Esc 閉じる',
+        fr: '↑↓ naviguer · Tab/Entrée sélectionner · Échap fermer',
+        de: '↑↓ navigieren · Tab/Enter wählen · Esc schließen',
+        ru: '↑↓ навигация · Tab/Enter выбрать · Esc закрыть',
+        ar: '↑↓ تنقل · Tab/Enter اختيار · Esc إغلاق',
+    },
+    'chat.suggestionHintMobile': {
+        en: 'Tap a command or use Send',
+        zh: '点击命令或按发送',
+        es: 'Toca un comando o usa Enviar',
+        pt: 'Toque um comando ou use Enviar',
+        ko: '명령어를 탭하거나 보내기 사용',
+        ja: 'コマンドをタップまたは送信',
+        fr: 'Appuyez sur une commande ou Envoyer',
+        de: 'Befehl antippen oder Senden',
+        ru: 'Нажмите команду или Отправить',
+        ar: 'اضغط على أمر أو إرسال',
     },
     'profile.stats': {
         en: 'Stats',

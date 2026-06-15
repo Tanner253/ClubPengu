@@ -273,6 +273,7 @@ describe('Igloo Handlers', () => {
                 iglooId: 'igloo1', 
                 ownerWallet: 'OtherWallet',
                 ownerUsername: 'Owner',
+                accessType: 'fee',
                 tokenGate: { enabled: false },
                 entryFee: { enabled: true, amount: 500, tokenSymbol: 'TOKEN' },
                 paidEntryFees: [],

@@ -18,7 +18,6 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PenguinBuilder';
 import { PALETTE } from '../constants';
-import ChatLog from '../components/ChatLog';
 
 // Helper to generate Solscan link
 const getSolscanLink = (txSignature) => `https://solscan.io/tx/${txSignature}`;
@@ -805,12 +804,11 @@ const P2PUno = ({ onMatchEnd }) => {
     const engineRef = useRef(null);
     const lastAnimatedActionRef = useRef(null); // Track last animated discard to prevent replays
     const { activeMatch, matchState, playCard, forfeitMatch, clearMatch } = useChallenge();
-    const { connected, playerId } = useMultiplayer();
+    const { connected, playerId, registerChatBubbleCallback, setMobileChatOpen } = useMultiplayer();
     
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [lastAction, setLastAction] = useState(null);
     const [showDisconnected, setShowDisconnected] = useState(false);
-    const [showMobileChat, setShowMobileChat] = useState(false);
     const [focusedCardIndex, setFocusedCardIndex] = useState(0);
     
     // Check if mobile
@@ -824,6 +822,8 @@ const P2PUno = ({ onMatchEnd }) => {
         if (isPlayer1) engineRef.current.showChatBubble(0, msg.text);
         else if (isPlayer2) engineRef.current.showChatBubble(1, msg.text);
     }, [activeMatch]);
+
+    useEffect(() => registerChatBubbleCallback(handleChatMessage), [handleChatMessage, registerChatBubbleCallback]);
 
     // Initialize engine
     useEffect(() => {
@@ -1265,29 +1265,13 @@ const P2PUno = ({ onMatchEnd }) => {
                 </div>
             )}
 
-            {/* === CHAT === */}
-            {isMobile ? (
-                <>
-                    {/* Mobile: Toggle button */}
-                    {!showMobileChat && (
-                        <button
-                            onClick={() => setShowMobileChat(true)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 z-30 bg-black/80 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg border border-white/20"
-                        >
-                            💬
-                        </button>
-                    )}
-                    {/* Mobile: Chat overlay */}
-                    <ChatLog 
-                        isMobile={true}
-                        isOpen={showMobileChat}
-                        onClose={() => setShowMobileChat(false)}
-                        onNewMessage={handleChatMessage}
-                    />
-                </>
-            ) : (
-                /* Desktop: Middle-left positioning */
-                <ChatLog minigameMode={true} onNewMessage={handleChatMessage} />
+            {isMobile && (
+                <button
+                    onClick={() => setMobileChatOpen(true)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 z-30 bg-black/80 text-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg border border-white/20"
+                >
+                    💬
+                </button>
             )}
         </div>
     );

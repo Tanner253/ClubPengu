@@ -8,6 +8,7 @@ import InventoryModal from './InventoryModal';
 import MarketplaceModal from './MarketplaceModal';
 import TutorialModal, { shouldShowTutorial } from './TutorialModal';
 import DailyBonusModal from './DailyBonusModal';
+import ServerPopulationPopup from './ServerPopulationPopup';
 import { useMultiplayer } from '../multiplayer';
 import { useLanguage } from '../i18n';
 
@@ -25,9 +26,11 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     const [showTutorial, setShowTutorial] = useState(false);
     const [forceTutorial, setForceTutorial] = useState(false); // Force show even if dismissed
     const [showDailyBonus, setShowDailyBonus] = useState(false);
+    const [showServerPopulation, setShowServerPopulation] = useState(false);
+    const serverPopAnchorRef = useRef(null);
     
     // Get pebbles from multiplayer context
-    const { userData, isAuthenticated } = useMultiplayer();
+    const { userData, isAuthenticated, serverPopulation, totalPlayerCount: liveTotalCount, requestServerPopulation } = useMultiplayer();
     const { t } = useLanguage();
     const pebbles = userData?.pebbles || 0;
     
@@ -110,6 +113,50 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     
     // Compact button style for portrait mode
     const compactBtn = "w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-90";
+
+    const toggleServerPopulation = () => {
+        setShowServerPopulation((open) => {
+            if (!open) requestServerPopulation();
+            return !open;
+        });
+    };
+
+    const onlineTotal = liveTotalCount || totalPlayerCount || playerCount + 1;
+
+    const playerCountButton = (compact = false) => (
+        <div className="relative">
+            <button
+                ref={serverPopAnchorRef}
+                type="button"
+                onClick={toggleServerPopulation}
+                className={`bg-black/70 backdrop-blur-md rounded-lg flex items-center gap-1 border transition-colors touch-manipulation ${
+                    showServerPopulation
+                        ? 'border-cyan-400/70 bg-cyan-950/40'
+                        : 'border-cyan-400/30 hover:border-cyan-400/50 active:bg-black/80'
+                } ${compact ? 'px-1.5 py-1' : 'px-3 py-2 gap-2'}`}
+                title={t('hud.serverPopulationHint')}
+                aria-expanded={showServerPopulation}
+            >
+                <span className={compact ? 'text-[10px]' : 'text-lg'}>👥</span>
+                <span className={`text-cyan-300 font-bold retro-text ${compact ? 'text-[10px]' : 'text-sm'}`}>
+                    {playerCount + 1}
+                </span>
+                <span className={`text-white/40 ${compact ? 'text-[8px]' : 'text-xs'}`}>/</span>
+                <span className={`text-green-400 font-bold retro-text ${compact ? 'text-[10px]' : 'text-sm'}`}>
+                    {onlineTotal}
+                </span>
+            </button>
+            <ServerPopulationPopup
+                isOpen={showServerPopulation}
+                onClose={() => setShowServerPopulation(false)}
+                population={serverPopulation}
+                totalPlayerCount={onlineTotal}
+                currentRoom={currentRoom}
+                anchorRef={serverPopAnchorRef}
+                compact={compact}
+            />
+        </div>
+    );
     
     // Portrait mode: vertical sidebar on right
     if (isPortrait) {
@@ -121,12 +168,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     <WalletButton onRequestAuth={onRequestAuth} compact={true} />
                     
                     {/* Player Count */}
-                    <div className="bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center gap-1 border border-cyan-400/30">
-                        <span className="text-[10px]">👥</span>
-                        <span className="text-cyan-300 font-bold retro-text text-[10px]">{playerCount + 1}</span>
-                        <span className="text-white/40 text-[8px]">/</span>
-                        <span className="text-green-400 font-bold retro-text text-[10px]">{totalPlayerCount || playerCount + 1}</span>
-                    </div>
+                    {playerCountButton(true)}
                     
                     {/* Coins */}
                     <div className="bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center gap-1 border border-yellow-400/30">
@@ -346,12 +388,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 </button>
                 
                 {/* Player Count - Room / Total */}
-                <div className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-cyan-400/30" title={t('hud.inRoomOnline')}>
-                    <span className="text-lg">👥</span>
-                    <span className="text-cyan-300 font-bold retro-text text-sm">{playerCount + 1}</span>
-                    <span className="text-white/40 retro-text text-xs">/</span>
-                    <span className="text-green-400 font-bold retro-text text-sm">{totalPlayerCount || playerCount + 1}</span>
-                </div>
+                {playerCountButton(false)}
                 
                 {/* Coins Display */}
                 <div className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-yellow-400/30">

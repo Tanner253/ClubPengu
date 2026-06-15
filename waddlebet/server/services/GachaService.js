@@ -112,11 +112,12 @@ class GachaService {
      * @param {Function} sendToPlayer - Send to specific player
      * @param {Function} broadcastToAll - Broadcast to ALL connected players
      */
-    constructor(userService, broadcastToRoom, sendToPlayer, broadcastToAll = null) {
+    constructor(userService, broadcastToRoom, sendToPlayer, broadcastToAll = null, publishChatMessage = null) {
         this.userService = userService;
         this.broadcastToRoom = broadcastToRoom;
         this.sendToPlayer = sendToPlayer;
         this.broadcastToAll = broadcastToAll;
+        this.publishChatMessage = publishChatMessage;
         
         // Cache for gacha pool (refresh periodically)
         this.gachaPoolCache = null;
@@ -719,7 +720,7 @@ class GachaService {
      * Announce roll to all online players
      */
     _announceRoll(username, rollResult) {
-        if (!this.broadcastToAll) return;
+        if (!this.broadcastToAll && !this.publishChatMessage) return;
         
         const { rarity, name, isHolographic, isFirstEdition, quality, category } = rollResult;
         
@@ -758,6 +759,29 @@ class GachaService {
             ? `${emoji} ${message} [${modifiers.join(' ')}]`
             : `${emoji} ${message}`;
         
+        if (this.publishChatMessage) {
+            this.publishChatMessage({
+                channel: 'casino',
+                scopeKey: 'casino',
+                senderId: 'gacha',
+                senderName: '🎰 Gacha',
+                text: fullMessage,
+                metadata: {
+                    username,
+                    rarity,
+                    rarityColor: RARITY_COLORS[rarity],
+                    name,
+                    category,
+                    quality,
+                    isHolographic,
+                    isFirstEdition
+                }
+            });
+            return;
+        }
+
+        if (!this.broadcastToAll) return;
+
         this.broadcastToAll({
             type: 'gacha_announcement',
             message: fullMessage,

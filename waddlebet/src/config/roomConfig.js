@@ -22,6 +22,17 @@ export const WORLD_SPAWN = {
 
 export const WORLD_SPAWN_ROOM = 'nightclub';
 
+/** Nightclub /spawn point as a full position (matches /spawn command) */
+export function getNightclubSpawnPosition() {
+    return { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
+}
+
+/** True when position is the uninitialized origin corner (common after reconnect before spawn runs) */
+export function isInvalidNightclubPosition(position) {
+    if (!position || position.x == null || position.z == null) return true;
+    return position.x < 1 && position.z < 1;
+}
+
 // Building definitions for the town
 export const BUILDINGS = [
     { 

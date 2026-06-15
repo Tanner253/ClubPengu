@@ -7,6 +7,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import GameManager from '../engine/GameManager';
 import { PhantomWallet } from '../wallet';
+import { createEmptyChatState, appendChannelMessage, applyChatHistorySnapshot, applyRoomChatHistory, normalizeChatMessage, CHAT_CHANNELS } from '../utils/chatChannels.js';
 
 const MultiplayerContext = createContext(null);
 
@@ -69,9 +70,103 @@ export function MultiplayerProvider({ children }) {
     const getPlayersData = useCallback(() => playersDataRef.current, []);
     const [playerCount, setPlayerCount] = useState(0);
     const [totalPlayerCount, setTotalPlayerCount] = useState(0);
+    const [serverPopulation, setServerPopulation] = useState({});
     
-    // Chat messages
-    const [chatMessages, setChatMessages] = useState([]);
+    const [chatByChannel, setChatByChannel] = useState(createEmptyChatState);
+    const [unreadChatTabs, setUnreadChatTabs] = useState({});
+    const [hasWhisperActivity, setHasWhisperActivity] = useState(false);
+    const [mobileChatOpen, setMobileChatOpenState] = useState(false);
+    const [activeChatTab, setActiveChatTabState] = useState('room');
+    const activeChatTabRef = useRef('room');
+    const mobileChatOpenRef = useRef(false);
+    /** True when VoxelWorld has a fullscreen overlay (casino blackjack, arcade, fishing) */
+    const [worldGameplayOverlay, setWorldGameplayOverlay] = useState(false);
+    const chatBubbleCallbackRef = useRef(null);
+
+    useEffect(() => {
+        activeChatTabRef.current = activeChatTab;
+    }, [activeChatTab]);
+
+    useEffect(() => {
+        mobileChatOpenRef.current = mobileChatOpen;
+    }, [mobileChatOpen]);
+
+    const isChatPanelVisible = useCallback(() => {
+        if (typeof window === 'undefined') return true;
+        return mobileChatOpenRef.current || window.innerWidth >= 768;
+    }, []);
+
+    const markChatTabRead = useCallback((tabId) => {
+        if (!tabId) return;
+        setUnreadChatTabs((prev) => {
+            if (!prev[tabId]) return prev;
+            const next = { ...prev };
+            delete next[tabId];
+            return next;
+        });
+    }, []);
+
+    const setActiveChatTab = useCallback((tabId) => {
+        setActiveChatTabState(tabId);
+        markChatTabRead(tabId);
+    }, [markChatTabRead]);
+
+    const setMobileChatOpen = useCallback((open) => {
+        setMobileChatOpenState(open);
+        if (open) {
+            markChatTabRead(activeChatTabRef.current);
+        }
+    }, [markChatTabRead]);
+
+    const maybeMarkChatTabUnread = useCallback((channel, normalized) => {
+        const tabId = channel === 'local' ? 'local' : channel;
+        if (!CHAT_CHANNELS.includes(tabId) || tabId === 'local') return;
+        if (normalized.type === 'whisperOut') return;
+        if (normalized.playerId && normalized.playerId === playerIdRef.current) return;
+        if (activeChatTabRef.current === tabId && isChatPanelVisible()) return;
+
+        setUnreadChatTabs((prev) => (prev[tabId] ? prev : { ...prev, [tabId]: true }));
+    }, [isChatPanelVisible]);
+    
+    const ingestChatMessage = useCallback((message) => {
+        const channel = message.channel || (message.isWhisper ? 'whisper' : 'room');
+        const normalized = normalizeChatMessage(message, playerIdRef.current);
+
+        setChatByChannel((prev) => appendChannelMessage(prev, channel, normalized, playerIdRef.current));
+
+        if (channel === 'whisper') {
+            setHasWhisperActivity(true);
+        }
+
+        maybeMarkChatTabUnread(channel, normalized);
+
+        if (channel === 'room' && !normalized.isWhisper && !normalized.isSystem) {
+            const chattingPlayer = playersDataRef.current.get(message.playerId);
+            if (chattingPlayer) {
+                chattingPlayer.chatMessage = message.text;
+                chattingPlayer.chatTime = Date.now();
+            }
+            callbacksRef.current.onChatMessage?.(normalized);
+            chatBubbleCallbackRef.current?.({
+                senderName: normalized.name,
+                text: normalized.text
+            });
+        }
+    }, [maybeMarkChatTabUnread]);
+
+    const addLocalChatMessage = useCallback((text, extra = {}) => {
+        ingestChatMessage({
+            channel: 'local',
+            playerId: 'system',
+            name: 'System',
+            text,
+            timestamp: Date.now(),
+            isSystem: true,
+            localOnly: true,
+            ...extra
+        });
+        setActiveChatTab('local');
+    }, [ingestChatMessage]);
     
     // Current room
     const [serverRoom, setServerRoom] = useState(null);
@@ -295,6 +390,9 @@ export function MultiplayerProvider({ children }) {
                 setPlayerId(message.playerId);
                 playerIdRef.current = message.playerId;
                 console.log(`🐧 Assigned player ID: ${message.playerId}${message.isGuest ? ' (guest)' : ''}`);
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({ type: 'get_chat_history' }));
+                }
                 break;
                 
             case 'auth_challenge':
@@ -338,6 +436,10 @@ export function MultiplayerProvider({ children }) {
                 // Sync GameManager with server data
                 const gm = GameManager.getInstance();
                 gm.syncFromServer(message.user, message.isNewUser);
+
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    wsRef.current.send(JSON.stringify({ type: 'get_chat_history' }));
+                }
                 
                 callbacksRef.current.onAuthSuccess?.(message.user);
                 break;
@@ -624,16 +726,17 @@ export function MultiplayerProvider({ children }) {
                     }
                     
                     if (announcementText) {
-                        const marketChatMsg = {
-                            id: `market_${Date.now()}`,
+                        ingestChatMessage({
+                            id: `market_ann_${Date.now()}`,
+                            channel: event === 'new_listing' ? 'announcement' : 'market',
                             playerId: 'system',
-                            name: '🏪 MARKET',
+                            name: event === 'new_listing' ? '📢 Announcements' : '🏪 Market',
                             text: announcementText,
                             timestamp: Date.now(),
                             isSystem: true,
-                            rarity // Pass rarity for potential styling
-                        };
-                        setChatMessages(prev => [...prev.slice(-50), marketChatMsg]);
+                            rarity,
+                            metadata: message.announcement
+                        });
                     }
                 }
                 break;
@@ -644,15 +747,15 @@ export function MultiplayerProvider({ children }) {
                 
                 // Show chat notification to seller
                 if (message.itemName) {
-                    const soldMsg = {
+                    ingestChatMessage({
                         id: `sold_${Date.now()}`,
+                        channel: 'market',
                         playerId: 'system',
                         name: '💰 SOLD',
                         text: `Your ${message.itemName} sold for ${message.price?.toLocaleString()} Pebbles to ${message.buyerUsername}!`,
                         timestamp: Date.now(),
                         isSystem: true
-                    };
-                    setChatMessages(prev => [...prev.slice(-50), soldMsg]);
+                    });
                 }
                 break;
                 
@@ -1263,22 +1366,76 @@ export function MultiplayerProvider({ children }) {
                 }
                 break;
                 
-            case 'chat':
-                const chattingPlayer = playersDataRef.current.get(message.playerId);
-                if (chattingPlayer) {
-                    chattingPlayer.chatMessage = message.text;
-                    chattingPlayer.chatTime = Date.now();
+            case 'chat_message':
+                ingestChatMessage(message);
+                break;
+
+            case 'chat_history':
+                setChatByChannel((prev) => applyChatHistorySnapshot(prev, message.channels, playerIdRef.current));
+                if ((message.channels?.whisper || []).length > 0) {
+                    setHasWhisperActivity(true);
                 }
-                
-                const chatMsg = {
-                    id: Date.now(),
-                    playerId: message.playerId,
-                    name: message.name,
+                break;
+
+            case 'chat_history_room':
+                if (message.room && Array.isArray(message.messages)) {
+                    setChatByChannel((prev) => applyRoomChatHistory(prev, message.messages, playerIdRef.current));
+                }
+                break;
+
+            case 'parkour_warp':
+                window.dispatchEvent(new CustomEvent('chatCommand', { detail: { command: message.stage } }));
+                break;
+
+            case 'chat_feedback':
+                ingestChatMessage({
+                    id: `local_${message.timestamp || Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                    channel: 'local',
+                    playerId: 'system',
+                    name: 'System',
                     text: message.text,
-                    timestamp: Date.now()
-                };
-                setChatMessages(prev => [...prev.slice(-50), chatMsg]);
-                callbacksRef.current.onChatMessage?.(chatMsg);
+                    timestamp: message.timestamp || Date.now(),
+                    isSystem: true,
+                    localOnly: true
+                });
+                setActiveChatTab('local');
+                break;
+
+            case 'chat_help':
+                (message.lines || []).forEach((line, index) => {
+                    ingestChatMessage({
+                        id: `help_${message.timestamp || Date.now()}_${index}`,
+                        channel: 'local',
+                        playerId: 'system',
+                        name: 'System',
+                        text: line,
+                        timestamp: message.timestamp || Date.now(),
+                        isSystem: true,
+                        localOnly: true
+                    });
+                });
+                setActiveChatTab('local');
+                break;
+
+            case 'chat':
+                if (message.playerId === 'system') {
+                    ingestChatMessage({
+                        ...message,
+                        channel: 'local',
+                        timestamp: message.timestamp || Date.now(),
+                        id: message.id || `local_${message.timestamp || Date.now()}`,
+                        isSystem: true,
+                        localOnly: true
+                    });
+                    setActiveChatTab('local');
+                    break;
+                }
+                ingestChatMessage({
+                    ...message,
+                    channel: 'room',
+                    timestamp: message.timestamp || Date.now(),
+                    id: message.id || `room_${message.timestamp || Date.now()}`
+                });
                 break;
             
             case 'emote_bubble':
@@ -1309,15 +1466,15 @@ export function MultiplayerProvider({ children }) {
                 }
                 
                 if (message.playerId === playerIdRef.current && message.isAfk) {
-                    const afkChatMsg = {
-                        id: Date.now(),
+                    ingestChatMessage({
+                        id: `afk_${Date.now()}`,
+                        channel: 'room',
                         playerId: message.playerId,
                         name: message.name || playerNameRef.current,
                         text: message.afkMessage,
                         timestamp: Date.now(),
-                        isAfk: true
-                    };
-                    setChatMessages(prev => [...prev.slice(-50), afkChatMsg]);
+                        metadata: { isAfk: true }
+                    });
                 }
                 console.log(`${message.isAfk ? '💤' : '👋'} ${message.name || message.playerId} is ${message.isAfk ? 'now AFK' : 'back'}`);
                 break;
@@ -1334,49 +1491,69 @@ export function MultiplayerProvider({ children }) {
                 break;
             
             case 'room_counts':
+                if (message.population) {
+                    setServerPopulation(message.population);
+                }
+                if (message.totalPlayers !== undefined) {
+                    setTotalPlayerCount(message.totalPlayers);
+                }
                 window.dispatchEvent(new CustomEvent('roomCounts', { detail: message.counts }));
                 break;
             
             case 'whisper': {
-                const whisperMsg = {
-                    id: Date.now(),
-                    playerId: message.fromId,
-                    name: message.fromName,
-                    fromName: message.fromName,
-                    text: message.text,
-                    timestamp: message.timestamp || Date.now(),
+                ingestChatMessage({
+                    ...message,
+                    channel: 'whisper',
+                    whisperDirection: 'in',
                     isWhisper: true,
-                    fromMe: false
-                };
-                setChatMessages(prev => [...prev.slice(-50), whisperMsg]);
+                    name: message.fromName,
+                    timestamp: message.timestamp || Date.now(),
+                    id: message.id || `whisper_in_${message.timestamp || Date.now()}`
+                });
                 console.log(`💬 Whisper from ${message.fromName}: ${message.text}`);
                 break;
             }
             
             case 'whisper_sent': {
-                const sentMsg = {
-                    id: Date.now(),
-                    playerId: null,
-                    name: `To [${message.toName}]`,
-                    text: message.text,
-                    timestamp: message.timestamp || Date.now(),
+                ingestChatMessage({
+                    ...message,
+                    channel: 'whisper',
+                    whisperDirection: 'out',
                     isWhisper: true,
-                    fromMe: true
-                };
-                setChatMessages(prev => [...prev.slice(-50), sentMsg]);
+                    fromMe: true,
+                    name: `To [${message.toName}]`,
+                    timestamp: message.timestamp || Date.now(),
+                    id: message.id || `whisper_out_${message.timestamp || Date.now()}`
+                });
                 break;
             }
             
             case 'whisper_error': {
-                const errorMsg = {
-                    id: Date.now(),
-                    playerId: null,
+                ingestChatMessage({
+                    id: `whisper_err_${Date.now()}`,
+                    channel: 'local',
+                    playerId: 'system',
                     name: 'System',
                     text: `Could not whisper to "${message.targetName}": ${message.error}`,
                     timestamp: Date.now(),
-                    isSystem: true
-                };
-                setChatMessages(prev => [...prev.slice(-50), errorMsg]);
+                    isSystem: true,
+                    localOnly: true
+                });
+                setActiveChatTab('local');
+                break;
+            }
+
+            case 'gacha_announcement': {
+                ingestChatMessage({
+                    id: `gacha_${Date.now()}`,
+                    channel: 'casino',
+                    playerId: 'gacha',
+                    name: '🎰 Gacha',
+                    text: message.message,
+                    timestamp: Date.now(),
+                    isSystem: true,
+                    metadata: message
+                });
                 break;
             }
             
@@ -1416,6 +1593,10 @@ export function MultiplayerProvider({ children }) {
         console.warn('[Multiplayer] WebSocket not open, dropped message:', message?.type);
         return false;
     }, []);
+
+    const requestServerPopulation = useCallback(() => {
+        send({ type: 'get_server_population' });
+    }, [send]);
     
     // ==================== AUTHENTICATION ====================
     
@@ -1566,9 +1747,18 @@ export function MultiplayerProvider({ children }) {
         send(msg);
     }, [send]);
     
-    const sendChat = useCallback((text) => {
-        send({ type: 'chat', text });
+    const sendChat = useCallback((text, channel = 'room') => {
+        send({ type: 'chat', text, channel });
     }, [send]);
+
+    const registerChatBubbleCallback = useCallback((callback) => {
+        chatBubbleCallbackRef.current = callback;
+        return () => {
+            if (chatBubbleCallbackRef.current === callback) {
+                chatBubbleCallbackRef.current = null;
+            }
+        };
+    }, []);
     
     const sendEmoteBubble = useCallback((text) => {
         send({ type: 'emote_bubble', text });
@@ -2062,11 +2252,25 @@ export function MultiplayerProvider({ children }) {
         playerName,
         playerCount,
         totalPlayerCount,
+        serverPopulation,
         playerList,
         getPlayersData,
         playersDataRef,
         worldTimeRef,
-        chatMessages,
+        chatByChannel,
+        chatMessages: chatByChannel.room,
+        unreadChatTabs,
+        hasUnreadChat: Object.keys(unreadChatTabs).length > 0,
+        hasWhisperActivity,
+        mobileChatOpen,
+        setMobileChatOpen,
+        worldGameplayOverlay,
+        setWorldGameplayOverlay,
+        activeChatTab,
+        setActiveChatTab,
+        markChatTabRead,
+        registerChatBubbleCallback,
+        addLocalChatMessage,
         serverRoom,
         connectionError,
         
@@ -2147,6 +2351,7 @@ export function MultiplayerProvider({ children }) {
         
         // Raw send for ChallengeContext
         send,
+        requestServerPopulation,
         
         // Alias for send (used by some components)
         sendMessage: send,
@@ -2155,8 +2360,12 @@ export function MultiplayerProvider({ children }) {
         addMessageHandler,
         removeMessageHandler
     }), [
-        connected, playerId, playerName, playerCount, totalPlayerCount, playerList,
-        getPlayersData, chatMessages, serverRoom, connectionError,
+        connected, playerId, playerName, playerCount, totalPlayerCount, serverPopulation, playerList,
+        getPlayersData, chatByChannel, unreadChatTabs, hasWhisperActivity,
+        mobileChatOpen, setMobileChatOpen, worldGameplayOverlay, setWorldGameplayOverlay,
+        activeChatTab, setActiveChatTab,
+        markChatTabRead, registerChatBubbleCallback, addLocalChatMessage,
+        serverRoom, connectionError,
         isAuthenticated, walletAddress, authToken, userData, isNewUser, authError,
         isAuthenticating, isRestoringSession,
         connectWallet, disconnectWallet,
@@ -2166,12 +2375,13 @@ export function MultiplayerProvider({ children }) {
         startFishing, attemptCatch, cancelFishing, fishingActive, fishingResult, clearFishingResult,
         adoptPuffle, puffleAdopting,
         setName, joinRoom, sendPosition, sendChat, sendEmoteBubble, sendEmote, stopEmote,
+        markChatTabRead, registerChatBubbleCallback, addLocalChatMessage,
         changeRoom, updateAppearance, updatePuffle, sendPuffleEmote, syncPuffleState,
         equipPuffleAccessory, unequipPuffleAccessory, equipPuffleToy,
         sendBallKick, requestBallSync, sendSnowball, registerCallbacks,
         syncCoins, updateUserCoins, changeUsername,
         allCosmetics, fetchAllCosmetics, checkUsername,
-        send, addMessageHandler, removeMessageHandler
+        send, requestServerPopulation, addMessageHandler, removeMessageHandler
     ]);
     
     return (

@@ -16,10 +16,11 @@ import {
 const VALID_ROOM = 'town';
 
 class GoldSlotsService {
-    constructor(userService, broadcastToRoom, sendToPlayer) {
+    constructor(userService, broadcastToRoom, sendToPlayer, publishChatMessage = null) {
         this.userService = userService;
         this.broadcastToRoom = broadcastToRoom;
         this.sendToPlayer = sendToPlayer;
+        this.publishChatMessage = publishChatMessage;
 
         this.activeSpins = new Map();
         this.machineStates = new Map();
@@ -257,13 +258,25 @@ class GoldSlotsService {
                     : payout >= 100
                         ? `✨ ${playerName} won ${payout} gold on the slots!`
                         : `🎰 ${playerName} won ${payout} gold`;
-                this.broadcastToRoom(room, {
-                    type: 'chat',
-                    playerId: 'casino_slots',
-                    name: '🎰 Casino',
-                    text: winText,
-                    timestamp: Date.now()
-                });
+
+                if (this.publishChatMessage) {
+                    await this.publishChatMessage({
+                        channel: 'casino',
+                        scopeKey: 'casino',
+                        senderId: 'casino_slots',
+                        senderName: '🎰 Casino',
+                        text: winText,
+                        metadata: { payout, isJackpot, playerName, machineId }
+                    });
+                } else {
+                    this.broadcastToRoom(room, {
+                        type: 'chat',
+                        playerId: 'casino_slots',
+                        name: '🎰 Casino',
+                        text: winText,
+                        timestamp: Date.now()
+                    });
+                }
             }
         }
 

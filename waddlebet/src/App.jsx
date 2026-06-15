@@ -32,6 +32,7 @@ import IglooRequirementsPanel from './components/IglooRequirementsPanel';
 import TipNotification from './components/TipNotification';
 import GiftNotification from './components/GiftNotification';
 import LoadingScreen from './components/LoadingScreen';
+import ChatLog from './components/ChatLog';
 
 // Default penguin appearance for guests
 const DEFAULT_PENGUIN = {
@@ -129,6 +130,47 @@ const BackgroundMusic = () => {
     return null; // No UI, just audio
 };
 
+/** Floating chat opener for mobile when world controls are hidden behind overlays */
+const MobileChatOpener = ({ visible }) => {
+    const { setMobileChatOpen, hasUnreadChat } = useMultiplayer();
+    if (!visible) return null;
+
+    return (
+        <button
+            type="button"
+            onClick={() => setMobileChatOpen(true)}
+            className={`fixed left-4 top-1/2 z-[10040] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/30 bg-black/80 text-xl shadow-lg pointer-events-auto${hasUnreadChat ? ' rs-chat-fab--unread' : ''}`}
+            aria-label="Open chat"
+            data-no-camera="true"
+        >
+            💬
+        </button>
+    );
+};
+
+/** Unified chat — world, minigames, mobile + desktop */
+const GlobalChat = ({ minigameMode = false }) => {
+    const { mobileChatOpen, setMobileChatOpen } = useMultiplayer();
+    const [isMobile, setIsMobile] = useState(() =>
+        typeof window !== 'undefined' && window.innerWidth < 768
+    );
+
+    useEffect(() => {
+        const onResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
+
+    return (
+        <ChatLog
+            isMobile={isMobile}
+            isOpen={!isMobile || mobileChatOpen}
+            onClose={() => setMobileChatOpen(false)}
+            minigameMode={minigameMode}
+        />
+    );
+};
+
 // --- MAIN APP CONTROLLER ---
 
 /**
@@ -142,7 +184,16 @@ const AppContent = () => {
     const [currentRoom, setCurrentRoom] = useState(null); // null = designer
     
     // Get auth state and user data from multiplayer context
-    const { isAuthenticated, userData, isRestoringSession, walletAddress } = useMultiplayer();
+    const { isAuthenticated, userData, isRestoringSession, walletAddress, mobileChatOpen, worldGameplayOverlay } = useMultiplayer();
+    const [isMobile, setIsMobile] = useState(() =>
+        typeof window !== 'undefined' && window.innerWidth < 768
+    );
+
+    useEffect(() => {
+        const onResize = () => setIsMobile(window.innerWidth < 768);
+        window.addEventListener('resize', onResize);
+        return () => window.removeEventListener('resize', onResize);
+    }, []);
     
     // Penguin customization - synced from server for auth users, defaults for guests
     const [penguinData, setPenguinData] = useState(DEFAULT_PENGUIN);
@@ -370,6 +421,8 @@ const AppContent = () => {
 
     // Check if we're in the game world (not designer)
     const inGameWorld = currentRoom !== null;
+    const chatOverlayMode = isInMatch || activeMinigame === 'card-jitsu' || worldGameplayOverlay;
+    const showMobileChatOpener = inGameWorld && isMobile && !mobileChatOpen && chatOverlayMode;
     
     return (
         <div className="w-screen h-screen">
@@ -514,6 +567,10 @@ const AppContent = () => {
             
             {/* Guest Mode Warning (shows when not authenticated) */}
             {inGameWorld && <GuestModeWarning onRequestAuth={handleRequestAuth} />}
+
+            {/* Unified chat — same panel in world + all minigames */}
+            {inGameWorld && <GlobalChat minigameMode={chatOverlayMode} />}
+            <MobileChatOpener visible={showMobileChatOpener} />
         </div>
     );
 };

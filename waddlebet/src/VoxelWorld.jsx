@@ -3,7 +3,6 @@ import { VOXEL_SIZE, PALETTE } from './constants';
 import { ASSETS } from './assets/index';
 import { IconSend } from './Icons';
 import GameHUD from './components/GameHUD';
-import ChatLog from './components/ChatLog';
 import Portal from './components/Portal';
 import IglooPortal from './components/IglooPortal';
 import BannerZoomOverlay from './components/BannerZoomOverlay';
@@ -57,6 +56,8 @@ import {
     ROOM_PORTALS,
     WORLD_SPAWN,
     WORLD_SPAWN_ROOM,
+    getNightclubSpawnPosition,
+    isInvalidNightclubPosition,
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './config';
@@ -65,6 +66,7 @@ import { readLiveWebGLInfo } from './utils/browserCapabilities.js';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
 import { savePlayerSession, getResumePosition } from './utils/playerSession';
+import { disposeThreeObject } from './utils/disposeThreeObject';
 import CasinoBlackjack from './components/CasinoBlackjack';
 import BattleshipGame from './minigames/BattleshipGame';
 import FlappyPenguinGame from './minigames/FlappyPenguinGame';
@@ -133,6 +135,7 @@ const VoxelWorld = ({
     const penguinDataRef = useRef(null); // Ref for current penguin data
     const onWorldReadyRef = useRef(onWorldReady);
     const worldReadyFiredRef = useRef(false);
+    const updateLoopGenerationRef = useRef(0);
 
     useEffect(() => {
         worldReadyFiredRef.current = false;
@@ -273,6 +276,8 @@ const VoxelWorld = ({
         sendSnowball: mpSendSnowball,
         registerCallbacks,
         chatMessages,
+        setMobileChatOpen,
+        setWorldGameplayOverlay,
         worldTimeRef: serverWorldTimeRef, // Server-synchronized world time
         isAuthenticated, // For determining persistence mode
         isRestoringSession,
@@ -320,9 +325,28 @@ const VoxelWorld = ({
     }, [playerList]);
 
     // Allow a fresh join message after disconnect/reconnect
+    const wasDisconnectedRef = useRef(false);
     useEffect(() => {
         if (!connected) {
             hasSentJoinRef.current = false;
+            wasDisconnectedRef.current = true;
+            return;
+        }
+
+        if (!wasDisconnectedRef.current) return;
+        wasDisconnectedRef.current = false;
+
+        if (roomRef.current === WORLD_SPAWN_ROOM && isInvalidNightclubPosition(posRef.current)) {
+            const spawn = getNightclubSpawnPosition();
+            posRef.current = spawn;
+            rotRef.current = 0;
+            velRef.current = { x: 0, y: 0, z: 0 };
+            if (playerRef.current) {
+                playerRef.current.position.set(spawn.x, spawn.y, spawn.z);
+                playerRef.current.rotation.y = 0;
+            }
+            savePlayerSession(WORLD_SPAWN_ROOM, spawn);
+            console.log('🌟 Reconnect: restored nightclub /spawn position', spawn);
         }
     }, [connected]);
     
@@ -379,7 +403,8 @@ const VoxelWorld = ({
         const currentRot = playerRef.current.rotation.y;
         const nameSprite = playerNameSpriteRef.current;
         
-        // Remove old mesh from scene
+        // Remove old mesh from scene and free GPU buffers
+        disposeThreeObject(playerRef.current);
         sceneRef.current.remove(playerRef.current);
         
         // Build new mesh with updated appearance
@@ -442,6 +467,7 @@ const VoxelWorld = ({
     const hasSentJoinRef = useRef(false); // One join per connection — room changes use change_room
     const [meshBuilderReady, setMeshBuilderReady] = useState(false); // Re-triggers other-player mesh creation
     const [meshSyncVersion, setMeshSyncVersion] = useState(0); // Bumps when game loop detects missing remote meshes
+    const meshSyncMissRef = useRef(new Map()); // playerId -> consecutive missing-appearance polls
     const playerListRef = useRef(playerList);
     const lastMissingMeshCheckRef = useRef(0);
     const meshSyncBumpScheduledRef = useRef(false);
@@ -457,6 +483,7 @@ const VoxelWorld = ({
     const keysRef = useRef({});
     const isGroundedRef = useRef(true);
     const jumpRequestedRef = useRef(false);
+    const jumpButtonRef = useRef(null);
     // Skateboard double jump / trick state
     const canDoubleJumpRef = useRef(false);
     const isDoingTrickRef = useRef(false);
@@ -546,39 +573,6 @@ const VoxelWorld = ({
     // DON'T persist puffles to localStorage - server is authoritative for auth users
     // Guests don't get persistence
     
-    // Mobile detection and orientation handling
-    useEffect(() => {
-        const checkMobile = () => {
-            // Check for mobile user agents
-            const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            
-            // Check for iPadOS 13+ (reports as Macintosh but has touch)
-            const isIPadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-            
-            // Any device with touch support should show mobile controls
-            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-            
-            // Mobile = mobile UA OR iPadOS OR touch device
-            const mobile = mobileUA || isIPadOS || hasTouch;
-            setIsMobile(mobile);
-        };
-        
-        const checkOrientation = () => {
-            setIsLandscape(window.innerWidth > window.innerHeight);
-        };
-        
-        checkMobile();
-        checkOrientation();
-        
-        window.addEventListener('resize', checkOrientation);
-        window.addEventListener('orientationchange', checkOrientation);
-        
-        return () => {
-            window.removeEventListener('resize', checkOrientation);
-            window.removeEventListener('orientationchange', checkOrientation);
-        };
-    }, []);
-    
     // Use prop for equipped puffle, with local ref for 3D tracking
     const puffle = playerPuffle;
     
@@ -614,6 +608,11 @@ const VoxelWorld = ({
     useEffect(() => {
         arcadeGameActiveRef.current = arcadeGameActive;
     }, [arcadeGameActive]);
+
+    useEffect(() => {
+        setWorldGameplayOverlay(blackjackGameActive || arcadeGameActive || fishingGameActive);
+        return () => setWorldGameplayOverlay(false);
+    }, [blackjackGameActive, arcadeGameActive, fishingGameActive, setWorldGameplayOverlay]);
     
     // Lord Fishnu Interaction State
     const [lordFishnuInteraction, setLordFishnuInteraction] = useState(null); // { canPayRespects, prompt }
@@ -626,9 +625,60 @@ const VoxelWorld = ({
     // Mobile State
     const [isMobile, setIsMobile] = useState(false);
     const [isLandscape, setIsLandscape] = useState(true);
+
+    // Mobile detection and orientation handling
+    useEffect(() => {
+        const checkMobile = () => {
+            const mobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const isIPadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+            const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+            const mobile = mobileUA || isIPadOS || hasTouch;
+            setIsMobile(mobile);
+        };
+
+        const checkOrientation = () => {
+            setIsLandscape(window.innerWidth > window.innerHeight);
+        };
+
+        checkMobile();
+        checkOrientation();
+
+        window.addEventListener('resize', checkOrientation);
+        window.addEventListener('orientationchange', checkOrientation);
+
+        return () => {
+            window.removeEventListener('resize', checkOrientation);
+            window.removeEventListener('orientationchange', checkOrientation);
+        };
+    }, []);
+
+    // Jump button needs non-passive touch listeners so preventDefault works (avoids camera scroll)
+    useEffect(() => {
+        const el = jumpButtonRef.current;
+        if (!el || !isMobile) return undefined;
+
+        const onTouchStart = (e) => {
+            e.preventDefault();
+            jumpRequestedRef.current = true;
+        };
+        const onTouchEnd = (e) => {
+            e.preventDefault();
+            jumpRequestedRef.current = false;
+        };
+
+        el.addEventListener('touchstart', onTouchStart, { passive: false });
+        el.addEventListener('touchend', onTouchEnd, { passive: false });
+        el.addEventListener('touchcancel', onTouchEnd, { passive: false });
+
+        return () => {
+            el.removeEventListener('touchstart', onTouchStart);
+            el.removeEventListener('touchend', onTouchEnd);
+            el.removeEventListener('touchcancel', onTouchEnd);
+        };
+    }, [isMobile]);
+
     const [showSettings, setShowSettings] = useState(false);
     const [showChangelog, setShowChangelog] = useState(false);
-    const [showMobileChat, setShowMobileChat] = useState(false);
     const [showDebugPosition, setShowDebugPosition] = useState(false);
     const showDebugPositionRef = useRef(false);
     const [debugPosition, setDebugPosition] = useState({ x: 0, y: 0, z: 0, offsetX: 0, offsetZ: 0 });
@@ -704,6 +754,9 @@ const VoxelWorld = ({
     useEffect(() => {
         const savePosition = () => {
             if (posRef.current && roomRef.current) {
+                if (roomRef.current === WORLD_SPAWN_ROOM && isInvalidNightclubPosition(posRef.current)) {
+                    return;
+                }
                 savePlayerSession(roomRef.current, posRef.current);
             }
         };
@@ -793,6 +846,7 @@ const VoxelWorld = ({
         
         async function initWorld() {
         await performanceManager.ensureAutoPreset();
+        const loopGeneration = ++updateLoopGenerationRef.current;
 
         const THREE = window.THREE;
         const OrbitControls = window.THREE.OrbitControls;
@@ -1096,19 +1150,17 @@ const VoxelWorld = ({
             
             console.log(`Town Center spawned: ${propMeshes.length} props, ${propLights.length} lights`);
             
-            // ==================== SNOW FORTS ZONE (East of Town) ====================
-            // PERF: zones build in small batches so no single block can freeze the page
             await loadYield(0.42);
             const snowFortsZone = new SnowFortsZone(THREE);
             snowFortsZoneRef.current = snowFortsZone;
             await snowFortsZone.spawnChunked(scene, makeYieldRange(0.42, 0.5, 5));
-            console.log('⛄ Snow Forts Zone loaded (east of town)');
+            console.log('⛄ Snow Forts Zone loaded');
             
-            // ==================== FOREST TRAILS ZONE (South of Snow Forts) ====================
+            await loadYield(0.5);
             const forestTrailsZone = new ForestTrailsZone(THREE);
             forestTrailsZoneRef.current = forestTrailsZone;
             await forestTrailsZone.spawnChunked(scene, makeYieldRange(0.5, 0.6, 14));
-            console.log('🌲 Forest Trails Zone loaded (south of Snow Forts)');
+            console.log('🌲 Forest Trails Zone loaded');
             
             // Add casino as snow exclusion zone (snow shouldn't fall inside)
             if (townCenter.casinoBounds && snowfallSystemRef.current) {
@@ -2490,50 +2542,41 @@ const VoxelWorld = ({
 
         // --- INPUT HANDLING ---
         handleDown = (e) => {
-            // Skip input processing when arcade game is active (games handle their own input)
-            if (arcadeGameActiveRef.current) {
-                return;
-            }
-            
             const activeElement = document.activeElement;
             const isInputFocused = activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA';
-            
+
             // Handle Escape key for any input
             if (isInputFocused && e.code === 'Escape') {
                 activeElement.blur();
                 return;
             }
-            
-            // Handle Enter and Slash keys to open chat
-            // Only handle Slash if Shift is NOT pressed (to allow "?" to be typed)
+
+            // Enter / Slash always open chat — including during arcade and other overlays
             if (e.code === 'Enter' || (e.code === 'Slash' && !e.shiftKey)) {
                 const chatInput = document.getElementById('chat-input-field');
                 if (chatInput) {
-                    // If chat input is already focused:
-                    // - Enter sends message (normal behavior, don't prevent default)
-                    // - Slash should be typed as a character (don't prevent default, don't refocus)
                     if (activeElement === chatInput) {
                         if (e.code === 'Enter') {
-                            // Don't prevent default - let Enter send message
                             return;
                         }
                         if (e.code === 'Slash') {
-                            // Don't prevent default - let "/" be typed in the input
                             return;
                         }
                     }
-                    // If another input is focused, don't interfere
                     if (isInputFocused && activeElement !== chatInput) {
                         return;
                     }
-                    // Otherwise, focus chat input (both Enter and Slash do this when NOT already focused)
                     chatInput.focus();
-                    // Prevent "/" from being typed when opening chat (only if not Shift+Slash)
                     if (e.code === 'Slash' && !e.shiftKey) {
                         e.preventDefault();
                     }
-                    return; // Don't process movement keys when opening chat
+                    return;
                 }
+            }
+
+            // Skip movement/game keys when arcade minigame is active
+            if (arcadeGameActiveRef.current) {
+                return;
             }
             
             // Don't process game keys if an input is focused
@@ -2731,6 +2774,7 @@ const VoxelWorld = ({
         };
         
         const update = () => {
+            if (loopGeneration !== updateLoopGenerationRef.current) return;
             reqRef.current = requestAnimationFrame(update);
             frameCount++;
             
@@ -5140,9 +5184,16 @@ const VoxelWorld = ({
             if (time - lastMissingMeshCheckRef.current > 1) {
                 lastMissingMeshCheckRef.current = time;
                 for (const id of playerListRef.current) {
+                    if (id === playerId) continue;
                     if (otherMeshes.has(id)) continue;
                     const missingData = playersData.get(id);
-                    if (!missingData?.appearance) continue;
+                    if (!missingData?.appearance) {
+                        const misses = (meshSyncMissRef.current.get(id) || 0) + 1;
+                        meshSyncMissRef.current.set(id, misses);
+                        if (misses > 10) continue;
+                        continue;
+                    }
+                    meshSyncMissRef.current.delete(id);
                     if (!meshSyncBumpScheduledRef.current) {
                         meshSyncBumpScheduledRef.current = true;
                         Promise.resolve().then(() => {
@@ -5178,7 +5229,8 @@ const VoxelWorld = ({
                     const bubble = meshData.bubble;
                     const goldRainSystem = meshData.goldRainSystem;
                     
-                    // Remove old mesh from scene
+                    // Remove old mesh from scene and free GPU buffers
+                    disposeThreeObject(meshData.mesh);
                     scene.remove(meshData.mesh);
                     
                     // Build new mesh with updated appearance
@@ -5312,6 +5364,7 @@ const VoxelWorld = ({
                     
                     // Remove old puffle mesh if exists
                     if (meshData.puffleMesh) {
+                        disposeThreeObject(meshData.puffleMesh);
                         scene.remove(meshData.puffleMesh);
                         meshData.puffleMesh = null;
                         meshData.puffleInstance = null;
@@ -6156,9 +6209,8 @@ const VoxelWorld = ({
             if (townCenterRef.current && roomRef.current === 'town' && !inParkourPerformanceMode) {
                 const worldTime = serverWorldTimeRef?.current ?? 0.35;
                 const nightFactor = calculateNightFactor(worldTime);
-                // Pass player position for distance-based animation culling
                 const playerPos = posRef.current;
-                
+
                 // Performance timing for TownCenter
                 const t0 = showPerfDebugRef.current ? performance.now() : 0;
                 townCenterRef.current.update(time, delta, nightFactor, playerPos);
@@ -6307,8 +6359,8 @@ const VoxelWorld = ({
                     lightsOnRef
                 });
                 
-                // Update state for UI (throttled)
-                if (frameCount % 30 === 0) {
+                // Update state for UI (throttled) — avoid React re-renders unless debug panel is open
+                if (showPerfDebugRef.current && frameCount % 30 === 0) {
                     setDayTime(daySpeedRef.current === 0 ? dayTimeRef.current : serverTime);
                 }
             }
@@ -6670,6 +6722,8 @@ const VoxelWorld = ({
         
         return () => {
             initCancelled = true;
+            updateLoopGenerationRef.current += 1;
+            meshSyncMissRef.current.clear();
             cancelAnimationFrame(deferTimer);
             if (deferTimeout) clearTimeout(deferTimeout);
             cancelAnimationFrame(reqRef.current);
@@ -6762,10 +6816,53 @@ const VoxelWorld = ({
             playerNameSpriteRef.current = null;
             buildPenguinMeshRef.current = null;
             setMeshBuilderReady(false);
+            // Cleanup AI agent meshes (town-only spawn, must not leak on room change)
+            for (const agent of aiAgentsRef.current) {
+                if (agent.mesh) {
+                    disposeThreeObject(agent.mesh);
+                    sceneRef.current?.remove(agent.mesh);
+                }
+            }
+            aiAgentsRef.current = [];
+            for (const entry of aiPufflesRef.current) {
+                if (entry?.puffle?.mesh) {
+                    disposeThreeObject(entry.puffle.mesh);
+                    sceneRef.current?.remove(entry.puffle.mesh);
+                }
+            }
+            aiPufflesRef.current = [];
+
+            if (iceFishingSystemRef.current) {
+                iceFishingSystemRef.current.cleanup();
+                iceFishingSystemRef.current = null;
+            }
+            if (goldLobbySlotSystemRef.current) {
+                goldLobbySlotSystemRef.current = null;
+            }
+
+            if (playerRef.current) {
+                disposeThreeObject(playerRef.current);
+                sceneRef.current?.remove(playerRef.current);
+                playerRef.current = null;
+            }
+
             for (const [, data] of otherPlayerMeshesRef.current) {
+                if (data.mesh) {
+                    disposeThreeObject(data.mesh);
+                    sceneRef.current?.remove(data.mesh);
+                }
+                if (data.puffleMesh) {
+                    disposeThreeObject(data.puffleMesh);
+                    sceneRef.current?.remove(data.puffleMesh);
+                }
                 if (data.goldRainSystem) data.goldRainSystem.dispose();
             }
             otherPlayerMeshesRef.current.clear();
+
+            if (sceneRef.current) {
+                disposeThreeObject(sceneRef.current);
+                sceneRef.current = null;
+            }
         };
     }, [room]); // eslint-disable-line react-hooks/exhaustive-deps -- penguinData reads use penguinDataRef; the line-279 useEffect handles mesh rebuilds
     
@@ -9427,12 +9524,7 @@ const VoxelWorld = ({
         const handleChatCommand = (e) => {
             const { command } = e.detail;
             
-            // Parkour teleport positions (DEV/QA only)
-            // Based on: CENTER = 100, DOJO_OFFSET = { x: 0, z: 70 }
-            // dojoX = 100, dojoZ = 170, mirrored = true
-            const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'qa';
-            
-            // Parkour stage start positions (approximate, for testing)
+            // Parkour stage start positions (approximate, for staff testing)
             // Y values raised +3 to land on top of platforms with clearance
             const parkourPositions = {
                 // Stage 1 (Blue) - Ground level start near dojo
@@ -9449,8 +9541,8 @@ const VoxelWorld = ({
                 pk6: { x: CENTER_X - 70.4 + 49 + 48 - 3, y: 57, z: CENTER_Z + 78.5 + 1 + 2 - 3, name: 'Stage 6 (Cyan) - The Gauntlet' },
             };
             
-            // Handle parkour teleports (DEV only)
-            if (isDev && parkourPositions[command]) {
+            // Handle parkour teleports (staff only — authorized via server parkour_warp message)
+            if (parkourPositions[command]) {
                 const pos = parkourPositions[command];
                 
                 // Clear any seated state first
@@ -10288,9 +10380,15 @@ const VoxelWorld = ({
         // Remove meshes for players who left
         for (const [id, data] of meshes) {
             if (!currentPlayerIds.has(id)) {
-                if (data.mesh) scene.remove(data.mesh);
+                if (data.mesh) {
+                    disposeThreeObject(data.mesh);
+                    scene.remove(data.mesh);
+                }
                 if (data.bubble) scene.remove(data.bubble);
-                if (data.puffleMesh) scene.remove(data.puffleMesh);
+                if (data.puffleMesh) {
+                    disposeThreeObject(data.puffleMesh);
+                    scene.remove(data.puffleMesh);
+                }
                 // Clean up gold rain particle system
                 if (data.goldRainSystem) {
                     data.goldRainSystem.dispose();
@@ -10650,52 +10748,72 @@ const VoxelWorld = ({
                 />
              )}
              
-             {/* Mobile Jump Button - positioned above action buttons on opposite side of joystick */}
-             {/* 50% larger for better touch targets */}
+             {/* Mobile controls — jump + actions stacked relative to each other (no fixed overlap) */}
              {isMobile && (
-                <button 
-                    className={`absolute ${isLandscape ? 'bottom-[200px]' : 'bottom-[200px]'} ${gameSettings.leftHanded ? 'left-3' : 'right-3'} ${isLandscape ? 'w-24 h-24' : 'w-[72px] h-[72px]'} rounded-full bg-green-600/80 border-2 border-white/40 flex items-center justify-center active:scale-90 active:bg-green-500 transition-all z-30 touch-none`}
-                    onTouchStart={(e) => { e.preventDefault(); jumpRequestedRef.current = true; }}
-                    onTouchEnd={(e) => { e.preventDefault(); jumpRequestedRef.current = false; }}
+                <div
+                    className={`absolute bottom-4 z-30 flex flex-col items-center touch-none ${
+                        gameSettings.leftHanded ? 'left-3' : 'right-3'
+                    }`}
+                    style={{ gap: isLandscape ? '0.875rem' : '0.75rem' }}
                 >
-                    <span className={isLandscape ? 'text-3xl' : 'text-2xl'}>⬆️</span>
-                </button>
-             )}
-             
-             {/* Mobile Action Buttons - positioned on opposite side of joystick */}
-             {/* Supports both portrait and landscape modes */}
-             {isMobile && (
-                <div className={`absolute ${isLandscape ? 'bottom-[70px]' : 'bottom-[80px]'} ${gameSettings.leftHanded ? 'left-3' : 'right-3'} flex flex-col gap-1.5 z-30`}>
-                    {/* Chat Button */}
-                    <button 
-                        className={`${isLandscape ? 'w-12 h-12' : 'w-11 h-11'} rounded-full bg-cyan-600/80 border-2 border-white/40 flex items-center justify-center active:scale-90 transition-transform touch-none`}
-                        onClick={() => setShowMobileChat(true)}
+                    {/* Jump */}
+                    <button
+                        ref={jumpButtonRef}
+                        type="button"
+                        className={`${
+                            isLandscape ? 'h-20 w-20' : 'h-[4.5rem] w-[4.5rem]'
+                        } flex shrink-0 items-center justify-center rounded-full border-2 border-white/40 bg-green-600/80 transition-all active:scale-90 active:bg-green-500 touch-none`}
+                        aria-label="Jump"
                     >
-                        <span className={isLandscape ? 'text-xl' : 'text-lg'}>💬</span>
+                        <span className={isLandscape ? 'text-3xl' : 'text-2xl'}>⬆️</span>
                     </button>
-                    
-                    {/* Emote Button */}
-                    <button 
-                        className={`${isLandscape ? 'w-12 h-12' : 'w-11 h-11'} rounded-full bg-purple-600/80 border-2 border-white/40 flex items-center justify-center active:scale-90 transition-transform touch-none`}
-                        onClick={() => { setEmoteWheelOpen(true); emoteSelectionRef.current = -1; setEmoteWheelSelection(-1); }}
+
+                    {/* Chat / emote / snowball */}
+                    <div
+                        className="flex shrink-0 flex-col items-center"
+                        style={{ gap: isLandscape ? '0.625rem' : '0.5rem' }}
                     >
-                        <span className={isLandscape ? 'text-xl' : 'text-lg'}>😄</span>
-                    </button>
-                    
-                    {/* Snowball Button - Toggle Mode */}
-                    <button 
-                        className={`${isLandscape ? 'w-12 h-12' : 'w-11 h-11'} rounded-full ${isSnowballMode ? 'bg-blue-500 border-blue-300 animate-pulse' : 'bg-white/80 border-white/40'} border-2 flex items-center justify-center active:scale-90 transition-all touch-none`}
-                        onClick={(e) => { 
-                            e.preventDefault();
-                            e.stopPropagation();
-                            // Toggle snowball mode
-                            const newMode = !isSnowballModeRef.current;
-                            isSnowballModeRef.current = newMode;
-                            setIsSnowballMode(newMode);
-                        }}
-                    >
-                        <span className={isLandscape ? 'text-xl' : 'text-lg'}>❄️</span>
-                    </button>
+                        <button
+                            type="button"
+                            className={`${
+                                isLandscape ? 'h-12 w-12' : 'h-11 w-11'
+                            } flex items-center justify-center rounded-full border-2 border-white/40 bg-cyan-600/80 transition-transform active:scale-90`}
+                            onClick={() => setMobileChatOpen(true)}
+                            aria-label="Chat"
+                        >
+                            <span className={isLandscape ? 'text-xl' : 'text-lg'}>💬</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            className={`${
+                                isLandscape ? 'h-12 w-12' : 'h-11 w-11'
+                            } flex items-center justify-center rounded-full border-2 border-white/40 bg-purple-600/80 transition-transform active:scale-90`}
+                            onClick={() => { setEmoteWheelOpen(true); emoteSelectionRef.current = -1; setEmoteWheelSelection(-1); }}
+                            aria-label="Emotes"
+                        >
+                            <span className={isLandscape ? 'text-xl' : 'text-lg'}>😄</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            className={`${
+                                isLandscape ? 'h-12 w-12' : 'h-11 w-11'
+                            } flex items-center justify-center rounded-full border-2 ${
+                                isSnowballMode ? 'animate-pulse border-blue-300 bg-blue-500' : 'border-white/40 bg-white/80'
+                            } transition-all active:scale-90`}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const newMode = !isSnowballModeRef.current;
+                                isSnowballModeRef.current = newMode;
+                                setIsSnowballMode(newMode);
+                            }}
+                            aria-label="Snowball"
+                        >
+                            <span className={isLandscape ? 'text-xl' : 'text-lg'}>❄️</span>
+                        </button>
+                    </div>
                 </div>
              )}
              
@@ -10726,13 +10844,6 @@ const VoxelWorld = ({
                 currentRoom={room}
                 isInsideOwnedIgloo={isInsideOwnedIgloo}
                 onOpenIglooSettings={() => openSettingsPanel(room)}
-             />
-             
-             {/* Chat Log - Desktop: bottom-left, Mobile: toggleable overlay */}
-             <ChatLog 
-                isMobile={isMobile}
-                isOpen={!isMobile || showMobileChat}
-                onClose={() => setShowMobileChat(false)}
              />
              
              {/* Door/Portal Prompt - Use IglooPortal for igloos, regular Portal otherwise */}

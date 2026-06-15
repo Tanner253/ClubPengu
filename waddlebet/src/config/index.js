@@ -30,6 +30,8 @@ export {
     WORLD_SPAWN,
     WORLD_SPAWN_OFFSET,
     WORLD_SPAWN_ROOM,
+    getNightclubSpawnPosition,
+    isInvalidNightclubPosition,
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './roomConfig.js';

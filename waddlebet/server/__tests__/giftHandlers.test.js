@@ -6,34 +6,15 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { handleGiftMessage } from '../handlers/giftHandlers.js';
 
-// Mock database models
-vi.mock('../db/models/index.js', () => ({
-    User: {
-        findOne: vi.fn()
-    },
-    OwnedCosmetic: {
-        findOne: vi.fn()
-    },
-    Transaction: {
-        record: vi.fn()
-    },
-    MarketListing: {
-        isItemListed: vi.fn()
-    }
-}));
-
-// Mock security validation
-vi.mock('../utils/securityValidation.js', () => ({
-    validateWalletAddress: vi.fn((address) => {
-        // Valid Solana address format (44 chars, base58)
+const securityMocks = vi.hoisted(() => {
+    const walletImpl = (address) => {
         if (typeof address === 'string' && address.length === 44 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(address)) {
             return { valid: true, address };
         }
         return { valid: false, error: 'Invalid wallet address format' };
-    }),
-    validateAmount: vi.fn((amount, options = {}) => {
+    };
+    const amountImpl = (amount, options = {}) => {
         const num = Number(amount);
         if (isNaN(num) || !isFinite(num)) {
             return { valid: false, error: 'Amount must be a valid number' };
@@ -51,7 +32,38 @@ vi.mock('../utils/securityValidation.js', () => ({
             return { valid: false, error: 'Amount cannot be zero' };
         }
         return { valid: true, value: num };
-    })
+    };
+    return {
+        validateWalletAddress: vi.fn(walletImpl),
+        validateAmount: vi.fn(amountImpl),
+        walletImpl,
+        amountImpl
+    };
+});
+
+import { handleGiftMessage } from '../handlers/giftHandlers.js';
+
+// Mock database models
+vi.mock('../db/models/index.js', () => ({
+    User: {
+        findOne: vi.fn()
+    },
+    OwnedCosmetic: {
+        findOne: vi.fn(),
+        transferOwnership: vi.fn()
+    },
+    Transaction: {
+        record: vi.fn()
+    },
+    MarketListing: {
+        isItemListed: vi.fn()
+    }
+}));
+
+// Mock security validation (hoisted refs survive vitest mockReset between tests)
+vi.mock('../utils/securityValidation.js', () => ({
+    validateWalletAddress: securityMocks.validateWalletAddress,
+    validateAmount: securityMocks.validateAmount
 }));
 
 import { User, OwnedCosmetic, Transaction, MarketListing } from '../db/models/index.js';
@@ -76,6 +88,8 @@ describe('Gift Handlers', () => {
 
     beforeEach(() => {
         vi.clearAllMocks();
+        securityMocks.validateWalletAddress.mockImplementation(securityMocks.walletImpl);
+        securityMocks.validateAmount.mockImplementation(securityMocks.amountImpl);
         
         playerId = 'player123';
         player = createMockPlayer();
@@ -498,8 +512,7 @@ describe('Gift Handlers', () => {
             MarketListing.isItemListed.mockResolvedValue(false);
             User.findOne.mockResolvedValue(recipient);
 
-            // Mock OwnedCosmetic.transferOwnership static method
-            OwnedCosmetic.transferOwnership = vi.fn().mockResolvedValue({ success: true });
+            OwnedCosmetic.transferOwnership.mockResolvedValue({ success: true });
 
             Transaction.record.mockResolvedValue(true);
 

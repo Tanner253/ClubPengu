@@ -6,7 +6,7 @@ import { createSkatePark } from '../props/SkatePark';
 import { createPark } from '../props/Park';
 import Lighthouse from '../props/Lighthouse';
 import { createCasino } from '../buildings';
-import { createCasinoTVSprite, updateCasinoTVSprite } from '../systems/CasinoTVSystem';
+import { createCasinoTVSprite, updateCasinoTVSprite, cleanupCasinoTV } from '../systems/CasinoTVSystem';
 
 /**
  * Helper: Attach collision/interaction data from a prop to its mesh
@@ -2966,6 +2966,10 @@ class TownCenter {
     }
 
     cleanup() {
+        if (this.casinoTVMesh) {
+            cleanupCasinoTV(this.casinoTVMesh);
+            this.casinoTVMesh = null;
+        }
         this.propMeshes.forEach(mesh => {
             if (mesh.parent) mesh.parent.remove(mesh);
             mesh.traverse(child => {

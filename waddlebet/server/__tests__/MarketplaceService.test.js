@@ -11,6 +11,10 @@ vi.mock('../db/models/MarketListing.js', () => ({
         findOne: vi.fn(),
         find: vi.fn(),
         countDocuments: vi.fn(),
+        browseListings: vi.fn(),
+        getUserListings: vi.fn(),
+        isItemListed: vi.fn(),
+        getMarketStats: vi.fn(),
         generateListingId: vi.fn(() => `mkt_${Date.now()}_test123`)
     }
 }));
@@ -126,74 +130,70 @@ describe('MarketplaceService', () => {
                 { listingId: 'l1', price: 100 },
                 { listingId: 'l2', price: 200 }
             ];
-            
-            MarketListing.countDocuments.mockResolvedValue(5);
-            MarketListing.find.mockReturnValue({
-                sort: vi.fn().mockReturnThis(),
-                skip: vi.fn().mockReturnThis(),
-                limit: vi.fn().mockReturnThis(),
-                lean: vi.fn().mockResolvedValue(mockListings)
+
+            MarketListing.browseListings.mockResolvedValue({
+                listings: mockListings,
+                total: 5,
+                page: 1,
+                limit: 2,
+                totalPages: 3,
+                hasMore: true
             });
             
             const result = await marketplaceService.browseListings({ page: 1, limit: 2 });
             
+            expect(MarketListing.browseListings).toHaveBeenCalledWith({ page: 1, limit: 2 });
             expect(result.listings).toHaveLength(2);
             expect(result.total).toBe(5);
             expect(result.hasMore).toBe(true);
         });
         
         it('should build correct query with category filter', async () => {
-            MarketListing.countDocuments.mockResolvedValue(1);
-            MarketListing.find.mockReturnValue({
-                sort: vi.fn().mockReturnThis(),
-                skip: vi.fn().mockReturnThis(),
-                limit: vi.fn().mockReturnThis(),
-                lean: vi.fn().mockResolvedValue([])
+            MarketListing.browseListings.mockResolvedValue({
+                listings: [],
+                total: 1,
+                page: 1,
+                limit: 20,
+                totalPages: 1,
+                hasMore: false
             });
             
             await marketplaceService.browseListings({ category: 'hat' });
             
-            expect(MarketListing.find).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    'itemSnapshot.category': 'hat'
-                })
-            );
+            expect(MarketListing.browseListings).toHaveBeenCalledWith({ category: 'hat' });
         });
         
         it('should build correct query with rarity filter', async () => {
-            MarketListing.countDocuments.mockResolvedValue(1);
-            MarketListing.find.mockReturnValue({
-                sort: vi.fn().mockReturnThis(),
-                skip: vi.fn().mockReturnThis(),
-                limit: vi.fn().mockReturnThis(),
-                lean: vi.fn().mockResolvedValue([])
+            MarketListing.browseListings.mockResolvedValue({
+                listings: [],
+                total: 1,
+                page: 1,
+                limit: 20,
+                totalPages: 1,
+                hasMore: false
             });
             
             await marketplaceService.browseListings({ rarity: 'legendary' });
             
-            expect(MarketListing.find).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    'itemSnapshot.rarity': 'legendary'
-                })
-            );
+            expect(MarketListing.browseListings).toHaveBeenCalledWith({ rarity: 'legendary' });
         });
         
         it('should build correct query with price range', async () => {
-            MarketListing.countDocuments.mockResolvedValue(1);
-            MarketListing.find.mockReturnValue({
-                sort: vi.fn().mockReturnThis(),
-                skip: vi.fn().mockReturnThis(),
-                limit: vi.fn().mockReturnThis(),
-                lean: vi.fn().mockResolvedValue([])
+            MarketListing.browseListings.mockResolvedValue({
+                listings: [],
+                total: 1,
+                page: 1,
+                limit: 20,
+                totalPages: 1,
+                hasMore: false
             });
             
             await marketplaceService.browseListings({ minPrice: 100, maxPrice: 500 });
             
-            expect(MarketListing.find).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    price: { $gte: 100, $lte: 500 }
-                })
-            );
+            expect(MarketListing.browseListings).toHaveBeenCalledWith({
+                minPrice: 100,
+                maxPrice: 500
+            });
         });
     });
     
@@ -228,7 +228,7 @@ describe('MarketplaceService', () => {
                 tradable: true
             });
             
-            MarketListing.findOne.mockResolvedValue({ listingId: 'existing' });
+            MarketListing.isItemListed.mockResolvedValue(true);
             
             const result = await marketplaceService.canListItem('wallet123', 'item123');
             
@@ -243,7 +243,7 @@ describe('MarketplaceService', () => {
                 tradable: true
             });
             
-            MarketListing.findOne.mockResolvedValue(null);
+            MarketListing.isItemListed.mockResolvedValue(false);
             
             const result = await marketplaceService.canListItem('wallet123', 'item123');
             
@@ -258,17 +258,11 @@ describe('MarketplaceService', () => {
                 { listingId: 'l1', sellerId: 'wallet123', status: 'active' }
             ];
             
-            MarketListing.find.mockReturnValue({
-                sort: vi.fn().mockReturnThis(),
-                lean: vi.fn().mockResolvedValue(mockListings)
-            });
+            MarketListing.getUserListings.mockResolvedValue(mockListings);
             
             const result = await marketplaceService.getUserListings('wallet123');
             
-            expect(MarketListing.find).toHaveBeenCalledWith({
-                sellerId: 'wallet123',
-                status: 'active'
-            });
+            expect(MarketListing.getUserListings).toHaveBeenCalledWith('wallet123', 'active');
             expect(result).toHaveLength(1);
         });
     });
@@ -289,15 +283,20 @@ describe('MarketplaceService', () => {
     // ==================== MARKET STATS ====================
     describe('getMarketStats', () => {
         it('should return aggregated market statistics (no fees tracked)', async () => {
-            // getMarketStats is delegated to the model
-            // We just verify the service method calls the model
-            MarketListing.countDocuments.mockResolvedValue(100);
+            MarketListing.getMarketStats.mockResolvedValue({
+                activeListings: 100,
+                totalSold24h: 12,
+                volume24h: 4500
+            });
             
-            // Just verify the method exists and returns something
             const result = await marketplaceService.getMarketStats();
             
-            // The result structure depends on the model implementation
-            expect(result).toBeDefined();
+            expect(MarketListing.getMarketStats).toHaveBeenCalled();
+            expect(result).toEqual({
+                activeListings: 100,
+                totalSold24h: 12,
+                volume24h: 4500
+            });
         });
     });
 });

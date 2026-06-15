@@ -3,13 +3,18 @@
  * Authenticated users also persist on the server; this covers guests and offline refresh.
  */
 
-import { WORLD_SPAWN_ROOM } from '../config/roomConfig.js';
+import {
+    WORLD_SPAWN_ROOM,
+    isInvalidNightclubPosition,
+    getNightclubSpawnPosition
+} from '../config/roomConfig.js';
 
 const STORAGE_KEY = 'player_session';
 const LEGACY_KEY = 'player_position';
 
 export function savePlayerSession(room, position) {
     if (!room || !position || position.x == null || position.z == null) return;
+    if (room === WORLD_SPAWN_ROOM && isInvalidNightclubPosition(position)) return;
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
             room,
@@ -47,16 +52,21 @@ export function getResumeRoom(isAuthenticated, userData) {
     return WORLD_SPAWN_ROOM;
 }
 
+function normalizeResumePosition(room, position) {
+    if (!position || position.x == null || position.z == null) return null;
+    if (room === WORLD_SPAWN_ROOM && isInvalidNightclubPosition(position)) {
+        return getNightclubSpawnPosition();
+    }
+    return { x: position.x, y: position.y ?? 0, z: position.z };
+}
+
 export function getResumePosition(room, isAuthenticated, userData) {
     if (isAuthenticated && userData?.lastRoom === room && userData?.lastPosition) {
-        const p = userData.lastPosition;
-        if (p.x != null && p.z != null) {
-            return { x: p.x, y: p.y ?? 0, z: p.z };
-        }
+        return normalizeResumePosition(room, userData.lastPosition);
     }
     const saved = loadPlayerSession();
     if (saved?.room === room && saved.position) {
-        return saved.position;
+        return normalizeResumePosition(room, saved.position);
     }
     return null;
 }
