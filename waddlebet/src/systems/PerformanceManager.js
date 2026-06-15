@@ -160,10 +160,10 @@ class PerformanceManager {
         this._gameplayReadyAt = 0;
         this._overlayActive = false;
 
-        // Low-end auto-detection state
+        // Low-end auto-detection state (smooth-play defaults ON until user opts out)
         this._lowEndEma = 0;
         this._lowEndBelowSince = 0;
-        this._lowEndMode = false;
+        this._lowEndMode = true;
         this._lowEndDecided = false;
 
         // Load saved preference (or sync GPU probe fallback)
@@ -173,12 +173,22 @@ class PerformanceManager {
 
     _loadLowEnd() {
         try {
-            if (localStorage.getItem(LOW_END.STORAGE_KEY) === '1') {
+            const stored = localStorage.getItem(LOW_END.STORAGE_KEY);
+            if (stored === '0') {
+                this._lowEndMode = false;
+                this._lowEndDecided = true;
+                return;
+            }
+            if (stored === '1') {
                 this._lowEndMode = true;
                 this._lowEndDecided = true;
+                return;
             }
+            // No saved preference — smooth-play ON by default for new visitors.
+            this._lowEndMode = true;
+            this._lowEndDecided = false;
         } catch {
-            // ignore
+            this._lowEndMode = true;
         }
     }
 
@@ -350,11 +360,11 @@ class PerformanceManager {
     /** Clear the persisted low-end decision (debug / opt back into full quality). */
     resetLowEnd() {
         this._lowEndMode = false;
-        this._lowEndDecided = false;
+        this._lowEndDecided = true;
         this._lowEndBelowSince = 0;
         this._lowEndEma = 0;
         try {
-            localStorage.removeItem(LOW_END.STORAGE_KEY);
+            localStorage.setItem(LOW_END.STORAGE_KEY, '0');
         } catch {
             // ignore
         }

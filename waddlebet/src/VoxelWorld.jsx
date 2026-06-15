@@ -270,6 +270,26 @@ const VoxelWorld = ({
             window.removeEventListener('lowEndModeActivated', handleLowEndActivated);
         };
     }, []);
+
+    // Re-apply low-end material simplification after room loads and for late-spawned meshes.
+    useEffect(() => {
+        if (!performanceManager.isLowEndMode()) return undefined;
+
+        const refreshLowEnd = () => {
+            applyLowEndMode({
+                renderer: rendererRef.current,
+                scene: sceneRef.current,
+                THREE: window.THREE
+            });
+        };
+
+        const timers = [500, 2500, 8000].map((ms) => setTimeout(refreshLowEnd, ms));
+        const interval = setInterval(refreshLowEnd, 15000);
+        return () => {
+            timers.forEach(clearTimeout);
+            clearInterval(interval);
+        };
+    }, [room]);
     
     
     // Multiplayer - OPTIMIZED: use refs for positions, state only for player list changes
