@@ -11490,9 +11490,9 @@ const VoxelWorld = ({
                 );
              })()}
              
-             {/* Town Interaction Prompt - Clickable like dojo enter */}
+             {/* Town / Casino Game Room Interaction Prompt - Clickable like dojo enter */}
              {/* Hide when blackjack interaction is showing to prevent overlap */}
-             {nearbyInteraction && (room === 'town' || (room === 'nightclub' && ['sit', 'dj'].includes(nearbyInteraction.action))) && !nearbyPortal && !slotInteraction && !goldSlotInteraction && !blackjackInteraction && (
+             {nearbyInteraction && (room === 'town' || room === 'casino_game_room' || (room === 'nightclub' && ['sit', 'dj'].includes(nearbyInteraction.action))) && !nearbyPortal && !slotInteraction && !goldSlotInteraction && !blackjackInteraction && (
                 <div 
                     className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border border-white/20 text-center z-20 ${
                         isMobile 

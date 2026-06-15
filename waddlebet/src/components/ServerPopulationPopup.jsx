@@ -1,23 +1,19 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useMemo } from 'react';
 import { useLanguage } from '../i18n';
 import { getRoomLabel, sortPopulationRooms } from '../utils/roomLabels';
 
 const VISIBLE_NAMES = 5;
 
 /**
- * Compact live server population — non-empty rooms only.
+ * Compact live server population panel (visibility controlled by parent).
  */
 const ServerPopulationPopup = ({
-    isOpen,
-    onClose,
     population = {},
     totalPlayerCount = 0,
     currentRoom,
-    anchorRef,
     compact = false,
 }) => {
     const { t } = useLanguage();
-    const popupRef = useRef(null);
 
     const activeRooms = useMemo(() => {
         const ids = Object.keys(population).filter((roomId) => {
@@ -27,39 +23,12 @@ const ServerPopulationPopup = ({
         return sortPopulationRooms(ids);
     }, [population]);
 
-    useEffect(() => {
-        if (!isOpen) return undefined;
-
-        const handlePointerDown = (event) => {
-            const anchor = anchorRef?.current;
-            const popup = popupRef.current;
-            if (popup?.contains(event.target) || anchor?.contains(event.target)) return;
-            onClose();
-        };
-
-        const handleKeyDown = (event) => {
-            if (event.key === 'Escape') onClose();
-        };
-
-        document.addEventListener('mousedown', handlePointerDown);
-        document.addEventListener('touchstart', handlePointerDown);
-        document.addEventListener('keydown', handleKeyDown);
-        return () => {
-            document.removeEventListener('mousedown', handlePointerDown);
-            document.removeEventListener('touchstart', handlePointerDown);
-            document.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [isOpen, onClose, anchorRef]);
-
-    if (!isOpen) return null;
-
     return (
         <div
-            ref={popupRef}
-            className={`absolute z-50 bg-black/90 backdrop-blur-md border border-cyan-400/40 rounded-lg shadow-xl shadow-cyan-500/10 ${
-                compact ? 'top-full right-0 mt-1 w-52' : 'top-full right-0 mt-2 w-64'
+            className={`bg-black/90 backdrop-blur-md border border-cyan-400/40 rounded-lg shadow-xl shadow-cyan-500/10 ${
+                compact ? 'w-52' : 'w-64'
             }`}
-            role="dialog"
+            role="region"
             aria-label={t('hud.serverPopulation')}
         >
             <div className={`flex items-center justify-between border-b border-white/10 ${

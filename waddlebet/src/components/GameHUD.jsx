@@ -28,8 +28,8 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     const [showTutorial, setShowTutorial] = useState(false);
     const [forceTutorial, setForceTutorial] = useState(false); // Force show even if dismissed
     const [showDailyBonus, setShowDailyBonus] = useState(false);
-    const [showServerPopulation, setShowServerPopulation] = useState(false);
-    const serverPopAnchorRef = useRef(null);
+    const [mobileServerPopOpen, setMobileServerPopOpen] = useState(false);
+    const serverPopWrapRef = useRef(null);
     
     // Get pebbles from multiplayer context
     const { userData, isAuthenticated, serverPopulation, totalPlayerCount: liveTotalCount, requestServerPopulation } = useMultiplayer();
@@ -116,28 +116,44 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     // Compact button style for portrait mode
     const compactBtn = "w-8 h-8 rounded-lg flex items-center justify-center text-sm transition-all active:scale-90";
 
-    const toggleServerPopulation = () => {
-        setShowServerPopulation((open) => {
-            if (!open) requestServerPopulation();
-            return !open;
-        });
+    const refreshServerPopulation = () => {
+        requestServerPopulation();
     };
+
+    // Mobile only: close population panel when tapping outside
+    useEffect(() => {
+        if (!isMobile || !mobileServerPopOpen) return undefined;
+
+        const handlePointerDown = (event) => {
+            if (serverPopWrapRef.current?.contains(event.target)) return;
+            setMobileServerPopOpen(false);
+        };
+
+        document.addEventListener('pointerdown', handlePointerDown);
+        return () => document.removeEventListener('pointerdown', handlePointerDown);
+    }, [isMobile, mobileServerPopOpen]);
 
     const onlineTotal = liveTotalCount || totalPlayerCount || playerCount + 1;
 
     const playerCountButton = (compact = false) => (
-        <div className="relative">
+        <div
+            ref={serverPopWrapRef}
+            className="relative group"
+            onMouseEnter={!isMobile ? refreshServerPopulation : undefined}
+        >
             <button
-                ref={serverPopAnchorRef}
                 type="button"
-                onClick={toggleServerPopulation}
-                className={`bg-black/70 backdrop-blur-md rounded-lg flex items-center gap-1 border transition-colors touch-manipulation ${
-                    showServerPopulation
-                        ? 'border-cyan-400/70 bg-cyan-950/40'
-                        : 'border-cyan-400/30 hover:border-cyan-400/50 active:bg-black/80'
-                } ${compact ? 'px-1.5 py-1' : 'px-3 py-2 gap-2'}`}
+                onMouseDown={!isMobile ? (e) => e.preventDefault() : undefined}
+                onClick={isMobile ? () => {
+                    refreshServerPopulation();
+                    setMobileServerPopOpen((open) => !open);
+                } : undefined}
+                className={`bg-black/70 backdrop-blur-md rounded-lg flex items-center gap-1 border transition-colors touch-manipulation border-cyan-400/30 hover:border-cyan-400/50 active:bg-black/80 ${
+                    isMobile && mobileServerPopOpen ? 'border-cyan-400/70 bg-cyan-950/40' : ''
+                } ${!isMobile ? 'group-hover:border-cyan-400/70 group-hover:bg-cyan-950/40' : ''} ${compact ? 'px-1.5 py-1' : 'px-3 py-2 gap-2'}`}
                 title={t('hud.serverPopulationHint')}
-                aria-expanded={showServerPopulation}
+                aria-haspopup="true"
+                aria-expanded={isMobile ? mobileServerPopOpen : undefined}
             >
                 <span className={compact ? 'text-[10px]' : 'text-lg'}>👥</span>
                 <span className={`text-cyan-300 font-bold retro-text ${compact ? 'text-[10px]' : 'text-sm'}`}>
@@ -148,15 +164,20 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     {onlineTotal}
                 </span>
             </button>
-            <ServerPopulationPopup
-                isOpen={showServerPopulation}
-                onClose={() => setShowServerPopulation(false)}
-                population={serverPopulation}
-                totalPlayerCount={onlineTotal}
-                currentRoom={currentRoom}
-                anchorRef={serverPopAnchorRef}
-                compact={compact}
-            />
+            <div
+                className={`absolute top-full right-0 z-50 pt-1 ${
+                    isMobile
+                        ? mobileServerPopOpen ? 'block' : 'hidden'
+                        : 'hidden group-hover:block'
+                } ${compact ? '' : ''}`}
+            >
+                <ServerPopulationPopup
+                    population={serverPopulation}
+                    totalPlayerCount={onlineTotal}
+                    currentRoom={currentRoom}
+                    compact={compact}
+                />
+            </div>
         </div>
     );
     
