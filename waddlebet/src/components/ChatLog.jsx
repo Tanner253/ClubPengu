@@ -30,6 +30,8 @@ const MESSAGE_TYPE_CLASS = {
     market: 'rs-chat-msg--market'
 };
 
+const CHAT_MINIMIZED_KEY = 'waddlebet_chat_minimized';
+
 const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = false, onNewMessage }) => {
     const {
         chatByChannel,
@@ -48,12 +50,18 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
     const { t } = useLanguage();
 
     const [isActive, setIsActive] = useState(false);
+    const [isMinimized, setIsMinimized] = useState(() => {
+        if (typeof window === 'undefined') return false;
+        return window.localStorage.getItem(CHAT_MINIMIZED_KEY) === 'true';
+    });
     const [inputValue, setInputValue] = useState('');
     const [autocompleteIndex, setAutocompleteIndex] = useState(0);
     const [lastTabInput, setLastTabInput] = useState('');
     const [suggestionIndex, setSuggestionIndex] = useState(0);
     const [inputReadonly, setInputReadonly] = useState(true);
     const messagesEndRef = useRef(null);
+    const messagesRef = useRef(null);
+    const panelRef = useRef(null);
     const inputRef = useRef(null);
     const containerRef = useRef(null);
     const fadeTimeoutRef = useRef(null);
@@ -69,6 +77,35 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
     const activeMessages = chatByChannel[activeChatTab] || [];
     const canWrite = activeTabConfig.writable && !activeTabConfig.comingSoon;
     const enterPlaceholder = `[${t('chat.enterToChat')}]`;
+    const hasUnread = Object.keys(unreadChatTabs).length > 0;
+
+    const setMinimized = useCallback((next) => {
+        setIsMinimized(next);
+        if (typeof window !== 'undefined') {
+            window.localStorage.setItem(CHAT_MINIMIZED_KEY, next ? 'true' : 'false');
+        }
+    }, []);
+
+    const handleChatWheel = useCallback((e) => {
+        const messagesEl = messagesRef.current;
+        if (!messagesEl || messagesEl.contains(e.target)) return;
+
+        const { scrollTop, scrollHeight, clientHeight } = messagesEl;
+        const atTop = scrollTop <= 0;
+        const atBottom = scrollTop + clientHeight >= scrollHeight - 1;
+        if ((e.deltaY < 0 && atTop) || (e.deltaY > 0 && atBottom)) return;
+
+        e.preventDefault();
+        messagesEl.scrollTop += e.deltaY;
+    }, []);
+
+    useEffect(() => {
+        const panelEl = panelRef.current;
+        if (!panelEl) return undefined;
+
+        panelEl.addEventListener('wheel', handleChatWheel, { passive: false });
+        return () => panelEl.removeEventListener('wheel', handleChatWheel);
+    }, [handleChatWheel, isMinimized, isMobile, isOpen]);
 
     useEffect(() => {
         if (!onNewMessage) return undefined;
@@ -435,11 +472,24 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         );
     };
 
-    const renderPanel = (showClose) => (
-        <div className={`rs-chat-panel flex flex-col min-h-0 overflow-hidden${isMobile ? ' rs-chat-panel--mobile' : ''}`}>
+    const renderPanel = ({ showClose = false, showMinimize = false } = {}) => (
+        <div
+            ref={panelRef}
+            className={`rs-chat-panel flex flex-col min-h-0 overflow-hidden${isMobile ? ' rs-chat-panel--mobile' : ''}`}
+        >
             <div className="rs-chat-header">
                 <span className="rs-chat-header-icon" aria-hidden="true">{activeTabConfig.icon}</span>
                 <span className="rs-chat-header-title">{t(activeTabConfig.headerKey)}</span>
+                {showMinimize && (
+                    <button
+                        type="button"
+                        className="rs-chat-minimize"
+                        onClick={() => setMinimized(true)}
+                        aria-label={t('chat.minimize')}
+                    >
+                        −
+                    </button>
+                )}
                 {showClose && (
                     <button type="button" className="rs-chat-close" onClick={onClose} aria-label={t('common.close')}>
                         ×
@@ -447,7 +497,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
                 )}
             </div>
 
-            <div className="rs-chat-tabs chat-scroll-x">
+            <div className="rs-chat-tabs">
                 {visibleTabs.map((tab) => {
                     const isActiveTab = activeChatTab === tab.id;
                     const unread = !!unreadChatTabs[tab.id];
@@ -466,7 +516,10 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
                 })}
             </div>
 
-            <div className={`rs-chat-messages chat-scroll chat-messages overflow-y-auto overflow-x-hidden overscroll-contain flex-1 min-h-0 ${isMobile ? '' : 'h-36'}`}>
+            <div
+                ref={messagesRef}
+                className={`rs-chat-messages chat-scroll chat-messages overflow-y-auto overflow-x-hidden overscroll-contain${isMobile ? ' flex-1 min-h-0' : ''}`}
+            >
                 <div className="px-2 py-1.5 space-y-0.5">
                     {activeTabConfig.comingSoon ? (
                         <div className="rs-chat-empty">{t('chat.tab.comingSoon')}</div>
@@ -520,9 +573,28 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
                     className="relative flex w-full max-w-md min-h-0 flex-col"
                     style={{ height: 'min(75dvh, calc(100dvh - 2rem))' }}
                 >
-                    {renderPanel(true)}
+                    {renderPanel({ showClose: true })}
                 </div>
             </div>
+        );
+    }
+
+    const chatPositionClass = 'bottom-20 left-4';
+    const chatZClass = minigameMode ? 'z-[10050]' : 'z-30';
+
+    if (isMinimized) {
+        return (
+            <button
+                type="button"
+                onClick={() => setMinimized(false)}
+                className={`rs-chat-collapsed fixed pointer-events-auto ${chatPositionClass} ${chatZClass}${hasUnread ? ' rs-chat-collapsed--unread' : ''}`}
+                aria-label={t('chat.restore')}
+                data-no-camera="true"
+            >
+                <span className="rs-chat-collapsed-icon" aria-hidden="true">💬</span>
+                <span className="rs-chat-collapsed-tab" aria-hidden="true">{activeTabConfig.icon}</span>
+                <span className="rs-chat-collapsed-label">{t('chat.title')}</span>
+            </button>
         );
     }
 
@@ -531,14 +603,10 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
             ref={containerRef}
             onMouseEnter={() => setIsActive(true)}
             onMouseLeave={() => !document.activeElement?.closest('.chat-log') && resetFadeTimer()}
-            className={`chat-log fixed pointer-events-auto transition-opacity duration-300 left-4 w-[30rem] flex flex-col ${
-                minigameMode ? 'z-[10050]' : 'z-30'
-            } ${
-                minigameMode ? 'top-1/2 -translate-y-1/2' : 'bottom-20'
-            } ${isActive ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}
+            className={`chat-log fixed pointer-events-auto transition-opacity duration-300 w-[30rem] flex flex-col ${chatPositionClass} ${chatZClass} ${isActive ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}
             data-no-camera="true"
         >
-            {renderPanel(false)}
+            {renderPanel({ showMinimize: true })}
         </div>
     );
 };

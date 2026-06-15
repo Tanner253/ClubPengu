@@ -139,7 +139,7 @@ const MobileChatOpener = ({ visible }) => {
         <button
             type="button"
             onClick={() => setMobileChatOpen(true)}
-            className={`fixed left-4 top-1/2 z-[10040] flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full border-2 border-white/30 bg-black/80 text-xl shadow-lg pointer-events-auto${hasUnreadChat ? ' rs-chat-fab--unread' : ''}`}
+            className={`fixed bottom-20 left-4 z-[10040] flex h-12 w-12 items-center justify-center rounded-full border-2 border-white/30 bg-black/80 text-xl shadow-lg pointer-events-auto${hasUnreadChat ? ' rs-chat-fab--unread' : ''}`}
             aria-label="Open chat"
             data-no-camera="true"
         >

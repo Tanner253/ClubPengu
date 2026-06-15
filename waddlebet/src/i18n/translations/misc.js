@@ -344,6 +344,12 @@ export default {
     'chat.title': {
         en: 'Chat', zh: '聊天', es: 'Chat', pt: 'Chat', ko: '채팅', ja: 'チャット', fr: 'Chat', de: 'Chat', ru: 'Чат', ar: 'الدردشة',
     },
+    'chat.minimize': {
+        en: 'Minimize chat', zh: '最小化聊天', es: 'Minimizar chat', pt: 'Minimizar chat', ko: '채팅 최소화', ja: 'チャットを最小化', fr: 'Réduire le chat', de: 'Chat minimieren', ru: 'Свернуть чат', ar: 'تصغير الدردشة',
+    },
+    'chat.restore': {
+        en: 'Restore chat', zh: '展开聊天', es: 'Restaurar chat', pt: 'Restaurar chat', ko: '채팅 복원', ja: 'チャットを復元', fr: 'Restaurer le chat', de: 'Chat wiederherstellen', ru: 'Развернуть чат', ar: 'استعادة الدردشة',
+    },
     'chat.send': {
         en: 'Send', zh: '发送', es: 'Enviar', pt: 'Enviar', ko: '보내기', ja: '送信', fr: 'Envoyer', de: 'Senden', ru: 'Отправить', ar: 'إرسال',
     },
