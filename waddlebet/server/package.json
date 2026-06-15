@@ -6,10 +6,10 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:ci": "vitest run --coverage --reporter=verbose --reporter=junit --outputFile=./coverage/junit.xml"
+    "test": "vitest run --config ./vitest.config.js",
+    "test:watch": "vitest --config ./vitest.config.js",
+    "test:coverage": "vitest run --config ./vitest.config.js --coverage",
+    "test:ci": "vitest run --config ./vitest.config.js --coverage --reporter=verbose --reporter=junit --outputFile=./coverage/junit.xml"
   },
   "dependencies": {
     "@solana/spl-token": "^0.4.14",
