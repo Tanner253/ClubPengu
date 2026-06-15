@@ -189,6 +189,12 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
                     characterType: clientData.characterType || 'penguin',
                     customization: clientData.customization || {},
                     coins: 100, // Starting bonus
+                    gameInventory: {
+                        columns: 10,
+                        displayRows: 6,
+                        unlockedSlots: 5,
+                        slots: Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }))
+                    },
                     // Migration data if provided
                     migrationSource: clientData.migrateFrom ? 'localStorage' : null,
                     migratedAt: clientData.migrateFrom ? new Date() : null,

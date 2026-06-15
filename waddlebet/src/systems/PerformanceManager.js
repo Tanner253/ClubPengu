@@ -144,9 +144,25 @@ class PerformanceManager {
         this._lastRecordedFps = 0;
         this._gameplayReady = false;
         this._gameplayReadyAt = 0;
+        this._overlayActive = false;
         
         // Load saved preference (or sync GPU probe fallback)
         this.loadSettings();
+    }
+
+    /**
+     * Fullscreen minigames (fishing, arcade, blackjack) run their own UI loop.
+     * Pause FPS sampling so emergency downgrade does not drop world quality to potato.
+     */
+    setOverlayActive(active) {
+        this._overlayActive = Boolean(active);
+        if (active) {
+            this._fpsSamples = [];
+        }
+    }
+
+    isOverlayActive() {
+        return this._overlayActive;
     }
     
     /**
@@ -229,7 +245,7 @@ class PerformanceManager {
      * Sample frame delta — triggers emergency downgrade if sustained FPS is very low.
      */
     recordFrame(delta) {
-        if (!this._gameplayReady) return;
+        if (!this._gameplayReady || this._overlayActive) return;
         // Ignore the first 8s after world load — init spikes would false-trigger downgrade.
         if (performance.now() - this._gameplayReadyAt < 8000) return;
 

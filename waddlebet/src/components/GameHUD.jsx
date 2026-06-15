@@ -5,6 +5,7 @@ import WalletButton from './WalletButton';
 import StatsModal from './StatsModal';
 import PebblesPurchaseModal from './PebblesPurchaseModal';
 import InventoryModal from './InventoryModal';
+import GameInventoryModal from './GameInventoryModal';
 import MarketplaceModal from './MarketplaceModal';
 import TutorialModal, { shouldShowTutorial } from './TutorialModal';
 import DailyBonusModal from './DailyBonusModal';
@@ -22,6 +23,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     const [recentReward, setRecentReward] = useState(null);
     const [showPebblesPurchase, setShowPebblesPurchase] = useState(false);
     const [showInventory, setShowInventory] = useState(false);
+    const [showGameInventory, setShowGameInventory] = useState(false);
     const [showMarketplace, setShowMarketplace] = useState(false);
     const [showTutorial, setShowTutorial] = useState(false);
     const [forceTutorial, setForceTutorial] = useState(false); // Force show even if dismissed
@@ -188,6 +190,17 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                         </button>
                     )}
                     
+                    {/* Backpack (gameplay items) */}
+                    {isAuthenticated && (
+                        <button
+                            onClick={() => setShowGameInventory(true)}
+                            className="bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center gap-1 border border-teal-400/50 active:border-teal-400 active:bg-teal-900/30 transition-colors touch-manipulation"
+                            title="Backpack"
+                        >
+                            <span className="text-[10px]">🎒</span>
+                        </button>
+                    )}
+
                     {/* Inventory Button (Mobile) */}
                     {isAuthenticated && (
                         <button 
@@ -292,6 +305,11 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 <InventoryModal
                     isOpen={showInventory}
                     onClose={() => setShowInventory(false)}
+                />
+
+                <GameInventoryModal
+                    isOpen={showGameInventory}
+                    onClose={() => setShowGameInventory(false)}
                 />
                 
                 {/* Marketplace Modal (Portrait) */}
@@ -409,6 +427,18 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     </button>
                 )}
                 
+                {/* Backpack (gameplay items: fish, resources, gear) */}
+                {isAuthenticated && (
+                    <button
+                        onClick={() => setShowGameInventory(true)}
+                        className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-teal-400/30 hover:border-teal-400/60 hover:bg-black/80 transition-all"
+                        title="Backpack — items you gather in the world"
+                    >
+                        <span className="text-lg">🎒</span>
+                        <span className="text-teal-300 font-bold retro-text text-sm hidden sm:inline">Backpack</span>
+                    </button>
+                )}
+
                 {/* Inventory Button */}
                 {isAuthenticated && (
                     <button 
@@ -459,6 +489,11 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
             <InventoryModal
                 isOpen={showInventory}
                 onClose={() => setShowInventory(false)}
+            />
+
+            <GameInventoryModal
+                isOpen={showGameInventory}
+                onClose={() => setShowGameInventory(false)}
             />
             
             {/* Marketplace Modal */}

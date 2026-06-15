@@ -882,7 +882,7 @@ export function renderFishingBanner(ctx, canvas, playerName, state) {
     ctx.font = 'bold 18px Arial';
     ctx.fillStyle = '#4ADE80';
     ctx.textAlign = 'center';
-    ctx.fillText(`🐟 ${fishCaught} fish caught • 💰 ${totalValue}g earned`, canvas.width / 2, 100);
+    ctx.fillText(`🐟 ${fishCaught} caught • 💰 ${totalValue}g pack value`, canvas.width / 2, 100);
     
     // Last fish caught
     if (state.lastFish) {
@@ -896,11 +896,14 @@ export function renderFishingBanner(ctx, canvas, playerName, state) {
         };
         ctx.fillStyle = rarityColors[state.lastFish.rarity] || '#FFFFFF';
         const emoji = state.lastFish.emoji || '🐟';
-        ctx.fillText(`${emoji} ${state.lastFish.name}`, canvas.width / 2, 135);
+        ctx.fillText(`${emoji} ${state.lastFish.name || 'Fish'}`, canvas.width / 2, 135);
         
         ctx.font = '14px Arial';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-        ctx.fillText(`+${state.lastFish.value}g • ${state.lastFish.rarity}`, canvas.width / 2, 155);
+        const rarityLabel = state.lastFish.rarity
+            ? state.lastFish.rarity.charAt(0).toUpperCase() + state.lastFish.rarity.slice(1)
+            : 'Common';
+        ctx.fillText(`~${state.lastFish.value || 0}g • ${rarityLabel}`, canvas.width / 2, 155);
     } else {
         ctx.font = '16px Arial';
         ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';

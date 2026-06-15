@@ -27,6 +27,7 @@ import {
     SlotService,
     GoldSlotsService,
     FishingService,
+    GameInventoryService,
     IglooService,
     BlackjackService,
     GachaService,
@@ -51,6 +52,8 @@ import dailyBonusService from './services/DailyBonusService.js';
 import { initializeReferralService, getReferralService } from './services/ReferralService.js';
 import { validateWalletAddress, validateTransactionSignature, validateAmount } from './utils/securityValidation.js';
 import { displayTokenSymbol } from './utils/tokenDisplay.js';
+import { getFishRarityLabel } from './config/gameItems.js';
+import { isPlayerNearMerchant } from './config/worldNpcs.js';
 
 const PORT = process.env.PORT || 3001;
 const MAX_CONNECTIONS_PER_IP = 2;
@@ -562,7 +565,30 @@ const challengeService = new ChallengeService(inboxService, statsService);
 const matchService = new MatchService(statsService, userService, broadcastToRoom, sendToPlayer);
 const slotService = new SlotService(userService, broadcastToRoom, sendToPlayer);
 const goldSlotsService = new GoldSlotsService(userService, broadcastToRoom, sendToPlayer, publishChatMessage);
-const fishingService = new FishingService(userService, broadcastToRoom, sendToPlayer);
+const gameInventoryService = new GameInventoryService(userService);
+const fishingService = new FishingService(userService, gameInventoryService, broadcastToRoom, sendToPlayer);
+
+async function sendGameInventorySnapshot(playerId, walletAddress, reason = 'unspecified') {
+    if (!walletAddress) {
+        console.warn(`[INVENTORY] snapshot skipped player=${playerId} reason=${reason} — no walletAddress`);
+        return;
+    }
+    try {
+        const result = await gameInventoryService.getInventory(walletAddress);
+        if (result.error) {
+            console.warn(`[INVENTORY] snapshot failed player=${playerId} wallet=${walletAddress.slice(0, 8)}… reason=${reason} error=${result.error} msg=${result.message || ''}`);
+            return;
+        }
+        const inv = result.inventory;
+        console.log(`[INVENTORY] snapshot → player=${playerId} wallet=${walletAddress.slice(0, 8)}… reason=${reason} used=${inv?.usedSlots ?? 0}/${inv?.unlockedSlots ?? '?'} slots`);
+        sendToPlayer(playerId, {
+            type: 'game_inventory_snapshot',
+            inventory: inv
+        });
+    } catch (err) {
+        console.error(`[INVENTORY] snapshot exception player=${playerId} wallet=${walletAddress?.slice(0, 8)}… reason=${reason}:`, err);
+    }
+}
 const blackjackService = new BlackjackService(userService, broadcastToRoom, sendToPlayer);
 const gachaService = new GachaService(userService, broadcastToRoom, sendToPlayer, broadcastToAll, publishChatMessage);
 const pebbleService = new PebbleService(solanaPaymentService, custodialWalletService, sendToPlayer);
@@ -1771,6 +1797,8 @@ async function handleMessage(playerId, message) {
                     referralApplied: authResult.referralApplied || false
                 });
 
+                await sendGameInventorySnapshot(playerId, walletAddress);
+
                 if (player.room) {
                     await sendChatHistory(playerId, player.room);
                 }
@@ -2090,6 +2118,8 @@ async function handleMessage(playerId, message) {
                     isNewUser: false,
                     restored: true
                 });
+
+                await sendGameInventorySnapshot(playerId, walletAddress);
 
                 if (player.room) {
                     await sendChatHistory(playerId, player.room);
@@ -5166,7 +5196,7 @@ async function handleMessage(playerId, message) {
         case 'fishing_start': {
             // Player wants to start fishing - deduct bait cost
             try {
-                const { spotId, guestCoins, isDemo } = message;
+                const { spotId, guestCoins } = message;
                 
                 if (!spotId) {
                     sendToPlayer(playerId, {
@@ -5176,6 +5206,10 @@ async function handleMessage(playerId, message) {
                     });
                     break;
                 }
+
+                const demoMode = !player.walletAddress;
+
+                console.log(`[FISHING] start player=${playerId} name=${player.name} spot=${spotId} auth=${!!player.isAuthenticated} wallet=${player.walletAddress ? player.walletAddress.slice(0, 8) + '…' : 'NONE'} demo=${demoMode}`);
                 
                 const fishResult = await fishingService.startFishing(
                     playerId,
@@ -5184,7 +5218,7 @@ async function handleMessage(playerId, message) {
                     spotId,
                     player.name,
                     guestCoins || 0,
-                    isDemo || !player.isAuthenticated
+                    demoMode
                 );
                 
                 if (fishResult.error) {
@@ -5234,12 +5268,17 @@ async function handleMessage(playerId, message) {
             // Minigame result - player caught a fish or missed
             try {
                 const { fish, depth, success } = message;
+
+                console.log(`[FISHING] game_result player=${playerId} name=${player.name} success=${!!success} fish=${fish?.id || 'none'} depth=${depth ?? 0} auth=${!!player.isAuthenticated} wallet=${player.walletAddress ? player.walletAddress.slice(0, 8) + '…' : 'NONE'}`);
                 
                 if (success && fish) {
-                    // Player caught a fish - award coins and broadcast to room
-                    const isDemo = !player.isAuthenticated;
-                    const guestBalance = !player.isAuthenticated ? (message.guestCoins || 0) : 0;
-                    
+                    const isDemo = !player.walletAddress;
+                    const guestBalance = isDemo ? (message.guestCoins || 0) : 0;
+
+                    if (isDemo) {
+                        console.warn(`[FISHING] catch will NOT enter backpack — demo mode (no wallet on server) player=${playerId} fish=${fish.id}`);
+                    }
+
                     const result = await fishingService.handleCatch(
                         playerId,
                         player.walletAddress,
@@ -5252,36 +5291,57 @@ async function handleMessage(playerId, message) {
                     );
                     
                     if (result.error) {
+                        console.warn(`[FISHING] handleCatch error player=${playerId} error=${result.error} msg=${result.message || ''}`);
                         sendToPlayer(playerId, {
                             type: 'fishing_error',
                             error: result.error,
                             message: result.message
                         });
                     } else {
+                        console.log(`[FISHING] catch result player=${playerId} fish=${result.fish?.id} inventoryAdded=${!!result.inventoryAdded} inventoryError=${result.inventoryError || 'none'} usedSlots=${result.inventory?.usedSlots ?? 'n/a'} isDemo=${!!result.isDemo} isJelly=${!!result.isJellyfish}`);
                         // Update PvE activity with caught fish
                         const activity = activePveActivities.get(playerId);
                         if (activity) {
                             const newFishCount = (activity.state.fishCaught || 0) + 1;
-                            const newTotalValue = (activity.state.totalValue || 0) + (fish.value || 0);
+                            const npcVal = result.npcValue || fish.coins || 0;
+                            const fishId = result.fish?.id || fish.id;
+                            const newTotalValue = (activity.state.totalValue || 0) + npcVal;
                             updatePveActivity(playerId, {
                                 fishCaught: newFishCount,
                                 totalValue: newTotalValue,
                                 lastFish: {
-                                    name: fish.name,
-                                    rarity: fish.rarity,
-                                    value: fish.value,
-                                    emoji: fish.emoji || '🐟'
+                                    name: result.fish?.name || fish.name || 'Fish',
+                                    rarity: getFishRarityLabel(fishId),
+                                    value: npcVal,
+                                    emoji: result.fish?.emoji || fish.emoji || '🐟'
                                 }
                             });
                         }
                         
-                        // Update coin balance
-                        if (result.newBalance !== undefined) {
+                        // Update coin balance only when gold actually changed
+                        if (result.newBalance !== undefined && result.inventoryAdded === false && !result.isJellyfish) {
                             sendToPlayer(playerId, {
                                 type: 'coins_update',
                                 coins: result.newBalance,
                                 isAuthenticated: player.isAuthenticated
                             });
+                        }
+
+                        if (result.inventory) {
+                            await sendGameInventorySnapshot(playerId, player.walletAddress, 'fishing_catch');
+                        } else if (result.inventoryAdded) {
+                            console.warn(`[FISHING] inventoryAdded=true but no inventory payload — forcing snapshot player=${playerId}`);
+                            await sendGameInventorySnapshot(playerId, player.walletAddress, 'fishing_catch_fallback');
+                        } else if (result.inventoryError) {
+                            console.warn(`[FISHING] backpack store FAILED player=${playerId} fish=${fish.id} error=${result.inventoryError}`);
+                            sendToPlayer(playerId, {
+                                type: 'game_inventory_error',
+                                error: result.inventoryError,
+                                message: `Could not store catch: ${result.inventoryError}`
+                            });
+                        } else if (!result.isDemo && !result.isJellyfish && player.walletAddress) {
+                            console.warn(`[FISHING] catch had wallet but inventoryAdded=false and no error — forcing snapshot player=${playerId} fish=${fish.id}`);
+                            await sendGameInventorySnapshot(playerId, player.walletAddress, 'fishing_catch_anomaly');
                         }
                     }
                 }
@@ -5318,6 +5378,192 @@ async function handleMessage(playerId, message) {
                     result: 'ended',
                     fishCaught: activity.state.fishCaught || 0,
                     totalValue: activity.state.totalValue || 0
+                });
+            }
+            break;
+        }
+
+        // ==================== GAME INVENTORY (fish, bait, rods) ====================
+        case 'game_inventory_get': {
+            if (!player.walletAddress) {
+                console.warn(`[INVENTORY] get rejected player=${playerId} name=${player.name} — no wallet (auth=${!!player.isAuthenticated})`);
+                sendToPlayer(playerId, {
+                    type: 'game_inventory_error',
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Connect wallet to use game inventory'
+                });
+                break;
+            }
+            try {
+                console.log(`[INVENTORY] get request player=${playerId} wallet=${player.walletAddress.slice(0, 8)}… auth=${!!player.isAuthenticated}`);
+                const result = await gameInventoryService.getInventory(player.walletAddress);
+                if (result.error) {
+                    console.warn(`[INVENTORY] get failed player=${playerId} error=${result.error} msg=${result.message || ''}`);
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                } else {
+                    const inv = result.inventory;
+                    console.log(`[INVENTORY] get ok player=${playerId} used=${inv?.usedSlots ?? 0}/${inv?.unlockedSlots ?? '?'} slots items=${(inv?.slots || []).filter(s => s?.itemId).map(s => `${s.itemId}x${s.quantity}`).join(', ') || 'none'}`);
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_snapshot',
+                        inventory: inv
+                    });
+                }
+            } catch (error) {
+                console.error(`[INVENTORY] get exception player=${playerId}:`, error);
+                sendToPlayer(playerId, {
+                    type: 'game_inventory_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to load inventory'
+                });
+            }
+            break;
+        }
+
+        case 'game_inventory_move': {
+            if (!player.walletAddress) break;
+            try {
+                const { fromSlot, toSlot, quantity } = message;
+                console.log(`[INVENTORY] move player=${playerId} ${fromSlot}→${toSlot} qty=${quantity ?? 'all'}`);
+                const result = await gameInventoryService.moveSlot(
+                    player.walletAddress,
+                    fromSlot,
+                    toSlot,
+                    quantity ?? null
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_snapshot',
+                        inventory: result.inventory
+                    });
+                }
+            } catch (error) {
+                console.error('📦 Error in game_inventory_move:', error);
+            }
+            break;
+        }
+
+        case 'backpack_upgrade': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'backpack_upgrade_error',
+                    error: 'NOT_AUTHENTICATED'
+                });
+                break;
+            }
+            if (message.merchantId !== 'supply_merchant') {
+                sendToPlayer(playerId, {
+                    type: 'backpack_upgrade_error',
+                    error: 'WRONG_MERCHANT',
+                    message: 'Backpack upgrades are only available from Copper Clive'
+                });
+                break;
+            }
+            try {
+                const result = await gameInventoryService.upgradeBackpack(player.walletAddress);
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'backpack_upgrade_error',
+                        error: result.error,
+                        message: result.message,
+                        cost: result.cost
+                    });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'backpack_upgrade_result',
+                        goldSpent: result.goldSpent,
+                        unlockedSlots: result.unlockedSlots,
+                        newBalance: result.newBalance,
+                        inventory: result.inventory
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: result.newBalance,
+                        isAuthenticated: true
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_snapshot',
+                        inventory: result.inventory
+                    });
+                }
+            } catch (error) {
+                console.error('🎒 Error in backpack_upgrade:', error);
+                sendToPlayer(playerId, {
+                    type: 'backpack_upgrade_error',
+                    error: 'SERVER_ERROR'
+                });
+            }
+            break;
+        }
+
+        case 'merchant_sell':
+        case 'fish_sell_npc': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'merchant_sell_error',
+                    error: 'NOT_AUTHENTICATED'
+                });
+                break;
+            }
+            try {
+                const { slotIndex, quantity, merchantId } = message;
+                const resolvedMerchantId = merchantId || 'fish_buyer';
+                if (!isPlayerNearMerchant(player, resolvedMerchantId)) {
+                    sendToPlayer(playerId, {
+                        type: 'merchant_sell_error',
+                        error: 'TOO_FAR',
+                        message: 'You need to be at the merchant to sell items'
+                    });
+                    break;
+                }
+                console.log(`[INVENTORY] sell player=${playerId} merchant=${resolvedMerchantId} slot=${slotIndex} qty=${quantity || 1}`);
+                const result = await gameInventoryService.sellAtMerchant(
+                    player.walletAddress,
+                    resolvedMerchantId,
+                    slotIndex,
+                    quantity || 1
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'merchant_sell_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'merchant_sell_result',
+                        goldEarned: result.goldEarned,
+                        itemId: result.itemId,
+                        quantitySold: result.quantitySold,
+                        merchantId: result.merchantId,
+                        merchantName: result.merchantName,
+                        newBalance: result.newBalance,
+                        inventory: result.inventory
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: result.newBalance,
+                        isAuthenticated: true
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_snapshot',
+                        inventory: result.inventory
+                    });
+                }
+            } catch (error) {
+                console.error('🐟 Error in merchant_sell:', error);
+                sendToPlayer(playerId, {
+                    type: 'merchant_sell_error',
+                    error: 'SERVER_ERROR'
                 });
             }
             break;

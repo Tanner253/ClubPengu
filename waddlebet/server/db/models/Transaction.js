@@ -37,7 +37,10 @@ const transactionSchema = new mongoose.Schema({
             'slot_spin',         // Slot machine spin cost
             'slot_payout',       // Slot machine winnings
             'fishing_bait',      // Bait cost for fishing
-            'fishing_catch',     // Coins earned from fishing
+            'fishing_catch',     // Legacy: coins earned from fishing (pre-inventory)
+            'fish_catch_inventory', // Fish added to game inventory (no gold)
+            'fish_sell_npc',     // Fish sold at Fish Buyer NPC for gold
+            'backpack_upgrade',  // Gold spent to unlock more backpack slots
             'blackjack_bet',     // PvE blackjack bet
             'blackjack_win',     // PvE blackjack payout
             // ========== GACHA/PEBBLE TYPES ==========

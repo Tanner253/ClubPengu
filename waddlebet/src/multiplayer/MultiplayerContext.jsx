@@ -201,6 +201,12 @@ export function MultiplayerProvider({ children }) {
     const [fishingActive, setFishingActive] = useState(false);
     const [fishingResult, setFishingResult] = useState(null);
     const fishingCallbackRef = useRef(null);
+
+    // Game backpack (fish, resources, gear)
+    const [gameInventory, setGameInventory] = useState(null);
+    const [backpackError, setBackpackError] = useState(null);
+    const fishSellCallbackRef = useRef(null);
+    const backpackUpgradeCallbackRef = useRef(null);
     
     // Callbacks
     const callbacksRef = useRef({
@@ -442,6 +448,7 @@ export function MultiplayerProvider({ children }) {
 
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
                     wsRef.current.send(JSON.stringify({ type: 'get_chat_history' }));
+                    wsRef.current.send(JSON.stringify({ type: 'game_inventory_get' }));
                 }
                 
                 callbacksRef.current.onAuthSuccess?.(message.user);
@@ -468,6 +475,8 @@ export function MultiplayerProvider({ children }) {
                 setWalletAddress(null);
                 setAuthToken(null);
                 setUserData(null);
+                setGameInventory(null);
+                setBackpackError(null);
                 localStorage.removeItem('auth_token');
                 localStorage.removeItem('wallet_address');
                 localStorage.removeItem('session_timestamp');
@@ -1019,9 +1028,24 @@ export function MultiplayerProvider({ children }) {
             }
             
             case 'fishing_result': {
-                // Local player's catch result (for coin display)
+                console.log(`[FISHING] client fishing_result inventoryAdded=${!!message.inventoryAdded} hasInventory=${!!message.inventory} error=${message.inventoryError || 'none'} isDemo=${!!message.isDemo} fish=${message.fish?.id || 'none'} usedSlots=${message.inventory?.usedSlots ?? 'n/a'}`);
                 setFishingResult(message);
                 setFishingActive(false);
+                if (message.inventory) {
+                    setGameInventory(message.inventory);
+                    setBackpackError(null);
+                }
+                if (message.inventoryAdded) {
+                    if (!message.inventory) {
+                        send({ type: 'game_inventory_get' });
+                    }
+                    setBackpackError(null);
+                } else if (!message.isDemo && !message.isJellyfish && message.inventoryError) {
+                    setBackpackError(message.inventoryError);
+                    console.warn('📦 Fish not stored:', message.inventoryError);
+                } else if (!message.isDemo && !message.isJellyfish && !message.inventoryAdded) {
+                    send({ type: 'game_inventory_get' });
+                }
                 break;
             }
             
@@ -1031,6 +1055,56 @@ export function MultiplayerProvider({ children }) {
                 if (fishingCallbackRef.current) {
                     fishingCallbackRef.current({ error: message.error, message: message.message });
                     fishingCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'game_inventory_snapshot': {
+                console.log(`[INVENTORY] client snapshot used=${message.inventory?.usedSlots ?? 0}/${message.inventory?.unlockedSlots ?? '?'} items=${(message.inventory?.slots || []).filter(s => s?.itemId).map(s => `${s.itemId}x${s.quantity}`).join(', ') || 'none'}`);
+                setGameInventory(message.inventory);
+                setBackpackError(null);
+                break;
+            }
+
+            case 'game_inventory_error': {
+                setBackpackError(message.message || message.error);
+                console.warn('📦 Backpack error:', message.error, message.message);
+                break;
+            }
+
+            case 'backpack_upgrade_result': {
+                if (message.inventory) setGameInventory(message.inventory);
+                setBackpackError(null);
+                if (backpackUpgradeCallbackRef.current) {
+                    backpackUpgradeCallbackRef.current(message);
+                    backpackUpgradeCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'backpack_upgrade_error': {
+                if (backpackUpgradeCallbackRef.current) {
+                    backpackUpgradeCallbackRef.current({ error: message.error, message: message.message, cost: message.cost });
+                    backpackUpgradeCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'merchant_sell_result':
+            case 'fish_sell_result': {
+                if (message.inventory) setGameInventory(message.inventory);
+                if (fishSellCallbackRef.current) {
+                    fishSellCallbackRef.current(message);
+                    fishSellCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'merchant_sell_error':
+            case 'fish_sell_error': {
+                if (fishSellCallbackRef.current) {
+                    fishSellCallbackRef.current({ error: message.error, message: message.message });
+                    fishSellCallbackRef.current = null;
                 }
                 break;
             }
@@ -2092,10 +2166,15 @@ export function MultiplayerProvider({ children }) {
         
         // If fish data is provided, this is from the minigame
         if (fishData) {
-            send({ 
-                type: 'fishing_game_result', 
-                spotId, 
-                fish: fishData,
+            send({
+                type: 'fishing_game_result',
+                spotId,
+                fish: {
+                    id: fishData.id,
+                    name: fishData.name,
+                    emoji: fishData.emoji,
+                    coins: fishData.coins
+                },
                 depth,
                 success: true
             });
@@ -2130,6 +2209,47 @@ export function MultiplayerProvider({ children }) {
     const clearFishingResult = useCallback(() => {
         setFishingResult(null);
     }, []);
+
+    const fetchGameInventory = useCallback(() => {
+        if (!connected) return;
+        if (!isAuthenticated) {
+            setBackpackError('Connect your wallet to use the backpack');
+            return;
+        }
+        send({ type: 'game_inventory_get' });
+    }, [connected, isAuthenticated, send]);
+
+    useEffect(() => {
+        if (connected && isAuthenticated) {
+            send({ type: 'game_inventory_get' });
+        }
+    }, [connected, isAuthenticated, send]);
+
+    const moveGameInventorySlot = useCallback((fromSlot, toSlot, quantity = null) => {
+        if (!connected) return;
+        send({ type: 'game_inventory_move', fromSlot, toSlot, quantity });
+    }, [connected, send]);
+
+    const sellAtMerchant = useCallback((merchantId, slotIndex, quantity = 1) => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            fishSellCallbackRef.current = resolve;
+            send({ type: 'merchant_sell', merchantId, slotIndex, quantity });
+        });
+    }, [connected, send]);
+
+    const upgradeBackpack = useCallback((merchantId = 'supply_merchant') => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            backpackUpgradeCallbackRef.current = resolve;
+            send({ type: 'backpack_upgrade', merchantId });
+        });
+    }, [connected, send]);
+
+    /** @deprecated use sellAtMerchant */
+    const sellFishAtNpc = useCallback((slotIndex, quantity = 1) => {
+        return sellAtMerchant('fish_buyer', slotIndex, quantity);
+    }, [sellAtMerchant]);
     
     // Connect on mount
     useEffect(() => {
@@ -2311,6 +2431,15 @@ export function MultiplayerProvider({ children }) {
         fishingActive,
         fishingResult,
         clearFishingResult,
+
+        // Backpack (gameplay items: fish, resources, gear)
+        gameInventory,
+        backpackError,
+        fetchGameInventory,
+        moveGameInventorySlot,
+        sellAtMerchant,
+        sellFishAtNpc,
+        upgradeBackpack,
         
         // Puffle Actions
         adoptPuffle,
@@ -2370,6 +2499,7 @@ export function MultiplayerProvider({ children }) {
         spinSlot, slotSpinning, slotResult, clearSlotResult, activeSlotSpins,
         spinGoldSlot, goldSlotSpinning, goldSlotResult, clearGoldSlotResult, syncGoldSlots, activeGoldSlotSpins,
         startFishing, attemptCatch, cancelFishing, fishingActive, fishingResult, clearFishingResult,
+        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, sellAtMerchant, sellFishAtNpc, upgradeBackpack,
         adoptPuffle, puffleAdopting,
         setName, joinRoom, sendPosition, sendChat, sendAfk, sendEmoteBubble, sendEmote, stopEmote,
         markChatTabRead, registerChatBubbleCallback, addLocalChatMessage,

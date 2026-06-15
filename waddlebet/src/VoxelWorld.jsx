@@ -75,6 +75,9 @@ import PongGame from './minigames/PongGame';
 import MemoryMatchGame from './minigames/MemoryMatchGame';
 import ThinIceGame from './minigames/ThinIceGame';
 import AvalancheRunGame from './minigames/AvalancheRunGame';
+import WorldNpcManager from './npcs/WorldNpcManager';
+import NpcDialogueModal from './components/NpcDialogueModal';
+import GameInventoryModal from './components/GameInventoryModal';
 
 const VoxelWorld = ({ 
     penguinData, 
@@ -299,7 +302,11 @@ const VoxelWorld = ({
         cancelFishing,
         fishingActive,
         fishingResult,
+        clearFishingResult,
         userData,
+        gameInventory,
+        upgradeBackpack,
+        fetchGameInventory,
         // Raw send for PvE activity messages
         send: mpSend
     } = useMultiplayer();
@@ -610,14 +617,31 @@ const VoxelWorld = ({
         arcadeGameActiveRef.current = arcadeGameActive;
     }, [arcadeGameActive]);
 
+    // Pause the heavy 3D world loop while fullscreen minigames / PvP wagers own the screen
+    const worldMinigameActiveRef = useRef(false);
     useEffect(() => {
-        setWorldGameplayOverlay(blackjackGameActive || arcadeGameActive || fishingGameActive);
-        return () => setWorldGameplayOverlay(false);
-    }, [blackjackGameActive, arcadeGameActive, fishingGameActive, setWorldGameplayOverlay]);
+        const active = blackjackGameActive || arcadeGameActive || fishingGameActive || isInMatch;
+        worldMinigameActiveRef.current = active;
+        performanceManager.setOverlayActive(active);
+        setWorldGameplayOverlay(active);
+        return () => {
+            worldMinigameActiveRef.current = false;
+            performanceManager.setOverlayActive(false);
+            setWorldGameplayOverlay(false);
+        };
+    }, [blackjackGameActive, arcadeGameActive, fishingGameActive, isInMatch, setWorldGameplayOverlay]);
     
     // Lord Fishnu Interaction State
     const [lordFishnuInteraction, setLordFishnuInteraction] = useState(null); // { canPayRespects, prompt }
     const lordFishnuCooldownRef = useRef(false); // Prevent spam
+
+    // World merchant NPCs (Old Salty, Copper Clive, …)
+    const worldNpcManagerRef = useRef(null);
+    const [nearbyNpcInteraction, setNearbyNpcInteraction] = useState(null);
+    const nearbyNpcInteractionRef = useRef(null);
+    const [activeNpcDef, setActiveNpcDef] = useState(null);
+    const [showNpcBackpack, setShowNpcBackpack] = useState(false);
+    const [npcBackpackSellMerchant, setNpcBackpackSellMerchant] = useState(null);
     
     // Bench Sitting State
     const [seatedOnBench, setSeatedOnBench] = useState(null); // { benchId, snapPoint, worldPos }
@@ -1784,6 +1808,20 @@ const VoxelWorld = ({
         // Store buildPenguinMesh for multiplayer to use
         buildPenguinMeshRef.current = buildPenguinMesh;
         setMeshBuilderReady(true);
+
+        // Spawn world merchant NPCs as permanent town props (town only)
+        if (room === 'town' && townCenterRef.current) {
+            if (!worldNpcManagerRef.current) {
+                worldNpcManagerRef.current = new WorldNpcManager(THREE);
+            }
+            worldNpcManagerRef.current.attachToTown(
+                scene,
+                buildPenguinMesh,
+                townCenterRef.current.collisionSystem,
+                townCenterRef.current.propMeshes
+            );
+            console.log('🐧 World merchant NPCs attached to town');
+        }
         
         // OPTIMIZATION: Cache animated cosmetic parts to avoid traverse() every frame
         // This function should be called once after building a mesh
@@ -2778,6 +2816,12 @@ const VoxelWorld = ({
             if (loopGeneration !== updateLoopGenerationRef.current) return;
             reqRef.current = requestAnimationFrame(update);
             frameCount++;
+
+            // Fullscreen minigames (fishing reel, arcade, blackjack) — skip world sim + render
+            if (worldMinigameActiveRef.current) {
+                clock.getDelta();
+                return;
+            }
             
             let delta = clock.getDelta();
             const time = clock.getElapsedTime(); 
@@ -6745,6 +6789,9 @@ const VoxelWorld = ({
                 rendererRef.current.dispose();
             }
             // Cleanup TownCenter
+            if (worldNpcManagerRef.current) {
+                worldNpcManagerRef.current.detach();
+            }
             if (townCenterRef.current) {
                 townCenterRef.current.dispose();
                 townCenterRef.current = null;
@@ -8233,6 +8280,12 @@ const VoxelWorld = ({
         nearbyPortalRef.current = null;
         setNearbyPortal(null);
         setNearbyInteraction(null);
+        setNearbyNpcInteraction(null);
+        nearbyNpcInteractionRef.current = null;
+        setActiveNpcDef(null);
+        if (worldNpcManagerRef.current) {
+            worldNpcManagerRef.current.detach();
+        }
     }, [room]);
 
     // Check for nearby portals (room-specific)
@@ -8648,6 +8701,32 @@ const VoxelWorld = ({
         }
     };
     
+    // Check world merchant NPC proximity (town only)
+    const checkWorldNpcs = () => {
+        if (room !== 'town' || !worldNpcManagerRef.current) {
+            if (nearbyNpcInteraction) setNearbyNpcInteraction(null);
+            nearbyNpcInteractionRef.current = null;
+            return;
+        }
+        const nearby = worldNpcManagerRef.current.checkProximity(
+            posRef.current,
+            room,
+            { gameInventory, coins: userData?.coins ?? 0 }
+        );
+        if (nearby) {
+            if (!nearbyNpcInteraction || nearbyNpcInteraction.id !== nearby.id) {
+                setNearbyNpcInteraction(nearby);
+                nearbyNpcInteractionRef.current = nearby;
+            }
+        } else if (nearbyNpcInteraction) {
+            setNearbyNpcInteraction(null);
+            nearbyNpcInteractionRef.current = null;
+        }
+        if (cameraRef.current) {
+            worldNpcManagerRef.current.updateMarkers(cameraRef.current);
+        }
+    };
+    
     // Check for Lord Fishnu proximity (town only)
     const checkLordFishnu = () => {
         if (room !== 'town') {
@@ -8690,11 +8769,12 @@ const VoxelWorld = ({
             checkSlotMachines();
             checkBlackjackTables();
             checkFishingSpots();
+            checkWorldNpcs();
             checkLordFishnu();
             checkArcadeMachines();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, isAuthenticated]);
+    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, isAuthenticated, gameInventory, nearbyNpcInteraction]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -9081,6 +9161,7 @@ const VoxelWorld = ({
     const handleFishingGameClose = useCallback(() => {
         setFishingGameActive(false);
         setFishingGameSpot(null);
+        clearFishingResult?.();
         
         // Clear local fishing state so player can fish again immediately
         if (iceFishingSystemRef.current) {
@@ -9089,7 +9170,26 @@ const VoxelWorld = ({
         
         // Notify server that fishing ended (for PvE spectator banners)
         mpSend?.({ type: 'fishing_end' });
-    }, [mpSend]);
+    }, [mpSend, clearFishingResult]);
+
+    const openNpcDialogue = useCallback((npcNearby) => {
+        if (!npcNearby?.def) return;
+        setActiveNpcDef(npcNearby.def);
+        fetchGameInventory?.();
+    }, [fetchGameInventory]);
+
+    const handleNpcDialogueAction = useCallback(async (actionId, npcDef) => {
+        if (actionId === 'upgrade_backpack') {
+            return upgradeBackpack?.('supply_merchant');
+        }
+        if (actionId === 'open_backpack') {
+            fetchGameInventory?.();
+            setNpcBackpackSellMerchant(npcDef?.merchantId === 'fish_buyer' ? 'fish_buyer' : null);
+            setShowNpcBackpack(true);
+            return { success: true };
+        }
+        return null;
+    }, [upgradeBackpack, fetchGameInventory]);
     
     // Handle arcade game close (PvE Battleship)
     const handleArcadeGameClose = useCallback(() => {
@@ -9153,20 +9253,25 @@ const VoxelWorld = ({
         mpSendEmoteBubble(message);
     }, [mpSendEmoteBubble]);
     
-    // E key handler for Lord Fishnu
+    // E key handler for world NPCs + Lord Fishnu
     useEffect(() => {
-        const handleFishnuKeyPress = (e) => {
-            if (e.code === 'KeyE' && room === 'town') {
-                const lf = lordFishnuInteractionRef.current;
-                // Only trigger if near Fishnu and NOT near a portal or fishing spot
-                if (lf?.canPayRespects && !nearbyPortal && !fishingInteraction && !emoteWheelOpen && !lordFishnuCooldownRef.current) {
-                    handlePayRespects();
-                }
+        const handleNpcKeyPress = (e) => {
+            if (e.code !== 'KeyE' || room !== 'town' || emoteWheelOpen) return;
+
+            const npc = nearbyNpcInteractionRef.current;
+            if (npc && !nearbyPortal && !fishingInteraction && !blackjackGameActive && !fishingGameActive) {
+                openNpcDialogue(npc);
+                return;
+            }
+
+            const lf = lordFishnuInteractionRef.current;
+            if (lf?.canPayRespects && !nearbyPortal && !fishingInteraction && !npc) {
+                handlePayRespects();
             }
         };
-        window.addEventListener('keydown', handleFishnuKeyPress);
-        return () => window.removeEventListener('keydown', handleFishnuKeyPress);
-    }, [nearbyPortal, fishingInteraction, emoteWheelOpen, room, handlePayRespects]);
+        window.addEventListener('keydown', handleNpcKeyPress);
+        return () => window.removeEventListener('keydown', handleNpcKeyPress);
+    }, [nearbyPortal, fishingInteraction, emoteWheelOpen, room, handlePayRespects, openNpcDialogue, blackjackGameActive, fishingGameActive]);
     
     // Handle town interactions (benches, snowmen, etc.)
     useEffect(() => {
@@ -9320,7 +9425,7 @@ const VoxelWorld = ({
                 }
             }
             
-            if (e.code === 'KeyE' && nearbyInteraction && !nearbyPortal) {
+            if (e.code === 'KeyE' && nearbyInteraction && !nearbyPortal && !nearbyNpcInteractionRef.current) {
                 // Handle bench sitting with snap points
                 if (nearbyInteraction.action === 'sit' && nearbyInteraction.benchData) {
                     const benchData = nearbyInteraction.benchData;
@@ -10320,7 +10425,6 @@ const VoxelWorld = ({
                 // Fishing started - minigame overlay handles display
             },
             onPlayerCaughtFish: (data) => {
-                // A player caught a fish - show bubble above them
                 if (iceFishingSystemRef.current) {
                     const isJellyfish = data.fish?.type === 'jellyfish' || data.fish?.id?.includes('jelly');
                     iceFishingSystemRef.current.showCatchBubble(
@@ -10329,7 +10433,9 @@ const VoxelWorld = ({
                         data.fish,
                         data.coins,
                         data.isDemo,
-                        isJellyfish
+                        isJellyfish,
+                        data.npcValue || data.fish?.npcValue || 0,
+                        data.inventoryAdded
                     );
                 }
             },
@@ -10666,6 +10772,7 @@ const VoxelWorld = ({
                     spotId={fishingGameSpot.id}
                     playerName={playerName}
                     isDemo={fishingGameSpot.isDemo}
+                    fishingResult={fishingResult}
                     onCatch={handleFishingCatch}
                     onMiss={handleFishingMiss}
                     onClose={handleFishingGameClose}
@@ -11149,6 +11256,56 @@ const VoxelWorld = ({
                 </div>
              )}
              
+             {/* World Merchant NPC interaction */}
+             {nearbyNpcInteraction && room === 'town' && !nearbyPortal && !fishingInteraction && !fishingGameActive && !activeNpcDef && (
+                <div
+                    className={`absolute bg-gradient-to-b from-slate-900/95 to-slate-950/95 backdrop-blur-sm rounded-xl border border-cyan-500/40 text-center z-20 shadow-lg shadow-cyan-500/10 ${
+                        isMobile
+                            ? isLandscape
+                                ? 'bottom-[180px] right-28 p-3'
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    }`}
+                >
+                    <div className="text-2xl mb-1">
+                        {nearbyNpcInteraction.markerType === '!' ? '❗' : '❓'}
+                    </div>
+                    <p className="text-cyan-300 retro-text text-sm mb-2">
+                        {isMobile
+                            ? `Tap to talk`
+                            : nearbyNpcInteraction.prompt}
+                    </p>
+                    <button
+                        type="button"
+                        className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm bg-gradient-to-b from-cyan-500 to-teal-700 hover:from-cyan-400 hover:to-teal-600 text-white transition-all active:scale-95"
+                        onClick={() => openNpcDialogue(nearbyNpcInteraction)}
+                    >
+                        💬 Talk
+                    </button>
+                    {!isMobile && (
+                        <p className="text-white/50 text-[10px] mt-1 retro-text">{t('interact.orPressE')}</p>
+                    )}
+                </div>
+             )}
+
+             <NpcDialogueModal
+                isOpen={Boolean(activeNpcDef)}
+                npcDef={activeNpcDef}
+                onClose={() => setActiveNpcDef(null)}
+                onAction={handleNpcDialogueAction}
+                gameInventory={gameInventory}
+                coins={userData?.coins ?? 0}
+             />
+
+             <GameInventoryModal
+                isOpen={showNpcBackpack}
+                onClose={() => {
+                    setShowNpcBackpack(false);
+                    setNpcBackpackSellMerchant(null);
+                }}
+                sellMerchantId={npcBackpackSellMerchant}
+             />
+
              {/* Lord Fishnu Interaction UI */}
              {lordFishnuInteraction && room === 'town' && !fishingInteraction && !nearbyPortal && (
                 <div 

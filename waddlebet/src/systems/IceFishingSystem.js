@@ -126,7 +126,7 @@ class IceFishingSystem {
     /**
      * Show catch bubble above a player
      */
-    showCatchBubble(playerId, playerName, fish, coins, isDemo = false, isStung = false) {
+    showCatchBubble(playerId, playerName, fish, coins, isDemo = false, isStung = false, npcValue = 0, inventoryAdded = false) {
         // Remove existing bubble for this player
         this.dismissCatchBubble(playerId);
         
@@ -164,11 +164,15 @@ class IceFishingSystem {
         ctx.font = 'bold 14px Arial';
         ctx.fillText(fish?.name || 'Fish', 100, 80);
         
-        // Coins (if not demo)
-        if (!isDemo && coins > 0) {
+        // Value line
+        if (!isDemo && !isStung) {
             ctx.fillStyle = '#FFD700';
             ctx.font = 'bold 12px Arial';
-            ctx.fillText(`+${coins}g 🪙`, 100, 98);
+            if (inventoryAdded && npcValue > 0) {
+                ctx.fillText(`~${npcValue}g → Backpack`, 100, 98);
+            } else if (coins > 0) {
+                ctx.fillText(`+${coins}g 🪙`, 100, 98);
+            }
         }
         
         const texture = new THREE.CanvasTexture(canvas);

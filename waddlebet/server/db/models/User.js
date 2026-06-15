@@ -105,6 +105,29 @@ const userSchema = new mongoose.Schema({
         default: []
     },
 
+    // ========== GAMEPLAY BACKPACK (fish, resources, gear — separate from cosmetics) ==========
+    gameInventory: {
+        columns: { type: Number, default: 10 },
+        displayRows: { type: Number, default: 6 },
+        /** Active backpack slots (default 5, upgradable to 60) */
+        unlockedSlots: { type: Number, default: 5 },
+        /** @deprecated legacy — use unlockedSlots */
+        rows: { type: Number, default: 6 },
+        // Plain JSON slot objects — avoids Mongoose subdoc persistence issues
+        slots: {
+            type: [mongoose.Schema.Types.Mixed],
+            default: () => []
+        }
+    },
+    fishingProgress: {
+        skillXp: { type: Number, default: 0 },
+        skillLevel: { type: Number, default: 1 },
+        equippedRod: { type: String, default: 'basic_rod' },
+        equippedBait: { type: String, default: null },
+        equippedLure: { type: String, default: null },
+        totalCatches: { type: Number, default: 0 }
+    },
+
     // ========== COMPREHENSIVE STATISTICS ==========
     stats: {
         movement: {

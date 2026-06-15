@@ -559,6 +559,48 @@ input, textarea {
   animation: slide-up 0.3s ease-out;
 }
 
+/* NPC merchant dialogue — RPG shop panel */
+.npc-dialogue-overlay {
+  animation: fade-in 0.2s ease-out;
+}
+
+.npc-speech-bubble::before {
+  content: '';
+  position: absolute;
+  left: 1.25rem;
+  top: -8px;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid rgba(255, 255, 255, 0.08);
+}
+
+@keyframes npc-feedback-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  60% {
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.npc-feedback-pop {
+  animation: npc-feedback-pop 0.35s ease-out;
+}
+
+.npc-choice-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  filter: brightness(1.08);
+}
+
+.npc-choice-btn:not(:disabled):active {
+  box-shadow: none !important;
+}
+
 /* Galaxy/Cosmic animated color shifts for special feather colors */
 @keyframes cosmicShift {
   0% {

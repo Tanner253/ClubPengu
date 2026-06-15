@@ -261,6 +261,357 @@ const getRandomPickup = () => {
 // Max pickups per game (total of all types)
 const MAX_COINS_PER_GAME = 5;
 
+// ==================== REEL TENSION MINIGAME ====================
+/**
+ * Difficulty scales with fish NPC value (coins) — deep/rare fish fight harder.
+ * Returns tier 1 (minnow) through 10 (leviathan/kraken).
+ */
+function getFishValueTier(fish) {
+    const value = fish?.coins ?? 3;
+    if (value >= 700) return 10;
+    if (value >= 400) return 9;
+    if (value >= 280) return 8;
+    if (value >= 180) return 7;
+    if (value >= 100) return 6;
+    if (value >= 60) return 5;
+    if (value >= 35) return 4;
+    if (value >= 15) return 3;
+    if (value >= 8) return 2;
+    return 1;
+}
+
+function getReelConfig(fish, catchDepth = 0) {
+    const tier = getFishValueTier(fish);
+    const size = fish?.size ?? 1;
+    const tierNorm = (tier - 1) / 9; // 0..1
+
+    // Deeper catches add a small extra challenge
+    const depthBonus = Math.min(0.25, catchDepth / 6000);
+
+    const greenWidth = 30 - tierNorm * 14 - depthBonus * 8; // wide for cheap, narrow for legends
+    const greenCenter = 50;
+    const greenMin = greenCenter - greenWidth / 2;
+    const greenMax = greenCenter + greenWidth / 2;
+
+    const fightMult = 1 + tierNorm * 1.1 + depthBonus;
+
+    return {
+        tier,
+        fishName: fish?.name || 'Fish',
+        greenMin,
+        greenMax,
+        snapHigh: 96,
+        snapLow: 4,
+        introMs: 600 + tier * 40,
+        fishPull: (5.5 + tier * 1.1) * fightMult,
+        reelPull: 10.5,
+        wobbleAmp: (0.8 + tier * 0.45 + size * 0.15) * fightMult,
+        wobbleHz: 0.3 + tier * 0.07,
+        dangerFillRate: (14 + tier * 2.8) * fightMult,
+        dangerDrainRate: 34,
+        progressFillRate: 24 / (tier + depthBonus * 4),
+        maxDanger: 100,
+        maxProgress: 100
+    };
+}
+
+const TIER_LABELS = {
+    1: 'Common',
+    2: 'Common',
+    3: 'Uncommon',
+    4: 'Uncommon',
+    5: 'Rare',
+    6: 'Rare',
+    7: 'Epic',
+    8: 'Epic',
+    9: 'Legendary',
+    10: 'Legendary'
+};
+
+function ReelTensionMinigame({ fish, catchDepth = 0, handlersRef }) {
+    const fishId = fish?.id ?? 'unknown';
+    const configRef = useRef(getReelConfig(fish, catchDepth));
+    const holdingRef = useRef(false);
+    const tensionRef = useRef(50);
+    const dangerRef = useRef(0);
+    const progressRef = useRef(0);
+    const finishedRef = useRef(false);
+    const wobblePhaseRef = useRef(0);
+    const startRef = useRef(performance.now());
+    const rafRef = useRef(null);
+
+    // DOM refs — updated directly in RAF (no React re-renders during fight)
+    const progressBarRef = useRef(null);
+    const progressTextRef = useRef(null);
+    const markerRef = useRef(null);
+    const dangerBarRef = useRef(null);
+    const dangerTextRef = useRef(null);
+    const statusTextRef = useRef(null);
+    const titleTextRef = useRef(null);
+    const hintTextRef = useRef(null);
+    const reelBadgeRef = useRef(null);
+    const lastUiUpdateRef = useRef(0);
+    const lastInGreenRef = useRef(true);
+    const lastHoldingRef = useRef(false);
+    const markerColorGreenRef = useRef(true);
+
+    const config = configRef.current;
+    const tierLabel = TIER_LABELS[config.tier] || 'Common';
+
+    const updateDom = (tension, danger, progress, holding, inGreen, started) => {
+        const progressPct = Math.round(progress);
+        if (progressBarRef.current) {
+            progressBarRef.current.style.width = `${progressPct}%`;
+        }
+        if (progressTextRef.current) {
+            progressTextRef.current.textContent = `${progressPct}%`;
+        }
+        if (markerRef.current) {
+            markerRef.current.style.left = `${tension}%`;
+            if (inGreen !== markerColorGreenRef.current) {
+                markerColorGreenRef.current = inGreen;
+                markerRef.current.className = `absolute top-1 bottom-1 w-4 -translate-x-1/2 rounded-md shadow-lg border-2 ${
+                    inGreen ? 'bg-green-300 border-green-100' : 'bg-amber-400 border-amber-200'
+                }`;
+            }
+        }
+        const dangerPct = Math.round(danger);
+        if (dangerBarRef.current) {
+            dangerBarRef.current.style.width = `${dangerPct}%`;
+            dangerBarRef.current.className = `h-full ${
+                dangerPct > 70 ? 'bg-red-500' : dangerPct > 35 ? 'bg-orange-500' : 'bg-yellow-600'
+            }`;
+        }
+        if (dangerTextRef.current) {
+            dangerTextRef.current.textContent = `${dangerPct}%`;
+            dangerTextRef.current.className = dangerPct > 60 ? 'text-red-400 font-bold' : 'text-gray-400';
+        }
+        if (statusTextRef.current) {
+            if (!started) statusTextRef.current.textContent = '…';
+            else if (inGreen) statusTextRef.current.textContent = 'Good — keep it steady!';
+            else if (dangerPct > 50) statusTextRef.current.textContent = 'Line stress rising — get back in green!';
+            else statusTextRef.current.textContent = 'Too much or too little tension — reel or let out line';
+            statusTextRef.current.className = `text-sm font-bold ${inGreen ? 'text-green-400' : 'text-red-400'}`;
+        }
+        if (titleTextRef.current) {
+            titleTextRef.current.textContent = started ? 'REEL IT IN!' : 'FISH ON THE LINE!';
+        }
+        if (hintTextRef.current && !started) {
+            hintTextRef.current.textContent = 'Get ready…';
+        }
+        if (reelBadgeRef.current) {
+            reelBadgeRef.current.className = `mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs ${
+                holding
+                    ? 'bg-cyan-900/60 text-cyan-200 border border-cyan-500/40'
+                    : 'bg-slate-800/80 text-gray-400 border border-slate-600'
+            }`;
+            const spans = reelBadgeRef.current.querySelectorAll('span');
+            if (spans[0]) spans[0].textContent = holding ? '🎣' : '⌨️';
+            if (spans[1]) spans[1].textContent = holding ? 'Reeling…' : 'Hold Space / click to reel';
+        }
+    };
+
+    useEffect(() => {
+        configRef.current = getReelConfig(fish, catchDepth);
+        const cfg = configRef.current;
+
+        finishedRef.current = false;
+        holdingRef.current = false;
+        tensionRef.current = 50;
+        dangerRef.current = 0;
+        progressRef.current = 0;
+        wobblePhaseRef.current = 0;
+        startRef.current = performance.now();
+        lastUiUpdateRef.current = 0;
+
+        let last = performance.now();
+
+        const finish = (won) => {
+            if (finishedRef.current) return;
+            finishedRef.current = true;
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            if (won) handlersRef?.current?.onSuccess?.();
+            else handlersRef?.current?.onFail?.();
+        };
+
+        const tick = (now) => {
+            if (finishedRef.current) return;
+
+            const dt = Math.min((now - last) / 1000, 0.033);
+            last = now;
+            const elapsed = now - startRef.current;
+            const started = elapsed >= cfg.introMs;
+
+            if (started) {
+                wobblePhaseRef.current += dt * cfg.wobbleHz * Math.PI * 2;
+                const wobble = Math.sin(wobblePhaseRef.current) * cfg.wobbleAmp;
+
+                let tension = tensionRef.current;
+                if (holdingRef.current) {
+                    tension -= cfg.reelPull * dt;
+                } else {
+                    tension += cfg.fishPull * dt;
+                }
+                tension += wobble * dt;
+                tension = Math.max(0, Math.min(100, tension));
+                tensionRef.current = tension;
+
+                const inGreen = tension >= cfg.greenMin && tension <= cfg.greenMax;
+
+                if (tension >= cfg.snapHigh || tension <= cfg.snapLow) {
+                    finish(false);
+                    return;
+                }
+
+                if (inGreen) {
+                    dangerRef.current = Math.max(0, dangerRef.current - cfg.dangerDrainRate * dt);
+                    progressRef.current = Math.min(
+                        cfg.maxProgress,
+                        progressRef.current + cfg.progressFillRate * dt
+                    );
+                    if (progressRef.current >= cfg.maxProgress) {
+                        finish(true);
+                        return;
+                    }
+                } else {
+                    dangerRef.current = Math.min(
+                        cfg.maxDanger,
+                        dangerRef.current + cfg.dangerFillRate * dt
+                    );
+                    if (dangerRef.current >= cfg.maxDanger) {
+                        finish(false);
+                        return;
+                    }
+                }
+
+                const holding = holdingRef.current;
+                if (markerRef.current) {
+                    markerRef.current.style.left = `${tension}%`;
+                }
+                // Progress bar every frame (cheap); other labels throttled
+                if (progressBarRef.current) {
+                    progressBarRef.current.style.width = `${progressRef.current}%`;
+                }
+
+                const shouldUpdateUi =
+                    now - lastUiUpdateRef.current >= 66 ||
+                    inGreen !== lastInGreenRef.current ||
+                    holding !== lastHoldingRef.current;
+
+                if (shouldUpdateUi) {
+                    lastUiUpdateRef.current = now;
+                    lastInGreenRef.current = inGreen;
+                    lastHoldingRef.current = holding;
+                    updateDom(tension, dangerRef.current, progressRef.current, holding, inGreen, true);
+                }
+            } else if (now - lastUiUpdateRef.current >= 100) {
+                lastUiUpdateRef.current = now;
+                updateDom(50, 0, 0, holdingRef.current, true, false);
+            }
+
+            rafRef.current = requestAnimationFrame(tick);
+        };
+
+        const onKeyDown = (e) => {
+            if (e.code !== 'Space' && e.key !== ' ') return;
+            e.preventDefault();
+            if (e.repeat) return;
+            holdingRef.current = true;
+        };
+        const onKeyUp = (e) => {
+            if (e.code !== 'Space' && e.key !== ' ') return;
+            e.preventDefault();
+            holdingRef.current = false;
+        };
+
+        window.addEventListener('keydown', onKeyDown, { passive: false });
+        window.addEventListener('keyup', onKeyUp, { passive: false });
+        updateDom(50, 0, 0, false, true, false);
+        rafRef.current = requestAnimationFrame(tick);
+
+        return () => {
+            finishedRef.current = true;
+            if (rafRef.current) cancelAnimationFrame(rafRef.current);
+            window.removeEventListener('keydown', onKeyDown);
+            window.removeEventListener('keyup', onKeyUp);
+        };
+    }, [fishId]);
+
+    return (
+        <div
+            className="absolute inset-0 flex items-center justify-center bg-black/90 z-30 select-none"
+            style={{ touchAction: 'none' }}
+            onPointerDown={(e) => { e.preventDefault(); holdingRef.current = true; }}
+            onPointerUp={() => { holdingRef.current = false; }}
+            onPointerLeave={() => { holdingRef.current = false; }}
+            onPointerCancel={() => { holdingRef.current = false; }}
+        >
+            <div className="w-full max-w-lg px-6 text-center pointer-events-auto">
+                <div className="text-5xl mb-1">{fish?.emoji || '🐟'}</div>
+                <div className="text-xs text-amber-400/90 mb-2 uppercase tracking-wide">
+                    {tierLabel} · ~{fish?.coins ?? '?'}g
+                </div>
+                <div ref={titleTextRef} className="text-xl font-bold text-cyan-300 mb-1 retro-text">
+                    FISH ON THE LINE!
+                </div>
+                <div ref={hintTextRef} className="text-sm text-gray-300 mb-5">
+                    {config.tier >= 7
+                        ? 'Tough fight — short pulses on Space, stay in the narrow green zone'
+                        : 'Hold Space or click to reel · Pulse to stay in the green zone'}
+                </div>
+
+                <div className="mb-4">
+                    <div className="flex justify-between text-[11px] text-gray-400 mb-1">
+                        <span>Catch progress</span>
+                        <span ref={progressTextRef}>0%</span>
+                    </div>
+                    <div className="h-3 bg-slate-900 rounded-full border border-slate-600 overflow-hidden">
+                        <div
+                            ref={progressBarRef}
+                            className="h-full bg-gradient-to-r from-teal-500 to-green-400"
+                            style={{ width: '0%' }}
+                        />
+                    </div>
+                </div>
+
+                <div className="relative h-12 bg-slate-900 rounded-xl border-2 border-slate-600 overflow-hidden mb-2">
+                    <div
+                        className="absolute top-0 bottom-0 bg-green-500/35 border-x-2 border-green-400/50"
+                        style={{ left: `${config.greenMin}%`, width: `${config.greenMax - config.greenMin}%` }}
+                    />
+                    <div
+                        ref={markerRef}
+                        className="absolute top-1 bottom-1 w-4 -translate-x-1/2 rounded-md shadow-lg border-2 bg-green-300 border-green-100"
+                        style={{ left: '50%' }}
+                    />
+                    <div className="absolute left-2 top-1 text-[9px] text-red-400/80">SNAP</div>
+                    <div className="absolute right-2 top-1 text-[9px] text-blue-400/80">ESCAPED</div>
+                </div>
+
+                <div className="mb-3">
+                    <div className="flex justify-between text-[11px] mb-1">
+                        <span className="text-gray-400">Line stress</span>
+                        <span ref={dangerTextRef} className="text-gray-400">0%</span>
+                    </div>
+                    <div className="h-2 bg-slate-900 rounded-full border border-slate-700 overflow-hidden">
+                        <div ref={dangerBarRef} className="h-full bg-yellow-600" style={{ width: '0%' }} />
+                    </div>
+                </div>
+
+                <div ref={statusTextRef} className="text-sm font-bold text-green-400">…</div>
+
+                <div
+                    ref={reelBadgeRef}
+                    className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs bg-slate-800/80 text-gray-400 border border-slate-600"
+                >
+                    <span>⌨️</span>
+                    <span>Hold Space / click to reel</span>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 // ==================== GAME COMPONENT ====================
 export default function IceFishingGame({ 
     onClose, 
@@ -268,7 +619,8 @@ export default function IceFishingGame({
     onMiss,
     playerName,
     isDemo = false,
-    spotId
+    spotId,
+    fishingResult = null
 }) {
     const containerRef = useRef(null);
     const rendererRef = useRef(null);
@@ -290,6 +642,7 @@ export default function IceFishingGame({
     const gameEndingRef = useRef(false); // For smooth end animation
     
     const [gamePhase, setGamePhase] = useState('intro');
+    const [missReason, setMissReason] = useState(null);
     const [depth, setDepth] = useState(0);
     const [currentZone, setCurrentZone] = useState(GAME_CONFIG.ZONES[0]);
     const [caughtFish, setCaughtFish] = useState(null);
@@ -301,7 +654,34 @@ export default function IceFishingGame({
     const [hasSpeedBoost, setHasSpeedBoost] = useState(false);
     const [treasureFound, setTreasureFound] = useState(false);
     const [pearlFound, setPearlFound] = useState(false);
+    const [reelingFish, setReelingFish] = useState(null);
+    const [reelCatchDepth, setReelCatchDepth] = useState(0);
+    const [catchStorageStatus, setCatchStorageStatus] = useState('pending'); // pending | stored | error | demo
+    const reelHandlersRef = useRef({ onSuccess: null, onFail: null });
     const speedBoostRef = useRef(0); // Timestamp when speed boost expires
+    const currentZoneNameRef = useRef(GAME_CONFIG.ZONES[0].name);
+    const atmosphereColorsRef = useRef(null);
+
+    useEffect(() => {
+        if (gamePhase === 'reeling' && rendererRef.current) {
+            rendererRef.current.domElement.style.display = 'none';
+        } else if (rendererRef.current) {
+            rendererRef.current.domElement.style.display = '';
+        }
+    }, [gamePhase]);
+
+    useEffect(() => {
+        if (!fishingResult || !caughtFish || gamePhase !== 'caught') return;
+        if (fishingResult.fish?.id && fishingResult.fish.id !== caughtFish.id) return;
+
+        if (isDemo || fishingResult.isDemo) {
+            setCatchStorageStatus('demo');
+        } else if (fishingResult.inventoryAdded) {
+            setCatchStorageStatus('stored');
+        } else if (fishingResult.inventoryError) {
+            setCatchStorageStatus('error');
+        }
+    }, [fishingResult, caughtFish, gamePhase, isDemo]);
     
     const inputRef = useRef({ left: false, right: false });
     
@@ -334,18 +714,22 @@ export default function IceFishingGame({
         camera.lookAt(0, -15, 0);
         cameraRef.current = camera;
         
-        // Renderer with better quality
+        // Renderer — lighter settings; world is paused while this overlay is open
         const renderer = new THREE.WebGLRenderer({ 
-            antialias: true, 
+            antialias: false, 
             alpha: true,
             powerPreference: 'high-performance'
         });
         renderer.setSize(width, height);
-        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.2;
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
         container.appendChild(renderer.domElement);
         rendererRef.current = renderer;
+
+        atmosphereColorsRef.current = {
+            top: new THREE.Color(zone.bgTop),
+            bottom: new THREE.Color(zone.bgBottom),
+            blended: new THREE.Color(zone.bgTop)
+        };
         
         // Ambient light (will dim with depth)
         const ambientLight = new THREE.AmbientLight(0x88CCFF, 0.8);
@@ -1610,7 +1994,10 @@ export default function IceFishingGame({
         }
         
         const zone = getZone(state.depth);
-        setCurrentZone(zone); // React will optimize if same value
+        if (zone.name !== currentZoneNameRef.current) {
+            currentZoneNameRef.current = zone.name;
+            setCurrentZone(zone);
+        }
         
         // ========== SPAWN FISH LANES ahead of player ==========
         const currentLane = Math.floor(state.depth / GAME_CONFIG.LANE_SPACING);
@@ -1659,10 +2046,14 @@ export default function IceFishingGame({
         
         // ========== ATMOSPHERE ==========
         const depthProgress = state.depth / zone.maxDepth;
-        const topColor = new THREE.Color(zone.bgTop);
-        const bottomColor = new THREE.Color(zone.bgBottom);
-        sceneRef.current.background = topColor.clone().lerp(bottomColor, Math.min(depthProgress, 1));
-        sceneRef.current.fog.color = sceneRef.current.background;
+        const colors = atmosphereColorsRef.current;
+        if (colors) {
+            colors.top.set(zone.bgTop);
+            colors.bottom.set(zone.bgBottom);
+            colors.blended.copy(colors.top).lerp(colors.bottom, Math.min(depthProgress, 1));
+            sceneRef.current.background = colors.blended;
+            sceneRef.current.fog.color.copy(colors.blended);
+        }
         sceneRef.current.fog.density = zone.fogDensity;
         
         if (ambientLightRef.current) {
@@ -1939,58 +2330,69 @@ export default function IceFishingGame({
                 
                 // Don't end the game - continue playing!
             } else {
-                // ========== CAUGHT A CREATURE (or JELLYFISH!) - Start end animation ==========
+                // ========== HOOKED A CREATURE — reel minigame (fish) or instant stung (jelly) ==========
+                const isJellyfish = hitFish.userData.isJellyfish ||
+                    hitFish.userData.type.type === CREATURE_TYPES.JELLYFISH;
+
                 gameEndingRef.current = true;
                 state.caughtFish = hitFish.userData.type;
-                
-                // Check if jellyfish hazard (stung!) vs regular fish catch
-                const isJellyfish = hitFish.userData.isJellyfish || 
-                    hitFish.userData.type.type === CREATURE_TYPES.JELLYFISH;
-                
-                // Start smooth slowdown animation
-                const endAnimation = () => {
-                    // Slow descent to a stop over 1 second
-                    let animProgress = 0;
-                    const animDuration = 1000;
-                    const animStart = performance.now();
-                    const originalSpeed = GAME_CONFIG.DESCENT_SPEED;
-                    
-                    const animate = () => {
-                        const now = performance.now();
-                        animProgress = Math.min((now - animStart) / animDuration, 1);
-                        
-                        // Ease out - slow to a stop
-                        const easeOut = 1 - Math.pow(1 - animProgress, 3);
-                        GAME_CONFIG.DESCENT_SPEED = originalSpeed * (1 - easeOut);
-                        
-                        // Continue descent but slowing
-                        if (animProgress < 1 && rendererRef.current && sceneRef.current) {
-                            state.depth += GAME_CONFIG.DESCENT_SPEED * 0.016;
-                            if (hookGroupRef.current) {
-                                hookGroupRef.current.position.y = -state.depth;
-                            }
-                            if (cameraRef.current) {
-                                cameraRef.current.position.y = -state.depth + 12;
-                                cameraRef.current.lookAt(state.hookX * 0.2, -state.depth - 15, 0);
-                            }
-                            rendererRef.current.render(sceneRef.current, cameraRef.current);
-                            requestAnimationFrame(animate);
-                        } else {
-                            // Animation complete - show result
-                            GAME_CONFIG.DESCENT_SPEED = originalSpeed; // Reset speed
-                            state.isPlaying = false;
-                            setCaughtFish(hitFish.userData.type);
-                            setGamePhase(isJellyfish ? 'stung' : 'caught');
-                            
-                            if (onCatch) onCatch(hitFish.userData.type, collectedCoinsRef.current);
-                        }
-                    };
-                    animate();
-                };
-                
-                // Stop the main game loop and start end animation
                 cancelAnimationFrame(animationFrameRef.current);
-                endAnimation();
+                state.isPlaying = false;
+                setCaughtFish(hitFish.userData.type);
+
+                const finishCatch = () => {
+                    const endAnimation = () => {
+                        let animProgress = 0;
+                        const animDuration = 1000;
+                        const animStart = performance.now();
+                        const originalSpeed = GAME_CONFIG.DESCENT_SPEED;
+
+                        const animate = () => {
+                            const now = performance.now();
+                            animProgress = Math.min((now - animStart) / animDuration, 1);
+                            const easeOut = 1 - Math.pow(1 - animProgress, 3);
+                            GAME_CONFIG.DESCENT_SPEED = originalSpeed * (1 - easeOut);
+
+                            if (animProgress < 1 && rendererRef.current && sceneRef.current) {
+                                state.depth += GAME_CONFIG.DESCENT_SPEED * 0.016;
+                                if (hookGroupRef.current) {
+                                    hookGroupRef.current.position.y = -state.depth;
+                                }
+                                if (cameraRef.current) {
+                                    cameraRef.current.position.y = -state.depth + 12;
+                                    cameraRef.current.lookAt(state.hookX * 0.2, -state.depth - 15, 0);
+                                }
+                                rendererRef.current.render(sceneRef.current, cameraRef.current);
+                                requestAnimationFrame(animate);
+                            } else {
+                                GAME_CONFIG.DESCENT_SPEED = originalSpeed;
+                                setGamePhase(isJellyfish ? 'stung' : 'caught');
+                                setReelingFish(null);
+                                if (!isJellyfish) {
+                                    setCatchStorageStatus(isDemo ? 'demo' : 'pending');
+                                }
+                                if (onCatch) onCatch(hitFish.userData.type, collectedCoinsRef.current);
+                            }
+                        };
+                        animate();
+                    };
+                    endAnimation();
+                };
+
+                if (isJellyfish) {
+                    setGamePhase('stung');
+                    if (onCatch) onCatch(hitFish.userData.type, collectedCoinsRef.current);
+                } else {
+                    setReelCatchDepth(Math.floor(state.depth));
+                    setReelingFish(hitFish.userData.type);
+                    setGamePhase('reeling');
+                    reelHandlersRef.current = { onSuccess: finishCatch, onFail: () => {
+                        setReelingFish(null);
+                        setMissReason('line_broke');
+                        setGamePhase('missed');
+                        if (onMiss) onMiss('line_broke', collectedCoinsRef.current);
+                    } };
+                }
                 return;
             }
         }
@@ -2019,6 +2421,7 @@ export default function IceFishingGame({
                     } else {
                         GAME_CONFIG.DESCENT_SPEED = originalSpeed;
                         state.isPlaying = false;
+                        setMissReason('hit_bottom');
                         setGamePhase('missed');
                         
                         if (onMiss) onMiss('hit_bottom', collectedCoinsRef.current);
@@ -2079,6 +2482,9 @@ export default function IceFishingGame({
             gameFishPoolRef.current = generateGameFishPool();
             coinsSpawnedRef.current = 0; // Reset coin counter
             gameEndingRef.current = false; // Reset ending flag
+            setMissReason(null);
+            setReelingFish(null);
+            setReelCatchDepth(0);
             
             // Clear any existing fish and reset lane tracking
             spawnedLanesRef.current.clear();
@@ -2158,8 +2564,16 @@ export default function IceFishingGame({
     
     return (
         <div className="fixed inset-0 z-[9999] bg-black overflow-hidden">
-            {/* 3D Canvas Container */}
-            <div ref={containerRef} className="absolute inset-0" />
+            {/* 3D Canvas Container — detached from layout during reel fight to free GPU */}
+            <div
+                ref={containerRef}
+                className="absolute inset-0"
+                style={{
+                    visibility: gamePhase === 'reeling' ? 'hidden' : 'visible',
+                    pointerEvents: gamePhase === 'reeling' ? 'none' : 'auto',
+                    contentVisibility: gamePhase === 'reeling' ? 'hidden' : 'visible'
+                }}
+            />
             
             {/* UI Overlay */}
             <div className="absolute inset-0 pointer-events-none">
@@ -2289,6 +2703,16 @@ export default function IceFishingGame({
                     </div>
                 )}
                 
+                {/* Reel tension minigame */}
+                {gamePhase === 'reeling' && reelingFish && (
+                    <ReelTensionMinigame
+                        key={`reel-${reelingFish.id}`}
+                        fish={reelingFish}
+                        catchDepth={reelCatchDepth}
+                        handlersRef={reelHandlersRef}
+                    />
+                )}
+
                 {/* Caught fish result */}
                 {gamePhase === 'caught' && caughtFish && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -2307,17 +2731,29 @@ export default function IceFishingGame({
                             </div>
                             {!isDemo && (
                                 <div className="space-y-2">
-                                    <div className="text-3xl text-yellow-400 font-bold drop-shadow-[0_0_20px_rgba(255,215,0,0.5)]">
-                                        🐟 +{caughtFish.coins} 🪙
-                                    </div>
-                                    {collectedCoins > 0 && (
-                                        <div className="text-2xl text-amber-300 font-bold">
-                                            🪙 +{collectedCoins} bonus!
+                                    {catchStorageStatus === 'pending' && (
+                                        <div className="text-xl text-gray-300 font-bold animate-pulse">
+                                            🎒 Storing in backpack…
                                         </div>
                                     )}
-                                    <div className="text-xl text-green-300 font-bold mt-2 pt-2 border-t border-white/20">
-                                        Total: {caughtFish.coins + collectedCoins} 🪙
+                                    {catchStorageStatus === 'stored' && (
+                                        <div className="text-2xl text-teal-300 font-bold">
+                                            🎒 Added to backpack
+                                        </div>
+                                    )}
+                                    {catchStorageStatus === 'error' && (
+                                        <div className="text-xl text-red-400 font-bold">
+                                            ⚠️ Could not store — {fishingResult?.inventoryError === 'INVENTORY_FULL' ? 'backpack full!' : 'try reopening backpack'}
+                                        </div>
+                                    )}
+                                    <div className="text-lg text-amber-300">
+                                        Sells for ~{caughtFish.coins}g at Old Salty
                                     </div>
+                                    {collectedCoins > 0 && (
+                                        <div className="text-sm text-gray-400">
+                                            Session pickups: +{collectedCoins} (client-only bonus)
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             {isDemo && (
@@ -2350,17 +2786,7 @@ export default function IceFishingGame({
                                     <div className="text-2xl text-pink-300 font-bold">
                                         The jellyfish got you!
                                     </div>
-                                    <div className="text-3xl text-yellow-400 font-bold drop-shadow-[0_0_20px_rgba(255,215,0,0.5)]">
-                                        🎐 +{caughtFish.coins} 🪙
-                                    </div>
-                                    {collectedCoins > 0 && (
-                                        <div className="text-2xl text-amber-300 font-bold">
-                                            🪙 +{collectedCoins} bonus!
-                                        </div>
-                                    )}
-                                    <div className="text-xl text-green-300 font-bold mt-2 pt-2 border-t border-white/20">
-                                        Total: {caughtFish.coins + collectedCoins} 🪙
-                                    </div>
+                                    <div className="text-sm text-gray-400">No catch — bait was still used</div>
                                 </div>
                             )}
                             {isDemo && (
@@ -2372,25 +2798,42 @@ export default function IceFishingGame({
                     </div>
                 )}
                 
-                {/* Missed result (hit bottom) */}
+                {/* Missed result */}
                 {gamePhase === 'missed' && (
                     <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-                        <div className="text-center">
-                            <div className="text-8xl mb-6">🏆</div>
-                            <div className="text-4xl font-bold text-yellow-400 mb-3">
-                                REACHED THE BOTTOM!
-                            </div>
-                            <div className="text-xl text-gray-300 mb-2">
-                                {formatDepth(GAME_CONFIG.WATER_DEPTH)} deep!
-                            </div>
-                            {collectedCoins > 0 ? (
-                                <div className="text-2xl text-amber-300 font-bold mt-4">
-                                    🪙 +{collectedCoins} coins collected!
-                                </div>
+                        <div className="text-center px-6">
+                            {missReason === 'line_broke' ? (
+                                <>
+                                    <div className="text-8xl mb-4">💔</div>
+                                    <div className="text-4xl font-bold text-red-400 mb-3">
+                                        THE FISH GOT AWAY!
+                                    </div>
+                                    <div className="text-lg text-gray-300 mb-2">
+                                        Line snapped — keep tension in the green zone next time.
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                        Bait was still used · Try pulsing reel (hold/release Space)
+                                    </div>
+                                </>
                             ) : (
-                                <div className="text-lg text-gray-500">
-                                    No coins collected - try collecting gold coins next time!
-                                </div>
+                                <>
+                                    <div className="text-8xl mb-6">🏆</div>
+                                    <div className="text-4xl font-bold text-yellow-400 mb-3">
+                                        REACHED THE BOTTOM!
+                                    </div>
+                                    <div className="text-xl text-gray-300 mb-2">
+                                        {formatDepth(GAME_CONFIG.WATER_DEPTH)} deep!
+                                    </div>
+                                    {collectedCoins > 0 ? (
+                                        <div className="text-2xl text-amber-300 font-bold mt-4">
+                                            🪙 +{collectedCoins} coins collected!
+                                        </div>
+                                    ) : (
+                                        <div className="text-lg text-gray-500">
+                                            No coins collected — hook a fish on the way down!
+                                        </div>
+                                    )}
+                                </>
                             )}
                         </div>
                     </div>
