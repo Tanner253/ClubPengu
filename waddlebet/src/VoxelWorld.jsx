@@ -29,6 +29,7 @@ import { generateSKNYIglooInterior } from './rooms/SKNYIglooInterior';
 import { useMultiplayer } from './multiplayer';
 import { useChallenge } from './challenge';
 import { useIgloo } from './igloo';
+import { getRoomLabel } from './utils/roomLabels';
 import { useLanguage } from './i18n';
 import { EMOTE_WHEEL_ITEMS, LOOPING_EMOTES, EMOTE_EMOJI_MAP } from './systems';
 import { 
@@ -584,6 +585,7 @@ const VoxelWorld = ({
     const buildPenguinMeshRef = useRef(null); // Will be set in useEffect
     const buildPartMergedRef = useRef(null);
     const hasSentJoinRef = useRef(false); // One join per connection — room changes use change_room
+    const lastRoomNotifyRef = useRef({ room: null, x: null, z: null });
     const [meshBuilderReady, setMeshBuilderReady] = useState(false); // Re-triggers other-player mesh creation
     const [meshSyncVersion, setMeshSyncVersion] = useState(0); // Bumps when game loop detects missing remote meshes
 
@@ -979,6 +981,7 @@ const VoxelWorld = ({
         // New room / world rebuild — drop stale mesh handles from the previous scene
         setMeshBuilderReady(false);
         buildPenguinMeshRef.current = null;
+        lastRoomNotifyRef.current = { room: null, x: null, z: null };
         for (const [, data] of otherPlayerMeshesRef.current) {
             if (data.goldRainSystem) data.goldRainSystem.dispose();
         }
@@ -11484,12 +11487,24 @@ const VoxelWorld = ({
         }
     }, [playerList, createNameSprite, meshBuilderReady, meshSyncVersion]);
     
-    // Notify server when changing rooms (include position once spawn is ready)
+    // Notify server after world spawn is ready (posRef is stale if sent before initWorld finishes)
     useEffect(() => {
-        if (connected && playerId && posRef.current) {
-            mpChangeRoom(room, posRef.current);
+        if (!connected || !playerId || !meshBuilderReady || !posRef.current) return;
+
+        const pos = posRef.current;
+        const last = lastRoomNotifyRef.current;
+        if (
+            last.room === room
+            && last.x != null
+            && Math.abs(last.x - pos.x) < 0.5
+            && Math.abs(last.z - pos.z) < 0.5
+        ) {
+            return;
         }
-    }, [room, connected, playerId, mpChangeRoom]);
+
+        lastRoomNotifyRef.current = { room, x: pos.x, z: pos.z };
+        mpChangeRoom(room, pos);
+    }, [room, connected, playerId, mpChangeRoom, meshBuilderReady]);
     
     // Track igloo room entry/exit for eligibility checks
     useEffect(() => {
@@ -12272,6 +12287,7 @@ const VoxelWorld = ({
                 coins={userData?.coins ?? 0}
                 gameInventory={gameInventory}
                 playerId={playerId}
+                isAuthenticated={isAuthenticated}
                 pending={travelPending}
              />
 
@@ -12727,8 +12743,8 @@ const VoxelWorld = ({
              }`}>
                  <h2 className={`drop-shadow-lg ${
                      isMobile && !isLandscape ? 'text-sm' : 'text-xl'
-                 } ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room === 'casino_game_room' ? 'text-yellow-400' : room === 'igloo3' ? 'text-fuchsia-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
-                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room === 'casino_game_room' ? '🎰 CASINO' : room === 'snow_forts' ? '⛄ SNOW FORTS' : room === 'forest_trails' ? '🌲 FOREST TRAILS' : room === 'igloo3' ? '🎵 SKNY GANG' : room.startsWith('igloo') ? `IGLOO ${room.replace('igloo', '')}` : 'TOWN'}
+                 } ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room === 'casino_game_room' ? 'text-yellow-400' : room === 'snow_forts' ? 'text-sky-300' : room === 'forest_trails' ? 'text-green-400' : room?.startsWith('travel:') ? 'text-cyan-300' : room === 'igloo3' ? 'text-fuchsia-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
+                     {getRoomLabel(room, t, { emoji: true })}
                  </h2>
                  {!isMobile && (
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>

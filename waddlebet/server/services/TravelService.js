@@ -1,7 +1,7 @@
 /**
  * TravelService — ferry voyages between overworld quadrants.
- * Server-authoritative: every passenger must have a paid ticket (no free boarding).
- * Passengers are tracked by wallet so logout/reconnect does not cancel or skip travel.
+ * Authenticated passengers pay gold or use a backpack ferry ticket; guests board free.
+ * Wallet passengers are tracked for logout/reconnect; guests are tracked by player id while online.
  */
 
 import { randomUUID } from 'crypto';
@@ -75,6 +75,10 @@ export default class TravelService {
         return null;
     }
 
+    getVoyagePassengerCount(voyage) {
+        return voyage.passengerWallets.length + (voyage.guestPassengerIds?.length || 0);
+    }
+
     getRouteStatusesForRoom(roomId) {
         const routes = getRoutesForRoom(roomId);
         const now = Date.now();
@@ -91,7 +95,7 @@ export default class TravelService {
             if (!voyage) {
                 return { ...base, status: 'available' };
             }
-            const passengerCount = voyage.passengerWallets.length;
+            const passengerCount = this.getVoyagePassengerCount(voyage);
             if (voyage.phase === 'boarding') {
                 return {
                     ...base,
@@ -152,7 +156,7 @@ export default class TravelService {
             captainId: voyage.captainId,
             captainName: voyage.captainName,
             passengerIds: [...voyage.passengerIds],
-            passengerCount: voyage.passengerWallets.length,
+            passengerCount: this.getVoyagePassengerCount(voyage),
             phase: voyage.phase,
             phaseEndsAt: voyage.phaseEndsAt,
             ticketCost: voyage.ticketCost,
@@ -270,8 +274,20 @@ export default class TravelService {
      */
     async handleBook(playerId, routeId, payForPlayerIds = []) {
         const payer = this.getPlayer(playerId);
-        if (!payer?.walletAddress) {
-            return { error: 'NOT_AUTHENTICATED', message: 'Sign in to buy a ticket.' };
+        if (!payer) {
+            return { error: 'NOT_FOUND', message: 'Player not found.' };
+        }
+
+        const isGuestPayer = !payer.walletAddress;
+        const extraIds = [...new Set(
+            (Array.isArray(payForPlayerIds) ? payForPlayerIds : [])
+                .filter(id => typeof id === 'string' && id && id !== playerId)
+        )];
+        if (isGuestPayer && extraIds.length > 0) {
+            return {
+                error: 'GUEST_CANNOT_PAY_OTHERS',
+                message: 'Sign in to buy tickets for friends.',
+            };
         }
 
         const route = getTravelRoute(routeId);
@@ -282,10 +298,6 @@ export default class TravelService {
             return { error: 'WRONG_ROOM', message: 'You must be at the departure dock.' };
         }
 
-        const extraIds = [...new Set(
-            (Array.isArray(payForPlayerIds) ? payForPlayerIds : [])
-                .filter(id => typeof id === 'string' && id && id !== playerId)
-        )];
         const requestedIds = [playerId, ...extraIds];
 
         const existingId = this.routeVoyage.get(route.id);
@@ -344,18 +356,19 @@ export default class TravelService {
         }
 
         if (existingVoyage?.phase === 'boarding') {
-            if (existingVoyage.passengerWallets.length + passengersToAdd.length > TRAVEL_TIMING.MAX_PASSENGERS) {
+            if (this.getVoyagePassengerCount(existingVoyage) + passengersToAdd.length > TRAVEL_TIMING.MAX_PASSENGERS) {
                 return { error: 'VOYAGE_FULL', message: 'The ferry is full.' };
             }
         }
 
         let goldSpent = 0;
         let ticketsFromInventory = 0;
-        let newBalance = payer.coins;
+        let newBalance = payer.coins ?? 0;
+
+        const payingPassengers = passengersToAdd.filter((passenger) => passenger.walletAddress);
 
         if (this.gameInventoryService) {
-            for (const passenger of passengersToAdd) {
-                if (!passenger.walletAddress) continue;
+            for (const passenger of payingPassengers) {
                 const ticket = await this.gameInventoryService.tryConsumeFerryTicket(
                     passenger.walletAddress,
                     route.id
@@ -366,10 +379,13 @@ export default class TravelService {
             }
         }
 
-        const passengersNeedingGold = passengersToAdd.length - ticketsFromInventory;
+        const passengersNeedingGold = payingPassengers.length - ticketsFromInventory;
         const goldCost = route.ticketCost * passengersNeedingGold;
 
         if (goldCost > 0) {
+            if (!payer.walletAddress) {
+                return { error: 'NOT_AUTHENTICATED', message: 'Sign in to buy a ticket.' };
+            }
             const deduct = await this.userService.addCoins(
                 payer.walletAddress,
                 -goldCost,
@@ -378,7 +394,7 @@ export default class TravelService {
                     routeId: route.id,
                     toRoom: route.toRoom,
                     passengerCount: passengersNeedingGold,
-                    passengerIds: passengersToAdd.map(p => p.id),
+                    passengerIds: payingPassengers.map(p => p.id),
                     ticketsFromInventory,
                 }
             );
@@ -450,7 +466,7 @@ export default class TravelService {
         const refundResult = await this.removePassenger(voyage, playerId, { refund: true });
         const refundBalance = refundResult?.newBalance ?? null;
 
-        if (voyage.passengerWallets.length === 0) {
+        if (this.getVoyagePassengerCount(voyage) === 0) {
             this.destroyVoyage(voyage);
             return {
                 success: true,
@@ -514,6 +530,7 @@ export default class TravelService {
             captainWallet: firstPassenger.walletAddress || null,
             passengerIds: [],
             passengerWallets: [],
+            guestPassengerIds: [],
             tickets: new Map(),
             phase: 'boarding',
             phaseEndsAt: now + TRAVEL_TIMING.BOARDING_SECONDS * 1000,
@@ -525,9 +542,13 @@ export default class TravelService {
     }
 
     addPassenger(voyage, player) {
-        if (player.walletAddress && !voyage.passengerWallets.includes(player.walletAddress)) {
-            voyage.passengerWallets.push(player.walletAddress);
-            this.walletVoyage.set(player.walletAddress, voyage.id);
+        if (player.walletAddress) {
+            if (!voyage.passengerWallets.includes(player.walletAddress)) {
+                voyage.passengerWallets.push(player.walletAddress);
+                this.walletVoyage.set(player.walletAddress, voyage.id);
+            }
+        } else if (!voyage.guestPassengerIds.includes(player.id)) {
+            voyage.guestPassengerIds.push(player.id);
         }
         this.linkOnlinePassenger(voyage, player.id);
     }
@@ -540,6 +561,8 @@ export default class TravelService {
         if (wallet) {
             voyage.passengerWallets = voyage.passengerWallets.filter(w => w !== wallet);
             this.walletVoyage.delete(wallet);
+        } else {
+            voyage.guestPassengerIds = voyage.guestPassengerIds.filter(id => id !== playerId);
         }
         this.playerVoyage.delete(playerId);
 
@@ -564,9 +587,20 @@ export default class TravelService {
 
         const nextWallet = voyage.passengerWallets[0] || null;
         const nextCaptain = nextWallet ? this.getPlayerByWallet(nextWallet) : null;
-        voyage.captainWallet = nextWallet;
-        voyage.captainId = nextCaptain?.id || null;
-        voyage.captainName = nextCaptain?.name || 'Captain';
+        if (nextCaptain) {
+            voyage.captainWallet = nextWallet;
+            voyage.captainId = nextCaptain.id;
+            voyage.captainName = nextCaptain.name;
+            return;
+        }
+
+        const nextGuestId = voyage.guestPassengerIds.find((id) => id !== removedPlayerId)
+            || voyage.guestPassengerIds[0]
+            || null;
+        const nextGuest = nextGuestId ? this.getPlayer(nextGuestId) : null;
+        voyage.captainWallet = null;
+        voyage.captainId = nextGuestId;
+        voyage.captainName = nextGuest?.name || 'Guest';
     }
 
     async refundTicket(ticket, voyage) {
@@ -597,6 +631,9 @@ export default class TravelService {
         }
         for (const pid of voyage.passengerIds) {
             this.playerVoyage.delete(pid);
+        }
+        for (const guestId of voyage.guestPassengerIds || []) {
+            this.playerVoyage.delete(guestId);
         }
         this.voyages.delete(voyage.id);
         this.routeVoyage.delete(voyage.routeId);
@@ -637,7 +674,14 @@ export default class TravelService {
             await this.transferPlayerRoom(passenger.id, lobbyRoom, LOBBY_SPAWN, serialized);
         }
 
-        if (voyage.passengerWallets.length === 0) {
+        for (const guestId of [...voyage.guestPassengerIds]) {
+            const passenger = this.getPlayer(guestId);
+            if (!passenger) continue;
+            this.linkOnlinePassenger(voyage, guestId);
+            await this.transferPlayerRoom(guestId, lobbyRoom, LOBBY_SPAWN, serialized);
+        }
+
+        if (this.getVoyagePassengerCount(voyage) === 0) {
             this.destroyVoyage(voyage);
             return;
         }
@@ -675,6 +719,17 @@ export default class TravelService {
             }
             this.walletVoyage.delete(wallet);
             voyage.tickets.delete(wallet);
+        }
+
+        for (const guestId of [...voyage.guestPassengerIds]) {
+            const passenger = this.getPlayer(guestId);
+            if (passenger) {
+                await this.transferPlayerRoom(passenger.id, voyage.toRoom, spawn, {
+                    ...serialized,
+                    phase: 'arrived',
+                });
+                this.playerVoyage.delete(passenger.id);
+            }
         }
 
         const endedId = voyage.id;

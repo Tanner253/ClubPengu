@@ -3225,31 +3225,38 @@ async function handleMessage(playerId, message) {
         case 'change_room': {
             const newRoom = message.room;
             const oldRoom = player.room;
-            
-            if (newRoom && newRoom !== oldRoom) {
-                joinRoom(playerId, newRoom);
-                
-                if (message.position?.x != null && message.position?.z != null) {
-                    player.position = {
-                        x: message.position.x,
-                        y: message.position.y ?? 0,
-                        z: message.position.z
-                    };
-                } else {
-                    player.position = { ...getDefaultSpawnForRoom(newRoom) };
-                }
 
-                if (player.walletAddress) {
-                    persistPlayerLocation(player.walletAddress, newRoom, player.position);
-                }
-                
-                const existingPlayers = getPlayersInRoom(newRoom, playerId);
-                sendToPlayer(playerId, {
-                    type: 'room_state',
-                    room: newRoom,
-                    players: existingPlayers
-                });
-                
+            if (!newRoom) break;
+
+            const roomChanged = newRoom !== oldRoom;
+
+            if (roomChanged) {
+                joinRoom(playerId, newRoom);
+            }
+
+            if (message.position?.x != null && message.position?.z != null) {
+                player.position = {
+                    x: message.position.x,
+                    y: message.position.y ?? 0,
+                    z: message.position.z
+                };
+            } else if (roomChanged) {
+                player.position = { ...getDefaultSpawnForRoom(newRoom) };
+            }
+
+            if (player.walletAddress && (roomChanged || message.position?.x != null)) {
+                persistPlayerLocation(player.walletAddress, newRoom, player.position);
+            }
+
+            // Always refresh roster — travel_transfer may have moved the player server-side first
+            const existingPlayers = getPlayersInRoom(newRoom, playerId);
+            sendToPlayer(playerId, {
+                type: 'room_state',
+                room: newRoom,
+                players: existingPlayers
+            });
+
+            if (roomChanged) {
                 broadcastToRoom(newRoom, {
                     type: 'player_joined',
                     player: {
@@ -3268,7 +3275,7 @@ async function handleMessage(playerId, message) {
                         role: player.role || null
                     }
                 }, playerId);
-                
+
                 // Send active matches in new room (P2P + PvE all via MatchService)
                 const matchesInNewRoom = matchService.getMatchesInRoom(newRoom);
                 if (matchesInNewRoom.length > 0) {
@@ -3276,7 +3283,7 @@ async function handleMessage(playerId, message) {
                 } else {
                     sendToPlayer(playerId, { type: 'active_matches', matches: [] });
                 }
-                
+
                 // Send active PvE activities in new room
                 const pveActivitiesInNewRoom = getPveActivitiesInRoom(newRoom);
                 sendToPlayer(playerId, { type: 'active_pve_activities', activities: pveActivitiesInNewRoom });

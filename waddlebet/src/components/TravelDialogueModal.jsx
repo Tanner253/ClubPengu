@@ -37,8 +37,14 @@ const FERRY_THEME = {
     loreBg: 'bg-[#0a1525]/80 border-sky-600/30',
 };
 
-function getPrimaryActionLabel({ selectedRoute, status, ticketCount, totalCost, hasOwnTicket }) {
+function getPrimaryActionLabel({ selectedRoute, status, ticketCount, totalCost, hasOwnTicket, isGuest }) {
     const dest = selectedRoute.name;
+    if (isGuest) {
+        return {
+            title: status === 'boarding' ? 'Board for free' : 'Board ferry',
+            subtitle: `${dest} · guest passage`,
+        };
+    }
     if (ticketCount > 1) {
         return {
             title: `Buy ${ticketCount} tickets`,
@@ -75,6 +81,7 @@ export default function TravelDialogueModal({
     coins = 0,
     gameInventory = null,
     playerId = null,
+    isAuthenticated = false,
     pending = false
 }) {
     const [tick, setTick] = useState(0);
@@ -135,14 +142,25 @@ export default function TravelDialogueModal({
     const status = selectedStatus?.status || 'available';
 
     const onThisVoyage = myVoyage?.routeId === selectedRoute?.id && myVoyage?.phase === 'boarding';
+    const isGuest = !isAuthenticated;
     const passengerCount = 1 + payForPlayerIds.length;
-    const ownTicketCount = selectedRoute
+    const ownTicketCount = selectedRoute && isAuthenticated
         ? countFerryTicketsForRoute(gameInventory, selectedRoute.id)
         : 0;
     const hasOwnTicket = ownTicketCount > 0;
-    const passengersNeedingGold = Math.max(0, passengerCount - (hasOwnTicket ? 1 : 0));
-    const totalCost = selectedRoute ? selectedRoute.ticketCost * passengersNeedingGold : 0;
-    const canAfford = selectedRoute ? coins >= totalCost : false;
+
+    const payingPassengerCount = useMemo(() => {
+        if (!isAuthenticated || !selectedRoute) return 0;
+        const players = getPlayersData?.() || new Map();
+        let count = hasOwnTicket ? 0 : 1;
+        for (const id of payForPlayerIds) {
+            if (players.get(id)?.isAuthenticated) count += 1;
+        }
+        return count;
+    }, [isAuthenticated, selectedRoute, hasOwnTicket, payForPlayerIds, getPlayersData, tick]);
+
+    const totalCost = selectedRoute ? selectedRoute.ticketCost * payingPassengerCount : 0;
+    const canAfford = isGuest || (selectedRoute ? coins >= totalCost : false);
     const canBook = (status === 'available' || status === 'boarding') && !onThisVoyage && selectedRoute;
 
     const togglePayFor = (id) => {
@@ -170,6 +188,7 @@ export default function TravelDialogueModal({
             ticketCount: passengerCount,
             totalCost,
             hasOwnTicket,
+            isGuest,
         })
         : null;
 
@@ -297,7 +316,7 @@ export default function TravelDialogueModal({
                         })}
                     </div>
 
-                    {canBook && dockNearbyPlayers.length > 0 && (
+                    {canBook && !isGuest && dockNearbyPlayers.length > 0 && (
                         <div className="mb-4">
                             <p className={`text-[10px] uppercase tracking-widest font-bold mb-2 ${theme.accentMuted}`}>
                                 Pay for friends at dock
@@ -336,7 +355,9 @@ export default function TravelDialogueModal({
                             </div>
                             <div>
                                 <p className="text-[10px] uppercase tracking-wider text-white/40 mb-0.5">Fare</p>
-                                <p className="text-sm font-bold retro-text text-sky-200">Each pays</p>
+                                <p className="text-sm font-bold retro-text text-sky-200">
+                                    {isGuest ? 'Free (guest)' : 'Each pays'}
+                                </p>
                             </div>
                         </div>
                     )}
@@ -401,7 +422,7 @@ export default function TravelDialogueModal({
                             `}
                             style={{ boxShadow: '0 3px 0 rgba(0,0,0,0.35)' }}
                         >
-                            Leave queue (ticket refunded)
+                            Leave queue{isGuest ? '' : ' (ticket refunded)'}
                         </button>
                     )}
                 </div>

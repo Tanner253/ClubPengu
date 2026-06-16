@@ -43,7 +43,9 @@ function addPlayer({ players, wallets }, id, wallet, room = 'town') {
         coins: 500,
     };
     players.set(id, player);
-    wallets.set(wallet, player);
+    if (wallet) {
+        wallets.set(wallet, player);
+    }
     return player;
 }
 
@@ -172,5 +174,56 @@ describe('TravelService disconnect/reconnect', () => {
             expect.anything()
         );
         expect(service.walletVoyage.has('wallet1')).toBe(false);
+    });
+
+    it('allows guests to board without gold or wallet', async () => {
+        addPlayer(ctx, 'guest1', null, 'town');
+
+        const book = await service.handleBook('guest1', 'town_snow_forts');
+
+        expect(book.success).toBe(true);
+        expect(book.goldSpent).toBe(0);
+        expect(ctx.deps.userService.addCoins).not.toHaveBeenCalled();
+        const voyage = [...service.voyages.values()][0];
+        expect(voyage.guestPassengerIds).toContain('guest1');
+        expect(service.playerVoyage.get('guest1')).toBe(voyage.id);
+
+        voyage.phaseEndsAt = Date.now() - 1;
+        await service.tick();
+        expect(voyage.phase).toBe('transit');
+        expect(ctx.deps.transferPlayerRoom).toHaveBeenCalledWith(
+            'guest1',
+            `travel:${voyage.id}`,
+            expect.any(Object),
+            expect.objectContaining({ phase: 'transit' })
+        );
+
+        voyage.phaseEndsAt = Date.now() - 1;
+        await service.tick();
+        expect(ctx.deps.transferPlayerRoom).toHaveBeenCalledWith(
+            'guest1',
+            voyage.toRoom,
+            expect.objectContaining({ x: expect.any(Number), z: expect.any(Number) }),
+            expect.objectContaining({ phase: 'arrived' })
+        );
+    });
+
+    it('does not charge authenticated payer for guest friends at the dock', async () => {
+        addPlayer(ctx, 'p1', 'wallet1', 'town');
+        addPlayer(ctx, 'guest1', null, 'town');
+
+        const book = await service.handleBook('p1', 'town_snow_forts', ['guest1']);
+
+        expect(book.success).toBe(true);
+        expect(book.goldSpent).toBe(25);
+        expect(ctx.deps.userService.addCoins).toHaveBeenCalledWith(
+            'wallet1',
+            -25,
+            'travel_ticket',
+            expect.anything()
+        );
+        const voyage = [...service.voyages.values()][0];
+        expect(voyage.guestPassengerIds).toContain('guest1');
+        expect(voyage.passengerWallets).toContain('wallet1');
     });
 });

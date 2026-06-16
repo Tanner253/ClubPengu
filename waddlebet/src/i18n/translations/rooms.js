@@ -107,6 +107,18 @@ export default {
         ru: 'Иглу',
         ar: 'الإغلو',
     },
+    'room.travel_ferry': {
+        en: 'Ice Ferry',
+        zh: '冰渡輪',
+        es: 'Ferry de Hielo',
+        pt: 'Balsa de Gelo',
+        ko: '얼음 페리',
+        ja: 'アイスフェリー',
+        fr: 'Ferry de Glace',
+        de: 'Eisfähre',
+        ru: 'Ледяной паром',
+        ar: 'عبّارة الجليد',
+    },
     'character.doginal': {
         en: 'Doginal Colors',
         zh: '狗狗颜色',

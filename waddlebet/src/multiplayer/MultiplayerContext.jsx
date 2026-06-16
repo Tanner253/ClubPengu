@@ -1805,9 +1805,32 @@ export function MultiplayerProvider({ children }) {
                 }
                 if (Array.isArray(message.players)) {
                     playersDataRef.current.clear();
+                    const ids = [];
                     message.players.forEach(p => {
-                        playersDataRef.current.set(p.id, { ...p, needsMeshRebuild: true });
+                        playersDataRef.current.set(p.id, {
+                            id: p.id,
+                            name: p.name,
+                            position: p.position,
+                            rotation: p.rotation,
+                            appearance: p.appearance,
+                            puffle: p.puffle || null,
+                            pufflePosition: p.pufflePosition || null,
+                            emote: p.emote || null,
+                            emoteStartTime: p.emote ? Date.now() : null,
+                            seatedOnFurniture: p.seatedOnFurniture || false,
+                            isAfk: p.isAfk || false,
+                            afkMessage: p.afkMessage || null,
+                            isAuthenticated: p.isAuthenticated || false,
+                            role: p.role || null,
+                            heldHotbarItem: p.heldHotbarItem ?? null,
+                            needsHeldItemUpdate: true,
+                            needsMesh: true,
+                            needsMeshRebuild: true,
+                        });
+                        ids.push(p.id);
                     });
+                    setPlayerList(ids);
+                    setPlayerCount(ids.length);
                 }
                 window.dispatchEvent(new CustomEvent('travelTransfer', {
                     detail: {

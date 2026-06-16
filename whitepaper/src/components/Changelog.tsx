@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, type ReactNode } from "react";
-import { useWhitepaperT } from "../i18n/LanguageContext";
+import { useWhitepaperLanguage } from "../i18n/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown,
@@ -877,6 +877,25 @@ function VersionCard({ version, isExpanded, onToggle }: { version: ChangelogVers
 
 // ==================== MAIN COMPONENT ====================
 
+function getShippingMonths(changelog: ChangelogVersion[]): number {
+  const times = changelog
+    .map((entry) => new Date(entry.date).getTime())
+    .filter((time) => !Number.isNaN(time));
+  if (times.length === 0) return 6;
+
+  const start = new Date(Math.min(...times));
+  const end = new Date();
+  let months =
+    (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  if (end.getDate() < start.getDate()) months -= 1;
+  return Math.max(1, months);
+}
+
+function formatShippingHighlight(months: number, locale: string): string {
+  if (locale === "zh") return `連續 ${months} 個月以上交付。`;
+  return `${months}+ months of shipping.`;
+}
+
 export default function Changelog() {
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set([CHANGELOG_DATA[0]?.version]));
   const [expandAll, setExpandAll] = useState(false);
@@ -909,7 +928,8 @@ export default function Changelog() {
   const totalDeletions = CHANGELOG_DATA.reduce((acc, v) => acc + (v.stats?.deletions || 0), 0);
   const totalFiles = CHANGELOG_DATA.reduce((acc, v) => acc + (v.stats?.filesChanged || 0), 0);
 
-  const t = useWhitepaperT();
+  const { t, locale } = useWhitepaperLanguage();
+  const shippingHighlight = formatShippingHighlight(getShippingMonths(CHANGELOG_DATA), locale);
 
   return (
     <section id="changelog" className="py-16 md:py-32 px-4 sm:px-6 relative">
@@ -929,7 +949,7 @@ export default function Changelog() {
           </h2>
           <p className="text-slate-400 text-lg max-w-2xl mx-auto mb-4">
             {t("changelog.lead")}
-            <span className="text-cyan-400 font-semibold"> {t("changelog.leadHighlight")}</span>
+            <span className="text-cyan-400 font-semibold"> {shippingHighlight}</span>
           </p>
           <p className="text-slate-500 text-sm max-w-xl mx-auto mb-8">{t("changelog.localeNote")}</p>
           
