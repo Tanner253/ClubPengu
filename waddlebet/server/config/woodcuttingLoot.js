@@ -90,4 +90,19 @@ export function getWoodYield(stage, chopMode = 'hold') {
     return base;
 }
 
+/** UI hint — min–max logs after rarity roll (matches what players actually receive). */
+export function getWoodYieldLabel(stage, chopMode = 'hold', axeItemId = 'basic_axe') {
+    const mode = chopMode === 'manual' ? 'manual' : 'hold';
+    let min = Infinity;
+    let max = 0;
+    for (const logId of WOOD_LOG_IDS) {
+        const qty = getWoodChopQuantityForLog(stage, logId, axeItemId, mode);
+        min = Math.min(min, qty);
+        max = Math.max(max, qty);
+    }
+    if (!Number.isFinite(min)) return '1';
+    if (min === max) return `${min}`;
+    return `${min}–${max}`;
+}
+
 export default rollWoodChopLoot;

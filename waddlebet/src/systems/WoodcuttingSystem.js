@@ -3,6 +3,7 @@
  */
 
 import { FOREST_ZONE_OFFSET, FOREST_ZONE_SIZE, getStageConfig, getWoodYield, MANUAL_WOOD_MULTIPLIER } from '../config/harvestableTrees';
+import { getWoodYieldLabel } from '../config/woodcuttingLoot';
 import { hasEquippedAxe, getEquippedHotbarTool, ownsAnyAxe } from '../utils/gameHotbar';
 import { getChopDurabilityLoss } from '../config/economy';
 import { canFitWoodChopLoot } from '../utils/inventoryCapacity';
@@ -125,10 +126,11 @@ class WoodcuttingSystem {
         const axeId = equippedTool?.itemId || 'basic_axe';
         const wear = tree.stage ? getChopDurabilityLoss(tree.stage, axeId) : 1;
         const durText = dur != null && maxDur != null ? ` · axe ${dur}/${maxDur} (−${wear})` : '';
+        const yieldLabel = getWoodYieldLabel(tree.stage, tree.chopMode || 'hold', axeId);
         if (tree.chopMode === 'manual') {
-            return `Press E to chop voxel tree (+${tree.woodYield} wood, ${MANUAL_WOOD_MULTIPLIER}×)${durText} — drag to swing`;
+            return `Press E to chop voxel tree (+${yieldLabel} wood, ${MANUAL_WOOD_MULTIPLIER}×)${durText} — drag to swing`;
         }
-        return `Press E to chop ${stageCfg?.label || tree.label} (+${tree.woodYield} wood)${durText}`;
+        return `Press E to chop ${stageCfg?.label || tree.label} (+${yieldLabel} wood)${durText}`;
     }
 
     setLocalChopping(treeId) {

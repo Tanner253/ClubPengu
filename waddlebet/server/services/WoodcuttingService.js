@@ -445,9 +445,12 @@ class WoodcuttingService {
         const chopMode = session.mode === 'manual' ? 'manual' : (def?.chopMode || 'hold');
         const axeItemId = session.axeItemId || 'basic_axe';
 
+        const liveTree = this.forestTreeService.getTree(session.treeId);
+        const stage = liveTree?.stage || session.stage;
+
         const loot = rollWoodChopLoot({
             treeId: session.treeId,
-            stage: session.stage,
+            stage,
             axeItemId,
             chopMode
         });
@@ -520,7 +523,7 @@ class WoodcuttingService {
 
         const damageResult = await this.gameInventoryService.damageEquippedTool(
             walletAddress,
-            getChopDurabilityLoss(session.stage, axeItemId)
+            getChopDurabilityLoss(stage, axeItemId)
         );
 
         let inventory = addResult.inventory;
@@ -535,7 +538,7 @@ class WoodcuttingService {
                 emoji: itemDef?.emoji || '🪵',
                 quantity: harvest.wood,
                 npcValue: itemDef?.npcValue ?? 0,
-                stage: session.stage,
+                stage,
                 label: harvest.label
             },
             treeState: this.forestTreeService.getTreePublicState(session.treeId),
@@ -665,7 +668,7 @@ class WoodcuttingService {
 
                 stage,
 
-                woodYield: getWoodYield(stage, def),
+                woodYield: getWoodYield(stage, 'manual'),
 
                 isDemo: true,
 
@@ -737,7 +740,7 @@ class WoodcuttingService {
 
             stage,
 
-            woodYield: getWoodYield(stage, def),
+            woodYield: getWoodYield(stage, 'manual'),
 
             isDemo: false,
 
@@ -769,13 +772,20 @@ class WoodcuttingService {
 
         }
 
-        if (session.falling) {
-
-            return { error: 'ALREADY_FALLING', message: 'Tree is already falling' };
-
-        }
-
         const hitSide = side === -1 || side === 1 ? side : null;
+
+        if (session.falling) {
+            return {
+                success: true,
+                treeId: session.treeId,
+                side: hitSide ?? (session.leftCut >= session.rightCut ? -1 : 1),
+                speed,
+                leftCut: session.leftCut,
+                rightCut: session.rightCut,
+                hitCount: session.hitCount,
+                falling: true
+            };
+        }
 
         if (!hitSide) {
 
@@ -860,13 +870,11 @@ class WoodcuttingService {
 
             this.forestTreeService.releaseTree(session.treeId, playerId);
 
-            const def = getHarvestableTree(session.treeId);
-
             return {
 
                 success: true,
 
-                wood: { quantity: getWoodYield(session.stage, def), stage: session.stage },
+                wood: { quantity: getWoodYield(session.stage, 'manual'), stage: session.stage },
 
                 isDemo: true,
 

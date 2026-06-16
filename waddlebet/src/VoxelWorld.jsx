@@ -11712,6 +11712,7 @@ const VoxelWorld = ({
                 }
             },
             onManualChopError: (data) => {
+                if (data?.error === 'ALREADY_FALLING') return;
                 if (manualChopActiveRef.current) exitManualChop('ERROR');
                 if (data?.treeState && forestTreeManagerRef.current) {
                     forestTreeManagerRef.current.updateTree(

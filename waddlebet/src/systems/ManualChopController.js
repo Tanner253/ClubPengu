@@ -275,6 +275,7 @@ class ManualChopController {
         }
         if (falling) {
             this.pendingServerFall = true;
+            this.isDragging = false;
         }
     }
 

@@ -246,6 +246,14 @@ describe('WoodcuttingService', () => {
         }
         vi.useRealTimers();
         expect(falling).toBe(true);
+        const extraHit = service.manualChopHit('p1', {
+            sessionId: start.sessionId,
+            side: -1,
+            speed: 4
+        });
+        expect(extraHit.success).toBe(true);
+        expect(extraHit.falling).toBe(true);
+        expect(extraHit.error).toBeUndefined();
         const complete = await service.completeManualChop('p1', 'wallet', { sessionId: start.sessionId });
         expect(complete.success).toBe(true);
         expect(mockForestTreeService.harvestTree).toHaveBeenCalledWith('ht_002', expect.objectContaining({
