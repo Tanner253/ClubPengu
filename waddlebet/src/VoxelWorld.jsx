@@ -3066,6 +3066,7 @@ const VoxelWorld = ({
         const _snowballPrevPos = new THREE.Vector3();
         const _snowballHitNormal = new THREE.Vector3();
         const _snowballHitPoint = new THREE.Vector3();
+        const _splatHitNormal = new THREE.Vector3();
         const _splatDefaultNormal = new THREE.Vector3(0, 0, 1);
         const _splatAlignQuat = new THREE.Quaternion();
         const _snowballCollidables = []; // Cached scene meshes, refreshed periodically while snowballs fly

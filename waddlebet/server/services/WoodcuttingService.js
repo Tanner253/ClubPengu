@@ -54,6 +54,13 @@ class WoodcuttingService {
 
     }
 
+    /** Live stage from ForestTreeService (sapling/baby/mature/elder), not static placement def. */
+    _resolveTreeStage(treeId) {
+        const tree = this.forestTreeService.getTree(treeId);
+        const def = getHarvestableTree(treeId);
+        return tree?.stage || def?.stage || 'mature';
+    }
+
 
 
     _computeDurationMs(stage, axeItemId) {
@@ -272,7 +279,8 @@ class WoodcuttingService {
 
 
 
-        const stageCfg = getStageConfig(def.stage);
+        const stage = this._resolveTreeStage(treeId);
+        const stageCfg = getStageConfig(stage);
 
 
 
@@ -282,7 +290,7 @@ class WoodcuttingService {
 
             if (reserve.error) return reserve;
 
-            const sessionId = this._createSession(playerId, treeId, def.stage, true, startPosition);
+            const sessionId = this._createSession(playerId, treeId, stage, true, startPosition);
 
             return {
 
@@ -294,11 +302,11 @@ class WoodcuttingService {
 
                 sessionId,
 
-                stage: def.stage,
+                stage,
 
                 woodYield: stageCfg?.wood || 1,
 
-                durationMs: this._computeDurationMs(def.stage, 'basic_axe'),
+                durationMs: this._computeDurationMs(stage, 'basic_axe'),
 
                 isDemo: true,
 
@@ -348,15 +356,13 @@ class WoodcuttingService {
 
         if (reserve.error) return reserve;
 
-        this.forestTreeService.recordForestChop();
-
         const sessionId = this._createSession(
 
             playerId,
 
             treeId,
 
-            def.stage,
+            stage,
 
             false,
 
@@ -378,11 +384,11 @@ class WoodcuttingService {
 
             sessionId,
 
-            stage: def.stage,
+            stage,
 
             woodYield: stageCfg?.wood || 1,
 
-            durationMs: this._computeDurationMs(def.stage, equippedAxe.itemId),
+            durationMs: this._computeDurationMs(stage, equippedAxe.itemId),
 
             isDemo: false,
 
@@ -639,7 +645,7 @@ class WoodcuttingService {
 
         }
 
-        const stageCfg = getStageConfig(def.stage);
+        const stage = this._resolveTreeStage(treeId);
 
         if (isDemo) {
 
@@ -647,7 +653,7 @@ class WoodcuttingService {
 
             if (reserve.error) return reserve;
 
-            const sessionId = this._createSession(playerId, treeId, def.stage, true, startPosition, null, 'manual');
+            const sessionId = this._createSession(playerId, treeId, stage, true, startPosition, null, 'manual');
 
             return {
 
@@ -657,9 +663,9 @@ class WoodcuttingService {
 
                 sessionId,
 
-                stage: def.stage,
+                stage,
 
-                woodYield: getWoodYield(def.stage, def),
+                woodYield: getWoodYield(stage, def),
 
                 isDemo: true,
 
@@ -703,15 +709,13 @@ class WoodcuttingService {
 
         if (reserve.error) return reserve;
 
-        this.forestTreeService.recordForestChop();
-
         const sessionId = this._createSession(
 
             playerId,
 
             treeId,
 
-            def.stage,
+            stage,
 
             false,
 
@@ -731,9 +735,9 @@ class WoodcuttingService {
 
             sessionId,
 
-            stage: def.stage,
+            stage,
 
-            woodYield: getWoodYield(def.stage, def),
+            woodYield: getWoodYield(stage, def),
 
             isDemo: false,
 
