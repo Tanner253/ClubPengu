@@ -23,11 +23,31 @@ const CHANGE_TYPES = {
 // ==================== CHANGELOG DATA (1:1 with whitepaper) ====================
 const CHANGELOG = [
     {
+        version: '1.3.2',
+        date: 'June 16, 2026',
+        title: '🔊 Zone Music, Ambient Audio & Ferry Fixes',
+        description: 'Procedural zone soundtracks, proximity ambient loops, nearby multiplayer action sounds, and mobile ferry cabin spawn fixes.',
+        highlight: true,
+        stats: { filesChanged: 38, additions: 2551, deletions: 358 },
+        changes: [
+            { type: 'feature', text: 'Procedural zone music — Auto picks distinct tracks per room (beach, forest, town, snow, harbor, club)' },
+            { type: 'feature', text: 'Zone-specific percussion — shaker, wood knocks, rim clicks, crystal tinkles, brush snare, club hats' },
+            { type: 'feature', text: 'Proximity ambient SFX — campfires, fountain, ice holes, casino, dojo, pizza kitchen' },
+            { type: 'feature', text: 'Multiplayer proximity SFX — hear nearby chops, drops, snowballs, and manual chop hits' },
+            { type: 'feature', text: 'Audio settings — music/SFX volume, track picker, default music 35%, AudioBootstrap' },
+            { type: 'feature', text: 'NPC typewriter speech box for ferry, merchant, and travel dialogue' },
+            { type: 'improvement', text: 'Campfire crackle retuned for audibility; Snow Forts music brightened; club energy follows dance floor' },
+            { type: 'fix', text: 'Mobile ferry passengers spawning outside cabin — spawn sync, bounds clamp, joystick reset on transfer' },
+            { type: 'backend', text: 'proximitySfx utility with player_sfx throttling and snowball/chop broadcasts' },
+            { type: 'mobile', text: 'Ferry boarding and transit more reliable on touch controls' },
+        ],
+    },
+    {
         version: '1.3.1',
         date: 'June 16, 2026',
         title: '📦 World Drops, Gold Bags & Backpack Trade',
         description: 'Drop items and gold on the ground for other players to pick up — server-authoritative, room-synced voxel models with 5-minute despawn.',
-        highlight: true,
+        highlight: false,
         stats: { filesChanged: 16, additions: 1762, deletions: 54 },
         changes: [
             { type: 'feature', text: 'World item drops — drag from backpack outside the window; all players in the room see rotating 3D voxel models' },

@@ -81,12 +81,38 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.3.2",
+    date: "June 16, 2026",
+    title: "🔊 Zone Music, Ambient Audio & Ferry Fixes",
+    description:
+      "The world now has a full procedural audio layer: distinct zone soundtracks with unique percussion, proximity ambient loops at campfires and landmarks, and nearby multiplayer action sounds. Ferry cabin spawning is fixed for mobile passengers.",
+    highlight: true,
+    stats: { filesChanged: 38, additions: 2551, deletions: 358 },
+    changes: [
+      { type: "feature", text: "Procedural zone music — Auto mode picks a distinct track per room (Coastal Dawn, Forest Path, Town Square, Snow Forts, Harbor Evening, Neon Dancefloor)" },
+      { type: "feature", text: "Zone-specific percussion — beach shaker, forest wood knocks, town rim clicks, snow crystal tinkles, harbor brush snare, club hi-hats (no more identical hats on every ambient loop)" },
+      { type: "feature", text: "Proximity ambient SFX — campfires, town fountain, ice fishing holes, casino floor hum, dojo murmur, and pizza kitchen sizzle fade in as you approach" },
+      { type: "feature", text: "Multiplayer proximity SFX — nearby players hear wood chops, item/gold drops, snowball throws, and manual chop hits without full-room spam" },
+      { type: "feature", text: "Audio module (client) — music scheduler, procedural SFX, settings sync, AudioBootstrap lifecycle, and track picker in Settings → Audio" },
+      { type: "feature", text: "NPC typewriter speech box — ferry captain, merchants, and travel dialogue use animated text reveal" },
+      { type: "improvement", text: "Campfire crackle retuned — warmer low-pass body with audible pops; wider hear radius at docks and forest campsites" },
+      { type: "improvement", text: "Snow Forts music brightened (C major I–IV–I–V); nightclub track tempo follows dance-floor energy" },
+      { type: "improvement", text: "Default music volume set to 35% for new users (client + server User model)" },
+      { type: "improvement", text: "Town ice ground texture extracted to TownIceGround module for cleaner room loading" },
+      { type: "fix", text: "Mobile ferry passengers sometimes spawned outside the transit cabin — spawn now applies before multiplayer sync, cabin bounds clamp, and joystick input clears on travel transfer" },
+      { type: "fix", text: "Ferry lobby spawn aligned server/client to cabin center (12, 10)" },
+      { type: "backend", text: "proximitySfx utility — broadcastProximitySfx with distance radius, player_sfx throttling, and wood_chop_tick / snowball_throw hooks" },
+      { type: "mobile", text: "Ferry boarding and transit more reliable on touch controls — movement input reset on room transfer" },
+      { type: "improvement", text: "Removed looping fishing reel SFX from the ice fishing minigame" },
+    ],
+  },
+  {
     version: "1.3.1",
     date: "June 16, 2026",
     title: "📦 World Drops, Gold Bags & Backpack Trade",
     description:
       "Drop items and gold on the ground for other players to pick up — server-authoritative, room-synced, with rotating voxel models and 5-minute despawn. Backpack drag-and-drop gets stack controls; gold drops use a money-sack model that scales with the amount.",
-    highlight: true,
+    highlight: false,
     stats: { filesChanged: 16, additions: 1762, deletions: 54 },
     changes: [
       { type: "feature", text: "World item drops — drag from backpack outside the window to drop items in front of your penguin; all players in the room see rotating 3D voxel models" },
