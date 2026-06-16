@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { VOXEL_SIZE, PALETTE } from './constants';
 import { ASSETS } from './assets/index';
 import { generateBaseBody, generateFlippers, generateFeet, generateHead } from './generators';
-import { IconSettings, IconChevronLeft, IconChevronRight, IconCamera, IconWorld } from './Icons';
+import { IconSettings, IconChevronLeft, IconChevronRight, IconCamera, IconWorld, IconGitHub } from './Icons';
 import { useMultiplayer } from './multiplayer';
 import { 
     characterRegistry, 
@@ -45,6 +45,8 @@ import WebGLStatusBanner from './components/WebGLStatusBanner';
 import { useLanguage } from './i18n';
 import performanceManager from './systems/PerformanceManager';
 import { initBrowserCapabilities, usesPrivacyBrowserOptimizations, readLiveWebGLInfo } from './utils/browserCapabilities';
+
+const GITHUB_REPO_URL = 'https://github.com/Tanner253/ClubPengu';
 
 function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const mountRef = useRef(null);
@@ -2069,6 +2071,57 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         </div>
     ) : null;
 
+    const renderCreatorHeaderLinks = (compact = false) => {
+        const iconSize = compact ? 12 : 16;
+        const linkClass = compact
+            ? 'px-2 py-1 text-[9px] leading-tight gap-1'
+            : 'px-3 py-2 text-sm gap-1.5';
+        const badgeTextClass = compact ? 'max-w-[5.5rem] text-center' : '';
+
+        return (
+            <div className={`flex shrink-0 items-center pointer-events-auto ${compact ? 'gap-1 flex-wrap justify-end max-w-[58vw]' : 'gap-2'}`}>
+                <a
+                    href="https://whitepaper.waddle.bet/"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={`flex shrink-0 items-center rounded-lg border border-cyan-500/45 bg-cyan-950/60 font-bold text-cyan-200 shadow-md transition-colors hover:bg-cyan-900/60 active:scale-95 ${linkClass}`}
+                >
+                    <IconWorld size={iconSize} />
+                    {t('menu.whitepaperCta')}
+                </a>
+                <a
+                    href={GITHUB_REPO_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={t('menu.githubCta')}
+                    className={`creator-oss-link flex shrink-0 items-center rounded-lg border font-bold text-emerald-100 shadow-md transition-transform hover:scale-[1.03] active:scale-95 ${linkClass}`}
+                >
+                    <span className="creator-oss-icon shrink-0">
+                        <IconGitHub size={iconSize} />
+                    </span>
+                    <span className={`retro-text uppercase tracking-wide ${badgeTextClass}`}>
+                        {t('menu.openSourceBadge')}
+                    </span>
+                </a>
+            </div>
+        );
+    };
+
+    const renderCloudflareBadge = () => (
+        <a
+            href="https://www.cloudflare.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500/20 to-orange-600/20 hover:from-orange-500/30 hover:to-orange-600/30 rounded-full border border-orange-500/40 hover:border-orange-500/60 transition-all shadow-lg shadow-orange-500/10 group"
+        >
+            <svg className="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.2678-.2246-.2767-.5765-.4198-.9725-.4466l-8.5057-.1123a.1654.1654 0 0 1-.1328-.0615.141.141 0 0 1-.0236-.1388.1742.1742 0 0 1 .1535-.121l8.5858-.1102c.974-.0288 2.0298-.8037 2.3878-1.7598l.454-1.214a.27.27 0 0 0 .0147-.1964 5.0842 5.0842 0 0 0-9.8793-1.0239c-.5765-.4259-1.2998-.649-2.0676-.5592-1.2763.1496-2.3055 1.1608-2.4816 2.4398a2.6573 2.6573 0 0 0 .0103.8627 3.8782 3.8782 0 0 0-3.7637 3.8765c0 .1949.0143.3856.042.5718a.167.167 0 0 0 .1657.1423l15.5878.0037c.0738 0 .1393-.0493.1577-.121l.0004-.0001z"/>
+                <path d="M19.4846 10.0557a.1008.1008 0 0 0-.0996-.0234c-.3333.1015-.6872.1545-1.0517.1545-1.1328 0-2.1415-.5193-2.8042-1.3329a.1012.1012 0 0 0-.0996-.0234.1027.1027 0 0 0-.0722.0793c-.2139.9577-.8575 1.7673-1.7112 2.2298a.1.1 0 0 0-.0512.1244c.1076.3112.1638.6456.1638.9932 0 .0616-.0016.1229-.0048.1838a.1.1 0 0 0 .0996.1052l5.4023.0698c.0502 0 .0935-.0355.1017-.0856a3.2137 3.2137 0 0 0 .0417-.5142c0-1.3006-.7745-2.4221-1.8862-2.9347a.1003.1003 0 0 0-.0284-.0258z"/>
+            </svg>
+            <span className="text-xs text-orange-400/90 font-medium group-hover:text-orange-300 transition-colors">{t('common.protectedBy')}</span>
+        </a>
+    );
+
     return (
         <div className="relative w-full h-full bg-gray-900 overflow-hidden font-sans">
             {/* 3D Canvas — larger preview on mobile portrait */}
@@ -2088,9 +2141,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     className="absolute top-0 left-0 right-0 z-20 pointer-events-none px-3 pb-6 bg-gradient-to-b from-black/70 via-black/25 to-transparent"
                     style={{ paddingTop: topSafePadding, height: isMobilePortrait ? `${MOBILE_PREVIEW_VH}vh` : undefined }}
                 >
-                    <div className="flex items-center justify-between gap-2 pointer-events-auto">
+                    <div className="flex items-start justify-between gap-2 pointer-events-auto">
                         <h1
-                            className={`retro-text text-white drop-shadow-lg pointer-events-none ${isPortrait ? 'text-lg leading-tight' : 'text-3xl'}`}
+                            className={`retro-text text-white drop-shadow-lg pointer-events-none min-w-0 ${isPortrait ? 'text-lg leading-tight' : 'text-3xl'}`}
                             style={{ textShadow: '3px 3px 0px #000' }}
                         >
                             {t('creator.penguinMaker')}{' '}
@@ -2098,15 +2151,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 {t('creator.deluxe')}
                             </span>
                         </h1>
-                        <a
-                            href="https://whitepaper.waddle.bet/"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="pointer-events-auto flex shrink-0 items-center gap-1 rounded-lg border border-cyan-500/45 bg-cyan-950/60 px-2 py-1 text-[10px] font-bold text-cyan-200 shadow-md"
-                        >
-                            <IconWorld size={12} />
-                            {t('menu.whitepaperCta')}
-                        </a>
+                        {renderCreatorHeaderLinks(isMobileView)}
                     </div>
                     {isMobilePortrait && (
                         <p className="absolute bottom-3 inset-x-0 text-center text-white/45 text-[10px] pointer-events-none flex items-center justify-center gap-1">
@@ -2118,29 +2163,27 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             ) : (
                 <>
                     <div
-                        className="absolute top-0 left-1/2 z-20 w-full max-w-md -translate-x-1/2 pointer-events-none px-4"
-                        style={{ paddingTop: topSafePadding }}
+                        className="absolute bottom-4 left-1/2 z-20 w-full max-w-md -translate-x-1/2 pointer-events-none px-4"
                     >
                         <div className="pointer-events-auto w-full">
                             {renderEnterWorldCTA()}
                         </div>
                     </div>
 
+                    <div
+                        className="absolute top-0 left-1/2 z-20 w-full max-w-md -translate-x-1/2 pointer-events-auto px-4 flex justify-center"
+                        style={{ paddingTop: topSafePadding }}
+                    >
+                        {renderCloudflareBadge()}
+                    </div>
+
                     <div className="absolute top-0 left-0 z-10 w-full p-6">
-                        <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
                             <h1 className="retro-text text-4xl text-white drop-shadow-lg pointer-events-none" style={{ textShadow: '4px 4px 0px #000' }}>
                                 {t('creator.penguinMaker')}{' '}
                                 <span className="text-yellow-400 text-sm align-top">{t('creator.deluxe')}</span>
                             </h1>
-                            <a
-                                href="https://whitepaper.waddle.bet/"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-950/50 px-3 py-2 text-sm font-bold text-cyan-200 shadow-md transition-colors hover:bg-cyan-900/60"
-                            >
-                                <IconWorld size={16} />
-                                {t('menu.whitepaperCta')}
-                            </a>
+                            {renderCreatorHeaderLinks(false)}
                         </div>
                     </div>
                 </>
@@ -3078,21 +3121,12 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 )}
             </div>
             
-            {/* Cloudflare Badge - hidden on mobile portrait (bottom sheet + browser chrome) */}
+            {/* Cloudflare Badge — bottom on mobile landscape; desktop uses top-center slot above */}
+            {!isMobileView ? null : (
             <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 ${isPortrait && isMobileView ? 'hidden' : ''}`}>
-                <a 
-                    href="https://www.cloudflare.com" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-500/20 to-orange-600/20 hover:from-orange-500/30 hover:to-orange-600/30 rounded-full border border-orange-500/40 hover:border-orange-500/60 transition-all shadow-lg shadow-orange-500/10 group"
-                >
-                    <svg className="w-5 h-5 text-orange-500" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M16.5088 16.8447c.1475-.5068.0908-.9707-.1553-1.2678-.2246-.2767-.5765-.4198-.9725-.4466l-8.5057-.1123a.1654.1654 0 0 1-.1328-.0615.141.141 0 0 1-.0236-.1388.1742.1742 0 0 1 .1535-.121l8.5858-.1102c.974-.0288 2.0298-.8037 2.3878-1.7598l.454-1.214a.27.27 0 0 0 .0147-.1964 5.0842 5.0842 0 0 0-9.8793-1.0239c-.5765-.4259-1.2998-.649-2.0676-.5592-1.2763.1496-2.3055 1.1608-2.4816 2.4398a2.6573 2.6573 0 0 0 .0103.8627 3.8782 3.8782 0 0 0-3.7637 3.8765c0 .1949.0143.3856.042.5718a.167.167 0 0 0 .1657.1423l15.5878.0037c.0738 0 .1393-.0493.1577-.121l.0004-.0001z"/>
-                        <path d="M19.4846 10.0557a.1008.1008 0 0 0-.0996-.0234c-.3333.1015-.6872.1545-1.0517.1545-1.1328 0-2.1415-.5193-2.8042-1.3329a.1012.1012 0 0 0-.0996-.0234.1027.1027 0 0 0-.0722.0793c-.2139.9577-.8575 1.7673-1.7112 2.2298a.1.1 0 0 0-.0512.1244c.1076.3112.1638.6456.1638.9932 0 .0616-.0016.1229-.0048.1838a.1.1 0 0 0 .0996.1052l5.4023.0698c.0502 0 .0935-.0355.1017-.0856a3.2137 3.2137 0 0 0 .0417-.5142c0-1.3006-.7745-2.4221-1.8862-2.9347a.1003.1003 0 0 0-.0284-.0258z"/>
-                    </svg>
-                    <span className="text-xs text-orange-400/90 font-medium group-hover:text-orange-300 transition-colors">{t('common.protectedBy')}</span>
-                </a>
+                {renderCloudflareBadge()}
             </div>
+            )}
 
             {!scriptsLoaded && (
                 <div className="absolute inset-0 bg-black flex items-center justify-center text-white retro-text z-50">
