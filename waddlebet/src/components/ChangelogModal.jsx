@@ -23,6 +23,23 @@ const CHANGE_TYPES = {
 // ==================== CHANGELOG DATA (1:1 with whitepaper) ====================
 const CHANGELOG = [
     {
+        version: '1.3.1',
+        date: 'June 16, 2026',
+        title: '📦 World Drops, Gold Bags & Backpack Trade',
+        description: 'Drop items and gold on the ground for other players to pick up — server-authoritative, room-synced voxel models with 5-minute despawn.',
+        highlight: true,
+        stats: { filesChanged: 16, additions: 1762, deletions: 54 },
+        changes: [
+            { type: 'feature', text: 'World item drops — drag from backpack outside the window; all players in the room see rotating 3D voxel models' },
+            { type: 'feature', text: 'Shift+click drops full stack; shift+drag outside drops whole stack; normal drag outside drops 1' },
+            { type: 'feature', text: 'Drop gold from HUD coin balance — amount picker with presets, custom input, or drop all' },
+            { type: 'feature', text: 'Gold money-sack baggie model scales with pile size; anyone in room can pick up gold or items' },
+            { type: 'improvement', text: 'Pickup blocked when backpack is full before item is removed from the world' },
+            { type: 'improvement', text: 'Penguin Maker mobile — title/button no longer overlap; Welcome {username} when signed in' },
+            { type: 'backend', text: 'WorldDropService, world_gold_drop, inventory capacity checks, unit tests' },
+        ],
+    },
+    {
         version: '1.1.3',
         date: 'January 26, 2026',
         title: '❄️ Snowball Fights & Internationalization',

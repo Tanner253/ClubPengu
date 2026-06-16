@@ -81,6 +81,29 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.3.1",
+    date: "June 16, 2026",
+    title: "📦 World Drops, Gold Bags & Backpack Trade",
+    description:
+      "Drop items and gold on the ground for other players to pick up — server-authoritative, room-synced, with rotating voxel models and 5-minute despawn. Backpack drag-and-drop gets stack controls; gold drops use a money-sack model that scales with the amount.",
+    highlight: true,
+    stats: { filesChanged: 16, additions: 1762, deletions: 54 },
+    changes: [
+      { type: "feature", text: "World item drops — drag from backpack outside the window to drop items in front of your penguin; all players in the room see rotating 3D voxel models" },
+      { type: "feature", text: "Shift+click a stack to drop the full quantity; shift+drag outside drops the whole stack; normal drag outside drops 1" },
+      { type: "feature", text: "WorldDropService (server) — per-room drop state, proximity pickup validation, 5-minute despawn tick, snapshot on room join, rollback only on rare save failures" },
+      { type: "feature", text: "Voxel drop models for fish tiers, wood logs, axes, mushrooms, bait, rods, ferry tickets, and specialty shapes (crab, squid, shark, eel, jellyfish)" },
+      { type: "feature", text: "Drop gold from HUD — tap coin balance to open amount picker (presets, custom, or all); spawns a gold money-sack baggie in the world" },
+      { type: "feature", text: "Gold baggie 3D model — tied sack with coins spilling out; visual size scales with dropped amount (small / medium / large piles)" },
+      { type: "feature", text: "Anyone signed in can pick up drops in the same room; gold goes straight to wallet balance, items go to backpack" },
+      { type: "improvement", text: "Pickup blocked upfront when backpack is full — no remove-then-rollback for inventory items" },
+      { type: "improvement", text: "Penguin Maker mobile layout — title and Enter World button stack without overlap; signed-in button shows Welcome {username}" },
+      { type: "backend", text: "world_item_drop / world_item_pickup / world_gold_drop handlers, GameInventoryService.removeFromSlot + canAddItem dry-run, WorldDropService unit tests" },
+      { type: "fix", text: "World init crash from worldDrops scope and missing getActiveHotbarEntry import after drop system integration" },
+      { type: "mobile", text: "Backpack hint text documents shift+click stack drop and drag-outside controls" },
+    ],
+  },
+  {
     version: "1.3.0",
     date: "June 15, 2026",
     title: "🌲 Overworld Economy, Ice Ferry & Onboarding",
