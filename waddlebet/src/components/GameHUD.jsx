@@ -150,19 +150,19 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     refreshServerPopulation();
                     setMobileServerPopOpen((open) => !open);
                 } : undefined}
-                className={`bg-black/70 backdrop-blur-md rounded-lg flex items-center gap-1 border transition-colors touch-manipulation border-cyan-400/30 hover:border-cyan-400/50 active:bg-black/80 ${
+                className={`bg-black/70 backdrop-blur-md rounded-md flex items-center gap-1 border transition-colors touch-manipulation border-cyan-400/30 hover:border-cyan-400/50 active:bg-black/80 ${
                     isMobile && mobileServerPopOpen ? 'border-cyan-400/70 bg-cyan-950/40' : ''
-                } ${!isMobile ? 'group-hover:border-cyan-400/70 group-hover:bg-cyan-950/40' : ''} ${compact ? 'px-1.5 py-1' : 'px-3 py-2 gap-2'}`}
+                } ${!isMobile ? 'group-hover:border-cyan-400/70 group-hover:bg-cyan-950/40' : ''} ${compact ? 'px-1.5 py-1' : 'px-2 py-1 gap-1.5'}`}
                 title={t('hud.serverPopulationHint')}
                 aria-haspopup="true"
                 aria-expanded={isMobile ? mobileServerPopOpen : undefined}
             >
-                <span className={compact ? 'text-[10px]' : 'text-lg'}>👥</span>
-                <span className={`text-cyan-300 font-bold retro-text ${compact ? 'text-[10px]' : 'text-sm'}`}>
+                <span className={compact ? 'text-[10px]' : 'text-sm'}>👥</span>
+                <span className={`text-cyan-300 font-bold retro-text ${compact ? 'text-[10px]' : 'text-xs'}`}>
                     {playerCount + 1}
                 </span>
-                <span className={`text-white/40 ${compact ? 'text-[8px]' : 'text-xs'}`}>/</span>
-                <span className={`text-green-400 font-bold retro-text ${compact ? 'text-[10px]' : 'text-sm'}`}>
+                <span className={`text-white/40 ${compact ? 'text-[8px]' : 'text-[10px]'}`}>/</span>
+                <span className={`text-green-400 font-bold retro-text ${compact ? 'text-[10px]' : 'text-xs'}`}>
                     {onlineTotal}
                 </span>
             </button>
@@ -369,23 +369,25 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     }
     
     // Landscape/Desktop: Horizontal or wrapped layout based on width
-    // isNarrow (but not isUltraNarrow/isPortrait) = wrapped horizontal
-    // !isNarrow = full horizontal
+    const navChip = 'bg-black/70 backdrop-blur-md rounded-md px-2 py-1 flex items-center gap-1.5 border';
+    const navIconBtn = 'rounded-md w-7 h-7 flex items-center justify-center text-xs transition-colors backdrop-blur-sm';
+    const navLabel = 'font-bold retro-text text-xs hidden sm:inline';
+
     return (
         <>
             {/* HUD Bar - Top Right - Responsive wrap on narrow windows */}
-            <div className={`absolute top-4 right-4 z-20 flex items-center gap-1.5 sm:gap-2 ${
+            <div className={`absolute top-3 right-3 z-20 flex items-center gap-1 sm:gap-1.5 ${
                 isNarrow && !isPortrait ? 'flex-wrap justify-end max-w-xs' : ''
             }`}>
                 {/* Daily Bonus Button */}
                 {isAuthenticated && (
                     <button
                         onClick={() => setShowDailyBonus(true)}
-                        className="relative bg-gradient-to-r from-amber-600/80 to-orange-600/80 hover:from-amber-500 hover:to-orange-500 active:from-amber-700 active:to-orange-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-sm transition-colors flex items-center justify-center hover:scale-105 active:scale-95"
+                        className="relative bg-gradient-to-r from-amber-600/80 to-orange-600/80 hover:from-amber-500 hover:to-orange-500 active:from-amber-700 active:to-orange-700 backdrop-blur-sm text-white w-7 h-7 sm:w-auto sm:h-auto sm:px-2 sm:py-1 rounded-md retro-text text-xs transition-colors flex items-center justify-center hover:scale-105 active:scale-95"
                         title={t('hud.dailyBonus')}
                     >
                         🎁
-                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-amber-400 rounded-full animate-pulse" />
+                        <span className="absolute -top-0.5 -right-0.5 w-1.5 h-1.5 bg-amber-400 rounded-full animate-pulse" />
                     </button>
                 )}
                 
@@ -393,7 +395,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 {onOpenSettings && (
                     <button
                         onClick={onOpenSettings}
-                        className="bg-gray-700/80 hover:bg-gray-600 active:bg-gray-500 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-xs transition-colors flex items-center justify-center"
+                        className={`${navIconBtn} bg-gray-700/80 hover:bg-gray-600 active:bg-gray-500 text-white retro-text`}
                         title={t('hud.settings')}
                     >
                         ⚙️
@@ -404,7 +406,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 {isInsideOwnedIgloo && onOpenIglooSettings && (
                     <button
                         onClick={onOpenIglooSettings}
-                        className="bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500 hover:to-pink-500 active:from-purple-700 active:to-pink-700 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-xs transition-colors flex items-center justify-center gap-1"
+                        className={`${navIconBtn} sm:w-auto sm:px-2 sm:py-1 bg-gradient-to-r from-purple-600/80 to-pink-600/80 hover:from-purple-500 hover:to-pink-500 active:from-purple-700 active:to-pink-700 text-white retro-text gap-1`}
                         title={t('hud.iglooSettings')}
                     >
                         🏠
@@ -413,48 +415,48 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 )}
                 
                 {/* Inbox Button */}
-                {showInbox && <InboxButton />}
+                {showInbox && <InboxButton compact />}
                 
                 {/* Puffles Button */}
                 <button
                     onClick={onOpenPuffles}
-                    className="bg-purple-600/80 hover:bg-purple-500 active:bg-purple-400 backdrop-blur-sm text-white w-9 h-9 sm:px-3 sm:py-2 sm:w-auto sm:h-auto rounded-lg retro-text text-xs transition-colors flex items-center justify-center"
-                        title={t('hud.managePuffles')}
+                    className={`${navIconBtn} bg-purple-600/80 hover:bg-purple-500 active:bg-purple-400 text-white retro-text`}
+                    title={t('hud.managePuffles')}
                 >
                     🐾
                 </button>
                 
                 {/* Wallet Connection Button */}
-                <WalletButton onRequestAuth={onRequestAuth} />
+                <WalletButton onRequestAuth={onRequestAuth} size="sm" />
                 
                 {/* Stats Button */}
                 <button 
                     onClick={() => setShowStatsModal(true)}
-                    className="bg-black/50 hover:bg-black/70 backdrop-blur-sm rounded-lg p-2 transition-all"
+                    className={`${navIconBtn} bg-black/50 hover:bg-black/70`}
                     title={t('hud.fullStats')}
                 >
-                    <span className="text-sm">📊</span>
+                    📊
                 </button>
                 
                 {/* Player Count - Room / Total */}
                 {playerCountButton(false)}
                 
                 {/* Coins Display */}
-                <div className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-yellow-400/30">
-                    <span className="text-lg">💰</span>
-                    <span className="text-yellow-300 font-bold retro-text text-sm">{coins}</span>
+                <div className={`${navChip} border-yellow-400/30`}>
+                    <span className="text-sm">💰</span>
+                    <span className="text-yellow-300 font-bold retro-text text-xs tabular-nums">{coins}</span>
                 </div>
                 
                 {/* Pebbles Display - Premium Currency */}
                 {isAuthenticated && (
                     <button 
                         onClick={() => setShowPebblesPurchase(true)}
-                        className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-purple-400/30 hover:border-purple-400/60 hover:bg-black/80 transition-all group"
+                        className={`${navChip} border-purple-400/30 hover:border-purple-400/60 hover:bg-black/80 transition-all group`}
                         title={t('hud.buyPebbles')}
                     >
-                        <span className="text-lg">🪨</span>
-                        <span className="text-purple-300 font-bold retro-text text-sm">{pebbles}</span>
-                        <span className="text-green-400 font-bold text-lg ml-1 opacity-60 group-hover:opacity-100 transition-opacity">+</span>
+                        <span className="text-sm">🪨</span>
+                        <span className="text-purple-300 font-bold retro-text text-xs tabular-nums">{pebbles}</span>
+                        <span className="text-green-400 font-bold text-sm ml-0.5 opacity-60 group-hover:opacity-100 transition-opacity">+</span>
                     </button>
                 )}
                 
@@ -462,11 +464,11 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 {isAuthenticated && (
                     <button
                         onClick={() => setShowGameInventory(true)}
-                        className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-teal-400/30 hover:border-teal-400/60 hover:bg-black/80 transition-all"
+                        className={`${navChip} border-teal-400/30 hover:border-teal-400/60 hover:bg-black/80 transition-all`}
                         title="Backpack — items you gather in the world"
                     >
-                        <span className="text-lg">🎒</span>
-                        <span className="text-teal-300 font-bold retro-text text-sm hidden sm:inline">Backpack</span>
+                        <span className="text-sm">🎒</span>
+                        <span className={`${navLabel} text-teal-300`}>Backpack</span>
                     </button>
                 )}
 
@@ -474,11 +476,11 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 {isAuthenticated && (
                     <button 
                         onClick={() => setShowInventory(true)}
-                        className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-amber-400/30 hover:border-amber-400/60 hover:bg-black/80 transition-all"
+                        className={`${navChip} border-amber-400/30 hover:border-amber-400/60 hover:bg-black/80 transition-all`}
                         title={t('hud.openInventory')}
                     >
-                        <span className="text-lg">📦</span>
-                        <span className="text-amber-300 font-bold retro-text text-sm hidden sm:inline">{t('hud.inventory')}</span>
+                        <span className="text-sm">📦</span>
+                        <span className={`${navLabel} text-amber-300`}>{t('hud.inventory')}</span>
                     </button>
                 )}
                 
@@ -486,19 +488,19 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 {isAuthenticated && (
                     <button 
                         onClick={() => setShowMarketplace(true)}
-                        className="bg-black/70 backdrop-blur-md rounded-lg px-3 py-2 flex items-center gap-2 border border-cyan-400/30 hover:border-cyan-400/60 hover:bg-black/80 transition-all"
+                        className={`${navChip} border-cyan-400/30 hover:border-cyan-400/60 hover:bg-black/80 transition-all`}
                         title={t('hud.openMarketplace')}
                     >
-                        <span className="text-lg">🏪</span>
-                        <span className="text-cyan-300 font-bold retro-text text-sm hidden sm:inline">{t('hud.market')}</span>
+                        <span className="text-sm">🏪</span>
+                        <span className={`${navLabel} text-cyan-300`}>{t('hud.market')}</span>
                     </button>
                 )}
             </div>
             
             {/* Coin Reward Animation */}
             {recentReward && (
-                <div className="absolute top-16 right-4 z-30 animate-bounce">
-                    <div className="bg-green-500/90 text-white px-3 py-1 rounded-lg retro-text text-xs">
+                <div className="absolute top-12 right-3 z-30 animate-bounce">
+                    <div className="bg-green-500/90 text-white px-2 py-0.5 rounded-md retro-text text-[10px]">
                         +{recentReward.amount} 💰
                     </div>
                 </div>

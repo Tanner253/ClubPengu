@@ -240,14 +240,16 @@ function buildTravelDock(THREE, npcDef) {
     stand.add(valance);
 
     const route = npcDef.routeId?.includes('forest') ? '🌲' : npcDef.routeId?.includes('snow') ? '⛄' : '🏘️';
-    mountFrontSign(stand, THREE, { x: 0, y: 6.2, z: 1.55, postSpread: 1.85 }, {
+    mountFrontSign(stand, THREE, { x: 0, y: 6.45, z: 1.55, postSpread: 2.05 }, {
         title: 'ICE FERRY',
         subtitle: 'Captain Skipper',
         emoji: route,
         accent: ['#0c2340', '#1a4a7a', '#0c2340'],
         border: '#7dd3fc',
         text: '#e0f2fe',
-        scale: [5.8, 1.72, 1]
+        scale: [8.4, 2.55, 1],
+        titleFontSize: 46,
+        subtitleFontSize: 24,
     });
 
     const ticketBooth = new THREE.Mesh(geo.box(1.6, 1.1, 0.8), wood);
@@ -526,7 +528,9 @@ function createShopSignSprite(THREE, opts) {
         accent = ['#0c4a6e', '#0369a1', '#0c4a6e'],
         border = '#7dd3fc',
         text = '#ffffff',
-        scale = [4, 1.2, 1]
+        scale = [4, 1.2, 1],
+        titleFontSize = 40,
+        subtitleFontSize = 22,
     } = opts;
 
     const canvas = document.createElement('canvas');
@@ -551,14 +555,14 @@ function createShopSignSprite(THREE, opts) {
     ctx.shadowColor = '#000000';
     ctx.shadowBlur = 6;
     ctx.fillStyle = text;
-    ctx.font = 'bold 40px Arial, sans-serif';
+    ctx.font = `bold ${titleFontSize}px Arial, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     const titleText = emoji ? `${emoji} ${title}` : title;
     ctx.fillText(titleText, canvas.width / 2, subtitle ? 58 : 80);
 
     if (subtitle) {
-        ctx.font = 'bold 22px Arial, sans-serif';
+        ctx.font = `bold ${subtitleFontSize}px Arial, sans-serif`;
         ctx.fillStyle = border;
         ctx.fillText(subtitle, canvas.width / 2, 108);
     }

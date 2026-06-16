@@ -8,7 +8,7 @@ import React, { useState } from 'react';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import { useLanguage } from '../i18n';
 
-function WalletButton({ className = '', onRequestAuth, compact = false }) {
+function WalletButton({ className = '', onRequestAuth, compact = false, size = 'default' }) {
     const { 
         isAuthenticated, 
         walletAddress, 
@@ -37,23 +37,28 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
     // Authenticated state
     if (isAuthenticated && walletAddress) {
         const shortAddress = `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`;
+        const btnSize = compact
+            ? 'gap-1 px-2 py-1 text-xs'
+            : size === 'sm'
+                ? 'gap-1.5 px-2 py-1 text-xs'
+                : 'gap-2 px-3 py-2 text-sm';
+        const dotSize = compact ? 'w-1.5 h-1.5' : size === 'sm' ? 'w-1.5 h-1.5' : 'w-2 h-2';
+        const chevronSize = size === 'sm' ? 'w-3 h-3' : 'w-4 h-4';
         
         return (
             <div className={`relative ${className}`}>
                 <button
                     onClick={() => setShowDropdown(!showDropdown)}
                     className={`flex items-center bg-gradient-to-r from-green-600 to-emerald-600 
-                               hover:from-green-500 hover:to-emerald-500 rounded-lg text-white font-medium
-                               shadow-lg border border-green-400/30 transition-all ${
-                                   compact ? 'gap-1 px-2 py-1 text-xs' : 'gap-2 px-3 py-2 text-sm'
-                               }`}
+                               hover:from-green-500 hover:to-emerald-500 rounded-md text-white font-medium
+                               shadow-lg border border-green-400/30 transition-all ${btnSize}`}
                 >
-                    <div className={`bg-green-300 rounded-full animate-pulse ${compact ? 'w-1.5 h-1.5' : 'w-2 h-2'}`} />
+                    <div className={`bg-green-300 rounded-full animate-pulse ${dotSize}`} />
                     {!compact && <span className="hidden sm:inline">{shortAddress}</span>}
                     {!compact && <span className="sm:hidden">{t('wallet.connected')}</span>}
                     {compact && <span>✓</span>}
                     {!compact && (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className={chevronSize} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                         </svg>
                     )}
@@ -124,8 +129,8 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
         return (
             <div className={`flex items-center gap-1 ${compact ? '' : 'gap-2'} ${className}`}>
                 {/* Guest indicator - hide on compact */}
-                {!compact && (
-                    <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-amber-900/50 rounded-lg 
+                {!compact && size !== 'sm' && (
+                    <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-amber-900/50 rounded-md 
                                     border border-amber-500/30 text-amber-300 text-xs">
                         <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" 
@@ -142,9 +147,13 @@ function WalletButton({ className = '', onRequestAuth, compact = false }) {
                 disabled={isAuthenticating}
                 className={`flex items-center bg-gradient-to-r from-purple-600 to-indigo-600 
                            hover:from-purple-500 hover:to-indigo-500 disabled:from-slate-600 disabled:to-slate-700
-                           rounded-lg text-white font-medium shadow-lg border border-purple-400/30 
+                           rounded-md text-white font-medium shadow-lg border border-purple-400/30 
                            transition-all disabled:cursor-wait ${
-                               compact ? 'gap-1 px-2 py-1 text-[10px]' : 'gap-2 px-3 py-2 text-sm'
+                               compact
+                                   ? 'gap-1 px-2 py-1 text-[10px]'
+                                   : size === 'sm'
+                                       ? 'gap-1.5 px-2 py-1 text-xs'
+                                       : 'gap-2 px-3 py-2 text-sm'
                            }`}
             >
                 {isAuthenticating ? (
