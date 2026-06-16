@@ -5,6 +5,7 @@
 import { FOREST_ZONE_OFFSET, FOREST_ZONE_SIZE, getStageConfig, getWoodYield, MANUAL_WOOD_MULTIPLIER } from '../config/harvestableTrees';
 import { hasEquippedAxe, getEquippedHotbarTool, ownsAnyAxe } from '../utils/gameHotbar';
 import { getChopDurabilityLoss } from '../config/economy';
+import { canFitWoodChopLoot } from '../utils/inventoryCapacity';
 
 class WoodcuttingSystem {
     constructor() {
@@ -66,6 +67,18 @@ class WoodcuttingSystem {
         } else if (isLocalChopping || isLocalManual) {
             canChop = false;
             reason = 'ALREADY_CHOPPING';
+        } else if (
+            isAuthenticated
+            && gameInventory
+            && !canFitWoodChopLoot(
+                gameInventory,
+                nearest.stage,
+                nearest.chopMode || 'hold',
+                this.equippedTool?.itemId || 'basic_axe'
+            )
+        ) {
+            canChop = false;
+            reason = 'INVENTORY_FULL';
         }
 
         const stageCfg = getStageConfig(nearest.stage);
@@ -103,6 +116,9 @@ class WoodcuttingSystem {
         }
         if (reason === 'ALREADY_CHOPPING') {
             return tree.chopMode === 'manual' ? 'Chopping… drag across the tree' : 'Chopping…';
+        }
+        if (reason === 'INVENTORY_FULL') {
+            return 'Backpack full — upgrade or sell items before chopping';
         }
         const dur = equippedTool?.durability;
         const maxDur = equippedTool?.maxDurability;

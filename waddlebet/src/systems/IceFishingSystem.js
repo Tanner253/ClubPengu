@@ -7,6 +7,9 @@
  * No spectator feed, no live game updates - just catch notifications.
  */
 
+import { canFitFishCatch } from '../utils/inventoryCapacity';
+import { hasEquippedRod, ownsAnyRod } from '../utils/gameHotbar';
+
 const INTERACTION_RADIUS = 3;
 const BUBBLE_DISPLAY_TIME = 4000; // Show catch bubble for 4 seconds
 const BUBBLE_HEIGHT_ABOVE_PLAYER = 4;
@@ -58,7 +61,8 @@ class IceFishingSystem {
     /**
      * Check if player is near a fishing spot
      */
-    checkInteraction(playerX, playerZ, playerCoins, isAuthenticated) {
+    checkInteraction(playerX, playerZ, playerCoins, isAuthenticated, gameInventory = null, options = {}) {
+        const { isMounted = false } = options;
         let nearestSpot = null;
         let nearestDist = Infinity;
         
@@ -92,18 +96,33 @@ class IceFishingSystem {
             prompt = '🎣 FREE DEMO! Press E to fish';
             canFish = true;
             isDemo = true;
+        } else if (isMounted) {
+            prompt = 'Dismount before fishing';
+            canFish = false;
+            reason = 'MOUNTED';
+        } else if (!hasEquippedRod(gameInventory)) {
+            const ownsRod = ownsAnyRod(gameInventory);
+            prompt = ownsRod
+                ? 'Equip your fishing rod on the hotbar (press 1–5)'
+                : 'Pick up the free Basic Rod near Old Salty\'s shack';
+            canFish = false;
+            reason = ownsRod ? 'ROD_NOT_EQUIPPED' : 'NO_ROD';
+        } else if (gameInventory && !canFitFishCatch(gameInventory)) {
+            prompt = 'Backpack full — upgrade or sell fish before fishing';
+            canFish = false;
+            reason = 'INVENTORY_FULL';
         } else if (playerCoins < FISHING_COST) {
             prompt = `Need ${FISHING_COST}g bait (you have ${playerCoins}g)`;
             canFish = false;
             reason = 'INSUFFICIENT_FUNDS';
         }
-        
-        return { 
-            spot: nearestSpot, 
-            prompt, 
-            canFish, 
-            reason, 
-            cost: isDemo ? 0 : FISHING_COST, 
+
+        return {
+            spot: nearestSpot,
+            prompt,
+            canFish,
+            reason,
+            cost: isDemo ? 0 : FISHING_COST,
             isDemo,
             isLocalFishing
         };

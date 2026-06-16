@@ -5,6 +5,12 @@
 
 import { User } from '../db/models/index.js';
 import { ECONOMY, getBackpackUpgradeInfo, getMaxSlotCount } from '../config/economy.js';
+import {
+    getRodUpgradeStep,
+    getNextRodUpgrade,
+    buildNextRodUpgradePreview,
+    ROD_UPGRADE_MAX_STEP
+} from '../config/rodUpgrades.js';
 import { getGameItem, isFishItem, getFishRarityLabel, getFishRarityDisplay, getFerryTicketItemForRoute } from '../config/gameItems.js';
 import { getMerchant, merchantAcceptsCategory } from '../config/merchants.js';
 import { getToolPurchasePrerequisite } from '../config/toolTiers.js';
@@ -47,7 +53,9 @@ function enrichSlot(slot) {
     const def = getGameItem(slot.itemId);
     const meta = slot.metadata || {};
     const category = def?.category || meta.category || 'unknown';
-    const npcValue = def?.npcValue ?? meta.npcValue ?? 0;
+    const npcValue = (category === 'fish' && meta.npcValue != null)
+        ? meta.npcValue
+        : (def?.npcValue ?? meta.npcValue ?? 0);
     const emoji = def?.emoji || meta.emoji || '📦';
     const out = {
         itemId: slot.itemId,
@@ -58,13 +66,14 @@ function enrichSlot(slot) {
         category,
         npcValue,
         tier: def?.tier || meta.tier || 0,
+        weightKg: meta.weightKg ?? null,
         rarity: getFishRarityLabel(slot.itemId),
         rarityDisplay: getFishRarityDisplay(slot.itemId),
         maxStack: def?.maxStack || GI.MAX_STACK
     };
-    if (category === 'tool') {
-        const toolCfg = ECONOMY.TOOLS?.[slot.itemId];
-        const maxDurability = meta.maxDurability ?? toolCfg?.maxDurability ?? 100;
+    if (category === 'tool' || category === 'rod') {
+        const gearCfg = ECONOMY.TOOLS?.[slot.itemId] || ECONOMY.RODS?.[slot.itemId];
+        const maxDurability = meta.maxDurability ?? gearCfg?.maxDurability ?? 100;
         out.maxDurability = maxDurability;
         out.durability = meta.durability ?? maxDurability;
     }
@@ -120,6 +129,14 @@ class GameInventoryService {
         const def = getGameItem(slot.itemId);
         return (def?.category || slot.metadata?.category) === 'tool';
     }
+    isRodSlot(slot) {
+        if (!slotHasItem(slot)) return false;
+        const def = getGameItem(slot.itemId);
+        return (def?.category || slot.metadata?.category) === 'rod';
+    }
+    isGearSlot(slot) {
+        return this.isToolSlot(slot) || this.isRodSlot(slot);
+    }
     sanitizeHotbar(slots, hotbar) {
         for (let i = 0; i < hotbar.length; i++) {
             const ref = hotbar[i];
@@ -147,15 +164,28 @@ class GameInventoryService {
         });
         this.sanitizeHotbar(slots, hotbar);
     }
-    getToolMetadataForNewItem(itemId) {
-        const toolCfg = ECONOMY.TOOLS?.[itemId];
-        if (!toolCfg?.maxDurability) return {};
+    getGearMetadataForNewItem(itemId) {
+        const gearCfg = ECONOMY.TOOLS?.[itemId] || ECONOMY.RODS?.[itemId];
+        if (!gearCfg?.maxDurability) return {};
         return {
-            durability: toolCfg.maxDurability,
-            maxDurability: toolCfg.maxDurability
+            durability: gearCfg.maxDurability,
+            maxDurability: gearCfg.maxDurability
         };
     }
+    getToolMetadataForNewItem(itemId) {
+        return this.getGearMetadataForNewItem(itemId);
+    }
     getEquippedTool(user) {
+        const equipped = this._getEquippedGear(user);
+        if (!equipped || !this.isToolSlot({ itemId: equipped.itemId, quantity: 1 })) return null;
+        return equipped;
+    }
+    getEquippedRod(user) {
+        const equipped = this._getEquippedGear(user);
+        if (!equipped || !this.isRodSlot({ itemId: equipped.itemId, quantity: 1 })) return null;
+        return equipped;
+    }
+    _getEquippedGear(user) {
         const slots = normalizeSlots(user.gameInventory?.slots, this.getUnlockedSlots(user));
         const hotbar = this.normalizeHotbar(user.gameInventory?.hotbar);
         this.sanitizeHotbar(slots, hotbar);
@@ -166,10 +196,10 @@ class GameInventoryService {
         const ref = hotbar[active];
         if (!ref || typeof ref.inventorySlot !== 'number') return null;
         const slot = slots[ref.inventorySlot];
-        if (!this.isToolSlot(slot)) return null;
+        if (!this.isGearSlot(slot)) return null;
         const meta = slot.metadata || {};
-        const toolCfg = ECONOMY.TOOLS?.[slot.itemId];
-        const maxDurability = meta.maxDurability ?? toolCfg?.maxDurability ?? 100;
+        const gearCfg = ECONOMY.TOOLS?.[slot.itemId] || ECONOMY.RODS?.[slot.itemId];
+        const maxDurability = meta.maxDurability ?? gearCfg?.maxDurability ?? 100;
         const durability = meta.durability ?? maxDurability;
         if (durability <= 0) return null;
         return {
@@ -245,18 +275,27 @@ class GameInventoryService {
         return { success: true, inventory: this.serializeInventory(updated) };
     }
     async damageEquippedTool(walletAddress, amount = null) {
+        return this._damageEquippedGear(walletAddress, amount, 'tool');
+    }
+    async damageEquippedRod(walletAddress, amount = null) {
+        return this._damageEquippedGear(walletAddress, amount, 'rod');
+    }
+    async _damageEquippedGear(walletAddress, amount = null, gearKind = 'tool') {
         const user = await this.ensureInventory(walletAddress);
         if (!user) return { error: 'USER_NOT_FOUND' };
-        const equipped = this.getEquippedTool(user);
-        if (!equipped) return { error: 'NO_TOOL', broken: false };
+        const equipped = gearKind === 'rod' ? this.getEquippedRod(user) : this.getEquippedTool(user);
+        if (!equipped) return { error: gearKind === 'rod' ? 'NO_ROD' : 'NO_TOOL', broken: false };
         const unlockedSlots = this.getUnlockedSlots(user);
         const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
         const hotbar = this.normalizeHotbar(user.gameInventory?.hotbar);
         const slot = slots[equipped.inventorySlot];
         const meta = { ...(slot.metadata || {}) };
-        const toolCfg = ECONOMY.TOOLS?.[equipped.itemId];
-        const maxDurability = meta.maxDurability ?? toolCfg?.maxDurability ?? 100;
-        const loss = amount ?? toolCfg?.durabilityLossPerChop ?? 1;
+        const gearCfg = ECONOMY.TOOLS?.[equipped.itemId] || ECONOMY.RODS?.[equipped.itemId];
+        const maxDurability = meta.maxDurability ?? gearCfg?.maxDurability ?? 100;
+        const defaultLoss = gearKind === 'rod'
+            ? (gearCfg?.durabilityLossPerCast ?? 1)
+            : (gearCfg?.durabilityLossPerChop ?? 1);
+        const loss = amount ?? defaultLoss;
         const nextDurability = (meta.durability ?? maxDurability) - loss;
         if (nextDurability <= 0) {
             slots[equipped.inventorySlot] = emptySlot();
@@ -402,6 +441,9 @@ class GameInventoryService {
         const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
         const usedSlots = slots.filter(slotHasItem).length;
         const nextUpgrade = getBackpackUpgradeInfo(unlockedSlots);
+        const rodStep = getRodUpgradeStep(user);
+        const ownsRod = (id) => this.countItemInSlots(slots, id) > 0;
+        const nextRodUpgrade = buildNextRodUpgradePreview(rodStep, ownsRod);
         const hotbarRaw = this.normalizeHotbar(user.gameInventory?.hotbar);
         this.sanitizeHotbar(slots, hotbarRaw);
         const hotbarSize = ECONOMY.HOTBAR?.SIZE || 5;
@@ -427,6 +469,7 @@ class GameInventoryService {
                 hotbarSize - 1
             ),
             nextUpgrade,
+            nextRodUpgrade,
             fishingProgress: user.fishingProgress || null
         };
     }
@@ -437,11 +480,17 @@ class GameInventoryService {
         return { success: true, inventory: this.serializeInventory(user) };
     }
 
-    findStackSlot(slots, itemId) {
-        return slots.findIndex(s => (
-            s.itemId === itemId
-            && s.quantity < (getGameItem(itemId)?.maxStack || GI.MAX_STACK)
-        ));
+    findStackSlot(slots, itemId, metadata = {}) {
+        const maxStack = getGameItem(itemId)?.maxStack || GI.MAX_STACK;
+        const isFish = isFishItem(itemId) || metadata.category === 'fish';
+        const catchValue = isFish && metadata.npcValue != null ? metadata.npcValue : null;
+
+        return slots.findIndex((s) => {
+            if (s.itemId !== itemId || s.quantity >= maxStack) return false;
+            if (catchValue == null) return true;
+            const stackValue = s.metadata?.npcValue ?? getGameItem(itemId)?.npcValue ?? 0;
+            return stackValue === catchValue;
+        });
     }
 
     findEmptySlot(slots) {
@@ -461,7 +510,7 @@ class GameInventoryService {
         const maxStack = itemDef.maxStack || GI.MAX_STACK;
 
         while (remaining > 0) {
-            let slotIdx = this.findStackSlot(simSlots, itemId);
+            let slotIdx = this.findStackSlot(simSlots, itemId, metadata);
             if (slotIdx === -1) slotIdx = this.findEmptySlot(simSlots);
             if (slotIdx === -1) {
                 return { ok: false, error: 'INVENTORY_FULL' };
@@ -556,11 +605,13 @@ class GameInventoryService {
             emoji: metadata.emoji || itemDef.emoji,
             npcValue: metadata.npcValue ?? itemDef.npcValue,
             category: metadata.category || itemDef.category,
-            tier: metadata.tier ?? itemDef.tier
+            tier: metadata.tier ?? itemDef.tier,
+            weightKg: metadata.weightKg,
+            caughtWithRod: metadata.caughtWithRod
         };
 
         while (remaining > 0) {
-            let slotIdx = this.findStackSlot(slots, itemId);
+            let slotIdx = this.findStackSlot(slots, itemId, storedMeta);
             if (slotIdx === -1) slotIdx = this.findEmptySlot(slots);
             if (slotIdx === -1) {
                 return { error: 'INVENTORY_FULL', message: 'Backpack is full — upgrade or sell fish' };
@@ -711,6 +762,48 @@ class GameInventoryService {
     }
 
     /**
+     * One-time free basic rod near Old Salty (server-authoritative).
+     */
+    async claimStarterRod(walletAddress) {
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return { error: 'USER_NOT_FOUND' };
+
+        if (user.fishingProgress?.starterRodClaimed) {
+            return { error: 'ALREADY_CLAIMED', message: 'You already picked up the starter rod' };
+        }
+
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+        if (this.countItemInSlots(slots, 'basic_rod') > 0) {
+            await User.findOneAndUpdate(
+                { walletAddress },
+                { $set: { 'fishingProgress.starterRodClaimed': true } },
+                { new: true }
+            );
+            return { error: 'ALREADY_OWNED', message: 'You already have a basic rod' };
+        }
+
+        const addResult = await this.addItem(walletAddress, 'basic_rod', 1, this.getGearMetadataForNewItem('basic_rod'));
+        if (addResult.error) return addResult;
+
+        let inventory = addResult.inventory;
+        const autoEquipped = await this.autoEquipToolToHotbar(walletAddress, 'basic_rod');
+        if (autoEquipped) inventory = autoEquipped;
+
+        await User.findOneAndUpdate(
+            { walletAddress },
+            { $set: { 'fishingProgress.starterRodClaimed': true } },
+            { new: true }
+        );
+
+        return {
+            success: true,
+            itemId: 'basic_rod',
+            inventory
+        };
+    }
+
+    /**
      * Unlock more backpack slots for gold.
      */
     async upgradeBackpack(walletAddress) {
@@ -794,6 +887,123 @@ class GameInventoryService {
         };
     }
 
+    /**
+     * Two-step wood + gold rod upgrades at Old Salty (fish_buyer).
+     */
+    async upgradeRod(walletAddress, merchantId = 'fish_buyer') {
+        if (merchantId !== 'fish_buyer') {
+            return { error: 'WRONG_MERCHANT', message: 'Rod upgrades are only available from Old Salty' };
+        }
+
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return { error: 'USER_NOT_FOUND' };
+
+        const completedSteps = getRodUpgradeStep(user);
+        if (completedSteps >= ROD_UPGRADE_MAX_STEP) {
+            return { error: 'MAX_ROD', message: 'Your rod is fully upgraded to Master' };
+        }
+
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+        const ownsRod = (id) => this.countItemInSlots(slots, id) > 0;
+        const step = getNextRodUpgrade(completedSteps, ownsRod);
+
+        if (!step) {
+            return {
+                error: 'MISSING_ROD',
+                message: 'Keep your current rod in the backpack to upgrade it'
+            };
+        }
+
+        for (const [woodId, qty] of Object.entries(step.woodRequired)) {
+            const have = this.countItemInSlots(slots, woodId);
+            if (have < qty) {
+                return {
+                    error: 'INSUFFICIENT_WOOD',
+                    message: `Need ${qty} ${woodId} (have ${have})`,
+                    woodRequired: step.woodRequired,
+                    itemId: woodId,
+                    need: qty,
+                    have
+                };
+            }
+        }
+
+        const userFresh = await this.userService.getUser(walletAddress);
+        if (!userFresh || userFresh.coins < step.goldCost) {
+            return {
+                error: 'INSUFFICIENT_FUNDS',
+                message: `Need ${step.goldCost}g (you have ${userFresh?.coins || 0}g)`,
+                cost: step.goldCost
+            };
+        }
+
+        const deduct = await this.userService.addCoins(
+            walletAddress,
+            -step.goldCost,
+            'rod_upgrade',
+            { stepId: step.id, merchantId },
+            `Rod upgrade: ${step.label}`
+        );
+        if (!deduct.success) return deduct;
+
+        for (const [woodId, qty] of Object.entries(step.woodRequired)) {
+            let remaining = qty;
+            for (let i = 0; i < slots.length && remaining > 0; i++) {
+                const slot = slots[i];
+                if (slot?.itemId !== woodId) continue;
+                const take = Math.min(remaining, slot.quantity);
+                slot.quantity -= take;
+                remaining -= take;
+                if (slot.quantity <= 0) slots[i] = emptySlot();
+            }
+        }
+
+        const newStep = completedSteps + 1;
+
+        if (step.grantsRodId) {
+            const rodSlotIdx = slots.findIndex((s) => s?.itemId === step.requiredRodId);
+            if (rodSlotIdx === -1) {
+                return { error: 'MISSING_ROD', message: 'Required rod not found in backpack' };
+            }
+            slots[rodSlotIdx] = {
+                itemId: step.grantsRodId,
+                quantity: 1,
+                metadata: this.getGearMetadataForNewItem(step.grantsRodId)
+            };
+        }
+
+        const hotbar = this.normalizeHotbar(user.gameInventory?.hotbar);
+        this.sanitizeHotbar(slots, hotbar);
+        const updated = await this.persistUserInventory(walletAddress, slots, null, {
+            'fishingProgress.rodUpgradeStep': newStep,
+            'gameInventory.hotbar': hotbar
+        });
+        if (!updated) return { error: 'SAVE_FAILED' };
+
+        let inventory = this.serializeInventory(updated);
+        if (step.grantsRodId) {
+            const autoEquipped = await this.autoEquipToolToHotbar(walletAddress, step.grantsRodId);
+            if (autoEquipped) inventory = autoEquipped;
+        }
+
+        const grantedDef = step.grantsRodId ? getGameItem(step.grantsRodId) : null;
+
+        return {
+            success: true,
+            stepIndex: newStep,
+            stepId: step.id,
+            grantsRodId: step.grantsRodId,
+            itemName: grantedDef?.name || step.label,
+            label: step.label,
+            goldSpent: step.goldCost,
+            woodSpent: step.woodRequired,
+            newBalance: deduct.newBalance,
+            inventory,
+            isPartialStep: !step.grantsRodId
+        };
+    }
+
     /** Count total quantity of an item across all backpack slots. */
     countItemInSlots(slots, itemId) {
         let total = 0;
@@ -827,7 +1037,7 @@ class GameInventoryService {
             return { error: 'ALREADY_OWNED', message: 'You already own this item' };
         }
 
-        if (itemDef.category === 'tool') {
+        if (itemDef.category === 'tool' || itemDef.category === 'rod') {
             const prereq = getToolPurchasePrerequisite(
                 itemId,
                 (toolId) => this.countItemInSlots(slots, toolId) > 0
@@ -838,6 +1048,23 @@ class GameInventoryService {
                     message: prereq.message,
                     requiredItemId: prereq.requiredItemId,
                 };
+            }
+        }
+
+        const woodRequired = listing.woodRequired || ECONOMY.RODS?.[itemId]?.woodRequired || null;
+        if (woodRequired) {
+            for (const [woodId, qty] of Object.entries(woodRequired)) {
+                const have = this.countItemInSlots(slots, woodId);
+                if (have < qty) {
+                    return {
+                        error: 'INSUFFICIENT_WOOD',
+                        message: `Need ${qty} ${woodId} (have ${have})`,
+                        woodRequired,
+                        itemId: woodId,
+                        need: qty,
+                        have
+                    };
+                }
             }
         }
 
@@ -860,7 +1087,22 @@ class GameInventoryService {
 
         if (!deduct.success) return deduct;
 
-        const toolMeta = this.getToolMetadataForNewItem(itemId);
+        if (woodRequired) {
+            for (const [woodId, qty] of Object.entries(woodRequired)) {
+                let remaining = qty;
+                for (let i = 0; i < slots.length && remaining > 0; i++) {
+                    const slot = slots[i];
+                    if (slot?.itemId !== woodId) continue;
+                    const take = Math.min(remaining, slot.quantity);
+                    slot.quantity -= take;
+                    remaining -= take;
+                    if (slot.quantity <= 0) slots[i] = emptySlot();
+                }
+            }
+            await this.persistUserInventory(walletAddress, slots);
+        }
+
+        const toolMeta = this.getGearMetadataForNewItem(itemId);
         const addResult = await this.addItem(walletAddress, itemId, 1, toolMeta);
         if (addResult.error) {
             await this.userService.addCoins(
@@ -873,7 +1115,7 @@ class GameInventoryService {
             return addResult;
         }
         let inventory = addResult.inventory;
-        if (itemDef.category === 'tool') {
+        if (itemDef.category === 'tool' || itemDef.category === 'rod') {
             const autoEquipped = await this.autoEquipToolToHotbar(walletAddress, itemId);
             if (autoEquipped) inventory = autoEquipped;
         }
@@ -883,6 +1125,7 @@ class GameInventoryService {
             itemId,
             itemName: itemDef.name,
             goldSpent: listing.cost,
+            woodSpent: woodRequired || null,
             newBalance: deduct.newBalance,
             merchantId,
             merchantName: merchant.name,
@@ -910,7 +1153,9 @@ class GameInventoryService {
         }
 
         const sellQty = Math.min(quantity, slot.quantity);
-        const unitValue = itemDef?.npcValue ?? slot.metadata?.npcValue ?? 0;
+        const unitValue = (category === 'fish' && slot.metadata?.npcValue != null)
+            ? slot.metadata.npcValue
+            : (itemDef?.npcValue ?? slot.metadata?.npcValue ?? 0);
         const categoryRatio = (category === 'wood' || category === 'forage')
             ? ECONOMY.WOODCUTTING.NPC_SELL_RATIO
             : ECONOMY.FISHING.NPC_SELL_RATIO;
@@ -960,7 +1205,9 @@ class GameInventoryService {
         const unlockedSlots = this.getUnlockedSlots(user);
         const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
 
-        const entry = this.computeSellEntry(merchant, merchantId, slots, unlockedSlots, slotIndex, quantity);
+        const entry = this.computeSellEntry(
+            merchant, merchantId, slots, unlockedSlots, slotIndex, quantity
+        );
         if (entry.error) return entry;
 
         this.applySellEntry(slots, entry);
@@ -1034,7 +1281,9 @@ class GameInventoryService {
 
         const entries = [];
         for (const [slotIndex, quantity] of merged.entries()) {
-            const entry = this.computeSellEntry(merchant, merchantId, slots, unlockedSlots, slotIndex, quantity);
+            const entry = this.computeSellEntry(
+                merchant, merchantId, slots, unlockedSlots, slotIndex, quantity
+            );
             if (entry.error) return entry;
             entries.push(entry);
         }

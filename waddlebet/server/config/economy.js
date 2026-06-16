@@ -6,7 +6,7 @@
 
  */
 
-
+import { STAGE_YIELD_BASE } from './woodcuttingLoot.js';
 
 export const ECONOMY = {
 
@@ -32,19 +32,30 @@ export const ECONOMY = {
 
         UPGRADE_COST_MULTIPLIER: 3.5,
 
-        /** All four tiers required once wood upgrades begin (upgrade #2+) */
+        /** Wood types unlock one at a time on early tiers; later tiers need all four. */
         BACKPACK_WOOD_TYPES: ['pine_log', 'birch_log', 'oak_log', 'ironwood_log'],
 
         BACKPACK_WOOD_STACK: 64,
 
-        /** Upgrade 5→10 is gold-only; 10→15+ needs every wood type */
+        /** Upgrade 5→10 is gold-only; 10→15+ needs wood */
         BACKPACK_WOOD_STARTS_AT_UPGRADE: 2,
 
-        /** 50% of max stack per type on first wood upgrade (32 each) */
-        BACKPACK_WOOD_BASE_RATIO: 0.5,
-
-        /** Each later wood-gated upgrade scales quantity (32 → 40 → 50 → 64 cap) */
-        BACKPACK_WOOD_SCALE: 1.25
+        /**
+         * Explicit wood cost per wood-gated tier (tier 1 = 10→15 slots).
+         * Each row must fit in `unlockedSlots` at that stage (see slotsNeededToStoreWood).
+         */
+        BACKPACK_WOOD_TIER_COSTS: {
+            1: { pine_log: 32 },
+            2: { pine_log: 64, birch_log: 40 },
+            3: { pine_log: 64, birch_log: 64, oak_log: 40 },
+            4: { pine_log: 96, birch_log: 96, oak_log: 64, ironwood_log: 40 },
+            5: { pine_log: 128, birch_log: 128, oak_log: 96, ironwood_log: 64 },
+            6: { pine_log: 160, birch_log: 160, oak_log: 128, ironwood_log: 96 },
+            7: { pine_log: 192, birch_log: 192, oak_log: 160, ironwood_log: 128 },
+            8: { pine_log: 256, birch_log: 256, oak_log: 224, ironwood_log: 160 },
+            9: { pine_log: 320, birch_log: 320, oak_log: 256, ironwood_log: 192 },
+            10: { pine_log: 384, birch_log: 384, oak_log: 320, ironwood_log: 256 }
+        }
 
     },
 
@@ -150,13 +161,54 @@ export const ECONOMY = {
     },
 
     RODS: {
-
-        basic_rod: { id: 'basic_rod', name: 'Basic Rod', tier: 1 },
-
-        pro_rod: { id: 'pro_rod', name: 'Pro Rod', tier: 2 },
-
-        master_rod: { id: 'master_rod', name: 'Master Rod', tier: 3 }
-
+        basic_rod: {
+            id: 'basic_rod',
+            name: 'Basic Rod',
+            tier: 1,
+            cost: 0,
+            maxDurability: 70,
+            durabilityLossPerCast: 1,
+            /** Extra effective depth (m) when rolling catch tier pool. */
+            catchDepthBonusM: 0,
+            /** Bias loot roll toward higher-tier fish already in the pool (0–1). */
+            catchTierBias: 0,
+            /** Random weight multiplier on catalog value — stored on fish at catch time. */
+            catchWeightMin: 0.85,
+            catchWeightMax: 1.0
+        },
+        iron_rod: {
+            id: 'iron_rod',
+            name: 'Iron Rod',
+            tier: 2,
+            maxDurability: 160,
+            durabilityLossPerCast: 1,
+            catchDepthBonusM: 60,
+            catchTierBias: 0.18,
+            catchWeightMin: 0.95,
+            catchWeightMax: 1.12
+        },
+        pro_rod: {
+            id: 'pro_rod',
+            name: 'Pro Rod',
+            tier: 3,
+            maxDurability: 280,
+            durabilityLossPerCast: 1,
+            catchDepthBonusM: 140,
+            catchTierBias: 0.35,
+            catchWeightMin: 1.0,
+            catchWeightMax: 1.25
+        },
+        master_rod: {
+            id: 'master_rod',
+            name: 'Master Rod',
+            tier: 4,
+            maxDurability: 500,
+            durabilityLossPerCast: 1,
+            catchDepthBonusM: 250,
+            catchTierBias: 0.55,
+            catchWeightMin: 1.08,
+            catchWeightMax: 1.38
+        }
     },
 
     BAIT: {
@@ -175,6 +227,21 @@ export function getMaxSlotCount() {
 
     return ECONOMY.GAME_INVENTORY.MAX_SLOTS;
 
+}
+
+
+
+/**
+ * Backpack slots required to hold a wood cost (one stack = MAX_STACK per slot).
+ * @param {Record<string, number> | null} woodRequired
+ * @param {number} [maxStack]
+ */
+export function slotsNeededToStoreWood(woodRequired, maxStack = ECONOMY.GAME_INVENTORY.MAX_STACK) {
+    if (!woodRequired) return 0;
+    return Object.values(woodRequired).reduce(
+        (sum, qty) => sum + Math.ceil(Math.max(0, qty) / maxStack),
+        0
+    );
 }
 
 
@@ -208,27 +275,15 @@ export function getBackpackWoodRequirements(unlockedSlots) {
 
 
     const woodTier = nextUpgradeNumber - gi.BACKPACK_WOOD_STARTS_AT_UPGRADE + 1;
+    const tierCosts = gi.BACKPACK_WOOD_TIER_COSTS[woodTier];
+    if (!tierCosts) return null;
 
-    const baseQty = Math.round(gi.BACKPACK_WOOD_STACK * gi.BACKPACK_WOOD_BASE_RATIO);
-
-    const qtyPerType = Math.min(
-
-        gi.BACKPACK_WOOD_STACK,
-
-        Math.round(baseQty * Math.pow(gi.BACKPACK_WOOD_SCALE, woodTier - 1))
-
-    );
-
-
-
-    /** @type {Record<string, number>} */
-
-    const woodRequired = {};
-
-    for (const itemId of gi.BACKPACK_WOOD_TYPES) {
-
-        woodRequired[itemId] = qtyPerType;
-
+    const woodRequired = { ...tierCosts };
+    const slotsNeeded = slotsNeededToStoreWood(woodRequired, gi.MAX_STACK);
+    if (slotsNeeded > unlockedSlots) {
+        console.warn(
+            `[economy] Backpack wood tier ${woodTier} needs ${slotsNeeded} slots at ${unlockedSlots} unlocked — check BACKPACK_WOOD_TIER_COSTS`
+        );
     }
 
     return woodRequired;
@@ -297,16 +352,16 @@ export function getChopDurabilityLoss(stage, axeItemId = 'basic_axe') {
  * @returns {number}
  */
 export function getTreeHarvestNpcGold(stage) {
-    const yields = { sapling: 1, baby: 25, mature: 50, elder: 100 };
-    const logs = {
-        sapling: 'pine_log',
-        baby: 'birch_log',
-        mature: 'oak_log',
-        elder: 'ironwood_log'
-    };
-    const qty = yields[stage] ?? 1;
-    const wood = ECONOMY.WOOD[logs[stage]] || ECONOMY.WOOD.pine_log;
+    const qty = STAGE_YIELD_BASE[stage] ?? 2;
+    const wood = ECONOMY.WOOD.pine_log;
     return Math.floor(wood.npcValue * ECONOMY.WOODCUTTING.NPC_SELL_RATIO * qty);
+}
+
+export const ROD_ITEM_IDS = Object.keys(ECONOMY.RODS);
+
+/** @returns {typeof ECONOMY.RODS.basic_rod} */
+export function getRodCatchConfig(rodItemId = 'basic_rod') {
+    return ECONOMY.RODS[rodItemId] || ECONOMY.RODS.basic_rod;
 }
 
 export default ECONOMY;

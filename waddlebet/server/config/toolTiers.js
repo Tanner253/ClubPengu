@@ -6,8 +6,8 @@
 /** @type {Record<string, string[]>} */
 export const TOOL_UPGRADE_CHAINS = {
     axe: ['basic_axe', 'iron_axe', 'steel_axe', 'master_axe'],
-    /** Future fishing rod line — add merchant listings when sold in-game */
-    fishing_rod: ['basic_rod', 'pro_rod', 'master_rod'],
+    /** Fishing rod line — must own previous tier in backpack */
+    fishing_rod: ['basic_rod', 'iron_rod', 'pro_rod', 'master_rod'],
     /** Future pickaxe line */
     pickaxe: [],
 };
@@ -18,6 +18,7 @@ export const TOOL_DISPLAY_NAMES = {
     steel_axe: 'Steel Axe',
     master_axe: 'Master Axe',
     basic_rod: 'Basic Rod',
+    iron_rod: 'Iron Rod',
     pro_rod: 'Pro Rod',
     master_rod: 'Master Rod',
 };

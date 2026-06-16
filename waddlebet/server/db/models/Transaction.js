@@ -48,6 +48,8 @@ const transactionSchema = new mongoose.Schema({
             'travel_ticket',     // Ferry / overworld travel ticket purchase
             'travel_refund',     // Ferry ticket refund (leave boarding / cancel)
             'scavenge',          // Gold found scavenging world props
+            'world_gold_drop',   // Gold placed as a world pickup bag
+            'world_gold_pickup', // Gold collected from a world pickup bag
             'onboarding_quest_reward', // Gold for completing the guided onboarding quest
             'blackjack_bet',     // PvE blackjack bet
             'blackjack_win',     // PvE blackjack payout

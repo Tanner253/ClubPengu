@@ -1,6 +1,6 @@
 /** Client hotbar helpers — sync with server GameInventoryService hotbar shape */
 
-import { AXE_ITEM_IDS } from '../config/economy';
+import { AXE_ITEM_IDS, ROD_ITEM_IDS } from '../config/economy';
 
 export const HOTBAR_SIZE = 5;
 
@@ -42,6 +42,17 @@ export function getEquippedHotbarTool(gameInventory) {
 export function hasEquippedAxe(gameInventory) {
     const tool = getEquippedHotbarTool(gameInventory);
     return Boolean(tool?.itemId && AXE_ITEM_IDS.includes(tool.itemId));
+}
+
+export function hasEquippedRod(gameInventory) {
+    const tool = getEquippedHotbarTool(gameInventory);
+    return Boolean(tool?.itemId && ROD_ITEM_IDS.includes(tool.itemId));
+}
+
+export function ownsAnyRod(gameInventory) {
+    return gameInventory?.slots?.some(
+        s => s?.itemId && ROD_ITEM_IDS.includes(s.itemId) && Number(s.quantity) > 0
+    );
 }
 
 export function ownsAnyAxe(gameInventory) {

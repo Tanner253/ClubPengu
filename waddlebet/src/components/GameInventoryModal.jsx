@@ -595,6 +595,12 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                                             : ''}
                                     </p>
                                     <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-300">
+                                        {selected.category === 'fish' && selected.weightKg != null && (
+                                            <>
+                                                <span>Weight</span>
+                                                <span className="text-right font-mono">{selected.weightKg} kg</span>
+                                            </>
+                                        )}
                                         <span>In stack</span>
                                         <span className="text-right font-mono">×{selected.quantity}</span>
                                         {selected.npcValue > 0 && merchantAcceptsSlot(selected, sellMerchantId) && (

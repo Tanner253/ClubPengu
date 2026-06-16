@@ -165,6 +165,19 @@ class ForestTreeManager {
             return;
         }
 
+        const localChopState = entry.instance?.treeState;
+        const manualFallVisual =
+            entry.def.chopMode === 'manual'
+            && next.state === 'ready'
+            && (localChopState === 'FALLING' || localChopState === 'FALL_COMPLETE' || localChopState === 'HARVESTED');
+
+        if (manualFallVisual) {
+            this._respawnTree(entry, { ...entry.state, ...next }, { animate: false });
+            this._refreshColliders(entry);
+            this._stumpHoverDirty = true;
+            return;
+        }
+
         if (entry.def.chopMode === 'manual' && next.state === 'harvested' && entry.instance?.treeState === 'FALLING') {
             entry.instance.pendingHarvested = true;
         } else {

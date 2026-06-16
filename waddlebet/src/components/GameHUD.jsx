@@ -34,6 +34,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     const [mobileServerPopOpen, setMobileServerPopOpen] = useState(false);
     const [showDropGold, setShowDropGold] = useState(false);
     const [droppingGold, setDroppingGold] = useState(false);
+    const [dropGoldError, setDropGoldError] = useState(null);
     const serverPopWrapRef = useRef(null);
     
     // Get pebbles from multiplayer context
@@ -142,11 +143,14 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
 
     const handleDropGold = async (amount) => {
         setDroppingGold(true);
+        setDropGoldError(null);
         const result = await dropWorldGold?.(amount);
         setDroppingGold(false);
-        if (!result?.error) {
-            setShowDropGold(false);
+        if (result?.error) {
+            setDropGoldError(result.message || 'Could not drop gold');
+            return;
         }
+        setShowDropGold(false);
     };
 
     const coinChipClass = 'bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center gap-1 border border-yellow-400/30';
@@ -386,10 +390,14 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
 
                 <DropGoldModal
                     isOpen={showDropGold}
-                    onClose={() => setShowDropGold(false)}
+                    onClose={() => {
+                        setShowDropGold(false);
+                        setDropGoldError(null);
+                    }}
                     maxCoins={coins}
                     onConfirm={handleDropGold}
                     dropping={droppingGold}
+                    error={dropGoldError}
                 />
 
                 <OnboardingQuestHUD isMobile={isMobile} isPortrait={isPortrait} />
@@ -606,10 +614,14 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
 
             <DropGoldModal
                 isOpen={showDropGold}
-                onClose={() => setShowDropGold(false)}
+                onClose={() => {
+                    setShowDropGold(false);
+                    setDropGoldError(null);
+                }}
                 maxCoins={coins}
                 onConfirm={handleDropGold}
                 dropping={droppingGold}
+                error={dropGoldError}
             />
 
             <OnboardingQuestHUD isMobile={isMobile} isPortrait={isPortrait} />

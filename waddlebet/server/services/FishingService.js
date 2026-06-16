@@ -9,7 +9,8 @@
 
 import crypto from 'crypto';
 import { ECONOMY } from '../config/economy.js';
-import { rollFishAtDepth } from '../config/fishingLoot.js';
+import { getEffectiveRodCatchConfig } from '../config/rodUpgrades.js';
+import { rollCatchAtDepth } from '../config/fishingLoot.js';
 import {
     getGameItem,
     isInventoryCatch,
@@ -38,13 +39,15 @@ class FishingService {
         this.sessions = new Map();
     }
 
-    _createSession(playerId, spotId, room, isDemo) {
+    _createSession(playerId, spotId, room, isDemo, rodItemId = 'basic_rod', catchConfig = null) {
         const sessionId = crypto.randomUUID();
         this.sessions.set(playerId, {
             sessionId,
             spotId,
             room,
             isDemo,
+            rodItemId: rodItemId || 'basic_rod',
+            catchConfig,
             createdAt: Date.now(),
             consumed: false
         });
@@ -80,7 +83,7 @@ class FishingService {
         let newBalance;
 
         if (isDemo) {
-            const sessionId = this._createSession(playerId, spotId, room, true);
+            const sessionId = this._createSession(playerId, spotId, room, true, 'basic_rod');
             return {
                 success: true,
                 spotId,
@@ -92,11 +95,40 @@ class FishingService {
         }
 
         if (walletAddress) {
-            const user = await this.userService.getUser(walletAddress);
-            if (!user || user.coins < FISHING_COST) {
+            const user = await this.gameInventoryService.ensureInventory(walletAddress);
+            if (!user) {
+                return { error: 'USER_NOT_FOUND', message: 'Could not load inventory' };
+            }
+
+            const equippedRod = this.gameInventoryService.getEquippedRod(user);
+            if (!equippedRod) {
+                return {
+                    error: 'NO_ROD',
+                    message: 'Equip a fishing rod on the hotbar — pick up the free rod near Old Salty'
+                };
+            }
+
+            const rodItemId = equippedRod.itemId || 'basic_rod';
+            const rodUpgradeStep = user.fishingProgress?.rodUpgradeStep ?? 0;
+            const catchConfig = getEffectiveRodCatchConfig(rodItemId, rodUpgradeStep);
+
+            if (!user.coins || user.coins < FISHING_COST) {
                 return {
                     error: 'INSUFFICIENT_FUNDS',
                     message: `Need ${FISHING_COST} coins for bait (you have ${user?.coins || 0})`
+                };
+            }
+
+            const capacity = await this.gameInventoryService.canAddItem(
+                walletAddress,
+                'minnow',
+                1,
+                { category: 'fish', name: 'Minnow', emoji: '🐟' }
+            );
+            if (!capacity.ok) {
+                return {
+                    error: capacity.error || 'INVENTORY_FULL',
+                    message: capacity.message || 'Backpack is full — upgrade or sell fish'
                 };
             }
 
@@ -112,6 +144,28 @@ class FishingService {
                 return { error: 'DEDUCT_FAILED', message: 'Failed to buy bait' };
             }
             newBalance = deductResult.newBalance;
+
+            const damageResult = await this.gameInventoryService.damageEquippedRod(walletAddress);
+            if (damageResult.broken) {
+                return {
+                    error: 'ROD_BROKEN',
+                    message: 'Your rod broke — buy a new one from Old Salty',
+                    inventory: damageResult.inventory
+                };
+            }
+
+            const sessionId = this._createSession(playerId, spotId, room, false, rodItemId, catchConfig);
+
+            console.log(`🎣 ${playerName} started fishing at spot ${spotId} session=${sessionId.slice(0, 8)} rod=${rodItemId}`);
+
+            return {
+                success: true,
+                spotId,
+                sessionId,
+                newBalance,
+                baitCost: FISHING_COST,
+                isDemo: false
+            };
         } else {
             if (guestCoins < FISHING_COST) {
                 return {
@@ -122,7 +176,7 @@ class FishingService {
             newBalance = guestCoins - FISHING_COST;
         }
 
-        const sessionId = this._createSession(playerId, spotId, room, false);
+        const sessionId = this._createSession(playerId, spotId, room, false, 'basic_rod');
 
         console.log(`🎣 ${playerName} started fishing at spot ${spotId} session=${sessionId.slice(0, 8)}`);
 
@@ -153,6 +207,9 @@ class FishingService {
             return sessionCheck;
         }
 
+        const { session } = sessionCheck;
+        const rodItemId = session.rodItemId || 'basic_rod';
+
         this._consumeSession(playerId);
 
         if (!success) {
@@ -173,7 +230,8 @@ class FishingService {
             );
         }
 
-        const rolled = rollFishAtDepth(depth);
+        const catchRoll = rollCatchAtDepth(depth, rodItemId, session.catchConfig);
+        const rolled = catchRoll.fish;
         if (!rolled || rolled.category !== 'fish') {
             return { error: 'INVALID_ROLL', message: 'Could not determine catch' };
         }
@@ -182,11 +240,13 @@ class FishingService {
             id: rolled.id,
             name: rolled.name,
             emoji: rolled.emoji,
-            coins: rolled.npcValue
+            coins: catchRoll.npcValue,
+            weightKg: catchRoll.weightKg,
+            caughtWithRod: catchRoll.caughtWithRod
         };
 
         console.log(
-            `[FISHING] server roll player=${playerId} depth=${depth} rolled=${rolled.id} clientClaim=${clientFish?.id || 'none'}`
+            `[FISHING] server roll player=${playerId} depth=${depth} rod=${rodItemId} rolled=${rolled.id} value=${catchRoll.npcValue}g weight=${catchRoll.weightKg}kg clientClaim=${clientFish?.id || 'none'}`
         );
 
         return this.handleCatch(
@@ -216,7 +276,9 @@ class FishingService {
 
         console.log(`[FISHING] handleCatch player=${playerId} name=${playerName} fish=${fishId} depth=${depth} isDemo=${isDemo} wallet=${walletAddress ? walletAddress.slice(0, 8) + '…' : 'NONE'} jelly=${isJellyfish} catalog=${!!catalogItem}`);
 
-        const npcValue = catalogItem?.npcValue ?? 0;
+        const npcValue = fishData?.coins ?? catalogItem?.npcValue ?? 0;
+        const weightKg = fishData?.weightKg ?? null;
+        const caughtWithRod = fishData?.caughtWithRod ?? null;
 
         const fish = {
             id: fishId,
@@ -225,7 +287,9 @@ class FishingService {
             category: catalogItem?.category || 'fish',
             rarity: getFishRarityLabel(fishId),
             npcValue,
-            tier: catalogItem?.tier || 0
+            tier: catalogItem?.tier || 0,
+            weightKg,
+            caughtWithRod
         };
 
         let newBalance = guestBalance;
@@ -251,7 +315,9 @@ class FishingService {
                     emoji: fish.emoji,
                     npcValue,
                     category: fish.category,
-                    tier: fish.tier
+                    tier: fish.tier,
+                    weightKg,
+                    caughtWithRod
                 }
             );
 

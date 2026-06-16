@@ -131,7 +131,10 @@ const userSchema = new mongoose.Schema({
         equippedRod: { type: String, default: 'basic_rod' },
         equippedBait: { type: String, default: null },
         equippedLure: { type: String, default: null },
-        totalCatches: { type: Number, default: 0 }
+        totalCatches: { type: Number, default: 0 },
+        starterRodClaimed: { type: Boolean, default: false },
+        /** Completed Old Salty rod upgrade steps (0–6). */
+        rodUpgradeStep: { type: Number, default: 0, min: 0, max: 6 }
     },
 
     lastCasinoTrashScavenge: { type: Date, default: null },

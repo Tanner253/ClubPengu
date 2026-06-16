@@ -10,7 +10,8 @@ export const MERCHANTS = {
         title: 'Fish Buyer',
         emoji: '🧓',
         acceptsCategories: ['fish'],
-        npcSellRatio: 1.0
+        npcSellRatio: 1.0,
+        sells: []
     },
     forest_ranger: {
         id: 'forest_ranger',

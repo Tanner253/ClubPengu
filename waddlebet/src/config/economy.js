@@ -13,9 +13,27 @@ export const GAME_INVENTORY = {
     BACKPACK_WOOD_TYPES: ['pine_log', 'birch_log', 'oak_log', 'ironwood_log'],
     BACKPACK_WOOD_STACK: 64,
     BACKPACK_WOOD_STARTS_AT_UPGRADE: 2,
-    BACKPACK_WOOD_BASE_RATIO: 0.5,
-    BACKPACK_WOOD_SCALE: 1.25
+    BACKPACK_WOOD_TIER_COSTS: {
+        1: { pine_log: 32 },
+        2: { pine_log: 64, birch_log: 40 },
+        3: { pine_log: 64, birch_log: 64, oak_log: 40 },
+        4: { pine_log: 96, birch_log: 96, oak_log: 64, ironwood_log: 40 },
+        5: { pine_log: 128, birch_log: 128, oak_log: 96, ironwood_log: 64 },
+        6: { pine_log: 160, birch_log: 160, oak_log: 128, ironwood_log: 96 },
+        7: { pine_log: 192, birch_log: 192, oak_log: 160, ironwood_log: 128 },
+        8: { pine_log: 256, birch_log: 256, oak_log: 224, ironwood_log: 160 },
+        9: { pine_log: 320, birch_log: 320, oak_log: 256, ironwood_log: 192 },
+        10: { pine_log: 384, birch_log: 384, oak_log: 320, ironwood_log: 256 }
+    }
 };
+
+export function slotsNeededToStoreWood(woodRequired, maxStack = GAME_INVENTORY.BACKPACK_WOOD_STACK) {
+    if (!woodRequired) return 0;
+    return Object.values(woodRequired).reduce(
+        (sum, qty) => sum + Math.ceil(Math.max(0, qty) / maxStack),
+        0
+    );
+}
 
 export function getBackpackWoodRequirements(unlockedSlots) {
     const gi = GAME_INVENTORY;
@@ -26,17 +44,10 @@ export function getBackpackWoodRequirements(unlockedSlots) {
     if (nextUpgradeNumber < gi.BACKPACK_WOOD_STARTS_AT_UPGRADE) return null;
 
     const woodTier = nextUpgradeNumber - gi.BACKPACK_WOOD_STARTS_AT_UPGRADE + 1;
-    const baseQty = Math.round(gi.BACKPACK_WOOD_STACK * gi.BACKPACK_WOOD_BASE_RATIO);
-    const qtyPerType = Math.min(
-        gi.BACKPACK_WOOD_STACK,
-        Math.round(baseQty * Math.pow(gi.BACKPACK_WOOD_SCALE, woodTier - 1))
-    );
+    const tierCosts = gi.BACKPACK_WOOD_TIER_COSTS[woodTier];
+    if (!tierCosts) return null;
 
-    const woodRequired = {};
-    for (const itemId of gi.BACKPACK_WOOD_TYPES) {
-        woodRequired[itemId] = qtyPerType;
-    }
-    return woodRequired;
+    return { ...tierCosts };
 }
 
 export function getBackpackUpgradeInfo(unlockedSlots) {
@@ -100,6 +111,10 @@ export const TOOL_DURABILITY = {
 };
 
 export const AXE_ITEM_IDS = ['basic_axe', 'iron_axe', 'steel_axe', 'master_axe'];
+
+export const ROD_ITEM_IDS = ['basic_rod', 'iron_rod', 'pro_rod', 'master_rod'];
+
+export { ROD_UPGRADE_STEPS, ROD_UPGRADE_MAX_STEP } from './rodUpgrades.js';
 
 export const WOOD_NPC_VALUE = {
     pine_log: 3,

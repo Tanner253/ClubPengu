@@ -222,11 +222,13 @@ export function MultiplayerProvider({ children }) {
     const travelLeaveCallbackRef = useRef(null);
     const fishSellCallbackRef = useRef(null);
     const merchantBuyCallbackRef = useRef(null);
+    const starterRodClaimCallbackRef = useRef(null);
     const woodChopCallbackRef = useRef(null);
     const woodChopSessionIdRef = useRef(null);
     const manualChopCallbackRef = useRef(null);
     const manualChopSessionIdRef = useRef(null);
     const backpackUpgradeCallbackRef = useRef(null);
+    const rodUpgradeCallbackRef = useRef(null);
     const hotbarSetCallbackRef = useRef(null);
     const mushroomHarvestCallbackRef = useRef(null);
     const worldDropCallbackRef = useRef(null);
@@ -1125,6 +1127,26 @@ export function MultiplayerProvider({ children }) {
                 break;
             }
 
+            case 'rod_upgrade_result': {
+                if (message.inventory) setGameInventory(message.inventory);
+                if (message.newBalance != null) {
+                    setUserData(prev => prev ? { ...prev, coins: message.newBalance } : prev);
+                }
+                if (rodUpgradeCallbackRef.current) {
+                    rodUpgradeCallbackRef.current(message);
+                    rodUpgradeCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'rod_upgrade_error': {
+                if (rodUpgradeCallbackRef.current) {
+                    rodUpgradeCallbackRef.current({ error: message.error, message: message.message, cost: message.cost });
+                    rodUpgradeCallbackRef.current = null;
+                }
+                break;
+            }
+
             case 'merchant_sell_result':
             case 'fish_sell_result': {
                 if (message.inventory) setGameInventory(message.inventory);
@@ -1164,6 +1186,27 @@ export function MultiplayerProvider({ children }) {
                 if (merchantBuyCallbackRef.current) {
                     merchantBuyCallbackRef.current({ error: message.error, message: message.message, cost: message.cost });
                     merchantBuyCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'claim_starter_rod_result': {
+                if (message.inventory) setGameInventory(message.inventory);
+                setUserData(prev => prev ? {
+                    ...prev,
+                    fishingProgress: { ...(prev.fishingProgress || {}), starterRodClaimed: true }
+                } : prev);
+                if (starterRodClaimCallbackRef.current) {
+                    starterRodClaimCallbackRef.current(message);
+                    starterRodClaimCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'claim_starter_rod_error': {
+                if (starterRodClaimCallbackRef.current) {
+                    starterRodClaimCallbackRef.current({ error: message.error, message: message.message });
+                    starterRodClaimCallbackRef.current = null;
                 }
                 break;
             }
@@ -2950,6 +2993,14 @@ export function MultiplayerProvider({ children }) {
         });
     }, [connected, send]);
 
+    const upgradeRod = useCallback((merchantId = 'fish_buyer') => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            rodUpgradeCallbackRef.current = resolve;
+            send({ type: 'rod_upgrade', merchantId });
+        });
+    }, [connected, send]);
+
     const buyFromMerchant = useCallback((merchantId, itemId) => {
         if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
         return new Promise((resolve) => {
@@ -2963,6 +3014,25 @@ export function MultiplayerProvider({ children }) {
             setTimeout(() => {
                 if (merchantBuyCallbackRef.current === resolve) {
                     merchantBuyCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out — restart the game server if you are developing locally' });
+                }
+            }, 10000);
+        });
+    }, [connected, send]);
+
+    const claimStarterRod = useCallback(() => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            starterRodClaimCallbackRef.current = resolve;
+            const sent = send({ type: 'claim_starter_rod' });
+            if (!sent) {
+                starterRodClaimCallbackRef.current = null;
+                resolve({ error: 'NOT_CONNECTED', message: 'Connection lost — try again' });
+                return;
+            }
+            setTimeout(() => {
+                if (starterRodClaimCallbackRef.current === resolve) {
+                    starterRodClaimCallbackRef.current = null;
                     resolve({ error: 'TIMEOUT', message: 'Request timed out — restart the game server if you are developing locally' });
                 }
             }, 10000);
@@ -3286,7 +3356,9 @@ export function MultiplayerProvider({ children }) {
         sellBatchAtMerchant,
         sellFishAtNpc,
         buyFromMerchant,
+        claimStarterRod,
         upgradeBackpack,
+        upgradeRod,
         startWoodChop,
         completeWoodChop,
         cancelWoodChop,
@@ -3361,7 +3433,7 @@ export function MultiplayerProvider({ children }) {
         spinSlot, slotSpinning, slotResult, clearSlotResult, activeSlotSpins,
         spinGoldSlot, goldSlotSpinning, goldSlotResult, clearGoldSlotResult, syncGoldSlots, activeGoldSlotSpins,
         startFishing, attemptCatch, cancelFishing, fishingActive, fishingResult, clearFishingResult,
-        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, setGameHotbarSlot, setActiveHotbarSlot, fetchForestTrees, forestTrees, fetchMushrooms, mushroomClusters, fetchWorldDrops, worldDrops, dropWorldItem, dropWorldGold, pickupWorldDrop, harvestMushroom, scavengeSpot, onboardingQuest, turnInMushroomQuest, sellAtMerchant, sellBatchAtMerchant, sellFishAtNpc, buyFromMerchant, upgradeBackpack, startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop,
+        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, setGameHotbarSlot, setActiveHotbarSlot, fetchForestTrees, forestTrees, fetchMushrooms, mushroomClusters, fetchWorldDrops, worldDrops, dropWorldItem, dropWorldGold, pickupWorldDrop, harvestMushroom, scavengeSpot, onboardingQuest, turnInMushroomQuest, sellAtMerchant, sellBatchAtMerchant, sellFishAtNpc, buyFromMerchant, claimStarterRod, upgradeBackpack, startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop,
         roomTravelVoyages, myTravelVoyage, travelPending, fetchTravelState, bookTravel, leaveTravel,
         adoptPuffle, puffleAdopting,
         setName, joinRoom, sendPosition, sendChat, sendAfk, sendEmoteBubble, sendEmote, stopEmote,

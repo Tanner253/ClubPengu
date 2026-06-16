@@ -5,6 +5,7 @@
 import { PALETTE } from '../constants';
 import { disposeThreeObject } from '../utils/disposeThreeObject';
 import { AXE_ITEM_IDS } from '../config/economy';
+import { buildFishingRodVoxels, isFishingRodItemId } from '../props/FishingRodWorldMesh';
 
 const HELD_ITEM_NAME = 'held_game_item';
 
@@ -151,25 +152,6 @@ function buildMushroomVoxels() {
         }
     }
     voxels.push({ x: -1, y: 4, z: 0, c: spot }, { x: 1, y: 4, z: 1, c: spot }, { x: 0, y: 4, z: -1, c: spot });
-    return voxels;
-}
-
-function buildRodVoxels() {
-    const voxels = [];
-    const wood = '#6b4423';
-    const woodDark = '#4a3520';
-    const reel = '#888888';
-    const tip = '#cccccc';
-    for (let z = 0; z < 10; z++) {
-        voxels.push({ x: 0, y: 0, z, c: z % 2 === 0 ? wood : woodDark });
-    }
-    for (let x = -1; x <= 1; x++) {
-        for (let y = -1; y <= 1; y++) {
-            if (Math.abs(x) + Math.abs(y) <= 1) voxels.push({ x, y, z: 2, c: reel });
-        }
-    }
-    voxels.push({ x: 0, y: 1, z: 9, c: tip });
-    voxels.push({ x: 0, y: 2, z: 10, c: '#ffffff' });
     return voxels;
 }
 
@@ -365,7 +347,7 @@ export function getHeldItemVoxels(entry) {
         return buildAxeVoxels(itemId);
     }
     if (itemId === 'forest_mushroom' || category === 'forage') return buildMushroomVoxels();
-    if (itemId === 'basic_rod' || category === 'rod') return buildRodVoxels();
+    if (isFishingRodItemId(itemId) || category === 'rod') return buildFishingRodVoxels(itemId);
     if (category === 'ticket' || itemId.startsWith('ferry_ticket')) return buildTicketVoxels();
     if (itemId === 'worm' || category === 'bait') return buildWormVoxels();
     if (itemId.includes('jelly')) return buildJellyfishVoxels(tier || 1);

@@ -4,7 +4,7 @@
 
 export const TOOL_UPGRADE_CHAINS = {
     axe: ['basic_axe', 'iron_axe', 'steel_axe', 'master_axe'],
-    fishing_rod: ['basic_rod', 'pro_rod', 'master_rod'],
+    fishing_rod: ['basic_rod', 'iron_rod', 'pro_rod', 'master_rod'],
     pickaxe: [],
 };
 
@@ -14,6 +14,7 @@ export const TOOL_DISPLAY_NAMES = {
     steel_axe: 'Steel Axe',
     master_axe: 'Master Axe',
     basic_rod: 'Basic Rod',
+    iron_rod: 'Iron Rod',
     pro_rod: 'Pro Rod',
     master_rod: 'Master Rod',
 };

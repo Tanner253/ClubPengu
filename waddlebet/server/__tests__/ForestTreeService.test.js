@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { FOREST_MATURATION } from '../config/forestMaturation.js';
 
 vi.mock('../db/connection.js', () => ({
     isDBConnected: vi.fn(() => false)
@@ -31,7 +32,7 @@ describe('ForestTreeService', () => {
         expect(state.regrowAt).toBe(result.regrowAt);
     });
 
-    it('regrows tree after regrowAt passes', async () => {
+    it('regrows tree after regrowAt passes and resets growth timer', async () => {
         const treeId = service.getSnapshot()[0].id;
         await service.harvestTree(treeId);
         const tree = service.getTree(treeId);
@@ -40,6 +41,7 @@ describe('ForestTreeService', () => {
         const regrown = await service.tickRegrowth();
         expect(regrown).toContain(treeId);
         expect(service.getTreePublicState(treeId).state).toBe('ready');
+        expect(service.getTree(treeId).stageSince).toBeGreaterThan(Date.now() - 5000);
     });
 
     it('rejects chop on harvested tree', async () => {
@@ -49,24 +51,72 @@ describe('ForestTreeService', () => {
         expect(reserve.error).toBe('TREE_REGROWING');
     });
 
-    it('applies 1.5× wood for manual chop trees', async () => {
+    it('rolls wood loot with manual chop bonus', async () => {
         const { getHarvestableTree } = await import('../config/harvestableTrees.js');
         const manual = service.getSnapshot().find(t => getHarvestableTree(t.id)?.chopMode === 'manual');
         expect(manual).toBeTruthy();
-        const result = await service.harvestTree(manual.id);
-        const def = getHarvestableTree(manual.id);
-        const baseWood = { sapling: 1, baby: 6, mature: 12, elder: 25 }[manual.stage];
-        expect(result.wood).toBe(Math.round(baseWood * 1.5));
+        const result = await service.harvestTree(manual.id, {
+            axeItemId: 'basic_axe',
+            chopMode: 'manual',
+        });
+        expect(result.wood).toBeGreaterThanOrEqual(1);
+        expect(['pine_log', 'birch_log', 'oak_log', 'ironwood_log']).toContain(result.logItemId);
         expect(result.chopMode).toBe('manual');
     });
 
-    it('matures ready trees when the forest has been quiet', async () => {
+    it('reverts harvest to prior tree state', async () => {
+        const treeId = service.getSnapshot()[0].id;
+        const before = service.getTree(treeId);
+        const priorStage = before.stage;
+
+        await service.harvestTree(treeId);
+        expect(service.getTreePublicState(treeId).state).toBe('harvested');
+
+        const snapshot = {
+            state: 'ready',
+            stage: priorStage,
+            regrowAt: null,
+            choppingBy: null,
+            chopStartedAt: null
+        };
+        await service.revertHarvest(treeId, snapshot);
+
+        const restored = service.getTreePublicState(treeId);
+        expect(restored.state).toBe('ready');
+        expect(restored.stage).toBe(priorStage);
+        expect(restored.regrowAt).toBeNull();
+    });
+
+    it('advances ready sapling to baby after growth duration', async () => {
         const treeId = service.getSnapshot().find(t => t.stage === 'sapling')?.id;
         expect(treeId).toBeTruthy();
-        service.lastForestChopAt = Date.now() - 2 * 60 * 60 * 1000;
+        const tree = service.getTree(treeId);
+        tree.stageSince = Date.now() - FOREST_MATURATION.STAGE_GROWTH_MS.sapling - 1000;
+
         const updated = await service.tickMaturation();
-        expect(updated.length).toBeGreaterThan(0);
-        const elderCount = service.getSnapshot().filter(t => t.stage === 'elder').length;
-        expect(elderCount).toBeGreaterThan(0);
+        expect(updated).toContain(treeId);
+        expect(service.getTreePublicState(treeId).stage).toBe('baby');
+    });
+
+    it('does not mature harvested stumps', async () => {
+        const treeId = service.getSnapshot().find(t => t.stage === 'sapling')?.id;
+        await service.harvestTree(treeId);
+        const tree = service.getTree(treeId);
+        tree.stageSince = Date.now() - FOREST_MATURATION.STAGE_GROWTH_MS.sapling - 1000;
+
+        const updated = await service.tickMaturation();
+        expect(updated).not.toContain(treeId);
+        expect(service.getTreePublicState(treeId).state).toBe('harvested');
+    });
+
+    it('repairs harvested trees missing regrowAt on tick', async () => {
+        const treeId = service.getSnapshot()[0].id;
+        await service.harvestTree(treeId);
+        const tree = service.getTree(treeId);
+        tree.regrowAt = null;
+
+        await service.tickRegrowth();
+        expect(service.getTree(treeId).regrowAt).toBeGreaterThan(Date.now());
+        expect(service.getTreePublicState(treeId).state).toBe('harvested');
     });
 });

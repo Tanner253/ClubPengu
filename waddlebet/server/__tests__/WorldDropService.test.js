@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import WorldDropService from '../services/WorldDropService.js';
-import { WORLD_DROP_DESPAWN_MS, WORLD_DROP_PICKUP_RADIUS } from '../config/worldDrops.js';
+import { WORLD_DROP_DESPAWN_MS, WORLD_DROP_PICKUP_RADIUS, GOLD_BAG_ITEM_ID } from '../config/worldDrops.js';
 
 describe('WorldDropService', () => {
     let service;
@@ -97,6 +97,24 @@ describe('WorldDropService', () => {
         service.removeDrop('town', original.id);
         service.restoreDrop(original);
         expect(service.getSnapshot('town')).toHaveLength(1);
+    });
+
+    it('creates a gold bag drop with quantity as coin amount', () => {
+        const drop = service.createDrop(
+            'town',
+            {
+                itemId: GOLD_BAG_ITEM_ID,
+                quantity: 250,
+                metadata: { category: 'gold', name: '250 Gold', emoji: '💰' }
+            },
+            { x: 5, y: 0, z: 5 },
+            0,
+            'player1'
+        );
+        const pub = service.toPublic(drop);
+        expect(pub.itemId).toBe(GOLD_BAG_ITEM_ID);
+        expect(pub.quantity).toBe(250);
+        expect(pub.metadata.category).toBe('gold');
     });
 
     it('expiresAt is roughly five minutes from creation', () => {

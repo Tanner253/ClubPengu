@@ -3,6 +3,10 @@
  */
 
 import { GAME_INVENTORY } from '../config/economy';
+import { WOOD_LOG_IDS, getWoodChopQuantityForLog } from '../config/woodcuttingLoot';
+
+/** Representative fish id — any fish uses the same stack rules. */
+const FISH_CATCH_PROBE_ID = 'minnow';
 
 const DEFAULT_MAX_STACK = 64;
 
@@ -67,4 +71,21 @@ export function canFitItemInBackpack(inventory, itemId, quantity = 1, maxStackOv
     }
 
     return true;
+}
+
+/**
+ * True if at least one possible wood-chop roll would fit in the backpack.
+ */
+export function canFitWoodChopLoot(inventory, stage, chopMode = 'hold', axeItemId = 'basic_axe') {
+    if (!inventory?.slots) return false;
+    return WOOD_LOG_IDS.some((logId) => {
+        const qty = getWoodChopQuantityForLog(stage, logId, axeItemId, chopMode);
+        return canFitItemInBackpack(inventory, logId, qty, null, { category: 'wood' });
+    });
+}
+
+/** True if one fish catch (qty 1) can be stored. */
+export function canFitFishCatch(inventory) {
+    if (!inventory?.slots) return false;
+    return canFitItemInBackpack(inventory, FISH_CATCH_PROBE_ID, 1, null, { category: 'fish' });
 }

@@ -4,7 +4,7 @@ import { MIN_GOLD_DROP, MAX_GOLD_DROP } from '../config/worldDrops';
 
 const PRESETS = [1, 10, 50, 100, 500, 1000];
 
-export default function DropGoldModal({ isOpen, onClose, maxCoins = 0, onConfirm, dropping = false }) {
+export default function DropGoldModal({ isOpen, onClose, maxCoins = 0, onConfirm, dropping = false, error = null }) {
     const [amount, setAmount] = useState('10');
 
     useEffect(() => {
@@ -102,6 +102,10 @@ export default function DropGoldModal({ isOpen, onClose, maxCoins = 0, onConfirm
 
                     {parsedAmount > maxCoins && (
                         <p className="text-red-400 text-xs">Not enough gold.</p>
+                    )}
+
+                    {error && (
+                        <p className="text-red-400 text-xs">{error}</p>
                     )}
 
                     <button

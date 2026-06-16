@@ -62,7 +62,8 @@ export const WORLD_NPCS = [
         ],
         actions: [
             { id: 'open_backpack', label: 'Sell my catch', icon: '🐟', requiresFish: true },
-            { id: 'lore_fishing', label: 'Tips for fishing', icon: '🎣', loreText: 'Ice holes are scattered all over Snow Forts — find one, drop a line, and reel \'em in. Stash catches in your backpack, then sell \'em here for gold. Bigger fish lurk deeper — but don\'t snap your line!' },
+            { id: 'upgrade_rod', label: 'Upgrade fishing rod', icon: '🎣', requiresRodUpgrade: true },
+            { id: 'lore_fishing', label: 'Tips for fishing', icon: '🎣', loreText: 'Pick up the free rod by my shack, equip it, then fish any ice hole. Upgrade the rod here in two steps per tier — first step uses a new wood type, second step costs more of the same wood plus gold. Better rods reach deeper fish and land heavier catches!' },
             { id: 'close', label: 'See you later, Salty', icon: '👋' }
         ],
         interactionRadius: 5.5

@@ -16,6 +16,8 @@ const mockGetEquippedTool = vi.fn();
 
 const mockAddItem = vi.fn();
 
+const mockCanAddItem = vi.fn();
+
 const mockDamageEquippedTool = vi.fn();
 
 
@@ -23,11 +25,16 @@ const mockDamageEquippedTool = vi.fn();
 const mockForestTreeService = {
     isReady: vi.fn(() => true),
     isAvailableForPlayer: vi.fn(() => true),
+    getTree: vi.fn((treeId) => {
+        const def = getHarvestableTree(treeId);
+        return def ? { id: treeId, stage: def.stage, state: 'ready' } : null;
+    }),
     reserveTree: vi.fn(() => ({
         success: true,
         treeState: { id: 'ht_001', state: 'ready', choppingBy: 'p1' }
     })),
     releaseTree: vi.fn(() => ({ id: 'ht_001', state: 'ready', choppingBy: null })),
+    revertHarvest: vi.fn(async () => ({ id: 'ht_001', state: 'ready', choppingBy: null })),
     harvestTree: vi.fn(async () => ({
         wood: 1,
         logItemId: 'pine_log',
@@ -88,6 +95,7 @@ describe('WoodcuttingService', () => {
         });
 
         mockAddItem.mockResolvedValue({ success: true, inventory: { usedSlots: 1 } });
+        mockCanAddItem.mockResolvedValue({ ok: true });
 
         mockDamageEquippedTool.mockResolvedValue({
 
@@ -112,7 +120,8 @@ describe('WoodcuttingService', () => {
             logItemId: 'pine_log',
             stage: 'sapling',
             label: 'Sapling',
-            regrowAt: Date.now() + 1800000
+            regrowAt: Date.now() + 1800000,
+            preHarvest: { state: 'ready', stage: 'mature', regrowAt: null, choppingBy: 'p1', chopStartedAt: 1 }
         });
         mockForestTreeService.getTreePublicState.mockReturnValue({
             id: 'ht_01',
@@ -132,7 +141,9 @@ describe('WoodcuttingService', () => {
 
                 damageEquippedTool: mockDamageEquippedTool,
 
-                addItem: mockAddItem
+                addItem: mockAddItem,
+
+                canAddItem: mockCanAddItem
 
             },
 
@@ -190,7 +201,11 @@ describe('WoodcuttingService', () => {
 
         expect(result.wood.id).toBe('pine_log');
 
-        expect(mockForestTreeService.harvestTree).toHaveBeenCalledWith('ht_001');
+        expect(mockForestTreeService.harvestTree).toHaveBeenCalledWith('ht_001', expect.objectContaining({
+            axeItemId: 'basic_axe',
+            chopMode: 'hold',
+            loot: expect.objectContaining({ logItemId: expect.any(String), quantity: expect.any(Number) })
+        }));
 
         expect(mockAddItem).toHaveBeenCalledWith('wallet', 'pine_log', 1, expect.any(Object));
 
@@ -233,7 +248,56 @@ describe('WoodcuttingService', () => {
         expect(falling).toBe(true);
         const complete = await service.completeManualChop('p1', 'wallet', { sessionId: start.sessionId });
         expect(complete.success).toBe(true);
-        expect(mockForestTreeService.harvestTree).toHaveBeenCalledWith('ht_002');
+        expect(mockForestTreeService.harvestTree).toHaveBeenCalledWith('ht_002', expect.objectContaining({
+            axeItemId: 'basic_axe',
+            chopMode: 'manual'
+        }));
+    });
+
+    it('rejects chop start when backpack is full', async () => {
+        mockCanAddItem.mockResolvedValue({
+            ok: false,
+            error: 'INVENTORY_FULL',
+            message: 'Backpack is full — upgrade or sell items'
+        });
+
+        const result = await service.startChop('p1', 'wallet', 'ht_001', false);
+        expect(result.error).toBe('INVENTORY_FULL');
+        expect(mockForestTreeService.reserveTree).not.toHaveBeenCalled();
+    });
+
+    it('rejects chop when backpack is full before harvesting tree', async () => {
+        mockCanAddItem
+            .mockResolvedValueOnce({ ok: true })
+            .mockResolvedValue({ ok: false, error: 'INVENTORY_FULL', message: 'Backpack is full — upgrade or sell items' });
+
+        const start = await service.startChop('p1', 'wallet', 'ht_001', false);
+        expect(start.success).toBe(true);
+        const result = await service.handleChopResult('p1', 'wallet', {
+            sessionId: start.sessionId,
+            success: true
+        });
+
+        expect(result.error).toBe('INVENTORY_FULL');
+        expect(mockForestTreeService.harvestTree).not.toHaveBeenCalled();
+        expect(mockAddItem).not.toHaveBeenCalled();
+    });
+
+    it('reverts harvest when addItem fails after chop', async () => {
+        mockAddItem.mockResolvedValue({
+            error: 'INVENTORY_FULL',
+            message: 'Backpack is full — upgrade or sell items'
+        });
+
+        const start = await service.startChop('p1', 'wallet', 'ht_001', false);
+        const result = await service.handleChopResult('p1', 'wallet', {
+            sessionId: start.sessionId,
+            success: true
+        });
+
+        expect(result.error).toBe('INVENTORY_FULL');
+        expect(mockForestTreeService.harvestTree).toHaveBeenCalled();
+        expect(mockForestTreeService.revertHarvest).toHaveBeenCalled();
     });
 
 });

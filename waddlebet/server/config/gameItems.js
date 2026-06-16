@@ -94,6 +94,36 @@ ITEM_CATALOG.set('basic_rod', {
     tier: 1
 });
 
+ITEM_CATALOG.set('iron_rod', {
+    id: 'iron_rod',
+    name: 'Iron Rod',
+    emoji: '🎣',
+    category: 'rod',
+    npcValue: 0,
+    maxStack: 1,
+    tier: 2
+});
+
+ITEM_CATALOG.set('pro_rod', {
+    id: 'pro_rod',
+    name: 'Pro Rod',
+    emoji: '🎣',
+    category: 'rod',
+    npcValue: 0,
+    maxStack: 1,
+    tier: 3
+});
+
+ITEM_CATALOG.set('master_rod', {
+    id: 'master_rod',
+    name: 'Master Rod',
+    emoji: '🎣',
+    category: 'rod',
+    npcValue: 0,
+    maxStack: 1,
+    tier: 4
+});
+
 ITEM_CATALOG.set('basic_axe', {
     id: 'basic_axe',
     name: 'Basic Axe',

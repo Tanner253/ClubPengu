@@ -2,12 +2,15 @@
  * Harvestable forest trees (client) — sync with server/config/harvestableTrees.js
  */
 
+import { getWoodYield as getBaseWoodYield, MANUAL_WOOD_MULTIPLIER } from './woodcuttingLoot';
+
+export { MANUAL_WOOD_MULTIPLIER };
+
 export const FOREST_ZONE_OFFSET = { x: 0, z: 0 };
 export const FOREST_ZONE_SIZE = 220;
 export const HARVEST_INTERACTION_RADIUS = 5;
 /** Show regrow countdown when walking near a harvested stump. */
 export const STUMP_PROXIMITY_RADIUS = 5;
-export const MANUAL_WOOD_MULTIPLIER = 1.5;
 export const TREE_GRID_STEP = 16;
 export const FOREST_TREE_INSET = 22;
 export const MIN_TREE_SPACING = 5.2;
@@ -50,35 +53,27 @@ function forestPathBounds(seg) {
 
 export const TREE_STAGES = {
     sapling: {
-        wood: 1,
         respawnMs: 30 * 60 * 1000,
         label: 'Sapling',
         chopDurationMs: 12000,
-        logItemId: 'pine_log',
         durabilityLoss: 1
     },
     baby: {
-        wood: 6,
         respawnMs: 60 * 60 * 1000,
         label: 'Baby Tree',
         chopDurationMs: 22000,
-        logItemId: 'birch_log',
         durabilityLoss: 3
     },
     mature: {
-        wood: 12,
         respawnMs: 2 * 60 * 60 * 1000,
         label: 'Tree',
         chopDurationMs: 35000,
-        logItemId: 'oak_log',
         durabilityLoss: 6
     },
     elder: {
-        wood: 25,
         respawnMs: 6 * 60 * 60 * 1000,
         label: 'Elder Tree',
         chopDurationMs: 55000,
-        logItemId: 'ironwood_log',
         durabilityLoss: 12
     }
 };
@@ -201,11 +196,8 @@ export function getStageConfig(stage) {
 }
 
 export function getWoodYield(stage, treeDef = null) {
-    const base = getStageConfig(stage)?.wood || 1;
-    if (treeDef?.chopMode === 'manual') {
-        return Math.max(1, Math.round(base * MANUAL_WOOD_MULTIPLIER));
-    }
-    return base;
+    const chopMode = treeDef?.chopMode === 'manual' ? 'manual' : 'hold';
+    return getBaseWoodYield(stage, chopMode);
 }
 
 /** Human-readable countdown for stump hover tooltips. */

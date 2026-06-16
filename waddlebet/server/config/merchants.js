@@ -14,6 +14,7 @@ export const MERCHANTS = {
         acceptsCategories: ['fish'],
         npcSellRatio: 1.0,
         sellTransactionType: 'fish_sell_npc',
+        buyTransactionType: 'rod_upgrade',
         sells: []
     },
     forest_ranger: {

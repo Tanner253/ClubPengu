@@ -3312,6 +3312,22 @@ async function handleMessage(playerId, message) {
                     room: newRoom,
                     messages: roomHistory.map((doc) => ChatService.toClientPayload(doc, playerId))
                 });
+
+                sendToPlayer(playerId, {
+                    type: 'world_drops_snapshot',
+                    drops: worldDropService.getSnapshot(newRoom)
+                });
+
+                if (newRoom === 'forest_trails') {
+                    sendToPlayer(playerId, {
+                        type: 'forest_trees_snapshot',
+                        trees: forestTreeService.getSnapshot()
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'mushrooms_snapshot',
+                        mushrooms: mushroomService.getSnapshot()
+                    });
+                }
             }
             break;
         }
@@ -6052,8 +6068,15 @@ async function handleMessage(playerId, message) {
                     sendToPlayer(playerId, {
                         type: 'wood_chop_error',
                         error: result.error,
-                        message: result.message
+                        message: result.message,
+                        treeState: result.treeState || null
                     });
+                    if (result.treeState && player.room) {
+                        broadcastToRoomAll(player.room, {
+                            type: 'forest_trees_update',
+                            trees: [result.treeState]
+                        });
+                    }
                     break;
                 }
                 if (result.missed) {
@@ -6236,8 +6259,15 @@ async function handleMessage(playerId, message) {
                     sendToPlayer(playerId, {
                         type: 'manual_chop_error',
                         error: result.error,
-                        message: result.message
+                        message: result.message,
+                        treeState: result.treeState || null
                     });
+                    if (result.treeState && player.room) {
+                        broadcastToRoomAll(player.room, {
+                            type: 'forest_trees_update',
+                            trees: [result.treeState]
+                        });
+                    }
                     break;
                 }
                 if (player.room) {
@@ -6750,6 +6780,65 @@ async function handleMessage(playerId, message) {
             break;
         }
 
+        case 'rod_upgrade': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'rod_upgrade_error',
+                    error: 'NOT_AUTHENTICATED'
+                });
+                break;
+            }
+            if (message.merchantId !== 'fish_buyer') {
+                sendToPlayer(playerId, {
+                    type: 'rod_upgrade_error',
+                    error: 'WRONG_MERCHANT',
+                    message: 'Rod upgrades are only available from Old Salty'
+                });
+                break;
+            }
+            try {
+                const result = await gameInventoryService.upgradeRod(player.walletAddress, message.merchantId);
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'rod_upgrade_error',
+                        error: result.error,
+                        message: result.message,
+                        cost: result.cost,
+                        woodRequired: result.woodRequired
+                    });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'rod_upgrade_result',
+                        goldSpent: result.goldSpent,
+                        woodSpent: result.woodSpent,
+                        newBalance: result.newBalance,
+                        inventory: result.inventory,
+                        label: result.label,
+                        grantsRodId: result.grantsRodId,
+                        itemName: result.itemName,
+                        isPartialStep: result.isPartialStep
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: result.newBalance,
+                        isAuthenticated: true
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_snapshot',
+                        inventory: result.inventory
+                    });
+                }
+            } catch (error) {
+                console.error('🎣 Error in rod_upgrade:', error);
+                sendToPlayer(playerId, {
+                    type: 'rod_upgrade_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to upgrade rod'
+                });
+            }
+            break;
+        }
+
         case 'backpack_upgrade': {
             if (!player.walletAddress) {
                 sendToPlayer(playerId, {
@@ -6933,6 +7022,42 @@ async function handleMessage(playerId, message) {
                 sendToPlayer(playerId, {
                     type: 'merchant_sell_error',
                     error: 'SERVER_ERROR'
+                });
+            }
+            break;
+        }
+
+        case 'claim_starter_rod': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'claim_starter_rod_error',
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Connect wallet to keep the starter rod'
+                });
+                break;
+            }
+            try {
+                const result = await gameInventoryService.claimStarterRod(player.walletAddress);
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'claim_starter_rod_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                    break;
+                }
+                sendToPlayer(playerId, {
+                    type: 'claim_starter_rod_result',
+                    itemId: result.itemId,
+                    inventory: result.inventory
+                });
+                await sendGameInventorySnapshot(playerId, player.walletAddress, 'starter_rod');
+            } catch (error) {
+                console.error('🎣 Error in claim_starter_rod:', error);
+                sendToPlayer(playerId, {
+                    type: 'claim_starter_rod_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to claim starter rod'
                 });
             }
             break;

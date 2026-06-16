@@ -4,7 +4,8 @@
 
 import { VOXEL_SIZE, PALETTE } from '../constants';
 import { getHeldItemVoxels } from '../items/HeldGameItemBuilder';
-import { WORLD_DROP_PICKUP_RADIUS } from '../config/worldDrops';
+import { getFishingRodWorldVoxels, isFishingRodItemId } from '../props/FishingRodWorldMesh';
+import { WORLD_DROP_PICKUP_RADIUS, GOLD_BAG_ITEM_ID } from '../config/worldDrops';
 import { disposeThreeObject } from '../utils/disposeThreeObject';
 
 const DROP_MESH_SCALE = VOXEL_SIZE * 0.42;
@@ -55,10 +56,14 @@ class WorldDropManager {
             tier: dropState.metadata?.tier,
             quantity: dropState.quantity
         };
-        const raw = getHeldItemVoxels(entry);
-        if (!raw?.length) return null;
+        const held = getHeldItemVoxels(entry);
+        if (!held?.length) return null;
 
-        const voxels = centerVoxels(raw);
+        const voxels = isFishingRodItemId(entry.itemId)
+            ? getFishingRodWorldVoxels(entry.itemId)
+            : centerVoxels(held);
+        if (!voxels?.length) return null;
+
         const mesh = this.buildPartMerged(voxels, PALETTE);
         const group = new this.THREE.Group();
         group.add(mesh);
@@ -66,6 +71,9 @@ class WorldDropManager {
         group.userData.worldDropId = dropState.id;
         group.userData.baseY = dropState.y ?? 0;
         group.userData.bobPhase = (dropState.id?.length || 0) * 0.37;
+        const isGold = dropState.itemId === GOLD_BAG_ITEM_ID || dropState.metadata?.category === 'gold';
+        group.userData.bobHeight = isGold ? 0.26 : BOB_HEIGHT;
+        group.userData.rotSpeed = isGold ? 2.1 : ROTATION_SPEED;
         return group;
     }
 
@@ -117,10 +125,12 @@ class WorldDropManager {
 
     update(delta, time) {
         for (const { group } of this.drops.values()) {
-            group.rotation.y += delta * ROTATION_SPEED;
+            const rotSpeed = group.userData.rotSpeed ?? ROTATION_SPEED;
+            group.rotation.y += delta * rotSpeed;
             const baseY = group.userData.baseY ?? 0;
             const phase = group.userData.bobPhase ?? 0;
-            group.position.y = baseY + Math.sin(time * 2.4 + phase) * BOB_HEIGHT;
+            const bobHeight = group.userData.bobHeight ?? BOB_HEIGHT;
+            group.position.y = baseY + Math.sin(time * 2.4 + phase) * bobHeight;
         }
     }
 

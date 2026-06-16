@@ -233,13 +233,10 @@ describe('GameInventoryService', () => {
         expect(result.woodSpent).toBeNull();
     });
 
-    it('upgradeBackpack from 10 slots requires all wood types', async () => {
+    it('upgradeBackpack from 10 slots requires pine only on first wood tier', async () => {
         const wallet = 'TestWallet2222222222222222222222222222222222';
         const slots = Array.from({ length: 10 }, (_, i) => {
-            if (i === 0) return { itemId: 'pine_log', quantity: 20, metadata: { category: 'wood' } };
-            if (i === 1) return { itemId: 'birch_log', quantity: 32, metadata: { category: 'wood' } };
-            if (i === 2) return { itemId: 'oak_log', quantity: 32, metadata: { category: 'wood' } };
-            if (i === 3) return { itemId: 'ironwood_log', quantity: 32, metadata: { category: 'wood' } };
+            if (i === 0) return { itemId: 'birch_log', quantity: 32, metadata: { category: 'wood' } };
             return { itemId: null, quantity: 0, metadata: {} };
         });
 
@@ -252,13 +249,10 @@ describe('GameInventoryService', () => {
         expect(result.itemId).toBe('pine_log');
     });
 
-    it('upgradeBackpack from 10 slots consumes wood and gold when stocked', async () => {
+    it('upgradeBackpack from 10 slots consumes pine and gold when stocked', async () => {
         const wallet = 'TestWallet3333333333333333333333333333333333';
         const slots = Array.from({ length: 10 }, (_, i) => {
-            if (i < 4) {
-                const ids = ['pine_log', 'birch_log', 'oak_log', 'ironwood_log'];
-                return { itemId: ids[i], quantity: 32, metadata: { category: 'wood' } };
-            }
+            if (i === 0) return { itemId: 'pine_log', quantity: 32, metadata: { category: 'wood' } };
             return { itemId: null, quantity: 0, metadata: {} };
         });
 
@@ -277,10 +271,92 @@ describe('GameInventoryService', () => {
         expect(result.success).toBe(true);
         expect(result.unlockedSlots).toBe(15);
         expect(result.woodSpent).toEqual({
-            pine_log: 32,
-            birch_log: 32,
-            oak_log: 32,
-            ironwood_log: 32
+            pine_log: 32
         });
+    });
+
+    it('claimStarterRod grants basic rod once', async () => {
+        const wallet = 'TestWallet4444444444444444444444444444444444';
+        const emptySlots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
+        const user = makeUser(emptySlots, 5);
+        user.fishingProgress.starterRodClaimed = false;
+
+        mockGetUser.mockResolvedValue(user);
+        mockFindOneAndUpdate.mockImplementation(async () => {
+            const saved = makeUser(emptySlots, 5);
+            saved.gameInventory.slots[0] = {
+                itemId: 'basic_rod',
+                quantity: 1,
+                metadata: { category: 'rod', name: 'Basic Rod', durability: 70, maxDurability: 70 }
+            };
+            saved.fishingProgress.starterRodClaimed = true;
+            return saved;
+        });
+
+        const result = await service.claimStarterRod(wallet);
+
+        expect(result.success).toBe(true);
+        expect(result.itemId).toBe('basic_rod');
+        expect(result.inventory.slots[0].itemId).toBe('basic_rod');
+    });
+
+    it('claimStarterRod rejects second claim', async () => {
+        const wallet = 'TestWallet5555555555555555555555555555555555';
+        const slots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
+        const user = makeUser(slots, 5);
+        user.fishingProgress.starterRodClaimed = true;
+        mockGetUser.mockResolvedValue(user);
+
+        const result = await service.claimStarterRod(wallet);
+        expect(result.error).toBe('ALREADY_CLAIMED');
+    });
+
+    it('upgradeRod step 1 deducts pine and gold while keeping basic rod', async () => {
+        const wallet = 'TestWallet6666666666666666666666666666666666';
+        const slots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
+        slots[0] = { itemId: 'basic_rod', quantity: 1, metadata: { category: 'rod', durability: 70, maxDurability: 70 } };
+        slots[1] = { itemId: 'pine_log', quantity: 20, metadata: { category: 'wood' } };
+        const user = makeUser(slots, 5);
+        user.fishingProgress = { ...user.fishingProgress, rodUpgradeStep: 0, starterRodClaimed: true };
+
+        mockGetUser.mockResolvedValue(user);
+        mockAddCoins.mockResolvedValue({ success: true, newBalance: 860 });
+        mockFindOneAndUpdate.mockImplementation(async () => {
+            const saved = makeUser(slots, 5);
+            saved.fishingProgress.rodUpgradeStep = 1;
+            saved.gameInventory.slots[0] = { itemId: 'basic_rod', quantity: 1, metadata: { category: 'rod', durability: 70, maxDurability: 70 } };
+            saved.gameInventory.slots[1] = { itemId: 'pine_log', quantity: 6, metadata: { category: 'wood' } };
+            return saved;
+        });
+
+        const result = await service.upgradeRod(wallet, 'fish_buyer');
+        expect(result.success).toBe(true);
+        expect(result.isPartialStep).toBe(true);
+        expect(result.goldSpent).toBe(140);
+        expect(result.woodSpent).toEqual({ pine_log: 14 });
+    });
+
+    it('upgradeRod step 2 grants iron rod', async () => {
+        const wallet = 'TestWallet7777777777777777777777777777777777';
+        const slots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
+        slots[0] = { itemId: 'basic_rod', quantity: 1, metadata: { category: 'rod', durability: 70, maxDurability: 70 } };
+        slots[1] = { itemId: 'pine_log', quantity: 40, metadata: { category: 'wood' } };
+        const user = makeUser(slots, 5);
+        user.fishingProgress = { ...user.fishingProgress, rodUpgradeStep: 1, starterRodClaimed: true };
+
+        mockGetUser.mockResolvedValue(user);
+        mockAddCoins.mockResolvedValue({ success: true, newBalance: 740 });
+        mockFindOneAndUpdate.mockImplementation(async () => {
+            const saved = makeUser(slots, 5);
+            saved.fishingProgress.rodUpgradeStep = 2;
+            saved.gameInventory.slots[0] = { itemId: 'iron_rod', quantity: 1, metadata: { category: 'rod', durability: 160, maxDurability: 160 } };
+            saved.gameInventory.slots[1] = { itemId: 'pine_log', quantity: 8, metadata: { category: 'wood' } };
+            return saved;
+        });
+
+        const result = await service.upgradeRod(wallet, 'fish_buyer');
+        expect(result.success).toBe(true);
+        expect(result.grantsRodId).toBe('iron_rod');
+        expect(result.goldSpent).toBe(260);
     });
 });

@@ -1,15 +1,15 @@
 /**
- * Passive forest maturation — trees grow when the forest is quiet.
- * Keep in sync with ForestTreeService.
+ * Forest tree stage growth — ready trees advance sapling → baby → mature → elder over time.
+ * Respawn timers after chop live in harvestableTrees.js (unchanged).
  */
 
 export const FOREST_MATURATION = {
-    /** No maturation until this long without any chop activity. */
-    QUIET_BEFORE_MS: 15 * 60 * 1000,
-    /** After this long, every ready tree becomes elder. */
-    FULL_FOREST_QUIET_MS: 90 * 60 * 1000,
-    /** Per-tick chance a sub-elder tree advances one stage (scaled by quiet time). */
-    BASE_ADVANCE_CHANCE: 0.04,
+    /** Ms a ready tree spends at each stage before advancing to the next. */
+    STAGE_GROWTH_MS: {
+        sapling: 2 * 60 * 1000,
+        baby: 4 * 60 * 1000,
+        mature: 8 * 60 * 1000,
+    },
 };
 
 export default FOREST_MATURATION;

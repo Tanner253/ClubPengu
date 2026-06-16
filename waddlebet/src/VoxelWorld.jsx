@@ -97,8 +97,9 @@ import { HARVESTABLE_MUSHROOMS, MUSHROOM_INTERACTION_RADIUS } from './config/har
 import { findActiveScavengeSpot } from './config/scavenge';
 import { formatScavengeCountdown, getScavengeRemainingMs, getScavengeSpotPrompt } from './utils/scavengeStatus';
 import { updateHeldGameItem, removeHeldGameItem } from './items/HeldGameItemBuilder';
-import { getActiveHotbarEntry } from './utils/gameHotbar';
+import { getActiveHotbarEntry, ownsAnyRod } from './utils/gameHotbar';
 import { canFitItemInBackpack } from './utils/inventoryCapacity';
+import StarterRodPickup from './systems/StarterRodPickup';
 
 function syncRemotePlayerHeldItem(meshData, playerData, buildPartMerged) {
     if (!meshData?.mesh || !buildPartMerged) return;
@@ -192,6 +193,9 @@ const VoxelWorld = ({
     const goldLobbySlotSyncedRef = useRef(false);
     const jackpotCelebrationRef = useRef(null); // Jackpot celebration effects (disco ball, confetti, lasers)
     const iceFishingSystemRef = useRef(null); // Ice fishing interaction system
+    const starterRodPickupRef = useRef(null);
+    const starterRodLockRef = useRef(false);
+    const [starterRodInteraction, setStarterRodInteraction] = useState(null);
     const woodcuttingSystemRef = useRef(null);
     const forestTreeManagerRef = useRef(null);
     const manualChopControllerRef = useRef(null);
@@ -387,7 +391,9 @@ const VoxelWorld = ({
         userData,
         gameInventory,
         upgradeBackpack,
+        upgradeRod,
         buyFromMerchant,
+        claimStarterRod,
         fetchGameInventory,
         startWoodChop,
         completeWoodChop,
@@ -616,7 +622,7 @@ const VoxelWorld = ({
         worldDropManagerRef.current.applySnapshot(worldDropsRef.current);
     }, [worldDrops, meshBuilderReady]);
 
-    // Show held game item (fish, wood, axe, etc.) on local player flipper
+    // Show held game item (fish, wood, axe, rod, etc.) on local player flipper
     useEffect(() => {
         if (!meshBuilderReady || !playerRef.current || !buildPartMergedRef.current) return;
         const entry = getActiveHotbarEntry(gameInventory);
@@ -1723,6 +1729,10 @@ const VoxelWorld = ({
                 }
                 iceFishingSystemRef.current.initForTown(sf.fishingSpots, scene);
                 iceFishingSystemRef.current.setPlayersRef(() => playersDataRef.current);
+                if (!starterRodPickupRef.current) {
+                    starterRodPickupRef.current = new StarterRodPickup();
+                }
+                starterRodPickupRef.current.init(scene, THREE, buildPartMergedRef.current);
             }
             roomData = {
                 name: 'snow_forts',
@@ -2031,6 +2041,7 @@ const VoxelWorld = ({
             worldDropManagerRef.current = new WorldDropManager();
         }
         worldDropManagerRef.current.init(scene, THREE, buildPartMerged);
+        worldDropManagerRef.current.applySnapshot(worldDropsRef.current || []);
 
         // Spawn world merchant NPCs as permanent room props
         if (room === 'town' && townCenterRef.current) {
@@ -6787,6 +6798,9 @@ const VoxelWorld = ({
                     perfStatsRef.current.timings.forestUpdate = performance.now() - t2;
                 }
             }
+            if (roomRef.current === 'snow_forts' && starterRodPickupRef.current) {
+                starterRodPickupRef.current.update(time);
+            }
             
             // Animate nightclub interior (dance floor, stage lights, speakers, disco ball)
             if (nightclubRef.current && roomRef.current === 'nightclub') {
@@ -7413,6 +7427,8 @@ const VoxelWorld = ({
                 iceFishingSystemRef.current.cleanup();
                 iceFishingSystemRef.current = null;
             }
+            starterRodPickupRef.current?.dispose();
+            starterRodPickupRef.current = null;
             if (goldLobbySlotSystemRef.current) {
                 goldLobbySlotSystemRef.current = null;
             }
@@ -9195,12 +9211,17 @@ const VoxelWorld = ({
         
         const playerPos = posRef.current;
         const playerCoins = userData?.coins || GameManager.getInstance().getCoins();
-        
+        const isMounted = !!(playerRef.current?.userData?.mount && playerRef.current?.userData?.mountData && mountEnabledRef.current);
+
         const interaction = iceFishingSystemRef.current.checkInteraction(
             playerPos.x,
             playerPos.z,
             playerCoins,
-            isAuthenticated
+            isAuthenticated,
+            gameInventory,
+            {
+                isMounted
+            }
         );
         
         if (interaction) {
@@ -9209,6 +9230,26 @@ const VoxelWorld = ({
             }
         } else if (fishingInteraction) {
             setFishingInteraction(null);
+        }
+    };
+
+    const shouldShowStarterRod = () => {
+        if (room !== 'snow_forts' || !isAuthenticated) return false;
+        if (ownsAnyRod(gameInventory)) return false;
+        return !userData?.fishingProgress?.starterRodClaimed;
+    };
+
+    const checkStarterRodPickup = () => {
+        if (room !== 'snow_forts' || !starterRodPickupRef.current?.visible) {
+            if (starterRodInteraction) setStarterRodInteraction(null);
+            return;
+        }
+        const playerPos = posRef.current;
+        const prox = starterRodPickupRef.current.checkProximity(playerPos.x, playerPos.z);
+        if (prox) {
+            if (!starterRodInteraction?.canPickup) setStarterRodInteraction(prox);
+        } else if (starterRodInteraction) {
+            setStarterRodInteraction(null);
         }
     };
     
@@ -9501,6 +9542,7 @@ const VoxelWorld = ({
             checkSlotMachines();
             checkBlackjackTables();
             checkFishingSpots();
+            checkStarterRodPickup();
             checkWoodcuttingSpots();
             checkMushroomSpots();
             checkWorldDropSpots();
@@ -9510,7 +9552,11 @@ const VoxelWorld = ({
             checkArcadeMachines();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, woodcuttingInteraction, woodChopProgress, mushroomInteraction, worldDropInteraction, scavengeInteraction, scavengeCooldowns, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, isAuthenticated, gameInventory, mushroomClusters, worldDrops, nearbyNpcInteraction, nearbyTravelNpcInteraction, travelRouteStatuses]);
+    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, woodcuttingInteraction, woodChopProgress, mushroomInteraction, worldDropInteraction, scavengeInteraction, scavengeCooldowns, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, userData?.fishingProgress?.starterRodClaimed, isAuthenticated, gameInventory, starterRodInteraction, mushroomClusters, worldDrops, nearbyNpcInteraction, nearbyTravelNpcInteraction, travelRouteStatuses]);
+
+    useEffect(() => {
+        starterRodPickupRef.current?.setVisible(shouldShowStarterRod());
+    }, [room, isAuthenticated, userData?.fishingProgress?.starterRodClaimed, gameInventory]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -9989,7 +10035,6 @@ const VoxelWorld = ({
                 },
                 onHit: (hit) => sendManualChopHit?.(hit),
                 onFallComplete: () => {
-                    forestTreeManagerRef.current?.optimisticHarvest(treeId);
                     completeManualChop?.();
                 },
                 onCancel: () => cancelManualChop?.('CANCELLED')
@@ -10037,7 +10082,6 @@ const VoxelWorld = ({
             if (progress < 1) {
                 woodChopTimerRef.current = requestAnimationFrame(tick);
             } else {
-                forestTreeManagerRef.current?.optimisticHarvest(treeId);
                 setWoodChopProgress({ treeId, progress: 1, finishing: true });
                 setWoodcuttingInteraction(null);
                 completeWoodChop?.(true);
@@ -10220,6 +10264,9 @@ const VoxelWorld = ({
         if (actionId === 'upgrade_backpack') {
             return upgradeBackpack?.('supply_merchant');
         }
+        if (actionId === 'upgrade_rod') {
+            return upgradeRod?.('fish_buyer');
+        }
         if (actionId === 'buy_basic_axe') {
             return buyFromMerchant?.('supply_merchant', 'basic_axe');
         }
@@ -10252,7 +10299,7 @@ const VoxelWorld = ({
             return { success: true, message: result.message || 'Earned a ferry ticket to Town!' };
         }
         return null;
-    }, [upgradeBackpack, buyFromMerchant, fetchGameInventory, turnInMushroomQuest]);
+    }, [upgradeBackpack, upgradeRod, buyFromMerchant, fetchGameInventory, turnInMushroomQuest]);
     
     // Handle arcade game close (PvE Battleship)
     const handleArcadeGameClose = useCallback(() => {
@@ -10260,11 +10307,33 @@ const VoxelWorld = ({
         setArcadeGameType(null);
     }, []);
     
+    const handleStarterRodClaim = useCallback(async () => {
+        if (starterRodLockRef.current || !isAuthenticated) return;
+        const interaction = starterRodInteraction;
+        if (!interaction?.canPickup) return;
+        starterRodLockRef.current = true;
+
+        const result = await claimStarterRod?.();
+        starterRodLockRef.current = false;
+        if (result?.error) {
+            setActiveBubble(result.message || 'Could not pick up rod');
+            return;
+        }
+        setActiveBubble('🎣 Picked up Basic Rod — equip it on your hotbar!');
+        starterRodPickupRef.current?.setVisible(false);
+        setStarterRodInteraction(null);
+        fetchGameInventory?.();
+    }, [starterRodInteraction, isAuthenticated, claimStarterRod, fetchGameInventory]);
+
     // E key handler for fishing (town) and woodcutting (forest)
     useEffect(() => {
         const handleFishingKeyPress = (e) => {
             if (e.code !== 'KeyE' || emoteWheelOpen) return;
             if (room === 'town' || room === 'snow_forts') {
+                if (room === 'snow_forts' && starterRodInteraction?.canPickup && !nearbyPortal) {
+                    handleStarterRodClaim();
+                    return;
+                }
                 const fi = fishingInteractionRef.current;
                 if (fi?.canFish && !nearbyPortal && !fishingLockRef.current && !fishingGameActive) {
                     handleFishingAction();
@@ -10292,7 +10361,7 @@ const VoxelWorld = ({
         };
         window.addEventListener('keydown', handleFishingKeyPress);
         return () => window.removeEventListener('keydown', handleFishingKeyPress);
-    }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction, handleWoodChopAction, handleMushroomHarvest, handleScavengeAction, handleWorldDropPickup, woodChopProgress, mushroomInteraction, worldDropInteraction, scavengeInteraction, fishingGameActive]);
+    }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction, handleWoodChopAction, handleMushroomHarvest, handleScavengeAction, handleWorldDropPickup, handleStarterRodClaim, woodChopProgress, mushroomInteraction, worldDropInteraction, scavengeInteraction, starterRodInteraction, fishingGameActive]);
     
     // E key handler for arcade machines (Battleship PvE)
     useEffect(() => {
@@ -11567,7 +11636,17 @@ const VoxelWorld = ({
                 woodcuttingSystemRef.current?.clearLocalChopping();
                 woodcuttingLockRef.current = false;
                 woodChopStartPosRef.current = null;
-                fetchForestTrees?.();
+                if (data?.treeState && forestTreeManagerRef.current) {
+                    forestTreeManagerRef.current.updateTree(
+                        data.treeState.id,
+                        data.treeState.state,
+                        data.treeState.regrowAt,
+                        data.treeState.choppingBy || null,
+                        data.treeState.stage
+                    );
+                } else {
+                    fetchForestTrees?.();
+                }
                 if (data?.message) setActiveBubble(data.message);
             },
             onWoodChopCancelled: (data) => {
@@ -11618,8 +11697,6 @@ const VoxelWorld = ({
                         data.treeState.choppingBy || null,
                         data.treeState.stage
                     );
-                } else if (data.treeId) {
-                    forestTreeManagerRef.current?.optimisticHarvest(data.treeId);
                 }
                 fetchGameInventory?.();
                 if (data.wood) {
@@ -11635,8 +11712,18 @@ const VoxelWorld = ({
             },
             onManualChopError: (data) => {
                 if (manualChopActiveRef.current) exitManualChop('ERROR');
+                if (data?.treeState && forestTreeManagerRef.current) {
+                    forestTreeManagerRef.current.updateTree(
+                        data.treeState.id,
+                        data.treeState.state,
+                        data.treeState.regrowAt,
+                        data.treeState.choppingBy || null,
+                        data.treeState.stage
+                    );
+                } else {
+                    fetchForestTrees?.();
+                }
                 if (data?.message) setActiveBubble(data.message);
-                fetchForestTrees?.();
             },
             onManualChopCancelled: (data) => {
                 if (manualChopActiveRef.current) exitManualChop('SERVER_CANCEL');
@@ -12448,6 +12535,29 @@ const VoxelWorld = ({
                 </div>
              )}
              
+             {/* Starter rod pickup (snow forts, client-only prop) */}
+             {starterRodInteraction && room === 'snow_forts' && !fishingInteraction && (
+                <div
+                    className={`absolute bg-gradient-to-b from-cyan-900/95 to-blue-900/95 backdrop-blur-sm rounded-xl border border-cyan-400/50 text-center z-20 shadow-lg shadow-cyan-500/20 ${
+                        isMobile
+                            ? isLandscape
+                                ? 'bottom-[180px] right-28 p-3'
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    }`}
+                >
+                    <div className="text-3xl mb-1">🎣</div>
+                    <p className="retro-text mb-2 text-sm text-cyan-300">{starterRodInteraction.prompt}</p>
+                    <button
+                        type="button"
+                        onClick={handleStarterRodClaim}
+                        className="px-4 py-1.5 bg-cyan-600 hover:bg-cyan-500 rounded-lg text-white text-sm font-bold transition-colors"
+                    >
+                        Pick up Basic Rod
+                    </button>
+                </div>
+             )}
+
              {/* Ice Fishing Interaction UI */}
              {fishingInteraction && (room === 'town' || room === 'snow_forts') && (
                 <div 

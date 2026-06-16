@@ -81,7 +81,7 @@ const MERCHANT_THEMES = {
     }
 };
 
-function resolveActionState(action, { hasSellableFish, hasSellableWood, ownedToolIds, nextUpgrade, coins, merchant, mushroomCount = 0, woodCounts = {} }) {
+function resolveActionState(action, { hasSellableFish, hasSellableWood, ownedToolIds, nextUpgrade, nextRodUpgrade, coins, merchant, mushroomCount = 0, woodCounts = {} }) {
     let disabled = Boolean(action.disabled);
     let label = action.label;
     let sublabel = null;
@@ -98,7 +98,10 @@ function resolveActionState(action, { hasSellableFish, hasSellableWood, ownedToo
     if (action.requiresBuyTool && action.itemId) {
         const listing = merchant?.sells?.find(s => s.itemId === action.itemId);
         const cost = listing?.cost ?? 0;
-        costBadge = `${cost.toLocaleString()}g`;
+        const woodRequired = listing?.woodRequired;
+        costBadge = woodRequired
+            ? `${cost.toLocaleString()}g + 🪵`
+            : `${cost.toLocaleString()}g`;
         if (ownedToolIds.has(action.itemId)) {
             disabled = true;
             sublabel = 'Already in your backpack';
@@ -107,11 +110,62 @@ function resolveActionState(action, { hasSellableFish, hasSellableWood, ownedToo
             if (prereq) {
                 disabled = true;
                 sublabel = prereq.message;
-            } else if (coins < cost) {
+            } else if (woodRequired) {
+                const woodParts = Object.entries(woodRequired).map(([itemId, qty]) => {
+                    const label = WOOD_LABELS[itemId] || itemId;
+                    const have = woodCounts[itemId] ?? 0;
+                    return `${label} ${have}/${qty}`;
+                });
+                sublabel = `🪵 ${woodParts.join(', ')} + ${cost.toLocaleString()}g`;
+                for (const [itemId, qty] of Object.entries(woodRequired)) {
+                    if ((woodCounts[itemId] ?? 0) < qty) {
+                        disabled = true;
+                        break;
+                    }
+                }
+            }
+            if (!disabled && coins < cost) {
                 disabled = true;
                 sublabel = `Need ${cost.toLocaleString()}g (you have ${coins.toLocaleString()}g)`;
-            } else {
+            } else if (!disabled && !woodRequired) {
                 sublabel = listing?.label ? 'Equip on hotbar after purchase' : 'Upgrade your gathering gear';
+            } else if (!disabled) {
+                sublabel = 'Equip on hotbar after purchase';
+            }
+        }
+    }
+    if (action.requiresRodUpgrade && action.id === 'upgrade_rod') {
+        if (!nextRodUpgrade) {
+            disabled = true;
+            label = 'Rod fully upgraded';
+            sublabel = 'Master rod complete';
+        } else {
+            label = nextRodUpgrade.label;
+            costBadge = `${nextRodUpgrade.goldCost.toLocaleString()}g + 🪵`;
+            sublabel = nextRodUpgrade.sublabel || nextRodUpgrade.tierName;
+            if (nextRodUpgrade.woodRequired) {
+                const woodParts = Object.entries(nextRodUpgrade.woodRequired).map(([itemId, qty]) => {
+                    const woodLabel = WOOD_LABELS[itemId] || itemId;
+                    const have = woodCounts[itemId] ?? 0;
+                    return `${woodLabel} ${have}/${qty}`;
+                });
+                sublabel = `${sublabel} · 🪵 ${woodParts.join(', ')}`;
+                for (const [itemId, qty] of Object.entries(nextRodUpgrade.woodRequired)) {
+                    if ((woodCounts[itemId] ?? 0) < qty) {
+                        disabled = true;
+                        const woodLabel = WOOD_LABELS[itemId] || itemId;
+                        sublabel = `Need ${qty} ${woodLabel} (have ${woodCounts[itemId] ?? 0}) + ${nextRodUpgrade.goldCost.toLocaleString()}g`;
+                        break;
+                    }
+                }
+            }
+            if (!disabled && !ownedToolIds.has(nextRodUpgrade.requiredRodId)) {
+                disabled = true;
+                sublabel = 'Keep your rod in the backpack to upgrade';
+            }
+            if (!disabled && coins < nextRodUpgrade.goldCost) {
+                disabled = true;
+                sublabel = `Need ${nextRodUpgrade.goldCost.toLocaleString()}g (you have ${coins.toLocaleString()}g)`;
             }
         }
     }
@@ -209,11 +263,12 @@ export default function NpcDialogueModal({
 
     const ownedToolIds = useMemo(() => new Set(
         (gameInventory?.slots || [])
-            .filter(s => s?.itemId && s.quantity > 0 && s.category === 'tool')
+            .filter(s => s?.itemId && s.quantity > 0 && (s.category === 'tool' || s.category === 'rod'))
             .map(s => s.itemId)
     ), [gameInventory]);
 
     const nextUpgrade = gameInventory?.nextUpgrade;
+    const nextRodUpgrade = gameInventory?.nextRodUpgrade;
 
     const mushroomCount = useMemo(() => (
         (gameInventory?.slots || [])
@@ -260,12 +315,32 @@ export default function NpcDialogueModal({
             }
             return;
         }
+        if (action.id === 'upgrade_rod') {
+            setPendingAction(action.id);
+            const result = await onAction?.('upgrade_rod', npcDef);
+            setPendingAction(null);
+            if (result?.grantsRodId && result?.itemName) {
+                setActionFeedback(`🎣 ${result.itemName} ready — equip it on your hotbar!`);
+            } else if (result?.label && result?.isPartialStep) {
+                setActionFeedback(`🎣 ${result.label} complete — one more step for the next tier!`);
+            } else if (result?.message) {
+                setActionFeedback(result.message);
+            } else if (result?.error) {
+                setActionFeedback(result.message || result.error);
+            }
+            return;
+        }
         if (action.requiresBuyTool && action.itemId) {
             setPendingAction(action.id);
             const result = await onAction?.(action.id, npcDef);
             setPendingAction(null);
             if (result?.itemName) {
-                setActionFeedback(`🪓 Bought ${result.itemName}! Equip it on your hotbar to chop trees.`);
+                const isRod = result.itemId?.includes('_rod');
+                setActionFeedback(
+                    isRod
+                        ? `🎣 Bought ${result.itemName}! Equip it on your hotbar for better sell prices.`
+                        : `🪓 Bought ${result.itemName}! Equip it on your hotbar to chop trees.`
+                );
             } else if (result?.message) {
                 setActionFeedback(result.message);
             } else if (result?.error) {
@@ -384,6 +459,7 @@ export default function NpcDialogueModal({
                                 hasSellableWood,
                                 ownedToolIds,
                                 nextUpgrade,
+                                nextRodUpgrade,
                                 coins,
                                 merchant,
                                 mushroomCount,
