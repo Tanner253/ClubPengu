@@ -416,7 +416,7 @@ const userSchema = new mongoose.Schema({
 
     // ========== SETTINGS ==========
     settings: {
-        musicVolume: { type: Number, default: 50, min: 0, max: 100 },
+        musicVolume: { type: Number, default: 35, min: 0, max: 100 },
         soundEnabled: { type: Boolean, default: true },
         mountEnabled: { type: Boolean, default: true },
         snowEnabled: { type: Boolean, default: true }

@@ -5,14 +5,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../i18n';
+import { playSfx } from '../audio';
 
-const playClick = () => {
-    try {
-        const audio = new Audio('/sounds/click.mp3');
-        audio.volume = 0.3;
-        audio.play().catch(() => {});
-    } catch (e) {}
-};
+const playClick = () => playSfx('ui_click');
 
 const LanguageToggle = ({
     className = '',

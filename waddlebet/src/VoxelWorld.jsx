@@ -20,6 +20,7 @@ import { GOLD_SLOT_BET } from './config/goldSlots';
 import Puffle from './engine/Puffle';
 import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PenguinBuilder';
 import TownCenter from './rooms/TownCenter';
+import { createTownIceGroundTexture } from './rooms/town/TownIceGround';
 import SnowFortsZone from './rooms/SnowFortsZone';
 import ForestTrailsZone from './rooms/ForestTrailsZone';
 import Nightclub from './rooms/Nightclub';
@@ -32,6 +33,7 @@ import { useIgloo } from './igloo';
 import { getRoomLabel } from './utils/roomLabels';
 import { useLanguage } from './i18n';
 import { EMOTE_WHEEL_ITEMS, LOOPING_EMOTES, EMOTE_EMOJI_MAP } from './systems';
+import { playSfx, stopTravelHum, setMusicEnergy, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME, normalizeMusicVolume, updateProximityAmbient, stopProximityAmbient, handleRemotePlayerSfx } from './audio';
 import { 
     CITY_SIZE, 
     BUILDING_SCALE, 
@@ -82,7 +84,7 @@ import TravelNpcManager from './npcs/TravelNpcManager';
 import NpcDialogueModal from './components/NpcDialogueModal';
 import TravelDialogueModal from './components/TravelDialogueModal';
 import TravelLobbyHUD from './components/TravelLobbyHUD';
-import { isTravelLobbyRoom, TRAVEL_LOBBY_CAMERA } from './config/travelConfig';
+import { isTravelLobbyRoom, TRAVEL_LOBBY_CAMERA, clampTravelLobbyPosition } from './config/travelConfig';
 import TravelLobbyRoom from './rooms/TravelLobbyRoom';
 import WoodcuttingSystem from './systems/WoodcuttingSystem';
 import ManualChopController from './systems/ManualChopController';
@@ -783,6 +785,7 @@ const VoxelWorld = ({
     const [woodChopProgress, setWoodChopProgress] = useState(null);
     const [manualChopActive, setManualChopActive] = useState(false); // { progress 0-1, spotId }
     const woodChopTimerRef = useRef(null);
+    const woodChopLastSfxRef = useRef(0);
     const [fishingGameActive, setFishingGameActive] = useState(false); // True when fishing minigame is open
     const [fishingGameSpot, setFishingGameSpot] = useState(null); // Current fishing spot for game
     
@@ -924,15 +927,23 @@ const VoxelWorld = ({
         const defaults = {
             leftHanded: false,
             cameraSensitivity: 0.3,
+            musicEnabled: true,
+            sfxEnabled: true,
+            musicVolume: DEFAULT_MUSIC_VOLUME,
+            sfxVolume: DEFAULT_SFX_VOLUME,
+            musicTrack: 'auto',
             soundEnabled: true,
             showFps: false,
-            snowEnabled: true // Snowfall particles - ON by default
+            snowEnabled: true
         };
         try {
             const saved = localStorage.getItem('game_settings');
             if (saved) {
-                // Merge saved settings with defaults (so new settings get their default values)
-                return { ...defaults, ...JSON.parse(saved) };
+                const parsed = JSON.parse(saved);
+                if (typeof parsed.musicVolume === 'number') {
+                    parsed.musicVolume = normalizeMusicVolume(parsed.musicVolume);
+                }
+                return { ...defaults, ...parsed };
             }
             return defaults;
         } catch {
@@ -955,10 +966,27 @@ const VoxelWorld = ({
     // Snowfall system ref
     const snowfallSystemRef = useRef(null);
     
-    // Save settings when they change
+    // Persist settings (audio is applied synchronously in SettingsMenu.syncSettings)
     useEffect(() => {
         localStorage.setItem('game_settings', JSON.stringify(gameSettings));
     }, [gameSettings]);
+
+    // Ferry lobby gets a low travel hum (ambient music is driven by App / AudioBootstrap)
+    useEffect(() => {
+        if (room?.startsWith('travel:')) {
+            playSfx('travel_hum_start');
+        } else {
+            stopTravelHum();
+        }
+    }, [room]);
+
+    useEffect(() => {
+        return () => stopProximityAmbient();
+    }, []);
+
+    useEffect(() => {
+        stopProximityAmbient();
+    }, [room]);
     
     // Save player position periodically and on unmount (all rooms)
     useEffect(() => {
@@ -1020,6 +1048,9 @@ const VoxelWorld = ({
         setMeshBuilderReady(false);
         buildPenguinMeshRef.current = null;
         lastRoomNotifyRef.current = { room: null, x: null, z: null };
+        mobileControlsRef.current = { forward: false, back: false, left: false, right: false };
+        joystickInputRef.current = { x: 0, y: 0 };
+        jumpRequestedRef.current = false;
         for (const [, data] of otherPlayerMeshesRef.current) {
             if (data.goldRainSystem) data.goldRainSystem.dispose();
         }
@@ -1253,15 +1284,7 @@ const VoxelWorld = ({
             const map = [];
             const dummy = new THREE.Object3D();
             
-            // Icy color palette - more blues, less white
-            const ICE_COLORS = [
-                '#7EB8D8', // Light ice blue
-                '#6AA8C8', // Medium ice blue  
-                '#5898B8', // Deeper ice blue
-                '#4888A8', // Dark ice blue
-                '#3878A0', // Deep blue
-                '#A8D0E0', // Pale ice (less common)
-            ];
+            // Icy color palette kept for map tile typing
             const WATER_ARCTIC = '#1A4A6A';
             const WATER_DEEP = '#0A3A5A';
             
@@ -1275,43 +1298,22 @@ const VoxelWorld = ({
             
             mapRef.current = map;
             
-            // Create one large ice plane instead of grid tiles
-            // Extended beyond zone boundaries to cover mountain gaps (except east where Snow Forts connects)
-            const GROUND_EXTEND = 50; // Extend 50 units beyond zone edges
-            const groundWidth = CITY_SIZE * BUILDING_SCALE + GROUND_EXTEND; // Extend west only
-            const groundDepth = CITY_SIZE * BUILDING_SCALE + GROUND_EXTEND * 2; // Extend north and south
-            
-            const iceGeo = new THREE.PlaneGeometry(groundWidth, groundDepth, 16, 16);
+            // Textured ice sheet — cracks, frost, drift (matches forest/snow fort ground quality)
+            const GROUND_EXTEND = 50;
+            const groundWidth = CITY_SIZE * BUILDING_SCALE + GROUND_EXTEND;
+            const groundDepth = CITY_SIZE * BUILDING_SCALE + GROUND_EXTEND * 2;
+
+            const iceTex = createTownIceGroundTexture(THREE);
+            const iceGeo = new THREE.PlaneGeometry(groundWidth, groundDepth);
             iceGeo.rotateX(-Math.PI / 2);
-            
-            // Add vertex color variation for organic look
-            const colors = [];
-            const positions = iceGeo.attributes.position;
-            for (let i = 0; i < positions.count; i++) {
-                const x = positions.getX(i);
-                const z = positions.getZ(i);
-                
-                // Use noise-like pattern for color variation
-                const noise = Math.sin(x * 0.1) * Math.cos(z * 0.1) + 
-                              Math.sin(x * 0.05 + 1) * Math.cos(z * 0.07) * 0.5;
-                const colorIndex = Math.floor((noise + 1) * 2.5) % ICE_COLORS.length;
-                const color = new THREE.Color(ICE_COLORS[colorIndex]);
-                
-                // Slight darkening towards edges
-                const distFromCenter = Math.sqrt(x*x + z*z) / (CITY_SIZE * BUILDING_SCALE / 2);
-                const edgeDarken = Math.max(0, 1 - distFromCenter * 0.3);
-                color.multiplyScalar(0.85 + edgeDarken * 0.15);
-                
-                colors.push(color.r, color.g, color.b);
-            }
-            iceGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-            
+
             const iceMat = new THREE.MeshStandardMaterial({
-                vertexColors: true,
-                roughness: 0.85, // High roughness to prevent specular glare
-                metalness: 0, // No metallic reflections
+                map: iceTex,
+                color: 0x9ec8e0,
+                roughness: 0.88,
+                metalness: 0.02,
             });
-            
+
             const icePlane = new THREE.Mesh(iceGeo, iceMat);
             // Position: shifted west slightly to cover extended area, centered on original zone
             icePlane.position.set(
@@ -2035,7 +2037,6 @@ const VoxelWorld = ({
         // Store buildPenguinMesh for multiplayer to use
         buildPenguinMeshRef.current = buildPenguinMesh;
         buildPartMergedRef.current = buildPartMerged;
-        setMeshBuilderReady(true);
 
         if (!worldDropManagerRef.current) {
             worldDropManagerRef.current = new WorldDropManager();
@@ -2608,6 +2609,13 @@ const VoxelWorld = ({
             posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
             rotRef.current = 0;
         }
+
+        if (isTravelLobbyRoom(room)) {
+            const clamped = clampTravelLobbyPosition(posRef.current.x, posRef.current.z);
+            posRef.current.x = clamped.x;
+            posRef.current.z = clamped.z;
+            posRef.current.y = posRef.current.y ?? 0;
+        }
         
         // CRITICAL: Sync mesh position with posRef IMMEDIATELY after spawn logic
         // This ensures first-time players don't spawn at (0,0,0) before game loop runs
@@ -2615,6 +2623,9 @@ const VoxelWorld = ({
             playerRef.current.position.set(posRef.current.x, posRef.current.y, posRef.current.z);
             playerRef.current.rotation.y = rotRef.current;
         }
+
+        // Multiplayer mesh builders are ready only after spawn position is finalized
+        setMeshBuilderReady(true);
 
         // Spawn player puffle if equipped (ensure it's a Puffle instance)
         if (puffle) {
@@ -3981,18 +3992,25 @@ const VoxelWorld = ({
                 finalX = result.x;
                 finalZ = result.z;
                 collided = result.collided;
-            } else if (isTravelLobbyRoom(roomRef.current) && travelLobbyRef.current) {
-                const result = travelLobbyRef.current.checkPlayerMovement(
-                    posRef.current.x,
-                    posRef.current.z,
-                    nextX,
-                    nextZ,
-                    0.6,
-                    posRef.current.y
-                );
-                finalX = result.x;
-                finalZ = result.z;
-                collided = result.collided;
+            } else if (isTravelLobbyRoom(roomRef.current)) {
+                if (travelLobbyRef.current) {
+                    const result = travelLobbyRef.current.checkPlayerMovement(
+                        posRef.current.x,
+                        posRef.current.z,
+                        nextX,
+                        nextZ,
+                        0.6,
+                        posRef.current.y
+                    );
+                    finalX = result.x;
+                    finalZ = result.z;
+                    collided = result.collided;
+                } else {
+                    const clamped = clampTravelLobbyPosition(nextX, nextZ);
+                    finalX = clamped.x;
+                    finalZ = clamped.z;
+                    collided = clamped.x !== nextX || clamped.z !== nextZ;
+                }
             } else if (roomRef.current === 'casino_game_room' && casinoRoomRef.current) {
                 // Casino room collision - handled by CasinoRoom.js (same pattern as Nightclub)
                 const result = casinoRoomRef.current.checkPlayerMovement(
@@ -4318,7 +4336,7 @@ const VoxelWorld = ({
                         }));
                     }
                 }
-            } else if (isTravelLobbyRoom(roomRef.current) && travelLobbyRef.current) {
+            } else if (isTravelLobbyRoom(roomRef.current)) {
                 posRef.current.x = finalX;
                 posRef.current.z = finalZ;
             } else if (roomRef.current === 'nightclub') {
@@ -6799,13 +6817,18 @@ const VoxelWorld = ({
                     perfStatsRef.current.timings.forestUpdate = performance.now() - t2;
                 }
             }
+
+            if (frameCount % 3 === 0 && !inParkourPerformanceMode) {
+                updateProximityAmbient(roomRef.current, posRef.current.x, posRef.current.z);
+            }
             if (roomRef.current === 'snow_forts' && starterRodPickupRef.current) {
                 starterRodPickupRef.current.update(time);
             }
             
             // Animate nightclub interior (dance floor, stage lights, speakers, disco ball)
             if (nightclubRef.current && roomRef.current === 'nightclub') {
-                nightclubRef.current.update(time, delta, 0.7); // Always club lighting
+                nightclubRef.current.update(time, delta, 0.7);
+                setMusicEnergy(nightclubRef.current.getMusicEnergy(time));
             }
             
             // Animate casino room interior (slot machines, roulette wheels, etc.)
@@ -7082,6 +7105,7 @@ const VoxelWorld = ({
                 // ========== CREATE SPLAT ==========
                 if (hitSomething && !sb.hasSplatted) {
                     sb.hasSplatted = true;
+                    playSfx('snowball_hit');
                     
                     const splat = acquireSplatMesh();
 
@@ -8232,6 +8256,7 @@ const VoxelWorld = ({
                 hasSplatted: false,
                 throwerId: playerId // Track who threw this snowball
             });
+            playSfx('snowball_throw');
             
             // Send to other players
             mpSendSnowball({
@@ -9786,6 +9811,7 @@ const VoxelWorld = ({
         const isDemo = currentSlotInteraction.isDemo;
         
         spinLockRef.current = true;
+        playSfx('slot_spin');
         
         // Show spinning animation IMMEDIATELY (don't wait for server)
         if (slotMachineSystemRef.current) {
@@ -9813,6 +9839,7 @@ const VoxelWorld = ({
 
         const machineId = current.machine.id;
         goldSpinLockRef.current = true;
+        playSfx('slot_spin');
 
         setGoldSlotInteraction({
             ...current,
@@ -10079,6 +10106,11 @@ const VoxelWorld = ({
             }
             const elapsed = Date.now() - startedAt;
             const progress = Math.min(1, elapsed / durationMs);
+            if (elapsed - woodChopLastSfxRef.current > 550) {
+                woodChopLastSfxRef.current = elapsed;
+                playSfx('wood_chop_tick');
+                mpSend?.({ type: 'player_sfx', sfx: 'wood_chop_tick' });
+            }
             setWoodChopProgress({ treeId, progress });
             if (progress < 1) {
                 woodChopTimerRef.current = requestAnimationFrame(tick);
@@ -10089,7 +10121,7 @@ const VoxelWorld = ({
             }
         };
         woodChopTimerRef.current = requestAnimationFrame(tick);
-    }, [startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop, woodChopProgress]);
+    }, [startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop, woodChopProgress, mpSend]);
 
     const exitManualChop = useCallback((reason = 'CANCELLED') => {
         const restoreDistance = manualChopControllerRef.current?.getSavedCameraDistance?.();
@@ -10169,6 +10201,7 @@ const VoxelWorld = ({
         if (!interaction?.canHarvest || !interaction.mushroomId) return;
         mushroomLockRef.current = true;
         const result = await harvestMushroom?.(interaction.mushroomId);
+        if (result?.success) playSfx('mushroom_pick');
         mushroomLockRef.current = false;
         if (result?.error) {
             setActiveBubble(result.message || 'Could not pick mushrooms');
@@ -10184,6 +10217,9 @@ const VoxelWorld = ({
         if (!interaction?.canPickup || !interaction.dropId) return;
         worldDropLockRef.current = true;
         const result = await pickupWorldDrop?.(interaction.dropId);
+        if (result?.success) {
+            playSfx(isGoldWorldDrop(interaction.itemId) ? 'gold_pickup' : 'ui_confirm');
+        }
         worldDropLockRef.current = false;
         if (result?.error) {
             setActiveBubble(result.message || 'Could not pick up item');
@@ -10234,6 +10270,7 @@ const VoxelWorld = ({
             }));
             return result;
         }
+        playSfx('travel_book');
         return result;
     }, [bookTravel]);
 
@@ -10253,9 +10290,14 @@ const VoxelWorld = ({
         const onTravelTransfer = (e) => {
             const { room: targetRoom, position } = e.detail || {};
             if (!targetRoom || !onChangeRoom) return;
+            mobileControlsRef.current = { forward: false, back: false, left: false, right: false };
+            joystickInputRef.current = { x: 0, y: 0 };
+            jumpRequestedRef.current = false;
+            playSfx('travel_depart');
             setActiveTravelNpcDef(null);
             setNearbyTravelNpcInteraction(null);
             onChangeRoom(targetRoom, position);
+            setTimeout(() => playSfx('travel_arrive'), 1200);
         };
         window.addEventListener('travelTransfer', onTravelTransfer);
         return () => window.removeEventListener('travelTransfer', onTravelTransfer);
@@ -10269,16 +10311,24 @@ const VoxelWorld = ({
             return upgradeRod?.('fish_buyer');
         }
         if (actionId === 'buy_basic_axe') {
-            return buyFromMerchant?.('supply_merchant', 'basic_axe');
+            const r = await buyFromMerchant?.('supply_merchant', 'basic_axe');
+            if (r && !r.error) playSfx('merchant_buy');
+            return r;
         }
         if (actionId === 'buy_iron_axe') {
-            return buyFromMerchant?.('supply_merchant', 'iron_axe');
+            const r = await buyFromMerchant?.('supply_merchant', 'iron_axe');
+            if (r && !r.error) playSfx('merchant_buy');
+            return r;
         }
         if (actionId === 'buy_steel_axe') {
-            return buyFromMerchant?.('supply_merchant', 'steel_axe');
+            const r = await buyFromMerchant?.('supply_merchant', 'steel_axe');
+            if (r && !r.error) playSfx('merchant_buy');
+            return r;
         }
         if (actionId === 'buy_master_axe') {
-            return buyFromMerchant?.('supply_merchant', 'master_axe');
+            const r = await buyFromMerchant?.('supply_merchant', 'master_axe');
+            if (r && !r.error) playSfx('merchant_buy');
+            return r;
         }
         if (actionId === 'open_backpack') {
             fetchGameInventory?.();
@@ -11407,6 +11457,7 @@ const VoxelWorld = ({
                 // Server confirmed our spin started - display already created in handleSlotSpin
             },
             onSlotReelReveal: (data) => {
+                playSfx('slot_stop');
                 // Update machine display with revealed reel
                 if (slotMachineSystemRef.current) {
                     slotMachineSystemRef.current.revealReel(
@@ -11447,6 +11498,11 @@ const VoxelWorld = ({
                 // Trigger jackpot celebration if it's a jackpot (Legendary or better)!
                 if (data.isJackpot && jackpotCelebrationRef.current) {
                     jackpotCelebrationRef.current.triggerJackpot();
+                    playSfx('slot_jackpot');
+                } else if (data.goldAwarded > 0 || data.payout > 0) {
+                    playSfx((data.goldAwarded || data.payout) >= 500 ? 'slot_win_medium' : 'slot_win_small');
+                } else if (data.rarity && data.rarity !== 'common') {
+                    playSfx('slot_win_small');
                 }
             },
             onSlotPlayerSpinning: (data) => {
@@ -11518,6 +11574,7 @@ const VoxelWorld = ({
                 }
             },
             onGoldSlotReelReveal: (data) => {
+                playSfx('slot_stop');
                 if (goldLobbySlotSystemRef.current) {
                     goldLobbySlotSystemRef.current.revealReel(
                         data.machineId,
@@ -11537,6 +11594,9 @@ const VoxelWorld = ({
                 }
                 if (data.isJackpot && jackpotCelebrationRef.current) {
                     jackpotCelebrationRef.current.triggerJackpot();
+                    playSfx('slot_jackpot');
+                } else if (data.payout > 0) {
+                    playSfx(data.payout >= 500 ? 'gold_win' : 'slot_win_medium');
                 }
             },
             onGoldSlotPlayerSpinning: (data) => {
@@ -11622,6 +11682,7 @@ const VoxelWorld = ({
                     );
                 }
                 if (data.wood && data.inventoryAdded) {
+                    playSfx('wood_chop_complete');
                     const qty = data.wood.quantity || 1;
                     const label = `${data.wood.emoji || '🪵'} ${qty}× ${data.wood.name}`;
                     setActiveBubble(
@@ -11701,6 +11762,7 @@ const VoxelWorld = ({
                 }
                 fetchGameInventory?.();
                 if (data.wood) {
+                    playSfx('wood_chop_complete');
                     const qty = data.wood.quantity || 1;
                     const label = `${data.wood.emoji || '🪵'} ${qty}× ${data.wood.name}`;
                     const multNote = data.woodMultiplier > 1 ? ' (manual 1.5×)' : '';
@@ -11754,6 +11816,9 @@ const VoxelWorld = ({
             onMushroomsUpdate: (mushrooms) => {
                 if (!mushroomClusterManagerRef.current || !mushrooms?.length) return;
                 mushroomClusterManagerRef.current.applySnapshot(mushrooms);
+            },
+            onPlayerSfx: (data) => {
+                handleRemotePlayerSfx(data, posRef.current, playerId);
             },
             // Snowball throw callback - another player threw a snowball
             onSnowballThrown: (data) => {
@@ -11973,8 +12038,11 @@ const VoxelWorld = ({
         }
 
         lastRoomNotifyRef.current = { room, x: pos.x, z: pos.z };
-        mpChangeRoom(room, pos);
-    }, [room, connected, playerId, mpChangeRoom, meshBuilderReady]);
+        mpChangeRoom(
+            room,
+            isTravelLobbyRoom(room) ? { x: pos.x, y: pos.y ?? 0, z: pos.z, absolute: true } : pos
+        );
+    }, [room, connected, playerId, mpChangeRoom, meshBuilderReady, customSpawnPos]);
     
     // Track igloo room entry/exit for eligibility checks
     useEffect(() => {

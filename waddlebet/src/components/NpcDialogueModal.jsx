@@ -2,13 +2,15 @@
  * NpcDialogueModal — RPG-style merchant dialogue & shop menu.
  */
 
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks';
 import { getMerchant } from '../config/merchants';
 import { getNpcDisplayName, getNpcTitle } from '../config/worldNpcs';
 import { getToolPurchasePrerequisite } from '../config/toolTiers';
 import { WOOD_LABELS } from '../config/economy';
+import NpcSpeechBox, { npcPitchFromId } from './NpcSpeechBox';
+import { playSfx } from '../audio';
 
 const MERCHANT_THEMES = {
     fish_buyer: {
@@ -239,8 +241,17 @@ export default function NpcDialogueModal({
     const [loreText, setLoreText] = useState(null);
     const [actionFeedback, setActionFeedback] = useState(null);
     const [pendingAction, setPendingAction] = useState(null);
+    const [greetingDone, setGreetingDone] = useState(false);
 
     useEscapeKey(onClose, isOpen);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setGreetingDone(false);
+        setLoreText(null);
+        setActionFeedback(null);
+        playSfx('ui_open');
+    }, [isOpen, npcDef?.merchantId, npcDef?.npcId]);
 
     const merchant = useMemo(() => getMerchant(npcDef?.merchantId), [npcDef?.merchantId]);
     const theme = MERCHANT_THEMES[npcDef?.merchantId] || MERCHANT_THEMES.default;
@@ -289,6 +300,18 @@ export default function NpcDialogueModal({
         () => (npcDef?.actions || []).filter(a => a.id !== 'close'),
         [npcDef?.actions]
     );
+
+    const npcPitch = useMemo(
+        () => npcPitchFromId(npcDef?.merchantId || npcDef?.npcId || name),
+        [npcDef?.merchantId, npcDef?.npcId, name]
+    );
+
+    const speechText = actionFeedback || loreText || greeting;
+    const showMenu = greetingDone;
+
+    const handleSpeechComplete = useCallback(() => {
+        setGreetingDone(true);
+    }, []);
 
     const handleAction = useCallback(async (action) => {
         setLoreText(null);
@@ -398,57 +421,46 @@ export default function NpcDialogueModal({
                     </div>
                 </div>
 
-                {/* NPC header + speech */}
-                <div className="px-4 pt-4 pb-3">
-                    <div className="flex gap-3 items-start mb-3">
+                {/* NPC portrait + typewriter speech */}
+                <div className="px-4 pt-4 pb-2">
+                    <div className="flex gap-3 items-start">
                         <div
-                            className={`shrink-0 w-14 h-14 rounded-xl bg-gradient-to-br ${theme.portraitRing} p-[2px] shadow-lg`}
-                            style={{ boxShadow: `0 4px 12px ${theme.glow}` }}
+                            className={`shrink-0 w-16 h-16 sm:w-[4.5rem] sm:h-[4.5rem] rounded-2xl bg-gradient-to-br ${theme.portraitRing} p-[3px] shadow-lg z-10 -mt-1`}
+                            style={{ boxShadow: `0 4px 16px ${theme.glow}` }}
                         >
-                            <div className="w-full h-full rounded-[10px] bg-black/40 flex items-center justify-center text-3xl">
+                            <div className="w-full h-full rounded-[13px] bg-[#0a0a12] flex items-center justify-center text-3xl sm:text-4xl border border-black/40">
                                 {merchant?.emoji || theme.stallIcon}
                             </div>
                         </div>
-                        <div className="flex-1 min-w-0 pt-0.5">
-                            <h2 className={`font-black retro-text text-lg leading-tight ${theme.accent}`}>{name}</h2>
-                            <p className={`text-xs font-semibold uppercase tracking-wider ${theme.accentMuted}`}>{title}</p>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="min-w-0">
+                                    <h2 className={`font-black retro-text text-base sm:text-lg leading-tight ${theme.accent}`}>{name}</h2>
+                                    <p className={`text-[10px] sm:text-xs font-semibold uppercase tracking-wider ${theme.accentMuted}`}>{title}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="shrink-0 w-8 h-8 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-white/50 hover:text-white text-sm transition-colors"
+                                    aria-label="Close"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <NpcSpeechBox
+                                text={speechText}
+                                active={isOpen}
+                                theme={theme}
+                                npcPitch={npcPitch}
+                                onComplete={handleSpeechComplete}
+                            />
                         </div>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="shrink-0 w-8 h-8 rounded-lg bg-black/30 hover:bg-black/50 border border-white/10 text-white/50 hover:text-white text-sm transition-colors"
-                            aria-label="Close"
-                        >
-                            ✕
-                        </button>
-                    </div>
-
-                    <div className={`relative ${theme.bubbleBg} border rounded-xl px-4 py-3 npc-speech-bubble`}>
-                        <p className="text-white/90 text-sm leading-relaxed retro-text">
-                            {greeting}
-                        </p>
                     </div>
                 </div>
 
-                {/* Lore / feedback */}
-                {(loreText || actionFeedback) && (
-                    <div className="px-4 pb-2 space-y-2">
-                        {loreText && (
-                            <div className={`${theme.loreBg} border rounded-xl px-3 py-2.5 text-xs text-white/80 leading-relaxed`}>
-                                <span className={`${theme.accent} font-bold text-[10px] uppercase tracking-wider block mb-1`}>📜 Tip</span>
-                                {loreText}
-                            </div>
-                        )}
-                        {actionFeedback && (
-                            <div className={`npc-feedback-pop px-3 py-2 rounded-xl border ${theme.badge} text-sm font-bold retro-text text-center`}>
-                                {actionFeedback}
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {/* Menu choices */}
-                <div className="px-4 pb-2">
+                {/* Menu choices — appear after greeting finishes (Pokemon-style) */}
+                {showMenu && (
+                <div className="px-4 pb-2 npc-menu-reveal">
                     <p className={`text-[10px] uppercase tracking-widest font-bold mb-2 ${theme.accentMuted}`}>
                         What would you like?
                     </p>
@@ -517,6 +529,15 @@ export default function NpcDialogueModal({
                         })}
                     </div>
                 </div>
+                )}
+
+                {!showMenu && (
+                    <div className="px-4 pb-3 text-center">
+                        <span className={`text-[10px] uppercase tracking-widest ${theme.accentMuted} animate-pulse`}>
+                            …
+                        </span>
+                    </div>
+                )}
 
                 {/* Footer */}
                 <div className="px-4 py-3 border-t border-white/5 bg-black/25 flex items-center justify-between gap-2">
@@ -528,7 +549,7 @@ export default function NpcDialogueModal({
                         👋 Walk away
                     </button>
                     <span className="text-[10px] text-white/25 uppercase tracking-wider hidden sm:inline">
-                        Esc to close
+                        Esc to close · tap speech to skip
                     </span>
                 </div>
             </div>

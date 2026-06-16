@@ -19,6 +19,7 @@
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
+import { playSfx } from '../audio';
 
 // ==================== GAME CONFIG ====================
 const GAME_CONFIG = {
@@ -668,6 +669,17 @@ export default function IceFishingGame({
         } else if (rendererRef.current) {
             rendererRef.current.domElement.style.display = '';
         }
+    }, [gamePhase]);
+
+    const prevFishPhaseRef = useRef('intro');
+    useEffect(() => {
+        const prev = prevFishPhaseRef.current;
+        if (gamePhase === 'playing' && prev === 'intro') playSfx('fishing_cast');
+        if (gamePhase === 'reeling' && prev !== 'reeling') playSfx('fishing_bite');
+        if (gamePhase === 'caught') playSfx('fishing_catch');
+        if (gamePhase === 'missed') playSfx('fishing_miss');
+        if (gamePhase === 'stung') playSfx('fishing_sting');
+        prevFishPhaseRef.current = gamePhase;
     }, [gamePhase]);
 
     useEffect(() => {

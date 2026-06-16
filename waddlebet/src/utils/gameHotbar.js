@@ -1,6 +1,7 @@
 /** Client hotbar helpers — sync with server GameInventoryService hotbar shape */
 
 import { AXE_ITEM_IDS, ROD_ITEM_IDS } from '../config/economy';
+import { playSfx } from '../audio';
 
 export const HOTBAR_SIZE = 5;
 
@@ -67,4 +68,16 @@ export function findHotbarSlotUnderPoint(clientX, clientY) {
     if (!slotEl) return null;
     const index = Number(slotEl.dataset.hotbarSlot);
     return Number.isFinite(index) ? index : null;
+}
+
+/** SFX event for selecting a hotbar slot with an item equipped. */
+export function getHotbarEquipSfx(itemId) {
+    if (!itemId) return 'equip_unequip';
+    if (ROD_ITEM_IDS.includes(itemId)) return 'equip_rod';
+    if (AXE_ITEM_IDS.includes(itemId)) return 'equip_axe';
+    return 'equip_tool';
+}
+
+export function playHotbarEquipSound(itemId) {
+    playSfx(getHotbarEquipSfx(itemId));
 }

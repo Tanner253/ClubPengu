@@ -61,6 +61,11 @@ import dailyBonusService from './services/DailyBonusService.js';
 import { initializeReferralService, getReferralService } from './services/ReferralService.js';
 import { validateWalletAddress, validateTransactionSignature, validateAmount } from './utils/securityValidation.js';
 import { displayTokenSymbol } from './utils/tokenDisplay.js';
+import {
+    broadcastProximitySfx,
+    canEmitPlayerSfx,
+    CLIENT_PLAYER_SFX,
+} from './utils/proximitySfx.js';
 import { getFishRarityLabel } from './config/gameItems.js';
 import { getMinigameReward, getMinigameRewardConfig, normalizeMinigameId } from './config/minigameRewards.js';
 import { isPlayerNearMerchant } from './config/worldNpcs.js';
@@ -81,7 +86,7 @@ function getDefaultSpawnForRoom(roomId) {
         return { x: 110, y: 0, z: 110 };
     }
     if (roomId?.startsWith('travel:')) {
-        return { x: 10, y: 0, z: 8 };
+        return { x: 12, y: 0, z: 10 };
     }
     if (roomId === 'dojo') {
         return { x: 0, y: 0, z: 14 };
@@ -3559,6 +3564,12 @@ async function handleMessage(playerId, message) {
                     velocityY: message.velocityY,
                     velocityZ: message.velocityZ
                 }, playerId); // Exclude sender
+
+                broadcastProximitySfx(broadcastToRoom, room, playerId, player.position, {
+                    sfx: 'snowball_throw',
+                    x: message.startX,
+                    z: message.startZ,
+                });
             }
             break;
         }
@@ -5976,6 +5987,20 @@ async function handleMessage(playerId, message) {
             break;
         }
 
+        case 'player_sfx': {
+            const sfx = message.sfx;
+            if (!CLIENT_PLAYER_SFX.has(sfx) || !player.room || !player.position) break;
+            const minMs = sfx === 'wood_chop_tick' ? 450 : 200;
+            if (!canEmitPlayerSfx(playerId, sfx, minMs)) break;
+            broadcastProximitySfx(broadcastToRoom, player.room, playerId, player.position, {
+                sfx,
+                intensity: message.intensity,
+                x: message.x ?? player.position.x,
+                z: message.z ?? player.position.z,
+            });
+            break;
+        }
+
         case 'wood_chop_start': {
             try {
                 const treeId = message.treeId || message.spotId;
@@ -6109,6 +6134,11 @@ async function handleMessage(playerId, message) {
                         trees: [result.treeState]
                     });
                 }
+                if (player.room && player.position && result.wood && result.inventoryAdded) {
+                    broadcastProximitySfx(broadcastToRoom, player.room, playerId, player.position, {
+                        sfx: 'wood_chop_complete',
+                    });
+                }
                 if (player.walletAddress && result.inventoryAdded) {
                     onboardingQuestService.handleWoodChop(player.walletAddress, {
                         inventoryAdded: result.inventoryAdded,
@@ -6239,6 +6269,11 @@ async function handleMessage(playerId, message) {
                         rightCut: result.rightCut,
                         falling: result.falling
                     }, playerId);
+                    const intensity = Math.min(2, (result.speed || 2) / 4);
+                    broadcastProximitySfx(broadcastToRoom, player.room, playerId, player.position, {
+                        sfx: result.falling ? 'wood_chop_fall' : 'wood_chop_hit',
+                        intensity: result.falling ? undefined : intensity,
+                    });
                 }
             } catch (error) {
                 console.error('🪓 Error in manual_chop_hit:', error);
@@ -6298,6 +6333,11 @@ async function handleMessage(playerId, message) {
                     broadcastToRoomAll(player.room, {
                         type: 'forest_trees_update',
                         trees: [result.treeState]
+                    });
+                }
+                if (player.room && player.position && result.wood && result.inventoryAdded) {
+                    broadcastProximitySfx(broadcastToRoom, player.room, playerId, player.position, {
+                        sfx: 'wood_chop_complete',
                     });
                 }
                 if (player.walletAddress && result.inventoryAdded) {
@@ -6467,6 +6507,11 @@ async function handleMessage(playerId, message) {
                     type: 'world_drops_update',
                     drops: [worldDropService.toPublic(drop)]
                 });
+                broadcastProximitySfx(broadcastToRoom, player.room, playerId, player.position, {
+                    sfx: 'ui_confirm',
+                    x: drop.x,
+                    z: drop.z,
+                });
                 sendToPlayer(playerId, {
                     type: 'world_item_drop_result',
                     drop: worldDropService.toPublic(drop),
@@ -6551,6 +6596,11 @@ async function handleMessage(playerId, message) {
                 broadcastToRoomAll(player.room, {
                     type: 'world_drops_update',
                     drops: [worldDropService.toPublic(drop)]
+                });
+                broadcastProximitySfx(broadcastToRoom, player.room, playerId, player.position, {
+                    sfx: 'drop_gold',
+                    x: drop.x,
+                    z: drop.z,
                 });
                 sendToPlayer(playerId, {
                     type: 'world_gold_drop_result',

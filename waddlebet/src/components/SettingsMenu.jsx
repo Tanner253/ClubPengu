@@ -11,6 +11,7 @@ import { formatSupportDiagnostics } from '../utils/browserCapabilities';
 import ReferralPanel from './ReferralPanel';
 import LanguageToggle from './LanguageToggle';
 import TokenomicsModal from './TokenomicsModal';
+import { applyGameSettings, MUSIC_TRACKS, DEFAULT_MUSIC_VOLUME } from '../audio';
 
 const WHITEPAPER_URL = 'https://whitepaper.waddle.bet';
 const DEXSCREENER_URL = 'https://dexscreener.com/solana/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump';
@@ -107,21 +108,24 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
     
     const keybinds = settings.keybinds || DEFAULT_KEYBINDS;
     
-    const handleToggle = (key) => {
-        onSettingsChange((prev) => {
-            const defaultsToTrue = ['soundEnabled', 'snowEnabled', 'mountEnabled'];
-            const currentValue = defaultsToTrue.includes(key)
-                ? prev[key] !== false
-                : prev[key] === true;
-            return { ...prev, [key]: !currentValue };
-        });
-        window.dispatchEvent(new CustomEvent('settingsChanged'));
+    const syncSettings = (next) => {
+        try {
+            localStorage.setItem('game_settings', JSON.stringify(next));
+        } catch { /* ignore quota errors */ }
+        applyGameSettings(next);
+        onSettingsChange(next);
     };
-    
+
+    const handleToggle = (key) => {
+        const defaultsToTrue = ['musicEnabled', 'sfxEnabled', 'soundEnabled', 'snowEnabled', 'mountEnabled'];
+        const currentValue = defaultsToTrue.includes(key)
+            ? settings[key] !== false
+            : settings[key] === true;
+        syncSettings({ ...settings, [key]: !currentValue });
+    };
+
     const handleSlider = (key, value) => {
-        const newSettings = { ...settings, [key]: value };
-        onSettingsChange(newSettings);
-        window.dispatchEvent(new CustomEvent('settingsChanged'));
+        syncSettings({ ...settings, [key]: value });
     };
     
     const tabs = [
@@ -546,55 +550,82 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                     {activeTab === 'audio' && (
                         <>
                             <SettingRow
-                                icon="🔊"
-                                title="Master Sound"
-                                description="Toggle all game audio"
+                                icon="🎵"
+                                title={t('settings.musicVol')}
+                                description={t('settings.musicVolDesc')}
                             >
-                                <Toggle 
-                                    enabled={settings.soundEnabled !== false} 
-                                    onChange={() => handleToggle('soundEnabled')}
-                                    color="green"
+                                <Toggle
+                                    enabled={settings.musicEnabled !== false}
+                                    onChange={() => handleToggle('musicEnabled')}
+                                    color="purple"
                                 />
                             </SettingRow>
-                            
-                            {/* Music Volume */}
                             <div className="py-3 border-b border-white/5">
-                                <div className="flex items-center justify-between mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-lg">🎵</span>
-                                        <div>
-                                            <div className="text-white text-sm font-medium">{t('settings.musicVol')}</div>
-                                            <div className="text-white/40 text-xs">{t('settings.musicVolDesc')}</div>
-                                        </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <button
-                                            onClick={() => handleToggle('musicMuted')}
-                                            className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all ${
-                                                settings.musicMuted 
-                                                    ? 'bg-red-500/20 text-red-400 border border-red-500/30' 
-                                                    : 'bg-green-500/20 text-green-400 border border-green-500/30'
-                                            }`}
-                                        >
-                                            {settings.musicMuted ? '🔇' : '🔊'}
-                                        </button>
-                                        <span className="text-purple-400 text-sm font-mono bg-purple-500/10 px-3 py-1 rounded-lg min-w-[50px] text-center">
-                                            {Math.round((settings.musicVolume ?? 0.3) * 100)}%
-                                        </span>
-                                    </div>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-white/50 text-xs">Music volume</span>
+                                    <span className="text-purple-400 text-sm font-mono bg-purple-500/10 px-3 py-1 rounded-lg min-w-[50px] text-center">
+                                        {Math.round((settings.musicVolume ?? DEFAULT_MUSIC_VOLUME) * 100)}%
+                                    </span>
                                 </div>
                                 <input
                                     type="range"
                                     min="0"
                                     max="1"
                                     step="0.05"
-                                    value={settings.musicVolume ?? 0.3}
+                                    value={settings.musicVolume ?? DEFAULT_MUSIC_VOLUME}
                                     onChange={(e) => handleSlider('musicVolume', parseFloat(e.target.value))}
-                                    disabled={settings.musicMuted}
+                                    disabled={settings.musicEnabled === false}
                                     className={`w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-purple-500 ${
-                                        settings.musicMuted ? 'opacity-40' : ''
+                                        settings.musicEnabled === false ? 'opacity-40' : ''
                                     }`}
                                 />
+                            </div>
+
+                            <SettingRow
+                                icon="🔊"
+                                title={t('settings.masterSound')}
+                                description={t('settings.masterSoundDesc')}
+                            >
+                                <Toggle
+                                    enabled={settings.sfxEnabled !== false}
+                                    onChange={() => handleToggle('sfxEnabled')}
+                                    color="green"
+                                />
+                            </SettingRow>
+                            <div className="py-3 border-b border-white/5">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-white/50 text-xs">Effects volume</span>
+                                    <span className="text-green-400 text-sm font-mono bg-green-500/10 px-3 py-1 rounded-lg min-w-[50px] text-center">
+                                        {Math.round((settings.sfxVolume ?? 0.55) * 100)}%
+                                    </span>
+                                </div>
+                                <input
+                                    type="range"
+                                    min="0"
+                                    max="1"
+                                    step="0.05"
+                                    value={settings.sfxVolume ?? 0.55}
+                                    onChange={(e) => handleSlider('sfxVolume', parseFloat(e.target.value))}
+                                    disabled={settings.sfxEnabled === false}
+                                    className={`w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-green-500 ${
+                                        settings.sfxEnabled === false ? 'opacity-40' : ''
+                                    }`}
+                                />
+                            </div>
+
+                            <div className="py-3">
+                                <div className="text-white text-sm font-medium mb-1">Ambient track</div>
+                                <div className="text-white/40 text-xs mb-2">Auto picks by area, or choose a loop</div>
+                                <select
+                                    value={settings.musicTrack ?? 'auto'}
+                                    onChange={(e) => handleSlider('musicTrack', e.target.value)}
+                                    className="w-full bg-black/50 border border-white/15 rounded-lg px-3 py-2 text-sm text-white"
+                                >
+                                    <option value="auto">Auto (by location)</option>
+                                    {MUSIC_TRACKS.map((tr) => (
+                                        <option key={tr.id} value={String(tr.id)}>{tr.name}</option>
+                                    ))}
+                                </select>
                             </div>
                         </>
                     )}

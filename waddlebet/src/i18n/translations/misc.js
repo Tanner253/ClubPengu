@@ -359,6 +359,9 @@ export default {
     'chat.readOnlyTab': {
         en: 'Read-only channel', zh: '只读频道', es: 'Canal de solo lectura', pt: 'Canal somente leitura', ko: '읽기 전용 채널', ja: '読み取り専用チャンネル', fr: 'Canal en lecture seule', de: 'Nur-Lesen-Kanal', ru: 'Канал только для чтения', ar: 'قناة للقراءة فقط',
     },
+    'chat.placeholderLocal': {
+        en: 'Commands or notes to yourself...', zh: '命令或自言自语...', es: 'Comandos o notas para ti...', pt: 'Comandos ou notas para você...', ko: '명령어 또는 메모...', ja: 'コマンドまたは独り言...', fr: 'Commandes ou notes...', de: 'Befehle oder Notizen...', ru: 'Команды или заметки...', ar: 'أوامر أو ملاحظات لنفسك...',
+    },
     'chat.placeholderGlobal': {
         en: 'Message everyone...', zh: '向所有人发送消息...', es: 'Mensaje global...', pt: 'Mensagem global...', ko: '전체 메시지...', ja: '全体にメッセージ...', fr: 'Message global...', de: 'Nachricht an alle...', ru: 'Сообщение всем...', ar: 'رسالة للجميع...',
     },

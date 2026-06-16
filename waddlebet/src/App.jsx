@@ -33,6 +33,8 @@ import TipNotification from './components/TipNotification';
 import GiftNotification from './components/GiftNotification';
 import LoadingScreen from './components/LoadingScreen';
 import ChatLog from './components/ChatLog';
+import AudioBootstrap from './components/AudioBootstrap';
+import { setMenuMusic, setMusicForRoom } from './audio';
 
 // Default penguin appearance for guests
 const DEFAULT_PENGUIN = {
@@ -43,91 +45,6 @@ const DEFAULT_PENGUIN = {
     bodyItem: 'none',
     mount: 'none',
     characterType: 'penguin'
-};
-
-// Background Music Player Component
-const BackgroundMusic = () => {
-    const audioRef = useRef(null);
-    const hasInteractedRef = useRef(false);
-    
-    useEffect(() => {
-        // Create audio element
-        const audio = new Audio('/lofi.mp3');
-        audio.loop = true;
-        audio.preload = 'auto';
-        audioRef.current = audio;
-        
-        // Load volume from settings and apply
-        const applyVolume = () => {
-            try {
-                const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
-                const volume = settings.musicVolume ?? 0.3;
-                const isMusicMuted = settings.musicMuted === true;
-                const isSoundEnabled = settings.soundEnabled !== false; // Master sound toggle
-                
-                if (audioRef.current) {
-                    // Clamp volume between 0 and 1
-                    const clampedVolume = Math.max(0, Math.min(1, volume));
-                    audioRef.current.volume = clampedVolume;
-                    
-                    // If master sound off, music muted, or volume is 0, pause the audio
-                    if (!isSoundEnabled || isMusicMuted || clampedVolume === 0) {
-                        audioRef.current.pause();
-                    } else if (hasInteractedRef.current && audioRef.current.paused) {
-                        // Sound enabled, not muted, volume > 0, and we've interacted - resume
-                        audioRef.current.play().catch(() => {});
-                    }
-                }
-            } catch (e) {
-                console.warn('Failed to apply music volume:', e);
-            }
-        };
-        
-        // Initial volume
-        applyVolume();
-        
-        // Listen for settings changes
-        window.addEventListener('storage', applyVolume);
-        window.addEventListener('settingsChanged', applyVolume);
-        
-        // Start playing after first user interaction (browser autoplay policy)
-        const startMusic = () => {
-            hasInteractedRef.current = true;
-            if (audioRef.current) {
-                // Check settings before playing
-                const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
-                const volume = settings.musicVolume ?? 0.3;
-                const isMusicMuted = settings.musicMuted === true;
-                const isSoundEnabled = settings.soundEnabled !== false;
-                
-                // Only play if sound enabled, not muted, and volume > 0
-                if (isSoundEnabled && !isMusicMuted && volume > 0) {
-                    audioRef.current.volume = volume;
-                    audioRef.current.play().catch((err) => {
-                        console.warn('Failed to start music:', err);
-                    });
-                }
-            }
-        };
-        
-        document.addEventListener('click', startMusic, { once: true });
-        document.addEventListener('keydown', startMusic, { once: true });
-        document.addEventListener('touchstart', startMusic, { once: true });
-        
-        return () => {
-            window.removeEventListener('storage', applyVolume);
-            window.removeEventListener('settingsChanged', applyVolume);
-            document.removeEventListener('click', startMusic);
-            document.removeEventListener('keydown', startMusic);
-            document.removeEventListener('touchstart', startMusic);
-            if (audioRef.current) {
-                audioRef.current.pause();
-                audioRef.current = null;
-            }
-        };
-    }, []);
-    
-    return null; // No UI, just audio
 };
 
 /** Floating chat opener for mobile when world controls are hidden behind overlays */
@@ -338,11 +255,13 @@ const AppContent = () => {
         GameManager.getInstance().setRoom(resumeRoom);
         setSpawnPosition(null);
         setCurrentRoom(resumeRoom);
+        setMusicForRoom(resumeRoom);
     };
     
     const handleWorldReady = useCallback(() => {
         scheduleDismissEntryLoading({ isInitialEntry: pendingInitialEntryRef.current });
         pendingInitialEntryRef.current = false;
+        setSpawnPosition(null);
     }, [scheduleDismissEntryLoading]);
     
     // If world never signals ready, do not block forever
@@ -385,6 +304,7 @@ const AppContent = () => {
     const handleExitToDesigner = () => {
         setCurrentRoom(null);
         setActiveMinigame(null);
+        setMenuMusic();
     };
     
     // Change room/layer (town -> dojo, dojo -> town, etc.)
@@ -399,6 +319,7 @@ const AppContent = () => {
         GameManager.getInstance().setRoom(newRoom);
         setSpawnPosition(exitSpawnPos);
         setCurrentRoom(newRoom);
+        setMusicForRoom(newRoom);
     }, [currentRoom]);
     
     // Start a minigame (overlays the current room)
@@ -430,6 +351,7 @@ const AppContent = () => {
         // Exit to designer for clean auth flow
         setCurrentRoom(null);
         setActiveMinigame(null);
+        setMenuMusic();
     };
 
     // Check if we're in the game world (not designer)
@@ -439,6 +361,7 @@ const AppContent = () => {
     
     return (
         <div className="w-screen h-screen">
+            <AudioBootstrap inGameWorld={inGameWorld} room={currentRoom} />
             <Styles />
             
             {entryLoading && <LoadingScreen visible={entryLoading} />}
@@ -751,7 +674,6 @@ const App = () => {
             <MultiplayerProvider>
                 <IglooProvider>
                     <ChallengeProvider>
-                        <BackgroundMusic />
                         <AppContent />
                     </ChallengeProvider>
                 </IglooProvider>

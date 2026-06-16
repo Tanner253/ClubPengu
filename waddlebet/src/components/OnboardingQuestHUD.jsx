@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { ONBOARDING_REWARD_GOLD } from '../config/onboardingQuest';
+import { playSfx } from '../audio';
 
 const STORAGE_KEY = 'waddlebet_onboarding_quest_collapsed';
 
@@ -22,6 +23,7 @@ export default function OnboardingQuestHUD({ isMobile = false, isPortrait = fals
 
     useEffect(() => {
         if (!status?.justCompletedStepId) return;
+        playSfx('quest_step');
         setFlashStepId(status.justCompletedStepId);
         const timer = setTimeout(() => setFlashStepId(null), 2500);
         return () => clearTimeout(timer);
@@ -29,6 +31,7 @@ export default function OnboardingQuestHUD({ isMobile = false, isPortrait = fals
 
     useEffect(() => {
         if (!status?.rewardGranted) return;
+        playSfx('quest_complete');
         setShowRewardBanner(true);
         const timer = setTimeout(() => setShowRewardBanner(false), 6000);
         return () => clearTimeout(timer);

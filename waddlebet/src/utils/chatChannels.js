@@ -17,7 +17,7 @@ export const CHAT_TAB_CONFIG = [
     { id: 'casino', labelKey: 'chat.tab.casino', headerKey: 'chat.header.game', icon: '🎰', writable: false },
     { id: 'announcement', labelKey: 'chat.tab.announcement', headerKey: 'chat.header.news', icon: '📢', writable: false },
     { id: 'market', labelKey: 'chat.tab.market', headerKey: 'chat.header.trade', icon: '🏪', writable: false },
-    { id: 'local', labelKey: 'chat.tab.local', headerKey: 'chat.header.local', icon: '📋', writable: false, localOnly: true }
+    { id: 'local', labelKey: 'chat.tab.local', headerKey: 'chat.header.local', icon: '📋', writable: true, localOnly: true, commandsAndSelf: true }
 ];
 
 export const MAX_CHAT_PER_CHANNEL = 1000;
@@ -70,7 +70,8 @@ export function normalizeChatMessage(msg, playerId = null) {
     if (msg.metadata?.isAfk || msg.text?.startsWith('💤')) {
         type = 'afk';
     } else if (channel === 'local' || msg.localOnly) {
-        type = 'system';
+        const isPlayerLocal = msg.playerId && msg.playerId !== 'system' && msg.isSystem !== true;
+        type = isPlayerLocal ? 'local' : 'system';
     } else if (msg.isWhisper || channel === 'whisper') {
         type = msg.whisperDirection === 'out' || msg.fromMe ? 'whisperOut' : 'whisperIn';
     } else if (msg.isSystem || ['casino', 'announcement', 'market'].includes(channel)) {

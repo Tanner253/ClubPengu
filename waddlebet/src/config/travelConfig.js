@@ -68,6 +68,19 @@ export function isTravelLobbyRoom(roomId) {
     return typeof roomId === 'string' && roomId.startsWith('travel:');
 }
 
+/** Ferry cabin interior bounds (keep in sync with TravelLobbyRoom 24×16 layout). */
+export const TRAVEL_LOBBY_BOUNDS = { minX: 2.2, maxX: 21.8, minZ: 2.2, maxZ: 13.8 };
+
+/** Default spawn inside the ferry cabin (matches TravelLobbyRoom.spawnPos). */
+export const TRAVEL_LOBBY_SPAWN = { x: 12, y: 0, z: 10, absolute: true };
+
+export function clampTravelLobbyPosition(x, z) {
+    return {
+        x: Math.max(TRAVEL_LOBBY_BOUNDS.minX, Math.min(TRAVEL_LOBBY_BOUNDS.maxX, x)),
+        z: Math.max(TRAVEL_LOBBY_BOUNDS.minZ, Math.min(TRAVEL_LOBBY_BOUNDS.maxZ, z)),
+    };
+}
+
 /** Third-person camera while inside the small ferry cabin (24×16 room). */
 export const TRAVEL_LOBBY_CAMERA = {
     targetDistance: 4.5,

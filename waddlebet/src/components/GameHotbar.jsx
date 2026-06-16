@@ -4,7 +4,7 @@
 
 import React, { useCallback, useEffect } from 'react';
 import { useMultiplayer } from '../multiplayer';
-import { HOTBAR_SIZE } from '../utils/gameHotbar';
+import { HOTBAR_SIZE, playHotbarEquipSound } from '../utils/gameHotbar';
 
 function DurabilityBar({ durability, maxDurability }) {
     if (maxDurability == null || durability == null) return null;
@@ -34,6 +34,15 @@ export default function GameHotbar({ className = '', inventoryMode = false }) {
     const hotbar = gameInventory?.hotbar || [];
     const activeHotbar = gameInventory?.activeHotbar ?? 0;
 
+    const selectHotbarSlot = useCallback((index) => {
+        const entry = hotbar[index];
+        const slotHasItem = Boolean(entry?.itemId) && Number(entry?.quantity) > 0;
+        if (index !== activeHotbar && slotHasItem) {
+            playHotbarEquipSound(entry.itemId);
+        }
+        setActiveHotbarSlot?.(index);
+    }, [hotbar, activeHotbar, setActiveHotbarSlot]);
+
     const handleSlotClick = useCallback((index) => {
         const entry = hotbar[index];
         const slotHasItem = Boolean(entry?.itemId) && Number(entry?.quantity) > 0;
@@ -41,8 +50,8 @@ export default function GameHotbar({ className = '', inventoryMode = false }) {
             setGameHotbarSlot?.(index, null);
             return;
         }
-        setActiveHotbarSlot?.(index);
-    }, [hotbar, inventoryMode, setActiveHotbarSlot, setGameHotbarSlot]);
+        selectHotbarSlot(index);
+    }, [hotbar, inventoryMode, setGameHotbarSlot, selectHotbarSlot]);
 
     const handleClearSlot = useCallback((e, index) => {
         e.preventDefault();
@@ -57,13 +66,13 @@ export default function GameHotbar({ className = '', inventoryMode = false }) {
             const num = Number(e.key);
             if (num >= 1 && num <= HOTBAR_SIZE) {
                 e.preventDefault();
-                setActiveHotbarSlot?.(num - 1);
+                selectHotbarSlot(num - 1);
             }
         };
 
         window.addEventListener('keydown', onKeyDown);
         return () => window.removeEventListener('keydown', onKeyDown);
-    }, [isAuthenticated, setActiveHotbarSlot]);
+    }, [isAuthenticated, selectHotbarSlot]);
 
     if (!isAuthenticated) return null;
 

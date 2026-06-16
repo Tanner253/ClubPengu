@@ -12,6 +12,7 @@ import TutorialModal, { shouldShowTutorial } from './TutorialModal';
 import OnboardingQuestHUD from './OnboardingQuestHUD';
 import DailyBonusModal from './DailyBonusModal';
 import DropGoldModal from './DropGoldModal';
+import { playSfx } from '../audio';
 import ServerPopulationPopup from './ServerPopulationPopup';
 import { useMultiplayer } from '../multiplayer';
 import { useLanguage } from '../i18n';
@@ -150,6 +151,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
             setDropGoldError(result.message || 'Could not drop gold');
             return;
         }
+        playSfx('drop_gold');
         setShowDropGold(false);
     };
 

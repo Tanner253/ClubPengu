@@ -3,7 +3,7 @@
  * Every passenger requires a paid ticket (server-authoritative).
  */
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks';
 import {
@@ -17,6 +17,8 @@ import {
     getRouteTransitSeconds,
 } from '../config/travelConfig';
 import { formatTravelCountdown, getTravelRouteStatusLabel } from '../utils/travelStatus';
+import NpcSpeechBox, { npcPitchFromId } from './NpcSpeechBox';
+import { playSfx } from '../audio';
 
 const FERRY_THEME = {
     stallName: 'Ice Ferry Dock',
@@ -87,9 +89,16 @@ export default function TravelDialogueModal({
     const [tick, setTick] = useState(0);
     const [selectedRouteId, setSelectedRouteId] = useState(null);
     const [payForPlayerIds, setPayForPlayerIds] = useState([]);
+    const [greetingDone, setGreetingDone] = useState(false);
     useEscapeKey(onClose, isOpen);
 
     const routes = useMemo(() => getRoutesForNpc(npcDef), [npcDef]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setGreetingDone(false);
+        playSfx('ui_open');
+    }, [isOpen, npcDef?.npcId]);
 
     useEffect(() => {
         if (!isOpen) return undefined;
@@ -175,6 +184,13 @@ export default function TravelDialogueModal({
         return lines[Math.floor(Math.random() * lines.length)];
     }, [npcDef, isOpen]);
 
+    const npcPitch = useMemo(
+        () => npcPitchFromId(npcDef?.npcId || 'ferry_captain'),
+        [npcDef?.npcId]
+    );
+
+    const handleSpeechComplete = useCallback(() => setGreetingDone(true), []);
+
     if (!isOpen || !npcDef || !routes.length) return null;
 
     const name = getNpcDisplayName(npcDef);
@@ -226,33 +242,46 @@ export default function TravelDialogueModal({
                 <div className="px-4 pt-4 pb-2 overflow-y-auto flex-1">
                     <div className="flex gap-3 items-start mb-3">
                         <div
-                            className={`shrink-0 w-14 h-14 rounded-xl bg-gradient-to-br ${theme.portraitRing} p-[2px] shadow-lg`}
-                            style={{ boxShadow: `0 4px 12px ${theme.glow}` }}
+                            className={`shrink-0 w-16 h-16 rounded-2xl bg-gradient-to-br ${theme.portraitRing} p-[3px] shadow-lg z-10 -mt-1`}
+                            style={{ boxShadow: `0 4px 16px ${theme.glow}` }}
                         >
-                            <div className="w-full h-full rounded-[10px] bg-black/40 flex items-center justify-center text-3xl">
+                            <div className="w-full h-full rounded-[13px] bg-[#0a0a12] flex items-center justify-center text-3xl border border-black/40">
                                 ⚓
                             </div>
                         </div>
-                        <div className="flex-1 min-w-0 pt-0.5">
-                            <h2 className={`font-black retro-text text-lg leading-tight ${theme.accent}`}>{name}</h2>
-                            <p className={`text-xs font-semibold uppercase tracking-wider ${theme.accentMuted}`}>{title}</p>
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="min-w-0">
+                                    <h2 className={`font-black retro-text text-base sm:text-lg leading-tight ${theme.accent}`}>{name}</h2>
+                                    <p className={`text-xs font-semibold uppercase tracking-wider ${theme.accentMuted}`}>{title}</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={onClose}
+                                    className="shrink-0 w-8 h-8 rounded-lg bg-black/40 hover:bg-black/60 border border-white/10 text-white/50 hover:text-white text-sm transition-colors"
+                                    aria-label="Close"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                            <NpcSpeechBox
+                                text={greeting}
+                                active={isOpen}
+                                theme={theme}
+                                npcPitch={npcPitch}
+                                onComplete={handleSpeechComplete}
+                            />
                         </div>
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="shrink-0 w-8 h-8 rounded-lg bg-black/30 hover:bg-black/50 border border-white/10 text-white/50 hover:text-white text-sm transition-colors"
-                            aria-label="Close"
-                        >
-                            ✕
-                        </button>
                     </div>
 
-                    <div className={`relative ${theme.bubbleBg} border rounded-xl px-4 py-3 npc-speech-bubble mb-4`}>
-                        <p className="text-white/90 text-sm leading-relaxed retro-text">
-                            &ldquo;{greeting}&rdquo;
-                        </p>
-                    </div>
+                    {!greetingDone && (
+                        <div className="pb-4 text-center">
+                            <span className={`text-[10px] uppercase tracking-widest ${theme.accentMuted} animate-pulse`}>…</span>
+                        </div>
+                    )}
 
+                    {greetingDone && (
+                    <div className="npc-menu-reveal">
                     <p className={`text-[10px] uppercase tracking-widest font-bold mb-2 ${theme.accentMuted}`}>
                         Choose destination
                     </p>
@@ -425,6 +454,8 @@ export default function TravelDialogueModal({
                             Leave queue{isGuest ? '' : ' (ticket refunded)'}
                         </button>
                     )}
+                    </div>
+                    )}
                 </div>
 
                 <div className="px-4 py-3 border-t border-white/5 bg-black/25 flex items-center justify-between gap-2 shrink-0">
@@ -436,7 +467,7 @@ export default function TravelDialogueModal({
                         👋 Not now
                     </button>
                     <span className="text-[10px] text-white/25 uppercase tracking-wider hidden sm:inline">
-                        Esc to close
+                        Esc to close · tap speech to skip
                     </span>
                 </div>
             </div>

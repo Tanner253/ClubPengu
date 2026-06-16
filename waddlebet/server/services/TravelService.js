@@ -17,7 +17,8 @@ import {
 /** Max distance (units) between payer and passengers when buying group tickets. */
 const DOCK_PARTY_RADIUS = 10;
 
-const LOBBY_SPAWN = { x: 10, y: 0, z: 8 };
+/** Matches client TravelLobbyRoom.spawnPos / TRAVEL_LOBBY_SPAWN */
+const LOBBY_SPAWN = { x: 12, y: 0, z: 10 };
 
 function distance2D(a, b) {
     if (!a || !b) return Infinity;

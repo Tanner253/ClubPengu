@@ -626,6 +626,17 @@ class Nightclub extends BaseRoom {
         }
     }
 
+    /**
+     * 0–1 energy for procedural nightclub music — peaks during disco light show.
+     */
+    getMusicEnergy(time = 0) {
+        const beat = Math.sin(time * 8) * 0.5 + 0.5;
+        if (this.discoMode) {
+            return 0.72 + beat * 0.28;
+        }
+        return 0.15 + beat * 0.2;
+    }
+
     cleanup() {
         // Cleanup props
         super.cleanup();

@@ -172,6 +172,19 @@ export function MultiplayerProvider({ children }) {
         });
         setActiveChatTab('local');
     }, [ingestChatMessage]);
+
+    const addPlayerLocalMessage = useCallback((text) => {
+        ingestChatMessage({
+            channel: 'local',
+            playerId: playerIdRef.current,
+            name: playerNameRef.current || 'You',
+            text,
+            timestamp: Date.now(),
+            localOnly: true,
+            fromMe: true,
+            isSystem: false,
+        });
+    }, [ingestChatMessage]);
     
     // Current room
     const [serverRoom, setServerRoom] = useState(null);
@@ -1242,6 +1255,11 @@ export function MultiplayerProvider({ children }) {
             case 'wood_chop_cancelled': {
                 woodChopSessionIdRef.current = null;
                 callbacksRef.current.onWoodChopCancelled?.(message);
+                break;
+            }
+
+            case 'player_sfx': {
+                callbacksRef.current.onPlayerSfx?.(message);
                 break;
             }
 
@@ -3285,6 +3303,7 @@ export function MultiplayerProvider({ children }) {
         markChatTabRead,
         registerChatBubbleCallback,
         addLocalChatMessage,
+        addPlayerLocalMessage,
         serverRoom,
         connectionError,
         
@@ -3424,7 +3443,7 @@ export function MultiplayerProvider({ children }) {
         getPlayersData, chatByChannel, unreadChatTabs, hasWhisperActivity,
         mobileChatOpen, setMobileChatOpen, worldGameplayOverlay, setWorldGameplayOverlay,
         activeChatTab, setActiveChatTab,
-        markChatTabRead, registerChatBubbleCallback, addLocalChatMessage,
+        markChatTabRead, registerChatBubbleCallback, addLocalChatMessage, addPlayerLocalMessage,
         serverRoom, connectionError,
         isAuthenticated, walletAddress, authToken, userData, isNewUser, authError,
         isAuthenticating, isRestoringSession,

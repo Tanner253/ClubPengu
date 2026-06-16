@@ -47,6 +47,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         getPlayersData,
         userData,
         addLocalChatMessage,
+        addPlayerLocalMessage,
         unreadChatTabs,
         hasWhisperActivity,
         activeChatTab,
@@ -83,7 +84,9 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
     const activeTabConfig = CHAT_TAB_CONFIG.find((tab) => tab.id === activeChatTab) || CHAT_TAB_CONFIG[1];
     const activeMessages = chatByChannel[activeChatTab] || [];
     const canWrite = activeTabConfig.writable && !activeTabConfig.comingSoon;
-    const enterPlaceholder = `[${t('chat.enterToChat')}]`;
+    const enterPlaceholder = activeChatTab === 'local'
+        ? t('chat.placeholderLocal')
+        : `[${t('chat.enterToChat')}]`;
     const hasUnread = Object.keys(unreadChatTabs).length > 0;
 
     const setMinimized = useCallback((next) => {
@@ -357,6 +360,12 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
 
         if (isUnknownSlashCommand(text, { isStaff })) {
             addLocalChatMessage(getUnknownCommandMessage(text));
+            finishSendInput();
+            return;
+        }
+
+        if (activeChatTab === 'local') {
+            addPlayerLocalMessage(text);
             finishSendInput();
             return;
         }

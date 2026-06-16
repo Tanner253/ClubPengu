@@ -5,7 +5,6 @@
 
 import { MANUAL_CHOP } from '../config/manualChop';
 import { createManualChopAxeGroup } from '../props/ManualChopAxeMesh';
-import { playManualChopSound } from '../utils/manualChopSounds';
 
 const { TRUNK_RADIUS, STUMP_H, CUT_H } = MANUAL_CHOP;
 const SWING_DURATION = 0.28;
@@ -103,8 +102,6 @@ class RemoteManualChopVisuals {
 
         session.swingTimer = SWING_DURATION;
         session.swingSide = side === -1 ? -1 : 1;
-        const intensity = Math.min(2, (speed || 2) / 4);
-        playManualChopSound(intensity * 0.85);
 
         this.forestTreeManager?.applyRemoteChopHit(treeId, side, speed, leftCut, rightCut, falling);
     }
