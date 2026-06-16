@@ -14,7 +14,7 @@ import {
     DiscoSpotlight,
     NightclubCouch
 } from '../props/nightclub';
-import { WORLD_SPAWN } from '../config/roomConfig';
+import { NIGHTCLUB_INTERIOR_SPAWN } from '../config/roomConfig';
 import { createShopSignSprite } from '../npcs/NpcStandBuilder';
 
 class Nightclub extends BaseRoom {
@@ -645,8 +645,8 @@ class Nightclub extends BaseRoom {
 
     getSpawnPosition() {
         return {
-            x: WORLD_SPAWN.x,
-            z: WORLD_SPAWN.z
+            x: NIGHTCLUB_INTERIOR_SPAWN.x,
+            z: NIGHTCLUB_INTERIOR_SPAWN.z
         };
     }
     

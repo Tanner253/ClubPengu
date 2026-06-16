@@ -1,5 +1,5 @@
 /**
- * GoldLobbySlotSystem - Town casino lobby gold slots
+ * GoldLobbySlotSystem - Snow Forts casino lobby gold slots
  * Each machine has independent state, display, and spin lifecycle.
  */
 

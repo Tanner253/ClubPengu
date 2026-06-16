@@ -486,11 +486,13 @@ class Casino extends BaseBuilding {
         });
         const signSprite = new THREE.Sprite(signSpriteMat);
         signSprite.name = 'casino_title_sign';
+        const signY = h + 8;
+        const signZ = d / 2 + 4.5;
         signSprite.scale.set(25, 6, 1);
-        signSprite.position.set(0, h + 5, d / 2 + 3);  // In front of roulette wheel
+        signSprite.position.set(0, signY, signZ);  // Above and in front of roulette wheel
         signSprite.renderOrder = 100;
         signSprite.userData.isFloatingText = true;
-        signSprite.userData.baseY = h + 5;
+        signSprite.userData.baseY = signY;
         group.add(signSprite);
         this.floatingText = signSprite;
         
@@ -770,166 +772,13 @@ class Casino extends BaseBuilding {
 
         this._createLobbyDecor(group, w, d);
 
-        // ==================== TV SCREEN (2nd Floor) ====================
+        // TV mount (frame + stand). Live chart is CasinoTVSystem overlay in casinoSetpiece.js.
         const tvGroup = new THREE.Group();
         
-        // TV Frame (25% larger)
         const tvFrameMat = this.getMaterial(0x111111, { roughness: 0.3, metalness: 0.8 });
         const tvFrameGeo = new THREE.BoxGeometry(10, 5.625, 0.3);
         const tvFrame = new THREE.Mesh(tvFrameGeo, tvFrameMat);
         tvGroup.add(tvFrame);
-        
-        // TV Screen - Create canvas texture for DexScreener-style chart display
-        const tvCanvas = document.createElement('canvas');
-        tvCanvas.width = 512;
-        tvCanvas.height = 256;
-        const tvCtx = tvCanvas.getContext('2d');
-        
-        // Draw $CP chart display
-        const drawTVScreen = () => {
-            const W = 512, H = 256;
-            
-            // Dark background
-            tvCtx.fillStyle = '#0d1117';
-            tvCtx.fillRect(0, 0, W, H);
-            
-            // Chart area (leave room for header)
-            const chartTop = 65;
-            const chartBottom = H - 15;
-            const chartLeft = 15;
-            const chartRight = W - 15;
-            const chartHeight = chartBottom - chartTop;
-            const chartWidth = chartRight - chartLeft;
-            
-            // Grid lines
-            tvCtx.strokeStyle = '#1a2332';
-            tvCtx.lineWidth = 1;
-            for (let i = 0; i <= 8; i++) {
-                const x = chartLeft + (chartWidth / 8) * i;
-                tvCtx.beginPath();
-                tvCtx.moveTo(x, chartTop);
-                tvCtx.lineTo(x, chartBottom);
-                tvCtx.stroke();
-            }
-            for (let i = 0; i <= 5; i++) {
-                const y = chartTop + (chartHeight / 5) * i;
-                tvCtx.beginPath();
-                tvCtx.moveTo(chartLeft, y);
-                tvCtx.lineTo(chartRight, y);
-                tvCtx.stroke();
-            }
-            
-            // Generate candle data (hourly candles)
-            const numCandles = 24; // 24 hours
-            const candleData = [];
-            let price = 0.00045 + Math.random() * 0.0001;
-            
-            for (let i = 0; i < numCandles; i++) {
-                const volatility = 0.15;
-                const change = (Math.random() - 0.48) * volatility;
-                const open = price;
-                const close = price * (1 + change);
-                const high = Math.max(open, close) * (1 + Math.random() * 0.05);
-                const low = Math.min(open, close) * (1 - Math.random() * 0.05);
-                candleData.push({ open, high, low, close });
-                price = close;
-            }
-            
-            // Find min/max for auto-scaling
-            let minPrice = Infinity, maxPrice = -Infinity;
-            candleData.forEach(c => {
-                minPrice = Math.min(minPrice, c.low);
-                maxPrice = Math.max(maxPrice, c.high);
-            });
-            const priceRange = maxPrice - minPrice;
-            const padding = priceRange * 0.1;
-            minPrice -= padding;
-            maxPrice += padding;
-            
-            // Calculate candle dimensions to fit
-            const candleSpacing = chartWidth / numCandles;
-            const candleWidth = candleSpacing * 0.7;
-            const wickWidth = 2;
-            
-            // Draw candles (auto-scaled to fit)
-            candleData.forEach((candle, i) => {
-                const x = chartLeft + i * candleSpacing + (candleSpacing - candleWidth) / 2;
-                const wickX = x + candleWidth / 2;
-                
-                // Scale prices to chart coordinates
-                const scaleY = (p) => chartBottom - ((p - minPrice) / (maxPrice - minPrice)) * chartHeight;
-                
-                const openY = scaleY(candle.open);
-                const closeY = scaleY(candle.close);
-                const highY = scaleY(candle.high);
-                const lowY = scaleY(candle.low);
-                
-                const isGreen = candle.close >= candle.open;
-                tvCtx.strokeStyle = isGreen ? '#00ff88' : '#ff4466';
-                tvCtx.fillStyle = isGreen ? '#00ff88' : '#ff4466';
-                
-                // Wick
-                tvCtx.fillRect(wickX - wickWidth/2, highY, wickWidth, lowY - highY);
-                
-                // Body
-                const bodyTop = Math.min(openY, closeY);
-                const bodyHeight = Math.abs(closeY - openY);
-                tvCtx.fillRect(x, bodyTop, candleWidth, Math.max(bodyHeight, 2));
-            });
-            
-            // Header background
-            tvCtx.fillStyle = '#0d1117';
-            tvCtx.fillRect(0, 0, W, 60);
-            
-            // Token ticker
-            tvCtx.fillStyle = '#00ffff';
-            tvCtx.font = 'bold 22px monospace';
-            tvCtx.fillText('$CP / SOL', 15, 25);
-            
-            // Current price
-            const currentPrice = candleData[candleData.length - 1].close;
-            const priceChange = ((currentPrice / candleData[0].open) - 1) * 100;
-            tvCtx.fillStyle = priceChange >= 0 ? '#00ff88' : '#ff4466';
-            tvCtx.font = 'bold 20px monospace';
-            tvCtx.fillText('$' + currentPrice.toFixed(6), 15, 50);
-            
-            // Price change
-            tvCtx.font = '16px monospace';
-            tvCtx.fillText((priceChange >= 0 ? '+' : '') + priceChange.toFixed(2) + '%', 180, 50);
-            
-            // Timeframe
-            tvCtx.fillStyle = '#666';
-            tvCtx.font = '14px monospace';
-            tvCtx.fillText('1H', chartRight - 25, 25);
-            
-            // Market cap
-            tvCtx.fillStyle = '#888';
-            tvCtx.font = '13px monospace';
-            tvCtx.fillText('MC: $' + (Math.random() * 500 + 100).toFixed(0) + 'K', chartRight - 120, 50);
-        };
-        
-        drawTVScreen();
-        
-        const tvTexture = new THREE.CanvasTexture(tvCanvas);
-        tvTexture.needsUpdate = true;
-        
-        const tvScreenMat = new THREE.MeshStandardMaterial({
-            map: tvTexture,
-            emissive: 0xffffff,
-            emissiveMap: tvTexture,
-            emissiveIntensity: 0.5,
-            roughness: 0.1
-        });
-        
-        const tvScreenGeo = new THREE.PlaneGeometry(9.375, 5);
-        const tvScreen = new THREE.Mesh(tvScreenGeo, tvScreenMat);
-        tvScreen.position.z = 0.16;
-        tvScreen.name = 'casino_tv_screen';
-        tvScreen.userData.tvCanvas = tvCanvas;
-        tvScreen.userData.tvCtx = tvCtx;
-        tvScreen.userData.tvTexture = tvTexture;
-        tvScreen.userData.drawTVScreen = drawTVScreen;
-        tvGroup.add(tvScreen);
         
         // TV Stand
         const tvStandMat = this.getMaterial(0x222222, { metalness: 0.7, roughness: 0.3 });
@@ -1243,7 +1092,7 @@ class Casino extends BaseBuilding {
             localZ: -d / 2 + secondFloorDepth / 2
         };
         
-        // TV position for iframe overlay
+        // TV anchor for CasinoTVSystem overlay (live DexScreener chart)
         group.userData.tvPosition = {
             localX: 0,
             localY: secondFloorHeight + 4.2,
@@ -1251,9 +1100,6 @@ class Casino extends BaseBuilding {
             width: 9.375,
             height: 5
         };
-        
-        // DexScreener iframe URL for the TV ($CP, candles, market cap, 1hr)
-        group.userData.tvIframeUrl = 'https://dexscreener.com/solana/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump?embed=1&theme=dark&chartStyle=1&chartType=mc&interval=60';
 
         // ==================== APPLE/MOBILE PERFORMANCE OPTIMIZATIONS ====================
         if (this.needsOptimization) {
@@ -1481,21 +1327,29 @@ class Casino extends BaseBuilding {
         
         const carpetWidth = 8;
         const carpetLength = 18;
+        const carpetOverlap = 3; // Tuck under entrance columns to meet interior floor
+        const totalLength = carpetLength + carpetOverlap;
+        const carpetCenterZ = d / 2 + carpetLength / 2 - carpetOverlap / 2;
         
         // Luxurious red carpet
-        const carpetMat = this.getMaterial(0x8B0000, { roughness: 0.85 });
-        const carpetGeo = new THREE.PlaneGeometry(carpetWidth, carpetLength);
+        const carpetMat = this.getMaterial(0x8B0000, {
+            roughness: 0.85,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -1,
+        });
+        const carpetGeo = new THREE.PlaneGeometry(carpetWidth, totalLength);
         const carpet = new THREE.Mesh(carpetGeo, carpetMat);
         carpet.rotation.x = -Math.PI / 2;
-        carpet.position.set(0, 0.02, d / 2 + carpetLength / 2);
+        carpet.position.set(0, 0.025, carpetCenterZ);
         carpet.receiveShadow = true;
         group.add(carpet);
         
         // Gold trim edges
         [-1, 1].forEach(side => {
-            const trimGeo = new THREE.BoxGeometry(0.2, 0.08, carpetLength);
+            const trimGeo = new THREE.BoxGeometry(0.2, 0.08, totalLength);
             const trim = new THREE.Mesh(trimGeo, goldTrimMat);
-            trim.position.set(side * carpetWidth / 2, 0.04, d / 2 + carpetLength / 2);
+            trim.position.set(side * carpetWidth / 2, 0.04, carpetCenterZ);
             group.add(trim);
         });
         
@@ -1709,7 +1563,7 @@ class Casino extends BaseBuilding {
      * @param {number} time - Current time in seconds
      * @param {number} delta - Time since last frame
      */
-    update(time, delta) {
+    update(time, delta = 0.016) {
         // Exterior landmarks — always animate (dice, neon suits, roulette, slot reels)
         if (this.exteriorProps?.length) {
             this.exteriorProps.forEach(prop => {

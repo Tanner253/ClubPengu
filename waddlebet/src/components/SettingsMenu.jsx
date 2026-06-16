@@ -108,12 +108,13 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
     const keybinds = settings.keybinds || DEFAULT_KEYBINDS;
     
     const handleToggle = (key) => {
-        const defaultsToTrue = ['soundEnabled', 'snowEnabled', 'mountEnabled'];
-        const currentValue = defaultsToTrue.includes(key) 
-            ? settings[key] !== false
-            : settings[key] === true;
-        const newSettings = { ...settings, [key]: !currentValue };
-        onSettingsChange(newSettings);
+        onSettingsChange((prev) => {
+            const defaultsToTrue = ['soundEnabled', 'snowEnabled', 'mountEnabled'];
+            const currentValue = defaultsToTrue.includes(key)
+                ? prev[key] !== false
+                : prev[key] === true;
+            return { ...prev, [key]: !currentValue };
+        });
         window.dispatchEvent(new CustomEvent('settingsChanged'));
     };
     
@@ -163,6 +164,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
         
         return (
             <button
+                type="button"
                 onClick={onChange}
                 className={`relative w-12 h-6 rounded-full transition-all duration-300 shrink-0 ${colorClasses[color]} border border-white/10`}
             >
@@ -365,12 +367,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                             >
                                 <Toggle 
                                     enabled={settings.mountEnabled !== false} 
-                                    onChange={() => {
-                                        handleToggle('mountEnabled');
-                                        window.dispatchEvent(new CustomEvent('mountToggled', { 
-                                            detail: { enabled: settings.mountEnabled === false } 
-                                        }));
-                                    }}
+                                    onChange={() => handleToggle('mountEnabled')}
                                     color="orange"
                                 />
                             </SettingRow>
@@ -382,12 +379,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                             >
                                 <Toggle 
                                     enabled={settings.greenCandlesEnabled === true} 
-                                    onChange={() => {
-                                        handleToggle('greenCandlesEnabled');
-                                        window.dispatchEvent(new CustomEvent('greenCandlesToggled', { 
-                                            detail: { enabled: !settings.greenCandlesEnabled } 
-                                        }));
-                                    }}
+                                    onChange={() => handleToggle('greenCandlesEnabled')}
                                     color="green"
                                 />
                             </SettingRow>

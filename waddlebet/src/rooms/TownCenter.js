@@ -5,8 +5,8 @@ import { createDojoParkour } from '../props/DojoParkour';
 import { createSkatePark } from '../props/SkatePark';
 import { createPark } from '../props/Park';
 import Lighthouse from '../props/Lighthouse';
-import { createCasino } from '../buildings';
-import { createCasinoTVSprite, updateCasinoTVSprite, cleanupCasinoTV } from '../systems/CasinoTVSystem';
+import { applyGroundPathSurface, groundPathMaterialProps } from '../utils/groundPathSurface';
+import { TOWN_TRASH_CANS } from '../config/scavenge';
 
 /**
  * Helper: Attach collision/interaction data from a prop to its mesh
@@ -89,14 +89,6 @@ class TownCenter {
             position: { x: -45, z: 35 },  // West side of T stem
             size: { w: 12, h: 7, d: 10 },
             rotation: Math.PI / 2, // Door faces east (toward street)
-        },
-        { 
-            id: 'casino', 
-            name: 'CASINO', 
-            position: { x: -50, z: 3 },  // Near pizza parlor, facing the street
-            size: { w: 36, h: 14, d: 32 },
-            rotation: Math.PI / 2, // Door faces east (toward street like pizza)
-            walkable: true, // Interior is walkable
         }
     ];
     
@@ -113,6 +105,7 @@ class TownCenter {
         
         this.propMeshes = [];
         this.lights = [];
+        this._renderingActive = true;
         this.propPlacements = this._generatePropPlacements();
     }
 
@@ -123,42 +116,6 @@ class TownCenter {
         const C = TownCenter.CENTER; // 110
         const SIZE = TownCenter.WORLD_SIZE; // 220
         const props = [];
-        
-        // ==================== CARDINAL DIRECTION MARKERS ====================
-        // Large floating letters to show N/S/E/W for debugging orientation
-        // Coordinate system: +Z = South, -Z = North, +X = East, -X = West
-        // World bounds: Town (0-220) + Snow Forts (220-440) = total 440 x 220
-        const WORLD_WIDTH = 440; // Total expanded world width
-        const WORLD_DEPTH = SIZE; // 220
-        
-        props.push({
-            type: 'cardinal_marker',
-            x: WORLD_WIDTH / 2,  // Center of expanded world (220)
-            z: -20,              // North edge (above z=0)
-            letter: 'N',
-            color: 0x00AAFF      // Blue for North
-        });
-        props.push({
-            type: 'cardinal_marker',
-            x: WORLD_WIDTH / 2,  // Center of expanded world
-            z: WORLD_DEPTH + 20, // South edge (below z=220)
-            letter: 'S',
-            color: 0xFF4444      // Red for South
-        });
-        props.push({
-            type: 'cardinal_marker',
-            x: -20,              // West edge (left of x=0)
-            z: C,                // Center depth
-            letter: 'W',
-            color: 0xFFAA00      // Orange for West
-        });
-        props.push({
-            type: 'cardinal_marker',
-            x: WORLD_WIDTH + 20, // East edge (right of x=440)
-            z: C,                // Center depth
-            letter: 'E',
-            color: 0x00FF00      // Green for East
-        });
         
         // ==================== T-INTERSECTION CAMPFIRE ====================
         const campfireX = C;
@@ -235,26 +192,6 @@ class TownCenter {
             width: 25,
             depth: 20,
             height: 12
-        });
-        
-        // ==================== CASINO ====================
-        // Walkable casino building beside pizza parlor
-        // Open front entrance, interior with stairs to 2nd floor bar
-        props.push({
-            type: 'casino',
-            x: C - 50,      // Near pizza parlor
-            z: C + 3,       // Near pizza parlor
-            width: 36,
-            depth: 32,
-            height: 14,
-            rotation: Math.PI / 2  // Door faces east (toward street like pizza)
-        });
-        
-        // Game room portal — visible marker on red carpet in front of casino
-        props.push({
-            type: 'casino_game_room_portal',
-            x: C - 30.8,
-            z: C + 2.8
         });
         
         // ==================== SKATE PARK ====================
@@ -374,8 +311,7 @@ class TownCenter {
             depth: 104,   // From C+75 to C-29
         });
         
-        // T-bar (horizontal street between igloo rows)
-        // Goes from z = C - 29 to z = C - 61
+        // T-bar (horizontal street between igloo rows) — ends at x=205 (no overlap with east extension)
         props.push({
             type: 'gravel_path',
             x: C,
@@ -385,29 +321,18 @@ class TownCenter {
         });
         
         // ==================== ZONE EXIT PATHS ====================
-        // Extension path to Snow Forts (EAST only)
+        // Extension path to Snow Forts (EAST only) — edge-to-edge with T-bar at x=205
         
-        // EAST ZONE EXIT PATH - extends T-bar to the east edge
-        // Leads to Snow Forts zone
         props.push({
             type: 'gravel_path',
-            x: SIZE - 8,   // Near east edge (204-220)
-            z: C - 45,     // Same z as T-bar
-            width: 16,     // From x=204 to x=220
-            depth: 32,     // Same depth as T-bar
+            x: 212.5,      // Center of x=205..220
+            z: C - 45,
+            width: 15,     // 205 to 220, touches T-bar without overlapping
+            depth: 32,
         });
         
         // ==================== ZONE EXIT SIGNS ====================
-        // Directional signs pointing to adjacent zones
-        
-        // EAST EXIT - Sign pointing to Snow Forts / Ice Rink
-        props.push({
-            type: 'direction_sign',
-            x: SIZE - 15,
-            z: C - 45,
-            text: 'SNOW FORTS →',
-            rotation: 0
-        });
+        // (Snow Forts travel handled by Captain Skipper dock on the east T-bar)
         
         // Path to Nightclub (north from T-bar)
         // Goes from z = C - 61 to z = C - 75 (nightclub entrance)
@@ -521,7 +446,6 @@ class TownCenter {
         // Eastern tree line (at map edge)
         const eastTrees = [
             { x: C + 95, z: C - 70, size: 'large' },
-            { x: C + 92, z: C - 40, size: 'medium' },
             { x: C + 95, z: C - 10, size: 'large' },
             { x: C + 90, z: C + 20, size: 'medium' },
             { x: C + 95, z: C + 50, size: 'large' },
@@ -692,7 +616,7 @@ class TownCenter {
         // ==================== FENCES - ALONG PERIMETER ====================
         props.push(
             { type: 'fence', x: C - 85, z: C - 60, rotation: Math.PI / 6, length: 5 },
-            { type: 'fence', x: C + 85, z: C - 60, rotation: -Math.PI / 6, length: 5 },
+            { type: 'fence', x: C + 92, z: C - 78, rotation: -Math.PI / 6, length: 5 },
             { type: 'fence', x: C - 85, z: C + 60, rotation: -Math.PI / 6, length: 4 },
             { type: 'fence', x: C + 85, z: C + 60, rotation: Math.PI / 6, length: 4 },
         );
@@ -714,19 +638,10 @@ class TownCenter {
         );
         
         // ==================== TRASH CANS - NEAR PUBLIC AREAS ====================
-        // Near benches and high-traffic areas (positioned OFF gravel paths)
-        props.push(
-            { type: 'trash_can', x: C - 18, z: C + 20 },    // Near stem bench west
-            { type: 'trash_can', x: C + 18, z: C + 50 },    // Near stem bench east
-            { type: 'trash_can', x: C - 32, z: C - 24 },    // Near T-bar bench south (above path)
-            { type: 'trash_can', x: C + 32, z: C - 24 },    // Near T-bar bench south (above path)
-            { type: 'trash_can', x: C - 32, z: C - 66 },    // Near T-bar bench north (below path)
-            { type: 'trash_can', x: C + 32, z: C - 66 },    // Near T-bar bench north (below path)
-            { type: 'trash_can', x: C - 50, z: C + 48 },    // Near pizza (outside path)
-            { type: 'trash_can', x: C + 50, z: C + 48 },    // Near puffle shop (outside path)
-            { type: 'trash_can', x: C + 18, z: C + 12 },    // Near campfire (outside stem)
-            { type: 'trash_can', x: C + 18, z: C - 66 },    // Nightclub corner (outside path)
-        );
+        // Each can is its own scavenge spot (independent 1hr cooldown per player).
+        TOWN_TRASH_CANS.forEach(({ id, localX, localZ }) => {
+            props.push({ type: 'trash_can', x: localX, z: localZ, scavengeSpotId: id });
+        });
         
         // ==================== BARRELS - SUPPLY AREAS ====================
         // Near businesses and storage areas (positioned OFF gravel paths)
@@ -761,7 +676,6 @@ class TownCenter {
             { type: 'ice_sculpture', x: C - 52.5, z: C + 54.7, sculptureType: 'fish', isLordFishnu: true, rotation: Math.PI }, // Northwest - LORD FISHNU (rotated 180°)
             { type: 'ice_sculpture', x: C + 52.7, z: C + 56.6, sculptureType: 'penguin' }, // Northeast open area (near puffle shop)
             { type: 'ice_sculpture', x: C - 85, z: C - 45, sculptureType: 'heart', rotation: Math.PI / 2 },   // Far west - rotated 90°
-            { type: 'ice_sculpture', x: C + 85, z: C - 45, sculptureType: 'star', rotation: Math.PI / 2 },    // Far east - rotated 90°
         );
         
         // ==================== CRATES - LOADING/STORAGE AREAS ====================
@@ -808,12 +722,8 @@ class TownCenter {
         const fishingPondZ = C + 78.5;
         
         props.push(
-            // Primary fishing hole (main spot)
+            // Single demo fishing hole (main fishing is in Snow Forts)
             { type: 'ice_fishing_hole', id: 'fishing_1', x: fishingPondX, z: fishingPondZ, rotation: 0 },
-            // Secondary holes around the pond
-            { type: 'ice_fishing_hole', id: 'fishing_2', x: fishingPondX + 8, z: fishingPondZ - 3, rotation: Math.PI / 6 },
-            { type: 'ice_fishing_hole', id: 'fishing_3', x: fishingPondX - 6, z: fishingPondZ + 5, rotation: -Math.PI / 4 },
-            { type: 'ice_fishing_hole', id: 'fishing_4', x: fishingPondX + 3, z: fishingPondZ + 9, rotation: Math.PI / 3 },
         );
         
         // ==================== ARCADE GAME ZONE ====================
@@ -844,10 +754,8 @@ class TownCenter {
             { type: 'floating_title', x: arcadeBaseX + 15, z: arcadeBaseZ - 3, text: '🎮 ARCADE ZONE', height: 8 }
         );
         
-        // Pond area decorations - snowy surroundings
+        // Pond area decorations - snowy surroundings (no zone banner)
         props.push(
-            // FLOATING TITLE SIGN - draws attention to the fishing area (raised high for visibility)
-            { type: 'floating_title', x: fishingPondX, z: fishingPondZ, text: '🎣 ICE FISHING', height: 12 },
             // Snow piles around pond edge
             { type: 'snow_pile', x: fishingPondX - 10, z: fishingPondZ - 8, size: 'medium' },
             { type: 'snow_pile', x: fishingPondX + 12, z: fishingPondZ + 12, size: 'small' },
@@ -859,11 +767,6 @@ class TownCenter {
             { type: 'rock', x: fishingPondX + 15, z: fishingPondZ - 5, size: 'small' },
             // Barrel with fishing supplies/bait
             { type: 'barrel', x: fishingPondX - 5, z: fishingPondZ - 7, size: 'medium' },
-            // Signpost pointing to the fishing area
-            { type: 'signpost', x: fishingPondX + 18, z: fishingPondZ - 8, signs: [
-                { text: 'FISHING', direction: 180 },
-                { text: 'DOJO', direction: 45 },
-            ]},
         );
         
         return props;
@@ -1140,141 +1043,6 @@ class TownCenter {
                         });
                     }
                     break;
-                
-                case 'casino':
-                    // Walkable casino building with open front and 2nd floor bar
-                    const casinoMesh = createCasino(this.THREE, {
-                        w: prop.width,
-                        h: prop.height,
-                        d: prop.depth
-                    });
-                    mesh = casinoMesh;
-                    mesh.name = 'casino';
-                    mesh.rotation.y = prop.rotation || 0;
-                    
-                    // Get collision data from the casino building
-                    const casinoColliders = casinoMesh.userData.getCollisionData(
-                        prop.x, prop.z, prop.rotation || 0
-                    );
-                    
-                    // Add wall collisions (allows walking inside through open front)
-                    casinoColliders.forEach(collider => {
-                        this.collisionSystem.addCollider(
-                            collider.x, collider.z,
-                            { type: 'box', size: collider.size, height: collider.height },
-                            1, // SOLID
-                            { name: collider.name },
-                            collider.rotation || 0,
-                            collider.y || 0
-                        );
-                    });
-                    
-                    // Get landing surfaces for storing bounds (NOT as colliders - handled dynamically)
-                    const casinoSurfaces = casinoMesh.userData.getLandingSurfaces(
-                        prop.x, prop.z, prop.rotation || 0
-                    );
-                    
-                    // DON'T add 2nd floor as solid collider - it blocks horizontal movement!
-                    // Instead, we handle landing dynamically in checkLanding() method
-                    
-                    // Store stair data for dynamic height calculation (like Nightclub)
-                    this.casinoStairData = casinoMesh.userData.getStairData(
-                        prop.x, prop.z, prop.rotation || 0
-                    );
-                    
-                    // Store 2nd floor data for landing check (dynamic, not a collider)
-                    const floor2 = casinoSurfaces.find(s => s.name === 'casino_second_floor');
-                    if (floor2) {
-                        this.casinoSecondFloor = {
-                            minX: floor2.x - floor2.width / 2,
-                            maxX: floor2.x + floor2.width / 2,
-                            minZ: floor2.z - floor2.depth / 2,
-                            maxZ: floor2.z + floor2.depth / 2,
-                            height: floor2.height
-                        };
-                    }
-                    
-                    // Get furniture data for sitting interactions (stools, couch)
-                    this.casinoFurniture = casinoMesh.userData.getFurnitureData(
-                        prop.x, prop.z, prop.rotation || 0
-                    );
-
-                    this.casinoLobbySlots = casinoMesh.userData.getLobbySlotData?.(
-                        prop.x, prop.z, prop.rotation || 0
-                    ) || [];
-                    this.casinoLobbySlotDisplays = casinoMesh.userData.lobbySlotDisplays || [];
-                    
-                    // Store casino bounds for visibility checks
-                    // Casino is rotated, so width/depth swap in world space
-                    const rot = prop.rotation || 0;
-                    const isRotated90 = Math.abs(Math.abs(rot % Math.PI) - Math.PI / 2) < 0.1;
-                    const worldWidth = isRotated90 ? prop.depth : prop.width;
-                    const worldDepth = isRotated90 ? prop.width : prop.depth;
-                    this.casinoBounds = {
-                        minX: prop.x - worldWidth / 2,
-                        maxX: prop.x + worldWidth / 2,
-                        minZ: prop.z - worldDepth / 2,
-                        maxZ: prop.z + worldDepth / 2
-                    };
-                    
-                    // Store lights for day/night cycle
-                    if (casinoMesh.userData.lights) {
-                        casinoMesh.userData.lights.forEach(light => {
-                            this.lights.push(light);
-                        });
-                    }
-                    
-                    // Add casino decoration colliders (chip stacks, dice in front)
-                    if (casinoMesh.userData.getDecorationColliders) {
-                        const decorationColliders = casinoMesh.userData.getDecorationColliders(
-                            prop.x, prop.z, prop.rotation || 0
-                        );
-                        decorationColliders.forEach((collider, idx) => {
-                            if (collider.type === 'cylinder') {
-                                this.collisionSystem.addCollider(
-                                    collider.worldX, collider.worldZ,
-                                    { type: 'circle', radius: collider.radius, height: collider.height },
-                                    1, // SOLID
-                                    { name: `casino_decoration_${idx}` },
-                                    0,
-                                    0
-                                );
-                            } else if (collider.type === 'box') {
-                                this.collisionSystem.addCollider(
-                                    collider.worldX, collider.worldZ,
-                                    { type: 'box', size: { x: collider.width, z: collider.depth }, height: collider.height },
-                                    1, // SOLID
-                                    { name: `casino_decoration_${idx}` },
-                                    0,
-                                    0
-                                );
-                            }
-                        });
-                        console.log(`🎰 Added ${decorationColliders.length} casino decoration colliders`);
-                    }
-                    
-                    // Create Casino TV mesh with REAL data from DexScreener API
-                    createCasinoTVSprite(this.THREE).then(casinoTVMesh => {
-                        // Position at TV location in casino (centered on back wall)
-                        const tvLocalX = 0;  // Centered
-                        const tvLocalZ = -prop.depth / 2 + 1.2;
-                        const tvWorldX = prop.x + tvLocalZ;
-                        const tvWorldZ = prop.z - tvLocalX;
-                        const tvWorldY = 5 + 4.2;
-                        
-                        casinoTVMesh.position.set(tvWorldX, tvWorldY, tvWorldZ);
-                        casinoTVMesh.rotation.y = prop.rotation;
-                        scene.add(casinoTVMesh);
-                        this.casinoTVMesh = casinoTVMesh;
-                        console.log('📺 Casino TV created with real $CP data');
-                    });
-                    break;
-                
-                case 'casino_game_room_portal': {
-                    mesh = this._createGameRoomPortalMarker(prop);
-                    mesh.name = 'casino_game_room_portal';
-                    break;
-                }
                 
                 case 'skate_park':
                     // Skate park with half pipes, rails, and ramps
@@ -1584,7 +1352,7 @@ class TownCenter {
                 case 'gravel_path':
                     // Create blue gravel ice texture for walking path
                     mesh = this._createGravelPath(prop.width, prop.depth);
-                    mesh.position.y = 0.02; // Slightly above ground - low enough to blend, high enough to avoid z-fighting
+                    applyGroundPathSurface(mesh);
                     mesh.name = 'gravel_path';
                     break;
                     
@@ -1597,6 +1365,9 @@ class TownCenter {
                 case 'trash_can': {
                     const trashProp = createProp(this.THREE, null, PROP_TYPES.TRASH_CAN, 0, 0, 0, { withLid: true });
                     mesh = attachPropData(trashProp, trashProp.group);
+                    if (prop.scavengeSpotId) {
+                        mesh.userData.scavengeSpotId = prop.scavengeSpotId;
+                    }
                     break;
                 }
                 case 'barrel': {
@@ -2110,7 +1881,7 @@ class TownCenter {
         const SIZE = TownCenter.WORLD_SIZE;
         const WALL_HEIGHT = 50; // Super tall walls
         const WALL_THICKNESS = 4;
-        const MARGIN = 5; // Distance from edge
+        const MARGIN = 1; // Tight to map edge — mountains provide exterior boundary
         
         // ==================== ZONE BOUNDARY CONFIGURATION ====================
         // Town is connected to Snow Forts on the EAST (no wall there)
@@ -2317,16 +2088,11 @@ class TownCenter {
         texture.wrapT = THREE.RepeatWrapping;
         texture.repeat.set(width / 15, depth / 15); // Tile the texture
         
-        // Create material with the gravel texture
-        // Enhanced polygon offset to fix z-fighting when camera looks straight down
         const material = new THREE.MeshStandardMaterial({
             map: texture,
             roughness: 0.9,
             metalness: 0.1,
-            depthWrite: true,
-            polygonOffset: true,
-            polygonOffsetFactor: -2,
-            polygonOffsetUnits: -2,
+            ...groundPathMaterialProps(),
         });
         
         // Create flat plane for the path
@@ -2336,112 +2102,6 @@ class TownCenter {
         mesh.receiveShadow = true;
         
         return mesh;
-    }
-
-    /**
-     * Visible game room portal marker — glow ring + floating sign on casino red carpet.
-     * Hidden until player is nearby (proximity culling in update()).
-     */
-    _createGameRoomPortalMarker(prop) {
-        const THREE = this.THREE;
-        const group = new THREE.Group();
-        
-        const neonCyan = 0x00FFFF;
-        const gold = 0xFFD700;
-        
-        // Inner glow disc (sits on existing casino entrance carpet)
-        const glowMat = new THREE.MeshStandardMaterial({
-            color: neonCyan,
-            emissive: neonCyan,
-            emissiveIntensity: 0.7,
-            transparent: true,
-            opacity: 0.5,
-            depthWrite: false,
-            polygonOffset: true,
-            polygonOffsetFactor: -4,
-            polygonOffsetUnits: -4
-        });
-        const glow = new THREE.Mesh(new THREE.CircleGeometry(2.8, 32), glowMat);
-        glow.rotation.x = -Math.PI / 2;
-        glow.position.y = 0.06;
-        glow.renderOrder = 5;
-        group.add(glow);
-        
-        // Outer pulsing ring
-        const ringMat = new THREE.MeshStandardMaterial({
-            color: gold,
-            emissive: gold,
-            emissiveIntensity: 0.9,
-            transparent: true,
-            opacity: 0.85,
-            depthWrite: false,
-            side: THREE.DoubleSide
-        });
-        const ring = new THREE.Mesh(new THREE.RingGeometry(2.6, 3.2, 32), ringMat);
-        ring.rotation.x = -Math.PI / 2;
-        ring.position.y = 0.07;
-        ring.renderOrder = 6;
-        group.add(ring);
-        
-        // Floating billboard sign
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 128;
-        const ctx = canvas.getContext('2d');
-        const grad = ctx.createLinearGradient(0, 0, 512, 0);
-        grad.addColorStop(0, '#1a0a2e');
-        grad.addColorStop(0.5, '#2d1b4e');
-        grad.addColorStop(1, '#1a0a2e');
-        ctx.fillStyle = grad;
-        ctx.fillRect(0, 0, 512, 128);
-        ctx.strokeStyle = '#FFD700';
-        ctx.lineWidth = 6;
-        ctx.strokeRect(6, 6, 500, 116);
-        ctx.shadowColor = '#00FFFF';
-        ctx.shadowBlur = 16;
-        ctx.fillStyle = '#00FFFF';
-        ctx.font = 'bold 44px Arial';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText('🎰 GAME ROOM', 256, 64);
-        
-        const signTexture = new THREE.CanvasTexture(canvas);
-        const spriteMat = new THREE.SpriteMaterial({
-            map: signTexture,
-            transparent: true,
-            depthWrite: false
-        });
-        const sprite = new THREE.Sprite(spriteMat);
-        sprite.scale.set(8, 2, 1);
-        const signY = 3.5;
-        sprite.position.set(0, signY, 0);
-        group.add(sprite);
-        
-        // Soft point light (skip on mobile GPUs)
-        const isMobileGPU = typeof window !== 'undefined' && (window._isMobileGPU || window._isAppleDevice);
-        let portalLight = null;
-        if (!isMobileGPU) {
-            portalLight = new THREE.PointLight(neonCyan, 0.6, 10);
-            portalLight.position.set(0, 1.5, 0);
-            group.add(portalLight);
-            this.lights.push(portalLight);
-        }
-        
-        // Hidden until player approaches (proximity culling in update())
-        group.visible = false;
-        
-        group.userData.portalAnim = {
-            worldX: prop.x,
-            worldZ: prop.z,
-            glow,
-            ring,
-            sprite,
-            portalLight,
-            baseY: signY,
-            group
-        };
-        
-        return group;
     }
 
     _handleInteraction(event, zone) {
@@ -2463,107 +2123,7 @@ class TownCenter {
     }
     
     checkLanding(x, z, y, radius = 0.8) {
-        // First check standard collision system landing
-        let result = this.collisionSystem.checkLanding(x, z, y, radius);
-        let highestY = result.landingY;
-        
-        // Check casino 2nd floor (like Nightclub DJ booth)
-        if (this.casinoSecondFloor) {
-            const f2 = this.casinoSecondFloor;
-            if (x >= f2.minX && x <= f2.maxX && z >= f2.minZ && z <= f2.maxZ) {
-                // Player is above the 2nd floor bounds - land on it
-                if (y >= f2.height - 1 && f2.height > highestY) {
-                    highestY = f2.height;
-                    result = {
-                        canLand: true,
-                        landingY: f2.height,
-                        collider: { name: 'casino_second_floor' }
-                    };
-                }
-            }
-        }
-        
-        // Then check casino stairs (dynamic height like Nightclub)
-        // Skip near lobby couches — their footprint overlaps the stair run and would snap players onto steps
-        let skipCasinoStairs = false;
-        if (this.casinoFurniture) {
-            for (const furn of this.casinoFurniture) {
-                if (furn.elevated || !furn.name?.startsWith('casino_lobby_couch')) continue;
-                const dx = x - furn.position.x;
-                const dz = z - furn.position.z;
-                if (dx * dx + dz * dz < (furn.interactionRadius + 0.5) ** 2) {
-                    skipCasinoStairs = true;
-                    break;
-                }
-            }
-        }
-
-        if (this.casinoStairData && !skipCasinoStairs) {
-            const st = this.casinoStairData;
-            
-            // For rotated stairs (runs along X axis in world space)
-            if (st.runsAlongX) {
-                // Check if player is within stair Z bounds (width becomes depth when rotated)
-                const stairHalfDepth = st.depth / 2;
-                const stairMinZ = st.z - stairHalfDepth;
-                const stairMaxZ = st.z + stairHalfDepth;
-                
-                if (z >= stairMinZ && z <= stairMaxZ) {
-                    // Calculate progress along stairs using X position
-                    // Stairs run from startX to endX
-                    const stairMinX = Math.min(st.startX, st.endX);
-                    const stairMaxX = Math.max(st.startX, st.endX);
-                    
-                    if (x >= stairMinX && x <= stairMaxX) {
-                        // Calculate which step we're on
-                        const distFromStart = Math.abs(x - st.startX);
-                        const stepIndex = Math.floor(distFromStart / st.stepDepth);
-                        
-                        if (stepIndex >= 0 && stepIndex < st.totalSteps) {
-                            const stepY = (stepIndex + 1) * st.stepHeight;
-                            
-                            // If this step is higher than current landing, use it
-                            if (stepY > highestY && y <= stepY + 0.5) {
-                                return {
-                                    canLand: true,
-                                    landingY: stepY,
-                                    collider: { name: `casino_stair_${stepIndex}` }
-                                };
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Standard Z-axis stairs
-                const stairHalfWidth = st.width / 2;
-                const stairMinX = st.x - stairHalfWidth;
-                const stairMaxX = st.x + stairHalfWidth;
-                
-                if (x >= stairMinX && x <= stairMaxX) {
-                    const stairMinZ = Math.min(st.startZ, st.endZ);
-                    const stairMaxZ = Math.max(st.startZ, st.endZ);
-                    
-                    if (z >= stairMinZ && z <= stairMaxZ) {
-                        const distFromStart = Math.abs(z - st.startZ);
-                        const stepIndex = Math.floor(distFromStart / st.stepDepth);
-                        
-                        if (stepIndex >= 0 && stepIndex < st.totalSteps) {
-                            const stepY = (stepIndex + 1) * st.stepHeight;
-                            
-                            if (stepY > highestY && y <= stepY + 0.5) {
-                                return {
-                                    canLand: true,
-                                    landingY: stepY,
-                                    collider: { name: `casino_stair_${stepIndex}` }
-                                };
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        return result;
+        return this.collisionSystem.checkLanding(x, z, y, radius);
     }
 
     checkTriggers(playerX, playerZ, playerY = 0) {
@@ -2572,24 +2132,6 @@ class TownCenter {
 
     getActiveTriggers(playerX, playerZ) {
         return this.collisionSystem.getActiveTriggers(playerX, playerZ);
-    }
-
-    /**
-     * Get casino furniture data for sitting interactions
-     * Returns array of furniture objects with type, position, seatHeight, etc.
-     */
-    getCasinoFurniture() {
-        return this.casinoFurniture || [];
-    }
-    
-    /**
-     * Check if player is inside the casino bounds
-     * Returns true if player is within the casino walls
-     */
-    isPlayerInCasino(x, z) {
-        if (!this.casinoBounds) return false;
-        const b = this.casinoBounds;
-        return x >= b.minX && x <= b.maxX && z >= b.minZ && z <= b.maxZ;
     }
 
     /**
@@ -2611,18 +2153,28 @@ class TownCenter {
         return this._collisionDebugEnabled || false;
     }
 
+    /** Hide town meshes when player is in a distant zone (e.g. forest) — toggles only on state change. */
+    setRenderingActive(active) {
+        if (this._renderingActive === active) return;
+        this._renderingActive = active;
+        for (const mesh of this.propMeshes) {
+            mesh.visible = active;
+        }
+        for (const light of this.lights) {
+            light.visible = active;
+        }
+    }
+
     update(time, delta, nightFactor = 0.5, playerPos = null) {
         if (!this._animatedCache) {
-            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], casinos: [], sknyIgloos: [], floatingSigns: [], gameRoomPortals: [], streetLightStrings: [], frameCounter: 0 };
+            this._animatedCache = { campfires: [], christmasTrees: [], nightclubs: [], sknyIgloos: [], floatingSigns: [], streetLightStrings: [], frameCounter: 0 };
             // === VISIBILITY CULLING CACHE ===
             // Store elements that should be hidden at distance (with state tracking to avoid freeze)
             // Billboard STRUCTURE stays visible, only the ADVERT IMAGE is hidden at distance
             this._cullCache = {
                 billboardAdverts: [],
                 nightclubSign: null,
-                casinoSign: null,
                 floatingTitles: [],
-                gameRoomPortal: null,
             };
             
             this.propMeshes.forEach(mesh => {
@@ -2643,25 +2195,6 @@ class TownCenter {
                     if (sign) {
                         this._cullCache.nightclubSign = { sprite: sign, parentMesh: mesh, wasVisible: true };
                     }
-                }
-                // Casino exterior animations (Vegas-style lights, slot machines, roulette, etc.)
-                if (mesh.name === 'casino' && mesh.userData.update) {
-                    this._animatedCache.casinos.push(mesh);
-                    // Cache casino sign for visibility culling
-                    const casinoSign = mesh.getObjectByName('casino_title_sign');
-                    if (casinoSign) {
-                        this._cullCache.casinoSign = { sprite: casinoSign, parentMesh: mesh, wasVisible: true };
-                    }
-                }
-                // Game room portal marker (proximity visibility + animation)
-                if (mesh.name === 'casino_game_room_portal' && mesh.userData.portalAnim) {
-                    this._animatedCache.gameRoomPortals.push(mesh.userData.portalAnim);
-                    this._cullCache.gameRoomPortal = {
-                        group: mesh,
-                        worldX: mesh.position.x,
-                        worldZ: mesh.position.z,
-                        wasVisible: false
-                    };
                 }
                 // Floating title signs - cache for visibility culling
                 if (mesh.name === 'floating_title' && mesh.userData.floatingSign) {
@@ -2712,17 +2245,6 @@ class TownCenter {
         const ANIMATION_DISTANCE_SQ = 80 * 80; // Skip detailed animations beyond 80 units
         const px = playerPos?.x || 0;
         const pz = playerPos?.z || 0;
-        
-        // Casino exterior animations — every frame when player is nearby
-        this._animatedCache.casinos.forEach(mesh => {
-            if (mesh.userData.update) {
-                const dx = px - mesh.position.x;
-                const dz = pz - mesh.position.z;
-                if (dx * dx + dz * dz < ANIMATION_DISTANCE_SQ) {
-                    mesh.userData.update(time, delta);
-                }
-            }
-        });
         
         // Nightclub + SKNY igloos — every 2nd frame
         if (frame % 2 === 0) {
@@ -2787,30 +2309,6 @@ class TownCenter {
             if (pdx * pdx + pdz * pdz < ANIMATION_DISTANCE_SQ) {
                 this.parkInstance.animate(delta);
             }
-        }
-        
-        // Game room portal — pulsing floor ring + sign bob (only when visible/nearby)
-        const PORTAL_SHOW_DIST_SQ = 50 * 50;
-        if (frame % 2 === 0) {
-            this._animatedCache.gameRoomPortals.forEach((anim) => {
-                if (!anim.group?.visible) return;
-                const dx = px - anim.worldX;
-                const dz = pz - anim.worldZ;
-                if (dx * dx + dz * dz > PORTAL_SHOW_DIST_SQ) return;
-                
-                const pulse = 1 + Math.sin(time * 2.5) * 0.12;
-                if (anim.ring) anim.ring.scale.set(pulse, pulse, 1);
-                if (anim.glow?.material) {
-                    anim.glow.material.opacity = 0.45 + Math.sin(time * 3) * 0.2;
-                    anim.glow.material.emissiveIntensity = 0.7 + Math.sin(time * 3) * 0.3;
-                }
-                if (anim.sprite && anim.baseY) {
-                    anim.sprite.position.y = anim.baseY + Math.sin(time * 1.5) * 0.25;
-                }
-                if (anim.portalLight) {
-                    anim.portalLight.intensity = 0.5 + Math.sin(time * 3) * 0.2;
-                }
-            });
         }
         
         // Floating signs - gentle bobbing animation every 2nd frame - DISTANCE CULLED
@@ -2926,19 +2424,6 @@ class TownCenter {
                 updateVisibility(entry.sprite, shouldShow, entry);
             }
             
-            // Casino title sign (sprite - safe to cull)
-            if (this._cullCache.casinoSign) {
-                const entry = this._cullCache.casinoSign;
-                const dx = px - entry.parentMesh.position.x;
-                const dz = pz - entry.parentMesh.position.z;
-                const distSq = dx * dx + dz * dz;
-                
-                const shouldShow = entry.wasVisible 
-                    ? distSq < HIDE_DIST_SQ 
-                    : distSq < SHOW_DIST_SQ;
-                updateVisibility(entry.sprite, shouldShow, entry);
-            }
-            
             // Floating titles (ARCADE, FISHING zones - sprites, safe to cull)
             this._cullCache.floatingTitles.forEach(entry => {
                 const dx = px - entry.parentMesh.position.x;
@@ -2950,26 +2435,10 @@ class TownCenter {
                     : distSq < SHOW_DIST_SQ;
                 updateVisibility(entry.sprite, shouldShow, entry);
             });
-
-            // Game room portal marker (glow + sign — only near casino entrance)
-            if (this._cullCache.gameRoomPortal) {
-                const entry = this._cullCache.gameRoomPortal;
-                const dx = px - entry.worldX;
-                const dz = pz - entry.worldZ;
-                const distSq = dx * dx + dz * dz;
-                const shouldShow = entry.wasVisible
-                    ? distSq < PORTAL_HIDE_DIST_SQ
-                    : distSq < PORTAL_SHOW_DIST_SQ;
-                updateVisibility(entry.group, shouldShow, entry);
-            }
         }
     }
 
     cleanup() {
-        if (this.casinoTVMesh) {
-            cleanupCasinoTV(this.casinoTVMesh);
-            this.casinoTVMesh = null;
-        }
         this.propMeshes.forEach(mesh => {
             if (mesh.parent) mesh.parent.remove(mesh);
             mesh.traverse(child => {

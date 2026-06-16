@@ -94,6 +94,105 @@ ITEM_CATALOG.set('basic_rod', {
     tier: 1
 });
 
+ITEM_CATALOG.set('basic_axe', {
+    id: 'basic_axe',
+    name: 'Basic Axe',
+    emoji: '🪓',
+    category: 'tool',
+    npcValue: 0,
+    maxStack: 1,
+    tier: 1
+});
+
+ITEM_CATALOG.set('iron_axe', {
+    id: 'iron_axe',
+    name: 'Iron Axe',
+    emoji: '⛏️',
+    category: 'tool',
+    npcValue: 0,
+    maxStack: 1,
+    tier: 2
+});
+
+ITEM_CATALOG.set('steel_axe', {
+    id: 'steel_axe',
+    name: 'Steel Axe',
+    emoji: '🪓',
+    category: 'tool',
+    npcValue: 0,
+    maxStack: 1,
+    tier: 3
+});
+
+ITEM_CATALOG.set('master_axe', {
+    id: 'master_axe',
+    name: 'Master Axe',
+    emoji: '🪓',
+    category: 'tool',
+    npcValue: 0,
+    maxStack: 1,
+    tier: 4
+});
+
+const WOOD_TYPES = [
+    { id: 'pine_log', name: 'Pine Log', emoji: '🪵', npcValue: 3, tier: 1 },
+    { id: 'birch_log', name: 'Birch Log', emoji: '🪵', npcValue: 6, tier: 2 },
+    { id: 'oak_log', name: 'Oak Log', emoji: '🪵', npcValue: 10, tier: 3 },
+    { id: 'ironwood_log', name: 'Ironwood Log', emoji: '🪵', npcValue: 16, tier: 4 }
+];
+
+for (const wood of WOOD_TYPES) {
+    ITEM_CATALOG.set(wood.id, {
+        id: wood.id,
+        name: wood.name,
+        emoji: wood.emoji,
+        category: 'wood',
+        npcValue: wood.npcValue,
+        maxStack: MAX_STACK,
+        tier: wood.tier
+    });
+}
+
+ITEM_CATALOG.set('forest_mushroom', {
+    id: 'forest_mushroom',
+    name: 'Forest Mushroom',
+    emoji: '🍄',
+    category: 'forage',
+    npcValue: 8,
+    maxStack: MAX_STACK,
+    tier: 1
+});
+
+/** Ferry tickets — stack in backpack; consumed when boarding matching route. */
+const FERRY_TICKETS = [
+    { id: 'ferry_ticket_town_snow', name: 'Ferry Ticket (Snow Forts)', routeId: 'town_snow_forts' },
+    { id: 'ferry_ticket_snow_town', name: 'Ferry Ticket (Town)', routeId: 'snow_forts_town' },
+    { id: 'ferry_ticket_snow_forest', name: 'Ferry Ticket (Forest)', routeId: 'snow_forts_forest' },
+    { id: 'ferry_ticket_forest_snow', name: 'Ferry Ticket (Snow Forts)', routeId: 'forest_snow_forts' },
+    { id: 'ferry_ticket_forest_town', name: 'Ferry Ticket (Town)', routeId: 'forest_town' },
+];
+
+for (const ticket of FERRY_TICKETS) {
+    ITEM_CATALOG.set(ticket.id, {
+        id: ticket.id,
+        name: ticket.name,
+        emoji: '🎫',
+        category: 'ticket',
+        npcValue: 0,
+        maxStack: 20,
+        routeId: ticket.routeId
+    });
+}
+
+/** Map route id → inventory item id for ticket consumption. */
+export const FERRY_TICKET_BY_ROUTE = Object.fromEntries(
+    FERRY_TICKETS.map(t => [t.routeId, t.id])
+);
+
+export function getFerryTicketItemForRoute(routeId) {
+    return FERRY_TICKET_BY_ROUTE[routeId] || null;
+}
+
 export function getGameItem(itemId) {
     return ITEM_CATALOG.get(itemId) || null;
 }
@@ -101,6 +200,16 @@ export function getGameItem(itemId) {
 export function isFishItem(itemId) {
     const item = getGameItem(itemId);
     return item?.category === 'fish';
+}
+
+export function isWoodItem(itemId) {
+    const item = getGameItem(itemId);
+    return item?.category === 'wood';
+}
+
+export function isToolItem(itemId) {
+    const item = getGameItem(itemId);
+    return item?.category === 'tool';
 }
 
 export function isJellyfishId(fishId) {
@@ -111,11 +220,29 @@ export function isInventoryCatch(fishData) {
     const id = fishData?.id;
     if (!id || isJellyfishId(id)) return false;
     const item = getGameItem(id);
-    if (item?.category === 'fish') return true;
-    // Minigame fish with sell value but missing from catalog — still storable
-    if (typeof fishData?.coins === 'number' && fishData.coins >= 0) return true;
-    // Any other identified catch from the minigame (wallet users always backpack)
-    return true;
+    return item?.category === 'fish';
+}
+
+/** All catalog fish in a depth tier (for server loot rolls). */
+export function getFishByTier(tier) {
+    const results = [];
+    for (const item of ITEM_CATALOG.values()) {
+        if (item.category === 'fish' && item.tier === tier) {
+            results.push(item);
+        }
+    }
+    return results;
+}
+
+/** Wood logs at a chop tier (falls back to nearest lower tier). */
+export function getWoodByTier(tier) {
+    const results = [];
+    for (const item of ITEM_CATALOG.values()) {
+        if (item.category === 'wood' && item.tier === tier) {
+            results.push(item);
+        }
+    }
+    return results;
 }
 
 const RARITY_BY_TIER = {
@@ -136,13 +263,19 @@ export function getFishRarityDisplay(itemId) {
 
 export function getNpcSellValue(itemId, quantity = 1) {
     const item = getGameItem(itemId);
-    if (!item || item.category !== 'fish') return 0;
-    return Math.floor(item.npcValue * ECONOMY.FISHING.NPC_SELL_RATIO * quantity);
+    if (!item) return 0;
+    if (item.category === 'fish') {
+        return Math.floor(item.npcValue * ECONOMY.FISHING.NPC_SELL_RATIO * quantity);
+    }
+    if (item.category === 'wood') {
+        return Math.floor(item.npcValue * ECONOMY.WOODCUTTING.NPC_SELL_RATIO * quantity);
+    }
+    return 0;
 }
 
 export function getAllFishItems() {
     return [...ITEM_CATALOG.values()].filter(i => i.category === 'fish');
 }
 
-export { ITEM_CATALOG, JELLYFISH_IDS, FISH_SPECIES };
+export { ITEM_CATALOG, JELLYFISH_IDS, FISH_SPECIES, WOOD_TYPES };
 export default ITEM_CATALOG;

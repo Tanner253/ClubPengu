@@ -1334,8 +1334,8 @@ class CasinoRoom extends BaseRoom {
             x: x,
             z: z + 2,
             radius: 2,
-            targetRoom: 'town',
-            targetSpawn: { x: -30.8, z: 2.8 }  // Red carpet in front of casino
+            targetRoom: 'snow_forts',
+            targetSpawn: { x: -11, z: 0 }
         });
     }
     
@@ -1530,17 +1530,10 @@ class CasinoRoom extends BaseRoom {
     }
 
     getSpawnPosition(fromRoom = null) {
-        // Spawn near exit when coming from town
-        if (fromRoom === 'town') {
-            return {
-                x: CasinoRoom.CENTER_X,
-                z: CasinoRoom.ROOM_DEPTH - 8
-            };
-        }
-        // Default spawn (center of room)
+        // Entrance near back wall (opposite slots / facing into the room)
         return {
             x: CasinoRoom.CENTER_X,
-            z: CasinoRoom.CENTER_Z
+            z: CasinoRoom.ROOM_DEPTH - 8
         };
     }
 

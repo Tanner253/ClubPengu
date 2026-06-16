@@ -29,7 +29,11 @@ export function buildWorldNpc(THREE, buildPenguinMesh, npcDef) {
 
     const stand = npcDef.standType === 'fishing_shack'
         ? buildFishingShack(THREE, npcDef)
-        : buildSupplyStall(THREE, npcDef);
+        : npcDef.standType === 'travel_dock'
+            ? buildTravelDock(THREE, npcDef)
+            : npcDef.standType === 'ranger_post'
+                ? buildRangerPost(THREE, npcDef)
+                : buildSupplyStall(THREE, npcDef);
     group.add(stand);
 
     const appearance = { ...npcDef.appearance };
@@ -195,6 +199,173 @@ function buildFishingShack(THREE, npcDef) {
     stand.userData.collision = { type: 'box', size: { x: 5.5, z: 4.2 }, height: 3.2 };
     // Behind counter, facing shack opening (+Z)
     stand.userData.npcSlot = { x: 0, z: -0.1, rotation: 0 };
+    return stand;
+}
+
+// ---------------------------------------------------------------------------
+// Travel dock — Captain Skipper ferry stops
+// ---------------------------------------------------------------------------
+
+function buildTravelDock(THREE, npcDef) {
+    const stand = new THREE.Group();
+    stand.name = 'travel_dock';
+    const mat = getMaterialManager(THREE);
+    const geo = getGeometryManager(THREE);
+    const wood = mat.get(PropColors.plankMedium, { roughness: 0.9 });
+    const darkWood = mat.get(PropColors.plankDark, { roughness: 0.85 });
+    const snow = mat.get(PropColors.snowLight, { roughness: 0.65 });
+    const metal = mat.get(PropColors.metalMedium, { roughness: 0.4, metalness: 0.5 });
+
+    for (let i = -2; i <= 2; i++) {
+        const plank = new THREE.Mesh(geo.box(1.1, 0.12, 0.45), i % 2 === 0 ? wood : darkWood);
+        plank.position.set(i * 1.05, 0.06, 0);
+        plank.receiveShadow = true;
+        stand.add(plank);
+    }
+
+    const postPositions = [[-2.4, -1.2], [2.4, -1.2], [-2.4, 1.2], [2.4, 1.2]];
+    postPositions.forEach(([px, pz]) => {
+        const post = new THREE.Mesh(geo.cylinder(0.09, 0.11, 2.4, 8), darkWood);
+        post.position.set(px, 1.25, pz);
+        post.castShadow = true;
+        stand.add(post);
+        addSnowCap(stand, { x: px, y: 2.55, z: pz }, geo, snow, 0.2, 0.1);
+    });
+
+    const canopy = new THREE.Mesh(geo.box(5.2, 0.08, 2.8), mat.get('#1e3a5f', { roughness: 0.85 }));
+    canopy.position.set(0, 2.35, 0);
+    stand.add(canopy);
+    const valance = new THREE.Mesh(geo.box(5.3, 0.1, 0.2), mat.get('#ffd700', { roughness: 0.5, metalness: 0.3 }));
+    valance.position.set(0, 2.2, 1.35);
+    stand.add(valance);
+
+    const route = npcDef.routeId?.includes('forest') ? '🌲' : npcDef.routeId?.includes('snow') ? '⛄' : '🏘️';
+    mountFrontSign(stand, THREE, { x: 0, y: 6.2, z: 1.55, postSpread: 1.85 }, {
+        title: 'ICE FERRY',
+        subtitle: 'Captain Skipper',
+        emoji: route,
+        accent: ['#0c2340', '#1a4a7a', '#0c2340'],
+        border: '#7dd3fc',
+        text: '#e0f2fe',
+        scale: [5.8, 1.72, 1]
+    });
+
+    const ticketBooth = new THREE.Mesh(geo.box(1.6, 1.1, 0.8), wood);
+    ticketBooth.position.set(-1.8, 0.65, 0.8);
+    ticketBooth.castShadow = true;
+    stand.add(ticketBooth);
+    const ticketWindow = new THREE.Mesh(geo.box(0.9, 0.5, 0.05), mat.get('#87ceeb', { roughness: 0.2, transparent: true, opacity: 0.6 }));
+    ticketWindow.position.set(-1.8, 0.85, 1.22);
+    stand.add(ticketWindow);
+
+    const boatHull = new THREE.Mesh(geo.box(2.8, 0.45, 1.2), mat.get('#2a5080', { roughness: 0.7 }));
+    boatHull.position.set(1.9, 0.35, -0.5);
+    boatHull.rotation.y = 0.2;
+    stand.add(boatHull);
+    const mast = new THREE.Mesh(geo.cylinder(0.05, 0.06, 2.2, 6), darkWood);
+    mast.position.set(2.1, 1.5, -0.4);
+    stand.add(mast);
+    const sail = new THREE.Mesh(geo.box(0.06, 1.4, 0.9), mat.get('#f8fafc', { roughness: 0.95 }));
+    sail.position.set(2.1, 1.6, -0.35);
+    stand.add(sail);
+
+    new Barrel(THREE, 'small').spawn(stand, 0.4, 0, 1.3);
+    addHangingLantern(stand, THREE, mat, geo, -0.5, 2.0, 1.1, '#ffeeaa');
+
+    stand.userData.collision = { type: 'box', size: { x: 5.4, z: 3.0 }, height: 3.0 };
+    // Face the path (+Z local); group rotation from npcDef.orients the dock toward travelers
+    stand.userData.npcSlot = { x: 0.2, z: 0.15, rotation: 0 };
+    return stand;
+}
+
+// ---------------------------------------------------------------------------
+// Ranger post — Whiskerwood Cabin porch (Ranger Pike)
+// ---------------------------------------------------------------------------
+
+function buildRangerPost(THREE, npcDef) {
+    const stand = new THREE.Group();
+    stand.name = 'ranger_post';
+    const mat = getMaterialManager(THREE);
+    const geo = getGeometryManager(THREE);
+    const wood = mat.get(PropColors.plankMedium, { roughness: 0.92 });
+    const darkWood = mat.get(PropColors.plankDark, { roughness: 0.88 });
+    const lightWood = mat.get(PropColors.plankLight, { roughness: 0.9 });
+    const moss = mat.get('#3d5c32', { roughness: 0.95 });
+    const paper = mat.get('#f5f0e1', { roughness: 0.95 });
+    const metal = mat.get(PropColors.metalMedium, { roughness: 0.4, metalness: 0.45 });
+
+    // Porch deck planks
+    for (let i = -1; i <= 1; i++) {
+        const plank = new THREE.Mesh(geo.box(1.0, 0.1, 0.38), i % 2 === 0 ? wood : lightWood);
+        plank.position.set(i * 0.95, 0.05, 0);
+        plank.receiveShadow = true;
+        stand.add(plank);
+    }
+
+    // Ledger desk
+    const desk = new THREE.Mesh(geo.box(2.8, 0.75, 1.0), darkWood);
+    desk.position.set(0, 0.42, -0.55);
+    desk.castShadow = true;
+    stand.add(desk);
+    const deskTop = new THREE.Mesh(geo.box(2.9, 0.06, 1.05), lightWood);
+    deskTop.position.set(0, 0.82, -0.55);
+    stand.add(deskTop);
+
+    // Open ledger book
+    const bookL = new THREE.Mesh(geo.box(0.55, 0.04, 0.7), paper);
+    bookL.position.set(-0.35, 0.88, -0.55);
+    bookL.rotation.y = 0.08;
+    stand.add(bookL);
+    const bookR = bookL.clone();
+    bookR.position.set(0.35, 0.88, -0.55);
+    bookR.rotation.y = -0.08;
+    stand.add(bookR);
+
+    // Ink quill jar
+    const jar = new THREE.Mesh(geo.cylinder(0.08, 0.1, 0.18, 8), mat.get('#223344', { roughness: 0.3, transparent: true, opacity: 0.75 }));
+    jar.position.set(1.0, 0.92, -0.45);
+    stand.add(jar);
+
+    // Log stack beside desk
+    for (let i = 0; i < 3; i++) {
+        const log = new THREE.Mesh(geo.cylinder(0.18, 0.2, 0.9, 8), darkWood);
+        log.rotation.z = Math.PI / 2;
+        log.position.set(-1.55, 0.25 + i * 0.14, 0.15);
+        log.castShadow = true;
+        stand.add(log);
+    }
+
+    // Stump with axe
+    const stump = new THREE.Mesh(geo.cylinder(0.35, 0.42, 0.28, 10), moss);
+    stump.position.set(1.45, 0.16, 0.25);
+    stand.add(stump);
+    addToolOnRack(stand, THREE, mat, geo, 1.55, 0.55, 0.25, 'axe');
+
+    // Quest board post (future quests — visual hook)
+    const boardPost = new THREE.Mesh(geo.cylinder(0.07, 0.09, 1.8, 6), wood);
+    boardPost.position.set(-1.8, 0.95, -0.9);
+    stand.add(boardPost);
+    const board = new THREE.Mesh(geo.box(1.2, 0.9, 0.08), lightWood);
+    board.position.set(-1.8, 1.55, -0.82);
+    stand.add(board);
+    const notice = new THREE.Mesh(geo.box(0.9, 0.55, 0.02), paper);
+    notice.position.set(-1.8, 1.58, -0.76);
+    stand.add(notice);
+
+    mountFrontSign(stand, THREE, { x: 0, y: 2.65, z: 1.15, postSpread: 1.2 }, {
+        title: 'WHISKERWOOD',
+        subtitle: 'Ranger Pike · Timber Buy',
+        emoji: '🌲',
+        accent: ['#1a3320', '#2d5a34', '#1a3320'],
+        border: '#86efac',
+        text: '#ecfdf5',
+        scale: [3.2, 1.05, 1]
+    });
+
+    addHangingLantern(stand, THREE, mat, geo, 0.5, 1.55, 0.85, '#c4f082');
+
+    stand.userData.collision = { type: 'box', size: { x: 4.2, z: 2.8 }, height: 2.6 };
+    stand.userData.npcSlot = { x: 0, z: 0.45, rotation: 0 };
     return stand;
 }
 
@@ -464,6 +635,10 @@ function applyNpcCosmetics(inner, buildPartMerged, cosmetics) {
     if (cosmetics.fisherHat) addFisherHat(inner, buildPartMerged);
     if (cosmetics.fishingRod) addFishingRod(inner, buildPartMerged);
     if (cosmetics.handPickaxe) addHandPickaxe(inner, buildPartMerged);
+    if (cosmetics.captainHat) addCaptainHat(inner, buildPartMerged);
+    if (cosmetics.shipWheel) addShipWheel(inner, buildPartMerged);
+    if (cosmetics.rangerHat) addRangerHat(inner, buildPartMerged);
+    if (cosmetics.handAxe) addHandAxe(inner, buildPartMerged);
 }
 
 /** Voxel fisherman hat — same coordinate space as ASSETS.HATS (y≈10 on head). */
@@ -536,6 +711,75 @@ function addHandPickaxe(inner, buildPartMerged) {
     voxels.push({ x: 0, y: 4, z: 0, c: metal });
 
     attachToFlipper(flipperL, buildPartMerged, voxels, { x: 5, y: 0, z: 0 }, { x: 5, y: -1, z: 1 }, 'hand_pickaxe');
+}
+
+function addCaptainHat(inner, buildPartMerged) {
+    const voxels = [];
+    const navy = '#1a2a4a';
+    const gold = '#d4af37';
+    for (let x = -5; x <= 5; x++) {
+        for (let z = -5; z <= 5; z++) {
+            if (x * x + z * z < 30) voxels.push({ x, y: 10, z, c: navy });
+        }
+    }
+    for (let x = -7; x <= 7; x++) {
+        if (Math.abs(x) > 2) voxels.push({ x, y: 10, z: 0, c: navy });
+    }
+    for (let x = -2; x <= 2; x++) {
+        voxels.push({ x, y: 11, z: 0, c: gold });
+    }
+    const hat = buildPartMerged(voxels, PALETTE);
+    hat.name = 'captain_hat';
+    inner.add(hat);
+}
+
+function addShipWheel(inner, buildPartMerged) {
+    const flipperR = inner.getObjectByName('flipper_r');
+    if (!flipperR) return;
+    const wood = '#5c4033';
+    const gold = '#c9a227';
+    const voxels = [];
+    for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        const sx = Math.round(Math.cos(angle) * 3);
+        const sz = Math.round(Math.sin(angle) * 3);
+        voxels.push({ x: sx, y: 1, z: sz + 2, c: wood });
+    }
+    voxels.push({ x: 0, y: 1, z: 2, c: gold });
+    attachToFlipper(flipperR, buildPartMerged, voxels, { x: -4, y: 0, z: 0 }, { x: -3, y: 0, z: 2 }, 'ship_wheel');
+}
+
+function addHandAxe(inner, buildPartMerged) {
+    const flipperR = inner.getObjectByName('flipper_r');
+    if (!flipperR) return;
+    const wood = '#5c4033';
+    const metal = '#9aaaba';
+    const voxels = [];
+    for (let y = -2; y <= 2; y++) voxels.push({ x: 0, y, z: 0, c: wood });
+    voxels.push({ x: 1, y: 2, z: 0, c: metal }, { x: 2, y: 1, z: 0, c: metal }, { x: 1, y: 1, z: 0, c: metal });
+    attachToFlipper(flipperR, buildPartMerged, voxels, { x: -4, y: 0, z: 0 }, { x: -3, y: 0, z: 1 }, 'hand_axe');
+}
+
+function addRangerHat(inner, buildPartMerged) {
+    const voxels = [];
+    const green = '#2d5a34';
+    const band = '#8B4513';
+    for (let x = -6; x <= 6; x++) {
+        for (let z = -6; z <= 6; z++) {
+            if (x * x + z * z < 38) voxels.push({ x, y: 10, z, c: green });
+        }
+    }
+    for (let x = -3; x <= 3; x++) {
+        for (let z = -3; z <= 3; z++) {
+            if (x * x + z * z < 10) {
+                for (let y = 11; y < 13; y++) voxels.push({ x, y, z, c: green });
+            }
+        }
+    }
+    for (let x = -4; x <= 4; x++) voxels.push({ x, y: 11, z: 0, c: band });
+    const hat = buildPartMerged(voxels, PALETTE);
+    hat.name = 'ranger_hat';
+    inner.add(hat);
 }
 
 function attachToFlipper(flipper, buildPartMerged, voxels, pivot, offset, name) {

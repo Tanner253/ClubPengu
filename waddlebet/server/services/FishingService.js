@@ -2,12 +2,14 @@
  * FishingService - Server-side fishing logic
  *
  * Client runs the ice fishing minigame. Server:
- * - Deducts bait cost (gold)
- * - Validates catches and adds fish to game inventory (no instant gold for authed users)
- * - Broadcasts catch bubbles to the room
+ * - Issues a session per cast (bait purchase)
+ * - Rolls catches server-side (client fish id is not trusted)
+ * - Validates session before granting inventory
  */
 
+import crypto from 'crypto';
 import { ECONOMY } from '../config/economy.js';
+import { rollFishAtDepth } from '../config/fishingLoot.js';
 import {
     getGameItem,
     isInventoryCatch,
@@ -16,8 +18,8 @@ import {
 } from '../config/gameItems.js';
 
 const FISHING_COST = ECONOMY.FISHING.BAIT_COST;
+const SESSION_TTL_MS = 10 * 60 * 1000;
 
-// Legacy reference fish table (UI info endpoint)
 const FISH_TYPES = [
     { id: 'minnow', emoji: '🐟', name: 'Minnow', weight: 40, coins: 3 },
     { id: 'clownfish', emoji: '🐠', name: 'Clownfish', weight: 25, coins: 10 },
@@ -32,15 +34,57 @@ class FishingService {
         this.gameInventoryService = gameInventoryService;
         this.broadcastToRoom = broadcastToRoom;
         this.sendToPlayer = sendToPlayer;
+        /** @type {Map<string, object>} */
+        this.sessions = new Map();
+    }
+
+    _createSession(playerId, spotId, room, isDemo) {
+        const sessionId = crypto.randomUUID();
+        this.sessions.set(playerId, {
+            sessionId,
+            spotId,
+            room,
+            isDemo,
+            createdAt: Date.now(),
+            consumed: false
+        });
+        return sessionId;
+    }
+
+    _validateSession(playerId, sessionId) {
+        const session = this.sessions.get(playerId);
+        if (!session) {
+            return { error: 'NO_SESSION', message: 'Start fishing before reporting a catch' };
+        }
+        if (session.consumed) {
+            return { error: 'SESSION_USED', message: 'This cast was already resolved' };
+        }
+        if (sessionId && session.sessionId !== sessionId) {
+            return { error: 'INVALID_SESSION', message: 'Invalid fishing session' };
+        }
+        if (Date.now() - session.createdAt > SESSION_TTL_MS) {
+            this.sessions.delete(playerId);
+            return { error: 'SESSION_EXPIRED', message: 'Fishing session expired — cast again' };
+        }
+        return { session };
+    }
+
+    _consumeSession(playerId) {
+        const session = this.sessions.get(playerId);
+        if (session) {
+            session.consumed = true;
+        }
     }
 
     async startFishing(playerId, walletAddress, room, spotId, playerName, guestCoins = 0, isDemo = false) {
         let newBalance;
 
         if (isDemo) {
+            const sessionId = this._createSession(playerId, spotId, room, true);
             return {
                 success: true,
                 spotId,
+                sessionId,
                 newBalance: guestCoins,
                 baitCost: 0,
                 isDemo: true
@@ -78,11 +122,14 @@ class FishingService {
             newBalance = guestCoins - FISHING_COST;
         }
 
-        console.log(`🎣 ${playerName} started fishing at spot ${spotId}`);
+        const sessionId = this._createSession(playerId, spotId, room, false);
+
+        console.log(`🎣 ${playerName} started fishing at spot ${spotId} session=${sessionId.slice(0, 8)}`);
 
         return {
             success: true,
             spotId,
+            sessionId,
             newBalance,
             baitCost: FISHING_COST,
             isDemo: false
@@ -90,17 +137,86 @@ class FishingService {
     }
 
     /**
-     * Handle minigame catch — fish go to inventory; jellyfish are hazards only.
+     * Resolve minigame result — requires active session; rolls fish on success.
+     */
+    async handleGameResult(
+        playerId,
+        walletAddress,
+        room,
+        playerName,
+        { sessionId, success, depth = 0, fish: clientFish },
+        isDemo = false,
+        guestBalance = 0
+    ) {
+        const sessionCheck = this._validateSession(playerId, sessionId);
+        if (sessionCheck.error) {
+            return sessionCheck;
+        }
+
+        this._consumeSession(playerId);
+
+        if (!success) {
+            console.log(`[FISHING] miss player=${playerId} depth=${depth}`);
+            return { success: true, missed: true, depth };
+        }
+
+        if (clientFish?.id && isJellyfishId(clientFish.id)) {
+            return this.handleCatch(
+                playerId,
+                walletAddress,
+                room,
+                playerName,
+                clientFish,
+                depth,
+                isDemo,
+                guestBalance
+            );
+        }
+
+        const rolled = rollFishAtDepth(depth);
+        if (!rolled || rolled.category !== 'fish') {
+            return { error: 'INVALID_ROLL', message: 'Could not determine catch' };
+        }
+
+        const fishData = {
+            id: rolled.id,
+            name: rolled.name,
+            emoji: rolled.emoji,
+            coins: rolled.npcValue
+        };
+
+        console.log(
+            `[FISHING] server roll player=${playerId} depth=${depth} rolled=${rolled.id} clientClaim=${clientFish?.id || 'none'}`
+        );
+
+        return this.handleCatch(
+            playerId,
+            walletAddress,
+            room,
+            playerName,
+            fishData,
+            depth,
+            isDemo,
+            guestBalance
+        );
+    }
+
+    /**
+     * Handle catch — fish go to inventory; jellyfish are hazards only.
      */
     async handleCatch(playerId, walletAddress, room, playerName, fishData, depth = 0, isDemo = false, guestBalance = 0) {
         const fishId = fishData?.id || 'unknown';
         const catalogItem = getGameItem(fishId);
         const isJellyfish = isJellyfishId(fishId) || fishData?.type === 'jellyfish';
-        const storable = isInventoryCatch(fishData);
 
-        console.log(`[FISHING] handleCatch player=${playerId} name=${playerName} fish=${fishId} depth=${depth} isDemo=${isDemo} wallet=${walletAddress ? walletAddress.slice(0, 8) + '…' : 'NONE'} storable=${storable} jelly=${isJellyfish} catalog=${!!catalogItem}`);
+        if (!isJellyfish && !catalogItem) {
+            console.warn(`[FISHING] rejected unknown fish id=${fishId} player=${playerId}`);
+            return { error: 'INVALID_FISH', message: 'Unknown catch' };
+        }
 
-        const npcValue = catalogItem?.npcValue ?? Math.min(Math.max(0, fishData?.coins || 0), 1000);
+        console.log(`[FISHING] handleCatch player=${playerId} name=${playerName} fish=${fishId} depth=${depth} isDemo=${isDemo} wallet=${walletAddress ? walletAddress.slice(0, 8) + '…' : 'NONE'} jelly=${isJellyfish} catalog=${!!catalogItem}`);
+
+        const npcValue = catalogItem?.npcValue ?? 0;
 
         const fish = {
             id: fishId,
@@ -150,7 +266,7 @@ class FishingService {
                 console.log(`[FISHING] backpack add OK player=${playerName} fish=${fishId} usedSlots=${inventory?.usedSlots ?? '?'} slot0=${inventory?.slots?.[0]?.itemId || 'empty'}`);
             }
         } else if (walletAddress) {
-            console.warn(`[FISHING] catch NOT storable player=${playerName} fish=${fishId} storable=${storable} wallet=${walletAddress.slice(0, 8)}…`);
+            console.warn(`[FISHING] catch NOT storable player=${playerName} fish=${fishId} wallet=${walletAddress.slice(0, 8)}…`);
             const user = await this.userService.getUser(walletAddress);
             newBalance = user?.coins ?? guestBalance;
         } else {
@@ -169,7 +285,8 @@ class FishingService {
                 inventory,
                 newBalance,
                 isDemo,
-                isJellyfish
+                isJellyfish,
+                serverAuthoritative: true
             });
         }
 
@@ -205,7 +322,7 @@ class FishingService {
     }
 
     handleDisconnect(playerId) {
-        // Stateless — no cleanup
+        this.sessions.delete(playerId);
     }
 
     static getFishingInfo() {

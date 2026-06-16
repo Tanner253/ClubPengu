@@ -383,12 +383,27 @@ export function createMountainBackground(THREE, scene, options = {}) {
         
         // Place mountains along the internal wall (only 1-2 rows, smaller than exterior)
         const internalRows = 2;
-        const internalOffset = 5; // Much closer to the edge (inside playable area)
+        const internalOffset = 5;
+        // playableSide: keep divider mountains on the non-playable side only (avoids encroaching into adjacent zones)
+        const getPerpendicularSign = (row) => {
+            if (wall.playableSide) {
+                switch (wall.playableSide) {
+                    case 'north': return 1;   // horizontal wall — playable north → mountains south (+Z)
+                    case 'south': return -1;  // playable south → mountains north (-Z)
+                    case 'west': return 1;    // vertical wall — playable west → mountains east (+X)
+                    case 'east': return -1;   // playable east → mountains west (-X)
+                    default: return row % 2 === 0 ? -1 : 1;
+                }
+            }
+            return row % 2 === 0 ? -1 : 1;
+        };
         
         for (let row = 0; row < internalRows; row++) {
-            const rowOffset = internalOffset + (row * 25); // Tighter spacing
-            const heightMult = 0.7 + (row * 0.15); // Shorter than exterior
+            const rowOffset = internalOffset + (row * 25);
+            const heightMult = 0.7 + (row * 0.15);
             const widthMult = 0.8 + (row * 0.1);
+            const perpSign = getPerpendicularSign(row);
+            const internalCollisionScale = 0.85;
             
             if (wall.edge === 'horizontal') {
                 // Horizontal wall at specific Z, spanning minX to maxX
@@ -408,7 +423,7 @@ export function createMountainBackground(THREE, scene, options = {}) {
                     
                     // Offset perpendicular to the wall (north or south)
                     const peakX = baseX + (Math.random() - 0.5) * 8;
-                    const peakZ = wallZ + (row % 2 === 0 ? -rowOffset : rowOffset);
+                    const peakZ = wallZ + perpSign * rowOffset;
                     
                     const basePeakHeight = minPeakHeight * 0.6 + Math.random() * (maxPeakHeight - minPeakHeight) * 0.4;
                     const peakHeight = basePeakHeight * heightMult;
@@ -422,7 +437,7 @@ export function createMountainBackground(THREE, scene, options = {}) {
                         collisionBoxes.push({
                             x: peakX,
                             z: peakZ,
-                            radius: spread * 1.2,
+                            radius: spread * internalCollisionScale,
                             type: 'cylinder'
                         });
                     }
@@ -444,7 +459,7 @@ export function createMountainBackground(THREE, scene, options = {}) {
                     if (isInWallGap(wallX, baseZ)) continue;
                     
                     // Offset perpendicular to the wall (east or west)
-                    const peakX = wallX + (row % 2 === 0 ? -rowOffset : rowOffset);
+                    const peakX = wallX + perpSign * rowOffset;
                     const peakZ = baseZ + (Math.random() - 0.5) * 8;
                     
                     const basePeakHeight = minPeakHeight * 0.6 + Math.random() * (maxPeakHeight - minPeakHeight) * 0.4;
@@ -459,7 +474,7 @@ export function createMountainBackground(THREE, scene, options = {}) {
                         collisionBoxes.push({
                             x: peakX,
                             z: peakZ,
-                            radius: spread * 1.2,
+                            radius: spread * internalCollisionScale,
                             type: 'cylinder'
                         });
                     }

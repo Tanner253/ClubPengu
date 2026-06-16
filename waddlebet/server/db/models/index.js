@@ -28,4 +28,7 @@ export { default as MarketListing } from './MarketListing.js';
 // Chat
 export { default as ChatMessage, CHAT_CHANNELS } from './ChatMessage.js';
 
+// World resources
+export { default as ForestTreeWorldState } from './ForestTreeWorldState.js';
+
 

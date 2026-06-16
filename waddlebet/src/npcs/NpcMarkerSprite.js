@@ -31,6 +31,53 @@ export function updateNpcMarkerSymbol(sprite, symbol) {
     sprite.visible = Boolean(symbol);
 }
 
+/** Vertical gap between the top of a shop banner and the quest marker. */
+const MARKER_SIGN_GAP = 0.75;
+/** Default height above penguin root when no shop banner exists. */
+const MARKER_HEAD_Y = 2.85;
+
+/**
+ * Place ! / ? above the shop banner when present, otherwise above the NPC head.
+ * Stand signs live on group.children[0] at the group origin, so sign local coords match group space.
+ *
+ * @param {import('three').Sprite} marker
+ * @param {import('three').Group} group
+ * @param {import('three').Object3D | null | undefined} penguin
+ * @param {import('three').Sprite | null | undefined} signSprite
+ */
+export function attachNpcMarker(marker, group, penguin, signSprite) {
+    if (marker.parent) marker.parent.remove(marker);
+
+    if (signSprite) {
+        group.add(marker);
+        marker.userData.anchor = 'sign';
+        marker.userData.signGap = MARKER_SIGN_GAP;
+        syncNpcMarkerToSign(marker, signSprite);
+        return;
+    }
+
+    if (penguin) {
+        penguin.add(marker);
+        marker.position.set(0, MARKER_HEAD_Y, 0);
+    } else {
+        group.add(marker);
+        marker.position.set(0, 3.2, 0);
+    }
+    marker.userData.anchor = 'head';
+}
+
+/**
+ * Keep marker stacked above a bobbing shop banner.
+ * @param {import('three').Sprite} marker
+ * @param {import('three').Sprite} signSprite
+ */
+export function syncNpcMarkerToSign(marker, signSprite) {
+    if (!marker || !signSprite || marker.userData.anchor !== 'sign') return;
+    const gap = marker.userData.signGap ?? MARKER_SIGN_GAP;
+    const signTop = signSprite.position.y + signSprite.scale.y * 0.52;
+    marker.position.set(signSprite.position.x, signTop + gap, signSprite.position.z);
+}
+
 /**
  * @param {typeof import('three')} THREE
  * @param {'!' | '?' | null} symbol
@@ -47,8 +94,6 @@ export function createNpcMarkerSprite(THREE, symbol = '!') {
         depthWrite: false
     }));
     sprite.scale.set(1.35, 1.35, 1);
-    // Above NPC head (parented to npc_penguin mesh, not the shop sign)
-    sprite.position.set(0, 2.85, 0);
     sprite.visible = false;
     sprite.renderOrder = 999;
     sprite.name = 'npc_marker';

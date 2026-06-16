@@ -27,6 +27,30 @@ export function getMessageSenderRole(msg) {
     return role === 'admin' || role === 'moderator' ? role : null;
 }
 
+/**
+ * Resolve staff role for any chat tab — message metadata, own user role, or online player lookup.
+ */
+export function resolveMessageStaffRole(msg, ctx = {}) {
+    const direct = getMessageSenderRole(msg);
+    if (direct) return direct;
+
+    const { playerId, playerName, userRole, playersById } = ctx;
+    const normalizedUserRole = userRole === 'admin' || userRole === 'moderator' ? userRole : null;
+
+    if (normalizedUserRole) {
+        if (msg?.fromMe) return normalizedUserRole;
+        if (playerId && msg?.playerId === playerId) return normalizedUserRole;
+        if (playerName && msg?.name === playerName) return normalizedUserRole;
+    }
+
+    if (msg?.playerId && playersById?.get) {
+        const onlineRole = playersById.get(msg.playerId)?.role;
+        if (onlineRole === 'admin' || onlineRole === 'moderator') return onlineRole;
+    }
+
+    return null;
+}
+
 export function getStaffChatTag(role) {
     if (role === 'admin') return 'ADMIN';
     if (role === 'moderator') return 'MOD';
@@ -51,6 +75,12 @@ export function normalizeChatMessage(msg, playerId = null) {
         type = msg.whisperDirection === 'out' || msg.fromMe ? 'whisperOut' : 'whisperIn';
     } else if (msg.isSystem || ['casino', 'announcement', 'market'].includes(channel)) {
         type = 'system';
+    }
+
+    // Player-authored room/global lines must stay on the local renderer (staff tags, name colors).
+    const senderId = msg.playerId || msg.senderId;
+    if ((channel === 'global' || channel === 'room') && senderId && senderId !== 'system') {
+        type = msg.metadata?.isAfk || msg.text?.startsWith('💤') ? 'afk' : 'local';
     }
 
         return {

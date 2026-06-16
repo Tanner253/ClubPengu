@@ -13,7 +13,7 @@ import {
     getGoldSlotInfo
 } from '../config/goldSlots.js';
 
-const VALID_ROOM = 'town';
+const VALID_ROOM = 'snow_forts';
 
 class GoldSlotsService {
     constructor(userService, broadcastToRoom, sendToPlayer, publishChatMessage = null) {
@@ -66,7 +66,7 @@ class GoldSlotsService {
         }
 
         if (room !== VALID_ROOM) {
-            return { allowed: false, error: 'WRONG_ROOM', message: 'Gold slots are only in the casino lobby (town)' };
+            return { allowed: false, error: 'WRONG_ROOM', message: 'Gold slots are only in the Snow Forts casino lobby' };
         }
 
         if (!this.isValidMachine(machineId)) {

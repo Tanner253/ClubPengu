@@ -1,7 +1,7 @@
 # Waddlebet Economy Master Plan
 
 > Living design doc for the fishing grind loop, material inventory, daily contracts, gold index, and gold ↔ $CP bridge.  
-> Aligns with existing systems: `user.coins`, `OwnedCosmetic` inventory, `FishingService`, `MarketplaceService`, `DailyBonusService`, custodial `$CP` wallet, pebble marketplace.
+> **Resource crossover (wood, axes, crafting):** see [RESOURCE_ECONOMY_PLAN.md](./RESOURCE_ECONOMY_PLAN.md).
 
 ---
 
@@ -69,8 +69,9 @@ Dedicated players can grind unlimited hours; their **hourly $CP value floats wit
 
 | Asset | Storage | Earn | Spend / sink |
 |:------|:--------|:-----|:-------------|
-| **Gold** | `user.coins` (wallet field) | Sell fish at NPC, contracts, minigames, bank sell-side | Bait, lures, rods, puffles, slots, inventory upgrades, bank buy-side |
-| **Fish** | `GameInventory` (grid stacks) | Fishing (server-validated catch) | Sell at Fish Buyer NPC for gold |
+| **Gold** | `user.coins` (wallet field) | Sell fish/wood at NPC, contracts, minigames, bank sell-side | Bait, lures, rods, axes, crafting, puffles, slots, inventory upgrades, bank buy-side |
+| **Fish** | `GameInventory` (grid stacks) | Fishing (server-validated catch) | Sell at Fish Buyer NPC, **craft lures/meals/quests** |
+| **Wood** | `GameInventory` (grid stacks) | Forest chopping (server-validated) | **Craft rod upgrades & lures** (Phase 2), sell at Clive (low NPC rate) |
 | **Gear** | Inventory + equipment slots | Shops (gold / later $CP) | Consumed (bait/lure) or durable (rod) |
 | **$CP** | On-chain wallet + custodial payouts | Bank gold buyback, player market sell, daily bonus, wagers won | Igloo rent, wagers, bank gold purchase, inventory upgrades |
 | **Pebbles** | `user.pebbles` | SOL deposit | Gacha, cosmetic marketplace (unchanged) |

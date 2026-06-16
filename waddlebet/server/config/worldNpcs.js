@@ -9,15 +9,21 @@ const CENTER_Z = 110;
 /** @type {Record<string, { room: string, x: number, z: number, radius: number }>} */
 export const MERCHANT_LOCATIONS = {
     fish_buyer: {
-        room: 'town',
-        x: CENTER_X + (-42.7),
-        z: CENTER_Z + 82.8,
+        room: 'snow_forts',
+        x: 18,
+        z: 18,
         radius: 5.5
     },
     supply_merchant: {
         room: 'town',
         x: CENTER_X + 39.5,
         z: CENTER_Z + 50.2,
+        radius: 7.5
+    },
+    forest_ranger: {
+        room: 'forest_trails',
+        x: 125,
+        z: 58.2,
         radius: 5.5
     }
 };

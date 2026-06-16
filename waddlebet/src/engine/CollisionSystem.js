@@ -510,6 +510,126 @@ class CollisionSystem {
         return active;
     }
 
+    /**
+     * Projectile / snowball hit test — 3D AABB overlap (no "standing on top" skip).
+     * @returns {{ y: number, collider: object, normal: { x: number, y: number, z: number } } | null}
+     */
+    findProjectileHit(x, z, y, radius = 0.18, prevX = x, prevZ = z, prevY = y) {
+        const nearby = this.getNearbyColliders(x, z, 6);
+        for (let i = 0; i < nearby.length; i++) {
+            const collider = nearby[i];
+            if (!collider || collider.type !== CollisionSystem.TYPES.SOLID) continue;
+
+            const bounds = this._getColliderBounds(collider);
+            const base = collider.y || 0;
+            const top = base + (collider.shape.height || collider.shape.size?.y || 2);
+
+            if (x + radius >= bounds.minX && x - radius <= bounds.maxX &&
+                z + radius >= bounds.minZ && z - radius <= bounds.maxZ &&
+                y + radius >= base && y - radius <= top) {
+                return {
+                    y: Math.max(base, Math.min(y, top)),
+                    collider,
+                    normal: this._computeProjectileNormal(collider, x, z, y, prevX, prevZ, prevY),
+                };
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Outward-facing normal for the collider face a projectile most likely hit.
+     */
+    _computeProjectileNormal(collider, x, z, y, prevX, prevZ, prevY) {
+        const { shape, rotation = 0 } = collider;
+
+        if (shape.type === 'cylinder' || shape.type === 'sphere') {
+            const dx = x - collider.x;
+            const dz = z - collider.z;
+            const len = Math.hypot(dx, dz) || 1;
+            return { x: dx / len, y: 0, z: dz / len };
+        }
+
+        if (shape.type === 'box') {
+            let lx = x - collider.x;
+            let lz = z - collider.z;
+            let plx = prevX - collider.x;
+            let plz = prevZ - collider.z;
+
+            if (rotation) {
+                const cos = Math.cos(-rotation);
+                const sin = Math.sin(-rotation);
+                const t = lx;
+                lx = t * cos - lz * sin;
+                lz = t * sin + lz * cos;
+                const pt = plx;
+                plx = pt * cos - plz * sin;
+                plz = pt * sin + plz * cos;
+            }
+
+            const hw = shape.size.x / 2;
+            const hd = shape.size.z / 2;
+            const base = collider.y || 0;
+            const top = base + (shape.height || shape.size.y || 2);
+
+            const faces = [
+                { nx: 1, ny: 0, nz: 0, dist: hw - lx },
+                { nx: -1, ny: 0, nz: 0, dist: hw + lx },
+                { nx: 0, ny: 0, nz: 1, dist: hd - lz },
+                { nx: 0, ny: 0, nz: -1, dist: hd + lz },
+                { nx: 0, ny: 1, nz: 0, dist: top - y },
+                { nx: 0, ny: -1, nz: 0, dist: y - base },
+            ];
+
+            const vx = lx - plx;
+            const vy = y - prevY;
+            const vz = lz - plz;
+
+            let bestScore = Infinity;
+            let bestNx = 0;
+            let bestNy = 1;
+            let bestNz = 0;
+
+            for (let i = 0; i < faces.length; i++) {
+                const f = faces[i];
+                const approach = vx * f.nx + vy * f.ny + vz * f.nz;
+                if (approach >= -0.0001) continue;
+                const score = f.dist - approach * 0.01;
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestNx = f.nx;
+                    bestNy = f.ny;
+                    bestNz = f.nz;
+                }
+            }
+
+            if (bestScore === Infinity) {
+                for (let i = 0; i < faces.length; i++) {
+                    if (faces[i].dist < bestScore) {
+                        bestScore = faces[i].dist;
+                        bestNx = faces[i].nx;
+                        bestNy = faces[i].ny;
+                        bestNz = faces[i].nz;
+                    }
+                }
+            }
+
+            if (rotation) {
+                const cos = Math.cos(rotation);
+                const sin = Math.sin(rotation);
+                return {
+                    x: bestNx * cos - bestNz * sin,
+                    y: bestNy,
+                    z: bestNx * sin + bestNz * cos,
+                };
+            }
+
+            return { x: bestNx, y: bestNy, z: bestNz };
+        }
+
+        return { x: 0, y: 1, z: 0 };
+    }
+
     // ==================== COLLISION TESTS ====================
     
     /**

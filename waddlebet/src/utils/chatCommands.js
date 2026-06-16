@@ -2,6 +2,18 @@
  * Chat slash commands — definitions, /help text, and tab completion
  */
 
+export const WARP_TARGET_META = {
+    forest: { label: 'Forest Trails (main clearing)', staffOnly: true },
+    snowforts: { label: 'Snow Forts (west dock)', staffOnly: true },
+    snow: { label: 'Snow Forts (west dock)', staffOnly: true },
+    pk1: { label: 'Parkour Stage 1 (Blue)', staffOnly: true },
+    pk2: { label: 'Parkour Stage 2 (Purple)', staffOnly: true },
+    pk3: { label: 'Parkour Stage 3 (Green)', staffOnly: true },
+    pk4: { label: 'Parkour Stage 4 (Orange)', staffOnly: true },
+    pk5: { label: 'Parkour Stage 5 (Red)', staffOnly: true },
+    pk6: { label: 'Parkour Stage 6 (Cyan Gauntlet)', staffOnly: true }
+};
+
 const BASE_COMMANDS = [
     {
         names: ['help'],
@@ -44,15 +56,21 @@ const BASE_COMMANDS = [
     },
     {
         names: ['warp'],
-        usage: '/warp pk1|pk2|pk3|pk4|pk5|pk6',
-        description: 'Teleport to a parkour stage (staff only)',
+        usage: '/warp <location>',
+        description: 'Teleport to a zone or parkour stage (staff only)',
         staffOnly: true,
         tabCompletes: true,
         args: [{ type: 'warpTarget' }]
     }
 ];
 
-const WARP_TARGETS = ['pk1', 'pk2', 'pk3', 'pk4', 'pk5', 'pk6'];
+export function getWarpTargets({ isStaff = false } = {}) {
+    return Object.keys(WARP_TARGET_META).filter((id) => {
+        const meta = WARP_TARGET_META[id];
+        if (meta.staffOnly && !isStaff) return false;
+        return true;
+    });
+}
 
 export function isStaffRole(userData) {
     return userData?.role === 'admin' || userData?.role === 'moderator';
@@ -84,11 +102,44 @@ export function getCommandSuggestions(input, { isStaff = false, isDev = false } 
     });
 }
 
+/** Location suggestions while typing `/warp` or `/warp fo`. */
+export function getWarpArgSuggestions(input, { isStaff = false } = {}) {
+    const match = input.match(/^\/warp(?:\s+(\S*))?$/i);
+    if (!match) return [];
+
+    const partial = (match[1] || '').toLowerCase();
+    return getWarpTargets({ isStaff })
+        .filter((target) => !partial || target.startsWith(partial))
+        .map((target) => ({
+            names: [target],
+            usage: `/warp ${target}`,
+            description: WARP_TARGET_META[target].label,
+            tabCompletes: false,
+            isLocationSuggestion: true
+        }));
+}
+
+/** Combined popup list for `/` command names and `/warp` location args. */
+export function getAllChatSuggestions(input, { isStaff = false, isDev = false } = {}) {
+    const warpArgs = getWarpArgSuggestions(input, { isStaff });
+    if (warpArgs.length > 0) return warpArgs;
+    if (shouldShowCommandSuggestions(input)) {
+        return getCommandSuggestions(input, { isStaff, isDev });
+    }
+    return [];
+}
+
 export function shouldShowCommandSuggestions(input) {
     return /^\/\S*$/.test(input);
 }
 
+export function shouldShowChatSuggestions(input) {
+    if (shouldShowCommandSuggestions(input)) return true;
+    return /^\/warp(\s+\S*)?$/i.test(input);
+}
+
 export function buildCommandInput(cmd) {
+    if (cmd.isLocationSuggestion) return cmd.usage;
     const name = cmd.names[0];
     const noSpaceCommands = ['help', 'spawn'];
     const addSpace = cmd.args?.length > 0
@@ -101,6 +152,10 @@ export function getHelpMessages({ isStaff = false, isDev = false } = {}) {
     const lines = ['=== Chat Commands ==='];
     for (const cmd of commands) {
         lines.push(`${cmd.usage} — ${cmd.description}`);
+    }
+    const warpList = getWarpTargets({ isStaff }).join('|');
+    if (isStaff) {
+        lines.push(`Warp locations: ${warpList}`);
     }
     lines.push('Tip: Press Tab while typing a command to autocomplete.');
     return lines;
@@ -191,6 +246,8 @@ export function completeChatInput(input, {
 
     if (cmd.staffOnly && !isStaff) return null;
     if (cmd.devOnly && !isDev) return null;
+
+    const argsString = parsed[2] || '';
     const { argIndex, partial, prefix } = getArgCompletionState(argsString);
     const argSpec = cmd.args[argIndex];
     if (!argSpec) return null;
@@ -199,7 +256,7 @@ export function completeChatInput(input, {
     if (argSpec.type === 'player') {
         matches = filterPlayerNames(playerNames, partial, argSpec.excludeSelf, selfName);
     } else if (argSpec.type === 'warpTarget') {
-        matches = WARP_TARGETS.filter((t) => t.startsWith(partial.toLowerCase()));
+        matches = getWarpTargets({ isStaff }).filter((t) => t.startsWith(partial.toLowerCase()));
     }
 
     const cycled = cycleMatch(matches, `${cmdName}:${argIndex}:${partial}`, autocompleteIndex, lastTabInput);
@@ -219,13 +276,71 @@ export function isHelpCommand(text) {
     return lower === '/help' || lower === '/commands' || lower === '/?';
 }
 
-export function canExecuteCommand(text) {
+export function canExecuteCommand(text, { isStaff = false } = {}) {
     const trimmed = text.trim();
     if (isHelpCommand(trimmed)) return true;
     if (trimmed.toLowerCase() === '/spawn') return true;
     if (trimmed.match(/^\/w(?:hisper)?\s+\S+\s+.+$/i)) return true;
     if (trimmed.match(/^\/r\s+.+/i)) return true;
     if (trimmed.match(/^\/afk(\s+.*)?$/i)) return true;
-    if (trimmed.match(/^\/tp\s+\S+\s+\S+$/i)) return true;
+    if (trimmed.match(/^\/tp\s+\S+\s+\S+$/i)) return isStaff;
+    if (trimmed.match(/^\/warp\s+\S+$/i)) return isStaff;
     return false;
+}
+
+/** True if this slash command should be sent to the server for handling. */
+export function isServerHandledSlashCommand(text, { isStaff = false } = {}) {
+    const trimmed = text.trim();
+    if (trimmed.match(/^\/warp\s+\S+$/i)) return isStaff;
+    if (trimmed.match(/^\/tp\s+.+/i)) return isStaff;
+    return false;
+}
+
+export function isUnknownSlashCommand(text, { isStaff = false } = {}) {
+    const trimmed = text.trim();
+    if (!trimmed.startsWith('/')) return false;
+    if (canExecuteCommand(trimmed, { isStaff })) return false;
+    if (isServerHandledSlashCommand(trimmed, { isStaff })) return false;
+    return true;
+}
+
+export function getUnknownCommandMessage(text) {
+    const cmd = text.trim().split(/\s+/)[0];
+    return `❌ Unknown command: ${cmd}. Type /help for available commands.`;
+}
+
+export function getIncompleteWarpMessage({ isStaff = false } = {}) {
+    const targets = getWarpTargets({ isStaff }).join('|');
+    return `❌ Usage: /warp ${targets}`;
+}
+
+/**
+ * Resolve what to do when the user presses Enter on a slash command.
+ * @returns {{ text: string, action: 'execute' | 'apply' | 'send' }}
+ */
+export function resolveCommandTextOnSend(input, {
+    showSuggestions = false,
+    suggestions = [],
+    suggestionIndex = 0,
+    isStaff = false
+} = {}) {
+    const text = input.trim();
+    if (!text.startsWith('/')) {
+        return { text, action: 'send' };
+    }
+
+    if (canExecuteCommand(text, { isStaff })) {
+        return { text, action: 'execute' };
+    }
+
+    if (showSuggestions && suggestions.length > 0) {
+        const picked = suggestions[suggestionIndex] || suggestions[0];
+        const suggested = (picked.isLocationSuggestion ? picked.usage : buildCommandInput(picked)).trim();
+        if (canExecuteCommand(suggested, { isStaff })) {
+            return { text: suggested, action: 'execute' };
+        }
+        return { text: suggested, action: 'apply' };
+    }
+
+    return { text, action: 'execute' };
 }

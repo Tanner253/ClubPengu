@@ -129,7 +129,9 @@ export function MultiplayerProvider({ children }) {
     }, [isChatPanelVisible]);
     
     const ingestChatMessage = useCallback((message) => {
-        const channel = message.channel || (message.isWhisper ? 'whisper' : 'room');
+        const channel = message.channel === 'global'
+            ? 'global'
+            : (message.channel || (message.isWhisper ? 'whisper' : 'room'));
         const normalized = normalizeChatMessage(message, playerIdRef.current);
 
         setChatByChannel((prev) => appendChannelMessage(prev, channel, normalized, playerIdRef.current));
@@ -201,14 +203,31 @@ export function MultiplayerProvider({ children }) {
     const [fishingActive, setFishingActive] = useState(false);
     const [fishingResult, setFishingResult] = useState(null);
     const fishingCallbackRef = useRef(null);
+    const fishingSessionIdRef = useRef(null);
 
     // Game backpack (fish, resources, gear)
     const [gameInventory, setGameInventory] = useState(null);
+    /** @type {[Record<string, number>, Function]} spotId -> cooldown end timestamp (ms) */
+    const [scavengeCooldowns, setScavengeCooldowns] = useState({});
     const [backpackError, setBackpackError] = useState(null);
+    const [onboardingQuest, setOnboardingQuest] = useState(null);
+    const [forestTrees, setForestTrees] = useState([]);
+    const [mushroomClusters, setMushroomClusters] = useState([]);
+    const [roomTravelVoyages, setRoomTravelVoyages] = useState([]);
+    const [travelRouteStatuses, setTravelRouteStatuses] = useState([]);
+    const [myTravelVoyage, setMyTravelVoyage] = useState(null);
+    const [travelPending, setTravelPending] = useState(false);
+    const travelBookCallbackRef = useRef(null);
+    const travelLeaveCallbackRef = useRef(null);
     const fishSellCallbackRef = useRef(null);
+    const merchantBuyCallbackRef = useRef(null);
+    const woodChopCallbackRef = useRef(null);
+    const woodChopSessionIdRef = useRef(null);
     const backpackUpgradeCallbackRef = useRef(null);
-    
-    // Callbacks
+    const hotbarSetCallbackRef = useRef(null);
+    const mushroomHarvestCallbackRef = useRef(null);
+    const scavengeCallbackRef = useRef(null);
+    const npcQuestCallbackRef = useRef(null);
     const callbacksRef = useRef({
         onPlayerJoined: null,
         onPlayerLeft: null,
@@ -1011,6 +1030,7 @@ export function MultiplayerProvider({ children }) {
             // ==================== ICE FISHING MESSAGES ====================
             case 'fishing_started': {
                 // Local player's fishing session started (bait cost deducted)
+                fishingSessionIdRef.current = message.sessionId || null;
                 setFishingActive(true);
                 setFishingResult(null);
                 callbacksRef.current.onFishingStarted?.(message);
@@ -1031,6 +1051,7 @@ export function MultiplayerProvider({ children }) {
                 console.log(`[FISHING] client fishing_result inventoryAdded=${!!message.inventoryAdded} hasInventory=${!!message.inventory} error=${message.inventoryError || 'none'} isDemo=${!!message.isDemo} fish=${message.fish?.id || 'none'} usedSlots=${message.inventory?.usedSlots ?? 'n/a'}`);
                 setFishingResult(message);
                 setFishingActive(false);
+                fishingSessionIdRef.current = null;
                 if (message.inventory) {
                     setGameInventory(message.inventory);
                     setBackpackError(null);
@@ -1051,6 +1072,7 @@ export function MultiplayerProvider({ children }) {
             
             case 'fishing_error': {
                 // Fishing error
+                fishingSessionIdRef.current = null;
                 setFishingActive(false);
                 if (fishingCallbackRef.current) {
                     fishingCallbackRef.current({ error: message.error, message: message.message });
@@ -1063,12 +1085,20 @@ export function MultiplayerProvider({ children }) {
                 console.log(`[INVENTORY] client snapshot used=${message.inventory?.usedSlots ?? 0}/${message.inventory?.unlockedSlots ?? '?'} items=${(message.inventory?.slots || []).filter(s => s?.itemId).map(s => `${s.itemId}x${s.quantity}`).join(', ') || 'none'}`);
                 setGameInventory(message.inventory);
                 setBackpackError(null);
+                if (hotbarSetCallbackRef.current) {
+                    hotbarSetCallbackRef.current({ success: true, inventory: message.inventory });
+                    hotbarSetCallbackRef.current = null;
+                }
                 break;
             }
 
             case 'game_inventory_error': {
                 setBackpackError(message.message || message.error);
                 console.warn('📦 Backpack error:', message.error, message.message);
+                if (hotbarSetCallbackRef.current) {
+                    hotbarSetCallbackRef.current({ error: message.error, message: message.message });
+                    hotbarSetCallbackRef.current = null;
+                }
                 break;
             }
 
@@ -1093,6 +1123,10 @@ export function MultiplayerProvider({ children }) {
             case 'merchant_sell_result':
             case 'fish_sell_result': {
                 if (message.inventory) setGameInventory(message.inventory);
+                if (message.newBalance != null) {
+                    GameManager.getInstance().setCoinsFromServer(message.newBalance);
+                    setUserData(prev => (prev ? { ...prev, coins: message.newBalance } : prev));
+                }
                 if (fishSellCallbackRef.current) {
                     fishSellCallbackRef.current(message);
                     fishSellCallbackRef.current = null;
@@ -1105,6 +1139,208 @@ export function MultiplayerProvider({ children }) {
                 if (fishSellCallbackRef.current) {
                     fishSellCallbackRef.current({ error: message.error, message: message.message });
                     fishSellCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'merchant_buy_result': {
+                if (message.inventory) setGameInventory(message.inventory);
+                if (message.newBalance != null) {
+                    setUserData(prev => prev ? { ...prev, coins: message.newBalance } : prev);
+                }
+                if (merchantBuyCallbackRef.current) {
+                    merchantBuyCallbackRef.current(message);
+                    merchantBuyCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'merchant_buy_error': {
+                if (merchantBuyCallbackRef.current) {
+                    merchantBuyCallbackRef.current({ error: message.error, message: message.message, cost: message.cost });
+                    merchantBuyCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'wood_chop_started': {
+                woodChopSessionIdRef.current = message.sessionId || null;
+                if (woodChopCallbackRef.current) {
+                    woodChopCallbackRef.current({ success: true, ...message });
+                    woodChopCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'wood_chop_result': {
+                if (message.inventory) {
+                    setGameInventory(message.inventory);
+                    setBackpackError(null);
+                }
+                callbacksRef.current.onWoodChopResult?.(message);
+                break;
+            }
+
+            case 'wood_chop_error': {
+                woodChopSessionIdRef.current = null;
+                if (woodChopCallbackRef.current) {
+                    woodChopCallbackRef.current({ error: message.error, message: message.message });
+                    woodChopCallbackRef.current = null;
+                }
+                callbacksRef.current.onWoodChopError?.(message);
+                break;
+            }
+
+            case 'wood_chop_cancelled': {
+                woodChopSessionIdRef.current = null;
+                callbacksRef.current.onWoodChopCancelled?.(message);
+                break;
+            }
+
+            case 'player_held_item': {
+                const heldPlayer = playersDataRef.current.get(message.playerId);
+                if (heldPlayer) {
+                    heldPlayer.heldHotbarItem = message.heldHotbarItem || null;
+                    heldPlayer.needsHeldItemUpdate = true;
+                }
+                break;
+            }
+
+            case 'forest_trees_snapshot': {
+                setForestTrees(message.trees || []);
+                break;
+            }
+
+            case 'forest_trees_update': {
+                const updates = message.trees || [];
+                if (!updates.length) break;
+                setForestTrees(prev => {
+                    const map = new Map((prev || []).map(t => [t.id, t]));
+                    for (const u of updates) map.set(u.id, { ...map.get(u.id), ...u });
+                    return Array.from(map.values());
+                });
+                callbacksRef.current.onForestTreesUpdate?.(updates);
+                break;
+            }
+
+            case 'mushrooms_snapshot': {
+                setMushroomClusters(message.mushrooms || []);
+                break;
+            }
+
+            case 'mushrooms_update': {
+                const mushUpdates = message.mushrooms || [];
+                if (!mushUpdates.length) break;
+                setMushroomClusters(prev => {
+                    const map = new Map((prev || []).map(m => [m.id, m]));
+                    for (const u of mushUpdates) map.set(u.id, { ...map.get(u.id), ...u });
+                    return Array.from(map.values());
+                });
+                callbacksRef.current.onMushroomsUpdate?.(mushUpdates);
+                break;
+            }
+
+            case 'mushroom_harvest_result': {
+                if (message.inventory) setGameInventory(message.inventory);
+                if (message.mushroom) {
+                    setMushroomClusters(prev => {
+                        const map = new Map((prev || []).map(m => [m.id, m]));
+                        map.set(message.mushroom.id, { ...map.get(message.mushroom.id), ...message.mushroom });
+                        return Array.from(map.values());
+                    });
+                    callbacksRef.current.onMushroomsUpdate?.([message.mushroom]);
+                }
+                if (mushroomHarvestCallbackRef.current) {
+                    mushroomHarvestCallbackRef.current(message);
+                    mushroomHarvestCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'mushroom_harvest_error': {
+                if (mushroomHarvestCallbackRef.current) {
+                    mushroomHarvestCallbackRef.current({ error: message.error, message: message.message, waitSeconds: message.waitSeconds });
+                    mushroomHarvestCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'scavenge_result': {
+                if (message.newBalance != null) {
+                    GameManager.getInstance().setCoinsFromServer(message.newBalance);
+                    setUserData(prev => ({ ...(prev || {}), coins: message.newBalance }));
+                }
+                if (message.spotId && message.displayRemainingSeconds) {
+                    setScavengeCooldowns(prev => ({
+                        ...prev,
+                        [message.spotId]: Date.now() + message.displayRemainingSeconds * 1000,
+                    }));
+                }
+                if (scavengeCallbackRef.current) {
+                    scavengeCallbackRef.current(message);
+                    scavengeCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'scavenge_status': {
+                const next = {};
+                for (const [spotId, status] of Object.entries(message.statuses || {})) {
+                    if (!status?.canScavenge && status.displayRemainingMs > 0) {
+                        next[spotId] = Date.now() + status.displayRemainingMs;
+                    }
+                }
+                setScavengeCooldowns(next);
+                break;
+            }
+
+            case 'scavenge_error': {
+                if (message.spotId && message.displayRemainingSeconds) {
+                    setScavengeCooldowns(prev => ({
+                        ...prev,
+                        [message.spotId]: Date.now() + message.displayRemainingSeconds * 1000,
+                    }));
+                }
+                if (scavengeCallbackRef.current) {
+                    scavengeCallbackRef.current({ error: message.error, message: message.message, displayRemainingSeconds: message.displayRemainingSeconds, spotId: message.spotId });
+                    scavengeCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'onboarding_quest_status':
+            case 'onboarding_quest_update': {
+                setOnboardingQuest({
+                    steps: message.steps || [],
+                    nextStepId: message.nextStepId ?? null,
+                    completedCount: message.completedCount ?? 0,
+                    totalSteps: message.totalSteps ?? 0,
+                    allDone: !!message.allDone,
+                    rewardClaimed: !!message.rewardClaimed,
+                    rewardGold: message.rewardGold ?? 500,
+                    justCompletedStepId: message.justCompletedStepId ?? null,
+                    rewardGranted: !!message.rewardGranted,
+                });
+                if (message.newBalance != null) {
+                    GameManager.getInstance().setCoinsFromServer(message.newBalance);
+                    setUserData((prev) => (prev ? { ...prev, coins: message.newBalance } : prev));
+                }
+                break;
+            }
+
+            case 'npc_quest_result': {
+                if (message.inventory) setGameInventory(message.inventory);
+                if (npcQuestCallbackRef.current) {
+                    npcQuestCallbackRef.current(message);
+                    npcQuestCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'npc_quest_error': {
+                if (npcQuestCallbackRef.current) {
+                    npcQuestCallbackRef.current({ error: message.error, message: message.message });
+                    npcQuestCallbackRef.current = null;
                 }
                 break;
             }
@@ -1270,6 +1506,9 @@ export function MultiplayerProvider({ children }) {
                         chatTime: p.isAfk ? Date.now() : (existingPlayer?.chatTime || null),
                         isAfkBubble: p.isAfk || existingPlayer?.isAfkBubble || false,
                         isAuthenticated: p.isAuthenticated || existingPlayer?.isAuthenticated || false,
+                        role: p.role || existingPlayer?.role || null,
+                        heldHotbarItem: p.heldHotbarItem ?? existingPlayer?.heldHotbarItem ?? null,
+                        needsHeldItemUpdate: true,
                         needsMesh: existingPlayer ? (existingPlayer.needsMesh || cosmeticsChanged) : true,
                         needsMeshRebuild: (existingPlayer?.needsMeshRebuild || false) || cosmeticsChanged
                     };
@@ -1298,6 +1537,9 @@ export function MultiplayerProvider({ children }) {
                     existingJoined.isAfk = message.player.isAfk || false;
                     existingJoined.afkMessage = message.player.afkMessage || null;
                     existingJoined.isAuthenticated = message.player.isAuthenticated || false;
+                    existingJoined.role = message.player.role || existingJoined.role || null;
+                    existingJoined.heldHotbarItem = message.player.heldHotbarItem ?? null;
+                    existingJoined.needsHeldItemUpdate = true;
                     existingJoined.needsMesh = true;
                     if (appearanceCosmeticsChanged(prevJoinedAppearance, message.player.appearance)) {
                         existingJoined.needsMeshRebuild = true;
@@ -1320,6 +1562,9 @@ export function MultiplayerProvider({ children }) {
                         chatTime: message.player.isAfk ? Date.now() : null,
                         isAfkBubble: message.player.isAfk || false,
                         isAuthenticated: message.player.isAuthenticated || false,
+                        role: message.player.role || null,
+                        heldHotbarItem: message.player.heldHotbarItem || null,
+                        needsHeldItemUpdate: true,
                         needsMesh: true
                     };
                     playersDataRef.current.set(message.player.id, joinedPlayerData);
@@ -1462,6 +1707,127 @@ export function MultiplayerProvider({ children }) {
 
             case 'parkour_warp':
                 window.dispatchEvent(new CustomEvent('chatCommand', { detail: { command: message.stage } }));
+                break;
+
+            case 'travel_state':
+                setRoomTravelVoyages(message.roomVoyages || []);
+                setTravelRouteStatuses(message.routeStatuses || []);
+                setMyTravelVoyage(message.myVoyage || null);
+                break;
+
+            case 'travel_route_status':
+                setTravelRouteStatuses(message.routeStatuses || []);
+                break;
+
+            case 'travel_voyage_update':
+                if (message.voyage) {
+                    setRoomTravelVoyages(prev => {
+                        const next = prev.filter(v => v.id !== message.voyage.id);
+                        if (message.voyage.phase === 'boarding') next.push(message.voyage);
+                        return next;
+                    });
+                    setMyTravelVoyage(prev => (
+                        prev?.id === message.voyage.id ? message.voyage : prev
+                    ));
+                }
+                if (message.routeStatuses) {
+                    setTravelRouteStatuses(message.routeStatuses);
+                }
+                break;
+
+            case 'travel_voyage_ended':
+                setRoomTravelVoyages(prev => prev.filter(v => v.id !== message.voyageId));
+                setMyTravelVoyage(prev => (prev?.id === message.voyageId ? null : prev));
+                if (message.routeStatuses) {
+                    setTravelRouteStatuses(message.routeStatuses);
+                }
+                break;
+
+            case 'travel_book_result':
+                setTravelPending(false);
+                if (message.voyage) {
+                    setMyTravelVoyage(message.voyage);
+                    setRoomTravelVoyages(prev => {
+                        const next = prev.filter(v => v.id !== message.voyage.id);
+                        if (message.voyage.phase === 'boarding') next.push(message.voyage);
+                        return next;
+                    });
+                }
+                if (message.routeStatuses) setTravelRouteStatuses(message.routeStatuses);
+                if (message.coins !== undefined) {
+                    GameManager.getInstance().setCoinsFromServer(message.coins);
+                    setUserData(prev => (prev ? { ...prev, coins: message.coins } : prev));
+                }
+                if (travelBookCallbackRef.current) {
+                    travelBookCallbackRef.current(message);
+                    travelBookCallbackRef.current = null;
+                }
+                break;
+
+            case 'travel_leave_result':
+                setTravelPending(false);
+                if (message.cancelled || !message.voyage) {
+                    setMyTravelVoyage(null);
+                } else if (message.voyage) {
+                    setMyTravelVoyage(message.voyage);
+                }
+                if (message.routeStatuses) setTravelRouteStatuses(message.routeStatuses);
+                if (message.coins !== undefined) {
+                    GameManager.getInstance().setCoinsFromServer(message.coins);
+                    setUserData(prev => (prev ? { ...prev, coins: message.coins } : prev));
+                }
+                if (travelLeaveCallbackRef.current) {
+                    travelLeaveCallbackRef.current(message);
+                    travelLeaveCallbackRef.current = null;
+                }
+                break;
+
+            case 'travel_error':
+                setTravelPending(false);
+                const travelCb = travelBookCallbackRef.current
+                    || travelLeaveCallbackRef.current;
+                if (travelCb) {
+                    travelCb({ error: message.error, message: message.message, cost: message.cost });
+                    travelBookCallbackRef.current = null;
+                    travelLeaveCallbackRef.current = null;
+                }
+                break;
+
+            case 'travel_transfer': {
+                if (message.voyage && message.room?.startsWith('travel:')) {
+                    setMyTravelVoyage(message.voyage);
+                } else {
+                    setMyTravelVoyage(null);
+                }
+                if (message.room) {
+                    setServerRoom(message.room);
+                    serverRoomRef.current = message.room;
+                }
+                if (Array.isArray(message.players)) {
+                    playersDataRef.current.clear();
+                    message.players.forEach(p => {
+                        playersDataRef.current.set(p.id, { ...p, needsMeshRebuild: true });
+                    });
+                }
+                window.dispatchEvent(new CustomEvent('travelTransfer', {
+                    detail: {
+                        room: message.room,
+                        position: message.position,
+                        voyage: message.voyage
+                    }
+                }));
+                break;
+            }
+
+            case 'travel_arrived':
+                setMyTravelVoyage(null);
+                window.dispatchEvent(new CustomEvent('travelTransfer', {
+                    detail: {
+                        room: message.room,
+                        position: message.position ? { ...message.position, absolute: true } : null,
+                        voyage: null
+                    }
+                }));
                 break;
 
             case 'chat_feedback':
@@ -1773,6 +2139,7 @@ export function MultiplayerProvider({ children }) {
         setWalletAddress(null);
         setAuthToken(null);
         setUserData(null);
+        setOnboardingQuest(null);
         
         // Clear ALL auth-related localStorage - prevents session restore with old wallet
         localStorage.removeItem('auth_token');
@@ -2169,6 +2536,7 @@ export function MultiplayerProvider({ children }) {
             send({
                 type: 'fishing_game_result',
                 spotId,
+                sessionId: fishingSessionIdRef.current,
                 fish: {
                     id: fishData.id,
                     name: fishData.name,
@@ -2197,7 +2565,8 @@ export function MultiplayerProvider({ children }) {
         if (depth > 0) {
             send({ 
                 type: 'fishing_game_result', 
-                spotId, 
+                spotId,
+                sessionId: fishingSessionIdRef.current,
                 success: false,
                 depth 
             });
@@ -2222,6 +2591,8 @@ export function MultiplayerProvider({ children }) {
     useEffect(() => {
         if (connected && isAuthenticated) {
             send({ type: 'game_inventory_get' });
+            send({ type: 'forest_trees_get' });
+            send({ type: 'mushrooms_get' });
         }
     }, [connected, isAuthenticated, send]);
 
@@ -2230,11 +2601,105 @@ export function MultiplayerProvider({ children }) {
         send({ type: 'game_inventory_move', fromSlot, toSlot, quantity });
     }, [connected, send]);
 
+    const setGameHotbarSlot = useCallback((hotbarIndex, inventorySlot) => {
+        if (!connected || !isAuthenticated) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            hotbarSetCallbackRef.current = resolve;
+            const sent = send({
+                type: 'game_inventory_set_hotbar',
+                hotbarIndex,
+                inventorySlot: inventorySlot ?? null
+            });
+            if (!sent) {
+                hotbarSetCallbackRef.current = null;
+                resolve({ error: 'NOT_CONNECTED', message: 'Connection lost — try again' });
+                return;
+            }
+            setTimeout(() => {
+                if (hotbarSetCallbackRef.current === resolve) {
+                    hotbarSetCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 8000);
+        });
+    }, [connected, isAuthenticated, send]);
+
+    const setActiveHotbarSlot = useCallback((hotbarIndex) => {
+        if (!connected || !isAuthenticated) return;
+        setGameInventory(prev => prev ? { ...prev, activeHotbar: hotbarIndex } : prev);
+        send({ type: 'game_inventory_set_active_hotbar', hotbarIndex });
+    }, [connected, isAuthenticated, send]);
+
+    const fetchForestTrees = useCallback(() => {
+        if (!connected) return;
+        send({ type: 'forest_trees_get' });
+    }, [connected, send]);
+
+    const fetchMushrooms = useCallback(() => {
+        if (!connected) return;
+        send({ type: 'mushrooms_get' });
+    }, [connected, send]);
+
+    const harvestMushroom = useCallback((mushroomId) => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            mushroomHarvestCallbackRef.current = resolve;
+            send({ type: 'mushroom_harvest', mushroomId });
+            setTimeout(() => {
+                if (mushroomHarvestCallbackRef.current === resolve) {
+                    mushroomHarvestCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, send]);
+
+    const scavengeSpot = useCallback((spotId = 'casino_trash') => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            scavengeCallbackRef.current = resolve;
+            send({ type: 'scavenge_spot', spotId });
+            setTimeout(() => {
+                if (scavengeCallbackRef.current === resolve) {
+                    scavengeCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, send]);
+
+    const fetchScavengeStatus = useCallback(() => {
+        if (!connected) return;
+        send({ type: 'scavenge_get' });
+    }, [connected, send]);
+
+    const turnInMushroomQuest = useCallback(() => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            npcQuestCallbackRef.current = resolve;
+            send({ type: 'npc_quest_turnin', questId: 'mushroom_ticket' });
+            setTimeout(() => {
+                if (npcQuestCallbackRef.current === resolve) {
+                    npcQuestCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, send]);
+
     const sellAtMerchant = useCallback((merchantId, slotIndex, quantity = 1) => {
         if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
         return new Promise((resolve) => {
             fishSellCallbackRef.current = resolve;
             send({ type: 'merchant_sell', merchantId, slotIndex, quantity });
+        });
+    }, [connected, send]);
+
+    const sellBatchAtMerchant = useCallback((merchantId, sells) => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            fishSellCallbackRef.current = resolve;
+            send({ type: 'merchant_sell_batch', merchantId, sells });
         });
     }, [connected, send]);
 
@@ -2246,6 +2711,92 @@ export function MultiplayerProvider({ children }) {
         });
     }, [connected, send]);
 
+    const buyFromMerchant = useCallback((merchantId, itemId) => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            merchantBuyCallbackRef.current = resolve;
+            const sent = send({ type: 'merchant_buy', merchantId, itemId });
+            if (!sent) {
+                merchantBuyCallbackRef.current = null;
+                resolve({ error: 'NOT_CONNECTED', message: 'Connection lost — try again' });
+                return;
+            }
+            setTimeout(() => {
+                if (merchantBuyCallbackRef.current === resolve) {
+                    merchantBuyCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out — restart the game server if you are developing locally' });
+                }
+            }, 10000);
+        });
+    }, [connected, send]);
+
+    const startWoodChop = useCallback((treeId) => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            woodChopCallbackRef.current = resolve;
+            send({ type: 'wood_chop_start', treeId, spotId: treeId });
+            setTimeout(() => {
+                if (woodChopCallbackRef.current === resolve) {
+                    woodChopCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, send]);
+
+    const completeWoodChop = useCallback((success = true) => {
+        if (!connected || !woodChopSessionIdRef.current) return;
+        send({
+            type: 'wood_chop_result',
+            sessionId: woodChopSessionIdRef.current,
+            success
+        });
+        woodChopSessionIdRef.current = null;
+    }, [connected, send]);
+
+    const cancelWoodChop = useCallback((reason = 'CANCELLED') => {
+        if (!connected) return;
+        send({ type: 'wood_chop_cancel', reason });
+        woodChopSessionIdRef.current = null;
+    }, [connected, send]);
+
+    const fetchTravelState = useCallback(() => {
+        if (!connected) return;
+        send({ type: 'travel_get_state' });
+    }, [connected, send]);
+
+    const bookTravel = useCallback((routeId, payForPlayerIds = []) => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED', message: 'Not connected to server' });
+        return new Promise((resolve) => {
+            setTravelPending(true);
+            travelBookCallbackRef.current = resolve;
+            const sent = send({
+                type: 'travel_book',
+                routeId,
+                payForPlayerIds: Array.isArray(payForPlayerIds) ? payForPlayerIds : [],
+            });
+            if (!sent) {
+                setTravelPending(false);
+                travelBookCallbackRef.current = null;
+                resolve({ error: 'NOT_CONNECTED', message: 'Not connected to server' });
+            }
+        });
+    }, [connected, send]);
+
+    const leaveTravel = useCallback(() => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED', message: 'Not connected to server' });
+        return new Promise((resolve) => {
+            setTravelPending(true);
+            travelLeaveCallbackRef.current = resolve;
+            const sent = send({ type: 'travel_leave' });
+            if (!sent) {
+                setTravelPending(false);
+                travelLeaveCallbackRef.current = null;
+                resolve({ error: 'NOT_CONNECTED', message: 'Not connected to server' });
+            }
+        });
+    }, [connected, send]);
+    
     /** @deprecated use sellAtMerchant */
     const sellFishAtNpc = useCallback((slotIndex, quantity = 1) => {
         return sellAtMerchant('fish_buyer', slotIndex, quantity);
@@ -2437,9 +2988,34 @@ export function MultiplayerProvider({ children }) {
         backpackError,
         fetchGameInventory,
         moveGameInventorySlot,
+        setGameHotbarSlot,
+        setActiveHotbarSlot,
+        fetchForestTrees,
+        forestTrees,
+        fetchMushrooms,
+        mushroomClusters,
+        harvestMushroom,
+        scavengeSpot,
+        scavengeCooldowns,
+        fetchScavengeStatus,
+        onboardingQuest,
+        turnInMushroomQuest,
         sellAtMerchant,
+        sellBatchAtMerchant,
         sellFishAtNpc,
+        buyFromMerchant,
         upgradeBackpack,
+        startWoodChop,
+        completeWoodChop,
+        cancelWoodChop,
+
+        roomTravelVoyages,
+        travelRouteStatuses,
+        myTravelVoyage,
+        travelPending,
+        fetchTravelState,
+        bookTravel,
+        leaveTravel,
         
         // Puffle Actions
         adoptPuffle,
@@ -2499,7 +3075,8 @@ export function MultiplayerProvider({ children }) {
         spinSlot, slotSpinning, slotResult, clearSlotResult, activeSlotSpins,
         spinGoldSlot, goldSlotSpinning, goldSlotResult, clearGoldSlotResult, syncGoldSlots, activeGoldSlotSpins,
         startFishing, attemptCatch, cancelFishing, fishingActive, fishingResult, clearFishingResult,
-        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, sellAtMerchant, sellFishAtNpc, upgradeBackpack,
+        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, setGameHotbarSlot, setActiveHotbarSlot, fetchForestTrees, forestTrees, fetchMushrooms, mushroomClusters, harvestMushroom, scavengeSpot, onboardingQuest, turnInMushroomQuest, sellAtMerchant, sellBatchAtMerchant, sellFishAtNpc, buyFromMerchant, upgradeBackpack, startWoodChop, completeWoodChop, cancelWoodChop,
+        roomTravelVoyages, myTravelVoyage, travelPending, fetchTravelState, bookTravel, leaveTravel,
         adoptPuffle, puffleAdopting,
         setName, joinRoom, sendPosition, sendChat, sendAfk, sendEmoteBubble, sendEmote, stopEmote,
         markChatTabRead, registerChatBubbleCallback, addLocalChatMessage,

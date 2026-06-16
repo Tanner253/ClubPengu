@@ -7,6 +7,8 @@ import { createPortal } from 'react-dom';
 import { useEscapeKey } from '../hooks';
 import { getMerchant } from '../config/merchants';
 import { getNpcDisplayName, getNpcTitle } from '../config/worldNpcs';
+import { getToolPurchasePrerequisite } from '../config/toolTiers';
+import { WOOD_LABELS } from '../config/economy';
 
 const MERCHANT_THEMES = {
     fish_buyer: {
@@ -25,6 +27,23 @@ const MERCHANT_THEMES = {
         badge: 'bg-amber-500/20 border-amber-400/40 text-amber-200',
         portraitRing: 'from-amber-400 to-orange-600',
         loreBg: 'bg-[#1f1408]/80 border-amber-600/30'
+    },
+    forest_ranger: {
+        stallName: "Ranger Pike's Post",
+        stallIcon: '🌲',
+        panelBg: 'from-[#0a1408] via-[#142010] to-[#060a04]',
+        banner: 'from-green-600 via-emerald-600 to-green-700',
+        bannerText: 'text-green-950',
+        accent: 'text-green-300',
+        accentMuted: 'text-green-200/70',
+        glow: 'rgba(74, 222, 128, 0.3)',
+        frameBorder: 'border-green-400/50',
+        bubbleBg: 'bg-green-950/50 border-green-500/30',
+        choiceBg: 'bg-green-950/40 hover:bg-green-900/60 border-green-500/25 hover:border-green-400/50',
+        choiceDisabled: 'bg-black/30 border-white/5',
+        badge: 'bg-green-500/20 border-green-400/40 text-green-200',
+        portraitRing: 'from-green-400 to-emerald-700',
+        loreBg: 'bg-[#0f1a0c]/80 border-green-600/30'
     },
     supply_merchant: {
         stallName: "Clive's Supply",
@@ -62,7 +81,7 @@ const MERCHANT_THEMES = {
     }
 };
 
-function resolveActionState(action, { hasSellableFish, nextUpgrade, coins }) {
+function resolveActionState(action, { hasSellableFish, hasSellableWood, ownedToolIds, nextUpgrade, coins, merchant, mushroomCount = 0, woodCounts = {} }) {
     let disabled = Boolean(action.disabled);
     let label = action.label;
     let sublabel = null;
@@ -72,6 +91,44 @@ function resolveActionState(action, { hasSellableFish, nextUpgrade, coins }) {
         disabled = true;
         sublabel = 'Nothing to sell';
     }
+    if (action.requiresWood && !hasSellableWood) {
+        disabled = true;
+        sublabel = 'No timber to sell';
+    }
+    if (action.requiresBuyTool && action.itemId) {
+        const listing = merchant?.sells?.find(s => s.itemId === action.itemId);
+        const cost = listing?.cost ?? 0;
+        costBadge = `${cost.toLocaleString()}g`;
+        if (ownedToolIds.has(action.itemId)) {
+            disabled = true;
+            sublabel = 'Already in your backpack';
+        } else {
+            const prereq = getToolPurchasePrerequisite(action.itemId, (id) => ownedToolIds.has(id));
+            if (prereq) {
+                disabled = true;
+                sublabel = prereq.message;
+            } else if (coins < cost) {
+                disabled = true;
+                sublabel = `Need ${cost.toLocaleString()}g (you have ${coins.toLocaleString()}g)`;
+            } else {
+                sublabel = listing?.label ? 'Equip on hotbar after purchase' : 'Upgrade your gathering gear';
+            }
+        }
+    }
+    if (action.requiresBuyAxe && action.id === 'buy_basic_axe') {
+        const cost = merchant?.sells?.find(s => s.itemId === 'basic_axe')?.cost ?? 75;
+        costBadge = `${cost.toLocaleString()}g`;
+        if (ownedToolIds.has('basic_axe')) {
+            disabled = true;
+            label = 'Basic Axe';
+            sublabel = 'Already in your backpack';
+        } else if (coins < cost) {
+            disabled = true;
+            sublabel = `Need ${cost.toLocaleString()}g (you have ${coins.toLocaleString()}g)`;
+        } else {
+            sublabel = 'Chop trees in the Forest Trails';
+        }
+    }
     if (action.requiresUpgrade && action.id === 'upgrade_backpack') {
         if (!nextUpgrade) {
             disabled = true;
@@ -80,10 +137,37 @@ function resolveActionState(action, { hasSellableFish, nextUpgrade, coins }) {
         } else {
             costBadge = `${nextUpgrade.cost.toLocaleString()}g`;
             sublabel = `+${nextUpgrade.slotsAdded} slots → ${nextUpgrade.nextSlots} total`;
-            if (coins < nextUpgrade.cost) {
+            if (nextUpgrade.woodRequired) {
+                const woodParts = Object.entries(nextUpgrade.woodRequired).map(([itemId, qty]) => {
+                    const label = WOOD_LABELS[itemId] || itemId;
+                    const have = woodCounts[itemId] ?? 0;
+                    return `${label} ${have}/${qty}`;
+                });
+                sublabel = `${sublabel} · 🪵 ${woodParts.join(', ')}`;
+                for (const [itemId, qty] of Object.entries(nextUpgrade.woodRequired)) {
+                    if ((woodCounts[itemId] ?? 0) < qty) {
+                        disabled = true;
+                        const label = WOOD_LABELS[itemId] || itemId;
+                        sublabel = `Need ${qty} ${label} (have ${woodCounts[itemId] ?? 0}) + ${nextUpgrade.cost.toLocaleString()}g`;
+                        break;
+                    }
+                }
+            }
+            if (!disabled && coins < nextUpgrade.cost) {
                 disabled = true;
                 sublabel = `Need ${nextUpgrade.cost.toLocaleString()}g (you have ${coins.toLocaleString()}g)`;
             }
+        }
+    }
+    if (action.requiresMushrooms && action.id === 'quest_mushroom_ticket') {
+        const required = 5;
+        costBadge = `${required}🍄`;
+        sublabel = `You have ${mushroomCount}/${required} mushrooms`;
+        if (mushroomCount < required) {
+            disabled = true;
+            sublabel = `Gather ${required - mushroomCount} more on the trails (slow respawn)`;
+        } else {
+            sublabel = 'Earn a 🎫 ferry ticket to Town';
         }
     }
 
@@ -119,7 +203,32 @@ export default function NpcDialogueModal({
         gameInventory?.slots?.some(s => s?.itemId && s.quantity > 0 && s.category === 'fish' && s.npcValue > 0)
     ), [gameInventory]);
 
+    const hasSellableWood = useMemo(() => (
+        gameInventory?.slots?.some(s => s?.itemId && s.quantity > 0 && s.category === 'wood' && s.npcValue > 0)
+    ), [gameInventory]);
+
+    const ownedToolIds = useMemo(() => new Set(
+        (gameInventory?.slots || [])
+            .filter(s => s?.itemId && s.quantity > 0 && s.category === 'tool')
+            .map(s => s.itemId)
+    ), [gameInventory]);
+
     const nextUpgrade = gameInventory?.nextUpgrade;
+
+    const mushroomCount = useMemo(() => (
+        (gameInventory?.slots || [])
+            .filter(s => s?.itemId === 'forest_mushroom' && s.quantity > 0)
+            .reduce((sum, s) => sum + s.quantity, 0)
+    ), [gameInventory]);
+
+    const woodCounts = useMemo(() => {
+        const counts = {};
+        for (const slot of gameInventory?.slots || []) {
+            if (!slot?.itemId || slot.category !== 'wood') continue;
+            counts[slot.itemId] = (counts[slot.itemId] || 0) + (slot.quantity || 0);
+        }
+        return counts;
+    }, [gameInventory]);
 
     const menuActions = useMemo(
         () => (npcDef?.actions || []).filter(a => a.id !== 'close'),
@@ -144,6 +253,32 @@ export default function NpcDialogueModal({
             setPendingAction(null);
             if (result?.unlockedSlots) {
                 setActionFeedback(`🎒 Backpack expanded to ${result.unlockedSlots} slots!`);
+            } else if (result?.message) {
+                setActionFeedback(result.message);
+            } else if (result?.error) {
+                setActionFeedback(result.message || result.error);
+            }
+            return;
+        }
+        if (action.requiresBuyTool && action.itemId) {
+            setPendingAction(action.id);
+            const result = await onAction?.(action.id, npcDef);
+            setPendingAction(null);
+            if (result?.itemName) {
+                setActionFeedback(`🪓 Bought ${result.itemName}! Equip it on your hotbar to chop trees.`);
+            } else if (result?.message) {
+                setActionFeedback(result.message);
+            } else if (result?.error) {
+                setActionFeedback(result.message || result.error);
+            }
+            return;
+        }
+        if (action.id === 'buy_basic_axe') {
+            setPendingAction(action.id);
+            const result = await onAction?.('buy_basic_axe', npcDef);
+            setPendingAction(null);
+            if (result?.itemName) {
+                setActionFeedback(`🪓 Bought ${result.itemName}! It is on your hotbar — chop trees in the Forest Trails.`);
             } else if (result?.message) {
                 setActionFeedback(result.message);
             } else if (result?.error) {
@@ -246,8 +381,13 @@ export default function NpcDialogueModal({
                         {menuActions.map((action, index) => {
                             const { disabled, label, sublabel, costBadge } = resolveActionState(action, {
                                 hasSellableFish,
+                                hasSellableWood,
+                                ownedToolIds,
                                 nextUpgrade,
-                                coins
+                                coins,
+                                merchant,
+                                mushroomCount,
+                                woodCounts
                             });
                             const isPending = pendingAction === action.id;
 

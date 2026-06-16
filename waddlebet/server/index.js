@@ -28,18 +28,21 @@ import {
     GoldSlotsService,
     FishingService,
     GameInventoryService,
+    WoodcuttingService,
+    ForestTreeService,
     IglooService,
     BlackjackService,
     GachaService,
     PebbleService,
     ChatService,
+    TravelService,
     ROLL_PRICE_PEBBLES
 } from './services/index.js';
 import custodialWalletService from './services/CustodialWalletService.js';
 import { handleIglooMessage } from './handlers/iglooHandlers.js';
 import { handleTippingMessage } from './handlers/tippingHandlers.js';
 import { handleMarketplaceMessage } from './handlers/marketplaceHandlers.js';
-import { getHelpLines, isHelpCommand, isClientOnlyCommand, isWarpCommand } from './utils/chatCommands.js';
+import { getHelpLines, isHelpCommand, isClientOnlyCommand, parseWarpCommand, getWarpTargetMeta, getWarpTargets } from './utils/chatCommands.js';
 import { handleGiftMessage } from './handlers/giftHandlers.js';
 import { WORLD_SPAWN, WORLD_SPAWN_ROOM, isInvalidNightclubPosition } from '../src/config/roomConfig.js';
 import { initializeNFTServices, handleNFTMessage, handleGetImage, handleGetMetadata } from './handlers/nftHandlers.js';
@@ -47,13 +50,19 @@ import nftOwnershipService from './services/NFTOwnershipService.js';
 import rentScheduler from './schedulers/RentScheduler.js';
 import solanaPaymentService from './services/SolanaPaymentService.js';
 import devBotService, { BOT_CONFIG } from './services/DevBotService.js';
+import MushroomService from './services/MushroomService.js';
+import ScavengeService from './services/ScavengeService.js';
+import OnboardingQuestService from './services/OnboardingQuestService.js';
+import { getScavengeSpot } from './config/scavenge.js';
 import wagerSettlementService from './services/WagerSettlementService.js';
 import dailyBonusService from './services/DailyBonusService.js';
 import { initializeReferralService, getReferralService } from './services/ReferralService.js';
 import { validateWalletAddress, validateTransactionSignature, validateAmount } from './utils/securityValidation.js';
 import { displayTokenSymbol } from './utils/tokenDisplay.js';
 import { getFishRarityLabel } from './config/gameItems.js';
+import { getMinigameReward, getMinigameRewardConfig, normalizeMinigameId } from './config/minigameRewards.js';
 import { isPlayerNearMerchant } from './config/worldNpcs.js';
+import { isPlayerNearHarvestableTree } from './config/harvestableTrees.js';
 
 const PORT = process.env.PORT || 3001;
 const MAX_CONNECTIONS_PER_IP = 2;
@@ -66,6 +75,15 @@ function getDefaultSpawnForRoom(roomId) {
     if (roomId === 'town') {
         return { x: 110, y: 0, z: 110 };
     }
+    if (roomId === 'snow_forts') {
+        return { x: 49.9, y: 0, z: 64.3 };
+    }
+    if (roomId === 'forest_trails') {
+        return { x: 90, y: 0, z: 70 };
+    }
+    if (roomId?.startsWith('travel:')) {
+        return { x: 10, y: 0, z: 8 };
+    }
     if (roomId === 'dojo') {
         return { x: 0, y: 0, z: 14 };
     }
@@ -73,7 +91,7 @@ function getDefaultSpawnForRoom(roomId) {
         return { x: 0, y: 0, z: 12 };
     }
     if (roomId === 'casino_game_room') {
-        return { x: 10, y: 0, z: 10 };
+        return { x: 40, y: 0, z: 82 };
     }
     if (roomId?.startsWith('igloo')) {
         return { x: 0, y: 0, z: 10 };
@@ -566,7 +584,128 @@ const matchService = new MatchService(statsService, userService, broadcastToRoom
 const slotService = new SlotService(userService, broadcastToRoom, sendToPlayer);
 const goldSlotsService = new GoldSlotsService(userService, broadcastToRoom, sendToPlayer, publishChatMessage);
 const gameInventoryService = new GameInventoryService(userService);
+const forestTreeService = new ForestTreeService();
+const mushroomService = new MushroomService();
+const scavengeService = new ScavengeService(userService);
 const fishingService = new FishingService(userService, gameInventoryService, broadcastToRoom, sendToPlayer);
+const woodcuttingService = new WoodcuttingService(userService, gameInventoryService, forestTreeService, sendToPlayer);
+
+/** Server-initiated room move (travel ferry / transit lobby). */
+async function transferPlayerRoom(playerId, newRoom, position, voyageMeta = null) {
+    const player = players.get(playerId);
+    if (!player || !newRoom) return;
+
+    const oldRoom = player.room;
+    if (oldRoom && oldRoom !== newRoom) {
+        joinRoom(playerId, newRoom);
+    } else if (!oldRoom) {
+        joinRoom(playerId, newRoom);
+    }
+
+    player.position = {
+        x: position.x,
+        y: position.y ?? 0,
+        z: position.z
+    };
+
+    if (player.walletAddress) {
+        await persistPlayerLocation(player.walletAddress, newRoom, player.position);
+    }
+
+    const existingPlayers = getPlayersInRoom(newRoom, playerId);
+    sendToPlayer(playerId, {
+        type: 'travel_transfer',
+        room: newRoom,
+        position: { ...player.position, absolute: true },
+        voyage: voyageMeta,
+        players: existingPlayers
+    });
+
+    broadcastToRoom(newRoom, {
+        type: 'player_joined',
+        player: {
+            id: player.id,
+            name: player.name,
+            position: player.position,
+            rotation: player.rotation,
+            appearance: player.appearance,
+            puffle: player.puffle,
+            pufflePosition: player.pufflePosition,
+            emote: player.emote,
+            seatedOnFurniture: player.seatedOnFurniture || false,
+            isAfk: player.isAfk || false,
+            afkMessage: player.afkMessage || null,
+            isAuthenticated: player.isAuthenticated,
+            role: player.role || null
+        }
+    }, playerId);
+
+    const matchesInNewRoom = matchService.getMatchesInRoom(newRoom);
+    sendToPlayer(playerId, {
+        type: 'active_matches',
+        matches: matchesInNewRoom.length > 0 ? matchesInNewRoom : []
+    });
+
+    const pveActivitiesInNewRoom = getPveActivitiesInRoom(newRoom);
+    sendToPlayer(playerId, { type: 'active_pve_activities', activities: pveActivitiesInNewRoom });
+
+    const roomHistory = await ChatService.getScopeHistory('room', newRoom);
+    sendToPlayer(playerId, {
+        type: 'chat_history_room',
+        room: newRoom,
+        messages: roomHistory.map((doc) => ChatService.toClientPayload(doc, playerId))
+    });
+
+    if (voyageMeta?.phase === 'arrived' && player.walletAddress && voyageMeta.routeId) {
+        onboardingQuestService.handleTravelArrival(player.walletAddress, voyageMeta.routeId)
+            .catch((err) => console.error('[OnboardingQuest] travel arrival:', err));
+    }
+}
+
+function getPlayerByWallet(walletAddress) {
+    if (!walletAddress) return null;
+    for (const player of players.values()) {
+        if (player.walletAddress === walletAddress) return player;
+    }
+    return null;
+}
+
+const onboardingQuestService = new OnboardingQuestService(
+    userService,
+    sendToPlayer,
+    getPlayerByWallet
+);
+
+const travelService = new TravelService({
+    userService,
+    gameInventoryService,
+    joinRoom,
+    broadcastToRoom,
+    sendToPlayer,
+    getPlayer: (id) => players.get(id),
+    getPlayerByWallet,
+    persistPlayerLocation,
+    transferPlayerRoom,
+    getDefaultSpawnForRoom,
+    fallbackRescueRoom: WORLD_SPAWN_ROOM
+});
+
+setInterval(() => {
+    travelService.tick().catch(err => console.error('[Travel] tick error:', err));
+}, 1000);
+
+setInterval(async () => {
+    const regrown = await forestTreeService.tickRegrowth();
+    if (regrown.length > 0) {
+        const trees = regrown.map(id => forestTreeService.getTreePublicState(id)).filter(Boolean);
+        broadcastToRoomAll('forest_trails', { type: 'forest_trees_update', trees });
+    }
+    const mushroomsRegrown = mushroomService.tickRegrowth();
+    if (mushroomsRegrown.length > 0) {
+        const mushrooms = mushroomsRegrown.map(id => mushroomService.getPublicState(id)).filter(Boolean);
+        broadcastToRoomAll('forest_trails', { type: 'mushrooms_update', mushrooms });
+    }
+}, 15000);
 
 async function sendGameInventorySnapshot(playerId, walletAddress, reason = 'unspecified') {
     if (!walletAddress) {
@@ -585,8 +724,46 @@ async function sendGameInventorySnapshot(playerId, walletAddress, reason = 'unsp
             type: 'game_inventory_snapshot',
             inventory: inv
         });
+        await syncPlayerHeldItem(playerId);
     } catch (err) {
         console.error(`[INVENTORY] snapshot exception player=${playerId} wallet=${walletAddress?.slice(0, 8)}… reason=${reason}:`, err);
+    }
+}
+async function resolvePlayerHeldItem(player) {
+    if (!player?.walletAddress) {
+        player.heldHotbarItem = null;
+        return;
+    }
+    try {
+        const result = await gameInventoryService.getInventory(player.walletAddress);
+        if (result.error || !result.inventory) {
+            player.heldHotbarItem = null;
+            return;
+        }
+        const inv = result.inventory;
+        const active = inv.activeHotbar ?? 0;
+        const entry = inv.hotbar?.[active];
+        player.heldHotbarItem = entry?.itemId ? {
+            itemId: entry.itemId,
+            category: entry.category,
+            tier: entry.tier
+        } : null;
+    } catch (err) {
+        console.warn('resolvePlayerHeldItem failed:', err.message);
+        player.heldHotbarItem = null;
+    }
+}
+
+async function syncPlayerHeldItem(playerId, { broadcast = true } = {}) {
+    const player = players.get(playerId);
+    if (!player) return;
+    await resolvePlayerHeldItem(player);
+    if (broadcast && player.room) {
+        broadcastToRoom(player.room, {
+            type: 'player_held_item',
+            playerId,
+            heldHotbarItem: player.heldHotbarItem
+        }, playerId);
     }
 }
 const blackjackService = new BlackjackService(userService, broadcastToRoom, sendToPlayer);
@@ -1143,6 +1320,8 @@ function cleanupStaleWalletConnection(walletAddress, excludePlayerId = null) {
             slotService.handleDisconnect(existingPlayerId);
             goldSlotsService.handleDisconnect(existingPlayerId);
             fishingService.handleDisconnect(existingPlayerId);
+            woodcuttingService.handleDisconnect(existingPlayerId);
+            travelService.handlePlayerDisconnect(existingPlayerId);
             
             // End any PvE activities
             if (activePveActivities.has(existingPlayerId)) {
@@ -1216,7 +1395,9 @@ function getPlayersInRoom(roomId, excludeId = null) {
                 isAfk: player.isAfk || false,
                 afkMessage: player.afkMessage || null,
                 trailPoints,
-                isAuthenticated: player.isAuthenticated || false
+                isAuthenticated: player.isAuthenticated || false,
+                heldHotbarItem: player.heldHotbarItem || null,
+                role: player.role || null
             });
         }
     }
@@ -1497,6 +1678,7 @@ wss.on('connection', (ws, req) => {
             slotService.handleDisconnect(playerId);
             goldSlotsService.handleDisconnect(playerId);
             fishingService.handleDisconnect(playerId);
+            woodcuttingService.handleDisconnect(playerId);
             
             // End daily bonus session tracking
             if (player.walletAddress) {
@@ -1581,6 +1763,7 @@ wss.on('connection', (ws, req) => {
             removeIPConnection(player.ip, playerId);
             
             if (player.room) {
+                travelService.handlePlayerDisconnect(playerId);
                 broadcastToRoom(player.room, { type: 'player_left', playerId });
                 const room = rooms.get(player.room);
                 if (room) room.delete(playerId);
@@ -1798,6 +1981,9 @@ async function handleMessage(playerId, message) {
                 });
 
                 await sendGameInventorySnapshot(playerId, walletAddress);
+
+                onboardingQuestService.sendStatusToPlayer(playerId, walletAddress)
+                    .catch((err) => console.error('[OnboardingQuest] auth status:', err));
 
                 if (player.room) {
                     await sendChatHistory(playerId, player.room);
@@ -2121,6 +2307,9 @@ async function handleMessage(playerId, message) {
 
                 await sendGameInventorySnapshot(playerId, walletAddress);
 
+                onboardingQuestService.sendStatusToPlayer(playerId, walletAddress)
+                    .catch((err) => console.error('[OnboardingQuest] restore status:', err));
+
                 if (player.room) {
                     await sendChatHistory(playerId, player.room);
                 }
@@ -2169,7 +2358,7 @@ async function handleMessage(playerId, message) {
             
             console.log(`[${ts()}] 📥 Join request: name=${player.name}, characterType=${message.appearance?.characterType || 'none'}, authenticated=${!!player.walletAddress}`);
             
-            const roomId = message.room || WORLD_SPAWN_ROOM;
+            let roomId = message.room || WORLD_SPAWN_ROOM;
             joinRoom(playerId, roomId);
             
             let spawnPos = getDefaultSpawnForRoom(roomId);
@@ -2405,6 +2594,13 @@ async function handleMessage(playerId, message) {
                 console.log(`[${ts()}] 👤 Guest ${player.name} appearance set: characterType=${player.appearance.characterType}`);
             }
             
+            if (player.walletAddress) {
+                const travelSync = await travelService.syncPassengerOnJoin(player.walletAddress, playerId);
+                if (travelSync?.room) {
+                    roomId = travelSync.room;
+                }
+            }
+
             const existingPlayers = getPlayersInRoom(roomId, playerId);
             
             // Get updated user data for authenticated users (includes locked username status)
@@ -2430,6 +2626,8 @@ async function handleMessage(playerId, message) {
             // Log what we're about to broadcast for debugging
             console.log(`[${ts()}] 📤 Broadcasting player_joined: name=${player.name}, characterType=${player.appearance?.characterType || 'undefined'}`);
             
+            await syncPlayerHeldItem(playerId, { broadcast: false });
+
             broadcastToRoom(roomId, {
                 type: 'player_joined',
                 player: {
@@ -2444,7 +2642,9 @@ async function handleMessage(playerId, message) {
                     seatedOnFurniture: player.seatedOnFurniture || false,
                     isAfk: player.isAfk || false,
                     afkMessage: player.afkMessage || null,
-                    isAuthenticated: player.isAuthenticated
+                    isAuthenticated: player.isAuthenticated,
+                    heldHotbarItem: player.heldHotbarItem || null,
+                    role: player.role || null
                 }
             }, playerId);
             
@@ -2472,6 +2672,17 @@ async function handleMessage(playerId, message) {
             }
 
             await sendChatHistory(playerId, roomId);
+
+            if (roomId === 'forest_trails') {
+                sendToPlayer(playerId, {
+                    type: 'forest_trees_snapshot',
+                    trees: forestTreeService.getSnapshot(),
+                });
+                sendToPlayer(playerId, {
+                    type: 'mushrooms_snapshot',
+                    mushrooms: mushroomService.getSnapshot(),
+                });
+            }
             
             console.log(`[${ts()}] ${player.name} joined ${roomId}${player.isAuthenticated ? ' (authenticated)' : ' (guest)'}`);
             } catch (joinError) {
@@ -2536,6 +2747,27 @@ async function handleMessage(playerId, message) {
                     moveMessage.trailPoints = message.trailPoints;
                 }
                 broadcastToRoom(player.room, moveMessage, playerId);
+
+                if (posChanged) {
+                    const chopCancel = woodcuttingService.checkPlayerMoved(
+                        playerId,
+                        player.position.x,
+                        player.position.z
+                    );
+                    if (chopCancel?.cancelled) {
+                        sendToPlayer(playerId, {
+                            type: 'wood_chop_cancelled',
+                            treeId: chopCancel.treeId,
+                            reason: chopCancel.reason
+                        });
+                        if (chopCancel.treeState) {
+                            broadcastToRoomAll(player.room, {
+                                type: 'forest_trees_update',
+                                trees: [chopCancel.treeState]
+                            });
+                        }
+                    }
+                }
             }
 
             if (player.walletAddress && player.room && posChanged) {
@@ -2582,19 +2814,30 @@ async function handleMessage(playerId, message) {
                     break;
                 }
 
-                const warpMatch = isWarpCommand(text);
-                if (warpMatch) {
-                    if (!player.walletAddress) {
-                        sendChatFeedback(playerId, '❌ You must be authenticated to use this command.');
+                if (text.trim().toLowerCase().startsWith('/warp')) {
+                    const isStaff = await isPlayerStaff(player);
+                    if (!isStaff) {
+                        sendChatFeedback(playerId, '❌ You do not have permission to use this command.');
                         break;
                     }
-                    if (!(await isPlayerStaff(player))) {
-                        sendChatFeedback(playerId, '❌ You do not have permission to use this command.');
+                    const warpTarget = parseWarpCommand(text);
+                    if (!warpTarget) {
+                        const options = getWarpTargets({ isStaff }).join('|');
+                        sendChatFeedback(playerId, `❌ Usage: /warp ${options}`);
+                        break;
+                    }
+                    const meta = getWarpTargetMeta(warpTarget);
+                    if (!meta) {
+                        sendChatFeedback(playerId, `❌ Unknown warp location "${warpTarget}". Type /help for locations.`);
+                        break;
+                    }
+                    if (meta.staffOnly && !isStaff) {
+                        sendChatFeedback(playerId, '❌ You do not have permission to warp there.');
                         break;
                     }
                     sendToPlayer(playerId, {
                         type: 'parkour_warp',
-                        stage: warpMatch[1],
+                        stage: warpTarget,
                         timestamp: Date.now()
                     });
                     break;
@@ -2702,11 +2945,21 @@ async function handleMessage(playerId, message) {
                                 newRoom.add(teleportingPlayer.id);
                                 broadcastToRoom(destinationPlayer.room, {
                                     type: 'player_joined',
-                                    playerId: teleportingPlayer.id,
-                                    name: tpPlayer.name,
-                                    position: tpPlayer.position,
-                                    appearance: tpPlayer.appearance,
-                                    isAuthenticated: tpPlayer.isAuthenticated
+                                    player: {
+                                        id: teleportingPlayer.id,
+                                        name: tpPlayer.name,
+                                        position: tpPlayer.position,
+                                        rotation: tpPlayer.rotation,
+                                        appearance: tpPlayer.appearance,
+                                        puffle: tpPlayer.puffle,
+                                        pufflePosition: tpPlayer.pufflePosition,
+                                        emote: tpPlayer.emote,
+                                        seatedOnFurniture: tpPlayer.seatedOnFurniture || false,
+                                        isAfk: tpPlayer.isAfk || false,
+                                        afkMessage: tpPlayer.afkMessage || null,
+                                        isAuthenticated: tpPlayer.isAuthenticated,
+                                        role: tpPlayer.role || null
+                                    }
                                 }, teleportingPlayer.id);
                             }
                         }
@@ -2724,6 +2977,11 @@ async function handleMessage(playerId, message) {
                         // Notify teleported player
                         sendChatFeedback(teleportingPlayer.id, `✨ You have been teleported to ${destinationPlayer.name}`);
                     }
+                    break;
+                }
+
+                if (text.trim().startsWith('/')) {
+                    sendChatFeedback(playerId, '❌ Unknown command. Type /help for available commands.');
                     break;
                 }
                 
@@ -2828,6 +3086,16 @@ async function handleMessage(playerId, message) {
                 const toKey = targetPlayer.walletAddress || targetPlayer.name;
                 const scopeKey = ChatService.whisperScopeKey(fromKey, toKey);
 
+                const whisperMetadata = {
+                    fromName: player.name,
+                    toName: targetPlayer.name,
+                    senderPlayerId: playerId,
+                    targetPlayerId: targetId
+                };
+                if (player.role === 'admin' || player.role === 'moderator') {
+                    whisperMetadata.senderRole = player.role;
+                }
+
                 const saved = await ChatService.save({
                     channel: 'whisper',
                     scopeKey,
@@ -2836,12 +3104,7 @@ async function handleMessage(playerId, message) {
                     text,
                     whisperFrom: player.walletAddress || null,
                     whisperTo: targetPlayer.walletAddress || null,
-                    metadata: {
-                        fromName: player.name,
-                        toName: targetPlayer.name,
-                        senderPlayerId: playerId,
-                        targetPlayerId: targetId
-                    }
+                    metadata: whisperMetadata
                 });
 
                 targetPlayer.ws.send(JSON.stringify({
@@ -3001,7 +3264,8 @@ async function handleMessage(playerId, message) {
                         seatedOnFurniture: player.seatedOnFurniture || false,
                         isAfk: player.isAfk || false,
                         afkMessage: player.afkMessage || null,
-                        isAuthenticated: player.isAuthenticated
+                        isAuthenticated: player.isAuthenticated,
+                        role: player.role || null
                     }
                 }, playerId);
                 
@@ -3023,6 +3287,56 @@ async function handleMessage(playerId, message) {
                     room: newRoom,
                     messages: roomHistory.map((doc) => ChatService.toClientPayload(doc, playerId))
                 });
+            }
+            break;
+        }
+
+        case 'travel_get_state': {
+            const state = await travelService.handleGetState(playerId);
+            if (state.error) {
+                sendToPlayer(playerId, { type: 'travel_error', error: state.error, message: state.message });
+            } else {
+                sendToPlayer(playerId, { type: 'travel_state', ...state });
+            }
+            break;
+        }
+
+        case 'travel_book': {
+            const payForPlayerIds = Array.isArray(message.payForPlayerIds) ? message.payForPlayerIds : [];
+            const result = await travelService.handleBook(playerId, message.routeId, payForPlayerIds);
+            if (result.error) {
+                sendToPlayer(playerId, {
+                    type: 'travel_error',
+                    error: result.error,
+                    message: result.message,
+                    cost: result.cost
+                });
+            } else {
+                sendToPlayer(playerId, { type: 'travel_book_result', ...result });
+                if (result.coins !== undefined) {
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: result.coins,
+                        isAuthenticated: true,
+                    });
+                }
+            }
+            break;
+        }
+
+        case 'travel_leave': {
+            const result = await travelService.handleLeave(playerId);
+            if (result.error) {
+                sendToPlayer(playerId, { type: 'travel_error', error: result.error, message: result.message });
+            } else {
+                sendToPlayer(playerId, { type: 'travel_leave_result', ...result });
+                if (result.coins !== undefined) {
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: result.coins,
+                        isAuthenticated: true,
+                    });
+                }
             }
             break;
         }
@@ -5231,6 +5545,7 @@ async function handleMessage(playerId, message) {
                     sendToPlayer(playerId, {
                         type: 'fishing_started',
                         spotId: fishResult.spotId,
+                        sessionId: fishResult.sessionId,
                         newBalance: fishResult.newBalance,
                         baitCost: fishResult.baitCost,
                         isDemo: fishResult.isDemo
@@ -5267,29 +5582,42 @@ async function handleMessage(playerId, message) {
         case 'fishing_game_result': {
             // Minigame result - player caught a fish or missed
             try {
-                const { fish, depth, success } = message;
+                const { fish, depth, success, sessionId } = message;
 
-                console.log(`[FISHING] game_result player=${playerId} name=${player.name} success=${!!success} fish=${fish?.id || 'none'} depth=${depth ?? 0} auth=${!!player.isAuthenticated} wallet=${player.walletAddress ? player.walletAddress.slice(0, 8) + '…' : 'NONE'}`);
+                console.log(`[FISHING] game_result player=${playerId} name=${player.name} success=${!!success} fish=${fish?.id || 'none'} depth=${depth ?? 0} session=${sessionId ? sessionId.slice(0, 8) + '…' : 'NONE'} auth=${!!player.isAuthenticated} wallet=${player.walletAddress ? player.walletAddress.slice(0, 8) + '…' : 'NONE'}`);
                 
-                if (success && fish) {
-                    const isDemo = !player.walletAddress;
-                    const guestBalance = isDemo ? (message.guestCoins || 0) : 0;
+                const isDemo = !player.walletAddress;
+                const guestBalance = isDemo ? (message.guestCoins || 0) : 0;
 
+                const result = await fishingService.handleGameResult(
+                    playerId,
+                    player.walletAddress,
+                    player.room,
+                    player.name,
+                    { sessionId, success: !!success, depth: depth || 0, fish },
+                    isDemo,
+                    guestBalance
+                );
+
+                if (result.error) {
+                    console.warn(`[FISHING] game_result error player=${playerId} error=${result.error} msg=${result.message || ''}`);
+                    sendToPlayer(playerId, {
+                        type: 'fishing_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                    break;
+                }
+
+                if (result.missed) {
+                    break;
+                }
+
+                if (result.fish) {
                     if (isDemo) {
-                        console.warn(`[FISHING] catch will NOT enter backpack — demo mode (no wallet on server) player=${playerId} fish=${fish.id}`);
+                        console.warn(`[FISHING] catch will NOT enter backpack — demo mode (no wallet on server) player=${playerId} fish=${result.fish.id}`);
                     }
 
-                    const result = await fishingService.handleCatch(
-                        playerId,
-                        player.walletAddress,
-                        player.room,
-                        player.name,
-                        fish,
-                        depth || 0,
-                        isDemo,
-                        guestBalance
-                    );
-                    
                     if (result.error) {
                         console.warn(`[FISHING] handleCatch error player=${playerId} error=${result.error} msg=${result.message || ''}`);
                         sendToPlayer(playerId, {
@@ -5303,17 +5631,17 @@ async function handleMessage(playerId, message) {
                         const activity = activePveActivities.get(playerId);
                         if (activity) {
                             const newFishCount = (activity.state.fishCaught || 0) + 1;
-                            const npcVal = result.npcValue || fish.coins || 0;
-                            const fishId = result.fish?.id || fish.id;
+                            const npcVal = result.npcValue || 0;
+                            const fishId = result.fish?.id;
                             const newTotalValue = (activity.state.totalValue || 0) + npcVal;
                             updatePveActivity(playerId, {
                                 fishCaught: newFishCount,
                                 totalValue: newTotalValue,
                                 lastFish: {
-                                    name: result.fish?.name || fish.name || 'Fish',
+                                    name: result.fish?.name || 'Fish',
                                     rarity: getFishRarityLabel(fishId),
                                     value: npcVal,
-                                    emoji: result.fish?.emoji || fish.emoji || '🐟'
+                                    emoji: result.fish?.emoji || '🐟'
                                 }
                             });
                         }
@@ -5333,19 +5661,24 @@ async function handleMessage(playerId, message) {
                             console.warn(`[FISHING] inventoryAdded=true but no inventory payload — forcing snapshot player=${playerId}`);
                             await sendGameInventorySnapshot(playerId, player.walletAddress, 'fishing_catch_fallback');
                         } else if (result.inventoryError) {
-                            console.warn(`[FISHING] backpack store FAILED player=${playerId} fish=${fish.id} error=${result.inventoryError}`);
+                            console.warn(`[FISHING] backpack store FAILED player=${playerId} fish=${result.fish.id} error=${result.inventoryError}`);
                             sendToPlayer(playerId, {
                                 type: 'game_inventory_error',
                                 error: result.inventoryError,
                                 message: `Could not store catch: ${result.inventoryError}`
                             });
                         } else if (!result.isDemo && !result.isJellyfish && player.walletAddress) {
-                            console.warn(`[FISHING] catch had wallet but inventoryAdded=false and no error — forcing snapshot player=${playerId} fish=${fish.id}`);
+                            console.warn(`[FISHING] catch had wallet but inventoryAdded=false and no error — forcing snapshot player=${playerId} fish=${result.fish.id}`);
                             await sendGameInventorySnapshot(playerId, player.walletAddress, 'fishing_catch_anomaly');
+                        }
+                        if (player.walletAddress && result.inventoryAdded) {
+                            onboardingQuestService.handleFishCatch(player.walletAddress, {
+                                inventoryAdded: result.inventoryAdded,
+                                isDemo: result.isDemo,
+                            }).catch((err) => console.error('[OnboardingQuest] fish catch:', err));
                         }
                     }
                 }
-                // Misses are silently ignored - no broadcast needed
             } catch (error) {
                 console.error('🎣 Error in fishing_game_result:', error);
                 sendToPlayer(playerId, {
@@ -5383,6 +5716,368 @@ async function handleMessage(playerId, message) {
             break;
         }
 
+        // ==================== WOODCUTTING (Forest Trails) ====================
+        case 'forest_trees_get': {
+            sendToPlayer(playerId, {
+                type: 'forest_trees_snapshot',
+                trees: forestTreeService.getSnapshot()
+            });
+            break;
+        }
+
+        case 'mushrooms_get': {
+            sendToPlayer(playerId, {
+                type: 'mushrooms_snapshot',
+                mushrooms: mushroomService.getSnapshot()
+            });
+            break;
+        }
+
+        case 'mushroom_harvest': {
+            try {
+                if (!player.walletAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'mushroom_harvest_error',
+                        error: 'NOT_AUTHENTICATED',
+                        message: 'Sign in to gather mushrooms'
+                    });
+                    break;
+                }
+                if (player.room !== 'forest_trails') {
+                    sendToPlayer(playerId, {
+                        type: 'mushroom_harvest_error',
+                        error: 'WRONG_ROOM',
+                        message: 'Mushrooms only grow in the Forest Trails'
+                    });
+                    break;
+                }
+                const mushroomId = message.mushroomId;
+                const result = mushroomService.tryHarvest(mushroomId, player.position);
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'mushroom_harvest_error',
+                        error: result.error,
+                        message: result.message,
+                        waitSeconds: result.waitSeconds
+                    });
+                    break;
+                }
+                const addResult = await gameInventoryService.addItem(
+                    player.walletAddress,
+                    result.itemId,
+                    result.quantity
+                );
+                if (addResult.error) {
+                    const restored = mushroomService.rollbackHarvest(mushroomId);
+                    if (restored) {
+                        broadcastToRoomAll('forest_trails', {
+                            type: 'mushrooms_update',
+                            mushrooms: [restored],
+                        });
+                    }
+                    sendToPlayer(playerId, {
+                        type: 'mushroom_harvest_error',
+                        error: addResult.error,
+                        message: addResult.message || 'Backpack full'
+                    });
+                    break;
+                }
+                broadcastToRoomAll('forest_trails', {
+                    type: 'mushrooms_update',
+                    mushrooms: [result.mushroom]
+                });
+                sendToPlayer(playerId, {
+                    type: 'mushroom_harvest_result',
+                    mushroomId: result.mushroomId,
+                    itemId: result.itemId,
+                    quantity: result.quantity,
+                    inventory: addResult.inventory,
+                    mushroom: result.mushroom,
+                });
+            } catch (error) {
+                console.error('🍄 Error in mushroom_harvest:', error);
+                sendToPlayer(playerId, {
+                    type: 'mushroom_harvest_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to harvest mushroom'
+                });
+            }
+            break;
+        }
+
+        case 'npc_quest_turnin': {
+            try {
+                if (!player.walletAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'npc_quest_error',
+                        error: 'NOT_AUTHENTICATED',
+                        message: 'Sign in to turn in quests'
+                    });
+                    break;
+                }
+                if (message.questId !== 'mushroom_ticket') {
+                    sendToPlayer(playerId, {
+                        type: 'npc_quest_error',
+                        error: 'UNKNOWN_QUEST',
+                        message: 'Unknown quest'
+                    });
+                    break;
+                }
+                if (!isPlayerNearMerchant(player, 'forest_ranger')) {
+                    sendToPlayer(playerId, {
+                        type: 'npc_quest_error',
+                        error: 'TOO_FAR',
+                        message: 'You need to be at Ranger Pike'
+                    });
+                    break;
+                }
+                const result = await gameInventoryService.turnInMushroomQuest(player.walletAddress);
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'npc_quest_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                    break;
+                }
+                sendToPlayer(playerId, {
+                    type: 'npc_quest_result',
+                    questId: 'mushroom_ticket',
+                    rewardItemId: result.rewardItemId,
+                    mushroomsTurnedIn: result.mushroomsTurnedIn,
+                    inventory: result.inventory,
+                    message: 'Ranger Pike traded you a ferry ticket to Town!'
+                });
+            } catch (error) {
+                console.error('📜 Error in npc_quest_turnin:', error);
+                sendToPlayer(playerId, {
+                    type: 'npc_quest_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Quest turn-in failed'
+                });
+            }
+            break;
+        }
+
+        case 'scavenge_get': {
+            try {
+                if (!player.walletAddress) break;
+                const user = await userService.getUser(player.walletAddress);
+                if (!user) break;
+                sendToPlayer(playerId, {
+                    type: 'scavenge_status',
+                    statuses: scavengeService.getAllSpotStatuses(user.toObject()),
+                });
+            } catch (error) {
+                console.error('🗑️ Error in scavenge_get:', error);
+            }
+            break;
+        }
+
+        case 'scavenge_spot': {
+            try {
+                if (!player.walletAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'scavenge_error',
+                        error: 'NOT_AUTHENTICATED',
+                        message: 'Sign in to search the trash'
+                    });
+                    break;
+                }
+                const spotId = message.spotId || 'casino_trash';
+                const spot = getScavengeSpot(spotId);
+                if (!spot) {
+                    sendToPlayer(playerId, {
+                        type: 'scavenge_error',
+                        error: 'UNKNOWN_SPOT',
+                        message: 'Nothing to search here'
+                    });
+                    break;
+                }
+                const result = await scavengeService.scavenge(
+                    player.walletAddress,
+                    spotId,
+                    { x: player.position?.x, z: player.position?.z, room: player.room }
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'scavenge_error',
+                        error: result.error,
+                        message: result.message,
+                        spotId,
+                        displayRemainingSeconds: result.displayRemainingSeconds
+                    });
+                    break;
+                }
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: result.newBalance,
+                    isAuthenticated: true,
+                });
+                sendToPlayer(playerId, {
+                    type: 'scavenge_result',
+                    spotId,
+                    goldEarned: result.goldEarned,
+                    newBalance: result.newBalance,
+                    message: result.message,
+                    displayRemainingSeconds: result.displayRemainingSeconds
+                });
+                onboardingQuestService.handleScavenge(player.walletAddress, spotId)
+                    .catch((err) => console.error('[OnboardingQuest] scavenge:', err));
+            } catch (error) {
+                console.error('🗑️ Error in scavenge_spot:', error);
+                sendToPlayer(playerId, {
+                    type: 'scavenge_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Search failed'
+                });
+            }
+            break;
+        }
+
+        case 'wood_chop_start': {
+            try {
+                const treeId = message.treeId || message.spotId;
+                if (!treeId) {
+                    sendToPlayer(playerId, {
+                        type: 'wood_chop_error',
+                        error: 'INVALID_TREE',
+                        message: 'Invalid tree'
+                    });
+                    break;
+                }
+                if (!isPlayerNearHarvestableTree(player, treeId)) {
+                    sendToPlayer(playerId, {
+                        type: 'wood_chop_error',
+                        error: 'TOO_FAR',
+                        message: 'Move closer to the harvestable tree (look for the green ring)'
+                    });
+                    break;
+                }
+                const demoMode = !player.walletAddress;
+                const result = await woodcuttingService.startChop(
+                    playerId,
+                    player.walletAddress,
+                    treeId,
+                    demoMode,
+                    player.position
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'wood_chop_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                } else {
+                    if (result.treeState && player.room) {
+                        broadcastToRoomAll(player.room, {
+                            type: 'forest_trees_update',
+                            trees: [result.treeState]
+                        });
+                    }
+                    sendToPlayer(playerId, {
+                        type: 'wood_chop_started',
+                        treeId: result.treeId,
+                        spotId: result.treeId,
+                        sessionId: result.sessionId,
+                        stage: result.stage,
+                        woodYield: result.woodYield,
+                        durationMs: result.durationMs,
+                        isDemo: result.isDemo
+                    });
+                }
+            } catch (error) {
+                console.error('🪓 Error in wood_chop_start:', error);
+                sendToPlayer(playerId, {
+                    type: 'wood_chop_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to start chopping'
+                });
+            }
+            break;
+        }
+
+        case 'wood_chop_cancel': {
+            const cancel = woodcuttingService.cancelChop(playerId, message.reason || 'CANCELLED');
+            if (cancel.cancelled) {
+                sendToPlayer(playerId, {
+                    type: 'wood_chop_cancelled',
+                    treeId: cancel.treeId,
+                    reason: cancel.reason
+                });
+                if (cancel.treeState && player.room) {
+                    broadcastToRoomAll(player.room, {
+                        type: 'forest_trees_update',
+                        trees: [cancel.treeState]
+                    });
+                }
+            }
+            break;
+        }
+
+        case 'wood_chop_result': {
+            try {
+                const { sessionId, success } = message;
+                const result = await woodcuttingService.handleChopResult(
+                    playerId,
+                    player.walletAddress,
+                    { sessionId, success: success !== false }
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'wood_chop_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                    break;
+                }
+                if (result.missed) {
+                    if (result.treeState && player.room) {
+                        broadcastToRoomAll(player.room, {
+                            type: 'forest_trees_update',
+                            trees: [result.treeState]
+                        });
+                    }
+                    break;
+                }
+                sendToPlayer(playerId, {
+                    type: 'wood_chop_result',
+                    treeId: result.treeId,
+                    wood: result.wood,
+                    inventoryAdded: result.inventoryAdded,
+                    isDemo: result.isDemo,
+                    inventory: result.inventory,
+                    axeBroken: result.axeBroken,
+                    axeDurability: result.axeDurability,
+                    axeMaxDurability: result.axeMaxDurability,
+                    treeState: result.treeState
+                });
+                if (result.inventory) {
+                    await sendGameInventorySnapshot(playerId, player.walletAddress, 'wood_chop');
+                }
+                if (result.treeState && player.room) {
+                    broadcastToRoomAll(player.room, {
+                        type: 'forest_trees_update',
+                        trees: [result.treeState]
+                    });
+                }
+                if (player.walletAddress && result.inventoryAdded) {
+                    onboardingQuestService.handleWoodChop(player.walletAddress, {
+                        inventoryAdded: result.inventoryAdded,
+                        isDemo: result.isDemo,
+                    }).catch((err) => console.error('[OnboardingQuest] wood chop:', err));
+                }
+            } catch (error) {
+                console.error('🪓 Error in wood_chop_result:', error);
+                sendToPlayer(playerId, {
+                    type: 'wood_chop_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to process chop result'
+                });
+            }
+            break;
+        }
+        
         // ==================== GAME INVENTORY (fish, bait, rods) ====================
         case 'game_inventory_get': {
             if (!player.walletAddress) {
@@ -5452,6 +6147,79 @@ async function handleMessage(playerId, message) {
             break;
         }
 
+        case 'game_inventory_set_hotbar': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'game_inventory_error',
+                    error: 'NOT_AUTHENTICATED'
+                });
+                break;
+            }
+            try {
+                const { hotbarIndex, inventorySlot } = message;
+                const result = await gameInventoryService.setHotbarSlot(
+                    player.walletAddress,
+                    hotbarIndex,
+                    inventorySlot ?? null
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_snapshot',
+                        inventory: result.inventory
+                    });
+                }
+            } catch (error) {
+                console.error('🎮 Error in game_inventory_set_hotbar:', error);
+                sendToPlayer(playerId, {
+                    type: 'game_inventory_error',
+                    error: 'SERVER_ERROR'
+                });
+            }
+            break;
+        }
+
+        case 'game_inventory_set_active_hotbar': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'game_inventory_error',
+                    error: 'NOT_AUTHENTICATED'
+                });
+                break;
+            }
+            try {
+                const { hotbarIndex } = message;
+                const result = await gameInventoryService.setActiveHotbar(
+                    player.walletAddress,
+                    hotbarIndex
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_snapshot',
+                        inventory: result.inventory
+                    });
+                }
+            } catch (error) {
+                console.error('🎮 Error in game_inventory_set_active_hotbar:', error);
+                sendToPlayer(playerId, {
+                    type: 'game_inventory_error',
+                    error: 'SERVER_ERROR'
+                });
+            }
+            break;
+        }
+
         case 'backpack_upgrade': {
             if (!player.walletAddress) {
                 sendToPlayer(playerId, {
@@ -5494,6 +6262,8 @@ async function handleMessage(playerId, message) {
                         type: 'game_inventory_snapshot',
                         inventory: result.inventory
                     });
+                    onboardingQuestService.handleBackpackUpgrade(player.walletAddress)
+                        .catch((err) => console.error('[OnboardingQuest] backpack:', err));
                 }
             } catch (error) {
                 console.error('🎒 Error in backpack_upgrade:', error);
@@ -5558,11 +6328,150 @@ async function handleMessage(playerId, message) {
                         type: 'game_inventory_snapshot',
                         inventory: result.inventory
                     });
+                    if (resolvedMerchantId === 'fish_buyer') {
+                        onboardingQuestService.handleFishSell(player.walletAddress, resolvedMerchantId)
+                            .catch((err) => console.error('[OnboardingQuest] fish sell:', err));
+                    }
                 }
             } catch (error) {
                 console.error('🐟 Error in merchant_sell:', error);
                 sendToPlayer(playerId, {
                     type: 'merchant_sell_error',
+                    error: 'SERVER_ERROR'
+                });
+            }
+            break;
+        }
+
+        case 'merchant_sell_batch': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'merchant_sell_error',
+                    error: 'NOT_AUTHENTICATED'
+                });
+                break;
+            }
+            try {
+                const { sells, merchantId } = message;
+                const resolvedMerchantId = merchantId || 'fish_buyer';
+                if (!isPlayerNearMerchant(player, resolvedMerchantId)) {
+                    sendToPlayer(playerId, {
+                        type: 'merchant_sell_error',
+                        error: 'TOO_FAR',
+                        message: 'You need to be at the merchant to sell items'
+                    });
+                    break;
+                }
+                const result = await gameInventoryService.sellBatchAtMerchant(
+                    player.walletAddress,
+                    resolvedMerchantId,
+                    sells
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'merchant_sell_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'merchant_sell_result',
+                        goldEarned: result.goldEarned,
+                        quantitySold: result.quantitySold,
+                        stacksSold: result.stacksSold,
+                        merchantId: result.merchantId,
+                        merchantName: result.merchantName,
+                        newBalance: result.newBalance,
+                        inventory: result.inventory
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: result.newBalance,
+                        isAuthenticated: true
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_snapshot',
+                        inventory: result.inventory
+                    });
+                    if (resolvedMerchantId === 'fish_buyer') {
+                        onboardingQuestService.handleFishSell(player.walletAddress, resolvedMerchantId)
+                            .catch((err) => console.error('[OnboardingQuest] fish sell batch:', err));
+                    }
+                }
+            } catch (error) {
+                console.error('🐟 Error in merchant_sell_batch:', error);
+                sendToPlayer(playerId, {
+                    type: 'merchant_sell_error',
+                    error: 'SERVER_ERROR'
+                });
+            }
+            break;
+        }
+
+        case 'merchant_buy': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'merchant_buy_error',
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Connect wallet to buy items'
+                });
+                break;
+            }
+            try {
+                const { merchantId, itemId } = message;
+                console.log(`[MERCHANT] buy player=${playerId} merchant=${merchantId} item=${itemId}`);
+                if (!merchantId || !itemId) {
+                    sendToPlayer(playerId, {
+                        type: 'merchant_buy_error',
+                        error: 'INVALID_REQUEST'
+                    });
+                    break;
+                }
+                if (!isPlayerNearMerchant(player, merchantId)) {
+                    sendToPlayer(playerId, {
+                        type: 'merchant_buy_error',
+                        error: 'TOO_FAR',
+                        message: 'You need to be at the merchant to buy items'
+                    });
+                    break;
+                }
+                const result = await gameInventoryService.buyFromMerchant(
+                    player.walletAddress,
+                    merchantId,
+                    itemId
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'merchant_buy_error',
+                        error: result.error,
+                        message: result.message,
+                        cost: result.cost
+                    });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'merchant_buy_result',
+                        itemId: result.itemId,
+                        itemName: result.itemName,
+                        goldSpent: result.goldSpent,
+                        merchantId: result.merchantId,
+                        merchantName: result.merchantName,
+                        newBalance: result.newBalance,
+                        inventory: result.inventory
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: result.newBalance,
+                        isAuthenticated: true
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'game_inventory_snapshot',
+                        inventory: result.inventory
+                    });
+                }
+            } catch (error) {
+                console.error('🛒 Error in merchant_buy:', error);
+                sendToPlayer(playerId, {
+                    type: 'merchant_buy_error',
                     error: 'SERVER_ERROR'
                 });
             }
@@ -5764,8 +6673,8 @@ async function handleMessage(playerId, message) {
                 console.log(`🎰 Blackjack bet deducted: ${player.name} bet $${betAmount}, new balance: $${newBalance}`);
                 sendToPlayer(playerId, { type: 'coins_update', coins: newBalance, isAuthenticated: true });
                 
-                // Track bet for payout validation and spectator display
-                player.blackjackBet = betAmount;
+                // Track total bet for server-authoritative payout (supports double-down)
+                player.blackjackBet = (player.blackjackBet || 0) + betAmount;
                 
             } catch (err) {
                 console.error('🎰 Blackjack bet deduction error:', err);
@@ -5803,8 +6712,8 @@ async function handleMessage(playerId, message) {
         }
         
         case 'blackjack_payout': {
-            // Simple PvE blackjack payout - add coins and end PvE activity
-            const { amount, result, playerScore, dealerScore, playerHand, dealerHand, isDemo } = message;
+            // PvE blackjack — server computes payout from stored bet + result (client amount ignored)
+            const { result, playerScore, dealerScore, playerHand, dealerHand, isDemo } = message;
             
             if (isDemo) {
                 endPveActivity(playerId);
@@ -5818,28 +6727,57 @@ async function handleMessage(playerId, message) {
                 });
                 break;
             }
-            
-            // Validate payout amount (max win is 2.5x bet of 5000 = 12500)
-            const validatedAmount = Math.min(Math.max(0, amount || 0), 12500);
-            
+
+            const bet = player.blackjackBet || 0;
+            if (bet < 10 || bet > 10000) {
+                sendToPlayer(playerId, {
+                    type: 'blackjack_error',
+                    error: 'Invalid bet state'
+                });
+                break;
+            }
+
+            let validatedAmount = 0;
             const playerWon = result === 'WIN' || result === 'BLACKJACK';
+
+            switch (result) {
+                case 'WIN':
+                    validatedAmount = bet * 2;
+                    break;
+                case 'BLACKJACK':
+                    validatedAmount = bet + Math.floor(bet * 1.5);
+                    break;
+                case 'PUSH':
+                    validatedAmount = bet;
+                    break;
+                default:
+                    validatedAmount = 0;
+                    break;
+            }
+
+            validatedAmount = Math.min(Math.max(0, validatedAmount), 25000);
             
             if (validatedAmount > 0) {
                 try {
-                    // Add coins (winAmount already includes bet + winnings)
-                    const result = await userService.updateCoins(player.walletAddress, validatedAmount);
-                    if (!result.success) {
-                        console.error('🎰 Blackjack payout failed:', result.error);
+                    const payoutResult = await userService.addCoins(
+                        player.walletAddress,
+                        validatedAmount,
+                        'blackjack_win',
+                        { result, bet, playerScore, dealerScore },
+                        `Blackjack ${result}`
+                    );
+                    if (!payoutResult.success) {
+                        console.error('🎰 Blackjack payout failed:', payoutResult.error);
                         sendToPlayer(playerId, {
                             type: 'blackjack_error',
-                            error: result.error || 'Payout failed'
+                            error: payoutResult.error || 'Payout failed'
                         });
                         break;
                     }
                     
-                    const newBalance = result.newBalance || await userService.getUserCoins(player.walletAddress);
+                    const newBalance = payoutResult.newBalance ?? await userService.getUserCoins(player.walletAddress);
                     
-                    console.log(`🎰 Blackjack payout to ${player.name}: +${validatedAmount} coins (${result}), new balance: ${newBalance}`);
+                    console.log(`🎰 Blackjack payout to ${player.name}: +${validatedAmount} coins (${result}, bet=${bet}), new balance: ${newBalance}`);
                     
                     sendToPlayer(playerId, {
                         type: 'coins_update',
@@ -5855,7 +6793,6 @@ async function handleMessage(playerId, message) {
                     });
                 }
             } else {
-                // No payout but still update balance for push/loss
                 const newBalance = await userService.getUserCoins(player.walletAddress);
                 sendToPlayer(playerId, {
                     type: 'coins_update',
@@ -5874,7 +6811,7 @@ async function handleMessage(playerId, message) {
                     playerHand: playerHand || activity.state.playerHand,
                     dealerHand: dealerHand || activity.state.dealerHand,
                     payout: validatedAmount,
-                    bet: player.blackjackBet || 0,
+                    bet,
                     won: playerWon
                 });
             }
@@ -5886,7 +6823,7 @@ async function handleMessage(playerId, message) {
                     user.recordBlackjackResult({
                         result: result,
                         isPvE: true,
-                        coinsDelta: playerWon ? validatedAmount : (player.blackjackBet || 0),
+                        coinsDelta: playerWon ? validatedAmount : bet,
                         gotBlackjack: result === 'BLACKJACK',
                         busted: playerScore > 21
                     });
@@ -7041,27 +7978,37 @@ async function handleMessage(playerId, message) {
         
         // ==================== MINIGAME REWARDS ====================
         case 'minigame_reward': {
-            // Server-authoritative single-player minigame rewards
+            // Server-authoritative solo minigame rewards — amount from config, not client
             if (!player.isAuthenticated || !player.walletAddress) {
-                // Guests don't earn coins
                 break;
             }
             
-            const { gameId, won, coinsRequested } = message;
+            const { gameId, won } = message;
+            const normalizedGameId = normalizeMinigameId(gameId);
+            const rewardConfig = getMinigameRewardConfig(gameId);
+            const validatedCoins = getMinigameReward(gameId, !!won);
             
-            // Validate reward amount (prevent exploits)
-            const maxReward = 200; // Max coins from a single minigame
-            const validatedCoins = Math.min(Math.max(0, coinsRequested || 0), maxReward);
+            if (validatedCoins == null || validatedCoins <= 0) {
+                console.warn(`[MINIGAME] rejected reward gameId=${gameId} player=${playerId}`);
+                break;
+            }
+
+            if (rewardConfig?.requiredRoom && player.room !== rewardConfig.requiredRoom) {
+                sendChatFeedback(
+                    playerId,
+                    rewardConfig.requiredRoom === 'dojo'
+                        ? '🥋 Challenge Sensei in the Dojo for gold rewards.'
+                        : '❌ You cannot earn that reward here.'
+                );
+                break;
+            }
             
-            if (validatedCoins <= 0) break;
-            
-            // Award coins
             const result = await userService.addCoins(
                 player.walletAddress,
                 validatedCoins,
                 'minigame_reward',
-                { gameId },
-                `${won ? 'Won' : 'Played'} ${gameId}`
+                { gameId: normalizedGameId, won: !!won },
+                `${won ? 'Won' : 'Played'} ${normalizedGameId}`
             );
             
             if (result.success) {
@@ -7071,10 +8018,12 @@ async function handleMessage(playerId, message) {
                     isAuthenticated: true
                 });
                 
-                // Update stats
                 if (won) {
-                    statsService.recordResult(player.walletAddress, gameId, true, 0);
+                    statsService.recordResult(player.walletAddress, normalizedGameId, true, 0);
                 }
+
+                onboardingQuestService.handleMinigameReward(player.walletAddress, player.room)
+                    .catch((err) => console.error('[OnboardingQuest] minigame:', err));
             }
             break;
         }
@@ -7095,6 +8044,7 @@ setInterval(async () => {
             slotService.handleDisconnect(playerId);
             goldSlotsService.handleDisconnect(playerId);
             fishingService.handleDisconnect(playerId);
+            woodcuttingService.handleDisconnect(playerId);
             
             // End any PvE activities
             if (activePveActivities.has(playerId)) {
@@ -7397,6 +8347,8 @@ async function start() {
         
         // Initialize igloo database records
         await IglooService.initializeIgloos();
+
+        await forestTreeService.loadFromDatabase();
         
         // Start rent scheduler (checks for overdue rentals)
         rentScheduler.start();

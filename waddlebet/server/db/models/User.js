@@ -117,7 +117,13 @@ const userSchema = new mongoose.Schema({
         slots: {
             type: [mongoose.Schema.Types.Mixed],
             default: () => []
-        }
+        },
+        /** Hotbar slot → backpack slot index (tools only) */
+        hotbar: {
+            type: [mongoose.Schema.Types.Mixed],
+            default: () => [null, null, null, null, null]
+        },
+        activeHotbar: { type: Number, default: 0, min: 0, max: 4 }
     },
     fishingProgress: {
         skillXp: { type: Number, default: 0 },
@@ -126,6 +132,20 @@ const userSchema = new mongoose.Schema({
         equippedBait: { type: String, default: null },
         equippedLure: { type: String, default: null },
         totalCatches: { type: Number, default: 0 }
+    },
+
+    lastCasinoTrashScavenge: { type: Date, default: null },
+    /** Per scavenge spot id → last search time (each trash can is independent). */
+    scavengeSpotCooldowns: {
+        type: Map,
+        of: Date,
+        default: () => new Map()
+    },
+
+    /** Guided onboarding quest — teaches core gameplay loop. */
+    onboardingQuest: {
+        completedSteps: { type: [String], default: [] },
+        rewardClaimed: { type: Boolean, default: false },
     },
 
     // ========== COMPREHENSIVE STATISTICS ==========

@@ -126,22 +126,76 @@ class IceFishingHole extends BaseProp {
             group.add(mound);
         }
         
-        // Bucket prop (for caught fish)
-        const bucketGeometry = new THREE.CylinderGeometry(0.25, 0.2, 0.4, 8, 1, true);
+        // Bucket prop (sits on ice surface beside the hole)
+        const iceTopY = 0.4;
+        const bucketHeight = 0.4;
+        const bucketGeometry = new THREE.CylinderGeometry(0.25, 0.2, bucketHeight, 8, 1, true);
         const bucketMaterial = new THREE.MeshStandardMaterial({ 
             color: 0x666688,
             side: THREE.DoubleSide
         });
         const bucket = new THREE.Mesh(bucketGeometry, bucketMaterial);
-        bucket.position.set(1.5, 0.2, -0.5);
+        bucket.position.set(1.5, iceTopY + bucketHeight / 2, -0.5);
         group.add(bucket);
         
-        // Bucket bottom
         const bucketBottomGeometry = new THREE.CircleGeometry(0.2, 8);
         const bucketBottom = new THREE.Mesh(bucketBottomGeometry, bucketMaterial);
         bucketBottom.rotation.x = Math.PI / 2;
-        bucketBottom.position.set(1.5, 0.01, -0.5);
+        bucketBottom.position.set(1.5, iceTopY + 0.02, -0.5);
         group.add(bucketBottom);
+
+        // Cooler chest (fishing gear stash)
+        const coolerBody = new THREE.Mesh(
+            new THREE.BoxGeometry(0.9, 0.55, 0.55),
+            new THREE.MeshStandardMaterial({ color: 0x2266aa, roughness: 0.55 })
+        );
+        coolerBody.position.set(-1.6, iceTopY + 0.28, 0.6);
+        group.add(coolerBody);
+        const coolerLid = new THREE.Mesh(
+            new THREE.BoxGeometry(0.92, 0.12, 0.58),
+            new THREE.MeshStandardMaterial({ color: 0x3388cc, roughness: 0.45 })
+        );
+        coolerLid.position.set(-1.6, iceTopY + 0.62, 0.6);
+        group.add(coolerLid);
+        const coolerHandle = new THREE.Mesh(
+            new THREE.TorusGeometry(0.18, 0.03, 6, 12, Math.PI),
+            new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.6 })
+        );
+        coolerHandle.rotation.x = Math.PI / 2;
+        coolerHandle.position.set(-1.6, iceTopY + 0.72, 0.6);
+        group.add(coolerHandle);
+
+        // Folded camp stool
+        const stoolSeat = new THREE.Mesh(
+            new THREE.BoxGeometry(0.45, 0.06, 0.45),
+            new THREE.MeshStandardMaterial({ color: 0x8b4513, roughness: 0.85 })
+        );
+        stoolSeat.position.set(-0.4, iceTopY + 0.35, 1.85);
+        group.add(stoolSeat);
+        for (const [sx, sz] of [[-0.15, -0.15], [0.15, -0.15], [-0.15, 0.15], [0.15, 0.15]]) {
+            const leg = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.025, 0.025, 0.35, 6),
+                new THREE.MeshStandardMaterial({ color: 0x555555, metalness: 0.5 })
+            );
+            leg.position.set(-0.4 + sx, iceTopY + 0.18, 1.85 + sz);
+            group.add(leg);
+        }
+
+        // Tackle box + spare rod lean
+        const tackleBox = new THREE.Mesh(
+            new THREE.BoxGeometry(0.35, 0.2, 0.25),
+            new THREE.MeshStandardMaterial({ color: 0x2a4a2a, roughness: 0.7 })
+        );
+        tackleBox.position.set(0.5, iceTopY + 0.12, 1.65);
+        group.add(tackleBox);
+        const spareRod = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.025, 0.02, 1.6, 6),
+            new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.8 })
+        );
+        spareRod.rotation.z = Math.PI / 6;
+        spareRod.rotation.y = -0.4;
+        spareRod.position.set(0.2, iceTopY + 0.85, 1.45);
+        group.add(spareRod);
         
         // Store mesh and add to scene
         this.mesh = group;

@@ -9,12 +9,21 @@
  * - Winding gravel trails
  * - Scattered benches and rest areas
  * - Campfire clearing
- * - Stream/creek (visual only)
  * - Mountain "gates" at zone connections (90% perimeter coverage)
  */
 
 import CollisionSystem from '../engine/CollisionSystem';
 import { createProp, PROP_TYPES } from '../props';
+import { applyGroundPathSurface, groundPathMaterialProps } from '../utils/groundPathSurface';
+import {
+    createForestGroundTexture,
+    createForestPathTexture,
+        spawnFallenLog,
+        createForestButterflies,
+        spawnForestCabin,
+        TRAIL_LOG_PLACEMENTS,
+        BUTTERFLY_PATCHES,
+    } from './forest/ForestAmbience';
 
 /**
  * Helper to attach collision and trigger data to prop meshes
@@ -60,8 +69,36 @@ class ForestTrailsZone {
     static CENTER = ForestTrailsZone.ZONE_SIZE / 2; // 110
     
     // World offset - this zone is SOUTH of Snow Forts
-    static WORLD_OFFSET_X = 220; // Same X as Snow Forts
-    static WORLD_OFFSET_Z = 220; // Starts where Snow Forts ends (south)
+    static WORLD_OFFSET_X = 0;
+    static WORLD_OFFSET_Z = 0;
+
+    /** Trail width — all segments share this (PlaneGeometry w × d, Y-rotated flat). */
+    static PATH_WIDTH = 14;
+
+    /**
+     * Forest trail segments — edge-aligned, no overlapping meshes.
+     * Layout: north corridor (x≈70) → elbow to spawn (90,70) → hub cross → south-east leg.
+     */
+    static PATH_SEGMENTS = [
+        { id: 'north_entry', x: 70, z: 26, w: 14, d: 52 },
+        { id: 'north_elbow', x: 81, z: 59.25, w: 18, d: 14.5 },
+        { id: 'spawn_spur', x: 90, z: 73.5, w: 14, d: 13 },
+        { id: 'hub_trunk', x: 90, z: 92, w: 14, d: 24 },
+        { id: 'west_branch', x: 68, z: 100, w: 30, d: 14 },
+        { id: 'east_branch', x: 108.5, z: 100, w: 23, d: 14 },
+        { id: 'south_turn', x: 135, z: 107, w: 30, d: 14 },
+        { id: 'south_leg', x: 145, z: 167, w: 14, d: 106 },
+    ];
+
+    /** Axis-aligned bounds for a path segment (local zone coords). */
+    static pathBounds(seg) {
+        return {
+            minX: seg.x - seg.w / 2,
+            maxX: seg.x + seg.w / 2,
+            minZ: seg.z - seg.d / 2,
+            maxZ: seg.z + seg.d / 2,
+        };
+    }
     
     constructor(THREE) {
         this.THREE = THREE;
@@ -76,6 +113,22 @@ class ForestTrailsZone {
         this.groundPlane = null;
         this.furniture = []; // Sittable furniture (benches, logs)
         this._animatedCache = null;
+        this.zoneRoot = null;
+        this._butterflySystem = null;
+        this._forestCabin = null;
+    }
+
+    _initZoneRoot(scene) {
+        if (!this.zoneRoot) {
+            this.zoneRoot = new this.THREE.Group();
+            this.zoneRoot.name = 'forest_trails_zone_root';
+            scene.add(this.zoneRoot);
+        }
+    }
+
+    _addToZone(object) {
+        this.zoneRoot.add(object);
+        this.meshes.push(object);
     }
     
     /**
@@ -114,6 +167,8 @@ class ForestTrailsZone {
         const C = ForestTrailsZone.CENTER; // 110 (local center)
         const OX = ForestTrailsZone.WORLD_OFFSET_X; // 220
         const OZ = ForestTrailsZone.WORLD_OFFSET_Z; // 220
+
+        this._initZoneRoot(scene);
         
         // ==================== GROUND PLANE ====================
         this._createGroundPlane(scene, THREE, OX, OZ);
@@ -127,11 +182,11 @@ class ForestTrailsZone {
         // ==================== CAMPFIRE CLEARING ====================
         this._createCampfireClearing(scene, THREE, OX, OZ, C);
         
-        // ==================== STREAM/CREEK ====================
-        this._createStream(scene, THREE, OX, OZ, C);
-        
         // ==================== REST AREAS (Benches) ====================
         this._createRestAreas(scene, THREE, OX, OZ, C);
+
+        // ==================== AMBIENCE (grass, logs, cabin, butterflies) ====================
+        this._createAmbience(scene, THREE, OX, OZ, C);
         
         // ==================== ZONE BOUNDARY COLLISION ====================
         this._createBoundaryCollisions(C);
@@ -153,7 +208,8 @@ class ForestTrailsZone {
         const C = ForestTrailsZone.CENTER;
         const OX = ForestTrailsZone.WORLD_OFFSET_X;
         const OZ = ForestTrailsZone.WORLD_OFFSET_Z;
-        
+
+        this._initZoneRoot(scene);
         this._createGroundPlane(scene, THREE, OX, OZ);
         this._createPaths(scene, THREE, OX, OZ, C);
         await yieldFn();
@@ -168,10 +224,14 @@ class ForestTrailsZone {
         await yieldFn();
         
         this._createCampfireClearing(scene, THREE, OX, OZ, C);
-        this._createStream(scene, THREE, OX, OZ, C);
         await yieldFn();
         
         this._createRestAreas(scene, THREE, OX, OZ, C);
+        await yieldFn();
+
+        this._createAmbience(scene, THREE, OX, OZ, C);
+        await yieldFn();
+
         this._createBoundaryCollisions(C);
         this._createLighting(scene, THREE, OX, OZ, C);
         
@@ -179,18 +239,119 @@ class ForestTrailsZone {
         
         return this;
     }
+
+    /**
+     * Grass tufts, trail logs, mushrooms, butterflies, ranger cabin.
+     */
+    _createAmbience(scene, THREE, OX, OZ, C) {
+        TRAIL_LOG_PLACEMENTS.forEach(pos => {
+            if (pos.sit) {
+                try {
+                    const logProp = createProp(THREE, null, PROP_TYPES.LOG_SEAT, 0, 0, 0, { rotation: pos.rot });
+                    const mesh = attachPropData(logProp, logProp.group);
+                    mesh.position.set(OX + pos.x, 0, OZ + pos.z);
+                    mesh.rotation.y = pos.rot;
+                    this._addToZone(mesh);
+                    this.furniture.push({
+                        type: 'log',
+                        position: { x: OX + pos.x, z: OZ + pos.z },
+                        rotation: pos.rot,
+                        seatHeight: mesh.userData.interactionZone?.seatHeight || 0.8,
+                        platformHeight: 0,
+                        snapPoints: mesh.userData.interactionZone?.snapPoints,
+                        interactionRadius: 2.5
+                    });
+                    this.collisionSystem.addCollider(
+                        pos.x, pos.z,
+                        { type: 'box', size: { x: 2.5, z: 1.2 }, height: 1 },
+                        1, { name: 'trail_log' }, pos.rot
+                    );
+                } catch (e) { /* skip */ }
+            } else {
+                const decor = spawnFallenLog(THREE, this.zoneRoot, OX, OZ, pos, pos);
+                if (decor?.collider) {
+                    this.collisionSystem.addCollider(
+                        pos.x, pos.z,
+                        { type: 'box', size: decor.collider.size, height: decor.collider.height },
+                        1, { name: 'fallen_log_decor' }, pos.rot ?? 0
+                    );
+                }
+            }
+        });
+
+        // Harvestable mushrooms are spawned by MushroomClusterManager (server-synced)
+
+        // Mossy rocks along stream
+        [{ x: 172, z: 42, size: 'medium' }, { x: 152, z: 155, size: 'small' }, { x: 62, z: 155, size: 'small' }].forEach(r => {
+            try {
+                const rock = createProp(THREE, null, PROP_TYPES.ROCK, 0, 0, 0, { size: r.size });
+                const mesh = attachPropData(rock, rock.group);
+                mesh.position.set(OX + r.x, 0, OZ + r.z);
+                mesh.rotation.y = (r.x + r.z) * 0.07;
+                this._addToZone(mesh);
+            } catch (e) { /* skip */ }
+        });
+
+        this._butterflySystem = createForestButterflies(THREE, this.zoneRoot, BUTTERFLY_PATCHES, OX, OZ);
+
+        // Ranger cabin — northeast of main clearing, tucked off the main path
+        const cabinLocalX = 125;
+        const cabinLocalZ = 52;
+        this._forestCabin = spawnForestCabin(THREE, this.zoneRoot, OX, OZ, cabinLocalX, cabinLocalZ);
+        if (this._forestCabin) {
+            const cabinMesh = attachPropData(this._forestCabin, this._forestCabin.group);
+            this.collisionSystem.addCollider(
+                cabinLocalX, cabinLocalZ,
+                { type: 'box', size: { x: 10, z: 9 }, height: 4.5 },
+                1, { name: 'forest_cabin' }
+            );
+            if (cabinMesh.userData.interactionZone) {
+                // trigger handled by collision system via attachPropData
+            }
+
+            // Porch bench — west of the path, clear of Ranger Pike on the porch
+            const benchLocalX = cabinLocalX - 5;
+            const benchLocalZ = cabinLocalZ + 10;
+            const benchRotation = 0;
+            try {
+                const benchProp = createProp(THREE, null, PROP_TYPES.BENCH, 0, 0, 0, { withSnow: false });
+                const benchMesh = attachPropData(benchProp, benchProp.group);
+                benchMesh.position.set(OX + benchLocalX, 0, OZ + benchLocalZ);
+                benchMesh.rotation.y = benchRotation;
+                this._addToZone(benchMesh);
+                this.furniture.push({
+                    type: 'bench',
+                    position: { x: OX + benchLocalX, z: OZ + benchLocalZ },
+                    rotation: benchRotation,
+                    seatHeight: benchMesh.userData.interactionZone?.seatHeight || 1.2,
+                    platformHeight: 0,
+                    snapPoints: benchMesh.userData.interactionZone?.snapPoints,
+                    interactionRadius: 3.0,
+                    dismountBack: true
+                });
+                this.collisionSystem.addCollider(
+                    benchLocalX, benchLocalZ,
+                    { type: 'box', size: { x: 3, z: 1.2 }, height: 1.5 },
+                    1, { name: 'cabin_bench' }, benchRotation
+                );
+            } catch (e) { /* skip */ }
+        }
+
+        console.log('🌿 Forest ambience: logs, cabin, butterflies');
+    }
     
     /**
-     * Create the forest ground (darker, more earthy than snow)
+     * Create the forest ground (textured mossy floor)
      */
     _createGroundPlane(scene, THREE, OX, OZ) {
         const SIZE = ForestTrailsZone.ZONE_SIZE;
+        const groundTex = createForestGroundTexture(THREE);
         
-        // Forest floor - darker, mossy green-brown
         const groundGeo = new THREE.PlaneGeometry(SIZE, SIZE);
         const groundMat = new THREE.MeshStandardMaterial({
-            color: 0x2d4a2d, // Dark forest green
-            roughness: 0.95,
+            map: groundTex,
+            color: 0xa8c4a0,
+            roughness: 0.96,
             metalness: 0.0
         });
         
@@ -200,67 +361,87 @@ class ForestTrailsZone {
         ground.receiveShadow = true;
         ground.name = 'forest_ground';
         
-        scene.add(ground);
+        this._addToZone(ground);
         this.groundPlane = ground;
-        this.meshes.push(ground);
     }
     
     /**
-     * Create clean connected gravel paths through the forest
-     * Simple T-shape and L-shape connections, no overlaps
+     * Create connected forest trails — segments share edges only (no stacked overlaps).
      */
     _createPaths(scene, THREE, OX, OZ, C) {
-        // Path material matching TownCenter style
-        const pathColor = 0x8B7355; // Gravel brown
-        const pathMat = new THREE.MeshStandardMaterial({
-            color: pathColor,
-            roughness: 0.9,
-            metalness: 0.0
-        });
-        
-        const PATH_WIDTH = 14;
-        
-        // ===== CLEAN PATH LAYOUT (T-shape with south fork) =====
-        // 
-        //       NORTH (from Snow Forts)
-        //            |
-        //            | (vertical main path x=70)
-        //            |
-        //   ----[CLEARING]----  (horizontal at z=100)
-        //            |
-        //            | (vertical south path)
-        //            |
-        //   DOCK (future south exit at x=145)
-        
-        const paths = [
-            // ===== NORTH ENTRY (from Snow Forts, x=70, z=0-55) =====
-            { x: 70, z: 27, w: PATH_WIDTH, d: 55 },
-            
-            // ===== MAIN VERTICAL PATH (x=70, z=55-125) =====
-            { x: 70, z: 90, w: PATH_WIDTH, d: 70 },
-            
-            // ===== CENTRAL CLEARING (wider area at z=100) =====
-            { x: 90, z: 100, w: 55, d: 30 },
-            
-            // ===== WEST BRANCH (from clearing to west campsite) =====
-            { x: 45, z: 100, w: 35, d: PATH_WIDTH },
-            
-            // ===== EAST BRANCH (from clearing toward dock) =====
-            { x: 130, z: 100, w: 25, d: PATH_WIDTH },
-            
-            // ===== SOUTH PATH (from east branch to dock exit, z=100-220) =====
-            { x: 145, z: 160, w: PATH_WIDTH, d: 120 },
-        ];
-        
-        paths.forEach(p => {
-            const pathGeo = new THREE.PlaneGeometry(p.w, p.d);
-            const pathMesh = new THREE.Mesh(pathGeo, pathMat.clone());
+        const pathTex = createForestPathTexture(THREE);
+
+        ForestTrailsZone.PATH_SEGMENTS.forEach((seg) => {
+            const tex = pathTex.clone();
+            tex.repeat.set(Math.max(1, seg.w / 10), Math.max(1, seg.d / 10));
+
+            const pathMat = new THREE.MeshStandardMaterial({
+                map: tex,
+                color: 0xffffff,
+                roughness: 0.88,
+                metalness: 0.02,
+                ...groundPathMaterialProps(),
+            });
+
+            const pathGeo = new THREE.PlaneGeometry(seg.w, seg.d);
+            const pathMesh = new THREE.Mesh(pathGeo, pathMat);
             pathMesh.rotation.x = -Math.PI / 2;
-            pathMesh.position.set(OX + p.x, 0.02, OZ + p.z);
+            pathMesh.position.set(OX + seg.x, 0, OZ + seg.z);
+            applyGroundPathSurface(pathMesh);
             pathMesh.receiveShadow = true;
             pathMesh.name = 'forest_path';
-            scene.add(pathMesh);
-            this.meshes.push(pathMesh);
+            pathMesh.userData.pathSegmentId = seg.id;
+            this._addToZone(pathMesh);
+        });
+
+        this._decorateForestPaths(scene, THREE, OX, OZ);
+    }
+
+    /** Trail markers and pebble accents along path junctions. */
+    _decorateForestPaths(scene, THREE, OX, OZ) {
+        // Wooden trail posts at major junctions
+        const posts = [
+            { x: 70, z: 26, style: 'topped' },
+            { x: 81, z: 58, style: 'plain' },
+            { x: 90, z: 72, style: 'topped' },
+            { x: 68, z: 100, style: 'plain' },
+            { x: 108.5, z: 100, style: 'plain' },
+            { x: 132.5, z: 107, style: 'plain' },
+            { x: 145, z: 118, style: 'plain' },
+            { x: 145, z: 198, style: 'topped' },
+        ];
+
+        posts.forEach(({ x, z, style }) => {
+            try {
+                const post = createProp(THREE, null, PROP_TYPES.WOODEN_POST, 0, 0, 0, { style });
+                const mesh = attachPropData(post, post.group);
+                mesh.position.set(OX + x, 0, OZ + z);
+                mesh.name = 'forest_trail_post';
+                this._addToZone(mesh);
+            } catch {
+                // skip if prop unavailable
+            }
+        });
+
+        // Small pebble clusters at clearing corners
+        const pebbleMat = new THREE.MeshStandardMaterial({
+            color: 0x6a5848,
+            roughness: 0.92,
+            ...groundPathMaterialProps(),
+        });
+        const corners = [
+            { x: 66, z: 96 }, { x: 114, z: 96 },
+            { x: 66, z: 104 }, { x: 114, z: 104 },
+            { x: 132, z: 104 }, { x: 142, z: 108 }, { x: 142, z: 205 },
+        ];
+        corners.forEach(({ x, z }) => {
+            const cluster = new THREE.Mesh(new THREE.CircleGeometry(1.2 + Math.random() * 0.6, 8), pebbleMat.clone());
+            cluster.rotation.x = -Math.PI / 2;
+            cluster.position.set(OX + x + (Math.random() - 0.5) * 2, 0.07, OZ + z + (Math.random() - 0.5) * 2);
+            cluster.renderOrder = 2;
+            cluster.receiveShadow = true;
+            cluster.name = 'forest_path_pebbles';
+            this._addToZone(cluster);
         });
     }
     
@@ -319,8 +500,9 @@ class ForestTrailsZone {
                 treePositions.push({ x: finalX, z: finalZ, size });
             }
         }
-        
-        return treePositions;
+
+        // Keep ~10% of decorative trees — harvestable trees fill the forest instead
+        return treePositions.filter((_, index) => index % 10 === 0);
     }
     
     /**
@@ -336,8 +518,7 @@ class ForestTrailsZone {
             mesh.position.set(OX + pos.x, 0, OZ + pos.z);
             // Random rotation for variety
             mesh.rotation.y = Math.sin(pos.x + pos.z) * Math.PI;
-            scene.add(mesh);
-            this.meshes.push(mesh);
+            this._addToZone(mesh);
             
             // Add tree collision (smaller radius for dense forest navigation)
             this.collisionSystem.addCollider(
@@ -352,30 +533,17 @@ class ForestTrailsZone {
     }
     
     /**
-     * Check if position is on a path (matches _createPaths layout)
+     * Check if position is on a path (matches PATH_SEGMENTS layout).
      */
     _isOnPath(x, z) {
-        const PATH_HALF = 9; // Slightly wider check than actual path
-        
-        // North entry (x=70, z=0-55)
-        if (x > 70 - PATH_HALF && x < 70 + PATH_HALF && z < 60) return true;
-        
-        // Main vertical path (x=70, z=55-125)
-        if (x > 70 - PATH_HALF && x < 70 + PATH_HALF && z > 50 && z < 130) return true;
-        
-        // Central clearing (x=65-115, z=85-115)
-        if (x > 60 && x < 120 && z > 82 && z < 118) return true;
-        
-        // West branch (x=25-65, z=93-107)
-        if (x > 22 && x < 68 && z > 90 && z < 110) return true;
-        
-        // East branch (x=115-145, z=93-107)
-        if (x > 112 && x < 148 && z > 90 && z < 110) return true;
-        
-        // South path to dock (x=138-152, z=100-220)
-        if (x > 135 && x < 155 && z > 95 && z < 225) return true;
-        
-        return false;
+        const margin = 1.5;
+        return ForestTrailsZone.PATH_SEGMENTS.some((seg) => {
+            const b = ForestTrailsZone.pathBounds(seg);
+            return x >= b.minX - margin
+                && x <= b.maxX + margin
+                && z >= b.minZ - margin
+                && z <= b.maxZ + margin;
+        });
     }
     
     /**
@@ -404,8 +572,7 @@ class ForestTrailsZone {
             const campfireProp = createProp(THREE, null, PROP_TYPES.CAMPFIRE, 0, 0, 0, {});
             const mesh = attachPropData(campfireProp, campfireProp.group);
             mesh.position.set(worldX, 0, worldZ);
-            scene.add(mesh);
-            this.meshes.push(mesh);
+            this._addToZone(mesh);
             mesh.name = 'campfire';
             mesh.userData.campfireInstance = campfireProp;
             
@@ -434,8 +601,7 @@ class ForestTrailsZone {
                 const mesh = attachPropData(logProp, logProp.group);
                 mesh.position.set(worldX + offset.dx, 0, worldZ + offset.dz);
                 mesh.rotation.y = offset.rot;
-                scene.add(mesh);
-                this.meshes.push(mesh);
+                this._addToZone(mesh);
                 
                 // Register furniture for sitting
                 this.furniture.push({
@@ -463,59 +629,21 @@ class ForestTrailsZone {
     }
     
     /**
-     * Create decorative stream/creek
-     */
-    _createStream(scene, THREE, OX, OZ, C) {
-        // Stream flowing through the forest (visual only - no collision blocking)
-        const streamMat = new THREE.MeshStandardMaterial({
-            color: 0x4a7c9b,
-            roughness: 0.2,
-            metalness: 0.3,
-            transparent: true,
-            opacity: 0.7
-        });
-        
-        // Stream segments
-        const streamParts = [
-            { x: 170, z: 30, w: 6, d: 35, rot: 0.2 },
-            { x: 165, z: 65, w: 5, d: 30, rot: -0.1 },
-            { x: 160, z: 100, w: 6, d: 40, rot: 0.15 },
-            { x: 155, z: 145, w: 5, d: 35, rot: -0.2 },
-        ];
-        
-        streamParts.forEach(s => {
-            const streamGeo = new THREE.PlaneGeometry(s.w, s.d);
-            const streamMesh = new THREE.Mesh(streamGeo, streamMat.clone());
-            streamMesh.rotation.x = -Math.PI / 2;
-            streamMesh.rotation.z = s.rot;
-            streamMesh.position.set(OX + s.x, 0.01, OZ + s.z);
-            streamMesh.name = 'stream';
-            scene.add(streamMesh);
-            this.meshes.push(streamMesh);
-        });
-    }
-    
-    /**
      * Create rest areas with benches along trails
      */
     _createRestAreas(scene, THREE, OX, OZ, C) {
         // Benches positioned OFF the paths, facing the path
         const benchPositions = [
-            // Along north entry path (facing the path)
-            { x: 55, z: 25, rot: Math.PI / 2 },   // West of north path
-            { x: 85, z: 40, rot: -Math.PI / 2 },  // East of north path
-            
-            // Along central clearing edges
-            { x: 55, z: 80, rot: Math.PI / 4 },   // NW of clearing
-            { x: 115, z: 80, rot: -Math.PI / 4 }, // NE of clearing
-            { x: 55, z: 120, rot: -Math.PI / 4 }, // SW of clearing
-            { x: 115, z: 120, rot: Math.PI / 4 }, // SE of clearing
-            
-            // Along south path to dock
-            { x: 165, z: 130, rot: -Math.PI / 2 }, // East of south path
-            { x: 125, z: 150, rot: Math.PI / 2 },  // West of south path
-            { x: 165, z: 180, rot: -Math.PI / 2 }, // East of south path
-            { x: 125, z: 200, rot: Math.PI / 2 },  // West of south path
+            { x: 55, z: 25, rot: Math.PI / 2 },
+            { x: 88, z: 42, rot: -Math.PI / 2 },
+            { x: 48, z: 98, rot: Math.PI / 2 },
+            { x: 118, z: 98, rot: -Math.PI / 2 },
+            { x: 48, z: 102, rot: Math.PI / 2 },
+            { x: 118, z: 102, rot: -Math.PI / 2 },
+            { x: 165, z: 130, rot: -Math.PI / 2 },
+            { x: 125, z: 150, rot: Math.PI / 2 },
+            { x: 165, z: 180, rot: -Math.PI / 2 },
+            { x: 125, z: 200, rot: Math.PI / 2 },
         ];
         
         benchPositions.forEach(pos => {
@@ -524,8 +652,7 @@ class ForestTrailsZone {
                 const mesh = attachPropData(benchProp, benchProp.group);
                 mesh.position.set(OX + pos.x, 0, OZ + pos.z);
                 mesh.rotation.y = pos.rot;
-                scene.add(mesh);
-                this.meshes.push(mesh);
+                this._addToZone(mesh);
                 
                 // Register furniture for sitting (REQUIRED for "Press E to sit")
                 this.furniture.push({
@@ -555,17 +682,12 @@ class ForestTrailsZone {
         
         // Scattered lamp posts along paths for night visibility
         const lampPositions = [
-            // North entry path
             { x: 60, z: 15 },
-            { x: 80, z: 45 },
-            
-            // Central clearing corners
-            { x: 65, z: 90 },
-            { x: 115, z: 90 },
-            { x: 65, z: 110 },
-            { x: 115, z: 110 },
-            
-            // South path to dock
+            { x: 78, z: 45 },
+            { x: 66, z: 72 },
+            { x: 102, z: 72 },
+            { x: 58, z: 100 },
+            { x: 118, z: 100 },
             { x: 135, z: 125 },
             { x: 155, z: 145 },
             { x: 135, z: 170 },
@@ -580,8 +702,7 @@ class ForestTrailsZone {
                 });
                 const mesh = attachPropData(lampProp, lampProp.group);
                 mesh.position.set(OX + pos.x, 0, OZ + pos.z);
-                scene.add(mesh);
-                this.meshes.push(mesh);
+                this._addToZone(mesh);
                 
                 // Collision for lamp post
                 this.collisionSystem.addCollider(
@@ -659,7 +780,7 @@ class ForestTrailsZone {
     _createLighting(scene, THREE, OX, OZ, C) {
         // Ambient light for the forest (slightly dimmer, greenish tint)
         const ambientLight = new THREE.AmbientLight(0x4a6b4a, 0.4);
-        scene.add(ambientLight);
+        this.zoneRoot.add(ambientLight);
         this.lights.push(ambientLight);
         
         // Campfire point lights (one per campsite)
@@ -672,7 +793,7 @@ class ForestTrailsZone {
         campfireLightPositions.forEach(pos => {
             const light = new THREE.PointLight(0xff6622, 2, 25);
             light.position.set(OX + pos.x, 3, OZ + pos.z);
-            scene.add(light);
+            this.zoneRoot.add(light);
             this.lights.push(light);
         });
     }
@@ -720,6 +841,20 @@ class ForestTrailsZone {
                 }
             }
         });
+
+        if (this._butterflySystem?.update) {
+            this._butterflySystem.update(time, playerPos);
+        }
+
+        if (this._forestCabin?.update && frame % 2 === 0) {
+            const cx = this._forestCabin.group?.position.x ?? 0;
+            const cz = this._forestCabin.group?.position.z ?? 0;
+            const cdx = px - cx;
+            const cdz = pz - cz;
+            if (cdx * cdx + cdz * cdz < ANIMATION_DISTANCE_SQ) {
+                this._forestCabin.update(time);
+            }
+        }
     }
     
     /**
@@ -767,6 +902,12 @@ class ForestTrailsZone {
         this.furniture = [];
         this.collisionSystem.clear();
         this._animatedCache = null;
+        this._butterflySystem = null;
+        this._forestCabin = null;
+        if (this.zoneRoot?.parent) {
+            this.zoneRoot.parent.remove(this.zoneRoot);
+        }
+        this.zoneRoot = null;
     }
 }
 

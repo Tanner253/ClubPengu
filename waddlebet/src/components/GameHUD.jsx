@@ -6,8 +6,10 @@ import StatsModal from './StatsModal';
 import PebblesPurchaseModal from './PebblesPurchaseModal';
 import InventoryModal from './InventoryModal';
 import GameInventoryModal from './GameInventoryModal';
+import GameHotbar from './GameHotbar';
 import MarketplaceModal from './MarketplaceModal';
 import TutorialModal, { shouldShowTutorial } from './TutorialModal';
+import OnboardingQuestHUD from './OnboardingQuestHUD';
 import DailyBonusModal from './DailyBonusModal';
 import ServerPopulationPopup from './ServerPopulationPopup';
 import { useMultiplayer } from '../multiplayer';
@@ -354,6 +356,14 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     isOpen={showDailyBonus}
                     onClose={() => setShowDailyBonus(false)}
                 />
+
+                <OnboardingQuestHUD isMobile={isMobile} isPortrait={isPortrait} />
+
+                {isAuthenticated && (
+                    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+                        <GameHotbar />
+                    </div>
+                )}
             </>
         );
     }
@@ -493,6 +503,12 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     </div>
                 </div>
             )}
+
+            {isAuthenticated && (
+                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
+                    <GameHotbar />
+                </div>
+            )}
             
             {/* Full Stats Modal */}
             <StatsModal
@@ -538,6 +554,8 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 isOpen={showDailyBonus}
                 onClose={() => setShowDailyBonus(false)}
             />
+
+            <OnboardingQuestHUD isMobile={isMobile} isPortrait={isPortrait} />
         </>
     );
 };

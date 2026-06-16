@@ -40,7 +40,15 @@ const transactionSchema = new mongoose.Schema({
             'fishing_catch',     // Legacy: coins earned from fishing (pre-inventory)
             'fish_catch_inventory', // Fish added to game inventory (no gold)
             'fish_sell_npc',     // Fish sold at Fish Buyer NPC for gold
+            'wood_sell_npc',     // Wood sold at supply merchant for gold
+            'wood_sell_ranger',  // Wood/forage sold at forest ranger for gold
+            'merchant_buy',      // Tool/consumable purchased from merchant NPC
+            'merchant_buy_refund', // Refund when purchase inventory add fails
             'backpack_upgrade',  // Gold spent to unlock more backpack slots
+            'travel_ticket',     // Ferry / overworld travel ticket purchase
+            'travel_refund',     // Ferry ticket refund (leave boarding / cancel)
+            'scavenge',          // Gold found scavenging world props
+            'onboarding_quest_reward', // Gold for completing the guided onboarding quest
             'blackjack_bet',     // PvE blackjack bet
             'blackjack_win',     // PvE blackjack payout
             // ========== GACHA/PEBBLE TYPES ==========

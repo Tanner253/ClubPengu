@@ -5,17 +5,22 @@
 import React, { useState, useEffect, useLayoutEffect, useRef, useCallback, useMemo } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { useLanguage } from '../i18n';
-import { CHAT_TAB_CONFIG, getMessageSenderRole, getStaffChatTag } from '../utils/chatChannels';
+import { CHAT_TAB_CONFIG, getStaffChatTag, resolveMessageStaffRole } from '../utils/chatChannels';
 import {
     buildCommandInput,
     canExecuteCommand,
     completeChatInput,
-    getCommandSuggestions,
+    getAllChatSuggestions,
     getHelpMessages,
+    getIncompleteWarpMessage,
+    getUnknownCommandMessage,
     isDevEnvironment,
     isHelpCommand,
+    isServerHandledSlashCommand,
     isStaffRole,
-    shouldShowCommandSuggestions
+    isUnknownSlashCommand,
+    resolveCommandTextOnSend,
+    shouldShowChatSuggestions
 } from '../utils/chatCommands';
 
 const MESSAGE_TYPE_CLASS = {
@@ -35,6 +40,7 @@ const CHAT_MINIMIZED_KEY = 'waddlebet_chat_minimized';
 const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = false, onNewMessage }) => {
     const {
         chatByChannel,
+        playerId,
         playerName,
         sendChat,
         sendAfk,
@@ -193,12 +199,18 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
     const isStaff = isStaffRole(userData);
     const isDev = isDevEnvironment();
 
+    const staffRoleContext = useMemo(() => ({
+        playerId,
+        playerName,
+        userRole: userData?.role || null
+    }), [playerId, playerName, userData?.role]);
+
     const commandSuggestions = useMemo(
-        () => getCommandSuggestions(inputValue, { isStaff, isDev }),
+        () => getAllChatSuggestions(inputValue, { isStaff, isDev }),
         [inputValue, isStaff, isDev]
     );
     const showCommandSuggestions = canWrite
-        && shouldShowCommandSuggestions(inputValue)
+        && shouldShowChatSuggestions(inputValue)
         && commandSuggestions.length > 0;
 
     useEffect(() => {
@@ -247,12 +259,24 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
 
     const handleSend = () => {
         if (!inputValue.trim() || !canWrite) return;
-        const text = inputValue.trim();
 
-        if (shouldShowCommandSuggestions(text) && commandSuggestions.length > 0 && !canExecuteCommand(text)) {
-            applyCommandSuggestion(commandSuggestions[suggestionIndex] || commandSuggestions[0]);
+        const resolved = resolveCommandTextOnSend(inputValue, {
+            showSuggestions: showCommandSuggestions,
+            suggestions: commandSuggestions,
+            suggestionIndex,
+            isStaff
+        });
+
+        if (resolved.action === 'apply') {
+            setInputValue(resolved.text);
+            setSuggestionIndex(0);
+            setAutocompleteIndex(0);
+            setLastTabInput('');
+            inputRef.current?.focus();
             return;
         }
+
+        const text = resolved.text;
 
         const whisperMatch = text.match(/^\/w(?:hisper)?\s+(\S+)\s+(.+)$/i);
         if (whisperMatch) {
@@ -307,6 +331,32 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
             window.dispatchEvent(new CustomEvent('chatCommand', {
                 detail: { command: 'afk', message: displayMsg }
             }));
+            finishSendInput();
+            return;
+        }
+
+        if (/^\/warp(\s|$)/i.test(text)) {
+            if (!isStaff) {
+                addLocalChatMessage(getUnknownCommandMessage(text));
+                finishSendInput();
+                return;
+            }
+            if (/^\/warp\s*$/i.test(text)) {
+                addLocalChatMessage(getIncompleteWarpMessage({ isStaff }));
+                finishSendInput();
+                return;
+            }
+        }
+
+        if (isServerHandledSlashCommand(text, { isStaff })) {
+            const channel = activeChatTab === 'global' ? 'global' : 'room';
+            sendChat(text, channel);
+            finishSendInput();
+            return;
+        }
+
+        if (isUnknownSlashCommand(text, { isStaff })) {
+            addLocalChatMessage(getUnknownCommandMessage(text));
             finishSendInput();
             return;
         }
@@ -370,22 +420,34 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     };
 
-    const renderPlayerChatLine = (msg, body) => {
-        const isPublicChat = msg.channel === 'room' || msg.channel === 'global';
-        const staffRole = isPublicChat ? getMessageSenderRole(msg) : null;
-        const staffTag = getStaffChatTag(staffRole);
-        const nameClass = msg.name === playerName ? 'rs-chat-msg-self' : 'rs-chat-msg-name';
+    const renderStaffTag = (msg) => {
+        const staffTag = getStaffChatTag(resolveMessageStaffRole(msg, {
+            ...staffRoleContext,
+            playersById: getPlayersData?.()
+        }));
+        if (!staffTag) return null;
+        return <span className="rs-chat-staff-tag">[{staffTag}] </span>;
+    };
+
+    const renderPlayerChatLine = (msg, body, nameOverride = null) => {
+        const nameClass = (nameOverride || msg.name) === playerName ? 'rs-chat-msg-self' : 'rs-chat-msg-name';
 
         return (
             <>
-                {staffTag && <span className="rs-chat-staff-tag">[{staffTag}] </span>}
-                <span className={nameClass}>{msg.name}:</span>
+                {renderStaffTag(msg)}
+                <span className={nameClass}>{nameOverride || msg.name}:</span>
                 <span className="rs-chat-msg-body"> {body}</span>
             </>
         );
     };
 
     const renderMessage = (msg, idx) => {
+        const isPlayerLine = msg.type === 'local'
+            || msg.type === 'afk'
+            || ((msg.channel === 'global' || msg.channel === 'room') && msg.playerId && msg.playerId !== 'system')
+            || (!msg.type && !msg.channel);
+        const isSystemLine = !isPlayerLine
+            && (msg.type === 'system' || ['casino', 'announcement', 'market'].includes(msg.channel));
         const typeClass = (msg.type === 'system' && MESSAGE_TYPE_CLASS[msg.channel])
             ? MESSAGE_TYPE_CLASS[msg.channel]
             : MESSAGE_TYPE_CLASS[msg.type] || MESSAGE_TYPE_CLASS.local;
@@ -397,23 +459,25 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
                 {timeLabel && <span className="rs-chat-msg-time">[{timeLabel}] </span>}
                 {msg.type === 'whisperIn' && (
                     <>
+                        {renderStaffTag(msg)}
                         <span className="rs-chat-msg-name">[From {msg.fromName || msg.name}]: </span>
                         <span className="rs-chat-msg-body">{body}</span>
                     </>
                 )}
                 {msg.type === 'whisperOut' && (
                     <>
+                        {renderStaffTag(msg)}
                         <span className="rs-chat-msg-name">{msg.name}: </span>
                         <span className="rs-chat-msg-body">{body}</span>
                     </>
                 )}
-                {(msg.type === 'system' || ['casino', 'announcement', 'market'].includes(msg.channel)) && (
+                {isSystemLine && (
                     <>
                         <span className="rs-chat-msg-name">[{msg.name}] </span>
                         <span className="rs-chat-msg-body">{body}</span>
                     </>
                 )}
-                {(msg.type === 'local' || msg.type === 'afk' || (!msg.type && !msg.channel)) && (
+                {isPlayerLine && (
                     renderPlayerChatLine(msg, body)
                 )}
             </div>
@@ -615,7 +679,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         );
     }
 
-    const chatPositionClass = 'bottom-20 left-4';
+    const chatPositionClass = minigameMode ? 'bottom-4 right-4' : 'bottom-20 left-4';
     const chatZClass = minigameMode ? 'z-[10050]' : 'z-30';
 
     if (isMinimized) {

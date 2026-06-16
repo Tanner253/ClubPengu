@@ -316,8 +316,8 @@ const CardJitsu = ({ penguinData, onExit }) => {
                 )}
             </div>
             
-            {/* How to Play Panel */}
-            <div className="absolute bottom-4 left-4 bg-black/70 backdrop-blur-sm rounded-lg p-3 text-xs text-white/80 hidden md:block border border-white/10">
+            {/* How to Play Panel — bottom-left; chat moves to bottom-right in minigame mode */}
+            <div className="absolute bottom-4 left-4 max-w-[14rem] bg-black/70 backdrop-blur-sm rounded-lg p-3 text-xs text-white/80 hidden md:block border border-white/10 z-10">
                 <div className="font-bold text-yellow-400 mb-2 retro-text">HOW TO WIN</div>
                 <div className="space-y-1 mb-2">
                     <p>🔥 Fire beats ❄️ Snow</p>

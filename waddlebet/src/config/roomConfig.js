@@ -11,18 +11,21 @@ export const BUILDING_SCALE = 4;
 export const CENTER_X = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
 export const CENTER_Z = (CITY_SIZE / 2) * BUILDING_SCALE; // 110
 
-/** Default world spawn offset from center (nightclub interior) */
-export const WORLD_SPAWN_OFFSET = { x: -101.8, z: -98.8 };
+/** Default world spawn offset from town center (C) */
+export const WORLD_SPAWN_OFFSET = { x: 0.4, z: 33.7 };
 
-/** Default world spawn — nightclub interior at C-101.8, C-98.8 */
+/** Default world spawn — town plaza at C+0.4, C+33.7 (matches /spawn) */
 export const WORLD_SPAWN = {
     x: CENTER_X + WORLD_SPAWN_OFFSET.x,
     z: CENTER_Z + WORLD_SPAWN_OFFSET.z,
 };
 
-export const WORLD_SPAWN_ROOM = 'nightclub';
+export const WORLD_SPAWN_ROOM = 'town';
 
-/** Nightclub /spawn point as a full position (matches /spawn command) */
+/** Nightclub interior spawn (separate from world /spawn) */
+export const NIGHTCLUB_INTERIOR_SPAWN = { x: 0, z: -55 };
+
+/** World /spawn point as a full position */
 export function getNightclubSpawnPosition() {
     return { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
 }
@@ -133,12 +136,14 @@ export const AI_CONVERSATIONS = [
 
 // Room spawn positions
 export const ROOM_SPAWNS = {
-    town: { x: 0, z: 0 },
+    town: { x: WORLD_SPAWN.x, z: WORLD_SPAWN.z },
+    snow_forts: { x: 49.9, z: 64.3 },
+    forest_trails: { x: 90, z: 70 }, // sync with overworldConfig FOREST_TRAILS_SPAWN
     dojo: { x: 0, z: 12 },
     pizza: { x: 0, z: 12 },
-    nightclub: { x: WORLD_SPAWN.x, z: WORLD_SPAWN.z },
+    nightclub: { x: NIGHTCLUB_INTERIOR_SPAWN.x, z: NIGHTCLUB_INTERIOR_SPAWN.z },
     igloo: { x: 0, z: 10 },
-    casino_game_room: { x: 10, z: 10 }  // Near entrance from casino portal room
+    casino_game_room: { x: 40, z: 82 }  // Near back-wall entrance from Snow Forts casino
 };
 
 // ==================== PORTAL DEFINITIONS ====================
@@ -156,16 +161,6 @@ export const ROOM_PORTALS = {
             // Dojo at (0, 70), rotated π (door faces north)
             position: { x: 0, z: 62 },
             doorRadius: 3.5
-        },
-        {
-            id: 'casino-game-room',
-            name: 'GAME ROOM',
-            emoji: '🎰',
-            description: 'Enter the Casino',
-            targetRoom: 'casino_game_room',
-            position: { x: -30.8, z: 2.8 },  // Red carpet in front of casino (east approach)
-            doorRadius: 3.5,
-            exitSpawnPos: { x: -30.8, z: 2.8 }  // Same spot when exiting game room
         },
         // NORTH ROW IGLOOS (north of T-bar, rotation: 0, door faces SOUTH toward street)
         // Igloos at z ~ -75, doors at z ~ -70, exit spawn at z ~ -62 (on street)
@@ -314,6 +309,19 @@ export const ROOM_PORTALS = {
             teleportToRoof: true
         }
     ],
+    snow_forts: [
+        {
+            id: 'casino-game-room',
+            name: 'GAME ROOM',
+            emoji: '🎰',
+            description: 'Enter the Casino Game Room',
+            targetRoom: 'casino_game_room',
+            position: { x: -11, z: 0 },
+            doorRadius: 3.5,
+            exitSpawnPos: { x: -11, z: 0 }
+        },
+    ],
+    forest_trails: [],
     pizza: [
         { 
             id: 'pizza-exit', 
@@ -374,13 +382,11 @@ export const ROOM_PORTALS = {
             id: 'casino-game-room-exit', 
             name: 'EXIT', 
             emoji: '🎰', 
-            description: 'Return to Casino',
-            targetRoom: 'town',
-            // Exit door at center-x (40), near back wall (87+2)
+            description: 'Return to Snow Forts',
+            targetRoom: 'snow_forts',
             position: { x: 40, z: 89 },
             doorRadius: 3,
-            // Spawn on red carpet in front of casino when exiting game room
-            exitSpawnPos: { x: -30.8, z: 2.8 }
+            exitSpawnPos: { x: -11, z: 0 }
         }
     ]
 };

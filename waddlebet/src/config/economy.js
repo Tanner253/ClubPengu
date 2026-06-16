@@ -9,15 +9,103 @@ export const GAME_INVENTORY = {
     MAX_SLOTS: 60,
     SLOTS_PER_UPGRADE: 5,
     UPGRADE_BASE_COST: 250,
-    UPGRADE_COST_MULTIPLIER: 3.5
+    UPGRADE_COST_MULTIPLIER: 3.5,
+    BACKPACK_WOOD_TYPES: ['pine_log', 'birch_log', 'oak_log', 'ironwood_log'],
+    BACKPACK_WOOD_STACK: 64,
+    BACKPACK_WOOD_STARTS_AT_UPGRADE: 2,
+    BACKPACK_WOOD_BASE_RATIO: 0.5,
+    BACKPACK_WOOD_SCALE: 1.25
 };
+
+export function getBackpackWoodRequirements(unlockedSlots) {
+    const gi = GAME_INVENTORY;
+    if (unlockedSlots >= gi.MAX_SLOTS) return null;
+
+    const completedUpgrades = Math.floor((unlockedSlots - gi.DEFAULT_SLOTS) / gi.SLOTS_PER_UPGRADE);
+    const nextUpgradeNumber = completedUpgrades + 1;
+    if (nextUpgradeNumber < gi.BACKPACK_WOOD_STARTS_AT_UPGRADE) return null;
+
+    const woodTier = nextUpgradeNumber - gi.BACKPACK_WOOD_STARTS_AT_UPGRADE + 1;
+    const baseQty = Math.round(gi.BACKPACK_WOOD_STACK * gi.BACKPACK_WOOD_BASE_RATIO);
+    const qtyPerType = Math.min(
+        gi.BACKPACK_WOOD_STACK,
+        Math.round(baseQty * Math.pow(gi.BACKPACK_WOOD_SCALE, woodTier - 1))
+    );
+
+    const woodRequired = {};
+    for (const itemId of gi.BACKPACK_WOOD_TYPES) {
+        woodRequired[itemId] = qtyPerType;
+    }
+    return woodRequired;
+}
 
 export function getBackpackUpgradeInfo(unlockedSlots) {
     if (unlockedSlots >= GAME_INVENTORY.MAX_SLOTS) return null;
     const tier = Math.max(0, Math.floor((unlockedSlots - GAME_INVENTORY.DEFAULT_SLOTS) / GAME_INVENTORY.SLOTS_PER_UPGRADE));
     const nextSlots = Math.min(unlockedSlots + GAME_INVENTORY.SLOTS_PER_UPGRADE, GAME_INVENTORY.MAX_SLOTS);
     const cost = Math.round(GAME_INVENTORY.UPGRADE_BASE_COST * Math.pow(GAME_INVENTORY.UPGRADE_COST_MULTIPLIER, tier));
-    return { nextSlots, cost, slotsAdded: nextSlots - unlockedSlots };
+    return {
+        nextSlots,
+        cost,
+        slotsAdded: nextSlots - unlockedSlots,
+        upgradeNumber: tier + 1,
+        woodRequired: getBackpackWoodRequirements(unlockedSlots)
+    };
 }
+
+export const WOOD_LABELS = {
+    pine_log: 'Pine',
+    birch_log: 'Birch',
+    oak_log: 'Oak',
+    ironwood_log: 'Ironwood'
+};
+
+/** Tool prices at Copper Clive — sync with server/config/economy.js */
+export const MERCHANT_TOOL_COSTS = {
+    basic_axe: 100,
+    iron_axe: 450,
+    steel_axe: 1400,
+    master_axe: 3800
+};
+
+export const HOTBAR = {
+    SIZE: 5
+};
+
+export const STAGE_DURABILITY_LOSS = {
+    sapling: 1,
+    baby: 3,
+    mature: 6,
+    elder: 12
+};
+
+export const AXE_DURABILITY_MULTIPLIER = {
+    basic_axe: 1.35,
+    iron_axe: 1.0,
+    steel_axe: 0.75,
+    master_axe: 0.5
+};
+
+export function getChopDurabilityLoss(stage, axeItemId = 'basic_axe') {
+    const base = STAGE_DURABILITY_LOSS[stage] ?? 1;
+    const mult = AXE_DURABILITY_MULTIPLIER[axeItemId] ?? 1;
+    return Math.max(1, Math.ceil(base * mult));
+}
+
+export const TOOL_DURABILITY = {
+    basic_axe: { max: 80, lossPerChop: 1 },
+    iron_axe: { max: 220, lossPerChop: 1 },
+    steel_axe: { max: 400, lossPerChop: 1 },
+    master_axe: { max: 650, lossPerChop: 1 }
+};
+
+export const AXE_ITEM_IDS = ['basic_axe', 'iron_axe', 'steel_axe', 'master_axe'];
+
+export const WOOD_NPC_VALUE = {
+    pine_log: 3,
+    birch_log: 6,
+    oak_log: 10,
+    ironwood_log: 16
+};
 
 export default GAME_INVENTORY;

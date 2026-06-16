@@ -77,7 +77,35 @@ import MemoryMatchGame from './minigames/MemoryMatchGame';
 import ThinIceGame from './minigames/ThinIceGame';
 import AvalancheRunGame from './minigames/AvalancheRunGame';
 import WorldNpcManager from './npcs/WorldNpcManager';
+import TravelNpcManager from './npcs/TravelNpcManager';
 import NpcDialogueModal from './components/NpcDialogueModal';
+import TravelDialogueModal from './components/TravelDialogueModal';
+import TravelLobbyHUD from './components/TravelLobbyHUD';
+import { isTravelLobbyRoom, TRAVEL_LOBBY_CAMERA } from './config/travelConfig';
+import TravelLobbyRoom from './rooms/TravelLobbyRoom';
+import WoodcuttingSystem from './systems/WoodcuttingSystem';
+import ForestTreeManager from './systems/ForestTreeManager';
+import { getOverworldMountainConfig, FOREST_TRAILS_SPAWN, SNOW_FORTS_ARRIVAL } from './config/overworldConfig';
+import { loadSnowFortsQuadrant, loadForestQuadrant } from './world/overworldLoader';
+import { HARVESTABLE_MUSHROOMS, MUSHROOM_INTERACTION_RADIUS } from './config/harvestableMushrooms';
+import { findActiveScavengeSpot } from './config/scavenge';
+import { formatScavengeCountdown, getScavengeRemainingMs, getScavengeSpotPrompt } from './utils/scavengeStatus';
+import { updateHeldGameItem, removeHeldGameItem } from './items/HeldGameItemBuilder';
+import { getActiveHotbarEntry } from './utils/gameHotbar';
+
+function syncRemotePlayerHeldItem(meshData, playerData, buildPartMerged) {
+    if (!meshData?.mesh || !buildPartMerged) return;
+    const entry = playerData?.heldHotbarItem;
+    const key = entry?.itemId ? `${entry.itemId}:${entry.tier || 0}` : '';
+    if (meshData.lastHeldItemKey === key && !playerData.needsHeldItemUpdate) return;
+    meshData.lastHeldItemKey = key;
+    playerData.needsHeldItemUpdate = false;
+    if (entry?.itemId) {
+        updateHeldGameItem(meshData.mesh, buildPartMerged, entry);
+    } else {
+        removeHeldGameItem(meshData.mesh);
+    }
+}
 import GameInventoryModal from './components/GameInventoryModal';
 
 const VoxelWorld = ({ 
@@ -117,7 +145,7 @@ const VoxelWorld = ({
     const roomRef = useRef(room); // Track current room
     const townCenterRef = useRef(null); // TownCenter room instance
     const snowFortsZoneRef = useRef(null); // Snow Forts zone instance (east of town)
-    const forestTrailsZoneRef = useRef(null); // Forest Trails zone instance (south of Snow Forts)
+    const forestTrailsZoneRef = useRef(null);
     const nightclubRef = useRef(null); // Nightclub room instance
     const casinoRoomRef = useRef(null); // CasinoRoom room instance
     const sknyIglooInteriorRef = useRef(null); // SKNY GANG igloo interior (with update function)
@@ -149,13 +177,17 @@ const VoxelWorld = ({
     }, [onWorldReady]);
     
     const wasInCasinoRef = useRef(false); // Track if player was inside casino (for one-time zoom)
+    const previousRoomRef = useRef(null);
     const nearTownFurnitureRef = useRef(null); // Cached furniture proximity (throttled scan)
-    const casinoZoomTransitionRef = useRef({ active: false, targetDistance: 20, progress: 0 }); // Casino zoom state
+    const casinoZoomTransitionRef = useRef({ active: false, targetDistance: 20, progress: 0 }); // Room zoom transitions
     const slotMachineSystemRef = useRef(null); // Slot machine interaction system
-    const goldLobbySlotSystemRef = useRef(null); // Town casino lobby gold slots
+    const goldLobbySlotSystemRef = useRef(null); // Snow Forts casino lobby gold slots
     const goldLobbySlotSyncedRef = useRef(false);
     const jackpotCelebrationRef = useRef(null); // Jackpot celebration effects (disco ball, confetti, lasers)
     const iceFishingSystemRef = useRef(null); // Ice fishing interaction system
+    const woodcuttingSystemRef = useRef(null);
+    const forestTreeManagerRef = useRef(null);
+    const mushroomClusterManagerRef = useRef(null);
     
     // Keep isInMatch ref up to date
     useEffect(() => {
@@ -344,7 +376,28 @@ const VoxelWorld = ({
         userData,
         gameInventory,
         upgradeBackpack,
+        buyFromMerchant,
         fetchGameInventory,
+        startWoodChop,
+        completeWoodChop,
+        cancelWoodChop,
+        fetchForestTrees,
+        forestTrees,
+        fetchMushrooms,
+        mushroomClusters,
+        harvestMushroom,
+        scavengeSpot,
+        scavengeCooldowns,
+        fetchScavengeStatus,
+        turnInMushroomQuest,
+        roomTravelVoyages,
+        travelRouteStatuses,
+        myTravelVoyage,
+        travelPending,
+        fetchTravelState,
+        bookTravel,
+        leaveTravel,
+        getPlayersData,
         // Raw send for PvE activity messages
         send: mpSend
     } = useMultiplayer();
@@ -355,6 +408,22 @@ const VoxelWorld = ({
         userDataRef.current = userData;
         isAuthenticatedRef.current = isAuthenticated;
     }, [userData, isAuthenticated]);
+
+    useEffect(() => {
+        if (playerId && woodcuttingSystemRef.current) {
+            woodcuttingSystemRef.current.setLocalPlayerId(playerId);
+        }
+    }, [playerId]);
+
+    useEffect(() => {
+        if (!forestTreeManagerRef.current || !forestTrees?.length) return;
+        forestTreeManagerRef.current.applySnapshot(forestTrees);
+    }, [forestTrees]);
+
+    useEffect(() => {
+        if (!mushroomClusterManagerRef.current || !mushroomClusters?.length) return;
+        mushroomClusterManagerRef.current.applySnapshot(mushroomClusters);
+    }, [mushroomClusters]);
 
     // Keep refs updated for use in event handlers (must be after useMultiplayer destructuring)
     useEffect(() => {
@@ -477,6 +546,10 @@ const VoxelWorld = ({
         
         // Update playerRef
         playerRef.current = newMesh;
+        const heldEntry = getActiveHotbarEntry(gameInventory);
+        if (heldEntry && buildPartMergedRef.current) {
+            updateHeldGameItem(newMesh, buildPartMergedRef.current, heldEntry);
+        }
         
         // Rebuild animated parts cache
         newMesh.userData._animatedPartsCache = cacheAnimatedParts(newMesh);
@@ -509,9 +582,21 @@ const VoxelWorld = ({
     const otherPlayerMeshesRef = useRef(new Map()); // playerId -> { mesh, bubble, puffle }
     const lastPositionSentRef = useRef({ x: 0, y: 0, z: 0, rot: 0, time: 0 });
     const buildPenguinMeshRef = useRef(null); // Will be set in useEffect
+    const buildPartMergedRef = useRef(null);
     const hasSentJoinRef = useRef(false); // One join per connection — room changes use change_room
     const [meshBuilderReady, setMeshBuilderReady] = useState(false); // Re-triggers other-player mesh creation
     const [meshSyncVersion, setMeshSyncVersion] = useState(0); // Bumps when game loop detects missing remote meshes
+
+    // Show held game item (fish, wood, axe, etc.) on local player flipper
+    useEffect(() => {
+        if (!meshBuilderReady || !playerRef.current || !buildPartMergedRef.current) return;
+        const entry = getActiveHotbarEntry(gameInventory);
+        if (entry) {
+            updateHeldGameItem(playerRef.current, buildPartMergedRef.current, entry);
+        } else {
+            removeHeldGameItem(playerRef.current);
+        }
+    }, [gameInventory?.activeHotbar, gameInventory?.hotbar, meshBuilderReady]);
     const meshSyncMissRef = useRef(new Map()); // playerId -> consecutive missing-appearance polls
     const playerListRef = useRef(playerList);
     const lastMissingMeshCheckRef = useRef(0);
@@ -641,6 +726,23 @@ const VoxelWorld = ({
     
     // Ice Fishing Interaction State
     const [fishingInteraction, setFishingInteraction] = useState(null); // { spot, prompt, canFish }
+    const [woodcuttingInteraction, setWoodcuttingInteraction] = useState(null);
+    const [mushroomInteraction, setMushroomInteraction] = useState(null);
+    const [scavengeInteraction, setScavengeInteraction] = useState(null);
+    const scavengeLockRef = useRef(false);
+    const scavengeCooldownsRef = useRef(scavengeCooldowns);
+    useEffect(() => {
+        scavengeCooldownsRef.current = scavengeCooldowns;
+    }, [scavengeCooldowns]);
+
+    useEffect(() => {
+        if (room === 'snow_forts' && isAuthenticated) {
+            fetchScavengeStatus?.();
+        }
+    }, [room, isAuthenticated, fetchScavengeStatus]);
+    const mushroomLockRef = useRef(false);
+    const [woodChopProgress, setWoodChopProgress] = useState(null); // { progress 0-1, spotId }
+    const woodChopTimerRef = useRef(null);
     const [fishingGameActive, setFishingGameActive] = useState(false); // True when fishing minigame is open
     const [fishingGameSpot, setFishingGameSpot] = useState(null); // Current fishing spot for game
     
@@ -675,9 +777,14 @@ const VoxelWorld = ({
 
     // World merchant NPCs (Old Salty, Copper Clive, …)
     const worldNpcManagerRef = useRef(null);
+    const travelNpcManagerRef = useRef(null);
+    const travelLobbyRef = useRef(null);
     const [nearbyNpcInteraction, setNearbyNpcInteraction] = useState(null);
     const nearbyNpcInteractionRef = useRef(null);
     const [activeNpcDef, setActiveNpcDef] = useState(null);
+    const [activeTravelNpcDef, setActiveTravelNpcDef] = useState(null);
+    const [nearbyTravelNpcInteraction, setNearbyTravelNpcInteraction] = useState(null);
+    const nearbyTravelNpcInteractionRef = useRef(null);
     const [showNpcBackpack, setShowNpcBackpack] = useState(false);
     const [npcBackpackSellMerchant, setNpcBackpackSellMerchant] = useState(null);
     
@@ -842,9 +949,25 @@ const VoxelWorld = ({
     const cameraRotationRef = useRef({ deltaX: 0, deltaY: 0 });
     const gameSettingsRef = useRef(gameSettings);
     
-    // Keep gameSettingsRef updated
+    // Keep gameSettingsRef updated + apply mount / green-candles from settings changes
     useEffect(() => {
         gameSettingsRef.current = gameSettings;
+
+        const mountOn = gameSettings.mountEnabled !== false;
+        mountEnabledRef.current = mountOn;
+        if (playerRef.current) {
+            const mountGroup = playerRef.current.getObjectByName('mount');
+            if (mountGroup) mountGroup.visible = mountOn;
+            if (playerRef.current.userData) playerRef.current.userData.mountVisible = mountOn;
+        }
+
+        if (mpUpdateAppearanceRef.current && penguinDataRef.current) {
+            mpUpdateAppearanceRef.current({
+                ...penguinDataRef.current,
+                mountEnabled: mountOn,
+                greenCandlesEnabled: gameSettings.greenCandlesEnabled === true
+            });
+        }
     }, [gameSettings]);
     const mobileControlsRef = useRef({ forward: false, back: false, left: false, right: false });
     const pinchRef = useRef({ startDist: 0, active: false });
@@ -1156,6 +1279,8 @@ const VoxelWorld = ({
                 CITY_SIZE/2 * BUILDING_SCALE
             );
             icePlane.receiveShadow = true;
+            icePlane.renderOrder = 0;
+            icePlane.name = 'world_ground';
             scene.add(icePlane);
             
             // ==================== MOUNTAIN BACKGROUND ====================
@@ -1163,46 +1288,10 @@ const VoxelWorld = ({
             if (initCancelled) return null;
             // Create low-poly mountain range surrounding the map (3 rows for depth)
             try {
-                mountainBackgroundRef.current = createMountainBackground(THREE, scene, {
-                    mapSize: CITY_SIZE * BUILDING_SCALE, // 220 units (for legacy)
-                    // Rectangular playable area: Town + Snow Forts + Forest
-                    // Note: Forest is at x=220-440, z=220-440. "Empty" is x=0-220, z=220-440
-                    worldBounds: {
-                        minX: 0,
-                        maxX: 440,  // Town + Snow Forts width
-                        minZ: 0,
-                        maxZ: 440   // Full depth including Forest
-                    },
-                    // Internal zone dividers (mountains BETWEEN zones, not just exterior)
-                    // Forest needs mountains on its NORTH edge (divider with Snow Forts)
-                    // and WEST edge (divider with empty space)
-                    // Town needs mountains on its SOUTH edge (no zone connection there)
-                    internalWalls: [
-                        // Town SOUTH edge (z=220, x=0-220) - FULL mountains, no connection south
-                        { edge: 'horizontal', z: 220, minX: 0, maxX: 220, gapMinX: -1, gapMaxX: -1 },
-                        // Snow Forts ↔ Forest divider (z=220, x=220-440)
-                        // Mountains with path gap at x=280-310 (Snow Forts/Forest path at local x=60-90)
-                        { edge: 'horizontal', z: 220, minX: 220, maxX: 440, gapMinX: 275, gapMaxX: 315 },
-                        // Empty ↔ Forest divider (x=220, z=220-440) - FULL mountains, no gap
-                        { edge: 'vertical', x: 220, minZ: 220, maxZ: 440, gapMinZ: -1, gapMaxZ: -1 },
-                    ],
-                    // Path gaps for exterior (none needed - all connections are internal)
-                    pathGaps: [],
-                    offset: 35,                    // Distance outside map bounds for first row
-                    mountainRows: 2,               // REDUCED: 2 rows instead of 3 for better performance
-                    rowSpacing: 60,                // Increased spacing to compensate for fewer rows
-                    mountainsPerRow: [16, 24],     // REDUCED: Fewer peaks per row
-                    baseHeight: 0,                 // Same level as zone ground (y=0)
-                    minPeakHeight: 50,             // Slightly taller to compensate for fewer rows
-                    maxPeakHeight: 95,             // Slightly taller
-                    baseWidth: 45,                 // Wider bases = fewer mountains needed
-                    snowLineRatio: 0.5,            // Snow starts at 50% of peak height
-                });
+                mountainBackgroundRef.current = createMountainBackground(THREE, scene, getOverworldMountainConfig('town'));
             } catch (err) {
                 console.warn('Failed to create mountain background:', err);
             }
-            
-            // No water ring - walls handle boundaries now
             
             // ==================== SPAWN TOWN CENTER PROPS ====================
             await loadYield(0.3);
@@ -1218,27 +1307,6 @@ const VoxelWorld = ({
             
             console.log(`Town Center spawned: ${propMeshes.length} props, ${propLights.length} lights`);
             
-            await loadYield(0.42);
-            const snowFortsZone = new SnowFortsZone(THREE);
-            snowFortsZoneRef.current = snowFortsZone;
-            await snowFortsZone.spawnChunked(scene, makeYieldRange(0.42, 0.5, 5));
-            console.log('⛄ Snow Forts Zone loaded');
-            
-            await loadYield(0.5);
-            const forestTrailsZone = new ForestTrailsZone(THREE);
-            forestTrailsZoneRef.current = forestTrailsZone;
-            await forestTrailsZone.spawnChunked(scene, makeYieldRange(0.5, 0.6, 14));
-            console.log('🌲 Forest Trails Zone loaded');
-            
-            // Add casino as snow exclusion zone (snow shouldn't fall inside)
-            if (townCenter.casinoBounds && snowfallSystemRef.current) {
-                snowfallSystemRef.current.addExclusionZone({
-                    ...townCenter.casinoBounds,
-                    roofHeight: 14 // Casino roof height
-                });
-                console.log('❄️ Added casino as snow exclusion zone');
-            }
-            
             // ==================== ICE FISHING SYSTEM ====================
             // Initialize fishing system with spots from TownCenter
             if (townCenter.fishingSpots && townCenter.fishingSpots.length > 0) {
@@ -1248,19 +1316,11 @@ const VoxelWorld = ({
                 iceFishingSystemRef.current.initForTown(townCenter.fishingSpots, scene);
                 // Set players ref for positioning catch bubbles above players
                 iceFishingSystemRef.current.setPlayersRef(() => playersDataRef.current);
+                if (!woodcuttingSystemRef.current) {
+                    woodcuttingSystemRef.current = new WoodcuttingSystem();
+                }
             }
 
-            // ==================== GOLD LOBBY SLOT MACHINES ====================
-            if (townCenter.casinoLobbySlots?.length > 0) {
-                if (!goldLobbySlotSystemRef.current) {
-                    goldLobbySlotSystemRef.current = new GoldLobbySlotSystem();
-                }
-                goldLobbySlotSystemRef.current.init(
-                    townCenter.casinoLobbySlots,
-                    townCenter.casinoLobbySlotDisplays || []
-                );
-            }
-            
             // ==================== IGLOO OCCUPANCY BUBBLES ====================
             // Create occupancy indicator sprites above each igloo
             const townCenterX = CENTER_X;
@@ -1591,6 +1651,84 @@ const VoxelWorld = ({
                     ...logSeats
                 ]
             };
+        } else if (room === 'snow_forts') {
+            reportLoadProgress(0.1);
+            snowFortsZoneRef.current = null;
+            forestTrailsZoneRef.current = null;
+            townCenterRef.current = null;
+            const loaderRefs = {
+                townCenterRef,
+                snowFortsZoneRef,
+                forestTrailsZoneRef,
+                forestTreeManagerRef,
+                mountainBackgroundRef,
+                propLightsRef,
+            };
+            await loadSnowFortsQuadrant(THREE, scene, loaderRefs, makeYieldRange(0.1, 0.85, 8));
+            if (initCancelled) return;
+            const sf = snowFortsZoneRef.current;
+            if (sf?.casinoBounds && snowfallSystemRef.current) {
+                snowfallSystemRef.current.addExclusionZone({
+                    ...sf.casinoBounds,
+                    roofHeight: 14,
+                });
+            }
+            if (sf?.casinoLobbySlots?.length > 0) {
+                if (!goldLobbySlotSystemRef.current) {
+                    goldLobbySlotSystemRef.current = new GoldLobbySlotSystem();
+                }
+                goldLobbySlotSystemRef.current.init(
+                    sf.casinoLobbySlots,
+                    sf.casinoLobbySlotDisplays || []
+                );
+            }
+            if (sf?.fishingSpots?.length > 0) {
+                if (!iceFishingSystemRef.current) {
+                    iceFishingSystemRef.current = new IceFishingSystem(THREE, scene);
+                }
+                iceFishingSystemRef.current.initForTown(sf.fishingSpots, scene);
+                iceFishingSystemRef.current.setPlayersRef(() => playersDataRef.current);
+            }
+            roomData = {
+                name: 'snow_forts',
+                furniture: [
+                    ...(sf?.getFurniture() || []),
+                    ...(sf?.getCasinoFurniture() || []),
+                ],
+            };
+        } else if (room === 'forest_trails') {
+            reportLoadProgress(0.1);
+            snowFortsZoneRef.current = null;
+            townCenterRef.current = null;
+            const loaderRefs = {
+                townCenterRef,
+                snowFortsZoneRef,
+                forestTrailsZoneRef,
+                forestTreeManagerRef,
+                mushroomClusterManagerRef,
+                mountainBackgroundRef,
+                propLightsRef,
+            };
+            await loadForestQuadrant(
+                THREE,
+                scene,
+                loaderRefs,
+                makeYieldRange(0.1, 0.85, 14),
+                fetchForestTrees,
+                forestTrees,
+                mushroomClusters
+            );
+            fetchMushrooms?.();
+            if (initCancelled) return;
+            if (!woodcuttingSystemRef.current) {
+                woodcuttingSystemRef.current = new WoodcuttingSystem();
+            }
+            woodcuttingSystemRef.current.setForestTreeManager(forestTreeManagerRef.current);
+            const fz = forestTrailsZoneRef.current;
+            roomData = {
+                name: 'forest_trails',
+                furniture: fz?.getFurniture?.() || [],
+            };
         } else if (room === 'dojo') {
             // Simple collision map for dojo
             const map = [];
@@ -1621,8 +1759,6 @@ const VoxelWorld = ({
             casinoRoom.spawn(scene);
             casinoRoomRef.current = casinoRoom;
             roomData = casinoRoom.getRoomData();
-            
-            // Initialize slot machine system
             if (!slotMachineSystemRef.current && sceneRef.current) {
                 slotMachineSystemRef.current = new SlotMachineSystem(THREE, sceneRef.current);
             }
@@ -1640,6 +1776,9 @@ const VoxelWorld = ({
                     roomData.roomHeight || 20
                 );
             }
+        } else if (isTravelLobbyRoom(room)) {
+            travelLobbyRef.current = new TravelLobbyRoom(THREE, myTravelVoyage);
+            roomData = travelLobbyRef.current.spawn(scene);
         } else if (room.startsWith('igloo')) {
             // igloo3 is SKNY GANG nightclub-themed igloo
             if (room === 'igloo3') {
@@ -1846,24 +1985,85 @@ const VoxelWorld = ({
         
         // --- PENGUIN BUILDER (extracted to PenguinBuilder.js) ---
         const penguinBuilder = createPenguinBuilder(THREE);
-        const { buildPenguinMesh } = penguinBuilder;
+        const { buildPenguinMesh, buildPartMerged } = penguinBuilder;
         
         // Store buildPenguinMesh for multiplayer to use
         buildPenguinMeshRef.current = buildPenguinMesh;
+        buildPartMergedRef.current = buildPartMerged;
         setMeshBuilderReady(true);
 
-        // Spawn world merchant NPCs as permanent town props (town only)
+        // Spawn world merchant NPCs as permanent room props
         if (room === 'town' && townCenterRef.current) {
             if (!worldNpcManagerRef.current) {
                 worldNpcManagerRef.current = new WorldNpcManager(THREE);
             }
-            worldNpcManagerRef.current.attachToTown(
+            worldNpcManagerRef.current.attachToRoom(
                 scene,
                 buildPenguinMesh,
                 townCenterRef.current.collisionSystem,
-                townCenterRef.current.propMeshes
+                townCenterRef.current.propMeshes,
+                'town'
             );
             console.log('🐧 World merchant NPCs attached to town');
+        } else if (room === 'snow_forts' && snowFortsZoneRef.current) {
+            if (!worldNpcManagerRef.current) {
+                worldNpcManagerRef.current = new WorldNpcManager(THREE);
+            }
+            worldNpcManagerRef.current.attachToRoom(
+                scene,
+                buildPenguinMesh,
+                snowFortsZoneRef.current.collisionSystem,
+                snowFortsZoneRef.current.meshes,
+                'snow_forts',
+                SnowFortsZone.CENTER,
+                SnowFortsZone.CENTER
+            );
+            console.log('🐧 World merchant NPCs attached to snow forts');
+        } else if (room === 'forest_trails' && forestTrailsZoneRef.current) {
+            if (!worldNpcManagerRef.current) {
+                worldNpcManagerRef.current = new WorldNpcManager(THREE);
+            }
+            worldNpcManagerRef.current.attachToRoom(
+                scene,
+                buildPenguinMesh,
+                forestTrailsZoneRef.current.collisionSystem,
+                forestTrailsZoneRef.current.meshes,
+                'forest_trails',
+                ForestTrailsZone.CENTER,
+                ForestTrailsZone.CENTER
+            );
+            console.log('🐧 World merchant NPCs attached to forest trails');
+        }
+
+        // Ferry captain NPCs at overworld zone docks
+        const overworldRooms = ['town', 'snow_forts', 'forest_trails'];
+        if (overworldRooms.includes(room)) {
+            if (!travelNpcManagerRef.current) {
+                travelNpcManagerRef.current = new TravelNpcManager(THREE);
+            }
+            let collisionSystem = null;
+            let propMeshes = null;
+            if (room === 'town' && townCenterRef.current) {
+                collisionSystem = townCenterRef.current.collisionSystem;
+                propMeshes = townCenterRef.current.propMeshes;
+            } else if (room === 'snow_forts' && snowFortsZoneRef.current) {
+                collisionSystem = snowFortsZoneRef.current.collisionSystem;
+                propMeshes = snowFortsZoneRef.current.meshes;
+            } else if (room === 'forest_trails' && forestTrailsZoneRef.current) {
+                collisionSystem = forestTrailsZoneRef.current.collisionSystem;
+                propMeshes = forestTrailsZoneRef.current.meshes;
+            }
+            if (collisionSystem) {
+                travelNpcManagerRef.current.attachToRoom(
+                    scene,
+                    room,
+                    buildPenguinMesh,
+                    collisionSystem,
+                    propMeshes
+                );
+                fetchTravelState?.();
+                console.log(`⛴️ Travel NPCs attached to ${room}`);
+            }
         }
         
         // OPTIMIZATION: Cache animated cosmetic parts to avoid traverse() every frame
@@ -2273,8 +2473,11 @@ const VoxelWorld = ({
         // --- BUILD PLAYER ---
         const playerWrapper = buildPenguinMesh(penguinDataRef.current || penguinData);
         playerRef.current = playerWrapper;
-        // OPTIMIZATION: Cache animated parts for local player
         playerWrapper.userData._animatedPartsCache = cacheAnimatedParts(playerWrapper);
+        const heldEntry = getActiveHotbarEntry(gameInventory);
+        if (heldEntry && buildPartMergedRef.current) {
+            updateHeldGameItem(playerWrapper, buildPartMergedRef.current, heldEntry);
+        }
         scene.add(playerWrapper);
         
         // Check if mount should be hidden based on settings (on initial load)
@@ -2290,14 +2493,22 @@ const VoxelWorld = ({
         } catch (e) { /* ignore */ }
         
         // Spawn position: portal exit, session resume, or room default
-        if (customSpawnPos && room === 'town') {
-            const townCenterX = CENTER_X;
-            const townCenterZ = CENTER_Z;
-            posRef.current = { 
-                x: townCenterX + customSpawnPos.x, 
-                y: 0, 
-                z: townCenterZ + customSpawnPos.z 
-            };
+        if (customSpawnPos) {
+            if (customSpawnPos.absolute) {
+                posRef.current = { x: customSpawnPos.x, y: customSpawnPos.y ?? 0, z: customSpawnPos.z };
+            } else if (room === 'town' || room === 'snow_forts') {
+                posRef.current = {
+                    x: CENTER_X + customSpawnPos.x,
+                    y: customSpawnPos.y ?? 0,
+                    z: CENTER_Z + customSpawnPos.z,
+                };
+            } else {
+                posRef.current = {
+                    x: customSpawnPos.x,
+                    y: customSpawnPos.y ?? 0,
+                    z: customSpawnPos.z,
+                };
+            }
         } else if (sessionResumeRef?.current) {
             const resumed = getResumePosition(
                 room,
@@ -2309,6 +2520,12 @@ const VoxelWorld = ({
                 console.log(`✅ Restored session position in ${room}:`, resumed);
             } else if (room === 'town') {
                 posRef.current = { x: CENTER_X, y: 0, z: CENTER_Z };
+                rotRef.current = 0;
+            } else if (room === 'snow_forts') {
+                posRef.current = { x: 49.9, y: 0, z: 64.3 };
+                rotRef.current = 0;
+            } else if (room === 'forest_trails') {
+                posRef.current = { ...FOREST_TRAILS_SPAWN };
                 rotRef.current = 0;
             } else if (room === WORLD_SPAWN_ROOM) {
                 posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
@@ -2326,6 +2543,12 @@ const VoxelWorld = ({
             sessionResumeRef.current = false;
         } else if (room === 'town') {
             posRef.current = { x: CENTER_X, y: 0, z: CENTER_Z };
+            rotRef.current = 0;
+        } else if (room === 'snow_forts') {
+            posRef.current = { x: 49.9, y: 0, z: 64.3 };
+            rotRef.current = 0;
+        } else if (room === 'forest_trails') {
+            posRef.current = { ...FOREST_TRAILS_SPAWN };
             rotRef.current = 0;
         } else if (room === WORLD_SPAWN_ROOM) {
             posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
@@ -2798,7 +3021,8 @@ const VoxelWorld = ({
         const _snowballPrevPos = new THREE.Vector3();
         const _snowballHitNormal = new THREE.Vector3();
         const _snowballHitPoint = new THREE.Vector3();
-        const _splatLookTarget = new THREE.Vector3();
+        const _splatDefaultNormal = new THREE.Vector3(0, 0, 1);
+        const _splatAlignQuat = new THREE.Quaternion();
         const _snowballCollidables = []; // Cached scene meshes, refreshed periodically while snowballs fly
         const _snowballScratch = []; // Per-snowball filtered list (excludes the thrower)
         const _mountTrailPos = { x: 0, z: 0 }; // Reused position object for trail updates
@@ -2847,12 +3071,28 @@ const VoxelWorld = ({
                 color: 0xffffff,
                 transparent: true,
                 opacity: 0.8,
-                side: THREE.DoubleSide
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                polygonOffset: true,
+                polygonOffsetFactor: -3,
+                polygonOffsetUnits: -3,
             });
             mat.opacity = 0.8;
             const splat = new THREE.Mesh(window._cachedSplatGeo, mat);
+            splat.renderOrder = 5;
             splat.scale.set(1, 1, 1);
             return splat;
+        };
+        const orientSplatToSurface = (splat, normal) => {
+            _splatHitNormal.copy(normal);
+            if (_splatHitNormal.lengthSq() < 1e-6) {
+                _splatHitNormal.set(0, 1, 0);
+            } else {
+                _splatHitNormal.normalize();
+            }
+            _splatDefaultNormal.set(0, 0, 1);
+            _splatAlignQuat.setFromUnitVectors(_splatDefaultNormal, _splatHitNormal);
+            splat.quaternion.copy(_splatAlignQuat);
         };
         const releaseSplatMesh = (splat) => {
             scene.remove(splat);
@@ -2863,6 +3103,14 @@ const VoxelWorld = ({
             }
         };
         let _snowballCollidablesFrame = -1000;
+        const _snowballSurfaces = [];
+        const _snowballRaycastTargets = [];
+        const _isSnowballSurfaceMesh = (obj) => {
+            if (!obj?.isMesh) return false;
+            const n = obj.name;
+            return n === 'gravel_path' || n === 'forest_path' || n === 'world_ground' ||
+                n === 'snow_forts_ground' || n === 'forest_ground';
+        };
         // Only collision-tagged props + player meshes — not every voxel face in town.
         const collectSnowballCollidables = (obj, ownerId, arr, inColliderSubtree = false) => {
             if (obj === playerRef.current) ownerId = '__local';
@@ -2887,7 +3135,18 @@ const VoxelWorld = ({
                 collectSnowballCollidables(children[c], ownerId, arr, inCollider);
             }
         };
-        const snowballHitsRoomCollider = (pos, colliders) => {
+        const collectSnowballSurfaces = (obj, arr) => {
+            if (_isSnowballSurfaceMesh(obj) &&
+                !obj.userData?.isSplat &&
+                !obj.userData?.isSnowball) {
+                arr.push(obj);
+            }
+            const children = obj.children;
+            for (let c = 0; c < children.length; c++) {
+                collectSnowballSurfaces(children[c], arr);
+            }
+        };
+        const computeRoomColliderHit = (pos, prevPos, colliders) => {
             if (!colliders?.length) return null;
             for (let c = 0; c < colliders.length; c++) {
                 const col = colliders[c];
@@ -2898,7 +3157,74 @@ const VoxelWorld = ({
                 if (pos.x >= col.x - hw && pos.x <= col.x + hw &&
                     pos.z >= col.z - hd && pos.z <= col.z + hd &&
                     pos.y >= bottom - 0.2 && pos.y <= top + 0.5) {
-                    return { y: Math.max(bottom, Math.min(pos.y, top)) };
+                    const faces = [
+                        { nx: 1, ny: 0, nz: 0, dist: (col.x + hw) - pos.x },
+                        { nx: -1, ny: 0, nz: 0, dist: pos.x - (col.x - hw) },
+                        { nx: 0, ny: 0, nz: 1, dist: (col.z + hd) - pos.z },
+                        { nx: 0, ny: 0, nz: -1, dist: pos.z - (col.z - hd) },
+                        { nx: 0, ny: 1, nz: 0, dist: top - pos.y },
+                        { nx: 0, ny: -1, nz: 0, dist: pos.y - bottom },
+                    ];
+                    const vx = pos.x - prevPos.x;
+                    const vy = pos.y - prevPos.y;
+                    const vz = pos.z - prevPos.z;
+                    let bestScore = Infinity;
+                    let nx = 0;
+                    let ny = 1;
+                    let nz = 0;
+                    for (let f = 0; f < faces.length; f++) {
+                        const face = faces[f];
+                        const approach = vx * face.nx + vy * face.ny + vz * face.nz;
+                        if (approach >= -0.0001) continue;
+                        const score = face.dist - approach * 0.01;
+                        if (score < bestScore) {
+                            bestScore = score;
+                            nx = face.nx;
+                            ny = face.ny;
+                            nz = face.nz;
+                        }
+                    }
+                    if (bestScore === Infinity) {
+                        for (let f = 0; f < faces.length; f++) {
+                            if (faces[f].dist < bestScore) {
+                                bestScore = faces[f].dist;
+                                nx = faces[f].nx;
+                                ny = faces[f].ny;
+                                nz = faces[f].nz;
+                            }
+                        }
+                    }
+                    return {
+                        y: Math.max(bottom, Math.min(pos.y, top)),
+                        normal: _snowballHitNormal.set(nx, ny, nz),
+                    };
+                }
+            }
+            return null;
+        };
+
+        /** Query open-world zone collision for the active room only. */
+        const querySnowballWorldCollision = (wx, wy, wz, pwx, pwy, pwz) => {
+            const r = 0.18;
+            const room = roomRef.current;
+            if (room === 'town' && townCenterRef.current) {
+                const hit = townCenterRef.current.collisionSystem.findProjectileHit(wx, wz, wy, r, pwx, pwz, pwy);
+                if (hit) return hit;
+            }
+            if (room === 'snow_forts' && snowFortsZoneRef.current) {
+                const hit = snowFortsZoneRef.current.collisionSystem.findProjectileHit(wx, wz, wy, r, pwx, pwz, pwy);
+                if (hit) return hit;
+            }
+            if (room === 'forest_trails' && forestTrailsZoneRef.current) {
+                const hit = forestTrailsZoneRef.current.collisionSystem.findProjectileHit(wx, wz, wy, r, pwx, pwz, pwy);
+                if (hit) return hit;
+            }
+            if (mountainBackgroundRef.current?.checkCollision) {
+                if (mountainBackgroundRef.current.checkCollision(wx, wz, 0.15)) {
+                    return {
+                        y: Math.max(0, wy),
+                        normal: { x: 0, y: 1, z: 0 },
+                    };
                 }
             }
             return null;
@@ -3608,6 +3934,18 @@ const VoxelWorld = ({
                 finalX = result.x;
                 finalZ = result.z;
                 collided = result.collided;
+            } else if (isTravelLobbyRoom(roomRef.current) && travelLobbyRef.current) {
+                const result = travelLobbyRef.current.checkPlayerMovement(
+                    posRef.current.x,
+                    posRef.current.z,
+                    nextX,
+                    nextZ,
+                    0.6,
+                    posRef.current.y
+                );
+                finalX = result.x;
+                finalZ = result.z;
+                collided = result.collided;
             } else if (roomRef.current === 'casino_game_room' && casinoRoomRef.current) {
                 // Casino room collision - handled by CasinoRoom.js (same pattern as Nightclub)
                 const result = casinoRoomRef.current.checkPlayerMovement(
@@ -3621,80 +3959,69 @@ const VoxelWorld = ({
                 finalX = result.x;
                 finalZ = result.z;
                 collided = result.collided;
-            } else if (townCenterRef.current) {
-                // ==================== MULTI-ZONE COLLISION ====================
-                // Determine which zone player is in based on position
-                const TOWN_EAST_EDGE = 220;
-                const SNOW_FORTS_SOUTH_EDGE = 220;
-                
-                const inForest = (nextX > TOWN_EAST_EDGE && nextZ > SNOW_FORTS_SOUTH_EDGE) || 
-                                 (posRef.current.x > TOWN_EAST_EDGE && posRef.current.z > SNOW_FORTS_SOUTH_EDGE);
-                const inSnowForts = !inForest && (nextX > TOWN_EAST_EDGE || posRef.current.x > TOWN_EAST_EDGE);
-                
-                if (inForest && forestTrailsZoneRef.current) {
-                    // Player is in Forest zone - use Forest collision
-                    const forestCollision = forestTrailsZoneRef.current.checkCollision(nextX, nextZ, 0.8);
-                    if (forestCollision) {
-                        finalX = posRef.current.x;
-                        finalZ = posRef.current.z;
-                        collided = true;
-                    } else {
-                        finalX = nextX;
-                        finalZ = nextZ;
-                    }
-                } else if (inSnowForts && snowFortsZoneRef.current) {
-                    // Player is in Snow Forts zone - use Snow Forts collision
-                    const sfCollision = snowFortsZoneRef.current.checkCollision(nextX, nextZ, 0.8);
-                    if (sfCollision) {
-                        // Hit a wall in Snow Forts - stay at current position
-                        finalX = posRef.current.x;
-                        finalZ = posRef.current.z;
-                        collided = true;
-                    } else {
-                        finalX = nextX;
-                        finalZ = nextZ;
-                    }
+            } else if (roomRef.current === 'forest_trails' && forestTrailsZoneRef.current) {
+                const forestCollision = forestTrailsZoneRef.current.checkCollision(nextX, nextZ, 0.8);
+                if (forestCollision) {
+                    finalX = posRef.current.x;
+                    finalZ = posRef.current.z;
+                    collided = true;
                 } else {
-                    // Town uses TownCenter collision system (props + buildings + water)
-                    // Pass Y position for height-based collision (so player can jump on objects)
-                    const result = townCenterRef.current.checkPlayerMovement(
-                        posRef.current.x, 
-                        posRef.current.z, 
-                        nextX, 
-                        nextZ, 
-                        0.8, // Player radius
-                        posRef.current.y // Y position for height check
-                    );
-                    finalX = result.x;
-                    finalZ = result.z;
-                    collided = result.collided;
+                    finalX = nextX;
+                    finalZ = nextZ;
                 }
-                
-                // ==================== MOUNTAIN COLLISION ====================
-                // Check if player is trying to walk into mountains at world edges
                 if (!collided && mountainBackgroundRef.current?.checkCollision) {
                     if (mountainBackgroundRef.current.checkCollision(finalX, finalZ, 0.8)) {
-                        // Hit a mountain - stay at current position
                         finalX = posRef.current.x;
                         finalZ = posRef.current.z;
                         collided = true;
                     }
                 }
-                
-                // Landing on objects is now handled in the unified ground collision section below
-                
-                // OPTIMIZED: Only check triggers every 3rd frame (still responsive, but 3x faster)
                 if (frameCount % 3 === 0) {
-                    if (inForest && forestTrailsZoneRef.current) {
-                        // Check Forest triggers (benches, campfires, etc.)
-                        forestTrailsZoneRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
-                    } else if (inSnowForts && snowFortsZoneRef.current) {
-                        // Check Snow Forts triggers (benches, etc.)
-                        snowFortsZoneRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
-                    } else {
-                        // Check Town Center triggers
-                        townCenterRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
+                    forestTrailsZoneRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
+                }
+            } else if (roomRef.current === 'snow_forts' && snowFortsZoneRef.current) {
+                const result = snowFortsZoneRef.current.checkPlayerMovement(
+                    posRef.current.x,
+                    posRef.current.z,
+                    nextX,
+                    nextZ,
+                    0.8,
+                    posRef.current.y
+                );
+                finalX = result.x;
+                finalZ = result.z;
+                collided = result.collided;
+                if (!collided && mountainBackgroundRef.current?.checkCollision) {
+                    if (mountainBackgroundRef.current.checkCollision(finalX, finalZ, 0.8)) {
+                        finalX = posRef.current.x;
+                        finalZ = posRef.current.z;
+                        collided = true;
                     }
+                }
+                if (frameCount % 3 === 0) {
+                    snowFortsZoneRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
+                }
+            } else if (townCenterRef.current && roomRef.current === 'town') {
+                const result = townCenterRef.current.checkPlayerMovement(
+                    posRef.current.x,
+                    posRef.current.z,
+                    nextX,
+                    nextZ,
+                    0.8,
+                    posRef.current.y
+                );
+                finalX = result.x;
+                finalZ = result.z;
+                collided = result.collided;
+                if (!collided && mountainBackgroundRef.current?.checkCollision) {
+                    if (mountainBackgroundRef.current.checkCollision(finalX, finalZ, 0.8)) {
+                        finalX = posRef.current.x;
+                        finalZ = posRef.current.z;
+                        collided = true;
+                    }
+                }
+                if (frameCount % 3 === 0) {
+                    townCenterRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
                 }
             }
             
@@ -3823,7 +4150,15 @@ const VoxelWorld = ({
                 }
             }
             
-            if (roomRef.current !== 'town' && roomRef.current !== 'pizza' && roomRef.current !== 'nightclub' && roomRef.current !== 'casino_game_room') {
+            if (
+                roomRef.current !== 'town'
+                && roomRef.current !== 'pizza'
+                && roomRef.current !== 'nightclub'
+                && roomRef.current !== 'casino_game_room'
+                && roomRef.current !== 'snow_forts'
+                && roomRef.current !== 'forest_trails'
+                && !isTravelLobbyRoom(roomRef.current)
+            ) {
                 // Fallback: Non-town rooms use different collision
                 // Town uses wall boundaries now, not water
                 // Nightclub has its own wall-clamping collision above
@@ -3936,6 +4271,9 @@ const VoxelWorld = ({
                         }));
                     }
                 }
+            } else if (isTravelLobbyRoom(roomRef.current) && travelLobbyRef.current) {
+                posRef.current.x = finalX;
+                posRef.current.z = finalZ;
             } else if (roomRef.current === 'nightclub') {
                 // Nightclub: use wall-clamped position (free movement inside, walls only block)
                 posRef.current.x = finalX;
@@ -4013,22 +4351,21 @@ const VoxelWorld = ({
                         detail: { action: 'exit' }
                     }));
                 }
-            } else if (townCenterRef.current && roomRef.current === 'town') {
-                // Town: use TownCenter's safe position
+            } else if (
+                roomRef.current === 'town'
+                || roomRef.current === 'snow_forts'
+                || roomRef.current === 'forest_trails'
+            ) {
+                // Overworld quadrant: apply safe position from zone collision
                 posRef.current.x = finalX;
                 posRef.current.z = finalZ;
                 
-                // Check town furniture proximity — throttled + distSq (no sqrt)
+                // Check furniture proximity — throttled + distSq (no sqrt)
                 let nearFurniture = nearTownFurnitureRef.current;
                 const playerY = posRef.current.y;
 
                 if (frameCount % 2 === 0) {
                     nearFurniture = null;
-                    const TOWN_EAST_EDGE = 220;
-                    const SNOW_FORTS_SOUTH_EDGE = 220;
-                    const inSnowFortsZone = finalX > TOWN_EAST_EDGE && finalZ < SNOW_FORTS_SOUTH_EDGE;
-                    const inForestZone = finalX > TOWN_EAST_EDGE && finalZ >= SNOW_FORTS_SOUTH_EDGE;
-
                     const checkFurnitureList = (list, yMatcher) => {
                         for (const furn of list) {
                             const dx = finalX - furn.position.x;
@@ -4042,33 +4379,36 @@ const VoxelWorld = ({
                         return false;
                     };
 
-                    if (inForestZone && forestTrailsZoneRef.current) {
+                    if (roomRef.current === 'forest_trails' && forestTrailsZoneRef.current) {
                         checkFurnitureList(forestTrailsZoneRef.current.getFurniture(), (furn) => {
                             const furnY = furn.platformHeight || 0;
                             return Math.abs(playerY - furnY) < 2;
                         });
                     }
 
-                    if (!nearFurniture && inSnowFortsZone && snowFortsZoneRef.current) {
-                        checkFurnitureList(snowFortsZoneRef.current.getFurniture(), (furn) => {
-                            const furnY = furn.platformHeight || 0;
-                            return Math.abs(playerY - furnY) < 2;
-                        });
+                    if (roomRef.current === 'snow_forts' && snowFortsZoneRef.current) {
+                        const sf = snowFortsZoneRef.current;
+                        const inCasino = sf.isPlayerInCasino(finalX, finalZ);
+                        const matchSeat = (furn) => {
+                            if (furn.elevated) {
+                                const standY = furn.platformHeight ?? (furn.seatHeight - 1.0);
+                                return Math.abs(playerY - standY) < 2.5
+                                    || Math.abs(playerY - (furn.seatHeight - 0.5)) < 1.5;
+                            }
+                            return playerY < 1.5;
+                        };
+                        const lists = inCasino
+                            ? [sf.getCasinoFurniture(), sf.getFurniture()]
+                            : [sf.getFurniture(), sf.getCasinoFurniture()];
+                        for (const list of lists) {
+                            if (checkFurnitureList(list, matchSeat)) break;
+                        }
                     }
 
-                    if (!nearFurniture && !inSnowFortsZone && roomData?.furniture) {
+                    if (!nearFurniture && roomRef.current === 'town' && roomData?.furniture) {
                         checkFurnitureList(roomData.furniture, (furn) => {
                             const furnY = furn.platformHeight || 0;
                             return Math.abs(playerY - furnY) < 2;
-                        });
-                    }
-
-                    if (!nearFurniture && !inSnowFortsZone && townCenterRef.current) {
-                        checkFurnitureList(townCenterRef.current.getCasinoFurniture(), (furn) => {
-                            const furnY = furn.elevated ? (furn.seatHeight - 1.0) : (furn.platformHeight ?? 0);
-                            return furn.elevated
-                                ? Math.abs(playerY - furnY) < 2
-                                : playerY < 1.5;
                         });
                     }
 
@@ -4141,6 +4481,26 @@ const VoxelWorld = ({
                 }
             }
             
+            if (room === 'snow_forts' && snowFortsZoneRef.current && velRef.current.y <= 0) {
+                const landing = snowFortsZoneRef.current.checkLanding(posRef.current.x, posRef.current.z, posRef.current.y, 0.8);
+                if (landing.canLand && posRef.current.y <= landing.landingY + 0.3) {
+                    if (landing.landingY >= groundHeight) {
+                        groundHeight = landing.landingY;
+                        foundGround = true;
+                    }
+                }
+            }
+
+            if (isTravelLobbyRoom(room) && travelLobbyRef.current && velRef.current.y <= 0) {
+                const landing = travelLobbyRef.current.checkLanding(posRef.current.x, posRef.current.z, posRef.current.y, 0.8);
+                if (landing.canLand && posRef.current.y <= landing.landingY + 0.3) {
+                    if (landing.landingY >= groundHeight) {
+                        groundHeight = landing.landingY;
+                        foundGround = true;
+                    }
+                }
+            }
+
             // Check for landing on town objects
             if (room === 'town' && townCenterRef.current && velRef.current.y <= 0) {
                 const landing = townCenterRef.current.checkLanding(posRef.current.x, posRef.current.z, posRef.current.y, 0.8);
@@ -5431,7 +5791,11 @@ const VoxelWorld = ({
                     if (newMesh.userData._animatedPartsCache) {
                         delete newMesh.userData._animatedPartsCache;
                     }
+
+                    syncRemotePlayerHeldItem(meshData, playerData, buildPartMergedRef.current);
                 }
+
+                syncRemotePlayerHeldItem(meshData, playerData, buildPartMergedRef.current);
                 
                 // OPTIMIZATION: Calculate distance to local player for LOD
                 const dx = (playerData.position?.x || 0) - localPosX;
@@ -6353,30 +6717,26 @@ const VoxelWorld = ({
                 const worldTime = serverWorldTimeRef?.current ?? 0.35;
                 const nightFactor = calculateNightFactor(worldTime);
                 const playerPos = posRef.current;
-
-                // Performance timing for TownCenter
                 const t0 = showPerfDebugRef.current ? performance.now() : 0;
                 townCenterRef.current.update(time, delta, nightFactor, playerPos);
                 if (showPerfDebugRef.current) {
                     perfStatsRef.current.timings.townUpdate = performance.now() - t0;
                 }
-                
-                // Update Snow Forts zone if player is nearby
-                if (snowFortsZoneRef.current && playerPos.x > 180) {
-                    const t1 = showPerfDebugRef.current ? performance.now() : 0;
-                    snowFortsZoneRef.current.update(time, delta, playerPos.x, playerPos.z);
-                    if (showPerfDebugRef.current) {
-                        perfStatsRef.current.timings.snowFortsUpdate = performance.now() - t1;
-                    }
+            }
+            if (snowFortsZoneRef.current && roomRef.current === 'snow_forts' && !inParkourPerformanceMode) {
+                const t1 = showPerfDebugRef.current ? performance.now() : 0;
+                snowFortsZoneRef.current.update(time, delta, posRef.current.x, posRef.current.z);
+                if (showPerfDebugRef.current) {
+                    perfStatsRef.current.timings.snowFortsUpdate = performance.now() - t1;
                 }
-                
-                // Update Forest zone if player is nearby (south of Snow Forts)
-                if (forestTrailsZoneRef.current && playerPos.x > 180 && playerPos.z > 180) {
-                    const t2 = showPerfDebugRef.current ? performance.now() : 0;
-                    forestTrailsZoneRef.current.update(time, delta, nightFactor, playerPos);
-                    if (showPerfDebugRef.current) {
-                        perfStatsRef.current.timings.forestUpdate = performance.now() - t2;
-                    }
+            }
+            if (forestTrailsZoneRef.current && roomRef.current === 'forest_trails' && !inParkourPerformanceMode) {
+                const worldTime = serverWorldTimeRef?.current ?? 0.35;
+                const nightFactor = calculateNightFactor(worldTime);
+                const t2 = showPerfDebugRef.current ? performance.now() : 0;
+                forestTrailsZoneRef.current.update(time, delta, nightFactor, posRef.current);
+                if (showPerfDebugRef.current) {
+                    perfStatsRef.current.timings.forestUpdate = performance.now() - t2;
                 }
             }
             
@@ -6396,57 +6756,50 @@ const VoxelWorld = ({
             }
             
             // Animate building door glows (pulse for interactive doors, town only)
-            // Skip door glow animations when in parkour performance mode
-            if (roomRef.current === 'town' && !inParkourPerformanceMode && frameCount % 2 === 0) {
-                portalsRef.current.forEach(building => {
-                    if (building.mesh && building.gameId) {
-                        // Cache the glow lookup — getObjectByName walks the building subtree
-                        if (building._doorGlow === undefined) {
-                            building._doorGlow = building.mesh.getObjectByName(`door_glow_${building.id}`) || null;
+            // Skip door glow animations when in parkour performance mode or forest zone
+            if ((roomRef.current === 'town' || roomRef.current === 'snow_forts') && !inParkourPerformanceMode && frameCount % 2 === 0) {
+                if (roomRef.current === 'town') {
+                    portalsRef.current.forEach(building => {
+                        if (building.mesh && building.gameId) {
+                            if (building._doorGlow === undefined) {
+                                building._doorGlow = building.mesh.getObjectByName(`door_glow_${building.id}`) || null;
+                            }
+                            const glow = building._doorGlow;
+                            if (glow && glow.material) {
+                                glow.material.opacity = 0.2 + Math.sin(time * 2) * 0.15;
+                            }
                         }
-                        const glow = building._doorGlow;
-                        if (glow && glow.material) {
-                            glow.material.opacity = 0.2 + Math.sin(time * 2) * 0.15;
-                        }
-                    }
-                });
-                
-                // ==================== CASINO INTERIOR CAMERA ZOOM ====================
-                // Auto-zoom camera ONCE when entering/exiting casino (allows free zoom otherwise)
-                if (controls && camera) {
-                    // Track state change (only zoom on transition, not continuously)
+                    });
+                }
+
+                if (roomRef.current === 'snow_forts' && controls && camera) {
                     const wasInCasino = wasInCasinoRef.current;
-                    const isInCasino = townCenterRef.current?.isPlayerInCasino(posRef.current.x, posRef.current.z);
-                    
+                    const isInCasino = snowFortsZoneRef.current?.isPlayerInCasino(posRef.current.x, posRef.current.z);
                     if (isInCasino !== wasInCasino) {
-                        // State changed - trigger one-time zoom adjustment
                         wasInCasinoRef.current = isInCasino;
                         casinoZoomTransitionRef.current = {
                             active: true,
-                            targetDistance: isInCasino ? 10 : 20, // Zoom in for casino, normal for outside
+                            targetDistance: isInCasino ? 10 : TRAVEL_LOBBY_CAMERA.defaultTargetDistance,
                             progress: 0
                         };
                     }
-                    
-                    // Smooth zoom transition (only while transition is active)
+                }
+
+                if (controls && camera) {
                     const transition = casinoZoomTransitionRef.current;
                     if (transition?.active) {
                         const offset = _casinoZoomOffset.copy(camera.position).sub(controls.target);
                         const currentDistance = offset.length();
                         const targetDistance = transition.targetDistance;
-                        
-                        // Smooth lerp toward target
-                        if (Math.abs(currentDistance - targetDistance) > 0.3) {
-                            const newDistance = currentDistance + (targetDistance - currentDistance) * 0.08;
+                        if (Math.abs(currentDistance - targetDistance) > 0.2) {
+                            const newDistance = currentDistance + (targetDistance - currentDistance) * 0.1;
                             const direction = offset.normalize();
                             camera.position.copy(controls.target).add(direction.multiplyScalar(newDistance));
                         } else {
-                            // Transition complete - stop adjusting, allow free zoom
                             transition.active = false;
                         }
                     }
                 }
-                
             }
             
             // Room-specific updates (self-contained in room modules)
@@ -6524,7 +6877,7 @@ const VoxelWorld = ({
             }
             
             // ==================== SNOWFALL UPDATE ====================
-            if (room === 'town' && snowfallSystemRef.current && gameSettingsRef.current.snowEnabled !== false) {
+            if ((room === 'town' || room === 'snow_forts') && snowfallSystemRef.current && gameSettingsRef.current.snowEnabled !== false) {
                 const serverTime = serverWorldTimeRef?.current ?? 0.35;
                 if (frameCount % 2 === 0) {
                     snowfallSystemRef.current.update(time, delta, posRef.current, serverTime);
@@ -6544,7 +6897,9 @@ const VoxelWorld = ({
             // Mesh membership rarely changes mid-flight; world matrices stay live on the cached refs.
             if (frameCount - _snowballCollidablesFrame >= 60) {
                 _snowballCollidables.length = 0;
+                _snowballSurfaces.length = 0;
                 collectSnowballCollidables(scene, null, _snowballCollidables);
+                collectSnowballSurfaces(scene, _snowballSurfaces);
                 _snowballCollidablesFrame = frameCount;
             }
 
@@ -6584,66 +6939,72 @@ const VoxelWorld = ({
                 const snowballAge = snowballNow - sb.startTime;
                 if (snowballAge < SNOWBALL_SAFE_PERIOD_MS) continue;
                 
-                // Check for collision with surfaces (room AABBs, props, players, ground)
+                // Check for collision with surfaces (paths, props, players, walls)
                 let hitSomething = false;
                 let hitPoint = null;
                 let hitNormal = null;
 
-                const colliderHit = snowballHitsRoomCollider(sb.mesh.position, roomColliders);
-                if (colliderHit) {
-                    hitSomething = true;
-                    hitPoint = _snowballHitPoint.set(sb.mesh.position.x, colliderHit.y, sb.mesh.position.z);
-                    hitNormal = _snowballHitNormal.set(0, 1, 0);
-                }
-                
-                // Raycast props/players only when not already hitting a room collider
-                if (!hitSomething) {
-                _snowballVelDir.set(sb.velocity.x, sb.velocity.y, sb.velocity.z).normalize();
-                const speed = Math.sqrt(sb.velocity.x**2 + sb.velocity.y**2 + sb.velocity.z**2);
-                
-                if (speed > 0.1 && _snowballCollidables.length > 0) {
+                _snowballVelDir.set(sb.velocity.x, sb.velocity.y, sb.velocity.z);
+                const speed = _snowballVelDir.length();
+                if (speed > 0.1) {
+                    _snowballVelDir.multiplyScalar(1 / speed);
                     _snowballRaycaster.set(_snowballPrevPos, _snowballVelDir);
-                    _snowballRaycaster.far = speed * delta + 0.5; // Check slightly ahead of movement
-                    
-                    // Filter the cached list per snowball: exclude the THROWER's meshes and this snowball.
+                    _snowballRaycaster.far = speed * delta + 0.5;
+
                     const throwerId = sb.throwerId;
                     const throwerKey = (!throwerId || throwerId === playerId) ? '__local' : throwerId;
-                    _snowballScratch.length = 0;
+                    _snowballRaycastTargets.length = 0;
+                    for (let m = 0; m < _snowballSurfaces.length; m++) {
+                        _snowballRaycastTargets.push(_snowballSurfaces[m]);
+                    }
                     for (let m = 0; m < _snowballCollidables.length; m++) {
                         const mesh = _snowballCollidables[m];
                         if (mesh === sb.mesh) continue;
                         const owner = mesh.userData._snowballOwner;
                         if (owner === throwerKey || (owner === throwerId && throwerKey === '__local')) continue;
-                        _snowballScratch.push(mesh);
+                        _snowballRaycastTargets.push(mesh);
                     }
-                    const intersects = _snowballScratch.length > 0
-                        ? _snowballRaycaster.intersectObjects(_snowballScratch, false)
-                        : [];
-                    
-                    if (intersects.length > 0) {
-                        hitSomething = true;
-                        hitPoint = intersects[0].point;
-                        if (intersects[0].face?.normal) {
-                            hitNormal = _snowballHitNormal.copy(intersects[0].face.normal);
-                            if (intersects[0].object.matrixWorld) {
-                                hitNormal.transformDirection(intersects[0].object.matrixWorld);
+
+                    if (_snowballRaycastTargets.length > 0) {
+                        const intersects = _snowballRaycaster.intersectObjects(_snowballRaycastTargets, true);
+                        if (intersects.length > 0) {
+                            hitSomething = true;
+                            hitPoint = intersects[0].point;
+                            if (intersects[0].face?.normal) {
+                                hitNormal = _snowballHitNormal.copy(intersects[0].face.normal);
+                                if (intersects[0].object.matrixWorld) {
+                                    hitNormal.transformDirection(intersects[0].object.matrixWorld);
+                                }
+                            } else {
+                                hitNormal = _snowballHitNormal.set(0, 1, 0);
                             }
-                        } else {
-                            hitNormal = _snowballHitNormal.set(0, 1, 0);
                         }
                     }
                 }
+
+                if (!hitSomething) {
+                    const colliderHit = computeRoomColliderHit(sb.mesh.position, _snowballPrevPos, roomColliders)
+                        || querySnowballWorldCollision(
+                            sb.mesh.position.x, sb.mesh.position.y, sb.mesh.position.z,
+                            _snowballPrevPos.x, _snowballPrevPos.y, _snowballPrevPos.z
+                        );
+                    if (colliderHit) {
+                        hitSomething = true;
+                        hitPoint = _snowballHitPoint.set(sb.mesh.position.x, colliderHit.y, sb.mesh.position.z);
+                        hitNormal = colliderHit.normal
+                            ? _snowballHitNormal.copy(colliderHit.normal)
+                            : _snowballHitNormal.set(0, 1, 0);
+                    }
                 }
-                
-                // Method 2: Simple Y-level check for ground (fallback)
+
+                // Ground fallback (open ice — paths should raycast above this)
                 if (!hitSomething && sb.mesh.position.y <= 0.15) {
                     hitSomething = true;
                     hitPoint = _snowballHitPoint.copy(sb.mesh.position);
                     hitPoint.y = 0;
-                    hitNormal = _snowballHitNormal.set(0, 1, 0); // Up normal for ground
+                    hitNormal = _snowballHitNormal.set(0, 1, 0);
                 }
-                
-                // Method 3: Check if below any reasonable ground level (deep fallback)
+
                 if (!hitSomething && sb.mesh.position.y < -1) {
                     hitSomething = true;
                     hitPoint = _snowballHitPoint.copy(sb.mesh.position);
@@ -6656,13 +7017,10 @@ const VoxelWorld = ({
                     sb.hasSplatted = true;
                     
                     const splat = acquireSplatMesh();
-                    
-                    // Position splat at hit point, offset slightly along normal to prevent z-fighting
+
                     splat.position.copy(hitPoint);
-                    splat.position.addScaledVector(hitNormal, 0.02);
-                    
-                    // Orient splat to face along the surface normal
-                    splat.lookAt(_splatLookTarget.copy(splat.position).add(hitNormal));
+                    splat.position.addScaledVector(hitNormal, 0.03);
+                    orientSplatToSurface(splat, hitNormal);
                     
                     splat.userData.startTime = snowballNow;
                     splat.userData.isSplat = true;
@@ -6884,6 +7242,13 @@ const VoxelWorld = ({
             if (worldNpcManagerRef.current) {
                 worldNpcManagerRef.current.detach();
             }
+            if (travelNpcManagerRef.current) {
+                travelNpcManagerRef.current.detach();
+            }
+            if (travelLobbyRef.current) {
+                travelLobbyRef.current.cleanup?.();
+                travelLobbyRef.current = null;
+            }
             if (townCenterRef.current) {
                 townCenterRef.current.dispose();
                 townCenterRef.current = null;
@@ -6897,6 +7262,14 @@ const VoxelWorld = ({
             if (forestTrailsZoneRef.current) {
                 forestTrailsZoneRef.current.cleanup();
                 forestTrailsZoneRef.current = null;
+            }
+            if (forestTreeManagerRef.current) {
+                forestTreeManagerRef.current.cleanup();
+                forestTreeManagerRef.current = null;
+            }
+            if (mushroomClusterManagerRef.current) {
+                mushroomClusterManagerRef.current.cleanup();
+                mushroomClusterManagerRef.current = null;
             }
             // Cleanup Mountain Background
             if (mountainBackgroundRef.current) {
@@ -7286,6 +7659,9 @@ const VoxelWorld = ({
                 }
             }
             // Casino TV and payout boards (stored in room refs)
+            if (roomRef.current === 'snow_forts' && snowFortsZoneRef.current?.casinoTVMesh?.visible) {
+                bannerSprites.push(snowFortsZoneRef.current.casinoTVMesh);
+            }
             if (casinoRoomRef.current) {
                 const casino = casinoRoomRef.current;
                 if (casino.tvMesh && casino.tvMesh.visible) {
@@ -8371,12 +8747,45 @@ const VoxelWorld = ({
         setNearbyNpcInteraction(null);
         nearbyNpcInteractionRef.current = null;
         setActiveNpcDef(null);
+        setActiveTravelNpcDef(null);
+        setNearbyTravelNpcInteraction(null);
+        nearbyTravelNpcInteractionRef.current = null;
         if (worldNpcManagerRef.current) {
             worldNpcManagerRef.current.detach();
         }
+        if (travelNpcManagerRef.current) {
+            travelNpcManagerRef.current.detach();
+        }
     }, [room]);
 
-    // Check for nearby portals (room-specific)
+    const checkTravelNpcs = () => {
+        const overworldRooms = ['town', 'snow_forts', 'forest_trails'];
+        if (!overworldRooms.includes(room) || !travelNpcManagerRef.current) {
+            if (nearbyTravelNpcInteraction) {
+                setNearbyTravelNpcInteraction(null);
+                nearbyTravelNpcInteractionRef.current = null;
+            }
+            return;
+        }
+        const nearby = travelNpcManagerRef.current.checkProximity(
+            posRef.current,
+            room,
+            travelRouteStatuses || []
+        );
+        if (nearby) {
+            if (!nearbyTravelNpcInteraction || nearbyTravelNpcInteraction.id !== nearby.id) {
+                setNearbyTravelNpcInteraction(nearby);
+                nearbyTravelNpcInteractionRef.current = nearby;
+            }
+        } else if (nearbyTravelNpcInteraction) {
+            setNearbyTravelNpcInteraction(null);
+            nearbyTravelNpcInteractionRef.current = null;
+        }
+        if (cameraRef.current) {
+            travelNpcManagerRef.current.updateMarkers(cameraRef.current);
+        }
+    };
+
     const checkPortals = () => {
         const playerPos = posRef.current;
         const portals = ROOM_PORTALS[room] || [];
@@ -8390,7 +8799,7 @@ const VoxelWorld = ({
             let portalX = portal.position.x;
             let portalZ = portal.position.z;
             
-            if (room === 'town') {
+            if (room === 'town' || room === 'snow_forts') {
                 portalX = centerX + portal.position.x;
                 portalZ = centerZ + portal.position.z;
             }
@@ -8431,15 +8840,8 @@ const VoxelWorld = ({
         if (room !== 'town') return;
         
         const playerPos = posRef.current;
-        const VISIBILITY_DISTANCE = 20; // Show bubble when within 20 units (reduced for performance)
-        
-        // Hide all banners if player is inside the casino
-        const isInCasino = townCenterRef.current?.isPlayerInCasino(playerPos.x, playerPos.z);
-        
-        // Also hide if player is in Snow Forts zone (far from town)
-        const TOWN_EAST_EDGE = 220;
-        const inSnowForts = playerPos.x > TOWN_EAST_EDGE;
-        
+        const VISIBILITY_DISTANCE = 20;
+
         iglooOccupancySpritesRef.current.forEach((sprite, iglooId) => {
             if (!sprite.userData) return;
             
@@ -8447,8 +8849,7 @@ const VoxelWorld = ({
             const dz = playerPos.z - sprite.userData.iglooZ;
             const dist = Math.sqrt(dx * dx + dz * dz);
             
-            // Show sprite if player is close enough AND not inside casino AND not in Snow Forts
-            const shouldShow = dist < VISIBILITY_DISTANCE && !isInCasino && !inSnowForts;
+            const shouldShow = dist < VISIBILITY_DISTANCE;
             
             if (sprite.visible !== shouldShow) {
                 sprite.visible = shouldShow;
@@ -8469,7 +8870,7 @@ const VoxelWorld = ({
             const dist = Math.sqrt(dx * dx + dz * dz);
             
             const FISHNU_VISIBILITY_DISTANCE = 18; // Show lore when within 18 units
-            const shouldShowFishnu = dist < FISHNU_VISIBILITY_DISTANCE && !isInCasino;
+            const shouldShowFishnu = dist < FISHNU_VISIBILITY_DISTANCE;
             
             if (lordFishnuSpriteRef.current.visible !== shouldShowFishnu) {
                 lordFishnuSpriteRef.current.visible = shouldShowFishnu;
@@ -8551,12 +8952,12 @@ const VoxelWorld = ({
     // Portal check effect
     // Check for nearby slot machines (casino only)
     const checkGoldLobbySlots = () => {
-        if (room !== 'town') {
+        if (room !== 'snow_forts') {
             if (goldSlotInteraction) setGoldSlotInteraction(null);
             return;
         }
 
-        if (!townCenterRef.current?.isPlayerInCasino(posRef.current.x, posRef.current.z)) {
+        if (!snowFortsZoneRef.current?.isPlayerInCasino(posRef.current.x, posRef.current.z)) {
             if (goldSlotInteraction) setGoldSlotInteraction(null);
             goldLobbySlotSyncedRef.current = false;
             return;
@@ -8567,15 +8968,15 @@ const VoxelWorld = ({
             syncGoldSlots();
         }
 
-        const tc = townCenterRef.current;
-        if (!tc?.casinoLobbySlots?.length) return;
+        const sf = snowFortsZoneRef.current;
+        if (!sf?.casinoLobbySlots?.length) return;
 
         if (!goldLobbySlotSystemRef.current) {
             goldLobbySlotSystemRef.current = new GoldLobbySlotSystem();
         }
         goldLobbySlotSystemRef.current.init(
-            tc.casinoLobbySlots,
-            tc.casinoLobbySlotDisplays || []
+            sf.casinoLobbySlots,
+            sf.casinoLobbySlotDisplays || []
         );
 
         const playerPos = posRef.current;
@@ -8705,9 +9106,9 @@ const VoxelWorld = ({
         }
     };
     
-    // Check for nearby ice fishing spots (town only)
+    // Check for nearby ice fishing spots (town demo hole + snow forts)
     const checkFishingSpots = () => {
-        if (room !== 'town') {
+        if (room !== 'town' && room !== 'snow_forts') {
             if (fishingInteraction) setFishingInteraction(null);
             return;
         }
@@ -8789,9 +9190,100 @@ const VoxelWorld = ({
         }
     };
     
-    // Check world merchant NPC proximity (town only)
+    const checkWoodcuttingSpots = () => {
+        if (room !== 'forest_trails') {
+            if (woodcuttingInteraction) setWoodcuttingInteraction(null);
+            return;
+        }
+        if (!woodcuttingSystemRef.current || woodChopProgress) {
+            return;
+        }
+        const playerPos = posRef.current;
+        const interaction = woodcuttingSystemRef.current.checkInteraction(
+            playerPos.x,
+            playerPos.z,
+            gameInventory,
+            isAuthenticated
+        );
+        if (interaction) {
+            if (!woodcuttingInteraction || woodcuttingInteraction.treeId !== interaction.treeId) {
+                setWoodcuttingInteraction(interaction);
+            }
+        } else if (woodcuttingInteraction) {
+            setWoodcuttingInteraction(null);
+        }
+    };
+
+    const checkMushroomSpots = () => {
+        if (room !== 'forest_trails') {
+            if (mushroomInteraction) setMushroomInteraction(null);
+            return;
+        }
+        const playerPos = posRef.current;
+        const stateMap = new Map((mushroomClusters || []).map(m => [m.id, m]));
+        let closest = null;
+        let closestDist = Infinity;
+        for (const def of HARVESTABLE_MUSHROOMS) {
+            const state = stateMap.get(def.id);
+            if (state?.state === 'harvested') continue;
+            const dx = playerPos.x - def.localX;
+            const dz = playerPos.z - def.localZ;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < MUSHROOM_INTERACTION_RADIUS && dist < closestDist) {
+                closestDist = dist;
+                closest = {
+                    mushroomId: def.id,
+                    prompt: isMobile ? 'Tap to pick mushrooms' : 'Press E to pick mushrooms',
+                    canHarvest: true
+                };
+            }
+        }
+        if (closest) {
+            if (!mushroomInteraction || mushroomInteraction.mushroomId !== closest.mushroomId) {
+                setMushroomInteraction(closest);
+            }
+        } else if (mushroomInteraction) {
+            setMushroomInteraction(null);
+        }
+    };
+
+    const checkScavengeSpots = () => {
+        if (room !== 'snow_forts' && room !== 'town') {
+            if (scavengeInteraction) setScavengeInteraction(null);
+            return;
+        }
+
+        const playerPos = posRef.current;
+        const activeSpot = findActiveScavengeSpot(playerPos, room);
+
+        if (activeSpot) {
+            const cooldownEndsAt = scavengeCooldownsRef.current?.[activeSpot.id] || 0;
+            const remainingMs = getScavengeRemainingMs(cooldownEndsAt);
+            const canScavenge = remainingMs === 0;
+            const remainingSeconds = Math.ceil(remainingMs / 1000);
+            setScavengeInteraction(prev => {
+                if (
+                    prev?.spotId === activeSpot.id
+                    && prev?.canScavenge === canScavenge
+                    && prev?.remainingSeconds === remainingSeconds
+                ) {
+                    return prev;
+                }
+                return {
+                    spotId: activeSpot.id,
+                    canScavenge,
+                    remainingSeconds,
+                    cooldownEndsAt: canScavenge ? null : cooldownEndsAt,
+                };
+            });
+        } else if (scavengeInteraction) {
+            setScavengeInteraction(null);
+        }
+    };
+    
+    // Check world merchant NPC proximity (town + snow forts)
     const checkWorldNpcs = () => {
-        if (room !== 'town' || !worldNpcManagerRef.current) {
+        if ((room !== 'town' && room !== 'snow_forts' && room !== 'forest_trails') || !worldNpcManagerRef.current) {
             if (nearbyNpcInteraction) setNearbyNpcInteraction(null);
             nearbyNpcInteractionRef.current = null;
             return;
@@ -8851,18 +9343,22 @@ const VoxelWorld = ({
     
     useEffect(() => {
         const interval = setInterval(() => {
+            checkTravelNpcs();
             checkPortals();
             checkIglooProximity();
             checkGoldLobbySlots();
             checkSlotMachines();
             checkBlackjackTables();
             checkFishingSpots();
+            checkWoodcuttingSpots();
+            checkMushroomSpots();
+            checkScavengeSpots();
             checkWorldNpcs();
             checkLordFishnu();
             checkArcadeMachines();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, isAuthenticated, gameInventory, nearbyNpcInteraction]);
+    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, woodcuttingInteraction, woodChopProgress, mushroomInteraction, scavengeInteraction, scavengeCooldowns, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, isAuthenticated, gameInventory, mushroomClusters, nearbyNpcInteraction, nearbyTravelNpcInteraction, travelRouteStatuses]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -8961,14 +9457,13 @@ const VoxelWorld = ({
                                 // This callback is called if user CAN enter directly
                                 console.log('✅ Server approved entry - entering:', iglooId);
                                 
-                                let exitSpawnPos = nearbyPortal.exitSpawnPos;
                                 if (room === 'town' && iglooId.startsWith('igloo')) {
-                                    iglooEntrySpawnRef.current = exitSpawnPos;
+                                    iglooEntrySpawnRef.current = nearbyPortal.exitSpawnPos;
                                 }
                                 
                                 nearbyPortalRef.current = null;
                                 setNearbyPortal(null);
-                                onChangeRoom(iglooId, exitSpawnPos);
+                                onChangeRoom(iglooId, null);
                             });
                             return; // Wait for server response
                         }
@@ -8980,25 +9475,27 @@ const VoxelWorld = ({
                 }
             }
             
-            let exitSpawnPos = nearbyPortal.exitSpawnPos;
-            
-            // If entering an igloo from town, store the exit spawn position
+            let spawnPos = null;
+            const overworldRooms = ['town', 'snow_forts', 'forest_trails'];
+
+            // If entering an igloo from town, store where to return on exit
             if (room === 'town' && nearbyPortal.targetRoom.startsWith('igloo')) {
                 iglooEntrySpawnRef.current = nearbyPortal.exitSpawnPos;
             }
-            
+
             // If exiting an igloo back to town, use the stored entry position
             if (room.startsWith('igloo') && nearbyPortal.targetRoom === 'town') {
-                if (iglooEntrySpawnRef.current) {
-                    exitSpawnPos = iglooEntrySpawnRef.current;
-                    iglooEntrySpawnRef.current = null; // Clear after use
-                }
+                spawnPos = iglooEntrySpawnRef.current ?? nearbyPortal.exitSpawnPos;
+                iglooEntrySpawnRef.current = null;
+            } else if (overworldRooms.includes(nearbyPortal.targetRoom) && nearbyPortal.exitSpawnPos) {
+                // Leaving an interior room → land at portal exit in the overworld
+                spawnPos = nearbyPortal.exitSpawnPos;
             }
-            
-            // Pass exit spawn position if available (for returning to town)
+            // Entering interior rooms: spawnPos stays null so room default spawn applies
+
             nearbyPortalRef.current = null;
             setNearbyPortal(null);
-            onChangeRoom(nearbyPortal.targetRoom, exitSpawnPos);
+            onChangeRoom(nearbyPortal.targetRoom, spawnPos);
             return;
         }
         
@@ -9145,7 +9642,7 @@ const VoxelWorld = ({
     useEffect(() => {
         const handleSlotKeyPress = (e) => {
             if (e.code === 'KeyE') {
-                if (goldSlotInteractionRef.current?.canSpin && room === 'town'
+                if (goldSlotInteractionRef.current?.canSpin && room === 'snow_forts'
                     && !nearbyPortal && !emoteWheelOpen && !goldSlotSpinning && !goldSpinLockRef.current) {
                     handleGoldSlotSpin();
                     return;
@@ -9260,24 +9757,186 @@ const VoxelWorld = ({
         mpSend?.({ type: 'fishing_end' });
     }, [mpSend, clearFishingResult]);
 
+    const woodcuttingLockRef = useRef(false);
+    const woodcuttingInteractionRef = useRef(null);
+    const woodChopStartPosRef = useRef(null);
+    useEffect(() => {
+        woodcuttingInteractionRef.current = woodcuttingInteraction;
+    }, [woodcuttingInteraction]);
+
+    const handleWoodChopAction = useCallback(async () => {
+        if (woodcuttingLockRef.current || woodChopProgress) return;
+        const interaction = woodcuttingInteractionRef.current;
+        if (!interaction?.canChop || !(interaction.treeId || interaction.spotId)) return;
+
+        woodcuttingLockRef.current = true;
+        const treeId = interaction.treeId || interaction.spotId;
+        woodcuttingSystemRef.current?.setLocalChopping(treeId);
+
+        const result = await startWoodChop?.(treeId);
+        if (result?.error) {
+            woodcuttingSystemRef.current?.clearLocalChopping();
+            woodcuttingLockRef.current = false;
+            if (result.message) setActiveBubble(result.message);
+            return;
+        }
+
+        const durationMs = result.durationMs || 2500;
+        const startedAt = Date.now();
+        woodChopStartPosRef.current = { x: posRef.current.x, z: posRef.current.z };
+        setWoodChopProgress({ treeId, progress: 0 });
+
+        const tick = () => {
+            const startPos = woodChopStartPosRef.current;
+            if (startPos) {
+                const moved = Math.hypot(posRef.current.x - startPos.x, posRef.current.z - startPos.z) > 2.5;
+                if (moved) {
+                    cancelWoodChop?.('MOVED');
+                    setWoodChopProgress(null);
+                    woodcuttingSystemRef.current?.clearLocalChopping();
+                    woodcuttingLockRef.current = false;
+                    woodChopStartPosRef.current = null;
+                    setActiveBubble('Chopping cancelled — stay near the tree');
+                    return;
+                }
+            }
+            const elapsed = Date.now() - startedAt;
+            const progress = Math.min(1, elapsed / durationMs);
+            setWoodChopProgress({ treeId, progress });
+            if (progress < 1) {
+                woodChopTimerRef.current = requestAnimationFrame(tick);
+            } else {
+                forestTreeManagerRef.current?.optimisticHarvest(treeId);
+                setWoodChopProgress({ treeId, progress: 1, finishing: true });
+                setWoodcuttingInteraction(null);
+                completeWoodChop?.(true);
+            }
+        };
+        woodChopTimerRef.current = requestAnimationFrame(tick);
+    }, [startWoodChop, completeWoodChop, cancelWoodChop, woodChopProgress]);
+
+    useEffect(() => () => {
+        if (woodChopTimerRef.current) cancelAnimationFrame(woodChopTimerRef.current);
+    }, []);
+
+    const handleMushroomHarvest = useCallback(async () => {
+        if (mushroomLockRef.current) return;
+        const interaction = mushroomInteraction;
+        if (!interaction?.canHarvest || !interaction.mushroomId) return;
+        mushroomLockRef.current = true;
+        const result = await harvestMushroom?.(interaction.mushroomId);
+        mushroomLockRef.current = false;
+        if (result?.error) {
+            setActiveBubble(result.message || 'Could not pick mushrooms');
+            return;
+        }
+        setActiveBubble('🍄 Forest mushroom added to backpack');
+        setMushroomInteraction(null);
+    }, [mushroomInteraction, harvestMushroom]);
+
+    const handleScavengeAction = useCallback(async () => {
+        if (scavengeLockRef.current) return;
+        const interaction = scavengeInteraction;
+        if (!interaction?.spotId || !interaction.canScavenge) return;
+        scavengeLockRef.current = true;
+        const result = await scavengeSpot?.(interaction.spotId);
+        scavengeLockRef.current = false;
+        if (result?.error) {
+            if (result.displayRemainingSeconds) {
+                const countdown = formatScavengeCountdown(result.displayRemainingSeconds);
+                setActiveBubble(result.message || `Try again in ${countdown}`);
+            } else {
+                setActiveBubble(result.message || 'Nothing useful in there');
+            }
+            return;
+        }
+        setActiveBubble(result.message || `Found ${result.goldEarned} gold!`);
+    }, [scavengeInteraction, scavengeSpot]);
+
     const openNpcDialogue = useCallback((npcNearby) => {
         if (!npcNearby?.def) return;
         setActiveNpcDef(npcNearby.def);
         fetchGameInventory?.();
     }, [fetchGameInventory]);
 
+    const openTravelDialogue = useCallback((npcNearby) => {
+        if (!npcNearby?.def) return;
+        setActiveTravelNpcDef(npcNearby.def);
+        fetchTravelState?.();
+    }, [fetchTravelState]);
+
+    const handleTravelBook = useCallback(async (routeId, payForPlayerIds = []) => {
+        const result = await bookTravel?.(routeId, payForPlayerIds);
+        if (result?.error) {
+            window.dispatchEvent(new CustomEvent('townInteraction', {
+                detail: { action: 'travel_error', message: result.message || 'Could not buy ticket.' }
+            }));
+            return result;
+        }
+        return result;
+    }, [bookTravel]);
+
+    const handleTravelLeave = useCallback(async () => {
+        const result = await leaveTravel?.();
+        if (result?.error) {
+            window.dispatchEvent(new CustomEvent('townInteraction', {
+                detail: { action: 'travel_error', message: result.message || 'Could not leave queue.' }
+            }));
+            return result;
+        }
+        if (result?.cancelled) setActiveTravelNpcDef(null);
+        return result;
+    }, [leaveTravel]);
+
+    useEffect(() => {
+        const onTravelTransfer = (e) => {
+            const { room: targetRoom, position } = e.detail || {};
+            if (!targetRoom || !onChangeRoom) return;
+            setActiveTravelNpcDef(null);
+            setNearbyTravelNpcInteraction(null);
+            onChangeRoom(targetRoom, position);
+        };
+        window.addEventListener('travelTransfer', onTravelTransfer);
+        return () => window.removeEventListener('travelTransfer', onTravelTransfer);
+    }, [onChangeRoom]);
+
     const handleNpcDialogueAction = useCallback(async (actionId, npcDef) => {
         if (actionId === 'upgrade_backpack') {
             return upgradeBackpack?.('supply_merchant');
         }
+        if (actionId === 'buy_basic_axe') {
+            return buyFromMerchant?.('supply_merchant', 'basic_axe');
+        }
+        if (actionId === 'buy_iron_axe') {
+            return buyFromMerchant?.('supply_merchant', 'iron_axe');
+        }
+        if (actionId === 'buy_steel_axe') {
+            return buyFromMerchant?.('supply_merchant', 'steel_axe');
+        }
+        if (actionId === 'buy_master_axe') {
+            return buyFromMerchant?.('supply_merchant', 'master_axe');
+        }
         if (actionId === 'open_backpack') {
             fetchGameInventory?.();
-            setNpcBackpackSellMerchant(npcDef?.merchantId === 'fish_buyer' ? 'fish_buyer' : null);
+            setNpcBackpackSellMerchant(
+                npcDef?.merchantId === 'fish_buyer' ? 'fish_buyer'
+                    : npcDef?.merchantId === 'supply_merchant' ? 'supply_merchant'
+                        : npcDef?.merchantId === 'forest_ranger' ? 'forest_ranger'
+                            : null
+            );
             setShowNpcBackpack(true);
             return { success: true };
         }
+        if (actionId === 'quest_mushroom_ticket') {
+            const result = await turnInMushroomQuest?.();
+            if (result?.error) {
+                return { error: result.error, message: result.message };
+            }
+            fetchGameInventory?.();
+            return { success: true, message: result.message || 'Earned a ferry ticket to Town!' };
+        }
         return null;
-    }, [upgradeBackpack, fetchGameInventory]);
+    }, [upgradeBackpack, buyFromMerchant, fetchGameInventory, turnInMushroomQuest]);
     
     // Handle arcade game close (PvE Battleship)
     const handleArcadeGameClose = useCallback(() => {
@@ -9285,19 +9944,35 @@ const VoxelWorld = ({
         setArcadeGameType(null);
     }, []);
     
-    // E key handler for fishing
+    // E key handler for fishing (town) and woodcutting (forest)
     useEffect(() => {
         const handleFishingKeyPress = (e) => {
-            if (e.code === 'KeyE' && room === 'town') {
+            if (e.code !== 'KeyE' || emoteWheelOpen) return;
+            if (room === 'town' || room === 'snow_forts') {
                 const fi = fishingInteractionRef.current;
-                if (fi?.canFish && !nearbyPortal && !emoteWheelOpen && !fishingLockRef.current) {
+                if (fi?.canFish && !nearbyPortal && !fishingLockRef.current && !fishingGameActive) {
                     handleFishingAction();
+                    return;
                 }
+            }
+            if (room === 'forest_trails') {
+                const wc = woodcuttingInteractionRef.current;
+                if (wc?.canChop && !nearbyPortal && !emoteWheelOpen && !woodcuttingLockRef.current && !woodChopProgress) {
+                    handleWoodChopAction();
+                    return;
+                }
+                if (mushroomInteraction?.canHarvest && !nearbyPortal && !emoteWheelOpen && !mushroomLockRef.current) {
+                    handleMushroomHarvest();
+                    return;
+                }
+            }
+            if ((room === 'snow_forts' || room === 'town') && scavengeInteraction?.canScavenge && !nearbyPortal && !emoteWheelOpen && !scavengeLockRef.current) {
+                handleScavengeAction();
             }
         };
         window.addEventListener('keydown', handleFishingKeyPress);
         return () => window.removeEventListener('keydown', handleFishingKeyPress);
-    }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction]);
+    }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction, handleWoodChopAction, handleMushroomHarvest, handleScavengeAction, woodChopProgress, mushroomInteraction, scavengeInteraction, fishingGameActive]);
     
     // E key handler for arcade machines (Battleship PvE)
     useEffect(() => {
@@ -9344,10 +10019,26 @@ const VoxelWorld = ({
     // E key handler for world NPCs + Lord Fishnu
     useEffect(() => {
         const handleNpcKeyPress = (e) => {
-            if (e.code !== 'KeyE' || room !== 'town' || emoteWheelOpen) return;
+            if (e.code !== 'KeyE' || emoteWheelOpen) return;
+
+            const travelNpc = nearbyTravelNpcInteractionRef.current;
+            if (travelNpc && ['town', 'snow_forts', 'forest_trails'].includes(room)
+                && !nearbyPortal && !fishingInteraction && !woodcuttingInteraction
+                && !blackjackGameActive && !fishingGameActive && !activeTravelNpcDef) {
+                openTravelDialogue(travelNpc);
+                return;
+            }
+
+            if (room !== 'town') {
+                const npcOther = nearbyNpcInteractionRef.current;
+                if (npcOther && !nearbyPortal && !fishingInteraction && !woodcuttingInteraction && !blackjackGameActive && !fishingGameActive) {
+                    openNpcDialogue(npcOther);
+                }
+                return;
+            }
 
             const npc = nearbyNpcInteractionRef.current;
-            if (npc && !nearbyPortal && !fishingInteraction && !blackjackGameActive && !fishingGameActive) {
+            if (npc && !nearbyPortal && !fishingInteraction && !woodcuttingInteraction && !blackjackGameActive && !fishingGameActive) {
                 openNpcDialogue(npc);
                 return;
             }
@@ -9359,7 +10050,7 @@ const VoxelWorld = ({
         };
         window.addEventListener('keydown', handleNpcKeyPress);
         return () => window.removeEventListener('keydown', handleNpcKeyPress);
-    }, [nearbyPortal, fishingInteraction, emoteWheelOpen, room, handlePayRespects, openNpcDialogue, blackjackGameActive, fishingGameActive]);
+    }, [nearbyPortal, fishingInteraction, emoteWheelOpen, room, handlePayRespects, openNpcDialogue, openTravelDialogue, blackjackGameActive, fishingGameActive, activeTravelNpcDef]);
     
     // Handle town interactions (benches, snowmen, etc.)
     useEffect(() => {
@@ -9514,6 +10205,10 @@ const VoxelWorld = ({
             }
             
             if (e.code === 'KeyE' && nearbyInteraction && !nearbyPortal && !nearbyNpcInteractionRef.current) {
+                // Let slot handlers consume E when a spin is available
+                if (goldSlotInteractionRef.current?.canSpin && roomRef.current === 'snow_forts') return;
+                if (slotInteractionRef.current?.canSpin && roomRef.current === 'casino_game_room') return;
+
                 // Handle bench sitting with snap points
                 if (nearbyInteraction.action === 'sit' && nearbyInteraction.benchData) {
                     const benchData = nearbyInteraction.benchData;
@@ -9726,9 +10421,13 @@ const VoxelWorld = ({
         const handleChatCommand = (e) => {
             const { command } = e.detail;
             
-            // Parkour stage start positions (approximate, for staff testing)
-            // Y values raised +3 to land on top of platforms with clearance
-            const parkourPositions = {
+            // Parkour stage start positions (staff) + zone warps
+            const warpPositions = {
+                // Forest Trails — main campfire clearing (world coords)
+                forest: { room: 'forest_trails', ...FOREST_TRAILS_SPAWN, name: 'Forest Trails' },
+                // Snow Forts — west ferry dock (staff only)
+                snowforts: { room: 'snow_forts', ...SNOW_FORTS_ARRIVAL, name: 'Snow Forts' },
+                snow: { room: 'snow_forts', ...SNOW_FORTS_ARRIVAL, name: 'Snow Forts' },
                 // Stage 1 (Blue) - Ground level start near dojo
                 pk1: { x: CENTER_X - 12, y: 4, z: CENTER_Z + 70 + 9, name: 'Stage 1 (Blue) Start' },
                 // Stage 2 (Purple) - Tier 1 platform (first roof)
@@ -9743,9 +10442,9 @@ const VoxelWorld = ({
                 pk6: { x: CENTER_X - 70.4 + 49 + 48 - 3, y: 57, z: CENTER_Z + 78.5 + 1 + 2 - 3, name: 'Stage 6 (Cyan) - The Gauntlet' },
             };
             
-            // Handle parkour teleports (staff only — authorized via server parkour_warp message)
-            if (parkourPositions[command]) {
-                const pos = parkourPositions[command];
+            // Handle zone warps (staff only — authorized via server)
+            if (warpPositions[command]) {
+                const pos = warpPositions[command];
                 
                 // Clear any seated state first
                 if (seatedRef.current) {
@@ -9755,28 +10454,18 @@ const VoxelWorld = ({
                     mpSendEmote(null);
                 }
                 
-                // If not in town, change room to town first
-                if (roomRef.current !== 'town') {
+                // Change room for zone warps (staff only)
+                const targetRoom = pos.room || 'town';
+                const spawnPos = { x: pos.x, y: pos.y, z: pos.z, absolute: true };
+                if (roomRef.current !== targetRoom) {
                     if (onChangeRoom) {
-                        onChangeRoom('town', null);
+                        onChangeRoom(targetRoom, spawnPos);
                     }
-                    // Teleport after room change
-                    setTimeout(() => {
-                        posRef.current.x = pos.x;
-                        posRef.current.y = pos.y;
-                        posRef.current.z = pos.z;
-                        velRef.current = { x: 0, y: 0, z: 0 };
-                        if (playerRef.current) {
-                            playerRef.current.position.set(pos.x, pos.y, pos.z);
-                        }
-                    }, 100);
                 } else {
-                    // Already in town - just teleport
                     posRef.current.x = pos.x;
                     posRef.current.y = pos.y;
                     posRef.current.z = pos.z;
                     velRef.current = { x: 0, y: 0, z: 0 };
-                    
                     if (playerRef.current) {
                         playerRef.current.position.set(pos.x, pos.y, pos.z);
                     }
@@ -10527,6 +11216,72 @@ const VoxelWorld = ({
                     );
                 }
             },
+            onWoodChopResult: (data) => {
+                if (woodChopTimerRef.current) cancelAnimationFrame(woodChopTimerRef.current);
+                setWoodChopProgress(null);
+                woodcuttingSystemRef.current?.clearLocalChopping();
+                woodcuttingLockRef.current = false;
+                woodChopStartPosRef.current = null;
+
+                if (data.treeState && forestTreeManagerRef.current) {
+                    forestTreeManagerRef.current.updateTree(
+                        data.treeState.id,
+                        data.treeState.state,
+                        data.treeState.regrowAt,
+                        data.treeState.choppingBy || null
+                    );
+                }
+                if (data.wood && data.inventoryAdded) {
+                    const qty = data.wood.quantity || 1;
+                    const label = `${data.wood.emoji || '🪵'} ${qty}× ${data.wood.name}`;
+                    setActiveBubble(
+                        data.axeBroken
+                            ? `Chopped ${label}! Your axe broke — buy a new one from Clive.`
+                            : `Chopped ${label}!`
+                    );
+                }
+            },
+            onWoodChopError: (data) => {
+                if (woodChopTimerRef.current) cancelAnimationFrame(woodChopTimerRef.current);
+                setWoodChopProgress(null);
+                woodcuttingSystemRef.current?.clearLocalChopping();
+                woodcuttingLockRef.current = false;
+                woodChopStartPosRef.current = null;
+                fetchForestTrees?.();
+                if (data?.message) setActiveBubble(data.message);
+            },
+            onWoodChopCancelled: (data) => {
+                if (woodChopTimerRef.current) cancelAnimationFrame(woodChopTimerRef.current);
+                setWoodChopProgress(null);
+                woodcuttingSystemRef.current?.clearLocalChopping();
+                woodcuttingLockRef.current = false;
+                woodChopStartPosRef.current = null;
+                if (data?.treeState && forestTreeManagerRef.current) {
+                    forestTreeManagerRef.current.updateTree(
+                        data.treeState.id,
+                        data.treeState.state,
+                        data.treeState.regrowAt,
+                        data.treeState.choppingBy || null
+                    );
+                } else if (data?.treeId && forestTreeManagerRef.current) {
+                    fetchForestTrees?.();
+                }
+            },
+            onForestTreesUpdate: (trees) => {
+                if (!forestTreeManagerRef.current || !trees?.length) return;
+                for (const tree of trees) {
+                    forestTreeManagerRef.current.updateTree(
+                        tree.id,
+                        tree.state,
+                        tree.regrowAt,
+                        tree.choppingBy || null
+                    );
+                }
+            },
+            onMushroomsUpdate: (mushrooms) => {
+                if (!mushroomClusterManagerRef.current || !mushrooms?.length) return;
+                mushroomClusterManagerRef.current.applySnapshot(mushrooms);
+            },
             // Snowball throw callback - another player threw a snowball
             onSnowballThrown: (data) => {
                 if (!sceneRef.current || !window.THREE) return;
@@ -10647,6 +11402,8 @@ const VoxelWorld = ({
                 mountGroup.visible = mountVisible;
             }
             mesh.userData.mountVisible = mountVisible;
+
+            syncRemotePlayerHeldItem({ mesh }, playerData, buildPartMergedRef.current);
             
             // Create name tag - adjust height for character type
             // Use player's chosen nametag style from appearance (default to 'day1')
@@ -10773,10 +11530,40 @@ const VoxelWorld = ({
     
     // Reset casino zoom state when changing rooms (so zoom triggers properly on re-entry)
     useEffect(() => {
-        // When room changes, reset the casino tracking so zoom can trigger fresh
+        const prevRoom = previousRoomRef.current;
+        const enteringTransit = isTravelLobbyRoom(room);
+        const leavingTransit = isTravelLobbyRoom(prevRoom) && !enteringTransit;
+        const controls = controlsRef.current;
+
         wasInCasinoRef.current = false;
-        casinoZoomTransitionRef.current = { active: false, targetDistance: 20, progress: 0 };
-        
+
+        if (enteringTransit) {
+            if (controls) {
+                controls.minDistance = TRAVEL_LOBBY_CAMERA.minDistance;
+                controls.maxDistance = TRAVEL_LOBBY_CAMERA.maxDistance;
+            }
+            casinoZoomTransitionRef.current = {
+                active: true,
+                targetDistance: TRAVEL_LOBBY_CAMERA.targetDistance,
+                progress: 0,
+            };
+            setTimeout(() => {
+                cameraControllerRef.current?.snapToTarget();
+            }, 100);
+        } else if (leavingTransit) {
+            if (controls) {
+                controls.minDistance = TRAVEL_LOBBY_CAMERA.defaultMinDistance;
+                controls.maxDistance = TRAVEL_LOBBY_CAMERA.defaultMaxDistance;
+            }
+            casinoZoomTransitionRef.current = {
+                active: true,
+                targetDistance: TRAVEL_LOBBY_CAMERA.defaultTargetDistance,
+                progress: 0,
+            };
+        } else {
+            casinoZoomTransitionRef.current = { active: false, targetDistance: TRAVEL_LOBBY_CAMERA.defaultTargetDistance, progress: 0 };
+        }
+
         // If entering town and spawning inside the casino, immediately trigger zoom
         if (room === 'town') {
             // Small delay to let position settle after room change
@@ -10789,7 +11576,7 @@ const VoxelWorld = ({
                     const dx = pos.x - casinoX;
                     const dz = pos.z - casinoZ;
                     const isInCasino = Math.abs(dx) < 20 && Math.abs(dz) < 20 && pos.y < 15;
-                    
+
                     if (isInCasino) {
                         wasInCasinoRef.current = true;
                         casinoZoomTransitionRef.current = {
@@ -10801,6 +11588,8 @@ const VoxelWorld = ({
                 }
             }, 100);
         }
+
+        previousRoomRef.current = room;
     }, [room]);
     
     // Update puffle on server when changed
@@ -11080,8 +11869,8 @@ const VoxelWorld = ({
                 />
              ) : null}
              
-             {/* Gold Lobby Slot Prompt (town casino) */}
-             {goldSlotInteraction && !nearbyPortal && room === 'town' && (
+             {/* Gold Lobby Slot Prompt (Snow Forts casino) */}
+             {goldSlotInteraction && !nearbyPortal && room === 'snow_forts' && (
                 <div
                     className={`absolute bg-gradient-to-b from-amber-900/95 to-black/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg border-yellow-500/50 shadow-yellow-500/20 ${
                         isMobile
@@ -11264,7 +12053,7 @@ const VoxelWorld = ({
              )}
              
              {/* Ice Fishing Interaction UI */}
-             {fishingInteraction && room === 'town' && (
+             {fishingInteraction && (room === 'town' || room === 'snow_forts') && (
                 <div 
                     className={`absolute bg-gradient-to-b from-blue-900/95 to-cyan-900/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${
                         fishingInteraction.isDemo 
@@ -11339,9 +12128,99 @@ const VoxelWorld = ({
                     )}
                 </div>
              )}
+
+             {/* Forest woodcutting interaction */}
+             {(woodcuttingInteraction || woodChopProgress) && room === 'forest_trails' && !fishingInteraction && (
+                <div
+                    className={`absolute bg-gradient-to-b from-emerald-950/95 to-green-900/95 backdrop-blur-sm rounded-xl border border-emerald-500/40 text-center z-20 shadow-lg shadow-emerald-500/10 ${
+                        isMobile
+                            ? isLandscape
+                                ? 'bottom-[180px] right-28 p-3'
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    }`}
+                >
+                    <div className="text-3xl mb-1">🪓</div>
+                    {woodChopProgress ? (
+                        <>
+                            <p className="text-emerald-300 retro-text text-sm mb-2">
+                                {woodChopProgress.finishing ? 'Gathering wood…' : 'Chopping…'}
+                            </p>
+                            <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden">
+                                <div
+                                    className="h-full bg-gradient-to-r from-emerald-400 to-lime-400 transition-all duration-100"
+                                    style={{ width: `${Math.round((woodChopProgress.progress || 0) * 100)}%` }}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <p className={`retro-text mb-2 text-sm ${woodcuttingInteraction?.canChop ? 'text-emerald-300' : 'text-gray-400'}`}>
+                                {woodcuttingInteraction?.prompt}
+                            </p>
+                            {woodcuttingInteraction?.canChop && (
+                                <button
+                                    type="button"
+                                    className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm bg-gradient-to-b from-emerald-400 to-green-700 hover:from-emerald-300 hover:to-green-600 text-black transition-all active:scale-95"
+                                    onClick={handleWoodChopAction}
+                                >
+                                    🪵 Chop wood
+                                </button>
+                            )}
+                        </>
+                    )}
+                </div>
+             )}
+
+             {scavengeInteraction && (room === 'snow_forts' || room === 'town') && !nearbyPortal && !fishingGameActive && (
+                <div className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border text-center z-20 ${
+                    scavengeInteraction.canScavenge ? 'border-amber-500/40' : 'border-gray-600/50'
+                } ${
+                    isMobile ? 'bottom-[170px] left-1/2 -translate-x-1/2 p-3' : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                }`}>
+                    <div className="text-3xl mb-1">🗑️</div>
+                    <p className={`retro-text mb-2 text-sm ${
+                        scavengeInteraction.canScavenge ? 'text-amber-200' : 'text-gray-400'
+                    }`}>
+                        {scavengeInteraction.canScavenge
+                            ? getScavengeSpotPrompt(scavengeInteraction.spotId, { isMobile })
+                            : `Already searched — ready in ${formatScavengeCountdown(scavengeInteraction.remainingSeconds)}`}
+                    </p>
+                    <button
+                        type="button"
+                        disabled={!scavengeInteraction.canScavenge}
+                        className={`w-full px-6 py-2 font-bold rounded-lg retro-text text-sm transition-all ${
+                            scavengeInteraction.canScavenge
+                                ? 'bg-gradient-to-b from-amber-400 to-orange-700 text-black hover:from-amber-300 hover:to-orange-600 active:scale-95'
+                                : 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-70'
+                        }`}
+                        onClick={handleScavengeAction}
+                    >
+                        {scavengeInteraction.canScavenge
+                            ? 'Search trash'
+                            : formatScavengeCountdown(scavengeInteraction.remainingSeconds)}
+                    </button>
+                </div>
+             )}
+
+             {mushroomInteraction && room === 'forest_trails' && !nearbyPortal && !woodcuttingInteraction && !woodChopProgress && !fishingGameActive && (
+                <div className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border border-purple-500/40 text-center z-20 ${
+                    isMobile ? 'bottom-[170px] left-1/2 -translate-x-1/2 p-3' : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                }`}>
+                    <div className="text-3xl mb-1">🍄</div>
+                    <p className="retro-text mb-2 text-sm text-purple-200">{mushroomInteraction.prompt}</p>
+                    <button
+                        type="button"
+                        className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm bg-gradient-to-b from-purple-400 to-fuchsia-700 text-white"
+                        onClick={handleMushroomHarvest}
+                    >
+                        Pick mushrooms
+                    </button>
+                </div>
+             )}
              
              {/* World Merchant NPC interaction */}
-             {nearbyNpcInteraction && room === 'town' && !nearbyPortal && !fishingInteraction && !fishingGameActive && !activeNpcDef && (
+             {nearbyNpcInteraction && (room === 'town' || room === 'snow_forts' || room === 'forest_trails') && !nearbyPortal && !fishingInteraction && !woodcuttingInteraction && !mushroomInteraction && !scavengeInteraction && !fishingGameActive && !activeNpcDef && (
                 <div
                     className={`absolute bg-gradient-to-b from-slate-900/95 to-slate-950/95 backdrop-blur-sm rounded-xl border border-cyan-500/40 text-center z-20 shadow-lg shadow-cyan-500/10 ${
                         isMobile
@@ -11380,6 +12259,57 @@ const VoxelWorld = ({
                 gameInventory={gameInventory}
                 coins={userData?.coins ?? 0}
              />
+
+             <TravelDialogueModal
+                isOpen={Boolean(activeTravelNpcDef)}
+                npcDef={activeTravelNpcDef}
+                onClose={() => setActiveTravelNpcDef(null)}
+                onBook={handleTravelBook}
+                onLeave={handleTravelLeave}
+                routeStatuses={travelRouteStatuses}
+                getPlayersData={getPlayersData}
+                myVoyage={myTravelVoyage}
+                coins={userData?.coins ?? 0}
+                gameInventory={gameInventory}
+                playerId={playerId}
+                pending={travelPending}
+             />
+
+             {(isTravelLobbyRoom(room) || ['town', 'snow_forts', 'forest_trails'].includes(room)) && (
+                <TravelLobbyHUD
+                    voyage={myTravelVoyage}
+                    routeStatuses={travelRouteStatuses}
+                    room={room}
+                />
+             )}
+
+             {nearbyTravelNpcInteraction && ['town', 'snow_forts', 'forest_trails'].includes(room)
+                && !nearbyPortal && !fishingInteraction && !woodcuttingInteraction
+                && !fishingGameActive && !activeTravelNpcDef && (
+                <div
+                    className={`absolute bg-gradient-to-b from-sky-900/95 to-cyan-950/95 backdrop-blur-sm rounded-xl border border-sky-400/50 text-center z-20 shadow-lg shadow-sky-500/20 ${
+                        isMobile
+                            ? isLandscape
+                                ? 'bottom-[180px] right-28 p-3'
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    }`}
+                >
+                    <p className="text-sky-200 retro-text text-sm mb-2">
+                        {isMobile ? 'Tap to talk to Captain Skipper' : nearbyTravelNpcInteraction.prompt}
+                    </p>
+                    <button
+                        type="button"
+                        className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm bg-gradient-to-b from-sky-500 to-cyan-700 hover:from-sky-400 hover:to-cyan-600 text-white transition-all active:scale-95"
+                        onClick={() => openTravelDialogue(nearbyTravelNpcInteraction)}
+                    >
+                        ⛴️ Ferry
+                    </button>
+                    {!isMobile && (
+                        <p className="text-white/50 text-[10px] mt-1 retro-text">{t('interact.orPressE')}</p>
+                    )}
+                </div>
+             )}
 
              <GameInventoryModal
                 isOpen={showNpcBackpack}
@@ -11492,7 +12422,13 @@ const VoxelWorld = ({
              
              {/* Town / Casino Game Room Interaction Prompt - Clickable like dojo enter */}
              {/* Hide when blackjack interaction is showing to prevent overlap */}
-             {nearbyInteraction && (room === 'town' || room === 'casino_game_room' || (room === 'nightclub' && ['sit', 'dj'].includes(nearbyInteraction.action))) && !nearbyPortal && !slotInteraction && !goldSlotInteraction && !blackjackInteraction && (
+             {nearbyInteraction && (
+                room === 'town'
+                || room === 'casino_game_room'
+                || room === 'snow_forts'
+                || room === 'forest_trails'
+                || (room === 'nightclub' && ['sit', 'dj'].includes(nearbyInteraction.action))
+             ) && !nearbyPortal && !slotInteraction && !goldSlotInteraction && !blackjackInteraction && (
                 <div 
                     className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border border-white/20 text-center z-20 ${
                         isMobile 
@@ -11792,7 +12728,7 @@ const VoxelWorld = ({
                  <h2 className={`drop-shadow-lg ${
                      isMobile && !isLandscape ? 'text-sm' : 'text-xl'
                  } ${room === 'dojo' ? 'text-red-400' : room === 'pizza' ? 'text-orange-400' : room === 'nightclub' ? 'text-fuchsia-400' : room === 'casino_game_room' ? 'text-yellow-400' : room === 'igloo3' ? 'text-fuchsia-400' : room.startsWith('igloo') ? 'text-cyan-300' : 'text-yellow-400'}`}>
-                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room === 'casino_game_room' ? '🎰 CASINO' : room === 'igloo3' ? '🎵 SKNY GANG' : room.startsWith('igloo') ? `IGLOO ${room.replace('igloo', '')}` : 'TOWN'}
+                     {room === 'dojo' ? 'THE DOJO' : room === 'pizza' ? 'PIZZA PARLOR' : room === 'nightclub' ? '🎵 THE NIGHTCLUB' : room === 'casino_game_room' ? '🎰 CASINO' : room === 'snow_forts' ? '⛄ SNOW FORTS' : room === 'forest_trails' ? '🌲 FOREST TRAILS' : room === 'igloo3' ? '🎵 SKNY GANG' : room.startsWith('igloo') ? `IGLOO ${room.replace('igloo', '')}` : 'TOWN'}
                  </h2>
                  {!isMobile && (
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>

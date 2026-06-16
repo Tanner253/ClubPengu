@@ -8,11 +8,23 @@
  * - Snow Forts battle area (under construction)
  * - Ice Rink / Stadium (under construction)
  * - Snowy park with benches and trees
- * - Gravel paths matching Town Center style
  */
-
+import { applyGroundPathSurface, groundPathMaterialProps } from '../utils/groundPathSurface';
 import CollisionSystem from '../engine/CollisionSystem';
 import { createProp, PROP_TYPES } from '../props';
+import { CASINO_SETPIECE } from '../config/overworldConfig';
+import { SCAVENGE_SPOTS } from '../config/scavenge';
+import IceFishingHole from '../props/IceFishingHole';
+import {
+    spawnCasinoSetpiece,
+    spawnCasinoPortalMarker,
+    disposeCasinoSetpiece,
+    isPlayerInCasinoBounds,
+    getCasinoFurnitureList,
+    applyCasinoLanding,
+    updateCasinoSetpieceAnimations,
+    buildCasinoAnimationCache,
+} from './casinoSetpiece';
 
 /**
  * Helper to attach collision and trigger data to prop meshes
@@ -56,10 +68,35 @@ class SnowFortsZone {
     static ZONE_SIZE = 220;
     static CENTER = SnowFortsZone.ZONE_SIZE / 2; // 110
     
-    // World offset - this zone is EAST of town
-    static WORLD_OFFSET_X = 220; // Starts where town ends
-    static WORLD_OFFSET_Z = 0;   // Same Z as town
-    
+    // Local room coords (0–220); standalone snow_forts room
+    static WORLD_OFFSET_X = 0;
+    static WORLD_OFFSET_Z = 0;
+
+    /** Ice rink layout (local zone coords) — keep prop lists clear of this box */
+    static RINK = {
+        centerX: 135,
+        centerZ: 175,
+        width: 60,
+        depth: 40,
+        clearMinX: 98,
+        clearMaxX: 172,
+        clearMinZ: 152,
+        clearMaxZ: 202,
+    };
+
+    /** Ice fishing holes — local zone coords, spread away from paths / rink / casino */
+    static FISHING_HOLES = [
+        { id: 'sf_fishing_1', x: 24, z: 28, rotation: 0 },
+        { id: 'sf_fishing_2', x: 38, z: 98, rotation: Math.PI / 5 },
+        { id: 'sf_fishing_3', x: 198, z: 42, rotation: -Math.PI / 6 },
+        { id: 'sf_fishing_4', x: 30, z: 208, rotation: Math.PI / 3 },
+        { id: 'sf_fishing_5', x: 202, z: 128, rotation: 0 },
+        { id: 'sf_fishing_6', x: 88, z: 168, rotation: Math.PI / 4 },
+        { id: 'sf_fishing_7', x: 200, z: 22, rotation: -Math.PI / 3 },
+        { id: 'sf_fishing_8', x: 188, z: 212, rotation: Math.PI / 6 },
+        { id: 'sf_fishing_9', x: 22, z: 148, rotation: 0 },
+        { id: 'sf_fishing_10', x: 168, z: 92, rotation: Math.PI / 2 },
+    ];
     constructor(THREE) {
         this.THREE = THREE;
         this.collisionSystem = new CollisionSystem(
@@ -70,9 +107,54 @@ class SnowFortsZone {
         
         this.meshes = [];
         this.lights = [];
+        this._renderingActive = true;
         this.groundPlane = null;
         this.campfires = [];
         this.furniture = []; // Sittable furniture (benches, logs) for interaction
+        this.fishingSpots = [];
+        this._animatedCache = null;
+    }
+
+    /** Procedural packed-snow ground — richer than flat white vertex colors. */
+    _createSnowFortsGroundTexture(THREE, size = 512) {
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#c8d8e4';
+        ctx.fillRect(0, 0, size, size);
+        for (let i = 0; i < 120; i++) {
+            const x = Math.random() * size;
+            const y = Math.random() * size;
+            const r = 10 + Math.random() * 35;
+            const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+            g.addColorStop(0, `rgba(${170 + Math.random() * 30}, ${190 + Math.random() * 25}, ${210 + Math.random() * 20}, 0.45)`);
+            g.addColorStop(1, 'rgba(0,0,0,0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.arc(x, y, r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        for (let i = 0; i < 80; i++) {
+            ctx.fillStyle = `rgba(${90 + Math.random() * 40}, ${110 + Math.random() * 35}, ${130 + Math.random() * 30}, 0.25)`;
+            ctx.fillRect(Math.random() * size, Math.random() * size, 4 + Math.random() * 12, 2 + Math.random() * 8);
+        }
+        for (let i = 0; i < 500; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#b0c4d4' : '#dce8f0';
+            ctx.fillRect(Math.random() * size, Math.random() * size, 1 + Math.random() * 2, 1);
+        }
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(5, 5);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
+    }
+
+    /** Register prop mesh with zone collision (player movement + snowball hits). */
+    _registerPropMesh(mesh) {
+        if (mesh?.userData?.collision) {
+            this.collisionSystem.registerProp(mesh);
+        }
     }
     
     /**
@@ -121,6 +203,10 @@ class SnowFortsZone {
         
         // ==================== ENVIRONMENT & POIS ====================
         this._createEnvironment(scene, SIZE, C, OX, OZ);
+
+        this._createIceFishingHoles(scene, OX, OZ);
+        
+        this._createCasino(scene, THREE);
         
         // ==================== LIGHTING ====================
         this._createLighting(scene, SIZE, C, OX, OZ);
@@ -128,7 +214,7 @@ class SnowFortsZone {
         // ==================== ZONE BOUNDARY WALLS ====================
         this._createBoundaryWalls(SIZE, C);
         
-        console.log(`⛄ Snow Forts Zone spawned: ${this.meshes.length} meshes, ${this.lights.length} lights`);
+        console.log(`⛄ Snow Forts Zone spawned: ${this.meshes.length} meshes, ${this.lights.length} lights, ${this.fishingSpots.length} fishing holes`);
     }
     
     /**
@@ -136,6 +222,7 @@ class SnowFortsZone {
      * awaiting `yieldFn` between phases so the main thread stays responsive.
      */
     async spawnChunked(scene, yieldFn) {
+        const THREE = this.THREE;
         const SIZE = SnowFortsZone.ZONE_SIZE;
         const C = SnowFortsZone.CENTER;
         const OX = SnowFortsZone.WORLD_OFFSET_X;
@@ -155,59 +242,110 @@ class SnowFortsZone {
         
         this._createEnvironment(scene, SIZE, C, OX, OZ);
         await yieldFn();
+
+        this._createIceFishingHoles(scene, OX, OZ);
+        await yieldFn();
+
+        this._createCasino(scene, THREE);
+        await yieldFn();
         
         this._createLighting(scene, SIZE, C, OX, OZ);
         this._createBoundaryWalls(SIZE, C);
         
-        console.log(`⛄ Snow Forts Zone spawned: ${this.meshes.length} meshes, ${this.lights.length} lights`);
+        console.log(`⛄ Snow Forts Zone spawned: ${this.meshes.length} meshes, ${this.lights.length} lights, ${this.fishingSpots.length} fishing holes`);
+    }
+    
+    _createIceFishingHoles(scene, OX, OZ) {
+        const THREE = this.THREE;
+        this.fishingSpots = [];
+
+        for (const hole of SnowFortsZone.FISHING_HOLES) {
+            const x = OX + hole.x;
+            const z = OZ + hole.z;
+            const fishingProp = new IceFishingHole(THREE);
+            fishingProp.spawn(scene, x, 0, z, { rotation: hole.rotation || 0 });
+            const mesh = fishingProp.mesh;
+            mesh.name = hole.id;
+            mesh.userData.fishingSpotId = hole.id;
+            mesh.userData.propInstance = fishingProp;
+            this.meshes.push(mesh);
+
+            this.fishingSpots.push({
+                id: hole.id,
+                x,
+                z,
+                rotation: hole.rotation || 0,
+                prop: fishingProp,
+            });
+
+            this.collisionSystem.addCollider(
+                x, z,
+                { type: 'circle', radius: 2.5, height: 0.5 },
+                1,
+                { name: hole.id }
+            );
+
+            this.collisionSystem.addTrigger(
+                x, z,
+                {
+                    type: 'circle',
+                    radius: 3.0,
+                    action: 'fishing',
+                    message: '🎣 Press E to Fish',
+                    fishingSpotId: hole.id,
+                },
+                (event) => this._handleInteraction(event, {
+                    action: 'fishing',
+                    message: '🎣 Press E to Fish',
+                    fishingSpotId: hole.id,
+                }),
+                { name: `${hole.id}_trigger` }
+            );
+        }
     }
     
     _createGroundPlane(scene, SIZE, C, OX, OZ) {
         const THREE = this.THREE;
-        
-        // Use the SAME ice colors as VoxelWorld
-        const ICE_COLORS = ['#B8D4E8', '#A8C8DC', '#C0D8EC', '#98BCD0', '#B0D0E4'];
-        
-        // NO west extension - zones touch end-to-end, no overlap
-        const extendWest = 0;
-        const extendOther = 30; // Extend other edges under mountains
-        
-        const iceGeo = new THREE.PlaneGeometry(SIZE + extendOther, SIZE + extendOther * 2, 24, 24);
-        iceGeo.rotateX(-Math.PI / 2);
-        
-        // Add vertex color variation (same as VoxelWorld)
-        const colors = [];
-        const positions = iceGeo.attributes.position;
-        for (let i = 0; i < positions.count; i++) {
-            const x = positions.getX(i);
-            const z = positions.getZ(i);
-            
-            const noise = Math.sin(x * 0.1) * Math.cos(z * 0.1) + 
-                          Math.sin(x * 0.05 + 1) * Math.cos(z * 0.07) * 0.5;
-            const colorIndex = Math.floor((noise + 1) * 2.5) % ICE_COLORS.length;
-            const color = new THREE.Color(ICE_COLORS[colorIndex]);
-            
-            colors.push(color.r, color.g, color.b);
-        }
-        iceGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
-        
-        const iceMat = new THREE.MeshStandardMaterial({
-            vertexColors: true,
-            roughness: 0.85,
-            metalness: 0
+        const extendOther = 30;
+        const groundTex = this._createSnowFortsGroundTexture(THREE);
+        const groundGeo = new THREE.PlaneGeometry(SIZE + extendOther, SIZE + extendOther * 2, 1, 1);
+        groundGeo.rotateX(-Math.PI / 2);
+        const groundMat = new THREE.MeshStandardMaterial({
+            map: groundTex,
+            color: 0xb8ccd8,
+            roughness: 0.92,
+            metalness: 0,
         });
-        
-        this.groundPlane = new THREE.Mesh(iceGeo, iceMat);
-        // Position: centered on zone, shifted slightly for overlap
-        this.groundPlane.position.set(
-            OX + SIZE / 2 + extendOther / 2,
-            0,
-            OZ + SIZE / 2
-        );
+        this.groundPlane = new THREE.Mesh(groundGeo, groundMat);
+        this.groundPlane.position.set(OX + SIZE / 2 + extendOther / 2, -0.01, OZ + SIZE / 2);
         this.groundPlane.receiveShadow = true;
         this.groundPlane.name = 'snow_forts_ground';
         scene.add(this.groundPlane);
         this.meshes.push(this.groundPlane);
+    }
+
+    _createCasino(scene, THREE) {
+        const prop = CASINO_SETPIECE;
+        spawnCasinoSetpiece(this, THREE, scene, prop);
+        spawnCasinoPortalMarker(this, THREE, scene, { x: prop.portalX, z: prop.portalZ });
+        this._createCasinoTrashCan(scene, THREE);
+        console.log('🎰 Casino setpiece spawned in Snow Forts');
+    }
+
+    /** Scavenge spot behind the casino — mesh must match SCAVENGE_SPOTS.casino_trash. */
+    _createCasinoTrashCan(scene, THREE) {
+        const spot = SCAVENGE_SPOTS.casino_trash;
+        try {
+            const trashProp = createProp(THREE, null, PROP_TYPES.TRASH_CAN, 0, 0, 0, { withLid: true });
+            const mesh = attachPropData(trashProp, trashProp.group);
+            mesh.position.set(spot.localX, 0, spot.localZ);
+            mesh.userData.scavengeSpotId = spot.id;
+            scene.add(mesh);
+            this.meshes.push(mesh);
+            this._registerPropMesh(mesh);
+        } catch (e) {
+            console.warn('Failed to create casino trash can:', e);
+        }
     }
     
     _createPaths(scene, SIZE, C, OX, OZ) {
@@ -230,13 +368,11 @@ class SnowFortsZone {
         // Centered at z=26.5, depth=45
         this._createGravelPath(scene, OX + 70, OZ + 26, PATH_WIDTH, 46);
         
-        // 4. Vertical path SOUTH from intersection edge (z=81) to Ice Rink (z=185)
-        // Centered at z=133, depth=104
-        this._createGravelPath(scene, OX + 70, OZ + 133, PATH_WIDTH, 104);
+        // 4. Vertical path SOUTH — stops before ice rink (z=81 to z=175)
+        this._createGravelPath(scene, OX + 70, OZ + 128, PATH_WIDTH, 94);
         
-        // 5. Path extension SOUTH from Ice Rink to Forest zone border (z=185-220)
-        // This connects to Forest Trails zone
-        this._createGravelPath(scene, OX + 70, OZ + 205, PATH_WIDTH, 35);
+        // 5. Path extension SOUTH to Forest zone border (z=175-220), clear of rink to the east
+        this._createGravelPath(scene, OX + 70, OZ + 197.5, PATH_WIDTH, 45);
     }
     
     // Create gravel path matching TownCenter's style exactly
@@ -250,14 +386,13 @@ class SnowFortsZone {
         canvas.height = size;
         const ctx = canvas.getContext('2d');
         
-        // Base dark blue color
-        ctx.fillStyle = '#1a3a4a';
+        // Packed-snow path base with visible tread
+        ctx.fillStyle = '#8a9aa8';
         ctx.fillRect(0, 0, size, size);
         
-        // Add gravel-like noise pattern in various blue shades
         const gravelColors = [
-            '#0d2633', '#1e4455', '#2a5566', '#163344', '#0f2d3d',
-            '#254d5e', '#1b404f', '#223d4c', '#2d5968'
+            '#6a7a88', '#7a8a98', '#5a6a78', '#9aaab8', '#4a5a68',
+            '#728090', '#657580', '#8898a6', '#556570'
         ];
         
         for (let i = 0; i < 3000; i++) {
@@ -296,11 +431,13 @@ class SnowFortsZone {
         const pathMat = new THREE.MeshStandardMaterial({
             map: texture,
             roughness: 0.9,
-            metalness: 0.1
+            metalness: 0.1,
+            ...groundPathMaterialProps(),
         });
         
         const path = new THREE.Mesh(pathGeo, pathMat);
-        path.position.set(x, 0.02, z);
+        path.position.set(x, 0, z);
+        applyGroundPathSurface(path);
         path.receiveShadow = true;
         path.name = 'gravel_path';
         scene.add(path);
@@ -313,9 +450,6 @@ class SnowFortsZone {
         // Vertical north path ends at z=4, so forts are north of that (z < 4)
         const fortsX = OX + 70;   // Centered on vertical path x
         const fortsZ = OZ + 12;   // North of path end
-        
-        // Construction site sign - south of the forts, facing the path
-        this._createConstructionSign(scene, fortsX, OZ + 2, 'SNOW FORTS', 'Battle Arena - Coming Soon!');
         
         // Partial snow fort walls (under construction) - OFF the path (x < 54 or x > 86)
         this._createSnowWall(scene, OX + 40, fortsZ - 5, 15, 4, 3);   // Left wall (west of path)
@@ -339,51 +473,151 @@ class SnowFortsZone {
         this.collisionSystem.addCollider(100, 7, { type: 'box', size: { x: 4, z: 15 }, height: 4 }, 1, { name: 'snow_wall_r' });
     }
     
+    _createIceRinkTexture(THREE) {
+        const W = 1024;
+        const H = 684;
+        const canvas = document.createElement('canvas');
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext('2d');
+
+        const grad = ctx.createLinearGradient(0, 0, W, H);
+        grad.addColorStop(0, '#d8f2fa');
+        grad.addColorStop(0.45, '#c8e8f4');
+        grad.addColorStop(1, '#b0d8e8');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, W, H);
+
+        ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i < 100; i++) {
+            ctx.beginPath();
+            ctx.moveTo(Math.random() * W, Math.random() * H);
+            ctx.lineTo(Math.random() * W, Math.random() * H);
+            ctx.stroke();
+        }
+
+        const halfW = 30;
+        const halfD = 20;
+        const sx = W / (halfW * 2);
+        const sz = H / (halfD * 2);
+        const cx = W / 2;
+        const cz = H / 2;
+
+        const px = (x) => cx + x * sx;
+        const pz = (z) => cz + z * sz;
+
+        const line = (x1, z1, x2, z2, color, lw) => {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lw;
+            ctx.lineCap = 'butt';
+            ctx.beginPath();
+            ctx.moveTo(px(x1), pz(z1));
+            ctx.lineTo(px(x2), pz(z2));
+            ctx.stroke();
+        };
+
+        const circle = (x, z, r, color, lw, fill = false) => {
+            ctx.beginPath();
+            ctx.arc(px(x), pz(z), r * sx, 0, Math.PI * 2);
+            if (fill) {
+                ctx.fillStyle = color;
+                ctx.fill();
+            } else {
+                ctx.strokeStyle = color;
+                ctx.lineWidth = lw;
+                ctx.stroke();
+            }
+        };
+
+        const crease = (goalX, facing) => {
+            const r = 3.2;
+            const cx0 = px(goalX + facing * r);
+            const cz0 = pz(0);
+            ctx.fillStyle = 'rgba(0, 120, 220, 0.35)';
+            ctx.strokeStyle = '#0066cc';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(cx0, cz0, r * sx, facing > 0 ? Math.PI * 0.5 : -Math.PI * 0.5, facing > 0 ? Math.PI * 1.5 : Math.PI * 0.5);
+            ctx.lineTo(px(goalX), pz(-4.5));
+            ctx.lineTo(px(goalX), pz(4.5));
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        };
+
+        const red = '#cc0000';
+        const blue = '#0066cc';
+
+        line(-27, -halfD, -27, halfD, red, 5);
+        line(27, -halfD, 27, halfD, red, 5);
+        line(-12, -halfD, -12, halfD, blue, 4);
+        line(12, -halfD, 12, halfD, blue, 4);
+        line(0, -halfD, 0, halfD, red, 5);
+
+        circle(0, 0, 5, red, 4);
+        circle(0, 0, 0.45, red, 1, true);
+
+        [[-20, -9], [-20, 9], [20, -9], [20, 9]].forEach(([x, z]) => {
+            circle(x, z, 4, red, 3);
+            circle(x, z, 0.4, red, 1, true);
+        });
+
+        [[-8, -7], [-8, 7], [8, -7], [8, 7]].forEach(([x, z]) => {
+            circle(x, z, 0.4, red, 1, true);
+        });
+
+        crease(-27, 1);
+        crease(27, -1);
+
+        ctx.fillStyle = 'rgba(255,255,255,0.08)';
+        ctx.font = `bold ${Math.round(W * 0.045)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('WADDLEBET', cx, cz);
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
+    }
+
     _createIceRink(scene, SIZE, C, OX, OZ) {
         const THREE = this.THREE;
-        // Ice Rink at SOUTH end of zone, centered on path (x=70)
-        // Vertical south path ends at z=185, so rink is below that
-        const rinkX = OX + 70;   // Centered on vertical path x
-        const rinkZ = OZ + 195;  // South area
-        const rinkWidth = 60;
-        const rinkDepth = 40;
+        const { centerX, centerZ, width: rinkWidth, depth: rinkDepth } = SnowFortsZone.RINK;
+        const rinkX = OX + centerX;
+        const rinkZ = OZ + centerZ;
+        const rinkSurfaceZ = rinkZ + 5;
         
-        // Construction sign - north of the rink, facing north toward the path (rotated 180)
-        this._createConstructionSign(scene, rinkX, OZ + 187, 'ICE RINK', 'Stadium - Coming Soon!', Math.PI);
+        this._createConstructionSign(scene, rinkX, OZ + centerZ - rinkDepth / 2 - 6, 'ICE RINK', 'Stadium - Coming Soon!', Math.PI);
         
-        // Smooth ice rink surface (further south, past the path end)
         const rinkGeo = new THREE.PlaneGeometry(rinkWidth, rinkDepth);
         rinkGeo.rotateX(-Math.PI / 2);
+        const rinkTex = this._createIceRinkTexture(THREE);
         const rinkMat = new THREE.MeshStandardMaterial({
-            color: 0xCCE8F4,
-            roughness: 0.05,
-            metalness: 0.2
+            map: rinkTex,
+            roughness: 0.08,
+            metalness: 0.15
         });
         const rink = new THREE.Mesh(rinkGeo, rinkMat);
-        rink.position.set(rinkX, 0.03, rinkZ + 5);
+        rink.position.set(rinkX, 0.08, rinkSurfaceZ);
+        rink.renderOrder = 3;
         rink.receiveShadow = true;
         scene.add(rink);
         this.meshes.push(rink);
         
-        // Rink markings
-        this._createRinkMarkings(scene, rinkX, rinkZ + 5, rinkWidth, rinkDepth);
+        this._createRinkBorder(scene, rinkX, rinkSurfaceZ, rinkWidth, rinkDepth);
         
-        // Rink border walls
-        this._createRinkBorder(scene, rinkX, rinkZ + 5, rinkWidth, rinkDepth);
+        // Bleacher scaffolding west / east of rink (outside clearance box)
+        this._createScaffolding(scene, OX + 88, rinkSurfaceZ, 6, 5);
+        this._createScaffolding(scene, OX + 178, rinkSurfaceZ, 6, 5);
         
-        // Scaffolding for bleachers (under construction) - OFF the path (x < 54 or x > 86)
-        this._createScaffolding(scene, OX + 35, rinkZ + 5, 6, 5);
-        this._createScaffolding(scene, OX + 105, rinkZ + 5, 6, 5);
+        this._createHockeyGoal(scene, rinkX - 25, rinkSurfaceZ, Math.PI / 2);
+        this._createHockeyGoal(scene, rinkX + 25, rinkSurfaceZ, -Math.PI / 2);
         
-        // Partial hockey goals
-        this._createHockeyGoal(scene, rinkX - 25, rinkZ + 5, Math.PI / 2);
-        this._createHockeyGoal(scene, rinkX + 25, rinkZ + 5, -Math.PI / 2);
+        // Construction materials northeast of rink
+        this._createWoodPile(scene, OX + 185, rinkZ - 8);
         
-        // Construction materials near rink - off the path
-        this._createWoodPile(scene, OX + 25, rinkZ);
-        this._createWoodPile(scene, OX + 115, rinkZ);
-        
-        // Ice rink has no collision - players can walk freely on the ice
+        // Ice rink has no collision — players walk freely on the ice
     }
     
     _createEnvironment(scene, SIZE, C, OX, OZ) {
@@ -396,19 +630,17 @@ class SnowFortsZone {
         // Vertical south: x=54-86, z=81-185
         // SAFE AREAS: x<54 or x>86 (when not on horizontal), z<49 or z>81 (when on horizontal)
         
-        // ==================== PINE TREES (EDGES ONLY - away from paths) ====================
+        // ==================== PINE TREES (EDGES ONLY - away from paths & rink) ====================
         const treePositions = [
             // West side (x < 50, avoid z 49-81)
             { x: 20, z: 25, size: 1.0 }, { x: 35, z: 35, size: 0.9 },
             { x: 15, z: 90, size: 0.8 }, { x: 25, z: 120, size: 1.0 },
-            { x: 20, z: 160, size: 0.9 }, { x: 35, z: 190, size: 1.1 },
-            // East side (x > 90)
+            { x: 20, z: 160, size: 0.9 },
+            // East side (x > 90) — none inside RINK clearance box
             { x: 120, z: 25, size: 0.95 }, { x: 140, z: 40, size: 1.0 },
-            { x: 150, z: 90, size: 0.85 }, { x: 130, z: 120, size: 0.9 },
-            { x: 160, z: 160, size: 1.0 }, { x: 140, z: 190, size: 0.85 },
-            // Far edges
+            { x: 150, z: 90, size: 0.85 },
             { x: 190, z: 50, size: 0.9 }, { x: 200, z: 110, size: 1.0 },
-            { x: 195, z: 170, size: 0.85 }, { x: 10, z: 200, size: 1.1 },
+            { x: 10, z: 200, size: 1.1 },
         ];
         
         treePositions.forEach(pos => {
@@ -418,6 +650,7 @@ class SnowFortsZone {
                 mesh.position.set(OX + pos.x, 0, OZ + pos.z);
                 scene.add(mesh);
                 this.meshes.push(mesh);
+                this._registerPropMesh(mesh);
             } catch (e) {
                 console.warn('Failed to create tree at', pos.x, pos.z);
             }
@@ -432,7 +665,6 @@ class SnowFortsZone {
             { x: 92, z: 55, rot: -Math.PI/2 }, // East of intersection, face west
             { x: 92, z: 75, rot: -Math.PI/2 }, // East of intersection, face west
             // East of vertical paths (x > 86, along south path)
-            { x: 92, z: 110, rot: -Math.PI/2 }, // East of south path
             { x: 92, z: 150, rot: -Math.PI/2 }, // East of south path
             // West of vertical paths (x < 54)
             { x: 48, z: 110, rot: Math.PI/2 }, // West of south path
@@ -449,6 +681,7 @@ class SnowFortsZone {
                 mesh.rotation.y = pos.rot;
                 scene.add(mesh);
                 this.meshes.push(mesh);
+                this._registerPropMesh(mesh);
                 
                 // Add to furniture array for direct interaction checking (like TownCenter benches)
                 this.furniture.push({
@@ -473,11 +706,11 @@ class SnowFortsZone {
             // East of intersection (x > 86)
             { x: 90, z: 50 },
             { x: 90, z: 80 },
-            // Along south path edges
+            // Along south path edges (west/east of rink clearance)
             { x: 50, z: 130 },
-            { x: 90, z: 130 },
-            { x: 50, z: 170 },
-            { x: 90, z: 170 },
+            { x: 88, z: 130 },
+            { x: 50, z: 210 },
+            { x: 185, z: 210 },
         ];
         
         lampPositions.forEach(pos => {
@@ -487,6 +720,7 @@ class SnowFortsZone {
                 mesh.position.set(OX + pos.x, 0, OZ + pos.z);
                 scene.add(mesh);
                 this.meshes.push(mesh);
+                this._registerPropMesh(mesh);
                 
                 const light = new THREE.PointLight(0xFFDD88, 0.4, 20);
                 light.position.set(OX + pos.x, 5, OZ + pos.z);
@@ -511,6 +745,7 @@ class SnowFortsZone {
                 mesh.position.set(OX + pos.x, 0, OZ + pos.z);
                 scene.add(mesh);
                 this.meshes.push(mesh);
+                this._registerPropMesh(mesh);
             } catch (e) {
                 console.warn('Failed to create trash can at', pos.x, pos.z);
             }
@@ -529,6 +764,7 @@ class SnowFortsZone {
                 mesh.position.set(OX + pos.x, 0, OZ + pos.z);
                 scene.add(mesh);
                 this.meshes.push(mesh);
+                this._registerPropMesh(mesh);
             } catch (e) {
                 console.warn('Failed to create ice sculpture at', pos.x, pos.z);
             }
@@ -537,9 +773,8 @@ class SnowFortsZone {
         // ==================== SNOWMEN (scattered in open areas) ====================
         const snowmanPositions = [
             { x: 130, z: 30 },    // Northeast
-            { x: 30, z: 100 },    // West  
-            { x: 150, z: 130 },   // East
-            { x: 25, z: 175 },    // Southwest
+            { x: 30, z: 100 },    // West
+            { x: 25, z: 175 },    // Southwest (west of rink)
         ];
         
         snowmanPositions.forEach(pos => {
@@ -550,6 +785,7 @@ class SnowFortsZone {
                 mesh.rotation.y = Math.random() * Math.PI * 2;
                 scene.add(mesh);
                 this.meshes.push(mesh);
+                this._registerPropMesh(mesh);
             } catch (e) {
                 console.warn('Failed to create snowman at', pos.x, pos.z);
             }
@@ -568,14 +804,15 @@ class SnowFortsZone {
                 mesh.position.set(OX + pos.x, 0, OZ + pos.z);
                 scene.add(mesh);
                 this.meshes.push(mesh);
+                this._registerPropMesh(mesh);
             } catch (e) {
                 console.warn('Failed to create barrel at', pos.x, pos.z);
             }
         });
         
         const cratePositions = [
-            { x: 30, z: 190 },  // Near rink west
-            { x: 110, z: 190 }, // Near rink east
+            { x: 30, z: 210 },  // South edge, west of rink
+            { x: 185, z: 210 }, // South edge, east of rink
         ];
         
         cratePositions.forEach(pos => {
@@ -585,6 +822,7 @@ class SnowFortsZone {
                 mesh.position.set(OX + pos.x, 0, OZ + pos.z);
                 scene.add(mesh);
                 this.meshes.push(mesh);
+                this._registerPropMesh(mesh);
             } catch (e) {
                 console.warn('Failed to create crate at', pos.x, pos.z);
             }
@@ -603,6 +841,7 @@ class SnowFortsZone {
                 mesh.position.set(OX + pos.x, 0, OZ + pos.z);
                 scene.add(mesh);
                 this.meshes.push(mesh);
+                this._registerPropMesh(mesh);
             } catch (e) {
                 console.warn('Failed to create hydrant at', pos.x, pos.z);
             }
@@ -624,6 +863,7 @@ class SnowFortsZone {
             campfireMesh.userData.campfireInstance = campfireProp;
             scene.add(campfireMesh);
             this.meshes.push(campfireMesh);
+            this._registerPropMesh(campfireMesh);
             
             // Store reference for update loop
             this.campfires = this.campfires || [];
@@ -655,6 +895,7 @@ class SnowFortsZone {
                 mesh.rotation.y = pos.rot;
                 scene.add(mesh);
                 this.meshes.push(mesh);
+                this._registerPropMesh(mesh);
                 
                 // Add to furniture array for direct interaction checking
                 this.furniture.push({
@@ -670,9 +911,6 @@ class SnowFortsZone {
                 console.warn('Failed to create log seat');
             }
         });
-        
-        // ==================== INFORMATION BOARD (at zone entrance, facing west toward Town) ====================
-        this._createInfoBoard(scene, OX + 15, OZ + 65, 'SNOW FORTS ZONE\n\n⛄ Coming Soon:\n• Snow Ball Battles\n• Ice Hockey\n• Snowman Building', Math.PI);
     }
     
     _createLighting(scene, SIZE, C, OX, OZ) {
@@ -685,7 +923,7 @@ class SnowFortsZone {
     }
     
     _createBoundaryWalls(SIZE, C) {
-        const MARGIN = 5;
+        const MARGIN = 8;
         
         // North wall (full)
         this.collisionSystem.addCollider(C, MARGIN, { type: 'box', size: { x: SIZE, z: 4 }, height: 50 }, 1, { name: 'wall_n' });
@@ -872,34 +1110,6 @@ class SnowFortsZone {
         this.meshes.push(group);
     }
     
-    _createRinkMarkings(scene, x, z, width, depth) {
-        const THREE = this.THREE;
-        
-        // Center red line
-        const redMat = new THREE.MeshStandardMaterial({ color: 0xCC0000 });
-        const centerLine = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.01, depth - 4), redMat);
-        centerLine.position.set(x, 0.04, z);
-        scene.add(centerLine);
-        this.meshes.push(centerLine);
-        
-        // Blue lines
-        const blueMat = new THREE.MeshStandardMaterial({ color: 0x0066CC });
-        [-width/4, width/4].forEach(offset => {
-            const line = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.01, depth - 4), blueMat);
-            line.position.set(x + offset, 0.04, z);
-            scene.add(line);
-            this.meshes.push(line);
-        });
-        
-        // Center circle
-        const circleGeo = new THREE.RingGeometry(4, 4.3, 32);
-        circleGeo.rotateX(-Math.PI / 2);
-        const circle = new THREE.Mesh(circleGeo, redMat);
-        circle.position.set(x, 0.04, z);
-        scene.add(circle);
-        this.meshes.push(circle);
-    }
-    
     _createRinkBorder(scene, x, z, width, depth) {
         const THREE = this.THREE;
         const borderMat = new THREE.MeshStandardMaterial({ color: 0xDDDDDD });
@@ -1037,6 +1247,18 @@ class SnowFortsZone {
         this.meshes.push(group);
     }
     
+    /** Hide snow forts meshes when player is in forest — toggles only on state change. */
+    setRenderingActive(active) {
+        if (this._renderingActive === active) return;
+        this._renderingActive = active;
+        for (const mesh of this.meshes) {
+            mesh.visible = active;
+        }
+        for (const light of this.lights) {
+            light.visible = active;
+        }
+    }
+
     /**
      * Check player collision within this zone
      */
@@ -1061,6 +1283,23 @@ class SnowFortsZone {
     getFurniture() {
         return this.furniture;
     }
+
+    getCasinoFurniture() {
+        return getCasinoFurnitureList(this);
+    }
+
+    isPlayerInCasino(x, z) {
+        return isPlayerInCasinoBounds(this, x, z);
+    }
+
+    checkPlayerMovement(x, z, newX, newZ, radius = 0.8, y = 0) {
+        return this.collisionSystem.checkMovement(x, z, newX, newZ, radius, y);
+    }
+
+    checkLanding(x, z, y, radius = 0.8) {
+        const base = this.collisionSystem.checkLanding(x, z, y, radius);
+        return applyCasinoLanding(this, x, z, y, base, radius);
+    }
     
     /**
      * Handle interaction events (sit, etc)
@@ -1081,27 +1320,49 @@ class SnowFortsZone {
      * Update zone animations
      */
     update(time, delta, playerX, playerZ) {
-        // Campfire animation (distance-culled)
         const CAMPFIRE_ANIM_DIST_SQ = 60 * 60;
-        
+
+        if (!this._animatedCache) {
+            this._animatedCache = {
+                campfires: [],
+                casinos: [],
+                gameRoomPortals: [],
+            };
+            this._cullCache = { casinoSign: null, gameRoomPortal: null };
+            this.meshes.forEach((mesh) => {
+                if (mesh.name === 'campfire' && mesh.userData.campfireInstance) {
+                    this._animatedCache.campfires.push({
+                        instance: mesh.userData.campfireInstance,
+                        position: { x: mesh.position.x, z: mesh.position.z },
+                    });
+                }
+            });
+            buildCasinoAnimationCache(this, this.meshes, this._animatedCache, this._cullCache);
+        }
+
         if (this.campfires) {
             this.campfires.forEach(({ instance, position }) => {
                 if (!instance || !instance.update) return;
-                
-                // Distance check
                 const dx = playerX - position.x;
                 const dz = playerZ - position.z;
                 if (dx * dx + dz * dz > CAMPFIRE_ANIM_DIST_SQ) return;
-                
                 instance.update(time, delta);
             });
         }
+
+        updateCasinoSetpieceAnimations(
+            this, time, delta, { x: playerX, z: playerZ },
+            this._animatedCache, this._cullCache
+        );
     }
     
     /**
      * Cleanup zone meshes
      */
     cleanup() {
+        disposeCasinoSetpiece(this);
+        this._animatedCache = null;
+        this.casinoBounds = null;
         this.meshes.forEach(mesh => {
             if (mesh.parent) mesh.parent.remove(mesh);
             if (mesh.geometry) mesh.geometry.dispose();
@@ -1121,6 +1382,7 @@ class SnowFortsZone {
         this.lights = [];
         
         this.groundPlane = null;
+        this.fishingSpots = [];
     }
 }
 
