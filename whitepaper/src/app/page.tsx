@@ -32,6 +32,7 @@ import {
   WhitepaperLanguageProvider,
   useWhitepaperLanguage,
 } from "../i18n/LanguageContext";
+import { scrollToAnchor, scrollToAnchorFromHash } from "../utils/scrollToAnchor";
 
 // Custom Icons
 const GitHubIcon = ({ className }: { className?: string }) => (
@@ -2280,6 +2281,46 @@ function Footer() {
 
 // Main Page
 function WhitepaperPageContent() {
+  useEffect(() => {
+    const syncHashScroll = (behavior: ScrollBehavior = "smooth") => {
+      if (!window.location.hash) return;
+      requestAnimationFrame(() => {
+        scrollToAnchorFromHash(window.location.hash, behavior);
+      });
+    };
+
+    // Deep links like /#changelog do not scroll reliably after client hydration.
+    syncHashScroll("auto");
+
+    const onHashChange = () => syncHashScroll("smooth");
+    window.addEventListener("hashchange", onHashChange);
+
+    const onDocumentClick = (event: MouseEvent) => {
+      if (event.defaultPrevented || event.button !== 0) return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+      const anchor = (event.target as Element | null)?.closest("a[href^='#']");
+      if (!(anchor instanceof HTMLAnchorElement)) return;
+
+      const { hash } = anchor;
+      if (!hash || hash === "#") return;
+
+      const id = hash.slice(1);
+      if (!document.getElementById(id)) return;
+
+      event.preventDefault();
+      window.history.pushState(null, "", hash);
+      scrollToAnchor(id);
+    };
+
+    document.addEventListener("click", onDocumentClick);
+
+    return () => {
+      window.removeEventListener("hashchange", onHashChange);
+      document.removeEventListener("click", onDocumentClick);
+    };
+  }, []);
+
   return (
     <main className="relative min-h-screen overflow-x-clip bg-[rgb(10,14,26)] text-slate-100">
       <Snowfall />

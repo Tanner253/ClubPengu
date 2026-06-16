@@ -22,10 +22,16 @@
 
 html {
   scroll-behavior: smooth;
+  /* Keep anchored sections visible below the fixed nav */
+  scroll-padding-top: 5rem;
   /* Prevent white flash under fixed nav / during paint (matches body) */
   background-color: rgb(10, 14, 26);
   /* No sideways scrolling anywhere — wide decorative elements get clipped instead */
   overflow-x: clip;
+}
+
+section[id] {
+  scroll-margin-top: 5rem;
 }
 
 body {
