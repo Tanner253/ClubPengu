@@ -39,7 +39,8 @@ const mockForestTreeService = {
         id: 'ht_001',
         state: 'harvested',
         regrowAt: Date.now() + 1800000
-    }))
+    })),
+    recordForestChop: vi.fn()
 };
 
 
@@ -198,6 +199,41 @@ describe('WoodcuttingService', () => {
             getChopDurabilityLoss(getHarvestableTree('ht_001').stage, 'basic_axe')
         );
 
+    });
+
+    it('rejects hold chop on manual tree', async () => {
+        const manualTree = getHarvestableTree('ht_002');
+        expect(manualTree?.chopMode).toBe('manual');
+        const result = await service.startChop('p1', 'wallet', 'ht_002', false);
+        expect(result.error).toBe('MANUAL_TREE');
+    });
+
+    it('starts manual chop session for voxel trees', async () => {
+        const result = await service.startManualChop('p1', 'wallet', 'ht_002', false);
+        expect(result.success).toBe(true);
+        expect(result.chopMode).toBe('manual');
+        expect(result.woodYield).toBeGreaterThan(1);
+    });
+
+    it('manual chop hit tracks cuts and triggers fall', async () => {
+        vi.useFakeTimers();
+        const start = await service.startManualChop('p1', 'wallet', 'ht_002', false);
+        let falling = false;
+        for (let i = 0; i < 80 && !falling; i++) {
+            vi.advanceTimersByTime(150);
+            const side = i % 2 === 0 ? -1 : 1;
+            const hit = service.manualChopHit('p1', {
+                sessionId: start.sessionId,
+                side,
+                speed: 4
+            });
+            if (hit.success) falling = hit.falling;
+        }
+        vi.useRealTimers();
+        expect(falling).toBe(true);
+        const complete = await service.completeManualChop('p1', 'wallet', { sessionId: start.sessionId });
+        expect(complete.success).toBe(true);
+        expect(mockForestTreeService.harvestTree).toHaveBeenCalledWith('ht_002');
     });
 
 });

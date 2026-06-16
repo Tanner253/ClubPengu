@@ -11,6 +11,7 @@ import {
     getRouteTransitSeconds,
     getTravelLobbyRoomId,
     getRoutesForRoom,
+    getFerryArrivalSpawn,
 } from '../config/travel.js';
 
 /** Max distance (units) between payer and passengers when buying group tickets. */
@@ -523,7 +524,7 @@ export default class TravelService {
             toRoom: route.toRoom,
             destinationName: route.name,
             destinationEmoji: route.emoji,
-            arrivalSpawn: route.arrivalSpawn,
+            arrivalSpawn: getFerryArrivalSpawn(route.toRoom),
             ticketCost: route.ticketCost,
             captainId: firstPassenger.id,
             captainName: firstPassenger.name,
@@ -694,10 +695,11 @@ export default class TravelService {
     }
 
     async completeVoyage(voyage) {
+        const arrival = getFerryArrivalSpawn(voyage.toRoom);
         const spawn = {
-            x: voyage.arrivalSpawn.x,
-            y: voyage.arrivalSpawn.y ?? 0,
-            z: voyage.arrivalSpawn.z,
+            x: arrival.x,
+            y: arrival.y ?? 0,
+            z: arrival.z,
         };
         const serialized = this.serializeVoyage(voyage);
 

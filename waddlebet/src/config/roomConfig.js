@@ -137,8 +137,8 @@ export const AI_CONVERSATIONS = [
 // Room spawn positions
 export const ROOM_SPAWNS = {
     town: { x: WORLD_SPAWN.x, z: WORLD_SPAWN.z },
-    snow_forts: { x: 49.9, z: 64.3 },
-    forest_trails: { x: 90, z: 70 }, // sync with overworldConfig FOREST_TRAILS_SPAWN
+    snow_forts: { x: CENTER_X, z: CENTER_Z },
+    forest_trails: { x: CENTER_X, z: CENTER_Z },
     dojo: { x: 0, z: 12 },
     pizza: { x: 0, z: 12 },
     nightclub: { x: NIGHTCLUB_INTERIOR_SPAWN.x, z: NIGHTCLUB_INTERIOR_SPAWN.z },

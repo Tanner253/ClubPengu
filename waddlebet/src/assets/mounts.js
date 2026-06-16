@@ -2119,10 +2119,10 @@ export const MOUNTS = {
         animated: true,
         animationType: 'skateboard_grind', // Custom grinding animation
         hidesFeet: false,  // Feet visible on the board
-        riderOffset: { y: 2.4 },  // Player height on board - scaled up 50%
+        riderOffset: { y: 1.5 },  // Feet on deck (positionY + ~0.8 stand height)
         speedBoost: 1.25, // 15% speed boost - skateboards are fast!
-        scale: 0.33,  // 50% larger (was 0.22)
-        positionY: 1.2,  // Lift board higher to compensate for size
+        scale: 0.22,
+        positionY: 0.68,  // Wheel bottom ~ground level at this scale
         // Rider stands sideways on skateboard
         riderRotation: Math.PI / 2, // 90 degrees - sideways stance
         

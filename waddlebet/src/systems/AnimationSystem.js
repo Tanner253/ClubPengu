@@ -3,6 +3,14 @@
  * Handles walking, emotes, sitting, mounted animations
  */
 
+function findHeldAxeOnFlipper(flipperR) {
+    if (!flipperR?.children?.length) return null;
+    for (let i = 0; i < flipperR.children.length; i++) {
+        if (flipperR.children[i].name === 'held_game_item') return flipperR.children[i];
+    }
+    return null;
+}
+
 /**
  * Cache animated part references on a mesh to avoid expensive lookups every frame
  * @param {THREE.Object3D} meshWrapper - The penguin mesh wrapper
@@ -43,6 +51,7 @@ export function cacheAnimParts(meshWrapper) {
  * @param {boolean} isAirborne - Whether in the air
  * @param {number} time - Current game time
  * @param {Function} onEmoteEnd - Callback when emote ends naturally
+ * @param {boolean} isChoppingWood - Hold-to-chop (Press E) woodcutting pose
  */
 export function animateMesh(
     meshWrapper, 
@@ -54,7 +63,8 @@ export function animateMesh(
     isMounted = false, 
     isAirborne = false,
     time = 0,
-    onEmoteEnd = null
+    onEmoteEnd = null,
+    isChoppingWood = false
 ) {
     if (!meshWrapper || !meshWrapper.children[0]) return;
     const meshInner = meshWrapper.children[0];
@@ -75,8 +85,17 @@ export function animateMesh(
     
     // Reset all parts to default pose (ensures clean state after any emote)
     // NOTE: Only reset ROTATIONS - positions are set by the model builder and should not be touched!
-    if(flipperL) { flipperL.rotation.set(0,0,0); }
-    if(flipperR) { flipperR.rotation.set(0,0,0); }
+    if(flipperL) { flipperL.rotation.set(0, 0, 0); }
+    if(flipperR) {
+        flipperR.rotation.set(0, 0, 0);
+        if (!isChoppingWood) {
+            const held = findHeldAxeOnFlipper(flipperR);
+            if (held) {
+                held.rotation.set(0, 0, 0);
+                held.position.set(0, 0, 0);
+            }
+        }
+    }
     meshInner.position.y = 0.8;
     meshInner.rotation.set(0,0,0);
     // Feet: reset rotation + only position.z (used by sit emote)
@@ -265,6 +284,34 @@ export function animateMesh(
         }
         if(flipperL) flipperL.rotation.z = 0.3;
         if(flipperR) flipperR.rotation.z = -0.3;
+        return;
+    }
+
+    // Hold-chop wood (Press E) — flipper forward (fixed); blade level; sweep on tool local Y only
+    if (isChoppingWood && !isSeatedOnFurniture && !isMounted && !isAirborne) {
+        const chopSpeed = time * 5.5;
+        const swing = Math.sin(chopSpeed); // -1 = right, +1 = left
+        const armForward = -0.72;
+        const armRaise = -0.38;
+        const swingAmp = 0.72;
+        const chopToolLift = .5;
+        const chopToolForward = 3;
+
+        meshInner.position.y = 0.8;
+
+        if (flipperR) {
+            flipperR.rotation.set(armForward, 0, armRaise);
+            const heldAxe = findHeldAxeOnFlipper(flipperR);
+            if (heldAxe) {
+                heldAxe.position.set(0, chopToolLift, chopToolForward);
+                heldAxe.rotation.set(-armForward, swing * swingAmp, -armRaise);
+            }
+        }
+        if (flipperL) {
+            flipperL.rotation.set(-0.35, 0, 0.32);
+        }
+        if (footL) footL.rotation.x = 0.06;
+        if (footR) footR.rotation.x = 0.06;
         return;
     }
 

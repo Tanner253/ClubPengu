@@ -27,6 +27,7 @@ describe('ForestTreeService', () => {
 
         const state = service.getTreePublicState(treeId);
         expect(state.state).toBe('harvested');
+        expect(state.stage).toBe('sapling');
         expect(state.regrowAt).toBe(result.regrowAt);
     });
 
@@ -46,5 +47,26 @@ describe('ForestTreeService', () => {
         await service.harvestTree(treeId);
         const reserve = service.reserveTree(treeId, 'p1');
         expect(reserve.error).toBe('TREE_REGROWING');
+    });
+
+    it('applies 1.5× wood for manual chop trees', async () => {
+        const { getHarvestableTree } = await import('../config/harvestableTrees.js');
+        const manual = service.getSnapshot().find(t => getHarvestableTree(t.id)?.chopMode === 'manual');
+        expect(manual).toBeTruthy();
+        const result = await service.harvestTree(manual.id);
+        const def = getHarvestableTree(manual.id);
+        const baseWood = { sapling: 1, baby: 6, mature: 12, elder: 25 }[manual.stage];
+        expect(result.wood).toBe(Math.round(baseWood * 1.5));
+        expect(result.chopMode).toBe('manual');
+    });
+
+    it('matures ready trees when the forest has been quiet', async () => {
+        const treeId = service.getSnapshot().find(t => t.stage === 'sapling')?.id;
+        expect(treeId).toBeTruthy();
+        service.lastForestChopAt = Date.now() - 2 * 60 * 60 * 1000;
+        const updated = await service.tickMaturation();
+        expect(updated.length).toBeGreaterThan(0);
+        const elderCount = service.getSnapshot().filter(t => t.stage === 'elder').length;
+        expect(elderCount).toBeGreaterThan(0);
     });
 });

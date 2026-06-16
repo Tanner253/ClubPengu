@@ -23,7 +23,7 @@ function isTypingTarget(target) {
     return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
 }
 
-export default function GameHotbar({ className = '' }) {
+export default function GameHotbar({ className = '', inventoryMode = false }) {
     const {
         gameInventory,
         isAuthenticated,
@@ -35,8 +35,14 @@ export default function GameHotbar({ className = '' }) {
     const activeHotbar = gameInventory?.activeHotbar ?? 0;
 
     const handleSlotClick = useCallback((index) => {
+        const entry = hotbar[index];
+        const slotHasItem = Boolean(entry?.itemId) && Number(entry?.quantity) > 0;
+        if (inventoryMode && slotHasItem) {
+            setGameHotbarSlot?.(index, null);
+            return;
+        }
         setActiveHotbarSlot?.(index);
-    }, [setActiveHotbarSlot]);
+    }, [hotbar, inventoryMode, setActiveHotbarSlot, setGameHotbarSlot]);
 
     const handleClearSlot = useCallback((e, index) => {
         e.preventDefault();
@@ -82,7 +88,9 @@ export default function GameHotbar({ className = '' }) {
                         onClick={() => handleSlotClick(index)}
                         onContextMenu={(e) => handleClearSlot(e, index)}
                         title={hasItem
-                            ? `[${slotLabel}] ${entry.name}${durability != null ? ` (${durability}/${maxDurability})` : ''} — right-click to unequip`
+                            ? inventoryMode
+                                ? `[${slotLabel}] ${entry.name} — tap to unequip`
+                                : `[${slotLabel}] ${entry.name}${durability != null ? ` (${durability}/${maxDurability})` : ''} — right-click to unequip`
                             : `[${slotLabel}] Empty hand slot — drag an item here`}
                         className={[
                             'hotbar-slot relative w-11 h-11 sm:w-12 sm:h-12 rounded-lg border-2 transition-all touch-manipulation',

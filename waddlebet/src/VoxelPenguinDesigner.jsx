@@ -1948,7 +1948,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const renderEnterWorldCTA = () => {
         if (isAuthenticated && isNewUser && (!username || username.length < 3 || usernameStatus === 'taken')) {
             return (
-                <div className={isPortrait && isMobileView ? '' : 'mt-4'}>
+                <div>
                     <button 
                         disabled
                         className="w-full py-3 bg-gray-600 text-gray-400 font-bold rounded-lg retro-text text-xs border-b-4 border-gray-700 flex justify-center items-center gap-2 cursor-not-allowed"
@@ -1963,7 +1963,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         }
         if (!isCustomizationValid) {
             return (
-                <div className={isPortrait && isMobileView ? '' : 'mt-4'}>
+                <div>
                     <button 
                         disabled
                         className="w-full py-3 bg-red-900/50 text-red-400 font-bold rounded-lg retro-text text-xs border-b-4 border-red-900 flex justify-center items-center gap-2 cursor-not-allowed"
@@ -1981,7 +1981,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         }
         if (!turnstileVerified) {
             return (
-                <div className={isPortrait && isMobileView ? '' : 'mt-4'}>
+                <div>
                     <button 
                         disabled
                         className="w-full py-3 bg-orange-900/50 text-orange-400 font-bold rounded-lg retro-text text-xs border-b-4 border-orange-900 flex justify-center items-center gap-2 cursor-not-allowed"
@@ -1995,7 +1995,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             );
         }
         return (
-            <div className={isPortrait && isMobileView ? '' : 'mt-4'}>
+            <div>
                 <button 
                     onClick={() => onEnterWorld(turnstileToken)}
                     className="w-full py-3.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg shadow-lg transform active:scale-95 transition-all retro-text text-sm border-b-4 border-yellow-700 flex justify-center items-center gap-2"
@@ -2011,7 +2011,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         );
     };
 
-    const mobileBottomInset = 'calc(1rem + env(safe-area-inset-bottom, 0px) + 2.75rem)';
+    const topSafePadding = 'calc(1.25rem + env(safe-area-inset-top, 0px))';
 
     return (
         <div className="relative w-full h-full bg-gray-900 overflow-hidden font-sans">
@@ -2027,7 +2027,17 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             
             <WebGLStatusBanner />
 
-            {/* Title + whitepaper — link is pointer-events-auto so canvas stays clickable elsewhere */}
+            {/* Enter World — top of screen only (title/whitepaper unchanged) */}
+            <div
+                className="absolute top-0 left-1/2 z-20 w-full max-w-md -translate-x-1/2 pointer-events-none px-4"
+                style={{ paddingTop: topSafePadding }}
+            >
+                <div className="pointer-events-auto w-full">
+                    {renderEnterWorldCTA()}
+                </div>
+            </div>
+
+            {/* Title + whitepaper — original top-left placement */}
             <div className={`absolute top-0 left-0 z-10 w-full ${isPortrait && isMobileView ? 'p-3' : 'p-6'}`}>
                 <div className="flex flex-wrap items-start justify-between gap-2">
                     <h1 className={`retro-text text-white drop-shadow-lg pointer-events-none ${isPortrait && isMobileView ? 'text-2xl' : 'text-4xl'}`} style={{textShadow: '4px 4px 0px #000'}}>
@@ -2074,7 +2084,6 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             <span className="text-purple-300 font-semibold text-sm flex items-center gap-2">
                                 👛 {t('creator.accountPromo')}
                                 {!isAuthenticated && <span className="text-xs text-amber-400">({t('creator.guest')})</span>}
-                                {isAuthenticated && <span className="text-xs text-green-400">✓</span>}
                             </span>
                             <span className="text-purple-400 text-xs">{walletExpanded ? '▼' : '▶'}</span>
                         </button>
@@ -2949,18 +2958,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             )}
                         </div>
                     )}
-                    
-                    {/* Enter World — desktop/landscape stays in scroll; mobile portrait pins below */}
-                    {!(isPortrait && isMobileView) && renderEnterWorldCTA()}
                 </div>
-                {isPortrait && isMobileView && (
-                    <div
-                        className="shrink-0 border-t border-white/10 bg-gray-900/95 backdrop-blur-md px-4 pt-3 shadow-[0_-10px_28px_rgba(0,0,0,0.45)]"
-                        style={{ paddingBottom: mobileBottomInset }}
-                    >
-                        {renderEnterWorldCTA()}
-                    </div>
-                )}
                 </div>
             </div>
             

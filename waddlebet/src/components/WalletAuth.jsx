@@ -46,18 +46,14 @@ function WalletAuth({ onAuthSuccess }) {
         
         return (
             <div className="bg-gradient-to-br from-green-900/40 to-emerald-900/40 rounded-xl p-4 border border-green-500/30">
-                <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-500 
-                                    flex items-center justify-center text-lg shadow-lg">
-                        ✓
-                    </div>
-                    <div className="flex-1">
-                        <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                    <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-green-400 font-bold">{userData?.username || 'Connected'}</span>
                             <span className="text-green-300/60 text-xs">{shortAddress}</span>
                         </div>
                         <div className="text-xs text-green-200/60 mt-0.5">
-                            💰 {userData?.coins?.toLocaleString() || 0} coins • Progress saves automatically
+                            💰 {userData?.coins?.toLocaleString() || 0} coins
                         </div>
                     </div>
                 </div>

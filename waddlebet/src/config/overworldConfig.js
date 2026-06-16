@@ -8,38 +8,47 @@ import { CENTER_X, CENTER_Z } from './roomConfig';
 export const OVERWORLD_ZONE_SIZE = 220;
 export const OVERWORLD_CENTER = OVERWORLD_ZONE_SIZE / 2; // 110
 
+/** Safe spawn at the center of any 220×220 overworld quadrant. */
+export const OVERWORLD_CENTER_SPAWN = { x: OVERWORLD_CENTER, y: 0, z: OVERWORLD_CENTER };
+
+export function getOverworldCenterSpawn(absolute = false) {
+    const spawn = { ...OVERWORLD_CENTER_SPAWN };
+    if (absolute) spawn.absolute = true;
+    return spawn;
+}
+
 export const OVERWORLD_ROOMS = ['town', 'snow_forts', 'forest_trails'];
 
 export function isOverworldRoom(roomId) {
     return OVERWORLD_ROOMS.includes(roomId);
 }
 
-/** Snow Forts ferry arrival / default spawn (C=110 → C-60.1, C-45.7). */
-export const SNOW_FORTS_ARRIVAL = { x: 49.9, y: 0, z: 64.3 };
-
-/** Forest ferry dock in Snow Forts + arrival when sailing from Forest Trails. */
+/** Forest ferry dock NPC position in Snow Forts (not a player spawn). */
 export const SNOW_FORTS_FOREST_DOCK = {
     x: CENTER_X - 42.3,
     y: 0,
     z: CENTER_Z + 95.3,
 };
 
-/** Forest Trails default spawn — main clearing (/warp forest). */
-export const FOREST_TRAILS_SPAWN = { x: 90, y: 0, z: 70 };
+/** @deprecated use OVERWORLD_CENTER_SPAWN */
+export const SNOW_FORTS_ARRIVAL = { ...OVERWORLD_CENTER_SPAWN };
+
+/** @deprecated use OVERWORLD_CENTER_SPAWN */
+export const FOREST_TRAILS_SPAWN = { ...OVERWORLD_CENTER_SPAWN };
 
 /** Default spawn when entering a quadrant (local coords). */
 export const OVERWORLD_SPAWNS = {
     town: { x: CENTER_X, y: 0, z: CENTER_Z },
-    snow_forts: { ...SNOW_FORTS_ARRIVAL },
-    forest_trails: { ...FOREST_TRAILS_SPAWN },
+    snow_forts: { ...OVERWORLD_CENTER_SPAWN },
+    forest_trails: { ...OVERWORLD_CENTER_SPAWN },
 };
 
-/** Ferry arrival spawns (absolute local coords within destination room). */
+/** Ferry / edge portal arrival — always map center (absolute local coords). */
 export const OVERWORLD_ARRIVAL_SPAWNS = {
-    snow_forts_from_town: { ...SNOW_FORTS_ARRIVAL, absolute: true },
-    snow_forts_from_forest: { x: SNOW_FORTS_FOREST_DOCK.x, z: SNOW_FORTS_FOREST_DOCK.z, absolute: true },
-    town_from_snow_forts: { x: 200, z: 65, absolute: true },
-    forest_from_snow_forts: { x: FOREST_TRAILS_SPAWN.x, z: FOREST_TRAILS_SPAWN.z, absolute: true },
+    snow_forts_from_town: getOverworldCenterSpawn(true),
+    snow_forts_from_forest: getOverworldCenterSpawn(true),
+    town_from_snow_forts: getOverworldCenterSpawn(true),
+    forest_from_snow_forts: getOverworldCenterSpawn(true),
 };
 
 /**

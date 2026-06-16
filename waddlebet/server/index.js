@@ -75,11 +75,8 @@ function getDefaultSpawnForRoom(roomId) {
     if (roomId === 'town') {
         return { x: 110, y: 0, z: 110 };
     }
-    if (roomId === 'snow_forts') {
-        return { x: 49.9, y: 0, z: 64.3 };
-    }
-    if (roomId === 'forest_trails') {
-        return { x: 90, y: 0, z: 70 };
+    if (roomId === 'snow_forts' || roomId === 'forest_trails') {
+        return { x: 110, y: 0, z: 110 };
     }
     if (roomId?.startsWith('travel:')) {
         return { x: 10, y: 0, z: 8 };
@@ -696,8 +693,10 @@ setInterval(() => {
 
 setInterval(async () => {
     const regrown = await forestTreeService.tickRegrowth();
-    if (regrown.length > 0) {
-        const trees = regrown.map(id => forestTreeService.getTreePublicState(id)).filter(Boolean);
+    const matured = await forestTreeService.tickMaturation();
+    const changedIds = [...new Set([...regrown, ...matured])];
+    if (changedIds.length > 0) {
+        const trees = changedIds.map(id => forestTreeService.getTreePublicState(id)).filter(Boolean);
         broadcastToRoomAll('forest_trails', { type: 'forest_trees_update', trees });
     }
     const mushroomsRegrown = mushroomService.tickRegrowth();
@@ -6081,6 +6080,226 @@ async function handleMessage(playerId, message) {
                     error: 'SERVER_ERROR',
                     message: 'Failed to process chop result'
                 });
+            }
+            break;
+        }
+
+        case 'manual_chop_start': {
+            try {
+                const treeId = message.treeId || message.spotId;
+                if (!treeId) {
+                    sendToPlayer(playerId, {
+                        type: 'manual_chop_error',
+                        error: 'INVALID_TREE',
+                        message: 'Invalid tree'
+                    });
+                    break;
+                }
+                if (!isPlayerNearHarvestableTree(player, treeId)) {
+                    sendToPlayer(playerId, {
+                        type: 'manual_chop_error',
+                        error: 'TOO_FAR',
+                        message: 'Move closer to the voxel chop tree'
+                    });
+                    break;
+                }
+                const demoMode = !player.walletAddress;
+                const appearance = player.appearance || {};
+                if (appearance.mount && appearance.mount !== 'none' && appearance.mountEnabled !== false) {
+                    sendToPlayer(playerId, {
+                        type: 'manual_chop_error',
+                        error: 'MOUNTED',
+                        message: 'Dismount before chopping trees'
+                    });
+                    break;
+                }
+                const result = await woodcuttingService.startManualChop(
+                    playerId,
+                    player.walletAddress,
+                    treeId,
+                    demoMode,
+                    player.position
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'manual_chop_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                } else {
+                    if (result.treeState && player.room) {
+                        broadcastToRoomAll(player.room, {
+                            type: 'forest_trees_update',
+                            trees: [result.treeState]
+                        });
+                    }
+                    startPveActivity(playerId, 'manual_chop', player.room, {
+                        treeId: result.treeId,
+                        stage: result.stage
+                    });
+                    broadcastToRoom(player.room, {
+                        type: 'manual_chop_started',
+                        playerId,
+                        playerName: player.name,
+                        treeId: result.treeId,
+                        stage: result.stage,
+                        position: player.position
+                    }, playerId);
+                    sendToPlayer(playerId, {
+                        type: 'manual_chop_started',
+                        treeId: result.treeId,
+                        sessionId: result.sessionId,
+                        stage: result.stage,
+                        woodYield: result.woodYield,
+                        isDemo: result.isDemo,
+                        chopMode: 'manual'
+                    });
+                }
+            } catch (error) {
+                console.error('🪓 Error in manual_chop_start:', error);
+                sendToPlayer(playerId, {
+                    type: 'manual_chop_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to start manual chop'
+                });
+            }
+            break;
+        }
+
+        case 'manual_chop_hit': {
+            try {
+                const { sessionId, side, speed } = message;
+                const result = woodcuttingService.manualChopHit(playerId, { sessionId, side, speed });
+                if (result.error) {
+                    if (result.error !== 'HIT_COOLDOWN') {
+                        sendToPlayer(playerId, {
+                            type: 'manual_chop_error',
+                            error: result.error,
+                            message: result.message
+                        });
+                    }
+                    break;
+                }
+                sendToPlayer(playerId, {
+                    type: 'manual_chop_hit',
+                    treeId: result.treeId,
+                    side: result.side,
+                    speed: result.speed,
+                    leftCut: result.leftCut,
+                    rightCut: result.rightCut,
+                    falling: result.falling
+                });
+                if (player.room) {
+                    broadcastToRoom(player.room, {
+                        type: 'manual_chop_sync',
+                        playerId,
+                        playerName: player.name,
+                        treeId: result.treeId,
+                        side: result.side,
+                        speed: result.speed,
+                        leftCut: result.leftCut,
+                        rightCut: result.rightCut,
+                        falling: result.falling
+                    }, playerId);
+                    updatePveActivity(playerId, {
+                        side: result.side,
+                        leftCut: result.leftCut,
+                        rightCut: result.rightCut,
+                        falling: result.falling
+                    });
+                }
+            } catch (error) {
+                console.error('🪓 Error in manual_chop_hit:', error);
+            }
+            break;
+        }
+
+        case 'manual_chop_complete': {
+            try {
+                const { sessionId } = message;
+                const result = await woodcuttingService.completeManualChop(
+                    playerId,
+                    player.walletAddress,
+                    { sessionId }
+                );
+                endPveActivity(playerId, { completed: true });
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'manual_chop_error',
+                        error: result.error,
+                        message: result.message
+                    });
+                    break;
+                }
+                if (player.room) {
+                    broadcastToRoom(player.room, {
+                        type: 'manual_chop_ended',
+                        playerId,
+                        treeId: result.treeId
+                    }, playerId);
+                }
+                sendToPlayer(playerId, {
+                    type: 'manual_chop_result',
+                    treeId: result.treeId,
+                    wood: result.wood,
+                    inventoryAdded: result.inventoryAdded,
+                    isDemo: result.isDemo,
+                    inventory: result.inventory,
+                    axeBroken: result.axeBroken,
+                    axeDurability: result.axeDurability,
+                    axeMaxDurability: result.axeMaxDurability,
+                    treeState: result.treeState,
+                    chopMode: 'manual',
+                    woodMultiplier: result.woodMultiplier
+                });
+                if (result.inventory) {
+                    await sendGameInventorySnapshot(playerId, player.walletAddress, 'manual_chop');
+                }
+                if (result.treeState && player.room) {
+                    broadcastToRoomAll(player.room, {
+                        type: 'forest_trees_update',
+                        trees: [result.treeState]
+                    });
+                }
+                if (player.walletAddress && result.inventoryAdded) {
+                    onboardingQuestService.handleWoodChop(player.walletAddress, {
+                        inventoryAdded: result.inventoryAdded,
+                        isDemo: result.isDemo,
+                    }).catch((err) => console.error('[OnboardingQuest] manual chop:', err));
+                }
+            } catch (error) {
+                console.error('🪓 Error in manual_chop_complete:', error);
+                sendToPlayer(playerId, {
+                    type: 'manual_chop_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to complete manual chop'
+                });
+            }
+            break;
+        }
+
+        case 'manual_chop_cancel': {
+            const cancel = woodcuttingService.cancelChop(playerId, message.reason || 'CANCELLED');
+            endPveActivity(playerId, { cancelled: true });
+            if (cancel.cancelled && player.room) {
+                broadcastToRoom(player.room, {
+                    type: 'manual_chop_ended',
+                    playerId,
+                    treeId: cancel.treeId
+                }, playerId);
+            }
+            if (cancel.cancelled) {
+                sendToPlayer(playerId, {
+                    type: 'manual_chop_cancelled',
+                    treeId: cancel.treeId,
+                    reason: cancel.reason
+                });
+                if (cancel.treeState && player.room) {
+                    broadcastToRoomAll(player.room, {
+                        type: 'forest_trees_update',
+                        trees: [cancel.treeState]
+                    });
+                }
             }
             break;
         }

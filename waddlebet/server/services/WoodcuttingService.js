@@ -10,9 +10,11 @@ import crypto from 'crypto';
 
 import { ECONOMY, getChopDurabilityLoss } from '../config/economy.js';
 
-import { getHarvestableTree, getStageConfig } from '../config/harvestableTrees.js';
+import { getHarvestableTree, getStageConfig, getWoodYield } from '../config/harvestableTrees.js';
 
 import { getGameItem } from '../config/gameItems.js';
+
+import { MANUAL_CHOP, computeCutAmount, shouldManualTreeFall } from '../config/manualChop.js';
 
 
 
@@ -68,7 +70,7 @@ class WoodcuttingService {
 
 
 
-    _createSession(playerId, treeId, stage, isDemo, startPosition, axeItemId = null) {
+    _createSession(playerId, treeId, stage, isDemo, startPosition, axeItemId = null, mode = 'hold') {
 
         const sessionId = crypto.randomUUID();
 
@@ -84,6 +86,18 @@ class WoodcuttingService {
 
             axeItemId,
 
+            mode,
+
+            leftCut: 0,
+
+            rightCut: 0,
+
+            hitCount: 0,
+
+            lastHitAt: 0,
+
+            falling: false,
+
             createdAt: Date.now(),
 
             consumed: false,
@@ -92,7 +106,9 @@ class WoodcuttingService {
 
             startZ: startPosition?.z ?? null,
 
-            chopDurationMs: this._computeDurationMs(stage, axeItemId || 'basic_axe')
+            chopDurationMs: mode === 'manual'
+                ? 0
+                : this._computeDurationMs(stage, axeItemId || 'basic_axe')
 
         });
 
@@ -230,6 +246,12 @@ class WoodcuttingService {
 
         }
 
+        if (def.chopMode === 'manual') {
+
+            return { error: 'MANUAL_TREE', message: 'Use manual chop on this tree (press E)' };
+
+        }
+
 
 
         if (!this.forestTreeService.isAvailableForPlayer(treeId, playerId)) {
@@ -278,6 +300,8 @@ class WoodcuttingService {
 
                 isDemo: true,
 
+                chopMode: 'hold',
+
                 treeState: reserve.treeState
 
             };
@@ -314,7 +338,7 @@ class WoodcuttingService {
 
         if (reserve.error) return reserve;
 
-
+        this.forestTreeService.recordForestChop();
 
         const sessionId = this._createSession(
 
@@ -351,6 +375,8 @@ class WoodcuttingService {
             durationMs: this._computeDurationMs(def.stage, equippedAxe.itemId),
 
             isDemo: false,
+
+            chopMode: 'hold',
 
             axeDurability: equippedAxe.durability,
 
@@ -522,6 +548,383 @@ class WoodcuttingService {
             axeDurability: damageResult.durability,
 
             axeMaxDurability: damageResult.maxDurability
+
+        };
+
+    }
+
+
+
+    async startManualChop(playerId, walletAddress, treeId, isDemo = false, startPosition = null) {
+
+        const def = getHarvestableTree(treeId);
+
+        if (!def) {
+
+            return { error: 'INVALID_TREE', message: 'Unknown harvestable tree' };
+
+        }
+
+        if (def.chopMode !== 'manual') {
+
+            return { error: 'NOT_MANUAL_TREE', message: 'Hold E to chop this tree' };
+
+        }
+
+        if (!this.forestTreeService.isAvailableForPlayer(treeId, playerId)) {
+
+            const tree = this.forestTreeService.getTree(treeId);
+
+            if (tree?.choppingBy && tree.choppingBy !== playerId) {
+
+                return { error: 'TREE_LOCKED', message: 'Someone else is already chopping this tree' };
+
+            }
+
+            return { error: 'TREE_REGROWING', message: 'This tree is regrowing — come back later' };
+
+        }
+
+        const stageCfg = getStageConfig(def.stage);
+
+        if (isDemo) {
+
+            const reserve = this.forestTreeService.reserveTree(treeId, playerId);
+
+            if (reserve.error) return reserve;
+
+            const sessionId = this._createSession(playerId, treeId, def.stage, true, startPosition, null, 'manual');
+
+            return {
+
+                success: true,
+
+                treeId,
+
+                sessionId,
+
+                stage: def.stage,
+
+                woodYield: getWoodYield(def.stage, def),
+
+                isDemo: true,
+
+                chopMode: 'manual',
+
+                treeState: reserve.treeState
+
+            };
+
+        }
+
+        if (!walletAddress) {
+
+            return { error: 'NOT_AUTHENTICATED', message: 'Connect wallet to chop wood' };
+
+        }
+
+        const equippedAxe = await this._getEquippedAxe(walletAddress);
+
+        if (!equippedAxe) {
+
+            return {
+
+                error: 'NO_AXE',
+
+                message: 'Equip an axe on the hotbar (press 1–5) to chop trees'
+
+            };
+
+        }
+
+        const reserve = this.forestTreeService.reserveTree(treeId, playerId);
+
+        if (reserve.error) return reserve;
+
+        this.forestTreeService.recordForestChop();
+
+        const sessionId = this._createSession(
+
+            playerId,
+
+            treeId,
+
+            def.stage,
+
+            false,
+
+            startPosition,
+
+            equippedAxe.itemId,
+
+            'manual'
+
+        );
+
+        return {
+
+            success: true,
+
+            treeId,
+
+            sessionId,
+
+            stage: def.stage,
+
+            woodYield: getWoodYield(def.stage, def),
+
+            isDemo: false,
+
+            chopMode: 'manual',
+
+            axeDurability: equippedAxe.durability,
+
+            axeMaxDurability: equippedAxe.maxDurability,
+
+            treeState: reserve.treeState
+
+        };
+
+    }
+
+
+
+    manualChopHit(playerId, { sessionId, side, speed = 2 }) {
+
+        const validation = this._validateSession(playerId, sessionId);
+
+        if (validation.error) return validation;
+
+        const { session } = validation;
+
+        if (session.mode !== 'manual') {
+
+            return { error: 'NOT_MANUAL_SESSION', message: 'Invalid chop session' };
+
+        }
+
+        if (session.falling) {
+
+            return { error: 'ALREADY_FALLING', message: 'Tree is already falling' };
+
+        }
+
+        const hitSide = side === -1 || side === 1 ? side : null;
+
+        if (!hitSide) {
+
+            return { error: 'INVALID_SIDE', message: 'Invalid chop side' };
+
+        }
+
+        const now = Date.now();
+
+        if (session.lastHitAt && now - session.lastHitAt < MANUAL_CHOP.HIT_COOLDOWN_MS) {
+
+            return { error: 'HIT_COOLDOWN', message: 'Swing too fast' };
+
+        }
+
+        session.lastHitAt = now;
+        session.hitCount += 1;
+
+        const cutAmount = computeCutAmount(speed);
+
+        if (hitSide === -1) session.leftCut = Math.min(1, session.leftCut + cutAmount);
+
+        else session.rightCut = Math.min(1, session.rightCut + cutAmount);
+
+        let falling = false;
+
+        if (shouldManualTreeFall(session.leftCut, session.rightCut, session.hitCount)) {
+
+            session.falling = true;
+
+            falling = true;
+
+        }
+
+        return {
+
+            success: true,
+
+            treeId: session.treeId,
+
+            side: hitSide,
+
+            speed,
+
+            leftCut: session.leftCut,
+
+            rightCut: session.rightCut,
+
+            hitCount: session.hitCount,
+
+            falling
+
+        };
+
+    }
+
+
+
+    async completeManualChop(playerId, walletAddress, { sessionId }) {
+
+        const validation = this._validateSession(playerId, sessionId);
+
+        if (validation.error) return validation;
+
+        const { session } = validation;
+
+        if (session.mode !== 'manual') {
+
+            return { error: 'NOT_MANUAL_SESSION', message: 'Invalid chop session' };
+
+        }
+
+        if (!session.falling) {
+
+            return { error: 'NOT_READY', message: 'Keep chopping until the tree falls' };
+
+        }
+
+        if (session.isDemo || !walletAddress) {
+
+            this._consumeSession(playerId);
+
+            this.forestTreeService.releaseTree(session.treeId, playerId);
+
+            const def = getHarvestableTree(session.treeId);
+
+            return {
+
+                success: true,
+
+                wood: { quantity: getWoodYield(session.stage, def), stage: session.stage },
+
+                isDemo: true,
+
+                inventoryAdded: false,
+
+                chopMode: 'manual'
+
+            };
+
+        }
+
+        if (!this.forestTreeService.isAvailableForPlayer(session.treeId, playerId)) {
+
+            this.forestTreeService.releaseTree(session.treeId, playerId);
+
+            return { error: 'TREE_REGROWING', message: 'Someone else already chopped this tree' };
+
+        }
+
+        const harvest = await this.forestTreeService.harvestTree(session.treeId);
+
+        if (harvest.error) {
+
+            this.forestTreeService.releaseTree(session.treeId, playerId);
+
+            return harvest;
+
+        }
+
+        const itemDef = getGameItem(harvest.logItemId);
+
+        const addResult = await this.gameInventoryService.addItem(
+
+            walletAddress,
+
+            harvest.logItemId,
+
+            harvest.wood,
+
+            {
+
+                name: itemDef?.name,
+
+                emoji: itemDef?.emoji,
+
+                npcValue: itemDef?.npcValue,
+
+                category: 'wood',
+
+                tier: itemDef?.tier
+
+            }
+
+        );
+
+        if (addResult.error) {
+
+            this.forestTreeService.releaseTree(session.treeId, playerId);
+
+            return {
+
+                error: addResult.error,
+
+                message: addResult.message || 'Could not add wood to backpack',
+
+                wood: harvest
+
+            };
+
+        }
+
+        this._consumeSession(playerId);
+
+        const damageResult = await this.gameInventoryService.damageEquippedTool(
+
+            walletAddress,
+
+            getChopDurabilityLoss(session.stage, session.axeItemId || 'basic_axe')
+
+        );
+
+        let inventory = addResult.inventory;
+
+        if (damageResult.inventory) inventory = damageResult.inventory;
+
+        return {
+
+            success: true,
+
+            treeId: session.treeId,
+
+            wood: {
+
+                id: harvest.logItemId,
+
+                name: itemDef?.name || harvest.logItemId,
+
+                emoji: itemDef?.emoji || '🪵',
+
+                quantity: harvest.wood,
+
+                npcValue: itemDef?.npcValue ?? 0,
+
+                stage: session.stage,
+
+                label: harvest.label
+
+            },
+
+            treeState: this.forestTreeService.getTreePublicState(session.treeId),
+
+            inventoryAdded: true,
+
+            inventory,
+
+            axeBroken: damageResult.broken === true,
+
+            axeDurability: damageResult.durability,
+
+            axeMaxDurability: damageResult.maxDurability,
+
+            chopMode: 'manual',
+
+            woodMultiplier: harvest.woodMultiplier
 
         };
 

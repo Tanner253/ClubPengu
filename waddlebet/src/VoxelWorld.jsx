@@ -85,8 +85,11 @@ import TravelLobbyHUD from './components/TravelLobbyHUD';
 import { isTravelLobbyRoom, TRAVEL_LOBBY_CAMERA } from './config/travelConfig';
 import TravelLobbyRoom from './rooms/TravelLobbyRoom';
 import WoodcuttingSystem from './systems/WoodcuttingSystem';
+import ManualChopController from './systems/ManualChopController';
+import { getManualChopStandDistance, snapPlayerToChopRing } from './config/manualChop';
+import { formatForestRegrowCountdown } from './config/harvestableTrees';
 import ForestTreeManager from './systems/ForestTreeManager';
-import { getOverworldMountainConfig, FOREST_TRAILS_SPAWN, SNOW_FORTS_ARRIVAL } from './config/overworldConfig';
+import { getOverworldMountainConfig, OVERWORLD_CENTER_SPAWN } from './config/overworldConfig';
 import { loadSnowFortsQuadrant, loadForestQuadrant } from './world/overworldLoader';
 import { HARVESTABLE_MUSHROOMS, MUSHROOM_INTERACTION_RADIUS } from './config/harvestableMushrooms';
 import { findActiveScavengeSpot } from './config/scavenge';
@@ -188,6 +191,8 @@ const VoxelWorld = ({
     const iceFishingSystemRef = useRef(null); // Ice fishing interaction system
     const woodcuttingSystemRef = useRef(null);
     const forestTreeManagerRef = useRef(null);
+    const manualChopControllerRef = useRef(null);
+    const manualChopActiveRef = useRef(false);
     const mushroomClusterManagerRef = useRef(null);
     
     // Keep isInMatch ref up to date
@@ -382,6 +387,10 @@ const VoxelWorld = ({
         startWoodChop,
         completeWoodChop,
         cancelWoodChop,
+        startManualChop,
+        sendManualChopHit,
+        completeManualChop,
+        cancelManualChop,
         fetchForestTrees,
         forestTrees,
         fetchMushrooms,
@@ -729,6 +738,8 @@ const VoxelWorld = ({
     // Ice Fishing Interaction State
     const [fishingInteraction, setFishingInteraction] = useState(null); // { spot, prompt, canFish }
     const [woodcuttingInteraction, setWoodcuttingInteraction] = useState(null);
+    const [forestStumpHover, setForestStumpHover] = useState(null);
+    const forestStumpHoverRef = useRef(null);
     const [mushroomInteraction, setMushroomInteraction] = useState(null);
     const [scavengeInteraction, setScavengeInteraction] = useState(null);
     const scavengeLockRef = useRef(false);
@@ -743,7 +754,8 @@ const VoxelWorld = ({
         }
     }, [room, isAuthenticated, fetchScavengeStatus]);
     const mushroomLockRef = useRef(false);
-    const [woodChopProgress, setWoodChopProgress] = useState(null); // { progress 0-1, spotId }
+    const [woodChopProgress, setWoodChopProgress] = useState(null);
+    const [manualChopActive, setManualChopActive] = useState(false); // { progress 0-1, spotId }
     const woodChopTimerRef = useRef(null);
     const [fishingGameActive, setFishingGameActive] = useState(false); // True when fishing minigame is open
     const [fishingGameSpot, setFishingGameSpot] = useState(null); // Current fishing spot for game
@@ -2524,11 +2536,8 @@ const VoxelWorld = ({
             } else if (room === 'town') {
                 posRef.current = { x: CENTER_X, y: 0, z: CENTER_Z };
                 rotRef.current = 0;
-            } else if (room === 'snow_forts') {
-                posRef.current = { x: 49.9, y: 0, z: 64.3 };
-                rotRef.current = 0;
-            } else if (room === 'forest_trails') {
-                posRef.current = { ...FOREST_TRAILS_SPAWN };
+            } else if (room === 'snow_forts' || room === 'forest_trails') {
+                posRef.current = { ...OVERWORLD_CENTER_SPAWN };
                 rotRef.current = 0;
             } else if (room === WORLD_SPAWN_ROOM) {
                 posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
@@ -2547,11 +2556,8 @@ const VoxelWorld = ({
         } else if (room === 'town') {
             posRef.current = { x: CENTER_X, y: 0, z: CENTER_Z };
             rotRef.current = 0;
-        } else if (room === 'snow_forts') {
-            posRef.current = { x: 49.9, y: 0, z: 64.3 };
-            rotRef.current = 0;
-        } else if (room === 'forest_trails') {
-            posRef.current = { ...FOREST_TRAILS_SPAWN };
+        } else if (room === 'snow_forts' || room === 'forest_trails') {
+            posRef.current = { ...OVERWORLD_CENTER_SPAWN };
             rotRef.current = 0;
         } else if (room === WORLD_SPAWN_ROOM) {
             posRef.current = { x: WORLD_SPAWN.x, y: 0, z: WORLD_SPAWN.z };
@@ -3274,16 +3280,17 @@ const VoxelWorld = ({
             // Check keyboard input (disabled during P2P match or arcade game)
             const inMatch = isInMatchRef.current;
             const inArcade = arcadeGameActiveRef.current;
+            const inManualChop = manualChopActiveRef.current;
             // WASD for player movement, Arrow keys for camera rotation
-            const keyForward = !inMatch && !inArcade && keysRef.current['KeyW'];
-            const keyBack = !inMatch && !inArcade && keysRef.current['KeyS'];
-            const keyLeft = !inMatch && !inArcade && keysRef.current['KeyA'];
-            const keyRight = !inMatch && !inArcade && keysRef.current['KeyD'];
-            const keyJump = !inMatch && !inArcade && keysRef.current['Space'];
+            const keyForward = !inMatch && !inArcade && !inManualChop && keysRef.current['KeyW'];
+            const keyBack = !inMatch && !inArcade && !inManualChop && keysRef.current['KeyS'];
+            const keyLeft = !inMatch && !inArcade && !inManualChop && keysRef.current['KeyA'];
+            const keyRight = !inMatch && !inArcade && !inManualChop && keysRef.current['KeyD'];
+            const keyJump = !inMatch && !inArcade && !inManualChop && keysRef.current['Space'];
             
             // Arrow keys rotate camera (horizontal only)
-            const arrowLeft = !inMatch && !inArcade && keysRef.current['ArrowLeft'];
-            const arrowRight = !inMatch && !inArcade && keysRef.current['ArrowRight'];
+            const arrowLeft = !inMatch && !inArcade && !inManualChop && keysRef.current['ArrowLeft'];
+            const arrowRight = !inMatch && !inArcade && !inManualChop && keysRef.current['ArrowRight'];
             
             // Check mobile button input (legacy D-pad)
             const mobile = mobileControlsRef.current;
@@ -3295,8 +3302,8 @@ const VoxelWorld = ({
             
             // Check joystick input (new PUBG-style controls)
             const joystick = joystickInputRef.current;
-            const joystickForward = !inMatch && joystick.y > 0.1;
-            const joystickBack = !inMatch && joystick.y < -0.1;
+            const joystickForward = !inMatch && !inManualChop && joystick.y > 0.1;
+            const joystickBack = !inMatch && !inManualChop && joystick.y < -0.1;
             const joystickMagnitude = Math.sqrt(joystick.x * joystick.x + joystick.y * joystick.y);
             
             // Apply camera controller inputs
@@ -3304,7 +3311,7 @@ const VoxelWorld = ({
             const camSensitivity = gameSettingsRef.current?.cameraSensitivity || 0.3;
             
             // Arrow key camera rotation
-            if (camController && !inMatch) {
+            if (camController && !inMatch && !inManualChop) {
                 const arrowDir = (arrowLeft ? 1 : 0) - (arrowRight ? 1 : 0);
                 camController.applyArrowKeyRotation(arrowDir);
             }
@@ -3312,7 +3319,7 @@ const VoxelWorld = ({
             // Touch/mouse camera rotation
             const camDelta = cameraRotationRef.current;
             if (camDelta.deltaX !== 0 || camDelta.deltaY !== 0) {
-                if (camController && !inMatch) {
+                if (camController && !inMatch && !inManualChop) {
                     camController.applyRotationInput(camDelta.deltaX, camDelta.deltaY, camSensitivity * 2);
                 }
                 // Reset in place — avoids allocating a new object every frame while dragging
@@ -4712,6 +4719,10 @@ const VoxelWorld = ({
                 const isMounted = !!(playerRef.current.userData?.mount && playerRef.current.userData?.mountData && mountEnabledRef.current);
                 // Simple airborne check: feet not touching ground (Y above threshold)
                 const isAirborne = velRef.current.y !== 0 && posRef.current.y > 0.05;
+                const isHoldChopping = !!(
+                    woodcuttingSystemRef.current?.localChopTreeId &&
+                    !woodcuttingSystemRef.current?.localManualChopTreeId
+                );
                 animateMesh(
                     playerRef.current, 
                     moving, 
@@ -4726,7 +4737,8 @@ const VoxelWorld = ({
                         // Emote ended naturally - clear it
                         emoteRef.current.type = null;
                         mpSendEmote(null);
-                    }
+                    },
+                    isHoldChopping
                 );
                 
                 // OPTIMIZATION: Use cached animated parts instead of traverse() every frame
@@ -5047,7 +5059,7 @@ const VoxelWorld = ({
                                 const movingBack = keyBack || mobileBack || (joystickInputRef.current.y > 0.1);
                                 
                                 // Bank into turns - more aggressive lean
-                                const targetRollZ = turningLeft ? tiltAmount : turningRight ? -tiltAmount : 0;
+                                const targetRollZ = turningLeft ? -tiltAmount : turningRight ? tiltAmount : 0;
                                 mountGroup.rotation.z += (targetRollZ - mountGroup.rotation.z) * 0.15;
                                 
                                 // Pitch forward/back
@@ -5861,7 +5873,6 @@ const VoxelWorld = ({
                 // Rotation interpolation
                 if (playerData.rotation !== undefined) {
                     if (isSeated) {
-                        // Snap rotation when seated
                         meshData.mesh.rotation.y = playerData.rotation;
                     } else {
                         meshData.mesh.rotation.y = lerpRotation(meshData.mesh.rotation.y, playerData.rotation, lerpFactor);
@@ -6032,7 +6043,12 @@ const VoxelWorld = ({
                     // Consider mount only if it's visible
                     const otherPlayerMounted = !!(meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData && meshData.mesh.userData?.mountVisible !== false);
                     const otherIsAirborne = (playerData.position?.y ?? 0) > 0.1;
-                    animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted, otherIsAirborne, time);
+                    const holdChoppers = forestTreeManagerRef.current?.getActiveHoldChoppers?.();
+                    const isOtherHoldChopping = !!(
+                        holdChoppers?.has(id) &&
+                        !forestTreeManagerRef.current?.isRemoteManualChopping?.(id)
+                    );
+                    animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted, otherIsAirborne, time, null, isOtherHoldChopping);
                     
                     // Animate cosmetics for other players with animated items (distance-based LOD)
                     if (meshData.hasAnimatedCosmetics && performanceManager.shouldAnimateCosmetics(distSq)) {
@@ -6738,6 +6754,10 @@ const VoxelWorld = ({
                 const nightFactor = calculateNightFactor(worldTime);
                 const t2 = showPerfDebugRef.current ? performance.now() : 0;
                 forestTrailsZoneRef.current.update(time, delta, nightFactor, posRef.current);
+                forestTreeManagerRef.current?.updateManualTrees(
+                    delta,
+                    manualChopActiveRef.current ? manualChopControllerRef.current?.treeEntry?.def?.id : null
+                );
                 if (showPerfDebugRef.current) {
                     perfStatsRef.current.timings.forestUpdate = performance.now() - t2;
                 }
@@ -6787,22 +6807,26 @@ const VoxelWorld = ({
                         };
                     }
                 }
+            }
 
-                if (controls && camera) {
-                    const transition = casinoZoomTransitionRef.current;
-                    if (transition?.active) {
-                        const offset = _casinoZoomOffset.copy(camera.position).sub(controls.target);
-                        const currentDistance = offset.length();
-                        const targetDistance = transition.targetDistance;
-                        if (Math.abs(currentDistance - targetDistance) > 0.2) {
-                            const newDistance = currentDistance + (targetDistance - currentDistance) * 0.1;
-                            const direction = offset.normalize();
-                            camera.position.copy(controls.target).add(direction.multiplyScalar(newDistance));
-                        } else {
-                            transition.active = false;
-                        }
+            if (controls && camera && !manualChopActiveRef.current) {
+                const transition = casinoZoomTransitionRef.current;
+                if (transition?.active) {
+                    const offset = _casinoZoomOffset.copy(camera.position).sub(controls.target);
+                    const currentDistance = offset.length();
+                    const targetDistance = transition.targetDistance;
+                    if (Math.abs(currentDistance - targetDistance) > 0.2) {
+                        const newDistance = currentDistance + (targetDistance - currentDistance) * 0.1;
+                        const direction = offset.normalize();
+                        camera.position.copy(controls.target).add(direction.multiplyScalar(newDistance));
+                    } else {
+                        transition.active = false;
                     }
                 }
+            }
+
+            if (manualChopActiveRef.current && manualChopControllerRef.current) {
+                manualChopControllerRef.current.update(delta);
             }
             
             // Room-specific updates (self-contained in room modules)
@@ -6824,8 +6848,8 @@ const VoxelWorld = ({
                 mountYOffset = mountBaseY + bounceY;
             }
             
-            // Update camera controller with player state
-            if (cameraControllerRef.current) {
+            // Update camera controller with player state (manual chop owns the camera)
+            if (cameraControllerRef.current && !manualChopActiveRef.current) {
                 cameraControllerRef.current.setPlayerState(
                     posRef.current,
                     rotRef.current,
@@ -6833,7 +6857,7 @@ const VoxelWorld = ({
                     mountYOffset // Pass mount elevation to camera
                 );
                 cameraControllerRef.current.update(delta);
-            } else {
+            } else if (!cameraControllerRef.current) {
                 // Fallback: simple camera follow if controller not initialized
                 const offset = tempOffsetRef.current.copy(camera.position).sub(controls.target);
                 const playerY = posRef.current.y + 1.2 + mountYOffset;
@@ -8509,6 +8533,18 @@ const VoxelWorld = ({
                 }
             }
             
+            if (roomRef.current === 'forest_trails' && forestTreeManagerRef.current && !manualChopActiveRef.current) {
+                const playerPos = posRef.current;
+                const stumpHover = forestTreeManagerRef.current.resolveStumpHover(
+                    playerPos.x,
+                    playerPos.z,
+                    raycaster
+                );
+                applyForestStumpHover(stumpHover);
+            } else {
+                applyForestStumpHover(null);
+            }
+
             // Set cursor based on hovered object type
             if (hovered) {
                 if (hoveredType === 'igloo' || hoveredType === 'poi') {
@@ -8558,6 +8594,12 @@ const VoxelWorld = ({
         
         return () => clearTimeout(timeout);
     }, [activeBubble]);
+
+    useEffect(() => {
+        if (!forestStumpHover?.regrowAt) return undefined;
+        const id = setInterval(() => setForestStumpHover((prev) => (prev ? { ...prev } : null)), 1000);
+        return () => clearInterval(id);
+    }, [forestStumpHover?.treeId, forestStumpHover?.regrowAt]);
     
     // Live room chat only — history reloads must not re-trigger bubbles
     const lastChatIdRef = useRef(null);
@@ -9193,20 +9235,47 @@ const VoxelWorld = ({
         }
     };
     
+    const applyForestStumpHover = (next) => {
+        const prev = forestStumpHoverRef.current;
+        if (!next && !prev) return;
+        if (next?.treeId === prev?.treeId && next?.regrowAt === prev?.regrowAt) return;
+        forestStumpHoverRef.current = next;
+        setForestStumpHover(next);
+    };
+
+    const checkForestStumpProximity = () => {
+        if (room !== 'forest_trails' || manualChopActiveRef.current || !forestTreeManagerRef.current) {
+            applyForestStumpHover(null);
+            return;
+        }
+        const playerPos = posRef.current;
+        applyForestStumpHover(
+            forestTreeManagerRef.current.resolveStumpHover(playerPos.x, playerPos.z)
+        );
+    };
+
     const checkWoodcuttingSpots = () => {
         if (room !== 'forest_trails') {
             if (woodcuttingInteraction) setWoodcuttingInteraction(null);
+            applyForestStumpHover(null);
             return;
         }
+        if (manualChopActiveRef.current) {
+            applyForestStumpHover(null);
+            return;
+        }
+        checkForestStumpProximity();
         if (!woodcuttingSystemRef.current || woodChopProgress) {
             return;
         }
         const playerPos = posRef.current;
+        const isMounted = !!(playerRef.current?.userData?.mount && playerRef.current?.userData?.mountData && mountEnabledRef.current);
         const interaction = woodcuttingSystemRef.current.checkInteraction(
             playerPos.x,
             playerPos.z,
             gameInventory,
-            isAuthenticated
+            isAuthenticated,
+            isMounted
         );
         if (interaction) {
             if (!woodcuttingInteraction || woodcuttingInteraction.treeId !== interaction.treeId) {
@@ -9768,12 +9837,91 @@ const VoxelWorld = ({
     }, [woodcuttingInteraction]);
 
     const handleWoodChopAction = useCallback(async () => {
-        if (woodcuttingLockRef.current || woodChopProgress) return;
+        if (woodcuttingLockRef.current || woodChopProgress || manualChopActiveRef.current) return;
         const interaction = woodcuttingInteractionRef.current;
         if (!interaction?.canChop || !(interaction.treeId || interaction.spotId)) return;
 
-        woodcuttingLockRef.current = true;
         const treeId = interaction.treeId || interaction.spotId;
+        if (interaction.chopMode === 'manual') {
+            woodcuttingLockRef.current = true;
+            woodcuttingSystemRef.current?.setLocalManualChopping(treeId);
+            const result = await startManualChop?.(treeId);
+            if (result?.error) {
+                woodcuttingSystemRef.current?.clearLocalChopping();
+                woodcuttingLockRef.current = false;
+                if (result.message) setActiveBubble(result.message);
+                return;
+            }
+            const entry = forestTreeManagerRef.current?.getTreeEntry(treeId);
+            if (!entry?.instance || !sceneRef.current || !window.THREE) {
+                cancelManualChop?.('SETUP_FAILED');
+                woodcuttingSystemRef.current?.clearLocalChopping();
+                woodcuttingLockRef.current = false;
+                setActiveBubble('Could not start manual chop');
+                return;
+            }
+            const treeWorldPos = {
+                x: entry.mesh.position.x,
+                z: entry.mesh.position.z
+            };
+            const standDistance = getManualChopStandDistance(entry.def.stage);
+            const snapped = snapPlayerToChopRing(
+                treeWorldPos.x,
+                treeWorldPos.z,
+                posRef.current.x,
+                posRef.current.z,
+                standDistance
+            );
+            posRef.current.x = snapped.x;
+            posRef.current.z = snapped.z;
+            rotRef.current = snapped.rotationY;
+            if (playerRef.current) {
+                playerRef.current.position.set(snapped.x, posRef.current.y, snapped.z);
+                playerRef.current.rotation.y = snapped.rotationY;
+            }
+            const playerWorldPos = { x: snapped.x, y: posRef.current.y, z: snapped.z };
+            if (!manualChopControllerRef.current) {
+                manualChopControllerRef.current = new ManualChopController();
+            }
+            manualChopControllerRef.current.enter({
+                scene: sceneRef.current,
+                camera: cameraRef.current,
+                renderer: rendererRef.current,
+                THREE: window.THREE,
+                treeEntry: entry,
+                treeWorldPos,
+                playerWorldPos,
+                sessionId: result.sessionId,
+                controls: controlsRef.current,
+                playerMesh: playerRef.current,
+                getPlayerViewState: () => {
+                    let mountYOffset = 0;
+                    if (mountEnabledRef.current && playerRef.current?.userData?.mountData) {
+                        const mountData = playerRef.current.userData.mountData;
+                        mountYOffset = (mountData.positionY || 0) + (playerRef.current.userData.mountBounceY || 0);
+                    }
+                    return {
+                        x: posRef.current.x,
+                        y: posRef.current.y,
+                        z: posRef.current.z,
+                        mountYOffset
+                    };
+                },
+                onHit: (hit) => sendManualChopHit?.(hit),
+                onFallComplete: () => {
+                    forestTreeManagerRef.current?.optimisticHarvest(treeId);
+                    completeManualChop?.();
+                },
+                onCancel: () => cancelManualChop?.('CANCELLED')
+            });
+            manualChopActiveRef.current = true;
+            setManualChopActive(true);
+            setWoodcuttingInteraction(null);
+            woodcuttingLockRef.current = false;
+            return;
+        }
+
+        woodcuttingLockRef.current = true;
         woodcuttingSystemRef.current?.setLocalChopping(treeId);
 
         const result = await startWoodChop?.(treeId);
@@ -9816,11 +9964,79 @@ const VoxelWorld = ({
             }
         };
         woodChopTimerRef.current = requestAnimationFrame(tick);
-    }, [startWoodChop, completeWoodChop, cancelWoodChop, woodChopProgress]);
+    }, [startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop, woodChopProgress]);
+
+    const exitManualChop = useCallback((reason = 'CANCELLED') => {
+        const restoreDistance = manualChopControllerRef.current?.getSavedCameraDistance?.();
+        if (manualChopControllerRef.current) {
+            manualChopControllerRef.current.exit();
+        }
+        manualChopActiveRef.current = false;
+        setManualChopActive(false);
+        woodcuttingSystemRef.current?.clearLocalChopping();
+        woodcuttingLockRef.current = false;
+        if (restoreDistance != null && controlsRef.current && cameraRef.current) {
+            const playerY = posRef.current.y + 1.2;
+            controlsRef.current.target.set(posRef.current.x, playerY, posRef.current.z);
+            casinoZoomTransitionRef.current = {
+                active: true,
+                targetDistance: restoreDistance,
+                progress: 0
+            };
+        }
+        if (reason !== 'COMPLETE') {
+            cancelManualChop?.(reason);
+        }
+    }, [cancelManualChop]);
 
     useEffect(() => () => {
         if (woodChopTimerRef.current) cancelAnimationFrame(woodChopTimerRef.current);
     }, []);
+
+    useEffect(() => {
+        if (!manualChopActive) return undefined;
+        const canvas = rendererRef.current?.domElement;
+        if (!canvas) return undefined;
+
+        const onDown = (e) => {
+            e.preventDefault();
+            manualChopControllerRef.current?.onPointerDown(e.clientX, e.clientY);
+        };
+        const onUp = () => manualChopControllerRef.current?.onPointerUp();
+        const onMove = (e) => manualChopControllerRef.current?.onPointerMove(e.clientX, e.clientY);
+        const onTouchStart = (e) => {
+            if (!e.touches[0]) return;
+            e.preventDefault();
+            manualChopControllerRef.current?.onPointerDown(e.touches[0].clientX, e.touches[0].clientY);
+        };
+        const onTouchEnd = () => manualChopControllerRef.current?.onPointerUp();
+        const onTouchMove = (e) => {
+            if (!e.touches[0]) return;
+            e.preventDefault();
+            manualChopControllerRef.current?.onPointerMove(e.touches[0].clientX, e.touches[0].clientY);
+        };
+        const onKey = (e) => {
+            if (e.code === 'Escape') exitManualChop('ESC');
+        };
+
+        canvas.addEventListener('mousedown', onDown);
+        window.addEventListener('mouseup', onUp);
+        window.addEventListener('mousemove', onMove);
+        canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+        window.addEventListener('touchend', onTouchEnd);
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('keydown', onKey);
+
+        return () => {
+            canvas.removeEventListener('mousedown', onDown);
+            window.removeEventListener('mouseup', onUp);
+            window.removeEventListener('mousemove', onMove);
+            canvas.removeEventListener('touchstart', onTouchStart);
+            window.removeEventListener('touchend', onTouchEnd);
+            window.removeEventListener('touchmove', onTouchMove);
+            window.removeEventListener('keydown', onKey);
+        };
+    }, [manualChopActive, exitManualChop]);
 
     const handleMushroomHarvest = useCallback(async () => {
         if (mushroomLockRef.current) return;
@@ -9960,7 +10176,7 @@ const VoxelWorld = ({
             }
             if (room === 'forest_trails') {
                 const wc = woodcuttingInteractionRef.current;
-                if (wc?.canChop && !nearbyPortal && !emoteWheelOpen && !woodcuttingLockRef.current && !woodChopProgress) {
+                if (wc?.canChop && !nearbyPortal && !emoteWheelOpen && !woodcuttingLockRef.current && !woodChopProgress && !manualChopActiveRef.current) {
                     handleWoodChopAction();
                     return;
                 }
@@ -10427,10 +10643,9 @@ const VoxelWorld = ({
             // Parkour stage start positions (staff) + zone warps
             const warpPositions = {
                 // Forest Trails — main campfire clearing (world coords)
-                forest: { room: 'forest_trails', ...FOREST_TRAILS_SPAWN, name: 'Forest Trails' },
-                // Snow Forts — west ferry dock (staff only)
-                snowforts: { room: 'snow_forts', ...SNOW_FORTS_ARRIVAL, name: 'Snow Forts' },
-                snow: { room: 'snow_forts', ...SNOW_FORTS_ARRIVAL, name: 'Snow Forts' },
+                forest: { room: 'forest_trails', ...OVERWORLD_CENTER_SPAWN, name: 'Forest Trails' },
+                snowforts: { room: 'snow_forts', ...OVERWORLD_CENTER_SPAWN, name: 'Snow Forts' },
+                snow: { room: 'snow_forts', ...OVERWORLD_CENTER_SPAWN, name: 'Snow Forts' },
                 // Stage 1 (Blue) - Ground level start near dojo
                 pk1: { x: CENTER_X - 12, y: 4, z: CENTER_Z + 70 + 9, name: 'Stage 1 (Blue) Start' },
                 // Stage 2 (Purple) - Tier 1 platform (first roof)
@@ -11231,7 +11446,8 @@ const VoxelWorld = ({
                         data.treeState.id,
                         data.treeState.state,
                         data.treeState.regrowAt,
-                        data.treeState.choppingBy || null
+                        data.treeState.choppingBy || null,
+                        data.treeState.stage
                     );
                 }
                 if (data.wood && data.inventoryAdded) {
@@ -11264,10 +11480,72 @@ const VoxelWorld = ({
                         data.treeState.id,
                         data.treeState.state,
                         data.treeState.regrowAt,
-                        data.treeState.choppingBy || null
+                        data.treeState.choppingBy || null,
+                        data.treeState.stage
                     );
                 } else if (data?.treeId && forestTreeManagerRef.current) {
                     fetchForestTrees?.();
+                }
+            },
+            onManualChopHit: (data) => {
+                manualChopControllerRef.current?.confirmLocalHit(data);
+            },
+            onManualChopSync: (data) => {
+                if (data.playerId === playerId) return;
+                forestTreeManagerRef.current?.onRemoteManualChopSync(data.playerId, data);
+            },
+            onRemoteManualChopStart: (data) => {
+                if (data.playerId === playerId) return;
+                forestTreeManagerRef.current?.onRemoteManualChopStart(
+                    data.playerId,
+                    data.treeId,
+                    data.position || getPlayersData()?.get(data.playerId)?.position || null
+                );
+            },
+            onRemoteManualChopEnd: (data) => {
+                if (!data?.playerId || data.playerId === playerId) return;
+                forestTreeManagerRef.current?.onRemoteManualChopEnd(data.playerId);
+            },
+            onManualChopResult: (data) => {
+                exitManualChop('COMPLETE');
+                if (data.treeState && forestTreeManagerRef.current) {
+                    forestTreeManagerRef.current.updateTree(
+                        data.treeState.id,
+                        data.treeState.state,
+                        data.treeState.regrowAt,
+                        data.treeState.choppingBy || null,
+                        data.treeState.stage
+                    );
+                } else if (data.treeId) {
+                    forestTreeManagerRef.current?.optimisticHarvest(data.treeId);
+                }
+                fetchGameInventory?.();
+                if (data.wood) {
+                    const qty = data.wood.quantity || 1;
+                    const label = `${data.wood.emoji || '🪵'} ${qty}× ${data.wood.name}`;
+                    const multNote = data.woodMultiplier > 1 ? ' (manual 1.5×)' : '';
+                    setActiveBubble(
+                        data.axeBroken
+                            ? `Chopped ${label}${multNote}! Your axe broke — buy a new one from Clive.`
+                            : `Chopped ${label}${multNote}!`
+                    );
+                }
+            },
+            onManualChopError: (data) => {
+                if (manualChopActiveRef.current) exitManualChop('ERROR');
+                if (data?.message) setActiveBubble(data.message);
+                fetchForestTrees?.();
+            },
+            onManualChopCancelled: (data) => {
+                if (manualChopActiveRef.current) exitManualChop('SERVER_CANCEL');
+                if (data?.treeState && forestTreeManagerRef.current) {
+                    forestTreeManagerRef.current.updateTree(
+                        data.treeState.id,
+                        data.treeState.state,
+                        data.treeState.regrowAt,
+                        data.treeState.choppingBy || null,
+                        data.treeState.stage
+                    );
                 }
             },
             onForestTreesUpdate: (trees) => {
@@ -11277,7 +11555,8 @@ const VoxelWorld = ({
                         tree.id,
                         tree.state,
                         tree.regrowAt,
-                        tree.choppingBy || null
+                        tree.choppingBy || null,
+                        tree.stage
                     );
                 }
             },
@@ -12145,7 +12424,7 @@ const VoxelWorld = ({
              )}
 
              {/* Forest woodcutting interaction */}
-             {(woodcuttingInteraction || woodChopProgress) && room === 'forest_trails' && !fishingInteraction && (
+             {(woodcuttingInteraction || woodChopProgress) && room === 'forest_trails' && !fishingInteraction && !manualChopActive && (
                 <div
                     className={`absolute bg-gradient-to-b from-emerald-950/95 to-green-900/95 backdrop-blur-sm rounded-xl border border-emerald-500/40 text-center z-20 shadow-lg shadow-emerald-500/10 ${
                         isMobile
@@ -12184,6 +12463,38 @@ const VoxelWorld = ({
                             )}
                         </>
                     )}
+                </div>
+             )}
+
+             {forestStumpHover && room === 'forest_trails' && !manualChopActive && !woodcuttingInteraction && (
+                <div
+                    className={`absolute bg-black/75 backdrop-blur-sm rounded-lg border border-gray-500/50 text-center z-20 pointer-events-none px-4 py-2 ${
+                        isMobile ? 'bottom-[150px] left-1/2 -translate-x-1/2' : 'bottom-20 left-1/2 -translate-x-1/2'
+                    }`}
+                >
+                    <p className="text-gray-200 retro-text text-xs">
+                        🌱 {formatForestRegrowCountdown(forestStumpHover.regrowAt)}
+                    </p>
+                </div>
+             )}
+
+             {manualChopActive && room === 'forest_trails' && (
+                <div
+                    className={`absolute bg-gradient-to-b from-amber-950/90 to-emerald-950/90 backdrop-blur-sm rounded-xl border border-amber-500/40 text-center z-20 pointer-events-none ${
+                        isMobile
+                            ? isLandscape
+                                ? 'bottom-[180px] right-28 p-3'
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    }`}
+                >
+                    <div className="text-3xl mb-1">🪓</div>
+                    <p className="text-emerald-200 retro-text text-sm mb-1">
+                        {isMobile ? 'Touch & drag across the tree to chop' : 'Click & drag across the tree to chop'}
+                    </p>
+                    <p className="text-amber-200/80 text-xs">
+                        {isMobile ? 'Swing across the trunk · 1.5× wood reward' : 'Esc to cancel · 1.5× wood reward'}
+                    </p>
                 </div>
              )}
 

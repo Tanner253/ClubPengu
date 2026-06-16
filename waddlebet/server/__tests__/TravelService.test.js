@@ -140,7 +140,7 @@ describe('TravelService disconnect/reconnect', () => {
         expect(ctx.deps.persistPlayerLocation).toHaveBeenCalledWith(
             'wallet1',
             voyage.toRoom,
-            expect.objectContaining({ x: expect.any(Number), z: expect.any(Number) })
+            expect.objectContaining({ x: 110, z: 110 })
         );
 
         addPlayer(ctx, 'p2', 'wallet1', `travel:${voyage.id}`);
@@ -203,7 +203,7 @@ describe('TravelService disconnect/reconnect', () => {
         expect(ctx.deps.transferPlayerRoom).toHaveBeenCalledWith(
             'guest1',
             voyage.toRoom,
-            expect.objectContaining({ x: expect.any(Number), z: expect.any(Number) }),
+            expect.objectContaining({ x: 110, z: 110 }),
             expect.objectContaining({ phase: 'arrived' })
         );
     });

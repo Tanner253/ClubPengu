@@ -7,15 +7,25 @@ import ForestTreeWorldState from '../db/models/ForestTreeWorldState.js';
 import {
     HARVESTABLE_TREES,
     getHarvestableTree,
-    getStageConfig
+    getStageConfig,
+    MANUAL_WOOD_MULTIPLIER,
+    STAGE_ORDER
 } from '../config/harvestableTrees.js';
+import { FOREST_MATURATION } from '../config/forestMaturation.js';
 
 const WORLD_STATE_ID = 'forest_trees';
+
+function hashTreeId(id = '') {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return (h % 1000) / 1000;
+}
 
 class ForestTreeService {
     constructor() {
         /** @type {Map<string, object>} */
         this.trees = new Map();
+        this.lastForestChopAt = Date.now();
         for (const def of HARVESTABLE_TREES) {
             this.trees.set(def.id, {
                 id: def.id,
@@ -29,6 +39,10 @@ class ForestTreeService {
             });
         }
         this._loadedFromDb = false;
+    }
+
+    recordForestChop() {
+        this.lastForestChopAt = Date.now();
     }
 
     /**
@@ -52,6 +66,9 @@ class ForestTreeService {
 
                 tree.state = entry.state === 'harvested' ? 'harvested' : 'ready';
                 tree.regrowAt = entry.regrowAt ?? null;
+                if (entry.stage && STAGE_ORDER.includes(entry.stage)) {
+                    tree.stage = entry.stage;
+                }
                 tree.choppingBy = null;
                 tree.chopStartedAt = null;
 
@@ -81,6 +98,7 @@ class ForestTreeService {
         const payload = {
             state: tree.state,
             regrowAt: tree.regrowAt,
+            stage: tree.stage,
             lastHarvestedAt: tree.state === 'harvested' ? Date.now() : null
         };
 
@@ -116,6 +134,43 @@ class ForestTreeService {
         }
 
         return regrown;
+    }
+
+    /**
+     * Passive maturation — ready trees grow when the forest has been quiet.
+     * @returns {Promise<string[]>} tree ids that advanced a stage
+     */
+    async tickMaturation() {
+        const now = Date.now();
+        const quiet = now - this.lastForestChopAt;
+        if (quiet < FOREST_MATURATION.QUIET_BEFORE_MS) return [];
+
+        const updated = [];
+        const { FULL_FOREST_QUIET_MS, BASE_ADVANCE_CHANCE } = FOREST_MATURATION;
+        const quietRatio = Math.min(1, quiet / FULL_FOREST_QUIET_MS);
+
+        if (quiet >= FULL_FOREST_QUIET_MS) {
+            for (const tree of this.trees.values()) {
+                if (tree.state !== 'ready' || tree.stage === 'elder') continue;
+                tree.stage = 'elder';
+                updated.push(tree.id);
+                await this.persistTree(tree.id);
+            }
+            return updated;
+        }
+
+        const advanceChance = BASE_ADVANCE_CHANCE * (0.35 + quietRatio * 0.65);
+        for (const tree of this.trees.values()) {
+            if (tree.state !== 'ready') continue;
+            const idx = STAGE_ORDER.indexOf(tree.stage);
+            if (idx < 0 || idx >= STAGE_ORDER.length - 1) continue;
+            if (hashTreeId(tree.id) > advanceChance) continue;
+            tree.stage = STAGE_ORDER[idx + 1];
+            updated.push(tree.id);
+            await this.persistTree(tree.id);
+        }
+
+        return updated;
     }
 
     getTree(treeId) {
@@ -190,20 +245,28 @@ class ForestTreeService {
         const stageCfg = getStageConfig(tree.stage);
         if (!stageCfg) return { error: 'INVALID_STAGE' };
 
+        const def = getHarvestableTree(treeId);
+        const woodMult = def?.chopMode === 'manual' ? MANUAL_WOOD_MULTIPLIER : 1;
+        const woodQty = Math.max(1, Math.round(stageCfg.wood * woodMult));
+
         tree.state = 'harvested';
         tree.regrowAt = Date.now() + stageCfg.respawnMs;
+        tree.stage = 'sapling';
         tree.choppingBy = null;
         tree.chopStartedAt = null;
 
+        this.recordForestChop();
         await this.persistTree(treeId);
 
         return {
-            wood: stageCfg.wood,
+            wood: woodQty,
             logItemId: stageCfg.logItemId,
             stage: tree.stage,
             label: stageCfg.label,
             regrowAt: tree.regrowAt,
-            chopDurationMs: stageCfg.chopDurationMs
+            chopDurationMs: stageCfg.chopDurationMs,
+            chopMode: def?.chopMode || 'hold',
+            woodMultiplier: woodMult
         };
     }
 

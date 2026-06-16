@@ -11,7 +11,25 @@ export const TRAVEL_TIMING = {
     MAX_PASSENGERS: 12,
 };
 
+/** 220×220 overworld quadrants — center spawn (keep in sync with src/config/overworldConfig.js). */
+export const OVERWORLD_CENTER = 110;
+export const OVERWORLD_CENTER_SPAWN = { x: OVERWORLD_CENTER, y: 0, z: OVERWORLD_CENTER };
+
+const OVERWORLD_ROOMS = new Set(['town', 'snow_forts', 'forest_trails']);
+
 /** @typedef {{ x: number, y?: number, z: number, absolute?: boolean }} TravelSpawn */
+
+/**
+ * Ferry passengers always arrive at the center of the destination overworld map.
+ * @param {string} toRoom
+ * @returns {TravelSpawn}
+ */
+export function getFerryArrivalSpawn(toRoom) {
+    if (OVERWORLD_ROOMS.has(toRoom)) {
+        return { ...OVERWORLD_CENTER_SPAWN, absolute: true };
+    }
+    return { ...OVERWORLD_CENTER_SPAWN };
+}
 
 /**
  * @typedef {Object} TravelRoute
@@ -22,17 +40,7 @@ export const TRAVEL_TIMING = {
  * @property {string} emoji
  * @property {number} ticketCost
  * @property {number} [transitSeconds] - override TRAVEL_TIMING.TRANSIT_SECONDS
- * @property {TravelSpawn} arrivalSpawn
  */
-
-/** Keep in sync with src/config/overworldConfig.js FOREST_TRAILS_SPAWN (/warp forest). */
-const FOREST_TRAILS_SPAWN = { x: 90, z: 70 };
-
-/** Keep in sync with server/index.js getDefaultSpawnForRoom('town') and overworldConfig town center. */
-const TOWN_CENTER = { x: 110, z: 110 };
-
-/** Keep in sync with src/config/overworldConfig.js SNOW_FORTS_FOREST_DOCK. */
-const SNOW_FORTS_FOREST_DOCK = { x: 67.7, z: 205.3 };
 
 /** @type {Record<string, TravelRoute>} */
 export const TRAVEL_ROUTES = {
@@ -43,7 +51,6 @@ export const TRAVEL_ROUTES = {
         name: 'Snow Forts',
         emoji: '⛄',
         ticketCost: 25,
-        arrivalSpawn: { x: 49.9, z: 64.3, absolute: true },
     },
     snow_forts_town: {
         id: 'snow_forts_town',
@@ -52,7 +59,6 @@ export const TRAVEL_ROUTES = {
         name: 'Town',
         emoji: '🏘️',
         ticketCost: 25,
-        arrivalSpawn: { x: 200, z: 65, absolute: true },
     },
     snow_forts_forest: {
         id: 'snow_forts_forest',
@@ -62,7 +68,6 @@ export const TRAVEL_ROUTES = {
         emoji: '🌲',
         ticketCost: 35,
         transitSeconds: 45,
-        arrivalSpawn: { x: FOREST_TRAILS_SPAWN.x, z: FOREST_TRAILS_SPAWN.z, absolute: true },
     },
     forest_snow_forts: {
         id: 'forest_snow_forts',
@@ -72,7 +77,6 @@ export const TRAVEL_ROUTES = {
         emoji: '⛄',
         ticketCost: 35,
         transitSeconds: 45,
-        arrivalSpawn: { x: SNOW_FORTS_FOREST_DOCK.x, z: SNOW_FORTS_FOREST_DOCK.z, absolute: true },
     },
     forest_town: {
         id: 'forest_town',
@@ -82,7 +86,6 @@ export const TRAVEL_ROUTES = {
         emoji: '🏘️',
         ticketCost: 35,
         transitSeconds: 45,
-        arrivalSpawn: { x: TOWN_CENTER.x, z: TOWN_CENTER.z, absolute: true },
     },
 };
 
@@ -108,3 +111,4 @@ export function isTravelLobbyRoom(roomId) {
 }
 
 export default TRAVEL_ROUTES;
+

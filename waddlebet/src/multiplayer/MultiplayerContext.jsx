@@ -223,6 +223,8 @@ export function MultiplayerProvider({ children }) {
     const merchantBuyCallbackRef = useRef(null);
     const woodChopCallbackRef = useRef(null);
     const woodChopSessionIdRef = useRef(null);
+    const manualChopCallbackRef = useRef(null);
+    const manualChopSessionIdRef = useRef(null);
     const backpackUpgradeCallbackRef = useRef(null);
     const hotbarSetCallbackRef = useRef(null);
     const mushroomHarvestCallbackRef = useRef(null);
@@ -1194,6 +1196,63 @@ export function MultiplayerProvider({ children }) {
             case 'wood_chop_cancelled': {
                 woodChopSessionIdRef.current = null;
                 callbacksRef.current.onWoodChopCancelled?.(message);
+                break;
+            }
+
+            case 'manual_chop_started': {
+                if (message.playerId && message.playerId !== playerId) {
+                    callbacksRef.current.onRemoteManualChopStart?.(message);
+                    break;
+                }
+                manualChopSessionIdRef.current = message.sessionId || null;
+                if (manualChopCallbackRef.current) {
+                    manualChopCallbackRef.current({ success: true, ...message });
+                    manualChopCallbackRef.current = null;
+                }
+                callbacksRef.current.onManualChopStarted?.(message);
+                break;
+            }
+
+            case 'manual_chop_hit': {
+                callbacksRef.current.onManualChopHit?.(message);
+                break;
+            }
+
+            case 'manual_chop_sync': {
+                callbacksRef.current.onManualChopSync?.(message);
+                break;
+            }
+
+            case 'manual_chop_result': {
+                manualChopSessionIdRef.current = null;
+                if (message.inventory) {
+                    setGameInventory(message.inventory);
+                    setBackpackError(null);
+                }
+                callbacksRef.current.onManualChopResult?.(message);
+                break;
+            }
+
+            case 'manual_chop_error': {
+                manualChopSessionIdRef.current = null;
+                if (manualChopCallbackRef.current) {
+                    manualChopCallbackRef.current({ error: message.error, message: message.message });
+                    manualChopCallbackRef.current = null;
+                }
+                callbacksRef.current.onManualChopError?.(message);
+                break;
+            }
+
+            case 'manual_chop_cancelled': {
+                manualChopSessionIdRef.current = null;
+                callbacksRef.current.onManualChopCancelled?.(message);
+                break;
+            }
+
+            case 'manual_chop_ended': {
+                if (message.playerId && message.playerId !== playerId) {
+                    callbacksRef.current.onRemoteManualChopEnd?.(message);
+                }
                 break;
             }
 
@@ -2783,6 +2842,44 @@ export function MultiplayerProvider({ children }) {
         woodChopSessionIdRef.current = null;
     }, [connected, send]);
 
+    const startManualChop = useCallback((treeId) => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            manualChopCallbackRef.current = resolve;
+            send({ type: 'manual_chop_start', treeId, spotId: treeId });
+            setTimeout(() => {
+                if (manualChopCallbackRef.current === resolve) {
+                    manualChopCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, send]);
+
+    const sendManualChopHit = useCallback(({ side, speed }) => {
+        if (!connected || !manualChopSessionIdRef.current) return;
+        send({
+            type: 'manual_chop_hit',
+            sessionId: manualChopSessionIdRef.current,
+            side,
+            speed
+        });
+    }, [connected, send]);
+
+    const completeManualChop = useCallback(() => {
+        if (!connected || !manualChopSessionIdRef.current) return;
+        send({
+            type: 'manual_chop_complete',
+            sessionId: manualChopSessionIdRef.current
+        });
+    }, [connected, send]);
+
+    const cancelManualChop = useCallback((reason = 'CANCELLED') => {
+        if (!connected) return;
+        send({ type: 'manual_chop_cancel', reason });
+        manualChopSessionIdRef.current = null;
+    }, [connected, send]);
+
     const fetchTravelState = useCallback(() => {
         if (!connected) return;
         send({ type: 'travel_get_state' });
@@ -3031,6 +3128,10 @@ export function MultiplayerProvider({ children }) {
         startWoodChop,
         completeWoodChop,
         cancelWoodChop,
+        startManualChop,
+        sendManualChopHit,
+        completeManualChop,
+        cancelManualChop,
 
         roomTravelVoyages,
         travelRouteStatuses,
@@ -3098,7 +3199,7 @@ export function MultiplayerProvider({ children }) {
         spinSlot, slotSpinning, slotResult, clearSlotResult, activeSlotSpins,
         spinGoldSlot, goldSlotSpinning, goldSlotResult, clearGoldSlotResult, syncGoldSlots, activeGoldSlotSpins,
         startFishing, attemptCatch, cancelFishing, fishingActive, fishingResult, clearFishingResult,
-        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, setGameHotbarSlot, setActiveHotbarSlot, fetchForestTrees, forestTrees, fetchMushrooms, mushroomClusters, harvestMushroom, scavengeSpot, onboardingQuest, turnInMushroomQuest, sellAtMerchant, sellBatchAtMerchant, sellFishAtNpc, buyFromMerchant, upgradeBackpack, startWoodChop, completeWoodChop, cancelWoodChop,
+        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, setGameHotbarSlot, setActiveHotbarSlot, fetchForestTrees, forestTrees, fetchMushrooms, mushroomClusters, harvestMushroom, scavengeSpot, onboardingQuest, turnInMushroomQuest, sellAtMerchant, sellBatchAtMerchant, sellFishAtNpc, buyFromMerchant, upgradeBackpack, startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop,
         roomTravelVoyages, myTravelVoyage, travelPending, fetchTravelState, bookTravel, leaveTravel,
         adoptPuffle, puffleAdopting,
         setName, joinRoom, sendPosition, sendChat, sendAfk, sendEmoteBubble, sendEmote, stopEmote,
