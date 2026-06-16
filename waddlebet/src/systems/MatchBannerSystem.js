@@ -1103,7 +1103,9 @@ export function updatePveBanners(params) {
     
     // Get current activity player IDs (exclude local player - they see their own UI)
     const currentActivityIds = new Set(
-        Object.keys(activePveActivities).filter(id => id !== localPlayerId)
+        Object.keys(activePveActivities).filter(
+            (id) => id !== localPlayerId && activePveActivities[id]?.activity !== 'manual_chop'
+        )
     );
     
     // Remove banners for ended activities
@@ -1119,6 +1121,7 @@ export function updatePveBanners(params) {
     // Create or update banners for active PvE activities
     for (const [playerId, activityData] of Object.entries(activePveActivities)) {
         if (playerId === localPlayerId) continue; // Skip local player
+        if (activityData.activity === 'manual_chop') continue; // Overworld chop — no spectator banner
         
         // Get player position
         const playerData = playersData.get(playerId);

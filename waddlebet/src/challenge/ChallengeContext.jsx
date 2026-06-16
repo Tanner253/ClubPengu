@@ -386,6 +386,7 @@ export function ChallengeProvider({ children }) {
                 
                 // ==================== PvE ACTIVITY SPECTATING ====================
                 case 'pve_activity_start':
+                    if (message.activity === 'manual_chop') break;
                     // A player started a PvE activity (fishing, blackjack, etc.)
                     setActivePveActivities(prev => ({
                         ...prev,
@@ -445,7 +446,14 @@ export function ChallengeProvider({ children }) {
                     
                 case 'active_pve_activities':
                     // Receive all active PvE activities when joining a room
-                    setActivePveActivities(message.activities || {});
+                    {
+                        const activities = message.activities || {};
+                        const filtered = {};
+                        for (const [id, act] of Object.entries(activities)) {
+                            if (act?.activity !== 'manual_chop') filtered[id] = act;
+                        }
+                        setActivePveActivities(filtered);
+                    }
                     break;
                     
                 case 'coins_update':

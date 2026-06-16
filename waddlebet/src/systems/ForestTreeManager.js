@@ -413,8 +413,8 @@ class ForestTreeManager {
         this.remoteChopVisuals.startSession(playerId, treeId, chopperPos);
     }
 
-    onRemoteManualChopSync(playerId, data) {
-        this.remoteChopVisuals.onSync(playerId, data);
+    onRemoteManualChopSync(playerId, data, chopperPos = null) {
+        this.remoteChopVisuals.onSync(playerId, data, chopperPos);
     }
 
     onRemoteManualChopEnd(playerId) {

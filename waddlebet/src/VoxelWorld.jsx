@@ -11593,7 +11593,8 @@ const VoxelWorld = ({
             },
             onManualChopSync: (data) => {
                 if (data.playerId === playerId) return;
-                forestTreeManagerRef.current?.onRemoteManualChopSync(data.playerId, data);
+                const chopperPos = getPlayersData()?.get(data.playerId)?.position || null;
+                forestTreeManagerRef.current?.onRemoteManualChopSync(data.playerId, data, chopperPos);
             },
             onRemoteManualChopStart: (data) => {
                 if (data.playerId === playerId) return;

@@ -6152,10 +6152,6 @@ async function handleMessage(playerId, message) {
                             trees: [result.treeState]
                         });
                     }
-                    startPveActivity(playerId, 'manual_chop', player.room, {
-                        treeId: result.treeId,
-                        stage: result.stage
-                    });
                     broadcastToRoom(player.room, {
                         type: 'manual_chop_started',
                         playerId,
@@ -6220,12 +6216,6 @@ async function handleMessage(playerId, message) {
                         rightCut: result.rightCut,
                         falling: result.falling
                     }, playerId);
-                    updatePveActivity(playerId, {
-                        side: result.side,
-                        leftCut: result.leftCut,
-                        rightCut: result.rightCut,
-                        falling: result.falling
-                    });
                 }
             } catch (error) {
                 console.error('🪓 Error in manual_chop_hit:', error);

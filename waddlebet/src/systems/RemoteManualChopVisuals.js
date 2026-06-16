@@ -1,5 +1,6 @@
 /**
- * Remote player manual-chop axe visuals — world-space axe at tree, synced on each hit.
+ * Remote player manual-chop axe — simple swing at the tree on each hit sync.
+ * Parented to the tree mesh (local space); no drag replication or spring physics.
  */
 
 import { MANUAL_CHOP } from '../config/manualChop';
@@ -7,6 +8,7 @@ import { createManualChopAxeGroup } from '../props/ManualChopAxeMesh';
 import { playManualChopSound } from '../utils/manualChopSounds';
 
 const { TRUNK_RADIUS, STUMP_H, CUT_H } = MANUAL_CHOP;
+const SWING_DURATION = 0.28;
 
 class RemoteManualChopVisuals {
     constructor() {
@@ -15,14 +17,12 @@ class RemoteManualChopVisuals {
         this.scene = null;
         this.THREE = null;
         this.forestTreeManager = null;
-        this._tempVec = null;
     }
 
     attach(scene, THREE, forestTreeManager) {
         this.scene = scene;
         this.THREE = THREE;
         this.forestTreeManager = forestTreeManager;
-        this._tempVec = new THREE.Vector3();
     }
 
     detach() {
@@ -39,7 +39,7 @@ class RemoteManualChopVisuals {
     }
 
     startSession(playerId, treeId, chopperWorldPos) {
-        if (!this.scene || !this.THREE || !this.forestTreeManager) return;
+        if (!this.THREE || !this.forestTreeManager) return;
         this.endSession(playerId);
 
         const entry = this.forestTreeManager.getTreeEntry(treeId);
@@ -50,39 +50,58 @@ class RemoteManualChopVisuals {
         }
 
         const axeGroup = createManualChopAxeGroup(this.THREE);
-        axeGroup.visible = true;
-        this.scene.add(axeGroup);
+        entry.mesh.add(axeGroup);
+
+        const cutY = STUMP_H + CUT_H * 0.45;
+        const restPos = new this.THREE.Vector3(0.95, cutY, TRUNK_RADIUS + 0.55);
+        const swingPosNeg = new this.THREE.Vector3(-(TRUNK_RADIUS + 0.08), cutY, TRUNK_RADIUS + 0.12);
+        const swingPosPos = new this.THREE.Vector3(TRUNK_RADIUS + 0.08, cutY, TRUNK_RADIUS + 0.12);
+        const restQuat = new this.THREE.Quaternion().setFromEuler(
+            new this.THREE.Euler(Math.PI / 6, Math.PI, Math.PI / 4)
+        );
+        const swingQuatNeg = new this.THREE.Quaternion().setFromEuler(
+            new this.THREE.Euler(0, Math.PI, Math.PI / 6)
+        );
+        const swingQuatPos = new this.THREE.Quaternion().setFromEuler(
+            new this.THREE.Euler(0, 0, -Math.PI / 6)
+        );
+
+        axeGroup.position.copy(restPos);
+        axeGroup.quaternion.copy(restQuat);
 
         this.sessions.set(playerId, {
             treeId,
             treeMesh: entry.mesh,
             axeGroup,
-            swingPhase: 0,
+            swingTimer: 0,
             swingSide: 1,
-            restPos: new this.THREE.Vector3(),
-            targetPos: new this.THREE.Vector3(),
-            axeVel: new this.THREE.Vector3(),
-            forceVec: new this.THREE.Vector3()
+            restPos,
+            swingPosNeg,
+            swingPosPos,
+            restQuat,
+            swingQuatNeg,
+            swingQuatPos,
+            blendQuat: new this.THREE.Quaternion(),
+            scratchPos: new this.THREE.Vector3()
         });
-        this._layoutAxeRest(this.sessions.get(playerId));
     }
 
     endSession(playerId) {
         const session = this.sessions.get(playerId);
         if (!session) return;
-        if (session.axeGroup && this.scene) this.scene.remove(session.axeGroup);
+        session.treeMesh?.remove(session.axeGroup);
         this.sessions.delete(playerId);
     }
 
-    onSync(playerId, { treeId, side, speed, leftCut, rightCut, falling }) {
+    onSync(playerId, { treeId, side, speed, leftCut, rightCut, falling }, chopperWorldPos = null) {
         let session = this.sessions.get(playerId);
         if (!session || session.treeId !== treeId) {
-            this.startSession(playerId, treeId);
+            this.startSession(playerId, treeId, chopperWorldPos);
             session = this.sessions.get(playerId);
         }
         if (!session) return;
 
-        session.swingPhase = 1;
+        session.swingTimer = SWING_DURATION;
         session.swingSide = side === -1 ? -1 : 1;
         const intensity = Math.min(2, (speed || 2) / 4);
         playManualChopSound(intensity * 0.85);
@@ -90,40 +109,26 @@ class RemoteManualChopVisuals {
         this.forestTreeManager?.applyRemoteChopHit(treeId, side, speed, leftCut, rightCut, falling);
     }
 
-    _layoutAxeRest(session) {
-        const treeMesh = session.treeMesh;
-        if (!treeMesh) return;
-        const cutY = STUMP_H + CUT_H * 0.45;
-        session.restPos.set(0, cutY, TRUNK_RADIUS + 0.55);
-        session.targetPos.copy(session.restPos);
-        treeMesh.localToWorld(session.restPos);
-        session.axeGroup.position.copy(session.restPos);
-        session.axeGroup.rotation.set(Math.PI / 6, 0, Math.PI / 4);
-    }
-
-    _layoutAxeSwing(session) {
-        const treeMesh = session.treeMesh;
-        if (!treeMesh) return;
-        const cutY = STUMP_H + CUT_H * 0.45;
-        const side = session.swingSide;
-        session.targetPos.set(side * (TRUNK_RADIUS + 0.08), cutY, TRUNK_RADIUS + 0.12);
-        treeMesh.localToWorld(session.targetPos);
-        session.axeGroup.rotation.set(0, side === -1 ? Math.PI : 0, side === -1 ? Math.PI / 3 : -Math.PI / 3);
-    }
-
     update(delta) {
         for (const session of this.sessions.values()) {
-            if (session.swingPhase > 0) {
-                session.swingPhase = Math.max(0, session.swingPhase - delta * 3.5);
-                this._layoutAxeSwing(session);
-            } else {
-                this._layoutAxeRest(session);
-            }
+            const { axeGroup, restPos, restQuat, blendQuat, scratchPos } = session;
 
-            const force = session.forceVec.copy(session.targetPos).sub(session.axeGroup.position).multiplyScalar(38);
-            session.axeVel.addScaledVector(force, delta);
-            session.axeVel.multiplyScalar(0.72);
-            session.axeGroup.position.addScaledVector(session.axeVel, delta * 14);
+            if (session.swingTimer > 0) {
+                session.swingTimer = Math.max(0, session.swingTimer - delta);
+                const elapsed = SWING_DURATION - session.swingTimer;
+                const k = Math.sin(Math.min(1, elapsed / SWING_DURATION) * Math.PI);
+
+                const swingPos = session.swingSide === -1 ? session.swingPosNeg : session.swingPosPos;
+                const swingQuat = session.swingSide === -1 ? session.swingQuatNeg : session.swingQuatPos;
+
+                scratchPos.lerpVectors(restPos, swingPos, k);
+                axeGroup.position.copy(scratchPos);
+                blendQuat.copy(restQuat).slerp(swingQuat, k);
+                axeGroup.quaternion.copy(blendQuat);
+            } else {
+                axeGroup.position.copy(restPos);
+                axeGroup.quaternion.copy(restQuat);
+            }
         }
     }
 }
