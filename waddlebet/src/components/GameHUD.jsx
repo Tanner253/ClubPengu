@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import GameManager from '../engine/GameManager';
 import InboxButton from './InboxButton';
 import WalletButton from './WalletButton';
@@ -16,6 +17,7 @@ import { playSfx } from '../audio';
 import ServerPopulationPopup from './ServerPopulationPopup';
 import { useMultiplayer } from '../multiplayer';
 import { useLanguage } from '../i18n';
+import { getRoomLabel } from '../utils/roomLabels';
 
 /**
  * GameHUD - Heads Up Display showing coins, stats, and quick actions
@@ -187,99 +189,102 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     {onlineTotal}
                 </span>
             </button>
-            <div
-                className={`absolute top-full right-0 z-50 pt-1 ${
-                    isMobile
-                        ? mobileServerPopOpen ? 'block' : 'hidden'
-                        : 'hidden group-hover:block'
-                } ${compact ? '' : ''}`}
-            >
+            {!isMobile && (
+                <div className="absolute top-full right-0 z-50 pt-1 hidden group-hover:block">
+                    <ServerPopulationPopup
+                        population={serverPopulation}
+                        totalPlayerCount={onlineTotal}
+                        currentRoom={currentRoom}
+                        compact={compact}
+                    />
+                </div>
+            )}
+        </div>
+    );
+
+    const mobileServerPopOverlay = isMobile && mobileServerPopOpen ? createPortal(
+        <div
+            className="fixed inset-0 z-[10050] flex items-start justify-center bg-black/50 backdrop-blur-[2px] p-3 pt-14 pointer-events-auto"
+            onClick={() => setMobileServerPopOpen(false)}
+            data-player-modal="true"
+        >
+            <div className="w-full max-w-xs" onClick={(e) => e.stopPropagation()}>
                 <ServerPopulationPopup
                     population={serverPopulation}
                     totalPlayerCount={onlineTotal}
                     currentRoom={currentRoom}
-                    compact={compact}
+                    compact
                 />
             </div>
-        </div>
-    );
+        </div>,
+        document.body
+    ) : null;
+
+    const roomLocationLabel = currentRoom ? (
+        <p className="text-xs sm:text-sm font-bold retro-text text-yellow-400 truncate drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)] pointer-events-none min-w-0">
+            {getRoomLabel(currentRoom, t, { emoji: true })}
+        </p>
+    ) : null;
     
     // Portrait mode: vertical sidebar on right
     if (isPortrait) {
+        const mobileIconBtn = 'bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center justify-center border touch-manipulation shrink-0';
+
         return (
             <>
-                {/* Portrait: Top bar with essential info */}
-                <div className="absolute top-1 right-1 left-1 z-20 flex items-center justify-end gap-1">
-                    {/* Wallet Button */}
-                    <WalletButton onRequestAuth={onRequestAuth} compact={true} />
-                    
-                    {/* Player Count */}
-                    {playerCountButton(true)}
-                    
-                    {/* Coins */}
-                    {isAuthenticated ? (
-                        <button
-                            type="button"
-                            onClick={() => setShowDropGold(true)}
-                            className={coinChipButtonClass}
-                            title="Drop gold in the world"
-                        >
-                            <span className="text-[10px]">💰</span>
-                            <span className="text-yellow-300 font-bold retro-text text-[10px]">{coins}</span>
-                        </button>
-                    ) : (
-                        <div className={coinChipClass}>
-                            <span className="text-[10px]">💰</span>
-                            <span className="text-yellow-300 font-bold retro-text text-[10px]">{coins}</span>
+                {mobileServerPopOverlay}
+                {/* Portrait: one row — location | currencies (center) | wallet + server */}
+                <div className="absolute top-1 left-1 right-1 z-20 pointer-events-none">
+                    <div className="flex items-center gap-1 min-h-[30px]">
+                        <div className="shrink-0 max-w-[26%] min-w-0">
+                            {roomLocationLabel}
                         </div>
-                    )}
-                    
-                    {/* Pebbles - Premium Currency (Always visible + button) */}
-                    {isAuthenticated && (
-                        <button 
-                            onClick={() => setShowPebblesPurchase(true)}
-                            className="bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center gap-1 border border-purple-400/50 active:border-purple-400 active:bg-purple-900/30 transition-colors touch-manipulation"
-                        >
-                            <span className="text-[10px]">🪨</span>
-                            <span className="text-purple-300 font-bold retro-text text-[10px]">{pebbles}</span>
-                            <span className="text-green-400 font-bold text-xs bg-green-500/30 rounded px-1 ml-0.5">+</span>
-                        </button>
-                    )}
-                    
-                    {/* Backpack (gameplay items) */}
-                    {isAuthenticated && (
-                        <button
-                            onClick={() => setShowGameInventory(true)}
-                            className="bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center gap-1 border border-teal-400/50 active:border-teal-400 active:bg-teal-900/30 transition-colors touch-manipulation"
-                            title="Backpack"
-                        >
-                            <span className="text-[10px]">🎒</span>
-                        </button>
-                    )}
 
-                    {/* Inventory Button (Mobile) */}
-                    {isAuthenticated && (
-                        <button 
-                            onClick={() => setShowInventory(true)}
-                            className="bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center gap-1 border border-amber-400/50 active:border-amber-400 active:bg-amber-900/30 transition-colors touch-manipulation"
-                        >
-                            <span className="text-[10px]">📦</span>
-                        </button>
-                    )}
-                    
-                    {/* Marketplace Button (Mobile) */}
-                    {isAuthenticated && (
-                        <button 
-                            onClick={() => setShowMarketplace(true)}
-                            className="bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center gap-1 border border-cyan-400/50 active:border-cyan-400 active:bg-cyan-900/30 transition-colors touch-manipulation"
-                        >
-                            <span className="text-[10px]">🏪</span>
-                        </button>
-                    )}
+                        <div className="flex-1 flex items-stretch gap-1 min-w-0 pointer-events-none [&_button]:pointer-events-auto [&>div]:pointer-events-auto">
+                            {isAuthenticated ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDropGold(true)}
+                                    className={`${coinChipButtonClass} flex-[2] min-w-0 justify-center px-2`}
+                                    title="Drop gold in the world"
+                                >
+                                    <span className="text-[10px] shrink-0">💰</span>
+                                    <span className="text-yellow-300 font-bold retro-text text-[10px] tabular-nums leading-none">
+                                        {coins.toLocaleString()}
+                                    </span>
+                                </button>
+                            ) : (
+                                <div className={`${coinChipClass} flex-[2] min-w-0 justify-center px-2`}>
+                                    <span className="text-[10px] shrink-0">💰</span>
+                                    <span className="text-yellow-300 font-bold retro-text text-[10px] tabular-nums leading-none">
+                                        {coins.toLocaleString()}
+                                    </span>
+                                </div>
+                            )}
+
+                            {isAuthenticated && (
+                                <button
+                                    onClick={() => setShowPebblesPurchase(true)}
+                                    className={`${mobileIconBtn} flex-1 min-w-0 border-purple-400/50 active:border-purple-400 active:bg-purple-900/30 justify-center px-1.5 gap-0.5`}
+                                >
+                                    <span className="text-[10px] shrink-0">🪨</span>
+                                    <span className="text-purple-300 font-bold retro-text text-[10px] tabular-nums leading-none">
+                                        {pebbles.toLocaleString()}
+                                    </span>
+                                    <span className="text-green-400 font-bold text-[10px] bg-green-500/30 rounded px-0.5 shrink-0">+</span>
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="shrink-0 flex items-center gap-1 pointer-events-none [&_button]:pointer-events-auto [&>div]:pointer-events-auto">
+                            <WalletButton onRequestAuth={onRequestAuth} compact={true} useMobileOverlay />
+                            {playerCountButton(true)}
+                        </div>
+                    </div>
                 </div>
                 
-                {/* Portrait: Vertical sidebar on right */}
-                <div className="absolute top-12 right-1 z-20 flex flex-col gap-1 bg-black/50 backdrop-blur-sm rounded-lg p-1">
+                {/* Portrait: action rail — flush under top bar */}
+                <div className="absolute top-10 right-1 z-20 flex flex-col gap-1 pointer-events-none [&_button]:pointer-events-auto">
                     {/* Daily Bonus */}
                     {isAuthenticated && (
                         <button
@@ -334,6 +339,32 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     >
                         📊
                     </button>
+
+                    {isAuthenticated && (
+                        <>
+                            <button
+                                onClick={() => setShowGameInventory(true)}
+                                className={`${compactBtn} bg-teal-700/80`}
+                                title="Backpack"
+                            >
+                                🎒
+                            </button>
+                            <button
+                                onClick={() => setShowInventory(true)}
+                                className={`${compactBtn} bg-amber-700/80`}
+                                title={t('hud.inventory')}
+                            >
+                                📦
+                            </button>
+                            <button
+                                onClick={() => setShowMarketplace(true)}
+                                className={`${compactBtn} bg-cyan-700/80`}
+                                title={t('hud.market')}
+                            >
+                                🏪
+                            </button>
+                        </>
+                    )}
                 </div>
                 
                 {/* Coin Reward Animation */}
@@ -420,8 +451,9 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
 
     return (
         <>
+            {mobileServerPopOverlay}
             {/* HUD Bar - Top Right - Responsive wrap on narrow windows */}
-            <div className={`absolute top-3 right-3 z-20 flex items-center gap-1 sm:gap-1.5 ${
+            <div className={`absolute top-3 right-3 z-20 flex items-center gap-1 sm:gap-1.5 pointer-events-none [&_button]:pointer-events-auto [&_a]:pointer-events-auto ${
                 isNarrow && !isPortrait ? 'flex-wrap justify-end max-w-xs' : ''
             }`}>
                 {/* Daily Bonus Button */}
@@ -472,7 +504,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 </button>
                 
                 {/* Wallet Connection Button */}
-                <WalletButton onRequestAuth={onRequestAuth} size="sm" />
+                <WalletButton onRequestAuth={onRequestAuth} size="sm" useMobileOverlay={isMobile} />
                 
                 {/* Stats Button */}
                 <button 

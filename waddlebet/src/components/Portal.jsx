@@ -15,7 +15,7 @@ const Portal = ({
     if (!isNearby) return null;
     
     return (
-        <div className="fixed bottom-28 left-1/2 transform -translate-x-1/2 z-30 animate-fade-in">
+        <div className="fixed bottom-28 left-1/2 transform -translate-x-1/2 z-30 animate-fade-in pointer-events-none">
             <div className={`
                 ${hasGame 
                     ? 'bg-gradient-to-br from-emerald-600 to-green-700 border-emerald-400' 
@@ -33,7 +33,7 @@ const Portal = ({
                 {hasGame ? (
                     <button 
                         onClick={onEnter}
-                        className="bg-white/20 hover:bg-white/30 text-white px-5 py-2 rounded-lg retro-text text-xs transition-all border border-white/30 hover:border-white/50"
+                        className="pointer-events-auto bg-white/20 hover:bg-white/30 text-white px-5 py-2 rounded-lg retro-text text-xs transition-all border border-white/30 hover:border-white/50"
                     >
                         🚪 ENTER [E]
                     </button>

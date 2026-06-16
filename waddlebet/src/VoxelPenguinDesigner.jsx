@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { VOXEL_SIZE, PALETTE } from './constants';
 import { ASSETS } from './assets/index';
 import { generateBaseBody, generateFlippers, generateFeet, generateHead } from './generators';
@@ -48,7 +48,11 @@ import { initBrowserCapabilities, usesPrivacyBrowserOptimizations, readLiveWebGL
 
 function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const mountRef = useRef(null);
+    const rendererRef = useRef(null);
+    const cameraRef = useRef(null);
+    const controlsRef = useRef(null);
     const [scriptsLoaded, setScriptsLoaded] = useState(false);
+    const [sceneReady, setSceneReady] = useState(false);
     
     // Language context
     const { t, currentLanguage, cycleLanguage } = useLanguage();
@@ -58,6 +62,34 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         isPortrait: typeof window !== 'undefined' && window.innerWidth < window.innerHeight,
         isMobileView: typeof window !== 'undefined' && window.innerWidth < 768
     }));
+
+    const { isPortrait, isMobileView } = layoutState;
+    const isMobilePortrait = isPortrait && isMobileView;
+    const MOBILE_PREVIEW_VH = 48;
+    const MOBILE_SHEET_VH = 52;
+
+    const applyPreviewFraming = useCallback((portrait, mobile) => {
+        const camera = cameraRef.current;
+        const controls = controlsRef.current;
+        if (!camera || !controls) return;
+        if (portrait && mobile) {
+            camera.position.set(14, 10, 22);
+            controls.target.set(0, 3.5, 0);
+            controls.minDistance = 10;
+            controls.maxDistance = 45;
+        } else if (mobile) {
+            camera.position.set(18, 14, 26);
+            controls.target.set(0, 4, 0);
+            controls.minDistance = 12;
+            controls.maxDistance = 50;
+        } else {
+            camera.position.set(20, 20, 30);
+            controls.target.set(0, 5, 0);
+            controls.minDistance = 15;
+            controls.maxDistance = 60;
+        }
+        controls.update();
+    }, []);
     
     // Update layout on resize/orientation change
     useEffect(() => {
@@ -79,6 +111,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 rendererRef.current.setSize(width, height);
                 cameraRef.current.aspect = width / height;
                 cameraRef.current.updateProjectionMatrix();
+                applyPreviewFraming(newIsPortrait, newIsMobileView);
             }
         };
         
@@ -89,9 +122,13 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             window.removeEventListener('resize', handleResize);
             window.removeEventListener('orientationchange', handleResize);
         };
-    }, []);
-    
-    const { isPortrait, isMobileView } = layoutState;
+    }, [applyPreviewFraming]);
+
+    useEffect(() => {
+        if (sceneReady) {
+            applyPreviewFraming(isPortrait, isMobileView);
+        }
+    }, [sceneReady, isPortrait, isMobileView, applyPreviewFraming]);
     
     // Multiplayer context
     const { setName, isAuthenticated, userData, checkUsername, registerCallbacks, isRestoringSession, redeemPromoCode, promoLoading } = useMultiplayer();
@@ -636,9 +673,6 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const timeRef = useRef(0);
     const spinRef = useRef(0); 
     const reqRef = useRef(null);
-    const rendererRef = useRef(null);
-    const cameraRef = useRef(null);
-    const [sceneReady, setSceneReady] = useState(false);
     
     // Refs for animated skin colors (cosmic, galaxy, rainbow, nebula)
     const animatedSkinMaterialsRef = useRef([]);
@@ -839,6 +873,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         }
 
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controlsRef.current = controls;
         controls.enableDamping = true;
         controls.dampingFactor = 0.05;
         controls.minDistance = 15;
@@ -2019,15 +2054,30 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
 
     const topSafePadding = 'calc(1.25rem + env(safe-area-inset-top, 0px))';
 
+    const turnstileBlock = import.meta.env.VITE_TURNSTILE_SITE_KEY && !turnstileVerified ? (
+        <div className="p-3 bg-slate-800/50 rounded-lg border border-orange-500/30">
+            <div className="flex items-center gap-2 mb-2">
+                <svg className="w-4 h-4 text-orange-500 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z"/>
+                </svg>
+                <span className="text-xs text-orange-400 font-medium">{t('creator.verification')}</span>
+            </div>
+            <div ref={turnstileContainerRef} className="flex justify-center" />
+            {turnstileError && (
+                <p className="text-xs text-red-400 text-center mt-2">{turnstileError}</p>
+            )}
+        </div>
+    ) : null;
+
     return (
         <div className="relative w-full h-full bg-gray-900 overflow-hidden font-sans">
-            {/* 3D Canvas - in portrait mode, only show top portion */}
+            {/* 3D Canvas — larger preview on mobile portrait */}
             <div 
                 ref={mountRef} 
-                className="absolute left-0 right-0 z-0" 
+                className="absolute left-0 right-0 z-0 touch-none" 
                 style={{
                     top: 0,
-                    height: isPortrait && isMobileView ? '35%' : '100%'
+                    height: isMobilePortrait ? `${MOBILE_PREVIEW_VH}vh` : '100%'
                 }}
             />
             
@@ -2035,16 +2085,16 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
 
             {isMobileView ? (
                 <div
-                    className="absolute top-0 left-0 right-0 z-20 pointer-events-none px-4"
-                    style={{ paddingTop: topSafePadding }}
+                    className="absolute top-0 left-0 right-0 z-20 pointer-events-none px-3 pb-6 bg-gradient-to-b from-black/70 via-black/25 to-transparent"
+                    style={{ paddingTop: topSafePadding, height: isMobilePortrait ? `${MOBILE_PREVIEW_VH}vh` : undefined }}
                 >
-                    <div className="flex flex-wrap items-start justify-between gap-2 pointer-events-auto">
+                    <div className="flex items-center justify-between gap-2 pointer-events-auto">
                         <h1
-                            className={`retro-text text-white drop-shadow-lg pointer-events-none ${isPortrait ? 'text-2xl' : 'text-3xl'}`}
-                            style={{ textShadow: '4px 4px 0px #000' }}
+                            className={`retro-text text-white drop-shadow-lg pointer-events-none ${isPortrait ? 'text-lg leading-tight' : 'text-3xl'}`}
+                            style={{ textShadow: '3px 3px 0px #000' }}
                         >
                             {t('creator.penguinMaker')}{' '}
-                            <span className={`text-yellow-400 align-top ${isPortrait ? 'text-xs' : 'text-sm'}`}>
+                            <span className={`text-yellow-400 align-top ${isPortrait ? 'text-[10px]' : 'text-sm'}`}>
                                 {t('creator.deluxe')}
                             </span>
                         </h1>
@@ -2052,15 +2102,18 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             href="https://whitepaper.waddle.bet/"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-950/50 px-2.5 py-1.5 text-xs font-bold text-cyan-200 shadow-md transition-colors hover:bg-cyan-900/60"
+                            className="pointer-events-auto flex shrink-0 items-center gap-1 rounded-lg border border-cyan-500/45 bg-cyan-950/60 px-2 py-1 text-[10px] font-bold text-cyan-200 shadow-md"
                         >
-                            <IconWorld size={14} />
+                            <IconWorld size={12} />
                             {t('menu.whitepaperCta')}
                         </a>
                     </div>
-                    <div className="mt-3 pointer-events-auto w-full max-w-md mx-auto">
-                        {renderEnterWorldCTA()}
-                    </div>
+                    {isMobilePortrait && (
+                        <p className="absolute bottom-3 inset-x-0 text-center text-white/45 text-[10px] pointer-events-none flex items-center justify-center gap-1">
+                            <IconCamera size={12} />
+                            {t('creator.dragRotate')} · {t('creator.scrollZoom')}
+                        </p>
+                    )}
                 </div>
             ) : (
                 <>
@@ -2095,22 +2148,31 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
 
             {/* Settings Panel - bottom sheet on mobile portrait, side panel on landscape/desktop */}
             <div className={`absolute z-10 pointer-events-auto ${
-                isPortrait && isMobileView 
-                    ? 'bottom-0 left-0 right-0 w-full' 
-                    : 'bottom-10 right-10 w-80'
+                isMobilePortrait
+                    ? 'bottom-0 left-0 right-0 w-full'
+                    : isMobileView
+                        ? 'bottom-4 right-4 left-4 w-auto max-w-md mx-auto'
+                        : 'bottom-10 right-10 w-80'
             }`}>
                 <div className={`glass-panel rounded-2xl flex flex-col ${
-                    isPortrait && isMobileView 
-                        ? 'max-h-[62vh] rounded-b-none overflow-hidden' 
-                        : 'p-6 max-h-[80vh] gap-3 overflow-y-auto'
-                }`}>
+                    isMobilePortrait
+                        ? 'rounded-b-none overflow-hidden border-b-0'
+                        : isMobileView
+                            ? 'max-h-[42vh] overflow-hidden'
+                            : 'p-6 max-h-[80vh] gap-3 overflow-y-auto'
+                }`} style={isMobilePortrait ? { maxHeight: `${MOBILE_SHEET_VH}vh` } : undefined}>
+                {isMobilePortrait && (
+                    <div className="shrink-0 flex justify-center pt-2 pb-1">
+                        <div className="w-10 h-1 rounded-full bg-white/25" aria-hidden />
+                    </div>
+                )}
                 <div className={
-                    isPortrait && isMobileView
-                        ? 'overflow-y-auto flex-1 min-h-0 p-4 flex flex-col gap-3'
+                    isMobileView
+                        ? 'overflow-y-auto flex-1 min-h-0 px-4 pb-2 flex flex-col gap-3 overscroll-contain'
                         : 'flex flex-col gap-3'
-                }>
-                    <h2 className={`text-white font-bold flex items-center gap-2 sticky top-0 bg-gray-900/50 p-2 rounded backdrop-blur-md z-20 ${isPortrait && isMobileView ? 'text-base mb-1' : 'text-lg mb-2'}`}>
-                        <IconSettings size={isPortrait && isMobileView ? 16 : 20} /> {characterType === 'penguin' ? t('creator.title') : currentCharacter?.name || t('creator.character')}
+                } style={isMobileView ? { WebkitOverflowScrolling: 'touch' } : undefined}>
+                    <h2 className={`text-white font-bold flex items-center gap-2 sticky top-0 bg-gray-900/50 p-2 rounded backdrop-blur-md z-20 ${isMobileView ? 'text-base mb-1' : 'text-lg mb-2'}`}>
+                        <IconSettings size={isMobileView ? 16 : 20} /> {characterType === 'penguin' ? t('creator.title') : currentCharacter?.name || t('creator.character')}
                     </h2>
                     
                     {/* Wallet & Account Section - Collapsible, at top */}
@@ -2981,27 +3043,31 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         </div>
                     )}
                     
-                    {/* Cloudflare Turnstile Verification */}
-                    {import.meta.env.VITE_TURNSTILE_SITE_KEY && !turnstileVerified && (
-                        <div className="mt-4 p-3 bg-slate-800/50 rounded-lg border border-orange-500/30">
-                            <div className="flex items-center gap-2 mb-2">
-                                <svg className="w-4 h-4 text-orange-500 animate-pulse" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 22C6.477 22 2 17.523 2 12S6.477 2 12 2s10 4.477 10 10-4.477 10-10 10zm-1-7v2h2v-2h-2zm0-8v6h2V7h-2z"/>
-                                </svg>
-                                <span className="text-xs text-orange-400 font-medium">{t('creator.verification')}</span>
-                            </div>
-                            <div ref={turnstileContainerRef} className="flex justify-center" />
-                            {turnstileError && (
-                                <p className="text-xs text-red-400 text-center mt-2">{turnstileError}</p>
-                            )}
-                        </div>
-                    )}
+                    {/* Cloudflare Turnstile Verification — scroll on desktop, footer on mobile portrait */}
+                    {!isMobileView && turnstileBlock}
                 </div>
+                {isMobileView && (
+                    <div
+                        className="shrink-0 border-t border-white/10 bg-gray-900/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] space-y-2"
+                    >
+                        {turnstileBlock}
+                        {renderEnterWorldCTA()}
+                    </div>
+                )}
                 </div>
             </div>
             
             {/* Bottom Left - Language flags (bar on desktop; sheet on mobile) */}
-            <div className={`absolute bottom-4 left-4 z-10 flex flex-col items-start gap-2 max-w-[calc(100vw-2rem)] ${isPortrait && isMobileView ? 'bottom-[62vh]' : ''}`}>
+            <div
+                className="absolute left-4 z-10 flex flex-col items-start gap-2 max-w-[calc(100vw-2rem)]"
+                style={
+                    isMobilePortrait
+                        ? { bottom: `calc(${MOBILE_SHEET_VH}vh + 0.5rem)` }
+                        : isMobileView
+                            ? { bottom: 'calc(42vh + 1rem)' }
+                            : { bottom: '1rem' }
+                }
+            >
                 <LanguageToggle variant="auto" isMobile={isMobileView} />
                 
                 {/* Help text - hide on mobile portrait to save space */}

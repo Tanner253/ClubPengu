@@ -4,6 +4,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import crypto from 'crypto';
+import { getOnboardingStepIds } from '../config/onboardingQuest.js';
 
 const mockUserFindOne = vi.fn();
 const mockUserUpdateOne = vi.fn();
@@ -27,6 +28,7 @@ vi.mock('../db/models/index.js', () => ({
 vi.mock('../services/CustodialWalletService.js', () => ({
     default: {
         isReady: () => true,
+        getTokenBalance: () => Promise.resolve({ success: true, uiBalance: 1_000_000 }),
         _sendPayoutTransaction: (...args) => mockSendPayout(...args)
     }
 }));
@@ -50,6 +52,11 @@ const eligibleUser = (walletAddress, overrides = {}) => ({
         processedClaimNonces: [],
         ...overrides.dailyBonus
     },
+    onboardingQuest: {
+        completedSteps: getOnboardingStepIds(),
+        rewardClaimed: true,
+        ...overrides.onboardingQuest
+    },
     ...overrides
 });
 
@@ -64,6 +71,28 @@ async function withEligibleSession(wallet, run) {
     }
 }
 
+describe('DailyBonusService.getStatus', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        mockUserFindOne.mockReset();
+    });
+
+    it('sets canClaim false when intro quest is incomplete', async () => {
+        const wallet = testWallet();
+        mockUserFindOne.mockResolvedValue(eligibleUser(wallet, {
+            onboardingQuest: { completedSteps: [], rewardClaimed: false }
+        }));
+
+        const status = await withEligibleSession(wallet, () =>
+            dailyBonusService.getStatus(wallet)
+        );
+
+        expect(status.onboardingComplete).toBe(false);
+        expect(status.canClaim).toBe(false);
+        expect(status.onboardingCompletedCount).toBe(0);
+    });
+});
+
 describe('DailyBonusService.claim', () => {
     beforeEach(() => {
         vi.clearAllMocks();
@@ -73,6 +102,21 @@ describe('DailyBonusService.claim', () => {
         mockTransactionRecord.mockResolvedValue(undefined);
         mockSendPayout.mockResolvedValue({ success: true, txId: 'tx_success_sig' });
         mockUserUpdateOne.mockResolvedValue({ modifiedCount: 1 });
+    });
+
+    it('rejects when intro quest is incomplete', async () => {
+        const wallet = testWallet();
+        mockUserFindOne.mockResolvedValue(eligibleUser(wallet, {
+            onboardingQuest: { completedSteps: ['dojo_gold'], rewardClaimed: false }
+        }));
+
+        const result = await withEligibleSession(wallet, () =>
+            dailyBonusService.claim(wallet, makeNonce())
+        );
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBe('ONBOARDING_INCOMPLETE');
+        expect(mockSendPayout).not.toHaveBeenCalled();
     });
 
     it('rejects invalid nonce format', async () => {

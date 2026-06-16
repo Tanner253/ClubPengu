@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import CosmeticThumbnail from './CosmeticThumbnail';
 import { useTokenValidation, TOKEN_VALIDATION_STATE } from '../hooks/useTokenValidation';
@@ -292,16 +293,20 @@ const GiftPanel = ({ targetPlayer, giftType, onClose }) => {
     
     if (!targetPlayer || !giftType) return null;
     
-    return (
+    const panelContent = (
         <div 
-            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto"
+            data-player-modal="true"
+            className="fixed inset-0 z-[10100] flex items-center justify-center bg-black/70 backdrop-blur-sm pointer-events-auto"
             onClick={onClose}
-            onMouseDown={e => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
         >
             <div 
-                className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-white/10 shadow-2xl p-5 w-[360px] max-w-[95vw] max-h-[90vh] overflow-y-auto pointer-events-auto"
+                className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-white/10 shadow-2xl p-5 w-[360px] max-w-[95vw] max-h-[90vh] overflow-y-auto pointer-events-auto overscroll-contain"
+                style={{ WebkitOverflowScrolling: 'touch' }}
                 onClick={e => e.stopPropagation()}
                 onMouseDown={e => e.stopPropagation()}
+                onTouchStart={e => e.stopPropagation()}
+                data-no-camera="true"
             >
                 {/* Header */}
                 <div className="flex items-center justify-between mb-4">
@@ -507,6 +512,8 @@ const GiftPanel = ({ targetPlayer, giftType, onClose }) => {
             </div>
         </div>
     );
+
+    return createPortal(panelContent, document.body);
 };
 
 export default GiftPanel;

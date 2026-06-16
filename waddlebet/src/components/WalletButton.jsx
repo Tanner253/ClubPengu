@@ -4,11 +4,12 @@
  * When clicked in-game, redirects to penguin maker for clean auth flow
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import { useLanguage } from '../i18n';
 
-function WalletButton({ className = '', onRequestAuth, compact = false, size = 'default' }) {
+function WalletButton({ className = '', onRequestAuth, compact = false, size = 'default', useMobileOverlay = false }) {
     const { 
         isAuthenticated, 
         walletAddress, 
@@ -21,9 +22,20 @@ function WalletButton({ className = '', onRequestAuth, compact = false, size = '
     const { t } = useLanguage();
     
     const [showDropdown, setShowDropdown] = useState(false);
+
+    useEffect(() => {
+        if (!showDropdown || !useMobileOverlay) return undefined;
+
+        const handlePointerDown = (event) => {
+            if (event.target?.closest?.('[data-wallet-panel]')) return;
+            setShowDropdown(false);
+        };
+
+        document.addEventListener('pointerdown', handlePointerDown);
+        return () => document.removeEventListener('pointerdown', handlePointerDown);
+    }, [showDropdown, useMobileOverlay]);
     
     const handleConnect = () => {
-        // If onRequestAuth is provided (we're in-game), trigger redirect to penguin maker
         if (onRequestAuth) {
             onRequestAuth();
         }
@@ -33,6 +45,51 @@ function WalletButton({ className = '', onRequestAuth, compact = false, size = '
         await disconnectWallet();
         setShowDropdown(false);
     };
+
+    const renderDropdownPanel = () => (
+        <div
+            data-wallet-panel="true"
+            className="w-full max-w-sm bg-slate-800 rounded-lg shadow-xl border border-slate-600 overflow-hidden"
+        >
+            <div className="p-4 border-b border-slate-700">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-blue-500 
+                                    flex items-center justify-center text-lg">
+                        🐧
+                    </div>
+                    <div className="min-w-0">
+                        <div className="font-medium text-white truncate">
+                            {userData?.username || 'Penguin'}
+                        </div>
+                        <div className="text-xs text-slate-400 truncate">
+                            {walletAddress ? `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}` : ''}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div className="p-3 border-b border-slate-700">
+                <div className="flex justify-between text-sm">
+                    <span className="text-slate-400">{t('wallet.coins')}</span>
+                    <span className="text-yellow-400 font-medium">
+                        💰 {userData?.coins?.toLocaleString() || 0}
+                    </span>
+                </div>
+            </div>
+            
+            <button
+                onClick={handleDisconnect}
+                className="w-full px-4 py-3 text-left text-sm text-red-400 hover:bg-slate-700/50 
+                           transition-colors flex items-center gap-2"
+            >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+                          d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                {t('wallet.disconnect')}
+            </button>
+        </div>
+    );
     
     // Authenticated state
     if (isAuthenticated && walletAddress) {
@@ -52,6 +109,7 @@ function WalletButton({ className = '', onRequestAuth, compact = false, size = '
                     className={`flex items-center bg-gradient-to-r from-green-600 to-emerald-600 
                                hover:from-green-500 hover:to-emerald-500 rounded-md text-white font-medium
                                shadow-lg border border-green-400/30 transition-all ${btnSize}`}
+                    aria-expanded={showDropdown}
                 >
                     <div className={`bg-green-300 rounded-full animate-pulse ${dotSize}`} />
                     {!compact && <span className="hidden sm:inline">{shortAddress}</span>}
@@ -64,8 +122,21 @@ function WalletButton({ className = '', onRequestAuth, compact = false, size = '
                     )}
                 </button>
                 
-                {showDropdown && (
-                    <div className="absolute top-full right-0 mt-2 w-64 bg-slate-800 rounded-lg shadow-xl 
+                {showDropdown && useMobileOverlay && createPortal(
+                    <div
+                        className="fixed inset-0 z-[10050] flex items-start justify-center bg-black/50 backdrop-blur-[2px] p-3 pt-14 pointer-events-auto"
+                        onClick={() => setShowDropdown(false)}
+                        data-player-modal="true"
+                    >
+                        <div className="w-full px-1" onClick={(e) => e.stopPropagation()}>
+                            {renderDropdownPanel()}
+                        </div>
+                    </div>,
+                    document.body
+                )}
+
+                {showDropdown && !useMobileOverlay && (
+                    <div className="absolute top-full right-0 mt-2 w-64 max-w-[calc(100vw-1rem)] bg-slate-800 rounded-lg shadow-xl 
                                     border border-slate-600 overflow-hidden z-50">
                         <div className="p-4 border-b border-slate-700">
                             <div className="flex items-center gap-3">
@@ -128,7 +199,6 @@ function WalletButton({ className = '', onRequestAuth, compact = false, size = '
         // Guest state - show connect button with warning
         return (
             <div className={`flex items-center gap-1 ${compact ? '' : 'gap-2'} ${className}`}>
-                {/* Guest indicator - hide on compact */}
                 {!compact && size !== 'sm' && (
                     <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 bg-amber-900/50 rounded-md 
                                     border border-amber-500/30 text-amber-300 text-xs">
@@ -141,7 +211,6 @@ function WalletButton({ className = '', onRequestAuth, compact = false, size = '
                     </div>
                 )}
             
-            {/* Connect button */}
             <button
                 onClick={handleConnect}
                 disabled={isAuthenticating}
@@ -180,4 +249,3 @@ function WalletButton({ className = '', onRequestAuth, compact = false, size = '
 }
 
 export default WalletButton;
-

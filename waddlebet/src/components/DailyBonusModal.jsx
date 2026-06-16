@@ -216,6 +216,32 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                 </div>
                             </div>
                             
+                            {/* Intro Quest Prerequisite */}
+                            {status?.onboardingComplete === false && (
+                                <div className="bg-white/5 rounded-2xl p-4 border border-amber-500/20">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base">📜</span>
+                                            <span className="text-white text-sm font-medium">Getting Started Quest</span>
+                                        </div>
+                                        <span className="text-amber-300 font-mono text-sm">
+                                            {status.onboardingCompletedCount ?? 0} / {status.onboardingTotalSteps ?? '?'}
+                                        </span>
+                                    </div>
+                                    <div className="h-2.5 bg-white/10 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-gradient-to-r from-amber-500 to-orange-400 transition-all duration-500"
+                                            style={{
+                                                width: `${Math.min(100, ((status.onboardingCompletedCount ?? 0) / Math.max(1, status.onboardingTotalSteps ?? 1)) * 100)}%`
+                                            }}
+                                        />
+                                    </div>
+                                    <p className="text-white/40 text-xs mt-2">
+                                        Complete the Getting Started quest to unlock daily bonus claims.
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Session Time Progress */}
                             <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
                                 <div className="flex items-center justify-between mb-2">
@@ -363,6 +389,10 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                             ) : status.canClaim ? (
                                 <span className="flex items-center justify-center gap-2">
                                     🎁 Claim 5,000 $CP
+                                </span>
+                            ) : status.onboardingComplete === false ? (
+                                <span className="flex items-center justify-center gap-2">
+                                    📜 Complete Getting Started Quest
                                 </span>
                             ) : !status.cooldownExpired ? (
                                 <span className="flex items-center justify-center gap-2">

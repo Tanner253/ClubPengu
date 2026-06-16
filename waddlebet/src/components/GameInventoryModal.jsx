@@ -15,11 +15,12 @@ import {
     merchantAcceptsSlot
 } from '../config/merchants';
 import { GAME_INVENTORY } from '../config/economy';
-import { findHotbarSlotUnderPoint, isHotbarItem } from '../utils/gameHotbar';
+import { findHotbarSlotUnderPoint, findInventorySlotUnderPoint, isHotbarItem, isInventoryWorldDropTarget } from '../utils/gameHotbar';
 import { getInventoryDetailVisual, getInventorySlotVisual } from '../utils/inventorySlotVisual';
 import GameHotbar from './GameHotbar';
 
 const FISH_BUYER = getMerchant('fish_buyer');
+const DRAG_THRESHOLD_PX = 8;
 
 function slotHasItem(slot) {
     return Boolean(slot?.itemId) && Number(slot?.quantity) > 0;
@@ -53,7 +54,9 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
     const hoverSlotRef = useRef(null);
     const sellTrayRef = useRef(null);
     const modalPanelRef = useRef(null);
+    const modalOverlayRef = useRef(null);
     const lastPointerRef = useRef({ x: 0, y: 0 });
+    const dragStartPosRef = useRef({ x: 0, y: 0 });
     const longPressTimerRef = useRef(null);
     const longPressTriggeredRef = useRef(false);
     const [isMobileLayout, setIsMobileLayout] = useState(false);
@@ -152,11 +155,20 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
 
         const trackPointer = (e) => {
             lastPointerRef.current = { x: e.clientX, y: e.clientY, shiftKey: e.shiftKey };
-            if (longPressTimerRef.current) {
-                clearTimeout(longPressTimerRef.current);
-                longPressTimerRef.current = null;
+            const dx = e.clientX - dragStartPosRef.current.x;
+            const dy = e.clientY - dragStartPosRef.current.y;
+            if (Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX) {
+                if (longPressTimerRef.current) {
+                    clearTimeout(longPressTimerRef.current);
+                    longPressTimerRef.current = null;
+                }
+                dragMovedRef.current = true;
+                e.preventDefault();
             }
-            dragMovedRef.current = true;
+            const slotUnder = findInventorySlotUnderPoint(e.clientX, e.clientY);
+            if (slotUnder != null) {
+                setHoverSlot(slotUnder);
+            }
         };
 
         const finishDrag = async () => {
@@ -172,8 +184,8 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                 return;
             }
             const from = dragSourceRef.current;
-            const to = hoverSlotRef.current;
             const { x, y } = lastPointerRef.current;
+            const to = findInventorySlotUnderPoint(x, y) ?? hoverSlotRef.current;
             const hotbarIndex = findHotbarSlotUnderPoint(x, y);
             const draggedSlot = from != null ? storedSlotsRef.current[from] : null;
             const droppedOnSellTray = canSell
@@ -182,13 +194,14 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                     const rect = sellTrayRef.current.getBoundingClientRect();
                     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
                 })();
-            const panel = modalPanelRef.current;
-            const droppedOutsidePanel = panel && dragMovedRef.current && (() => {
-                const rect = panel.getBoundingClientRect();
-                return x < rect.left || x > rect.right || y < rect.top || y > rect.bottom;
-            })();
+            const droppedInWorld = dragMovedRef.current
+                && isInventoryWorldDropTarget(x, y, {
+                    modalPanel: modalPanelRef.current,
+                    sellTray: sellTrayRef.current,
+                    canSell
+                });
 
-            if (from !== null && droppedOutsidePanel && slotHasItem(draggedSlot) && isAuthenticated) {
+            if (from !== null && droppedInWorld && slotHasItem(draggedSlot) && isAuthenticated) {
                 const dropQty = lastPointerRef.current.shiftKey
                     ? (draggedSlot.quantity || 1)
                     : 1;
@@ -209,13 +222,14 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
             dragMovedRef.current = false;
         };
 
-        window.addEventListener('pointermove', trackPointer);
-        window.addEventListener('pointerup', finishDrag);
-        window.addEventListener('pointercancel', finishDrag);
+        const pointerOpts = { passive: false, capture: true };
+        window.addEventListener('pointermove', trackPointer, pointerOpts);
+        window.addEventListener('pointerup', finishDrag, true);
+        window.addEventListener('pointercancel', finishDrag, true);
         return () => {
-            window.removeEventListener('pointermove', trackPointer);
-            window.removeEventListener('pointerup', finishDrag);
-            window.removeEventListener('pointercancel', finishDrag);
+            window.removeEventListener('pointermove', trackPointer, pointerOpts);
+            window.removeEventListener('pointerup', finishDrag, true);
+            window.removeEventListener('pointercancel', finishDrag, true);
         };
     }, [dragSource, moveGameInventorySlot, setGameHotbarSlot, canSell, isSellableSlot, addToSellSelection, isMobileLayout, toggleSellSelection, dropSlotToWorld, isAuthenticated]);
 
@@ -277,6 +291,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
     const handlePointerDown = useCallback((e, index, hasItem, locked) => {
         if (locked || !hasItem) return;
         e.preventDefault();
+        e.stopPropagation();
 
         if (e.shiftKey && canSell && isSellableSlot(index)) {
             toggleSellSelection(index);
@@ -290,9 +305,18 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
 
         dragMovedRef.current = false;
         longPressTriggeredRef.current = false;
+        dragStartPosRef.current = { x: e.clientX, y: e.clientY };
         lastPointerRef.current = { x: e.clientX, y: e.clientY, shiftKey: e.shiftKey };
         setDragSource(index);
         setHoverSlot(index);
+
+        if (e.currentTarget.setPointerCapture) {
+            try {
+                e.currentTarget.setPointerCapture(e.pointerId);
+            } catch {
+                // ignore — capture unsupported on some browsers
+            }
+        }
 
         if (isMobileLayout && canSell && isSellableSlot(index)) {
             clearLongPressTimer();
@@ -304,9 +328,20 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
         }
     }, [canSell, isSellableSlot, toggleSellSelection, isMobileLayout, clearLongPressTimer, dropSlotToWorld, isAuthenticated]);
 
-    const handlePointerMove = useCallback(() => {
-        if (dragSourceRef.current !== null) {
+    const handlePointerMove = useCallback((e) => {
+        if (dragSourceRef.current === null) return;
+        const dx = e.clientX - dragStartPosRef.current.x;
+        const dy = e.clientY - dragStartPosRef.current.y;
+        if (Math.hypot(dx, dy) >= DRAG_THRESHOLD_PX) {
             dragMovedRef.current = true;
+            if (longPressTimerRef.current) {
+                clearTimeout(longPressTimerRef.current);
+                longPressTimerRef.current = null;
+            }
+            const slotUnder = findInventorySlotUnderPoint(e.clientX, e.clientY);
+            if (slotUnder != null) {
+                setHoverSlot(slotUnder);
+            }
         }
     }, []);
 
@@ -363,10 +398,196 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
     if (!isOpen) return null;
 
     const acceptsLabel = canSell ? getMerchantAcceptsLabel(sellMerchantId) : '';
+    const gridColumns = isMobileLayout && canSell ? 5 : columns;
+
+    const sellHint = canSell ? (
+        <p className="text-[10px] text-amber-200/80 mb-2 text-center uppercase tracking-wide">
+            {isMobileLayout
+                ? 'Tap stacks to inspect · Long-press to queue for sale'
+                : 'Shift+click stacks · Drag to merchant tray →'}
+        </p>
+    ) : null;
+
+    const inventoryGrid = (
+        <div
+            className="grid gap-1.5 select-none touch-none"
+            style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}
+        >
+            {displayCells.slice(0, columns * rows).map(({ index, locked, slot }) => {
+                const hasItem = !locked && slotHasItem(slot);
+                const sellable = hasItem && merchantAcceptsSlot(slot, sellMerchantId);
+                const visual = hasItem ? getInventorySlotVisual(slot) : null;
+                const isSelected = !isDragging && selectedSlot === index;
+                const isQueued = sellSelection.has(index);
+                const isDragSource = dragSource === index;
+                const isHover = hoverSlot === index && dragSource !== null && dragSource !== index;
+                const cellBorder = locked
+                    ? 'border-slate-700/40 bg-slate-900/80'
+                    : isQueued
+                        ? 'border-amber-300 bg-amber-900/40 ring-2 ring-amber-400/60'
+                        : isSelected
+                            ? 'border-cyan-400 bg-cyan-900/20'
+                            : `${visual?.border || 'border-slate-600/50'} ${visual?.bg || 'bg-slate-800/60'}`;
+
+                return (
+                    <button
+                        key={index}
+                        type="button"
+                        data-inventory-slot={index}
+                        disabled={locked}
+                        onPointerDown={(e) => handlePointerDown(e, index, hasItem, locked)}
+                        onPointerMove={handlePointerMove}
+                        onPointerEnter={() => {
+                            if (!locked && dragSourceRef.current !== null) setHoverSlot(index);
+                        }}
+                        className={`
+                            aspect-square rounded-lg border-2 flex flex-col items-center justify-center
+                            relative transition-colors
+                            ${isMobileLayout && canSell ? 'min-h-[44px]' : 'min-h-[36px]'}
+                            ${cellBorder}
+                            ${canSell && hasItem && !sellable ? 'opacity-35 saturate-50' : ''}
+                            ${isDragSource ? 'ring-2 ring-cyan-400 opacity-80 scale-95' : ''}
+                            ${isHover ? 'border-green-400 bg-green-900/30' : ''}
+                            ${hasItem ? 'hover:border-cyan-400/60 cursor-grab active:cursor-grabbing' : !locked ? 'opacity-80' : ''}
+                            ${locked ? 'opacity-40 cursor-not-allowed' : ''}
+                        `}
+                        title={
+                            locked
+                                ? 'Locked — visit Copper Clive to upgrade'
+                                : hasItem
+                                    ? `${slot.name} ×${slot.quantity}${visual?.shortLabel ? ` · ${visual.shortLabel}` : ''}${sellable ? (isMobileLayout ? ' · Long-press to queue' : ' · Shift+click to queue') : ''}`
+                                    : 'Empty slot'
+                        }
+                    >
+                        {locked ? (
+                            <span className="text-base opacity-60 pointer-events-none">🔒</span>
+                        ) : hasItem ? (
+                            <>
+                                {visual?.stripe && (
+                                    <span
+                                        className={`absolute left-0 top-1 bottom-1 w-1 rounded-full pointer-events-none ${visual.stripe}`}
+                                        aria-hidden
+                                    />
+                                )}
+                                <span
+                                    className={`${isMobileLayout && canSell ? 'text-xl' : 'text-2xl'} leading-none pointer-events-none select-none`}
+                                    role="img"
+                                    aria-label={slot.name}
+                                >
+                                    {visual?.emoji || slot.emoji || '📦'}
+                                </span>
+                                {visual?.shortLabel && slot.category === 'wood' && (
+                                    <span className={`absolute top-0.5 right-0.5 text-[8px] font-bold pointer-events-none px-0.5 rounded ${visual.text} bg-black/45`}>
+                                        {visual.shortLabel}
+                                    </span>
+                                )}
+                                {slot.quantity > 1 && (
+                                    <span className="absolute bottom-0.5 right-1 text-[10px] text-white font-bold pointer-events-none bg-black/50 rounded px-0.5">
+                                        {slot.quantity}
+                                    </span>
+                                )}
+                                {isQueued && (
+                                    <span className="absolute top-0.5 left-1 text-[10px] text-amber-200 font-bold pointer-events-none">
+                                        ✓
+                                    </span>
+                                )}
+                            </>
+                        ) : null}
+                    </button>
+                );
+            })}
+        </div>
+    );
+
+    const merchantTrayPanel = canSell ? (
+        <div
+            ref={sellTrayRef}
+            data-sell-tray="true"
+            className={`rounded-xl border-2 border-dashed border-amber-500/40 bg-amber-950/20 flex flex-col ${
+                isMobileLayout ? 'p-2 shrink-0' : 'w-44 shrink-0 p-3 min-h-[220px]'
+            }`}
+        >
+            <div className={`flex items-center justify-between gap-2 ${isMobileLayout ? 'mb-1.5' : 'mb-1'}`}>
+                <p className="text-[10px] uppercase tracking-wider text-amber-200/90 font-bold">
+                    Merchant tray
+                </p>
+                {sellQueue.length > 0 && (
+                    <p className="text-[10px] text-amber-200 font-bold tabular-nums">
+                        {sellQueue.length} · {sellQueueTotal}g
+                    </p>
+                )}
+            </div>
+            {!isMobileLayout && (
+                <p className="text-[10px] text-amber-100/60 mb-2 text-center leading-snug">
+                    Drop or shift+click {acceptsLabel}
+                </p>
+            )}
+            <div className={`${isMobileLayout ? 'overflow-x-auto overflow-y-hidden flex gap-2 pb-1 min-h-[52px]' : 'flex-1 overflow-y-auto space-y-1.5 min-h-0'}`}>
+                {sellQueue.length === 0 ? (
+                    <p className={`text-[11px] text-amber-100/40 text-center ${isMobileLayout ? 'py-3 px-2 w-full' : 'py-6 px-1'}`}>
+                        {isMobileLayout ? `Long-press ${acceptsLabel} to queue` : 'Queue stacks here to sell in one trip'}
+                    </p>
+                ) : (
+                    sellQueue.map(({ index, slot, totalGold }) => (
+                        <div
+                            key={index}
+                            className={`flex items-center gap-1.5 rounded-lg bg-black/30 border border-amber-500/20 px-2 py-1.5 ${
+                                isMobileLayout ? 'shrink-0 min-w-[9rem]' : ''
+                            }`}
+                        >
+                            <span className="text-lg shrink-0">{slot.emoji}</span>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-[10px] text-white truncate">{slot.name}</p>
+                                <p className="text-[10px] text-amber-200/80">×{slot.quantity} · {totalGold}g</p>
+                            </div>
+                            <button
+                                type="button"
+                                className="text-white/40 hover:text-white text-xs shrink-0"
+                                onClick={() => toggleSellSelection(index)}
+                                aria-label="Remove from tray"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    ))
+                )}
+            </div>
+            {sellQueue.length > 0 && (
+                <button
+                    type="button"
+                    disabled={selling}
+                    onClick={handleSellSelected}
+                    className={`w-full bg-gradient-to-b from-amber-400 to-orange-700 hover:from-amber-300 hover:to-orange-600 disabled:opacity-60 text-black rounded-lg font-bold retro-text ${
+                        isMobileLayout ? 'mt-2 px-3 py-2.5 text-sm' : 'mt-2 px-3 py-2 text-xs'
+                    }`}
+                >
+                    {selling ? 'Selling…' : `Sell queued (${sellQueueTotal}g)`}
+                </button>
+            )}
+        </div>
+    ) : null;
 
     return createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-            <div ref={modalPanelRef} className={`bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-cyan-500/40 rounded-2xl shadow-2xl w-full ${canSell ? 'max-w-3xl' : 'max-w-lg'} max-h-[90vh] overflow-hidden flex flex-col`}>
+        <div
+            ref={modalOverlayRef}
+            data-player-modal="true"
+            {...(isDragging ? { 'data-inventory-world-drop': 'true' } : {})}
+            className={`fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4 ${isDragging ? 'touch-none overscroll-none' : ''}`}
+        >
+            {isDragging && (
+                <div
+                    className={`absolute inset-x-3 z-[1] flex items-center justify-center pointer-events-none ${
+                        isMobileLayout ? 'top-3 bottom-[calc(92vh+0.75rem)]' : 'top-4 h-20'
+                    }`}
+                >
+                    <div className="rounded-xl border-2 border-dashed border-cyan-400/60 bg-cyan-950/55 px-4 py-2.5 shadow-lg">
+                        <p className="text-cyan-200 retro-text text-xs sm:text-sm text-center">
+                            {isMobileLayout ? '↑ Release here to drop in world' : 'Release above backpack to drop in world'}
+                        </p>
+                    </div>
+                </div>
+            )}
+            <div ref={modalPanelRef} data-inventory-panel className={`relative z-10 bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-cyan-500/40 rounded-2xl shadow-2xl w-full ${canSell ? 'max-w-3xl' : 'max-w-lg'} ${canSell && isMobileLayout ? 'h-[92vh]' : 'max-h-[92vh] sm:max-h-[90vh]'} overflow-hidden flex flex-col ${isDragging ? 'touch-none' : ''}`}>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/20">
                     <div className="flex items-center gap-2">
                         <span className="text-2xl">{canSell ? (sellMerchant?.emoji || '🪙') : '🎒'}</span>
@@ -404,178 +625,51 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                     </div>
                 )}
 
-                <div className={`p-4 overflow-y-auto flex-1 ${canSell ? 'flex gap-4 min-h-0' : ''}`}>
-                    <div className={canSell ? 'flex-1 min-w-0' : ''}>
-                        {canSell && (
-                            <p className="text-[10px] text-amber-200/80 mb-2 text-center uppercase tracking-wide">
-                                {isMobileLayout
-                                    ? 'Long-press stacks to queue · Drag to merchant tray →'
-                                    : 'Shift+click stacks · Drag to merchant tray →'}
-                            </p>
-                        )}
+                {canSell && isMobileLayout ? (
+                    <>
                         <div
-                            className="grid gap-1.5 select-none touch-none"
-                            style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+                            className={`flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pt-2 pb-1 ${isDragging ? 'overflow-hidden touch-none' : ''}`}
+                            style={{ WebkitOverflowScrolling: 'touch' }}
                         >
-                            {displayCells.slice(0, columns * rows).map(({ index, locked, slot }) => {
-                                const hasItem = !locked && slotHasItem(slot);
-                                const sellable = hasItem && merchantAcceptsSlot(slot, sellMerchantId);
-                                const visual = hasItem ? getInventorySlotVisual(slot) : null;
-                                const isSelected = !isDragging && selectedSlot === index;
-                                const isQueued = sellSelection.has(index);
-                                const isDragSource = dragSource === index;
-                                const isHover = hoverSlot === index && dragSource !== null && dragSource !== index;
-                                const cellBorder = locked
-                                    ? 'border-slate-700/40 bg-slate-900/80'
-                                    : isQueued
-                                        ? 'border-amber-300 bg-amber-900/40 ring-2 ring-amber-400/60'
-                                        : isSelected
-                                            ? 'border-cyan-400 bg-cyan-900/20'
-                                            : `${visual?.border || 'border-slate-600/50'} ${visual?.bg || 'bg-slate-800/60'}`;
-
-                                return (
-                                    <button
-                                        key={index}
-                                        type="button"
-                                        disabled={locked}
-                                        onPointerDown={(e) => handlePointerDown(e, index, hasItem, locked)}
-                                        onPointerMove={handlePointerMove}
-                                        onPointerEnter={() => {
-                                            if (!locked && dragSourceRef.current !== null) setHoverSlot(index);
-                                        }}
-                                        className={`
-                                            aspect-square rounded-lg border-2 flex flex-col items-center justify-center
-                                            relative transition-colors min-h-[36px]
-                                            ${cellBorder}
-                                            ${canSell && hasItem && !sellable ? 'opacity-35 saturate-50' : ''}
-                                            ${isDragSource ? 'ring-2 ring-cyan-400 opacity-80 scale-95' : ''}
-                                            ${isHover ? 'border-green-400 bg-green-900/30' : ''}
-                                            ${hasItem ? 'hover:border-cyan-400/60 cursor-grab active:cursor-grabbing' : !locked ? 'opacity-80' : ''}
-                                            ${locked ? 'opacity-40 cursor-not-allowed' : ''}
-                                        `}
-                                        title={
-                                            locked
-                                                ? 'Locked — visit Copper Clive to upgrade'
-                                                : hasItem
-                                                    ? `${slot.name} ×${slot.quantity}${visual?.shortLabel ? ` · ${visual.shortLabel}` : ''}${sellable ? (isMobileLayout ? ' · Long-press to queue' : ' · Shift+click to queue') : ''}`
-                                                    : 'Empty slot'
-                                        }
-                                    >
-                                        {locked ? (
-                                            <span className="text-base opacity-60 pointer-events-none">🔒</span>
-                                        ) : hasItem ? (
-                                            <>
-                                                {visual?.stripe && (
-                                                    <span
-                                                        className={`absolute left-0 top-1 bottom-1 w-1 rounded-full pointer-events-none ${visual.stripe}`}
-                                                        aria-hidden
-                                                    />
-                                                )}
-                                                <span
-                                                    className="text-2xl leading-none pointer-events-none select-none"
-                                                    role="img"
-                                                    aria-label={slot.name}
-                                                >
-                                                    {visual?.emoji || slot.emoji || '📦'}
-                                                </span>
-                                                {visual?.shortLabel && slot.category === 'wood' && (
-                                                    <span className={`absolute top-0.5 right-0.5 text-[8px] font-bold pointer-events-none px-0.5 rounded ${visual.text} bg-black/45`}>
-                                                        {visual.shortLabel}
-                                                    </span>
-                                                )}
-                                                {slot.quantity > 1 && (
-                                                    <span className="absolute bottom-0.5 right-1 text-[10px] text-white font-bold pointer-events-none bg-black/50 rounded px-0.5">
-                                                        {slot.quantity}
-                                                    </span>
-                                                )}
-                                                {isQueued && (
-                                                    <span className="absolute top-0.5 left-1 text-[10px] text-amber-200 font-bold pointer-events-none">
-                                                        ✓
-                                                    </span>
-                                                )}
-                                            </>
-                                        ) : null}
-                                    </button>
-                                );
-                            })}
+                            {sellHint}
+                            {inventoryGrid}
                         </div>
-
+                        <div className="shrink-0 border-t border-amber-500/25 bg-amber-950/15 px-3 py-2">
+                            {merchantTrayPanel}
+                        </div>
+                    </>
+                ) : (
+                <div className={`p-3 sm:p-4 overflow-y-auto flex-1 min-h-0 ${canSell ? 'flex gap-4' : ''} ${isDragging ? 'overflow-hidden touch-none' : ''}`}>
+                    <div className={canSell ? 'flex-1 min-w-0 min-h-0' : ''}>
+                        {sellHint}
+                        {inventoryGrid}
+                        {!canSell && (
                         <p className="text-gray-500 text-[10px] mt-2 text-center">
                             {isMobileLayout
-                                ? 'Touch & drag between slots · Tap hotbar item to unequip'
-                                : 'Drag items between slots · Drag sellable stacks to the merchant tray'}
+                                ? 'Drag between slots · Drag up outside grid to drop in world'
+                                : 'Drag items between slots · Drag outside backpack to drop in world'}
                         </p>
+                        )}
                     </div>
-
-                    {canSell && (
-                        <div
-                            ref={sellTrayRef}
-                            className="w-44 shrink-0 rounded-xl border-2 border-dashed border-amber-500/40 bg-amber-950/20 p-3 flex flex-col min-h-[220px]"
-                        >
-                            <p className="text-[10px] uppercase tracking-wider text-amber-200/90 font-bold mb-1 text-center">
-                                Merchant tray
-                            </p>
-                            <p className="text-[10px] text-amber-100/60 mb-2 text-center leading-snug">
-                                Drop or shift+click {acceptsLabel}
-                            </p>
-                            <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
-                                {sellQueue.length === 0 ? (
-                                    <p className="text-[11px] text-amber-100/40 text-center py-6 px-1">
-                                        Queue stacks here to sell in one trip
-                                    </p>
-                                ) : (
-                                    sellQueue.map(({ index, slot, totalGold }) => (
-                                        <div
-                                            key={index}
-                                            className="flex items-center gap-1.5 rounded-lg bg-black/30 border border-amber-500/20 px-2 py-1.5"
-                                        >
-                                            <span className="text-lg shrink-0">{slot.emoji}</span>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-[10px] text-white truncate">{slot.name}</p>
-                                                <p className="text-[10px] text-amber-200/80">×{slot.quantity} · {totalGold}g</p>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                className="text-white/40 hover:text-white text-xs shrink-0"
-                                                onClick={() => toggleSellSelection(index)}
-                                                aria-label="Remove from tray"
-                                            >
-                                                ✕
-                                            </button>
-                                        </div>
-                                    ))
-                                )}
-                            </div>
-                            {sellQueue.length > 0 && (
-                                <div className="mt-2 pt-2 border-t border-amber-500/20">
-                                    <p className="text-xs text-amber-200 text-center mb-2 font-bold">
-                                        {sellQueue.length} stack{sellQueue.length === 1 ? '' : 's'} · {sellQueueTotal}g
-                                    </p>
-                                    <button
-                                        type="button"
-                                        disabled={selling}
-                                        onClick={handleSellSelected}
-                                        className="w-full bg-gradient-to-b from-amber-400 to-orange-700 hover:from-amber-300 hover:to-orange-600 disabled:opacity-60 text-black px-3 py-2 rounded-lg text-xs font-bold retro-text"
-                                    >
-                                        {selling ? 'Selling…' : 'Sell queued'}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    {merchantTrayPanel}
                 </div>
+                )}
 
-                <div className="px-4 py-3 border-t border-cyan-500/20 bg-black/40">
+                {!canSell && (
+                <div className="px-4 py-3 border-t border-cyan-500/20 bg-black/40" data-inventory-no-drop="true">
                     <p className="text-[10px] text-center text-gray-400 mb-2 uppercase tracking-wide">
                         Hand hotbar · {isMobileLayout ? 'tap equipped item to unequip' : 'right-click equipped item to unequip'}
                     </p>
                     <GameHotbar className="justify-center" inventoryMode />
                 </div>
+                )}
 
-                <div className="px-4 py-3 border-t border-cyan-500/20 bg-black/30 min-h-[172px] flex flex-col justify-center">
+                <div className={`shrink-0 border-t border-cyan-500/20 bg-black/30 flex flex-col ${
+                    canSell && isMobileLayout ? 'max-h-[38vh] overflow-y-auto overscroll-contain' : 'min-h-[172px] justify-center'
+                } px-3 sm:px-4 py-3`} data-inventory-no-drop="true" style={canSell && isMobileLayout ? { WebkitOverflowScrolling: 'touch' } : undefined}>
                     {isDragging ? (
                         <p className="text-cyan-300/90 text-xs text-center retro-text">
-                            Dragging… release to drop
+                            Drag up to the drop zone to place in world…
                         </p>
                     ) : selected && slotHasItem(selected) ? (
                         <div className={`rounded-xl border p-3 ${selectedStyle.bg} ${selectedStyle.border}`}>
@@ -620,12 +714,12 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                             </div>
 
                             {canSell && merchantAcceptsSlot(selected, sellMerchantId) && (
-                                <div className="flex gap-2 mt-3">
+                                <div className={`flex gap-2 mt-3 ${isMobileLayout ? 'flex-wrap' : ''}`}>
                                     <button
                                         type="button"
                                         disabled={selling}
                                         onClick={() => handleSell(1)}
-                                        className="flex-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white px-3 py-2 rounded-lg text-xs font-bold retro-text"
+                                        className={`flex-1 min-w-[5rem] bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white px-3 py-2.5 rounded-lg text-xs font-bold retro-text`}
                                     >
                                         Sell 1
                                     </button>
@@ -634,7 +728,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                                             type="button"
                                             disabled={selling}
                                             onClick={() => handleSell(selected.quantity)}
-                                            className="flex-1 bg-amber-700 hover:bg-amber-600 disabled:opacity-60 text-white px-3 py-2 rounded-lg text-xs font-bold retro-text"
+                                            className="flex-1 min-w-[5rem] bg-amber-700 hover:bg-amber-600 disabled:opacity-60 text-white px-3 py-2.5 rounded-lg text-xs font-bold retro-text"
                                         >
                                             Sell stack
                                         </button>
@@ -643,9 +737,9 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                                         type="button"
                                         disabled={selling}
                                         onClick={() => addToSellSelection(selectedSlot)}
-                                        className="flex-1 bg-amber-900/60 hover:bg-amber-800/70 border border-amber-500/30 text-amber-100 px-3 py-2 rounded-lg text-xs font-bold retro-text"
+                                        className="flex-1 min-w-[5rem] bg-amber-900/60 hover:bg-amber-800/70 border border-amber-500/30 text-amber-100 px-3 py-2.5 rounded-lg text-xs font-bold retro-text"
                                     >
-                                        {sellSelection.has(selectedSlot) ? 'Queued ✓' : 'Queue stack'}
+                                        {sellSelection.has(selectedSlot) ? 'Queued ✓' : 'Queue'}
                                     </button>
                                 </div>
                             )}
@@ -670,7 +764,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                                     ? 'Tap a stack to inspect · Long-press to queue for sale'
                                     : 'Click a stack to inspect · Shift+click to queue for sale')
                                 : (isMobileLayout
-                                    ? 'Tap a stack to inspect · Shift+click to drop stack · Drag outside to drop 1'
+                                    ? 'Tap a stack to inspect · Drag up to drop in world'
                                     : 'Click a stack to inspect · Shift+click to drop stack · Drag outside to drop 1 · Shift+drag outside for full stack')}
                         </p>
                     )}

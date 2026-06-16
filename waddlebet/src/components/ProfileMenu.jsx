@@ -33,19 +33,22 @@ const ProfileMenu = () => {
     const [showGiftPanel, setShowGiftPanel] = useState(false);
     const [giftType, setGiftType] = useState(null); // 'gold', 'pebbles', 'item', 'spl'
     const menuRef = useRef(null);
+    const overlayRef = useRef(null);
     
     // Use shared device detection hook
     const { isMobile, isLandscape } = useDeviceDetection();
     
-    // Close on click outside (but not when wager modal is open)
+    const hasSubModal = showWagerModal || showGiftPanel || showGiftDropdown || showGameDropdown;
+
+    // Close on click outside (not while challenge/gift sub-modals are open)
     const handleClose = useCallback(() => {
-        if (!showWagerModal) {
-                clearSelectedPlayer();
-            }
-    }, [clearSelectedPlayer, showWagerModal]);
+        if (!showWagerModal && !showGiftPanel) {
+            clearSelectedPlayer();
+        }
+    }, [clearSelectedPlayer, showWagerModal, showGiftPanel]);
     
-    useClickOutside(menuRef, handleClose, !!selectedPlayer && !showWagerModal);
-    useEscapeKey(handleClose, !!selectedPlayer && !showWagerModal);
+    useClickOutside(overlayRef, handleClose, !!selectedPlayer && !hasSubModal);
+    useEscapeKey(handleClose, !!selectedPlayer && !hasSubModal);
     
     if (!selectedPlayer) return null;
     
@@ -85,15 +88,17 @@ const ProfileMenu = () => {
     // Landscape mobile layout - horizontal and compact
     if (isLandscape && isMobile) {
         return (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-2">
+            <div ref={overlayRef} className="fixed inset-0 z-50 flex items-center justify-center p-2 pointer-events-none">
                 {/* Backdrop */}
+                {!hasSubModal && (
                 <div 
-                    className="absolute inset-0 bg-black/40"
+                    className="absolute inset-0 bg-black/40 pointer-events-auto"
                     onClick={clearSelectedPlayer}
                 />
+                )}
                 
                 {/* Modal wrapper with outset close button */}
-                <div className="relative">
+                <div className="relative pointer-events-auto">
                     {/* Close button - outset */}
                     <button 
                         onClick={clearSelectedPlayer}
@@ -243,9 +248,11 @@ const ProfileMenu = () => {
                 {/* Gift Dropdown for landscape */}
                 {showGiftDropdown && (
                     <div 
+                        data-player-modal="true"
                         className="fixed inset-0 z-[60] flex items-center justify-center pointer-events-auto"
                         onClick={() => setShowGiftDropdown(false)}
                         onMouseDown={e => e.stopPropagation()}
+                        onTouchStart={e => e.stopPropagation()}
                     >
                         <div className="bg-gray-800 rounded-xl border border-white/20 shadow-2xl p-2 min-w-[200px] pointer-events-auto" onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}>
                             <div className="text-white/60 text-xs px-3 py-2 border-b border-white/10 mb-1">Send Gift to {selectedPlayer.name}</div>
@@ -282,9 +289,9 @@ const ProfileMenu = () => {
     
     // Portrait mobile & Desktop layout - vertical
     return (
-        <div className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
-            {/* Backdrop for mobile */}
-            {isMobile && (
+        <div ref={overlayRef} className="fixed inset-0 z-50 pointer-events-none overflow-hidden">
+            {/* Backdrop for mobile — hide while challenge/gift sub-modals are open */}
+            {isMobile && !hasSubModal && (
                 <div 
                     className="absolute inset-0 bg-black/40 pointer-events-auto"
                     onClick={clearSelectedPlayer}
@@ -292,10 +299,8 @@ const ProfileMenu = () => {
             )}
             
             <div 
-                className="w-full h-full flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain"
+                className="w-full h-full flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain pointer-events-none"
                 style={{ WebkitOverflowScrolling: 'touch' }}
-                onMouseDown={handleMenuInteraction}
-                onClick={handleMenuInteraction}
             >
                 {/* Modal wrapper with outset close button */}
                 <div className="relative my-4 sm:my-auto flex-shrink-0 pointer-events-auto">
@@ -412,7 +417,7 @@ const ProfileMenu = () => {
                                 
                                 {/* Game Selection */}
                                 {showGameDropdown && (
-                                    <div className="mt-2 bg-gray-800 rounded-xl border border-white/10 shadow-xl animate-fade-in">
+                                    <div data-player-modal="true" className="mt-2 bg-gray-800 rounded-xl border border-white/10 shadow-xl animate-fade-in">
                                         <div className="p-1">
                                             {availableGames.map(game => (
                                                 <button
@@ -452,7 +457,7 @@ const ProfileMenu = () => {
                             
                             {/* Gift Selection Dropdown */}
                             {showGiftDropdown && (
-                                <div className="absolute top-full left-0 right-0 mt-2 bg-gray-800 rounded-xl border border-white/10 shadow-xl animate-fade-in z-20">
+                                <div data-player-modal="true" className="absolute top-full left-0 right-0 mt-2 bg-gray-800 rounded-xl border border-white/10 shadow-xl animate-fade-in z-20">
                                     <div className="p-1">
                                         <button
                                             onClick={() => { setGiftType('gold'); setShowGiftPanel(true); setShowGiftDropdown(false); }}

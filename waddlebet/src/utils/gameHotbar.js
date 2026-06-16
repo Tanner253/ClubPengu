@@ -70,6 +70,46 @@ export function findHotbarSlotUnderPoint(clientX, clientY) {
     return Number.isFinite(index) ? index : null;
 }
 
+export function findInventorySlotUnderPoint(clientX, clientY) {
+    const el = document.elementFromPoint(clientX, clientY);
+    const slotEl = el?.closest?.('[data-inventory-slot]');
+    if (!slotEl) return null;
+    const index = Number(slotEl.dataset.inventorySlot);
+    return Number.isFinite(index) ? index : null;
+}
+
+/**
+ * True when a drag release should drop the stack into the world (backdrop / drop zone / panel chrome).
+ */
+export function isInventoryWorldDropTarget(clientX, clientY, { modalPanel = null, sellTray = null, canSell = false } = {}) {
+    const el = document.elementFromPoint(clientX, clientY);
+    if (el?.closest?.('[data-inventory-world-drop]')) return true;
+
+    if (modalPanel) {
+        const rect = modalPanel.getBoundingClientRect();
+        if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+            return true;
+        }
+    }
+
+    if (findInventorySlotUnderPoint(clientX, clientY) != null) return false;
+    if (findHotbarSlotUnderPoint(clientX, clientY) != null) return false;
+
+    if (canSell && sellTray) {
+        const trayRect = sellTray.getBoundingClientRect();
+        if (
+            clientX >= trayRect.left && clientX <= trayRect.right
+            && clientY >= trayRect.top && clientY <= trayRect.bottom
+        ) {
+            return false;
+        }
+    }
+
+    if (el?.closest?.('[data-inventory-no-drop]')) return false;
+
+    return Boolean(el?.closest?.('[data-inventory-panel]') || el?.closest?.('[data-player-modal]'));
+}
+
 /** SFX event for selecting a hotbar slot with an item equipped. */
 export function getHotbarEquipSfx(itemId) {
     if (!itemId) return 'equip_unequip';

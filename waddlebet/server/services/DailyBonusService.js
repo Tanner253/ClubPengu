@@ -13,6 +13,7 @@ import { isDBConnected } from '../db/connection.js';
 import custodialWalletService from './CustodialWalletService.js';
 import crypto from 'crypto';
 import { getReferralService } from './ReferralService.js';
+import { getOnboardingProgress, isOnboardingQuestComplete } from '../config/onboardingQuest.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -213,9 +214,12 @@ class DailyBonusService {
             // Check session time requirement
             const hasEnoughTime = sessionMinutes >= CONFIG.REQUIRED_SESSION_MINUTES;
             const minutesRemaining = Math.max(0, CONFIG.REQUIRED_SESSION_MINUTES - sessionMinutes);
+
+            const onboardingProgress = getOnboardingProgress(user);
+            const onboardingComplete = onboardingProgress.complete;
             
-            // Can claim if cooldown expired AND has enough session time
-            const canClaim = cooldownExpired && hasEnoughTime;
+            // Can claim if cooldown expired AND has enough session time AND intro quest done
+            const canClaim = cooldownExpired && hasEnoughTime && onboardingComplete;
             
             // Get custodial wallet balance
             let custodialBalance = null;
@@ -234,6 +238,9 @@ class DailyBonusService {
                 sessionMinutes,                                    // current session time
                 requiredMinutes: CONFIG.REQUIRED_SESSION_MINUTES,  // required time
                 minutesRemaining,                                  // minutes until eligible
+                onboardingComplete,
+                onboardingCompletedCount: onboardingProgress.completedCount,
+                onboardingTotalSteps: onboardingProgress.totalSteps,
                 rewardAmount: CONFIG.REWARD_AMOUNT,                // $CP reward amount
                 totalClaimed: user.dailyBonus?.totalClaimed || 0,
                 totalWaddleEarned: user.dailyBonus?.totalWaddleEarned || 0,
@@ -332,6 +339,17 @@ class DailyBonusService {
             
             const now = new Date();
             const sessionMinutes = this.getSessionMinutes(walletAddress);
+
+            if (!isOnboardingQuestComplete(user)) {
+                const progress = getOnboardingProgress(user);
+                return {
+                    success: false,
+                    error: 'ONBOARDING_INCOMPLETE',
+                    message: 'Complete the Getting Started quest before claiming daily bonus',
+                    onboardingCompletedCount: progress.completedCount,
+                    onboardingTotalSteps: progress.totalSteps,
+                };
+            }
             
             // Check session time requirement
             if (sessionMinutes < CONFIG.REQUIRED_SESSION_MINUTES) {

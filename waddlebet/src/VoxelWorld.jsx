@@ -69,7 +69,8 @@ import { readLiveWebGLInfo } from './utils/browserCapabilities.js';
 import { applyLowEndMode } from './utils/lowEndRender.js';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
 import IceFishingGame from './games/IceFishingGame';
-import { savePlayerSession, getResumePosition } from './utils/playerSession';
+import { canPickWorldAt } from './utils/worldPickInput';
+import { getResumePosition, savePlayerSession } from './utils/playerSession';
 import { disposeThreeObject } from './utils/disposeThreeObject';
 import CasinoBlackjack from './components/CasinoBlackjack';
 import BattleshipGame from './minigames/BattleshipGame';
@@ -750,6 +751,13 @@ const VoxelWorld = ({
     
     // Town Interaction State
     const [nearbyInteraction, setNearbyInteraction] = useState(null);
+    const lighthouseDeckInsideRef = useRef(false);
+
+    useEffect(() => {
+        if (room !== 'town') {
+            lighthouseDeckInsideRef.current = false;
+        }
+    }, [room]);
     
     // Slot Machine Interaction State
     const [slotInteraction, setSlotInteraction] = useState(null); // { machine, prompt, canSpin }
@@ -4087,6 +4095,24 @@ const VoxelWorld = ({
                 }
                 if (frameCount % 3 === 0) {
                     townCenterRef.current.checkTriggers(finalX, finalZ, posRef.current.y);
+
+                    const lighthouseX = CENTER_X + 80.5;
+                    const lighthouseZ = CENTER_Z + 52.7;
+                    const distToLighthouse = Math.sqrt(
+                        (finalX - lighthouseX) ** 2 + (finalZ - lighthouseZ) ** 2
+                    );
+                    const onLighthouseDeck = posRef.current.y > 10 && distToLighthouse < 6;
+                    if (onLighthouseDeck && !lighthouseDeckInsideRef.current) {
+                        lighthouseDeckInsideRef.current = true;
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: { action: 'descend_lighthouse', data: {} }
+                        }));
+                    } else if (!onLighthouseDeck && lighthouseDeckInsideRef.current) {
+                        lighthouseDeckInsideRef.current = false;
+                        window.dispatchEvent(new CustomEvent('townInteraction', {
+                            detail: { action: 'exit', exitedZone: 'descend_lighthouse' }
+                        }));
+                    }
                 }
             }
             
@@ -7605,36 +7631,12 @@ const VoxelWorld = ({
         
         // Unified handler for both mouse clicks and touch taps
         const handleInteraction = (clientX, clientY, eventTarget, isTouch = false) => {
-            // Don't process if any UI overlay is open (check by z-index elements)
-            const elementsAtPoint = document.elementsFromPoint(clientX, clientY);
-            
-            // Check if click/tap is on a UI element (buttons, menus, joystick, etc.)
-            const isUIElement = elementsAtPoint.some(el => {
-                // Skip canvas and its container
-                if (el === renderer.domElement || el === renderer.domElement.parentElement) {
-                    return false;
-                }
-                // Check for high z-index (UI overlays)
-                const zIndex = window.getComputedStyle(el).zIndex;
-                if (zIndex && parseInt(zIndex) >= 40) {
-                    return true;
-                }
-                // Check for common UI element classes/tags
-                if (el.tagName === 'BUTTON' || el.tagName === 'INPUT' || 
-                    el.closest('button') || el.closest('[role="button"]') ||
-                    el.closest('[data-joystick]') || el.hasAttribute?.('data-joystick') ||
-                    el.closest('.joystick') || el.closest('[class*="joystick"]')) {
-                    return true;
-                }
-                return false;
-            });
-            
-            if (isUIElement) {
+            if (!canPickWorldAt(clientX, clientY, renderer.domElement)) {
                 return;
             }
             
             // For mouse clicks, require exact target match
-            // For touch, be more lenient (touch events can bubble differently)
+            // For touch, document-level handler validates via canPickWorldAt above
             if (!isTouch && eventTarget !== renderer.domElement) {
                 return;
             }
@@ -8347,15 +8349,13 @@ const VoxelWorld = ({
         };
         
         renderer.domElement.addEventListener('click', handleClick);
-        renderer.domElement.addEventListener('touchstart', handleTouchStart, { passive: true });
-        renderer.domElement.addEventListener('touchend', handleTouchEnd, { passive: true });
+        document.addEventListener('touchstart', handleTouchStart, { passive: true });
+        document.addEventListener('touchend', handleTouchEnd, { passive: true });
         
         return () => {
-            if (renderer.domElement) {
-                renderer.domElement.removeEventListener('click', handleClick);
-                renderer.domElement.removeEventListener('touchstart', handleTouchStart);
-                renderer.domElement.removeEventListener('touchend', handleTouchEnd);
-            }
+            renderer.domElement.removeEventListener('click', handleClick);
+            document.removeEventListener('touchstart', handleTouchStart);
+            document.removeEventListener('touchend', handleTouchEnd);
         };
     }, [onPlayerClick, playerId]);
     
@@ -8387,23 +8387,7 @@ const VoxelWorld = ({
             _lastHoverCheck = hoverNow;
             
             // Skip if any UI element is being hovered
-            const elementsAtPoint = document.elementsFromPoint(event.clientX, event.clientY);
-            const isOverUI = elementsAtPoint.some(el => {
-                if (el === renderer.domElement || el === renderer.domElement.parentElement) {
-                    return false;
-                }
-                const zIndex = window.getComputedStyle(el).zIndex;
-                if (zIndex && parseInt(zIndex) >= 30) {
-                    return true;
-                }
-                if (el.tagName === 'BUTTON' || el.tagName === 'INPUT' || 
-                    el.closest('button') || el.closest('[role="button"]')) {
-                    return true;
-                }
-                return false;
-            });
-            
-            if (isOverUI) {
+            if (!canPickWorldAt(event.clientX, event.clientY, renderer.domElement)) {
                 setHoverCursor('default');
                 return;
             }
@@ -10570,14 +10554,11 @@ const VoxelWorld = ({
                     });
                 }
             } else if (action === 'descend_lighthouse') {
-                // Show lighthouse descend prompt (for mobile users at top of lighthouse)
-                // Only show if player is actually elevated (Y > 10)
+                // Show leave prompt when on the observation deck
                 if (posRef.current.y > 10) {
-                    setNearbyInteraction({ 
-                        action, 
-                        message: `🔦 Descend (${t('interact.pressE')})`,
-                        data: data
-                    });
+                    setNearbyInteraction(prev => (
+                        prev?.action === 'descend_lighthouse' ? prev : { action, data: data }
+                    ));
                 }
             } else if (action === 'interact_snowman') {
                 // Show snowman message
@@ -10620,7 +10601,7 @@ const VoxelWorld = ({
                 return;
             }
             
-            // Check if player is on lighthouse deck and wants to descend (no UI needed)
+            // Lighthouse deck — E to descend (position check; UI uses nearbyInteraction)
             if (e.code === 'KeyE' && roomRef.current === 'town') {
                 const playerY = posRef.current.y;
                 const playerX = posRef.current.x;
@@ -12425,7 +12406,7 @@ const VoxelWorld = ({
              {/* Gold Lobby Slot Prompt (Snow Forts casino) */}
              {goldSlotInteraction && !nearbyPortal && room === 'snow_forts' && (
                 <div
-                    className={`absolute bg-gradient-to-b from-amber-900/95 to-black/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg border-yellow-500/50 shadow-yellow-500/20 ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-amber-900/95 to-black/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg border-yellow-500/50 shadow-yellow-500/20 ${
                         isMobile
                             ? isLandscape
                                 ? 'bottom-[180px] right-28 p-3'
@@ -12482,7 +12463,7 @@ const VoxelWorld = ({
              {/* Slot Machine Interaction Prompt */}
              {slotInteraction && !goldSlotInteraction && !nearbyPortal && room === 'casino_game_room' && (
                 <div 
-                    className={`absolute bg-gradient-to-b from-purple-900/95 to-black/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-purple-900/95 to-black/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${
                         slotInteraction.isDemo 
                             ? 'border-green-500/50 shadow-green-500/20' 
                             : 'border-yellow-500/50 shadow-yellow-500/20'
@@ -12537,7 +12518,7 @@ const VoxelWorld = ({
              {/* Blackjack Table Interaction Prompt - Positioned ABOVE sit prompts */}
              {blackjackInteraction && !slotInteraction && !goldSlotInteraction && !nearbyPortal && room === 'casino_game_room' && !blackjackGameActive && (
                 <div 
-                    className={`absolute bg-gradient-to-b from-green-900/95 to-emerald-950/95 backdrop-blur-sm rounded-xl border text-center z-30 shadow-lg ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-green-900/95 to-emerald-950/95 backdrop-blur-sm rounded-xl border text-center z-30 shadow-lg ${
                         blackjackInteraction.isDemo
                             ? 'border-green-500/50 shadow-green-500/20'
                             : 'border-emerald-500/50 shadow-emerald-500/20'
@@ -12608,7 +12589,7 @@ const VoxelWorld = ({
              {/* Starter rod pickup (snow forts, client-only prop) */}
              {starterRodInteraction && room === 'snow_forts' && !fishingInteraction && (
                 <div
-                    className={`absolute bg-gradient-to-b from-cyan-900/95 to-blue-900/95 backdrop-blur-sm rounded-xl border border-cyan-400/50 text-center z-20 shadow-lg shadow-cyan-500/20 ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-cyan-900/95 to-blue-900/95 backdrop-blur-sm rounded-xl border border-cyan-400/50 text-center z-20 shadow-lg shadow-cyan-500/20 ${
                         isMobile
                             ? isLandscape
                                 ? 'bottom-[180px] right-28 p-3'
@@ -12631,7 +12612,7 @@ const VoxelWorld = ({
              {/* Ice Fishing Interaction UI */}
              {fishingInteraction && (room === 'town' || room === 'snow_forts') && (
                 <div 
-                    className={`absolute bg-gradient-to-b from-blue-900/95 to-cyan-900/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-blue-900/95 to-cyan-900/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${
                         fishingInteraction.isDemo 
                             ? 'border-green-500/50 shadow-green-500/20' 
                             : 'border-cyan-500/50 shadow-cyan-500/20'
@@ -12708,7 +12689,7 @@ const VoxelWorld = ({
              {/* Forest woodcutting interaction */}
              {(woodcuttingInteraction || woodChopProgress) && room === 'forest_trails' && !fishingInteraction && !manualChopActive && (
                 <div
-                    className={`absolute bg-gradient-to-b from-emerald-950/95 to-green-900/95 backdrop-blur-sm rounded-xl border border-emerald-500/40 text-center z-20 shadow-lg shadow-emerald-500/10 ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-emerald-950/95 to-green-900/95 backdrop-blur-sm rounded-xl border border-emerald-500/40 text-center z-20 shadow-lg shadow-emerald-500/10 ${
                         isMobile
                             ? isLandscape
                                 ? 'bottom-[180px] right-28 p-3'
@@ -12762,7 +12743,7 @@ const VoxelWorld = ({
 
              {manualChopActive && room === 'forest_trails' && (
                 <div
-                    className={`absolute bg-gradient-to-b from-amber-950/90 to-emerald-950/90 backdrop-blur-sm rounded-xl border border-amber-500/40 text-center z-20 pointer-events-none ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-amber-950/90 to-emerald-950/90 backdrop-blur-sm rounded-xl border border-amber-500/40 text-center z-20 pointer-events-none ${
                         isMobile
                             ? isLandscape
                                 ? 'bottom-[180px] right-28 p-3'
@@ -12781,7 +12762,7 @@ const VoxelWorld = ({
              )}
 
              {scavengeInteraction && (room === 'snow_forts' || room === 'town') && !nearbyPortal && !fishingGameActive && (
-                <div className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border text-center z-20 ${
+                <div className={`world-interaction-prompt absolute bg-black/80 backdrop-blur-sm rounded-xl border text-center z-20 ${
                     scavengeInteraction.canScavenge ? 'border-amber-500/40' : 'border-gray-600/50'
                 } ${
                     isMobile ? 'bottom-[170px] left-1/2 -translate-x-1/2 p-3' : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
@@ -12812,7 +12793,7 @@ const VoxelWorld = ({
              )}
 
              {mushroomInteraction && room === 'forest_trails' && !nearbyPortal && !woodcuttingInteraction && !woodChopProgress && !fishingGameActive && (
-                <div className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border border-purple-500/40 text-center z-20 ${
+                <div className={`world-interaction-prompt absolute bg-black/80 backdrop-blur-sm rounded-xl border border-purple-500/40 text-center z-20 ${
                     isMobile ? 'bottom-[170px] left-1/2 -translate-x-1/2 p-3' : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
                 }`}>
                     <div className="text-3xl mb-1">🍄</div>
@@ -12828,7 +12809,7 @@ const VoxelWorld = ({
              )}
 
              {worldDropInteraction && !nearbyPortal && !fishingGameActive && !woodChopProgress && !manualChopActive && (
-                <div className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border border-cyan-500/40 text-center z-20 ${
+                <div className={`world-interaction-prompt absolute bg-black/80 backdrop-blur-sm rounded-xl border border-cyan-500/40 text-center z-20 ${
                     isMobile ? 'bottom-[170px] left-1/2 -translate-x-1/2 p-3' : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
                 }`}>
                     <div className="text-3xl mb-1">{worldDropInteraction.isGold ? '💰' : '📦'}</div>
@@ -12853,7 +12834,7 @@ const VoxelWorld = ({
              {/* World Merchant NPC interaction */}
              {nearbyNpcInteraction && (room === 'town' || room === 'snow_forts' || room === 'forest_trails') && !nearbyPortal && !fishingInteraction && !woodcuttingInteraction && !mushroomInteraction && !worldDropInteraction && !scavengeInteraction && !fishingGameActive && !activeNpcDef && (
                 <div
-                    className={`absolute bg-gradient-to-b from-slate-900/95 to-slate-950/95 backdrop-blur-sm rounded-xl border border-cyan-500/40 text-center z-20 shadow-lg shadow-cyan-500/10 ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-slate-900/95 to-slate-950/95 backdrop-blur-sm rounded-xl border border-cyan-500/40 text-center z-20 shadow-lg shadow-cyan-500/10 ${
                         isMobile
                             ? isLandscape
                                 ? 'bottom-[180px] right-28 p-3'
@@ -12919,7 +12900,7 @@ const VoxelWorld = ({
                 && !nearbyPortal && !fishingInteraction && !woodcuttingInteraction
                 && !fishingGameActive && !activeTravelNpcDef && (
                 <div
-                    className={`absolute bg-gradient-to-b from-sky-900/95 to-cyan-950/95 backdrop-blur-sm rounded-xl border border-sky-400/50 text-center z-20 shadow-lg shadow-sky-500/20 ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-sky-900/95 to-cyan-950/95 backdrop-blur-sm rounded-xl border border-sky-400/50 text-center z-20 shadow-lg shadow-sky-500/20 ${
                         isMobile
                             ? isLandscape
                                 ? 'bottom-[180px] right-28 p-3'
@@ -12955,7 +12936,7 @@ const VoxelWorld = ({
              {/* Lord Fishnu Interaction UI */}
              {lordFishnuInteraction && room === 'town' && !fishingInteraction && !nearbyPortal && (
                 <div 
-                    className={`absolute bg-gradient-to-b from-amber-900/95 to-yellow-900/95 backdrop-blur-sm rounded-xl border border-yellow-500/50 text-center z-20 shadow-lg shadow-yellow-500/20 ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-amber-900/95 to-yellow-900/95 backdrop-blur-sm rounded-xl border border-yellow-500/50 text-center z-20 shadow-lg shadow-yellow-500/20 ${
                         isMobile 
                             ? isLandscape 
                                 ? 'bottom-[180px] right-28 p-3' 
@@ -13017,7 +12998,7 @@ const VoxelWorld = ({
                 };
                 return (
                 <div 
-                    className={`absolute bg-gradient-to-b from-indigo-900/95 to-purple-900/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${colorClasses[config.color]} ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-indigo-900/95 to-purple-900/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${colorClasses[config.color]} ${
                         isMobile 
                             ? isLandscape 
                                 ? 'bottom-[180px] right-28 p-3' 
@@ -13062,7 +13043,7 @@ const VoxelWorld = ({
                 || (room === 'nightclub' && ['sit', 'dj'].includes(nearbyInteraction.action))
              ) && !nearbyPortal && !slotInteraction && !goldSlotInteraction && !blackjackInteraction && (
                 <div 
-                    className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border border-white/20 text-center z-20 ${
+                    className={`world-interaction-prompt absolute bg-black/80 backdrop-blur-sm rounded-xl border border-white/20 text-center z-20 ${
                         isMobile 
                             ? isLandscape 
                                 ? 'bottom-[180px] right-28 p-3' 
@@ -13072,10 +13053,13 @@ const VoxelWorld = ({
                 >
                     {/* Mobile-friendly message without "Press E" */}
                     <p className="text-white retro-text text-sm mb-2">
-                        {isMobile 
-                            ? nearbyInteraction.message.replace('Press E to ', 'Tap to ').replace('(Press E)', '')
-                            : nearbyInteraction.message
-                        }
+                        {nearbyInteraction.action === 'descend_lighthouse'
+                            ? (isMobile
+                                ? `🔦 ${t('interact.tap')} ${t('interact.leaveLighthouse')}`
+                                : `🔦 ${t('interact.pressE')} ${t('interact.leaveLighthouse')}`)
+                            : isMobile
+                                ? nearbyInteraction.message.replace('Press E to ', 'Tap to ').replace('(Press E)', '')
+                                : nearbyInteraction.message}
                     </p>
                     
                     {/* Action Button */}
@@ -13262,7 +13246,7 @@ const VoxelWorld = ({
                          nearbyInteraction.action === 'dj' ? `🎧 ${t('interact.dj')}` :
                          nearbyInteraction.action === 'climb_roof' ? `🪜 ${t('interact.climb')}` :
                          nearbyInteraction.action === 'climb_lighthouse' ? `🔦 ${t('interact.climb')}` :
-                         nearbyInteraction.action === 'descend_lighthouse' ? `🔦 ${t('interact.descend') || 'Descend'}` :
+                         nearbyInteraction.action === 'descend_lighthouse' ? `🔦 ${t('interact.leave')}` :
                          nearbyInteraction.action === 'play_arcade' ? `🎮 ${t('interact.play')}` :
                          `✓ ${t('interact.ok')}`}
                     </button>
@@ -13353,7 +13337,8 @@ const VoxelWorld = ({
                 </div>
              )}
              
-             {/* Title & Controls - Top Left */}
+             {/* Title & Controls - Top Left (desktop / mobile landscape; portrait uses GameHUD) */}
+             {!(isMobile && !isLandscape) && (
              <div className={`absolute retro-text text-white drop-shadow-md z-10 pointer-events-none select-none ${
                  isMobile && !isLandscape ? 'top-2 left-2' : 'top-4 left-4'
              }`}>
@@ -13366,6 +13351,7 @@ const VoxelWorld = ({
                      <p className="text-[10px] opacity-70 mt-1">WASD Move • E Interact • T Emotes • Mouse Orbit</p>
                  )}
              </div>
+             )}
              
              {/* Debug Position Panel - Press F3 to toggle (DEV ONLY) */}
              {process.env.NODE_ENV !== 'production' && showDebugPosition && (

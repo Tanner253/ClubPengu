@@ -27,6 +27,7 @@ const TouchCameraControl = ({
                 const isInteractive = target.closest('button') || 
                                      target.closest('[data-joystick]') ||
                                      target.closest('[data-no-camera]') ||
+                                     target.closest('[data-player-modal]') ||
                                      target.closest('[data-emote-wheel]') ||
                                      target.closest('input') ||
                                      target.tagName === 'INPUT' ||

@@ -67,6 +67,22 @@ export function getOnboardingStepIds() {
     return ONBOARDING_STEPS.map((s) => s.id);
 }
 
+/** True when the player finished the intro quest (reward claimed or all steps done). */
+export function isOnboardingQuestComplete(user) {
+    if (!user?.onboardingQuest) return false;
+    if (user.onboardingQuest.rewardClaimed) return true;
+    const completed = user.onboardingQuest.completedSteps || [];
+    const required = getOnboardingStepIds();
+    return required.length > 0 && required.every((id) => completed.includes(id));
+}
+
+export function getOnboardingProgress(user) {
+    const completed = user?.onboardingQuest?.completedSteps || [];
+    const totalSteps = ONBOARDING_STEPS.length;
+    const completedCount = ONBOARDING_STEPS.filter((s) => completed.includes(s.id)).length;
+    return { completedCount, totalSteps, complete: isOnboardingQuestComplete(user) };
+}
+
 export function isTownTrashSpot(spotId) {
     return typeof spotId === 'string' && spotId.startsWith('town_trash_');
 }

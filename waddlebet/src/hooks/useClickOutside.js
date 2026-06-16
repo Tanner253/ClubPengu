@@ -11,6 +11,7 @@ export const useClickOutside = (ref, callback, enabled = true) => {
         if (!enabled) return;
         
         const handleClickOutside = (e) => {
+            if (e.target?.closest?.('[data-player-modal]')) return;
             if (ref.current && !ref.current.contains(e.target)) {
                 callback(e);
             }

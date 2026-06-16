@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useChallenge } from '../challenge';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import { useDeviceDetection, useEscapeKey } from '../hooks';
@@ -142,6 +143,10 @@ const WagerModal = () => {
     const handleModalInteraction = (e) => {
         e.stopPropagation();
     };
+
+    const stopTouchPropagation = (e) => {
+        e.stopPropagation();
+    };
     
     const handleBackdropClick = (e) => {
         if (e.target === e.currentTarget) {
@@ -150,12 +155,13 @@ const WagerModal = () => {
     };
     
     // Landscape mobile layout
-    if (isLandscape && isMobile) {
-        return (
-            <div 
-                className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-2"
-                onClick={handleBackdropClick}
-            >
+    const modalContent = isLandscape && isMobile ? (
+        <div 
+            data-player-modal="true"
+            className="fixed inset-0 z-[10100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-2 pointer-events-auto"
+            onClick={handleBackdropClick}
+            onTouchStart={stopTouchPropagation}
+        >
                 {/* Modal wrapper with outset close button */}
                 <div className="relative">
                     {/* Close button - outset */}
@@ -168,9 +174,10 @@ const WagerModal = () => {
                     
                     <div 
                         ref={modalRef}
-                        className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl border border-white/10 shadow-2xl overflow-hidden max-h-[85vh]"
+                        className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-xl border border-white/10 shadow-2xl overflow-hidden max-h-[85vh] pointer-events-auto"
                         style={{ maxWidth: '90vw', width: '480px' }}
                         onClick={handleModalInteraction}
+                        onTouchStart={handleModalInteraction}
                         data-no-camera="true"
                     >
                         <form onSubmit={handleSubmit} className="flex">
@@ -280,18 +287,16 @@ const WagerModal = () => {
                         </form>
                     </div>
                 </div>
-            </div>
-        );
-    }
-    
-    // Portrait mobile & Desktop layout
-    return (
+        </div>
+    ) : (
         <div 
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm animate-fade-in overflow-hidden"
+            data-player-modal="true"
+            className="fixed inset-0 z-[10100] bg-black/70 backdrop-blur-sm animate-fade-in overflow-hidden pointer-events-auto"
             onClick={handleBackdropClick}
+            onTouchStart={stopTouchPropagation}
         >
             <div 
-                className="w-full h-full flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain"
+                className="w-full h-full flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain pointer-events-auto"
                 style={{ WebkitOverflowScrolling: 'touch' }}
                 onClick={handleBackdropClick}
             >
@@ -307,9 +312,10 @@ const WagerModal = () => {
                     
                     <div 
                         ref={modalRef}
-                        className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-white/10 shadow-2xl p-4 sm:p-5 w-[300px] sm:w-[340px]"
+                        className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-white/10 shadow-2xl p-4 sm:p-5 w-[300px] sm:w-[340px] pointer-events-auto"
                         onClick={handleModalInteraction}
                         onMouseDown={handleModalInteraction}
+                        onTouchStart={handleModalInteraction}
                         data-no-camera="true"
                     >
                         {/* Header */}
@@ -439,6 +445,8 @@ const WagerModal = () => {
             </div>
         </div>
     );
+
+    return createPortal(modalContent, document.body);
 };
 
 export default WagerModal;

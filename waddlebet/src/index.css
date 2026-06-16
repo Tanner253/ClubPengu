@@ -11,6 +11,15 @@
   display: none;  /* Chrome, Safari, Opera */
 }
 
+/* World interaction prompts — pass taps through to canvas except on buttons */
+.world-interaction-prompt {
+  pointer-events: none;
+}
+.world-interaction-prompt button,
+.world-interaction-prompt a {
+  pointer-events: auto;
+}
+
 /* RuneScape-style chat panel */
 .rs-chat-panel {
   --rs-chat-gold: #c9a227;
