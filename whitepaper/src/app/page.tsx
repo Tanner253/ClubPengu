@@ -148,7 +148,6 @@ function Navigation() {
     { label: t("nav.whaleStatus"), href: "#whale-status" },
     { label: t("nav.gachaSystem"), href: "#gacha-system" },
     { label: t("nav.tokenEconomy"), href: "#economy" },
-    { label: t("nav.changelog"), href: "#changelog" },
   ];
 
   const gameFeaturesLabel = t("nav.features");
@@ -191,6 +190,14 @@ function Navigation() {
                 {item.label}
               </a>
             ))}
+
+            <a
+              href="#changelog"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-sm font-medium text-green-400 transition-colors hover:border-green-400/50 hover:bg-green-500/15 hover:text-green-300"
+            >
+              <ScrollText className="w-4 h-4" />
+              {t("nav.changelog")}
+            </a>
             
             {/* Game Features Dropdown */}
             <div className="relative">
@@ -289,6 +296,15 @@ function Navigation() {
                 {item.label}
               </a>
             ))}
+
+            <a
+              href="#changelog"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center gap-2 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-green-400 transition-colors hover:bg-green-500/15 hover:text-green-300"
+            >
+              <ScrollText className="w-4 h-4" />
+              {t("nav.changelog")}
+            </a>
             
             {/* Game Features Collapsible */}
             <div className="py-2">
