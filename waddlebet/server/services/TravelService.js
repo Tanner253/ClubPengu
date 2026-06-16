@@ -692,4 +692,4 @@ export default class TravelService {
         this.broadcastRouteStatuses(voyage.fromRoom);
     }
 }
-
+
