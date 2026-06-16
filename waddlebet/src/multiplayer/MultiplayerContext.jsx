@@ -57,15 +57,16 @@ export function MultiplayerProvider({ children }) {
     const playerNameRef = useRef(playerName);
     
     // ==================== AUTHENTICATION STATE ====================
-    const [isAuthenticated, setIsAuthenticated] = useState(() => hasStoredSession(localStorage));
-    const isAuthenticatedRef = useRef(isAuthenticated);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const isAuthenticatedRef = useRef(false);
+    const isAuthenticatingRef = useRef(false);
     const [walletAddress, setWalletAddress] = useState(() => localStorage.getItem('wallet_address'));
     const [authToken, setAuthToken] = useState(() => localStorage.getItem('auth_token'));
     const [userData, setUserData] = useState(null);
     const [isNewUser, setIsNewUser] = useState(false);
     const [authError, setAuthError] = useState(null);
     const [isAuthenticating, setIsAuthenticating] = useState(false);
-    const [isRestoringSession, setIsRestoringSession] = useState(false);
+    const [isRestoringSession, setIsRestoringSession] = useState(() => hasStoredSession(localStorage));
     
     // Pending auth challenge
     const pendingChallengeRef = useRef(null);
@@ -314,9 +315,17 @@ export function MultiplayerProvider({ children }) {
         isAuthenticatedRef.current = isAuthenticated;
     }, [isAuthenticated]);
 
+    useEffect(() => {
+        isAuthenticatingRef.current = isAuthenticating;
+    }, [isAuthenticating]);
+
     /** Restore wallet session from localStorage — runs on every (re)connect, not just first load */
     const attemptSessionRestore = useCallback((ws) => {
         if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+        if (isAuthenticatingRef.current) {
+            console.log('🔄 Skipping session restore — wallet sign-in in progress');
+            return false;
+        }
 
         const stored = readStoredSession(localStorage);
         if (!stored) return false;
@@ -327,13 +336,12 @@ export function MultiplayerProvider({ children }) {
             setIsAuthenticated(false);
             setWalletAddress(null);
             setAuthToken(null);
+            setIsRestoringSession(false);
             return false;
         }
 
         console.log('🔄 Attempting to restore session...');
-        if (!isAuthenticatedRef.current) {
-            setIsRestoringSession(true);
-        }
+        setIsRestoringSession(true);
         ws.send(JSON.stringify(buildAuthRestoreMessage(stored)));
         return true;
     }, []);
@@ -423,6 +431,26 @@ export function MultiplayerProvider({ children }) {
             reconnectTimeoutRef.current = setTimeout(connect, 5000);
         }
     }, [attemptSessionRestore, sendKeepalivePing]);
+
+    const waitForOpenSocket = useCallback((timeoutMs = 8000) => {
+        return new Promise((resolve) => {
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                resolve(true);
+                return;
+            }
+            connect();
+            const started = Date.now();
+            const timer = setInterval(() => {
+                if (wsRef.current?.readyState === WebSocket.OPEN) {
+                    clearInterval(timer);
+                    resolve(true);
+                } else if (Date.now() - started >= timeoutMs) {
+                    clearInterval(timer);
+                    resolve(false);
+                }
+            }, 100);
+        });
+    }, [connect]);
     
     // ==================== GENERIC MESSAGE HANDLERS ====================
     // Allow components to subscribe to all messages
@@ -518,8 +546,8 @@ export function MultiplayerProvider({ children }) {
                 setIsAuthenticating(false);
                 setIsRestoringSession(false);
                 
-                // Clear stored session on failure
-                if (message.error === 'TOKEN_EXPIRED' || message.error === 'SESSION_INVALID') {
+                // Clear stored session on restore failure so reconnect won't loop stale tokens
+                if (['TOKEN_EXPIRED', 'SESSION_INVALID', 'INVALID_TOKEN', 'WALLET_MISMATCH', 'RESTORE_ERROR'].includes(message.error)) {
                     clearStoredSession(localStorage);
                     setWalletAddress(null);
                     setAuthToken(null);
@@ -2318,6 +2346,9 @@ export function MultiplayerProvider({ children }) {
         
         setIsAuthenticating(true);
         setAuthError(null);
+        clearStoredSession(localStorage);
+        setAuthToken(null);
+        setIsAuthenticated(false);
         
         // Step 1: Connect to Phantom
         const connectResult = await wallet.connect();
@@ -2328,6 +2359,12 @@ export function MultiplayerProvider({ children }) {
         }
         
         setWalletAddress(connectResult.publicKey);
+
+        if (!await waitForOpenSocket()) {
+            setAuthError({ code: 'NOT_CONNECTED', message: 'Lost connection to server. Please try again.' });
+            setIsAuthenticating(false);
+            return { success: false, error: 'NOT_CONNECTED' };
+        }
         
         // Step 2: Request x403 auth challenge from server
         // Include domain for signer confidence message
@@ -2392,7 +2429,7 @@ export function MultiplayerProvider({ children }) {
         
         // Auth response will be handled by message handler
         return { success: true, pending: true };
-    }, [send, playerName, referralCode]);
+    }, [send, playerName, referralCode, waitForOpenSocket]);
     
     /**
      * Disconnect wallet and logout
@@ -3256,17 +3293,12 @@ export function MultiplayerProvider({ children }) {
         const handleFocus = () => {
             console.log('📱 Window focused - sending keepalive ping');
             
-            // Always try to send a ping when window gains focus
-            // This helps after Phantom wallet popups close
             if (wsRef.current?.readyState === WebSocket.OPEN) {
                 sendKeepalivePing(wsRef.current);
-            } else if (wasHidden) {
-                console.log('📱 Connection lost while hidden, reconnecting...');
-                setTimeout(() => {
-                    if (wsRef.current?.readyState !== WebSocket.OPEN) {
-                        connect();
-                    }
-                }, 500);
+            } else {
+                // PC Phantom extension popup can kill WS without hiding the tab
+                console.log('📱 Connection lost — reconnecting after focus');
+                connect();
             }
         };
         
