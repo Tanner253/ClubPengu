@@ -46,11 +46,19 @@ export default function OnboardingQuestHUD({ isMobile = false, isPortrait = fals
 
     if (!visible && !showRewardBanner) return null;
 
+    // Portrait mobile: keep quest off the bottom-left joystick zone
+    const mobilePortrait = isMobile && isPortrait;
+    const questAnchorClass = mobilePortrait
+        ? 'top-12 left-2 right-14'
+        : isPortrait
+            ? 'bottom-20 left-2 right-2'
+            : 'top-24 left-4 w-72 max-w-[calc(100vw-2rem)]';
+
     if (showRewardBanner && status?.rewardClaimed) {
         return (
             <div
                 className={`fixed z-30 pointer-events-none ${
-                    isPortrait ? 'bottom-20 left-2 right-2' : 'bottom-6 left-4 max-w-sm'
+                    mobilePortrait ? 'top-12 left-2 right-2' : isPortrait ? 'bottom-20 left-2 right-2' : 'bottom-6 left-4 max-w-sm'
                 }`}
             >
                 <div className="bg-emerald-900/90 border border-emerald-400/60 rounded-xl px-4 py-3 shadow-lg backdrop-blur-md">
@@ -116,9 +124,7 @@ export default function OnboardingQuestHUD({ isMobile = false, isPortrait = fals
                 type="button"
                 onClick={() => setCollapsed(false)}
                 className={`fixed z-30 touch-manipulation ${
-                    isPortrait
-                        ? 'bottom-20 left-2'
-                        : 'top-24 left-4'
+                    mobilePortrait ? 'top-12 left-2' : isPortrait ? 'bottom-20 left-2' : 'top-24 left-4'
                 } bg-sky-950/90 hover:bg-sky-900/90 border border-sky-400/50 rounded-xl px-3 py-2 shadow-lg backdrop-blur-md flex items-center gap-2`}
                 aria-label="Open quest guide"
             >
@@ -131,13 +137,7 @@ export default function OnboardingQuestHUD({ isMobile = false, isPortrait = fals
     }
 
     return (
-        <div
-            className={`fixed z-30 ${
-                isPortrait
-                    ? 'bottom-20 left-2 right-2 max-w-none'
-                    : 'top-24 left-4 w-72 max-w-[calc(100vw-2rem)]'
-            }`}
-        >
+        <div className={`fixed z-30 ${questAnchorClass}`}>
             <div className="bg-black/75 border border-sky-400/35 rounded-xl shadow-xl backdrop-blur-md overflow-hidden">
                 <div className="flex items-center justify-between gap-2 px-3 py-2 bg-sky-950/50 border-b border-white/10">
                     <div className="flex items-center gap-2 min-w-0">
