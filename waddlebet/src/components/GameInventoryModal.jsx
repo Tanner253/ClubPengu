@@ -34,6 +34,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
         setGameHotbarSlot,
         sellAtMerchant,
         sellBatchAtMerchant,
+        dropWorldItem,
         isAuthenticated
     } = useMultiplayer();
 
@@ -45,15 +46,35 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
     const [dragSource, setDragSource] = useState(null);
     const [hoverSlot, setHoverSlot] = useState(null);
     const [sellFeedback, setSellFeedback] = useState(null);
+    const [dropFeedback, setDropFeedback] = useState(null);
     const [selling, setSelling] = useState(false);
     const dragMovedRef = useRef(false);
     const dragSourceRef = useRef(null);
     const hoverSlotRef = useRef(null);
     const sellTrayRef = useRef(null);
+    const modalPanelRef = useRef(null);
     const lastPointerRef = useRef({ x: 0, y: 0 });
     const longPressTimerRef = useRef(null);
     const longPressTriggeredRef = useRef(false);
     const [isMobileLayout, setIsMobileLayout] = useState(false);
+
+    const dropSlotToWorld = useCallback(async (slotIndex, quantity = 1) => {
+        if (!isAuthenticated || slotIndex == null) return;
+        const slot = storedSlotsRef.current[slotIndex];
+        if (!slotHasItem(slot)) return;
+        const dropQty = Math.min(Math.max(1, quantity), slot.quantity || 1);
+        const result = await dropWorldItem?.(slotIndex, dropQty);
+        if (result?.error) {
+            setDropFeedback(result.message || result.error);
+            setTimeout(() => setDropFeedback(null), 3000);
+            return;
+        }
+        setDropFeedback(dropQty > 1 ? `Dropped ${dropQty} in world` : 'Dropped in world');
+        setTimeout(() => setDropFeedback(null), 2000);
+        if (slotIndex === selectedSlot && !result?.inventory?.slots?.[slotIndex]?.quantity) {
+            setSelectedSlot(null);
+        }
+    }, [dropWorldItem, isAuthenticated, selectedSlot]);
 
     useEscapeKey(onClose, isOpen);
 
@@ -130,7 +151,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
         if (dragSource === null) return undefined;
 
         const trackPointer = (e) => {
-            lastPointerRef.current = { x: e.clientX, y: e.clientY };
+            lastPointerRef.current = { x: e.clientX, y: e.clientY, shiftKey: e.shiftKey };
             if (longPressTimerRef.current) {
                 clearTimeout(longPressTimerRef.current);
                 longPressTimerRef.current = null;
@@ -161,8 +182,18 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                     const rect = sellTrayRef.current.getBoundingClientRect();
                     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
                 })();
+            const panel = modalPanelRef.current;
+            const droppedOutsidePanel = panel && dragMovedRef.current && (() => {
+                const rect = panel.getBoundingClientRect();
+                return x < rect.left || x > rect.right || y < rect.top || y > rect.bottom;
+            })();
 
-            if (from !== null && droppedOnSellTray && isSellableSlot(from)) {
+            if (from !== null && droppedOutsidePanel && slotHasItem(draggedSlot) && isAuthenticated) {
+                const dropQty = lastPointerRef.current.shiftKey
+                    ? (draggedSlot.quantity || 1)
+                    : 1;
+                dropSlotToWorld(from, dropQty);
+            } else if (from !== null && droppedOnSellTray && isSellableSlot(from)) {
                 addToSellSelection(from);
             } else if (from !== null && hotbarIndex != null && isHotbarItem(draggedSlot)) {
                 await setGameHotbarSlot?.(hotbarIndex, from);
@@ -186,7 +217,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
             window.removeEventListener('pointerup', finishDrag);
             window.removeEventListener('pointercancel', finishDrag);
         };
-    }, [dragSource, moveGameInventorySlot, setGameHotbarSlot, canSell, isSellableSlot, addToSellSelection, isMobileLayout, toggleSellSelection]);
+    }, [dragSource, moveGameInventorySlot, setGameHotbarSlot, canSell, isSellableSlot, addToSellSelection, isMobileLayout, toggleSellSelection, dropSlotToWorld, isAuthenticated]);
 
     const clearLongPressTimer = useCallback(() => {
         if (longPressTimerRef.current) {
@@ -252,9 +283,14 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
             return;
         }
 
+        if (e.shiftKey && isAuthenticated && hasItem) {
+            dropSlotToWorld(index, storedSlotsRef.current[index]?.quantity || 1);
+            return;
+        }
+
         dragMovedRef.current = false;
         longPressTriggeredRef.current = false;
-        lastPointerRef.current = { x: e.clientX, y: e.clientY };
+        lastPointerRef.current = { x: e.clientX, y: e.clientY, shiftKey: e.shiftKey };
         setDragSource(index);
         setHoverSlot(index);
 
@@ -266,7 +302,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                 toggleSellSelection(index);
             }, 480);
         }
-    }, [canSell, isSellableSlot, toggleSellSelection, isMobileLayout, clearLongPressTimer]);
+    }, [canSell, isSellableSlot, toggleSellSelection, isMobileLayout, clearLongPressTimer, dropSlotToWorld, isAuthenticated]);
 
     const handlePointerMove = useCallback(() => {
         if (dragSourceRef.current !== null) {
@@ -330,7 +366,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
 
     return createPortal(
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-            <div className={`bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-cyan-500/40 rounded-2xl shadow-2xl w-full ${canSell ? 'max-w-3xl' : 'max-w-lg'} max-h-[90vh] overflow-hidden flex flex-col`}>
+            <div ref={modalPanelRef} className={`bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-cyan-500/40 rounded-2xl shadow-2xl w-full ${canSell ? 'max-w-3xl' : 'max-w-lg'} max-h-[90vh] overflow-hidden flex flex-col`}>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/20">
                     <div className="flex items-center gap-2">
                         <span className="text-2xl">{canSell ? (sellMerchant?.emoji || '🪙') : '🎒'}</span>
@@ -628,9 +664,12 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                                     ? 'Tap a stack to inspect · Long-press to queue for sale'
                                     : 'Click a stack to inspect · Shift+click to queue for sale')
                                 : (isMobileLayout
-                                    ? 'Tap a stack to inspect · Drag items onto the hotbar'
-                                    : 'Click a stack to inspect · Drag items onto the hotbar')}
+                                    ? 'Tap a stack to inspect · Shift+click to drop stack · Drag outside to drop 1'
+                                    : 'Click a stack to inspect · Shift+click to drop stack · Drag outside to drop 1 · Shift+drag outside for full stack')}
                         </p>
+                    )}
+                    {dropFeedback && (
+                        <p className="text-cyan-300 text-center text-sm mt-2 font-bold">{dropFeedback}</p>
                     )}
                     {sellFeedback && (
                         <p className="text-amber-300 text-center text-sm mt-2 font-bold">{sellFeedback}</p>

@@ -125,8 +125,157 @@ function buildLogVoxels(tier = 1) {
 
 function buildWormVoxels() {
     const voxels = [];
-    for (let i = 0; i < 6; i++) {
-        voxels.push({ x: i % 2, y: Math.floor(i / 2) - 1, z: 0, c: i % 2 ? '#c0392b' : '#e74c3c' });
+    for (let i = 0; i < 8; i++) {
+        const seg = i % 2 ? '#c0392b' : '#e74c3c';
+        voxels.push({ x: Math.sin(i * 0.8) * 0.5, y: 0, z: i * 0.55, c: seg });
+        if (i % 3 === 0) voxels.push({ x: Math.sin(i * 0.8) * 0.5 + 0.4, y: 0.3, z: i * 0.55, c: '#a93226' });
+    }
+    return voxels;
+}
+
+function buildMushroomVoxels() {
+    const voxels = [];
+    const cap = '#c0392b';
+    const capLight = '#e74c3c';
+    const stem = '#f5f0e1';
+    const spot = '#fff8f0';
+    for (let y = 0; y <= 2; y++) {
+        voxels.push({ x: 0, y, z: 0, c: stem });
+        voxels.push({ x: 0, y, z: 1, c: stem });
+    }
+    for (let x = -2; x <= 2; x++) {
+        for (let z = -1; z <= 2; z++) {
+            if (Math.abs(x) + Math.abs(z - 0.5) <= 3) {
+                voxels.push({ x, y: 3, z, c: (x + z) % 2 === 0 ? cap : capLight });
+            }
+        }
+    }
+    voxels.push({ x: -1, y: 4, z: 0, c: spot }, { x: 1, y: 4, z: 1, c: spot }, { x: 0, y: 4, z: -1, c: spot });
+    return voxels;
+}
+
+function buildRodVoxels() {
+    const voxels = [];
+    const wood = '#6b4423';
+    const woodDark = '#4a3520';
+    const reel = '#888888';
+    const tip = '#cccccc';
+    for (let z = 0; z < 10; z++) {
+        voxels.push({ x: 0, y: 0, z, c: z % 2 === 0 ? wood : woodDark });
+    }
+    for (let x = -1; x <= 1; x++) {
+        for (let y = -1; y <= 1; y++) {
+            if (Math.abs(x) + Math.abs(y) <= 1) voxels.push({ x, y, z: 2, c: reel });
+        }
+    }
+    voxels.push({ x: 0, y: 1, z: 9, c: tip });
+    voxels.push({ x: 0, y: 2, z: 10, c: '#ffffff' });
+    return voxels;
+}
+
+function buildTicketVoxels() {
+    const gold = '#ffd700';
+    const goldDark = '#daa520';
+    const ink = '#5c4033';
+    const voxels = [];
+    for (let x = -2; x <= 2; x++) {
+        for (let y = 0; y <= 3; y++) {
+            voxels.push({ x, y, z: 0, c: y === 0 || y === 3 ? goldDark : gold });
+        }
+    }
+    voxels.push({ x: -1, y: 1, z: 1, c: ink }, { x: 0, y: 2, z: 1, c: ink }, { x: 1, y: 1, z: 1, c: ink });
+    voxels.push({ x: 2, y: 1, z: 0, c: goldDark }, { x: 2, y: 2, z: 0, c: goldDark });
+    return voxels;
+}
+
+function buildJellyfishVoxels(tier = 1) {
+    const hues = ['#7ec8ff', '#b388ff', '#ff80ab', '#80deea', '#ce93d8'];
+    const bell = hues[(tier - 1) % hues.length];
+    const tent = '#e1f5fe';
+    const voxels = [];
+    for (let x = -2; x <= 2; x++) {
+        for (let z = -1; z <= 1; z++) {
+            if (Math.abs(x) + Math.abs(z) <= 2) voxels.push({ x, y: 2, z, c: bell });
+        }
+    }
+    voxels.push({ x: 0, y: 3, z: 0, c: bell });
+    for (let i = 0; i < 5; i++) {
+        voxels.push({ x: i - 2, y: 1, z: 0, c: tent }, { x: i - 2, y: 0, z: 0, c: tent });
+    }
+    return voxels;
+}
+
+function buildCrabVoxels() {
+    const shell = '#c0392b';
+    const claw = '#e74c3c';
+    const voxels = [];
+    for (let x = -1; x <= 1; x++) {
+        for (let z = -1; z <= 1; z++) {
+            if (Math.abs(x) + Math.abs(z) <= 2) voxels.push({ x, y: 0, z, c: shell });
+        }
+    }
+    for (const sx of [-2, 2]) {
+        voxels.push({ x: sx, y: 0, z: 0, c: claw }, { x: sx + (sx > 0 ? 1 : -1), y: 0, z: 0, c: claw });
+    }
+    voxels.push({ x: -1, y: 0, z: -2, c: shell }, { x: 1, y: 0, z: -2, c: shell });
+    return voxels;
+}
+
+function buildSquidVoxels(tier = 1) {
+    const body = tier >= 8 ? '#4a148c' : tier >= 5 ? '#6a1b9a' : '#8e24aa';
+    const eye = '#ffffff';
+    const voxels = [];
+    for (let y = 0; y <= 3; y++) {
+        voxels.push({ x: 0, y, z: 0, c: body });
+        if (y <= 2) voxels.push({ x: 0, y, z: 1, c: body });
+    }
+    voxels.push({ x: -1, y: 2, z: 1, c: eye }, { x: 1, y: 2, z: 1, c: eye });
+    for (let i = 0; i < 4; i++) {
+        voxels.push({ x: i - 1.5, y: -1, z: 0, c: body }, { x: i - 1.5, y: -2, z: 0, c: body });
+    }
+    return voxels;
+}
+
+function buildTurtleVoxels() {
+    const shell = '#2e7d32';
+    const shellLight = '#43a047';
+    const skin = '#8bc34a';
+    const voxels = [];
+    for (let x = -2; x <= 2; x++) {
+        for (let z = -1; z <= 2; z++) {
+            if (Math.abs(x) + Math.abs(z - 0.5) <= 3) {
+                voxels.push({ x, y: 1, z, c: (x + z) % 2 === 0 ? shell : shellLight });
+            }
+        }
+    }
+    voxels.push({ x: 0, y: 0, z: -2, c: skin }, { x: -1, y: 0, z: 3, c: skin }, { x: 1, y: 0, z: 3, c: skin });
+    return voxels;
+}
+
+function buildSharkVoxels(tier = 4) {
+    const colors = FISH_TIER_PALETTES[Math.min(10, Math.max(1, tier))] || FISH_TIER_PALETTES[4];
+    const voxels = [];
+    for (let x = -2; x <= 3; x++) {
+        for (let y = -1; y <= 1; y++) {
+            if (Math.abs(y) + Math.abs(x - 0.5) < 3) voxels.push({ x, y, z: 0, c: colors.body });
+        }
+    }
+    voxels.push({ x: 4, y: 0, z: 0, c: colors.accent });
+    voxels.push({ x: 0, y: 2, z: 0, c: colors.fin });
+    voxels.push({ x: -2, y: 1, z: 0, c: colors.fin });
+    return voxels;
+}
+
+function buildEelVoxels(tier = 5) {
+    const colors = FISH_TIER_PALETTES[Math.min(10, Math.max(1, tier))] || FISH_TIER_PALETTES[5];
+    const voxels = [];
+    for (let i = 0; i < 9; i++) {
+        voxels.push({
+            x: Math.sin(i * 0.65) * 1.2,
+            y: 0,
+            z: i * 0.55,
+            c: i % 2 === 0 ? colors.body : colors.accent
+        });
     }
     return voxels;
 }
@@ -140,6 +289,55 @@ function buildCoinStackVoxels() {
             voxels.push({ x, y: layer, z: 0, c: layer === 1 ? gold : goldDark });
         }
     }
+    return voxels;
+}
+
+/** Money sack — size scales with dropped gold amount. */
+function buildGoldBagVoxels(amount = 1) {
+    const sack = '#9a7b4f';
+    const sackDark = '#6b4f2a';
+    const gold = '#ffd700';
+    const goldLight = '#fff176';
+    const goldDark = '#daa520';
+    const tie = '#c0392b';
+    const voxels = [];
+    const tier = amount >= 500 ? 3 : amount >= 50 ? 2 : 1;
+    const bodyHeight = tier === 3 ? 4 : tier === 2 ? 3 : 2;
+
+    for (let y = 0; y <= bodyHeight; y++) {
+        const width = y === 0 ? 2 : y === bodyHeight ? 1 : 2;
+        for (let x = -width; x <= width; x++) {
+            for (let z = -1; z <= 1; z++) {
+                if (Math.abs(x) + Math.abs(z) <= width + (y === 0 ? 1 : 0)) {
+                    voxels.push({
+                        x,
+                        y,
+                        z,
+                        c: (x + z + y) % 2 === 0 ? sack : sackDark
+                    });
+                }
+            }
+        }
+    }
+
+    for (let x = -1; x <= 1; x++) {
+        voxels.push({ x, y: bodyHeight + 1, z: 0, c: sackDark });
+    }
+    voxels.push({ x: -1, y: bodyHeight + 2, z: 0, c: tie });
+    voxels.push({ x: 1, y: bodyHeight + 2, z: 0, c: tie });
+    voxels.push({ x: 0, y: bodyHeight + 2, z: 0, c: '#e74c3c' });
+
+    const coinCount = tier === 3 ? 8 : tier === 2 ? 5 : 3;
+    for (let i = 0; i < coinCount; i++) {
+        const ox = (i % 3) - 1;
+        const oz = (Math.floor(i / 3) % 2) * 2 - 1;
+        const cy = bodyHeight + 1 + (tier >= 2 && i % 2);
+        voxels.push({ x: ox, y: cy, z: oz, c: i % 2 ? gold : goldDark });
+        if (tier >= 2 && i % 3 === 0) {
+            voxels.push({ x: ox, y: cy + 1, z: oz, c: goldLight });
+        }
+    }
+
     return voxels;
 }
 
@@ -158,17 +356,29 @@ function buildGenericVoxels(category = 'unknown') {
 
 export function getHeldItemVoxels(entry) {
     if (!entry?.itemId) return null;
-    const { itemId, category, tier } = entry;
+    const { itemId, category, tier, quantity } = entry;
 
+    if (itemId === 'gold_bag' || category === 'gold') {
+        return buildGoldBagVoxels(quantity ?? tier ?? 1);
+    }
     if (AXE_ITEM_IDS.includes(itemId) || (category === 'tool' && itemId.endsWith('_axe'))) {
         return buildAxeVoxels(itemId);
     }
-    if (category === 'fish' || itemId.includes('fish') || itemId.includes('jelly')) {
+    if (itemId === 'forest_mushroom' || category === 'forage') return buildMushroomVoxels();
+    if (itemId === 'basic_rod' || category === 'rod') return buildRodVoxels();
+    if (category === 'ticket' || itemId.startsWith('ferry_ticket')) return buildTicketVoxels();
+    if (itemId === 'worm' || category === 'bait') return buildWormVoxels();
+    if (itemId.includes('jelly')) return buildJellyfishVoxels(tier || 1);
+    if (itemId === 'giant_crab') return buildCrabVoxels();
+    if (itemId.includes('squid') || itemId === 'kraken') return buildSquidVoxels(tier || 6);
+    if (itemId === 'sea_turtle') return buildTurtleVoxels();
+    if (itemId.includes('shark') || itemId === 'manta_ray') return buildSharkVoxels(tier || 4);
+    if (itemId.includes('eel') || itemId === 'sea_serpent') return buildEelVoxels(tier || 5);
+    if (category === 'fish' || itemId.includes('fish')) {
         return buildFishVoxels(tier || 1);
     }
     if (category === 'wood' || itemId.endsWith('_log')) return buildLogVoxels(tier || 1);
-    if (itemId === 'worm' || category === 'bait') return buildWormVoxels();
-    if (itemId.includes('coin') || itemId.includes('gold')) return buildCoinStackVoxels();
+    if (itemId.includes('coin')) return buildCoinStackVoxels();
 
     return buildGenericVoxels(category);
 }

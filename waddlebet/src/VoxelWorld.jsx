@@ -89,6 +89,8 @@ import ManualChopController from './systems/ManualChopController';
 import { getManualChopStandDistance, snapPlayerToChopRing } from './config/manualChop';
 import { formatForestRegrowCountdown } from './config/harvestableTrees';
 import ForestTreeManager from './systems/ForestTreeManager';
+import WorldDropManager from './systems/WorldDropManager';
+import { WORLD_DROP_PICKUP_RADIUS, isGoldWorldDrop } from './config/worldDrops';
 import { getOverworldMountainConfig, OVERWORLD_CENTER_SPAWN } from './config/overworldConfig';
 import { loadSnowFortsQuadrant, loadForestQuadrant } from './world/overworldLoader';
 import { HARVESTABLE_MUSHROOMS, MUSHROOM_INTERACTION_RADIUS } from './config/harvestableMushrooms';
@@ -96,6 +98,7 @@ import { findActiveScavengeSpot } from './config/scavenge';
 import { formatScavengeCountdown, getScavengeRemainingMs, getScavengeSpotPrompt } from './utils/scavengeStatus';
 import { updateHeldGameItem, removeHeldGameItem } from './items/HeldGameItemBuilder';
 import { getActiveHotbarEntry } from './utils/gameHotbar';
+import { canFitItemInBackpack } from './utils/inventoryCapacity';
 
 function syncRemotePlayerHeldItem(meshData, playerData, buildPartMerged) {
     if (!meshData?.mesh || !buildPartMerged) return;
@@ -194,6 +197,8 @@ const VoxelWorld = ({
     const manualChopControllerRef = useRef(null);
     const manualChopActiveRef = useRef(false);
     const mushroomClusterManagerRef = useRef(null);
+    const worldDropManagerRef = useRef(null);
+    const worldDropsRef = useRef([]);
     
     // Keep isInMatch ref up to date
     useEffect(() => {
@@ -396,6 +401,9 @@ const VoxelWorld = ({
         fetchMushrooms,
         mushroomClusters,
         harvestMushroom,
+        worldDrops,
+        pickupWorldDrop,
+        fetchWorldDrops,
         scavengeSpot,
         scavengeCooldowns,
         fetchScavengeStatus,
@@ -434,6 +442,10 @@ const VoxelWorld = ({
         if (!mushroomClusterManagerRef.current || !mushroomClusters?.length) return;
         mushroomClusterManagerRef.current.applySnapshot(mushroomClusters);
     }, [mushroomClusters]);
+
+    useEffect(() => {
+        fetchWorldDrops?.();
+    }, [room, fetchWorldDrops]);
 
     // Keep refs updated for use in event handlers (must be after useMultiplayer destructuring)
     useEffect(() => {
@@ -598,6 +610,12 @@ const VoxelWorld = ({
     const [meshBuilderReady, setMeshBuilderReady] = useState(false); // Re-triggers other-player mesh creation
     const [meshSyncVersion, setMeshSyncVersion] = useState(0); // Bumps when game loop detects missing remote meshes
 
+    useEffect(() => {
+        worldDropsRef.current = worldDrops || [];
+        if (!worldDropManagerRef.current) return;
+        worldDropManagerRef.current.applySnapshot(worldDropsRef.current);
+    }, [worldDrops, meshBuilderReady]);
+
     // Show held game item (fish, wood, axe, etc.) on local player flipper
     useEffect(() => {
         if (!meshBuilderReady || !playerRef.current || !buildPartMergedRef.current) return;
@@ -741,6 +759,7 @@ const VoxelWorld = ({
     const [forestStumpHover, setForestStumpHover] = useState(null);
     const forestStumpHoverRef = useRef(null);
     const [mushroomInteraction, setMushroomInteraction] = useState(null);
+    const [worldDropInteraction, setWorldDropInteraction] = useState(null);
     const [scavengeInteraction, setScavengeInteraction] = useState(null);
     const scavengeLockRef = useRef(false);
     const scavengeCooldownsRef = useRef(scavengeCooldowns);
@@ -754,6 +773,7 @@ const VoxelWorld = ({
         }
     }, [room, isAuthenticated, fetchScavengeStatus]);
     const mushroomLockRef = useRef(false);
+    const worldDropLockRef = useRef(false);
     const [woodChopProgress, setWoodChopProgress] = useState(null);
     const [manualChopActive, setManualChopActive] = useState(false); // { progress 0-1, spotId }
     const woodChopTimerRef = useRef(null);
@@ -2006,6 +2026,11 @@ const VoxelWorld = ({
         buildPenguinMeshRef.current = buildPenguinMesh;
         buildPartMergedRef.current = buildPartMerged;
         setMeshBuilderReady(true);
+
+        if (!worldDropManagerRef.current) {
+            worldDropManagerRef.current = new WorldDropManager();
+        }
+        worldDropManagerRef.current.init(scene, THREE, buildPartMerged);
 
         // Spawn world merchant NPCs as permanent room props
         if (room === 'town' && townCenterRef.current) {
@@ -7089,6 +7114,9 @@ const VoxelWorld = ({
             }
             
             // Performance tracking for render
+            if (worldDropManagerRef.current) {
+                worldDropManagerRef.current.update(delta, time);
+            }
             const renderStart = showPerfDebugRef.current ? performance.now() : 0;
             renderer.render(scene, camera);
             
@@ -7297,6 +7325,9 @@ const VoxelWorld = ({
             if (mushroomClusterManagerRef.current) {
                 mushroomClusterManagerRef.current.cleanup();
                 mushroomClusterManagerRef.current = null;
+            }
+            if (worldDropManagerRef.current) {
+                worldDropManagerRef.current.cleanup();
             }
             // Cleanup Mountain Background
             if (mountainBackgroundRef.current) {
@@ -9319,6 +9350,54 @@ const VoxelWorld = ({
         }
     };
 
+    const checkWorldDropSpots = () => {
+        if (!worldDropManagerRef.current || !isAuthenticated) {
+            if (worldDropInteraction) setWorldDropInteraction(null);
+            return;
+        }
+        const nearest = worldDropManagerRef.current.findNearest(posRef.current, WORLD_DROP_PICKUP_RADIUS);
+        if (nearest) {
+            const isGold = isGoldWorldDrop(nearest);
+            const label = isGold
+                ? `${nearest.quantity?.toLocaleString?.() ?? nearest.quantity} Gold`
+                : (nearest.metadata?.name || nearest.metadata?.emoji || nearest.itemId);
+            const qtyLabel = !isGold && nearest.quantity > 1 ? ` ×${nearest.quantity}` : '';
+            const canPickup = isGold
+                ? isAuthenticated
+                : canFitItemInBackpack(
+                    gameInventory,
+                    nearest.itemId,
+                    nearest.quantity,
+                    nearest.maxStack,
+                    nearest.metadata
+                );
+            const next = {
+                dropId: nearest.id,
+                itemLabel: `${label}${qtyLabel}`,
+                isGold,
+                prompt: canPickup
+                    ? (isMobile
+                        ? `Tap to pick up ${label}${qtyLabel}`
+                        : `Press E to pick up ${label}${qtyLabel}`)
+                    : (isGold ? 'Sign in to pick up gold' : 'Backpack full — make space first'),
+                canPickup
+            };
+            setWorldDropInteraction(prev => {
+                if (
+                    prev?.dropId === next.dropId
+                    && prev?.canPickup === next.canPickup
+                    && prev?.prompt === next.prompt
+                    && prev?.isGold === next.isGold
+                ) {
+                    return prev;
+                }
+                return next;
+            });
+        } else if (worldDropInteraction) {
+            setWorldDropInteraction(null);
+        }
+    };
+
     const checkScavengeSpots = () => {
         if (room !== 'snow_forts' && room !== 'town') {
             if (scavengeInteraction) setScavengeInteraction(null);
@@ -9424,13 +9503,14 @@ const VoxelWorld = ({
             checkFishingSpots();
             checkWoodcuttingSpots();
             checkMushroomSpots();
+            checkWorldDropSpots();
             checkScavengeSpots();
             checkWorldNpcs();
             checkLordFishnu();
             checkArcadeMachines();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, woodcuttingInteraction, woodChopProgress, mushroomInteraction, scavengeInteraction, scavengeCooldowns, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, isAuthenticated, gameInventory, mushroomClusters, nearbyNpcInteraction, nearbyTravelNpcInteraction, travelRouteStatuses]);
+    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, woodcuttingInteraction, woodChopProgress, mushroomInteraction, worldDropInteraction, scavengeInteraction, scavengeCooldowns, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, isAuthenticated, gameInventory, mushroomClusters, worldDrops, nearbyNpcInteraction, nearbyTravelNpcInteraction, travelRouteStatuses]);
     
     // Handle portal entry
     const handlePortalEnter = () => {
@@ -10053,6 +10133,23 @@ const VoxelWorld = ({
         setMushroomInteraction(null);
     }, [mushroomInteraction, harvestMushroom]);
 
+    const handleWorldDropPickup = useCallback(async () => {
+        if (worldDropLockRef.current) return;
+        const interaction = worldDropInteraction;
+        if (!interaction?.canPickup || !interaction.dropId) return;
+        worldDropLockRef.current = true;
+        const result = await pickupWorldDrop?.(interaction.dropId);
+        worldDropLockRef.current = false;
+        if (result?.error) {
+            setActiveBubble(result.message || 'Could not pick up item');
+            return;
+        }
+        setActiveBubble(result?.isGold || interaction.isGold
+            ? `💰 Picked up ${interaction.itemLabel || 'gold'}`
+            : `📦 Picked up ${interaction.itemLabel || 'item'}`);
+        setWorldDropInteraction(null);
+    }, [worldDropInteraction, pickupWorldDrop]);
+
     const handleScavengeAction = useCallback(async () => {
         if (scavengeLockRef.current) return;
         const interaction = scavengeInteraction;
@@ -10187,11 +10284,15 @@ const VoxelWorld = ({
             }
             if ((room === 'snow_forts' || room === 'town') && scavengeInteraction?.canScavenge && !nearbyPortal && !emoteWheelOpen && !scavengeLockRef.current) {
                 handleScavengeAction();
+                return;
+            }
+            if (worldDropInteraction?.canPickup && !nearbyPortal && !emoteWheelOpen && !worldDropLockRef.current) {
+                handleWorldDropPickup();
             }
         };
         window.addEventListener('keydown', handleFishingKeyPress);
         return () => window.removeEventListener('keydown', handleFishingKeyPress);
-    }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction, handleWoodChopAction, handleMushroomHarvest, handleScavengeAction, woodChopProgress, mushroomInteraction, scavengeInteraction, fishingGameActive]);
+    }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction, handleWoodChopAction, handleMushroomHarvest, handleScavengeAction, handleWorldDropPickup, woodChopProgress, mushroomInteraction, worldDropInteraction, scavengeInteraction, fishingGameActive]);
     
     // E key handler for arcade machines (Battleship PvE)
     useEffect(() => {
@@ -12544,9 +12645,32 @@ const VoxelWorld = ({
                     </button>
                 </div>
              )}
+
+             {worldDropInteraction && !nearbyPortal && !fishingGameActive && !woodChopProgress && !manualChopActive && (
+                <div className={`absolute bg-black/80 backdrop-blur-sm rounded-xl border border-cyan-500/40 text-center z-20 ${
+                    isMobile ? 'bottom-[170px] left-1/2 -translate-x-1/2 p-3' : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                }`}>
+                    <div className="text-3xl mb-1">{worldDropInteraction.isGold ? '💰' : '📦'}</div>
+                    <p className={`retro-text mb-2 text-sm ${worldDropInteraction.canPickup ? 'text-cyan-200' : 'text-amber-200'}`}>
+                        {worldDropInteraction.prompt}
+                    </p>
+                    <button
+                        type="button"
+                        disabled={!worldDropInteraction.canPickup}
+                        className={`w-full px-6 py-2 font-bold rounded-lg retro-text text-sm ${
+                            worldDropInteraction.canPickup
+                                ? 'bg-gradient-to-b from-cyan-400 to-blue-700 text-white'
+                                : 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-70'
+                        }`}
+                        onClick={handleWorldDropPickup}
+                    >
+                        {worldDropInteraction.canPickup ? 'Pick up' : 'Backpack full'}
+                    </button>
+                </div>
+             )}
              
              {/* World Merchant NPC interaction */}
-             {nearbyNpcInteraction && (room === 'town' || room === 'snow_forts' || room === 'forest_trails') && !nearbyPortal && !fishingInteraction && !woodcuttingInteraction && !mushroomInteraction && !scavengeInteraction && !fishingGameActive && !activeNpcDef && (
+             {nearbyNpcInteraction && (room === 'town' || room === 'snow_forts' || room === 'forest_trails') && !nearbyPortal && !fishingInteraction && !woodcuttingInteraction && !mushroomInteraction && !worldDropInteraction && !scavengeInteraction && !fishingGameActive && !activeNpcDef && (
                 <div
                     className={`absolute bg-gradient-to-b from-slate-900/95 to-slate-950/95 backdrop-blur-sm rounded-xl border border-cyan-500/40 text-center z-20 shadow-lg shadow-cyan-500/10 ${
                         isMobile

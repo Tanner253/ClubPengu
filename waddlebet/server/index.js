@@ -51,6 +51,8 @@ import rentScheduler from './schedulers/RentScheduler.js';
 import solanaPaymentService from './services/SolanaPaymentService.js';
 import devBotService, { BOT_CONFIG } from './services/DevBotService.js';
 import MushroomService from './services/MushroomService.js';
+import WorldDropService from './services/WorldDropService.js';
+import { GOLD_BAG_ITEM_ID, MIN_GOLD_DROP, MAX_GOLD_DROP, isGoldWorldDrop } from './config/worldDrops.js';
 import ScavengeService from './services/ScavengeService.js';
 import OnboardingQuestService from './services/OnboardingQuestService.js';
 import { getScavengeSpot } from './config/scavenge.js';
@@ -583,6 +585,7 @@ const goldSlotsService = new GoldSlotsService(userService, broadcastToRoom, send
 const gameInventoryService = new GameInventoryService(userService);
 const forestTreeService = new ForestTreeService();
 const mushroomService = new MushroomService();
+const worldDropService = new WorldDropService();
 const scavengeService = new ScavengeService(userService);
 const fishingService = new FishingService(userService, gameInventoryService, broadcastToRoom, sendToPlayer);
 const woodcuttingService = new WoodcuttingService(userService, gameInventoryService, forestTreeService, sendToPlayer);
@@ -703,6 +706,17 @@ setInterval(async () => {
     if (mushroomsRegrown.length > 0) {
         const mushrooms = mushroomsRegrown.map(id => mushroomService.getPublicState(id)).filter(Boolean);
         broadcastToRoomAll('forest_trails', { type: 'mushrooms_update', mushrooms });
+    }
+    const expiredDrops = worldDropService.purgeExpired();
+    if (expiredDrops.length > 0) {
+        const byRoom = new Map();
+        for (const { room, dropId } of expiredDrops) {
+            if (!byRoom.has(room)) byRoom.set(room, []);
+            byRoom.get(room).push(dropId);
+        }
+        for (const [room, dropIds] of byRoom) {
+            broadcastToRoomAll(room, { type: 'world_drops_removed', dropIds });
+        }
     }
 }, 15000);
 
@@ -2682,6 +2696,11 @@ async function handleMessage(playerId, message) {
                     mushrooms: mushroomService.getSnapshot(),
                 });
             }
+
+            sendToPlayer(playerId, {
+                type: 'world_drops_snapshot',
+                drops: worldDropService.getSnapshot(roomId),
+            });
             
             console.log(`[${ts()}] ${player.name} joined ${roomId}${player.isAuthenticated ? ' (authenticated)' : ' (guest)'}`);
             } catch (joinError) {
@@ -6369,6 +6388,301 @@ async function handleMessage(playerId, message) {
                 }
             } catch (error) {
                 console.error('📦 Error in game_inventory_move:', error);
+            }
+            break;
+        }
+
+        case 'world_drops_get': {
+            if (!player.room) break;
+            sendToPlayer(playerId, {
+                type: 'world_drops_snapshot',
+                drops: worldDropService.getSnapshot(player.room)
+            });
+            break;
+        }
+
+        case 'world_item_drop': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'world_item_drop_error',
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Sign in to drop items'
+                });
+                break;
+            }
+            if (!player.room || !player.position) {
+                sendToPlayer(playerId, {
+                    type: 'world_item_drop_error',
+                    error: 'NO_ROOM',
+                    message: 'Cannot drop items here'
+                });
+                break;
+            }
+            try {
+                const slotIndex = Number(message.slotIndex);
+                const quantity = Math.max(1, Number(message.quantity) || 1);
+                const removeResult = await gameInventoryService.removeFromSlot(
+                    player.walletAddress,
+                    slotIndex,
+                    quantity
+                );
+                if (removeResult.error) {
+                    sendToPlayer(playerId, {
+                        type: 'world_item_drop_error',
+                        error: removeResult.error,
+                        message: removeResult.message || 'Could not remove item from backpack'
+                    });
+                    break;
+                }
+
+                const drop = worldDropService.createDrop(
+                    player.room,
+                    removeResult.removed,
+                    player.position,
+                    player.rotation ?? 0,
+                    playerId
+                );
+
+                broadcastToRoomAll(player.room, {
+                    type: 'world_drops_update',
+                    drops: [worldDropService.toPublic(drop)]
+                });
+                sendToPlayer(playerId, {
+                    type: 'world_item_drop_result',
+                    drop: worldDropService.toPublic(drop),
+                    inventory: removeResult.inventory
+                });
+            } catch (error) {
+                console.error('📦 Error in world_item_drop:', error);
+                sendToPlayer(playerId, {
+                    type: 'world_item_drop_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to drop item'
+                });
+            }
+            break;
+        }
+
+        case 'world_gold_drop': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'world_gold_drop_error',
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Sign in to drop gold'
+                });
+                break;
+            }
+            if (!player.room || !player.position) {
+                sendToPlayer(playerId, {
+                    type: 'world_gold_drop_error',
+                    error: 'NO_ROOM',
+                    message: 'Cannot drop gold here'
+                });
+                break;
+            }
+            try {
+                const amount = Math.min(
+                    MAX_GOLD_DROP,
+                    Math.max(0, Math.floor(Number(message.amount) || 0))
+                );
+                if (amount < MIN_GOLD_DROP) {
+                    sendToPlayer(playerId, {
+                        type: 'world_gold_drop_error',
+                        error: 'INVALID_AMOUNT',
+                        message: `Enter at least ${MIN_GOLD_DROP} gold`
+                    });
+                    break;
+                }
+
+                const deduct = await userService.addCoins(
+                    player.walletAddress,
+                    -amount,
+                    'world_gold_drop',
+                    {},
+                    `Dropped ${amount} gold in ${player.room}`
+                );
+                if (!deduct.success) {
+                    sendToPlayer(playerId, {
+                        type: 'world_gold_drop_error',
+                        error: deduct.error || 'INSUFFICIENT_FUNDS',
+                        message: deduct.error === 'INSUFFICIENT_FUNDS'
+                            ? 'Not enough gold'
+                            : 'Could not drop gold'
+                    });
+                    break;
+                }
+
+                const drop = worldDropService.createDrop(
+                    player.room,
+                    {
+                        itemId: GOLD_BAG_ITEM_ID,
+                        quantity: amount,
+                        metadata: {
+                            category: 'gold',
+                            name: `${amount} Gold`,
+                            emoji: '💰'
+                        }
+                    },
+                    player.position,
+                    player.rotation ?? 0,
+                    playerId
+                );
+
+                broadcastToRoomAll(player.room, {
+                    type: 'world_drops_update',
+                    drops: [worldDropService.toPublic(drop)]
+                });
+                sendToPlayer(playerId, {
+                    type: 'world_gold_drop_result',
+                    drop: worldDropService.toPublic(drop),
+                    coins: deduct.newBalance
+                });
+                sendToPlayer(playerId, {
+                    type: 'coins_update',
+                    coins: deduct.newBalance
+                });
+            } catch (error) {
+                console.error('💰 Error in world_gold_drop:', error);
+                sendToPlayer(playerId, {
+                    type: 'world_gold_drop_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to drop gold'
+                });
+            }
+            break;
+        }
+
+        case 'world_item_pickup': {
+            if (!player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'world_item_pickup_error',
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Sign in to pick up items'
+                });
+                break;
+            }
+            if (!player.room || !player.position) break;
+            try {
+                const dropId = message.dropId;
+                const validated = worldDropService.validatePickup(dropId, player.room, player.position);
+                if (validated.error) {
+                    sendToPlayer(playerId, {
+                        type: 'world_item_pickup_error',
+                        error: validated.error,
+                        message: validated.message
+                    });
+                    break;
+                }
+
+                const { drop } = validated;
+                const isGold = isGoldWorldDrop(drop);
+
+                if (!isGold) {
+                    const capacity = await gameInventoryService.canAddItem(
+                        player.walletAddress,
+                        drop.itemId,
+                        drop.quantity,
+                        drop.metadata || {}
+                    );
+                    if (!capacity.ok) {
+                        sendToPlayer(playerId, {
+                            type: 'world_item_pickup_error',
+                            error: capacity.error || 'INVENTORY_FULL',
+                            message: capacity.message || 'Backpack is full — upgrade or sell items'
+                        });
+                        break;
+                    }
+                }
+
+                const pickupResult = worldDropService.tryPickup(dropId, player.room, player.position);
+                if (pickupResult.error) {
+                    sendToPlayer(playerId, {
+                        type: 'world_item_pickup_error',
+                        error: pickupResult.error,
+                        message: pickupResult.message
+                    });
+                    break;
+                }
+
+                if (isGold) {
+                    const coinResult = await userService.addCoins(
+                        player.walletAddress,
+                        drop.quantity,
+                        'world_gold_pickup',
+                        { dropId },
+                        `Picked up ${drop.quantity} gold`
+                    );
+                    if (!coinResult.success) {
+                        worldDropService.restoreDrop(drop);
+                        broadcastToRoomAll(player.room, {
+                            type: 'world_drops_update',
+                            drops: [worldDropService.toPublic(drop)]
+                        });
+                        sendToPlayer(playerId, {
+                            type: 'world_item_pickup_error',
+                            error: coinResult.error || 'PICKUP_FAILED',
+                            message: 'Failed to pick up gold'
+                        });
+                        break;
+                    }
+
+                    broadcastToRoomAll(player.room, {
+                        type: 'world_drops_removed',
+                        dropIds: [dropId]
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'world_item_pickup_result',
+                        dropId,
+                        itemId: drop.itemId,
+                        quantity: drop.quantity,
+                        coins: coinResult.newBalance,
+                        isGold: true
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: coinResult.newBalance
+                    });
+                    break;
+                }
+
+                const addResult = await gameInventoryService.addItem(
+                    player.walletAddress,
+                    drop.itemId,
+                    drop.quantity,
+                    drop.metadata || {}
+                );
+                if (addResult.error) {
+                    worldDropService.restoreDrop(drop);
+                    broadcastToRoomAll(player.room, {
+                        type: 'world_drops_update',
+                        drops: [worldDropService.toPublic(drop)]
+                    });
+                    sendToPlayer(playerId, {
+                        type: 'world_item_pickup_error',
+                        error: addResult.error,
+                        message: addResult.message || 'Failed to pick up item'
+                    });
+                    break;
+                }
+
+                broadcastToRoomAll(player.room, {
+                    type: 'world_drops_removed',
+                    dropIds: [dropId]
+                });
+                sendToPlayer(playerId, {
+                    type: 'world_item_pickup_result',
+                    dropId,
+                    itemId: drop.itemId,
+                    quantity: drop.quantity,
+                    inventory: addResult.inventory
+                });
+            } catch (error) {
+                console.error('📦 Error in world_item_pickup:', error);
+                sendToPlayer(playerId, {
+                    type: 'world_item_pickup_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to pick up item'
+                });
             }
             break;
         }

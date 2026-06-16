@@ -11,6 +11,7 @@ import MarketplaceModal from './MarketplaceModal';
 import TutorialModal, { shouldShowTutorial } from './TutorialModal';
 import OnboardingQuestHUD from './OnboardingQuestHUD';
 import DailyBonusModal from './DailyBonusModal';
+import DropGoldModal from './DropGoldModal';
 import ServerPopulationPopup from './ServerPopulationPopup';
 import { useMultiplayer } from '../multiplayer';
 import { useLanguage } from '../i18n';
@@ -31,10 +32,12 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
     const [forceTutorial, setForceTutorial] = useState(false); // Force show even if dismissed
     const [showDailyBonus, setShowDailyBonus] = useState(false);
     const [mobileServerPopOpen, setMobileServerPopOpen] = useState(false);
+    const [showDropGold, setShowDropGold] = useState(false);
+    const [droppingGold, setDroppingGold] = useState(false);
     const serverPopWrapRef = useRef(null);
     
     // Get pebbles from multiplayer context
-    const { userData, isAuthenticated, serverPopulation, totalPlayerCount: liveTotalCount, requestServerPopulation } = useMultiplayer();
+    const { userData, isAuthenticated, serverPopulation, totalPlayerCount: liveTotalCount, requestServerPopulation, dropWorldGold } = useMultiplayer();
     const { t } = useLanguage();
     const pebbles = userData?.pebbles || 0;
     
@@ -137,6 +140,18 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
 
     const onlineTotal = liveTotalCount || totalPlayerCount || playerCount + 1;
 
+    const handleDropGold = async (amount) => {
+        setDroppingGold(true);
+        const result = await dropWorldGold?.(amount);
+        setDroppingGold(false);
+        if (!result?.error) {
+            setShowDropGold(false);
+        }
+    };
+
+    const coinChipClass = 'bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center gap-1 border border-yellow-400/30';
+    const coinChipButtonClass = `${coinChipClass} hover:border-yellow-300/60 hover:bg-yellow-950/30 active:bg-yellow-950/40 transition-colors touch-manipulation cursor-pointer`;
+
     const playerCountButton = (compact = false) => (
         <div
             ref={serverPopWrapRef}
@@ -196,10 +211,22 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     {playerCountButton(true)}
                     
                     {/* Coins */}
-                    <div className="bg-black/70 backdrop-blur-md rounded-lg px-1.5 py-1 flex items-center gap-1 border border-yellow-400/30">
-                        <span className="text-[10px]">💰</span>
-                        <span className="text-yellow-300 font-bold retro-text text-[10px]">{coins}</span>
-                    </div>
+                    {isAuthenticated ? (
+                        <button
+                            type="button"
+                            onClick={() => setShowDropGold(true)}
+                            className={coinChipButtonClass}
+                            title="Drop gold in the world"
+                        >
+                            <span className="text-[10px]">💰</span>
+                            <span className="text-yellow-300 font-bold retro-text text-[10px]">{coins}</span>
+                        </button>
+                    ) : (
+                        <div className={coinChipClass}>
+                            <span className="text-[10px]">💰</span>
+                            <span className="text-yellow-300 font-bold retro-text text-[10px]">{coins}</span>
+                        </div>
+                    )}
                     
                     {/* Pebbles - Premium Currency (Always visible + button) */}
                     {isAuthenticated && (
@@ -357,6 +384,14 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                     onClose={() => setShowDailyBonus(false)}
                 />
 
+                <DropGoldModal
+                    isOpen={showDropGold}
+                    onClose={() => setShowDropGold(false)}
+                    maxCoins={coins}
+                    onConfirm={handleDropGold}
+                    dropping={droppingGold}
+                />
+
                 <OnboardingQuestHUD isMobile={isMobile} isPortrait={isPortrait} />
 
                 {isAuthenticated && (
@@ -442,10 +477,22 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 {playerCountButton(false)}
                 
                 {/* Coins Display */}
-                <div className={`${navChip} border-yellow-400/30`}>
-                    <span className="text-sm">💰</span>
-                    <span className="text-yellow-300 font-bold retro-text text-xs tabular-nums">{coins}</span>
-                </div>
+                {isAuthenticated ? (
+                    <button
+                        type="button"
+                        onClick={() => setShowDropGold(true)}
+                        className={`${navChip} border-yellow-400/30 hover:border-yellow-300/60 hover:bg-yellow-950/20 transition-all`}
+                        title="Drop gold in the world"
+                    >
+                        <span className="text-sm">💰</span>
+                        <span className="text-yellow-300 font-bold retro-text text-xs tabular-nums">{coins}</span>
+                    </button>
+                ) : (
+                    <div className={`${navChip} border-yellow-400/30`}>
+                        <span className="text-sm">💰</span>
+                        <span className="text-yellow-300 font-bold retro-text text-xs tabular-nums">{coins}</span>
+                    </div>
+                )}
                 
                 {/* Pebbles Display - Premium Currency */}
                 {isAuthenticated && (
@@ -555,6 +602,14 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
             <DailyBonusModal
                 isOpen={showDailyBonus}
                 onClose={() => setShowDailyBonus(false)}
+            />
+
+            <DropGoldModal
+                isOpen={showDropGold}
+                onClose={() => setShowDropGold(false)}
+                maxCoins={coins}
+                onConfirm={handleDropGold}
+                dropping={droppingGold}
             />
 
             <OnboardingQuestHUD isMobile={isMobile} isPortrait={isPortrait} />

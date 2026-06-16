@@ -2000,7 +2000,13 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     onClick={() => onEnterWorld(turnstileToken)}
                     className="w-full py-3.5 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-lg shadow-lg transform active:scale-95 transition-all retro-text text-sm border-b-4 border-yellow-700 flex justify-center items-center gap-2"
                 >
-                    <IconWorld size={16} /> {isAuthenticated ? t('menu.enterWorld') : t('creator.playAsGuest')}
+                    <IconWorld size={16} />{' '}
+                    {isAuthenticated
+                        ? t('creator.welcomeUser').replace(
+                            '{username}',
+                            username || userData?.username || t('creator.guest')
+                        )
+                        : t('creator.playAsGuest')}
                 </button>
                 {!isAuthenticated && (
                     <p className="text-xs text-amber-400 text-center mt-2">
@@ -2027,33 +2033,65 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             
             <WebGLStatusBanner />
 
-            {/* Enter World — top of screen only (title/whitepaper unchanged) */}
-            <div
-                className="absolute top-0 left-1/2 z-20 w-full max-w-md -translate-x-1/2 pointer-events-none px-4"
-                style={{ paddingTop: topSafePadding }}
-            >
-                <div className="pointer-events-auto w-full">
-                    {renderEnterWorldCTA()}
+            {isMobileView ? (
+                <div
+                    className="absolute top-0 left-0 right-0 z-20 pointer-events-none px-4"
+                    style={{ paddingTop: topSafePadding }}
+                >
+                    <div className="flex flex-wrap items-start justify-between gap-2 pointer-events-auto">
+                        <h1
+                            className={`retro-text text-white drop-shadow-lg pointer-events-none ${isPortrait ? 'text-2xl' : 'text-3xl'}`}
+                            style={{ textShadow: '4px 4px 0px #000' }}
+                        >
+                            {t('creator.penguinMaker')}{' '}
+                            <span className={`text-yellow-400 align-top ${isPortrait ? 'text-xs' : 'text-sm'}`}>
+                                {t('creator.deluxe')}
+                            </span>
+                        </h1>
+                        <a
+                            href="https://whitepaper.waddle.bet/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-950/50 px-2.5 py-1.5 text-xs font-bold text-cyan-200 shadow-md transition-colors hover:bg-cyan-900/60"
+                        >
+                            <IconWorld size={14} />
+                            {t('menu.whitepaperCta')}
+                        </a>
+                    </div>
+                    <div className="mt-3 pointer-events-auto w-full max-w-md mx-auto">
+                        {renderEnterWorldCTA()}
+                    </div>
                 </div>
-            </div>
-
-            {/* Title + whitepaper — original top-left placement */}
-            <div className={`absolute top-0 left-0 z-10 w-full ${isPortrait && isMobileView ? 'p-3' : 'p-6'}`}>
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                    <h1 className={`retro-text text-white drop-shadow-lg pointer-events-none ${isPortrait && isMobileView ? 'text-2xl' : 'text-4xl'}`} style={{textShadow: '4px 4px 0px #000'}}>
-                        {t('creator.penguinMaker')} <span className={`text-yellow-400 align-top ${isPortrait && isMobileView ? 'text-xs' : 'text-sm'}`}>{t('creator.deluxe')}</span>
-                    </h1>
-                    <a
-                        href="https://whitepaper.waddle.bet/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-950/50 px-2.5 py-1.5 text-xs font-bold text-cyan-200 shadow-md transition-colors hover:bg-cyan-900/60 sm:px-3 sm:py-2 sm:text-sm"
+            ) : (
+                <>
+                    <div
+                        className="absolute top-0 left-1/2 z-20 w-full max-w-md -translate-x-1/2 pointer-events-none px-4"
+                        style={{ paddingTop: topSafePadding }}
                     >
-                        <IconWorld size={isPortrait && isMobileView ? 14 : 16} />
-                        {t('menu.whitepaperCta')}
-                    </a>
-                </div>
-            </div>
+                        <div className="pointer-events-auto w-full">
+                            {renderEnterWorldCTA()}
+                        </div>
+                    </div>
+
+                    <div className="absolute top-0 left-0 z-10 w-full p-6">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                            <h1 className="retro-text text-4xl text-white drop-shadow-lg pointer-events-none" style={{ textShadow: '4px 4px 0px #000' }}>
+                                {t('creator.penguinMaker')}{' '}
+                                <span className="text-yellow-400 text-sm align-top">{t('creator.deluxe')}</span>
+                            </h1>
+                            <a
+                                href="https://whitepaper.waddle.bet/"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="pointer-events-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-cyan-500/45 bg-cyan-950/50 px-3 py-2 text-sm font-bold text-cyan-200 shadow-md transition-colors hover:bg-cyan-900/60"
+                            >
+                                <IconWorld size={16} />
+                                {t('menu.whitepaperCta')}
+                            </a>
+                        </div>
+                    </div>
+                </>
+            )}
 
             {/* Settings Panel - bottom sheet on mobile portrait, side panel on landscape/desktop */}
             <div className={`absolute z-10 pointer-events-auto ${

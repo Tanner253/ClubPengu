@@ -419,6 +419,18 @@ export default {
         ru: 'ИГРАТЬ КАК ГОСТЬ',
         ar: 'العب كضيف',
     },
+    'creator.welcomeUser': {
+        en: 'Welcome {username}',
+        zh: '欢迎 {username}',
+        es: 'Bienvenido {username}',
+        pt: 'Bem-vindo {username}',
+        ko: '환영합니다 {username}',
+        ja: 'ようこそ {username}',
+        fr: 'Bienvenue {username}',
+        de: 'Willkommen {username}',
+        ru: 'Добро пожаловать, {username}',
+        ar: 'مرحباً {username}',
+    },
     'creator.guestWarning': {
         en: 'Guest mode: Progress won\'t be saved',
         zh: '访客模式：进度不会保存',

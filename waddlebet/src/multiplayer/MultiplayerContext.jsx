@@ -213,6 +213,7 @@ export function MultiplayerProvider({ children }) {
     const [onboardingQuest, setOnboardingQuest] = useState(null);
     const [forestTrees, setForestTrees] = useState([]);
     const [mushroomClusters, setMushroomClusters] = useState([]);
+    const [worldDrops, setWorldDrops] = useState([]);
     const [roomTravelVoyages, setRoomTravelVoyages] = useState([]);
     const [travelRouteStatuses, setTravelRouteStatuses] = useState([]);
     const [myTravelVoyage, setMyTravelVoyage] = useState(null);
@@ -228,6 +229,8 @@ export function MultiplayerProvider({ children }) {
     const backpackUpgradeCallbackRef = useRef(null);
     const hotbarSetCallbackRef = useRef(null);
     const mushroomHarvestCallbackRef = useRef(null);
+    const worldDropCallbackRef = useRef(null);
+    const worldPickupCallbackRef = useRef(null);
     const scavengeCallbackRef = useRef(null);
     const npcQuestCallbackRef = useRef(null);
     const callbacksRef = useRef({
@@ -1320,6 +1323,107 @@ export function MultiplayerProvider({ children }) {
                 if (mushroomHarvestCallbackRef.current) {
                     mushroomHarvestCallbackRef.current({ error: message.error, message: message.message, waitSeconds: message.waitSeconds });
                     mushroomHarvestCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'world_drops_snapshot': {
+                setWorldDrops(message.drops || []);
+                callbacksRef.current.onWorldDropsUpdate?.(message.drops || []);
+                break;
+            }
+
+            case 'world_drops_update': {
+                const dropUpdates = message.drops || [];
+                if (!dropUpdates.length) break;
+                setWorldDrops(prev => {
+                    const map = new Map((prev || []).map(d => [d.id, d]));
+                    for (const u of dropUpdates) map.set(u.id, { ...map.get(u.id), ...u });
+                    return Array.from(map.values());
+                });
+                callbacksRef.current.onWorldDropsUpdate?.(dropUpdates);
+                break;
+            }
+
+            case 'world_drops_removed': {
+                const dropIds = message.dropIds || [];
+                if (!dropIds.length) break;
+                setWorldDrops(prev => (prev || []).filter(d => !dropIds.includes(d.id)));
+                callbacksRef.current.onWorldDropsRemoved?.(dropIds);
+                break;
+            }
+
+            case 'world_item_drop_result': {
+                if (message.inventory) setGameInventory(message.inventory);
+                if (message.drop) {
+                    setWorldDrops(prev => {
+                        const map = new Map((prev || []).map(d => [d.id, d]));
+                        map.set(message.drop.id, message.drop);
+                        return Array.from(map.values());
+                    });
+                }
+                if (worldDropCallbackRef.current) {
+                    worldDropCallbackRef.current(message);
+                    worldDropCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'world_item_drop_error': {
+                if (worldDropCallbackRef.current) {
+                    worldDropCallbackRef.current({ error: message.error, message: message.message });
+                    worldDropCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'world_gold_drop_result': {
+                if (message.coins !== undefined) {
+                    GameManager.getInstance().setCoinsFromServer(message.coins);
+                    setUserData(prev => ({ ...(prev || {}), coins: message.coins }));
+                }
+                if (message.drop) {
+                    setWorldDrops(prev => {
+                        const map = new Map((prev || []).map(d => [d.id, d]));
+                        map.set(message.drop.id, message.drop);
+                        return Array.from(map.values());
+                    });
+                }
+                if (worldDropCallbackRef.current) {
+                    worldDropCallbackRef.current(message);
+                    worldDropCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'world_gold_drop_error': {
+                if (worldDropCallbackRef.current) {
+                    worldDropCallbackRef.current({ error: message.error, message: message.message });
+                    worldDropCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'world_item_pickup_result': {
+                if (message.inventory) setGameInventory(message.inventory);
+                if (message.coins !== undefined) {
+                    GameManager.getInstance().setCoinsFromServer(message.coins);
+                    setUserData(prev => ({ ...(prev || {}), coins: message.coins }));
+                }
+                if (message.dropId) {
+                    setWorldDrops(prev => (prev || []).filter(d => d.id !== message.dropId));
+                }
+                if (worldPickupCallbackRef.current) {
+                    worldPickupCallbackRef.current(message);
+                    worldPickupCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'world_item_pickup_error': {
+                if (worldPickupCallbackRef.current) {
+                    worldPickupCallbackRef.current({ error: message.error, message: message.message });
+                    worldPickupCallbackRef.current = null;
                 }
                 break;
             }
@@ -2736,6 +2840,59 @@ export function MultiplayerProvider({ children }) {
         });
     }, [connected, send]);
 
+    const fetchWorldDrops = useCallback(() => {
+        if (!connected) return;
+        send({ type: 'world_drops_get' });
+    }, [connected, send]);
+
+    const dropWorldItem = useCallback((slotIndex, quantity = 1) => {
+        if (!connected || !isAuthenticated) {
+            return Promise.resolve({ error: 'NOT_AUTHENTICATED', message: 'Sign in to drop items' });
+        }
+        return new Promise((resolve) => {
+            worldDropCallbackRef.current = resolve;
+            send({ type: 'world_item_drop', slotIndex, quantity });
+            setTimeout(() => {
+                if (worldDropCallbackRef.current === resolve) {
+                    worldDropCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, isAuthenticated, send]);
+
+    const dropWorldGold = useCallback((amount) => {
+        if (!connected || !isAuthenticated) {
+            return Promise.resolve({ error: 'NOT_AUTHENTICATED', message: 'Sign in to drop gold' });
+        }
+        return new Promise((resolve) => {
+            worldDropCallbackRef.current = resolve;
+            send({ type: 'world_gold_drop', amount });
+            setTimeout(() => {
+                if (worldDropCallbackRef.current === resolve) {
+                    worldDropCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, isAuthenticated, send]);
+
+    const pickupWorldDrop = useCallback((dropId) => {
+        if (!connected || !isAuthenticated) {
+            return Promise.resolve({ error: 'NOT_AUTHENTICATED', message: 'Sign in to pick up items' });
+        }
+        return new Promise((resolve) => {
+            worldPickupCallbackRef.current = resolve;
+            send({ type: 'world_item_pickup', dropId });
+            setTimeout(() => {
+                if (worldPickupCallbackRef.current === resolve) {
+                    worldPickupCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, isAuthenticated, send]);
+
     const scavengeSpot = useCallback((spotId = 'casino_trash') => {
         if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
         return new Promise((resolve) => {
@@ -3114,6 +3271,11 @@ export function MultiplayerProvider({ children }) {
         forestTrees,
         fetchMushrooms,
         mushroomClusters,
+        fetchWorldDrops,
+        worldDrops,
+        dropWorldItem,
+        dropWorldGold,
+        pickupWorldDrop,
         harvestMushroom,
         scavengeSpot,
         scavengeCooldowns,
@@ -3199,7 +3361,7 @@ export function MultiplayerProvider({ children }) {
         spinSlot, slotSpinning, slotResult, clearSlotResult, activeSlotSpins,
         spinGoldSlot, goldSlotSpinning, goldSlotResult, clearGoldSlotResult, syncGoldSlots, activeGoldSlotSpins,
         startFishing, attemptCatch, cancelFishing, fishingActive, fishingResult, clearFishingResult,
-        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, setGameHotbarSlot, setActiveHotbarSlot, fetchForestTrees, forestTrees, fetchMushrooms, mushroomClusters, harvestMushroom, scavengeSpot, onboardingQuest, turnInMushroomQuest, sellAtMerchant, sellBatchAtMerchant, sellFishAtNpc, buyFromMerchant, upgradeBackpack, startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop,
+        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, setGameHotbarSlot, setActiveHotbarSlot, fetchForestTrees, forestTrees, fetchMushrooms, mushroomClusters, fetchWorldDrops, worldDrops, dropWorldItem, dropWorldGold, pickupWorldDrop, harvestMushroom, scavengeSpot, onboardingQuest, turnInMushroomQuest, sellAtMerchant, sellBatchAtMerchant, sellFishAtNpc, buyFromMerchant, upgradeBackpack, startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop,
         roomTravelVoyages, myTravelVoyage, travelPending, fetchTravelState, bookTravel, leaveTravel,
         adoptPuffle, puffleAdopting,
         setName, joinRoom, sendPosition, sendChat, sendAfk, sendEmoteBubble, sendEmote, stopEmote,

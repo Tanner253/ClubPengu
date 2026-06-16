@@ -448,6 +448,59 @@ class GameInventoryService {
         return slots.findIndex(s => !slotHasItem(s));
     }
 
+    /**
+     * Dry-run: can quantity of itemId fit without persisting?
+     */
+    canAddItemSlots(slots, itemId, quantity = 1, metadata = {}) {
+        const itemDef = this.resolveItemDef(itemId, metadata);
+        if (!itemDef) return { ok: false, error: 'INVALID_ITEM' };
+        if (quantity <= 0) return { ok: false, error: 'INVALID_QUANTITY' };
+
+        const simSlots = cloneSlots(slots);
+        let remaining = quantity;
+        const maxStack = itemDef.maxStack || GI.MAX_STACK;
+
+        while (remaining > 0) {
+            let slotIdx = this.findStackSlot(simSlots, itemId);
+            if (slotIdx === -1) slotIdx = this.findEmptySlot(simSlots);
+            if (slotIdx === -1) {
+                return { ok: false, error: 'INVENTORY_FULL' };
+            }
+
+            const slot = simSlots[slotIdx];
+            if (!slot.itemId) {
+                slot.itemId = itemId;
+                slot.quantity = 0;
+            }
+
+            const space = maxStack - slot.quantity;
+            const add = Math.min(remaining, space);
+            slot.quantity += add;
+            remaining -= add;
+        }
+
+        return { ok: true };
+    }
+
+    async canAddItem(walletAddress, itemId, quantity = 1, metadata = {}) {
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return { ok: false, error: 'USER_NOT_FOUND' };
+
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+        const result = this.canAddItemSlots(slots, itemId, quantity, metadata);
+        if (!result.ok) {
+            return {
+                ok: false,
+                error: result.error,
+                message: result.error === 'INVENTORY_FULL'
+                    ? 'Backpack is full — upgrade or sell items'
+                    : undefined
+            };
+        }
+        return { ok: true };
+    }
+
     resolveItemDef(itemId, metadata = {}) {
         let itemDef = getGameItem(itemId);
         if (!itemDef && metadata.npcValue != null && metadata.npcValue >= 0) {
@@ -610,6 +663,51 @@ class GameInventoryService {
         if (!updated) return { error: 'SAVE_FAILED' };
 
         return { success: true, inventory: this.serializeInventory(updated) };
+    }
+
+    /**
+     * Remove quantity from a specific slot (world drop, consume, etc.).
+     */
+    async removeFromSlot(walletAddress, slotIndex, quantity = 1) {
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return { error: 'USER_NOT_FOUND' };
+
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+
+        if (slotIndex < 0 || slotIndex >= unlockedSlots) {
+            return { error: 'INVALID_SLOT' };
+        }
+
+        const slot = slots[slotIndex];
+        if (!slotHasItem(slot)) {
+            return { error: 'EMPTY_SOURCE', message: 'That slot is empty.' };
+        }
+
+        const takeQty = Math.min(Math.max(1, quantity), slot.quantity);
+        const removed = {
+            itemId: slot.itemId,
+            quantity: takeQty,
+            metadata: { ...slot.metadata }
+        };
+
+        slot.quantity -= takeQty;
+        if (slot.quantity <= 0) {
+            slots[slotIndex] = emptySlot();
+        }
+
+        const hotbar = this.normalizeHotbar(user.gameInventory?.hotbar);
+        this.sanitizeHotbar(slots, hotbar);
+        const updated = await this.persistUserInventory(walletAddress, slots, null, {
+            'gameInventory.hotbar': hotbar
+        });
+        if (!updated) return { error: 'SAVE_FAILED' };
+
+        return {
+            success: true,
+            inventory: this.serializeInventory(updated),
+            removed
+        };
     }
 
     /**
