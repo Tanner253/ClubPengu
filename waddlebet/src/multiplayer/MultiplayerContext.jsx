@@ -8,6 +8,12 @@ import React, { createContext, useContext, useEffect, useRef, useState, useCallb
 import GameManager from '../engine/GameManager';
 import { PhantomWallet } from '../wallet';
 import { createEmptyChatState, appendChannelMessage, applyChatHistorySnapshot, applyRoomChatHistory, normalizeChatMessage, CHAT_CHANNELS } from '../utils/chatChannels.js';
+import {
+    hasStoredSession,
+    readStoredSession,
+    buildAuthRestoreMessage,
+    clearStoredSession
+} from './sessionRestore.js';
 
 const MultiplayerContext = createContext(null);
 
@@ -51,7 +57,8 @@ export function MultiplayerProvider({ children }) {
     const playerNameRef = useRef(playerName);
     
     // ==================== AUTHENTICATION STATE ====================
-    const [isAuthenticated, setIsAuthenticated] = useState(false);
+    const [isAuthenticated, setIsAuthenticated] = useState(() => hasStoredSession(localStorage));
+    const isAuthenticatedRef = useRef(isAuthenticated);
     const [walletAddress, setWalletAddress] = useState(() => localStorage.getItem('wallet_address'));
     const [authToken, setAuthToken] = useState(() => localStorage.getItem('auth_token'));
     const [userData, setUserData] = useState(null);
@@ -62,7 +69,6 @@ export function MultiplayerProvider({ children }) {
     
     // Pending auth challenge
     const pendingChallengeRef = useRef(null);
-    const sessionRestoredRef = useRef(false);
     
     // ==================== PLAYER STATE ====================
     const [playerList, setPlayerList] = useState([]);
@@ -304,6 +310,44 @@ export function MultiplayerProvider({ children }) {
         }
     }, []);
     
+    useEffect(() => {
+        isAuthenticatedRef.current = isAuthenticated;
+    }, [isAuthenticated]);
+
+    /** Restore wallet session from localStorage — runs on every (re)connect, not just first load */
+    const attemptSessionRestore = useCallback((ws) => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+
+        const stored = readStoredSession(localStorage);
+        if (!stored) return false;
+
+        if (stored.expired) {
+            console.log('⚠️ Stored session expired, clearing...');
+            clearStoredSession(localStorage);
+            setIsAuthenticated(false);
+            setWalletAddress(null);
+            setAuthToken(null);
+            return false;
+        }
+
+        console.log('🔄 Attempting to restore session...');
+        if (!isAuthenticatedRef.current) {
+            setIsRestoringSession(true);
+        }
+        ws.send(JSON.stringify(buildAuthRestoreMessage(stored)));
+        return true;
+    }, []);
+
+    const sendKeepalivePing = useCallback((ws) => {
+        if (ws?.readyState === WebSocket.OPEN) {
+            try {
+                ws.send(JSON.stringify({ type: 'ping' }));
+            } catch (e) {
+                console.log('📱 Keepalive ping failed:', e.message);
+            }
+        }
+    }, []);
+
     // ==================== CONNECT ====================
     const connect = useCallback(() => {
         // Prevent duplicate connections (CONNECTING = 0, OPEN = 1)
@@ -328,51 +372,17 @@ export function MultiplayerProvider({ children }) {
             
             ws.onopen = () => {
                 console.log('✅ Connected to multiplayer server');
+                clearTimeout(reconnectTimeoutRef.current);
                 setConnected(true);
                 window.__multiplayerWs = ws;
-                
-                // Ping to keep connection alive
-                // Ping every 15s for all devices - ensures connection stays alive during:
-                // - Wallet popup interactions (Phantom)
-                // - Heavy 3D rendering
-                // - Mobile background/foreground transitions
-                // Server tolerates up to 120s without activity, so 15s gives plenty of margin
-                const pingInterval = 15000; // 15s for all devices
-                
-                pingIntervalRef.current = setInterval(() => {
-                    if (ws.readyState === WebSocket.OPEN) {
-                        ws.send(JSON.stringify({ type: 'ping' }));
-                    }
-                }, pingInterval);
-                
-                // Attempt to restore session from stored token
-                const storedToken = localStorage.getItem('auth_token');
-                const storedWallet = localStorage.getItem('wallet_address');
-                const sessionTimestamp = localStorage.getItem('session_timestamp');
-                
-                if (storedToken && storedWallet && !sessionRestoredRef.current) {
-                    // Check if session is still valid (within 7 days)
-                    const sessionAge = Date.now() - parseInt(sessionTimestamp || '0');
-                    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
-                    
-                    if (sessionAge < maxAge) {
-                        console.log('🔄 Attempting to restore session...');
-                        setIsRestoringSession(true);
-                        sessionRestoredRef.current = true;
-                        
-                        // Send session restore request
-                        ws.send(JSON.stringify({
-                            type: 'auth_restore',
-                            token: storedToken,
-                            walletAddress: storedWallet
-                        }));
-                    } else {
-                        console.log('⚠️ Stored session expired, clearing...');
-                        localStorage.removeItem('auth_token');
-                        localStorage.removeItem('wallet_address');
-                        localStorage.removeItem('session_timestamp');
-                    }
-                }
+
+                // Immediate ping + 10s interval — mobile timers throttle in background,
+                // so we also ping on visibility/focus (see effect below)
+                sendKeepalivePing(ws);
+                clearInterval(pingIntervalRef.current);
+                pingIntervalRef.current = setInterval(() => sendKeepalivePing(ws), 10000);
+
+                attemptSessionRestore(ws);
             };
             
             ws.onmessage = (event) => {
@@ -388,9 +398,16 @@ export function MultiplayerProvider({ children }) {
                 console.log('❌ Disconnected from server');
                 setConnected(false);
                 setPlayerId(null);
-                setIsAuthenticated(false);
+                playerIdRef.current = null;
+                // Keep auth state — stored token will be restored on reconnect
                 clearInterval(pingIntervalRef.current);
-                
+                pingIntervalRef.current = null;
+
+                if (wsRef.current === ws) {
+                    wsRef.current = null;
+                }
+
+                clearTimeout(reconnectTimeoutRef.current);
                 reconnectTimeoutRef.current = setTimeout(() => {
                     console.log('🔄 Attempting reconnect...');
                     connect();
@@ -402,9 +419,10 @@ export function MultiplayerProvider({ children }) {
             };
         } catch (e) {
             console.error('Failed to connect:', e);
+            clearTimeout(reconnectTimeoutRef.current);
             reconnectTimeoutRef.current = setTimeout(connect, 5000);
         }
-    }, []);
+    }, [attemptSessionRestore, sendKeepalivePing]);
     
     // ==================== GENERIC MESSAGE HANDLERS ====================
     // Allow components to subscribe to all messages
@@ -495,18 +513,23 @@ export function MultiplayerProvider({ children }) {
                 
             case 'auth_failure':
                 console.error(`🔐 Auth failed: ${message.error}`);
+                setIsAuthenticated(false);
                 setAuthError({ code: message.error, message: message.message });
                 setIsAuthenticating(false);
                 setIsRestoringSession(false);
                 
                 // Clear stored session on failure
                 if (message.error === 'TOKEN_EXPIRED' || message.error === 'SESSION_INVALID') {
-                    localStorage.removeItem('auth_token');
-                    localStorage.removeItem('wallet_address');
-                    localStorage.removeItem('session_timestamp');
+                    clearStoredSession(localStorage);
+                    setWalletAddress(null);
+                    setAuthToken(null);
                 }
                 
                 callbacksRef.current.onAuthFailure?.(message.error, message.message);
+                break;
+
+            case 'session_replaced':
+                console.warn('🔐 Session replaced by a newer connection — reconnecting');
                 break;
                 
             case 'auth_logged_out':
@@ -2397,8 +2420,6 @@ export function MultiplayerProvider({ children }) {
         // Clear GameManager state including appearance
         GameManager.getInstance().clearServerData();
         
-        // Reset session restored flag so next connect can restore fresh session
-        sessionRestoredRef.current = false;
     }, [send]);
     
     // Join a room — returns false if the message could not be sent
@@ -3203,18 +3224,10 @@ export function MultiplayerProvider({ children }) {
                 wasHidden = false;
                 console.log(`📱 Page visible${hiddenDuration ? ` after ${Math.round(hiddenDuration/1000)}s` : ''}`);
                 
-                // ALWAYS send a ping when becoming visible to keep connection alive
-                // This is critical for wallet popup interactions
                 if (wsRef.current?.readyState === WebSocket.OPEN) {
-                        try {
-                            wsRef.current.send(JSON.stringify({ type: 'ping' }));
-                        console.log('📱 Sent keepalive ping on visibility change');
-                        } catch (e) {
-                            console.log('📱 Ping failed, reconnecting...');
-                            connect();
-                        }
+                    sendKeepalivePing(wsRef.current);
+                    console.log('📱 Sent keepalive ping on visibility change');
                 } else if (hiddenDuration > 2000) {
-                    // Only reconnect if we were actually hidden for a while
                     console.log('📱 WebSocket disconnected while hidden, reconnecting...');
                     connect();
                 }
@@ -3246,12 +3259,7 @@ export function MultiplayerProvider({ children }) {
             // Always try to send a ping when window gains focus
             // This helps after Phantom wallet popups close
             if (wsRef.current?.readyState === WebSocket.OPEN) {
-                try {
-                    wsRef.current.send(JSON.stringify({ type: 'ping' }));
-                } catch (e) {
-                    console.log('📱 Ping failed on focus, reconnecting...');
-                    connect();
-                }
+                sendKeepalivePing(wsRef.current);
             } else if (wasHidden) {
                 console.log('📱 Connection lost while hidden, reconnecting...');
                 setTimeout(() => {
@@ -3273,7 +3281,7 @@ export function MultiplayerProvider({ children }) {
             window.removeEventListener('pageshow', handlePageShow);
             window.removeEventListener('focus', handleFocus);
         };
-    }, [connect]);
+    }, [connect, sendKeepalivePing]);
     
     // PERF: memoized so consumers only re-render when an exposed value actually changes,
     // not whenever this provider re-renders for unrelated/internal reasons.

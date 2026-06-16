@@ -1980,6 +1980,10 @@ async function handleMessage(playerId, message) {
                 player.authToken = authResult.token;
                 player.name = authResult.user.username;
                 player.role = authResult.user.role || null;
+                if (player.ws?._roomJoinTimeout) {
+                    clearTimeout(player.ws._roomJoinTimeout);
+                    player.ws._roomJoinTimeout = null;
+                }
                 // Include characterType from top-level user field (not in customization subdoc)
                 player.appearance = {
                     ...authResult.user.customization,
@@ -2291,6 +2295,12 @@ async function handleMessage(playerId, message) {
                 player.authToken = token;
                 player.name = user.username;
                 player.role = user.role || null;
+
+                // Authenticated users may spend >5min in designer before joining a room
+                if (player.ws?._roomJoinTimeout) {
+                    clearTimeout(player.ws._roomJoinTimeout);
+                    player.ws._roomJoinTimeout = null;
+                }
                 // Include characterType from top-level user field (not in customization subdoc)
                 const userObj = user.toObject();
                 player.appearance = {
@@ -8830,7 +8840,7 @@ setInterval(async () => {
 // Mobile browsers may not respond to WebSocket-level pings during heavy rendering
 // or when Phantom wallet popup is open. Be generous to avoid false disconnects.
 // We also check if client has sent any message recently (fallback for mobile/wallet interactions)
-const MOBILE_HEARTBEAT_TOLERANCE = 120000; // 120s (2 min) - allows for wallet popups and heavy rendering
+const MOBILE_HEARTBEAT_TOLERANCE = 180000; // 3 min — mobile timers/background suspend JSON pings
 
 setInterval(() => {
     const now = Date.now();
