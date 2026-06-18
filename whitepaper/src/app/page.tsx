@@ -25,9 +25,6 @@ import {
 } from "lucide-react";
 import Changelog from "../components/Changelog";
 import GachaSystemSection from "../components/GachaSystem";
-import { EconomyLoopCanvas } from "../components/EconomyLoopCanvas";
-import StreakRewardCanvas from "../components/StreakRewardCanvas";
-import RevenueFlywheelCanvas from "../components/RevenueFlywheelCanvas";
 import { SolanaHistoryChart } from "../components/SolanaHistoryChart";
 import { ChapterTag } from "../components/ChapterTag";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
@@ -142,7 +139,6 @@ function Navigation() {
 
   const navItems = [
     { label: t("nav.product"), href: "#about" },
-    { label: t("nav.economics"), href: "#economics" },
     { label: t("nav.team"), href: "#team" },
     { label: t("nav.roadmap"), href: "#roadmap" },
   ];
@@ -1307,295 +1303,6 @@ function WhaleStatusSection() {
 }
 
 
-// Wagering Section
-// Platform Economics Section
-const INDUSTRY_COMPARISON = [
-  { platform: "WaddleBet", rake: "5%", model: "P2P Rake", highlight: true },
-  { platform: "PokerStars", rake: "2.5-5%", model: "P2P Rake", highlight: false },
-  { platform: "Stake.com", rake: "1-5%", model: "House Edge", highlight: false },
-  { platform: "Vegas Casinos", rake: "2-15%", model: "House Edge", highlight: false },
-  { platform: "Betfair Exchange", rake: "2-5%", model: "P2P Commission", highlight: false },
-];
-
-function PlatformEconomicsSection() {
-  const revenueStreams = [
-    {
-      name: "P2P Rake",
-      rate: "5%",
-      description: "All player-vs-player wagers",
-      icon: "🎮",
-    },
-    {
-      name: "Cosmetic Sales",
-      rate: "Premium",
-      description: "Skins, hats, effects & bundles",
-      icon: "🎨",
-    },
-    {
-      name: "Igloo Rentals",
-      rate: "Weekly",
-      description: "Virtual property subscriptions",
-      icon: "🏠",
-    },
-  ];
-
-  return (
-    <section id="economics" className="py-16 md:py-32 px-5 sm:px-6 relative">
-      <div className="section-divider mb-16 md:mb-32" />
-      
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 40 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-10 md:mb-16"
-        >
-          <ChapterTag no="07">Sustainability</ChapterTag>
-          <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
-            Platform <span className="text-green-400">Economics</span>
-          </h2>
-          <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            Dual-currency design: infinite soft gold for gameplay, on-chain $CP for property and cosmetics —
-            closed NPC loops that reward long-term gathering without inflating the token.
-          </p>
-        </motion.div>
-
-        {/* In-Game Closed Loop (shipped) */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="glass-card rounded-2xl p-6 sm:p-8 mb-12 border border-cyan-500/25 bg-gradient-to-br from-cyan-500/5 to-emerald-500/5"
-        >
-          <h3 className="text-xl font-bold text-center mb-2 text-cyan-300">Closed NPC Economy Loop</h3>
-          <p className="text-center text-slate-400 text-sm mb-6 max-w-xl mx-auto">
-            Fish &amp; wood are progression currencies. Gold pays for ferries, bait, and wagers.
-            $CP is earned on a 7-day login streak (1k→5k on CP days; gold-only on days 3 &amp; 6) and spent on igloo rent &amp; the cosmetic bazaar.
-          </p>
-          <EconomyLoopCanvas className="mb-6" />
-          <StreakRewardCanvas className="mb-4" />
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-            {[
-              { t: "Gather", d: "Fishing holes & forest trees regrow. Worms from mossy logs." },
-              { t: "Gear", d: "Axes, rods & backpack tiers cost wood — not gold." },
-              { t: "Contracts", d: "Visit NPCs, accept daily timber/catch orders, turn in for bonuses." },
-              { t: "7-Day Streak", d: "1k→5k $CP on days 1, 2, 4, 5, 7; gold-only bonus on days 3 & 6 after 60 min play." },
-            ].map((item) => (
-              <div key={item.t} className="bg-black/30 rounded-lg p-3 border border-white/10">
-                <div className="font-bold text-cyan-200 mb-1">{item.t}</div>
-                <div className="text-slate-400 text-xs leading-relaxed">{item.d}</div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-
-        {/* Revenue Flywheel Diagram */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="glass-card rounded-2xl p-8 mb-12 border border-green-500/20 bg-gradient-to-br from-green-500/5 to-cyan-500/5"
-        >
-          <h3 className="text-xl font-bold text-center mb-4 text-green-400">Platform Revenue Flywheel</h3>
-          <RevenueFlywheelCanvas className="mb-4" />
-          <p className="text-center text-slate-500 text-sm">
-            ↻ Sustainable growth cycle — platform profits benefit everyone
-          </p>
-        </motion.div>
-
-        {/* Revenue Streams */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mb-12"
-        >
-          <h3 className="text-2xl font-bold mb-6 text-center">Revenue Streams</h3>
-          <div className="grid md:grid-cols-3 gap-4">
-            {revenueStreams.map((stream, i) => (
-            <motion.div
-              key={i}
-                initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-                className="glass-card rounded-xl p-6 text-center"
-            >
-                <div className="text-4xl mb-4">{stream.icon}</div>
-                <h4 className="font-bold text-lg mb-2">{stream.name}</h4>
-                <div className="text-2xl font-bold text-cyan-400 mb-2">{stream.rate}</div>
-                <p className="text-slate-400 text-sm">{stream.description}</p>
-            </motion.div>
-          ))}
-        </div>
-        </motion.div>
-
-        {/* P2P Rake Deep Dive */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="glass-card rounded-2xl p-8 mb-12"
-        >
-          <div className="grid md:grid-cols-2 gap-8 items-center">
-            <div>
-              <h3 className="text-2xl font-bold mb-4">🎯 P2P Rake: 5%</h3>
-              <p className="text-slate-400 mb-4">
-                Industry-standard rake on player-vs-player wagers. The same proven model 
-                used by poker rooms and betting exchanges worldwide.
-              </p>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-green-400">✓</span>
-                  <span className="text-slate-300">Winner receives 95% of pot instantly</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-green-400">✓</span>
-                  <span className="text-slate-300">Platform receives 5% to fund growth</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-green-400">✓</span>
-                  <span className="text-slate-300">All settlements on-chain and verifiable</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-green-400">✓</span>
-                  <span className="text-slate-300">Competitive with industry standards</span>
-                </div>
-              </div>
-            </div>
-            <div className="bg-black/30 rounded-xl p-6 border border-white/10">
-              <h4 className="font-bold text-center mb-4 text-slate-300">Example Settlement</h4>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center py-2 border-b border-white/5">
-                  <span className="text-slate-400">Player A Wager</span>
-                  <span className="font-mono text-white">1.00 SOL</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-white/5">
-                  <span className="text-slate-400">Player B Wager</span>
-                  <span className="font-mono text-white">1.00 SOL</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-white/5">
-                  <span className="text-slate-400">Total Pot</span>
-                  <span className="font-mono text-cyan-400">2.00 SOL</span>
-                </div>
-                <div className="flex justify-between items-center py-2 border-b border-white/5">
-                  <span className="text-slate-400">Platform Rake (5%)</span>
-                  <span className="font-mono text-yellow-400">0.10 SOL</span>
-                </div>
-                <div className="flex justify-between items-center py-2 bg-green-500/10 rounded-lg px-3 -mx-3">
-                  <span className="text-green-400 font-semibold">Winner Receives</span>
-                  <span className="font-mono text-green-400 font-bold">1.90 SOL</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Where Revenue Goes */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="glass-card rounded-2xl p-8 mb-12"
-        >
-          <h3 className="text-2xl font-bold mb-4 text-center">Where Revenue Goes</h3>
-          <p className="text-slate-400 text-center mb-8 max-w-2xl mx-auto">
-            Platform revenue is reinvested to grow the ecosystem and support token value. 
-            When the platform wins, everyone wins.
-          </p>
-          <div className="grid md:grid-cols-4 gap-6">
-            {[
-              { icon: "🛠️", title: "Development", desc: "New games, features, bug fixes, and infrastructure improvements", color: "text-blue-400" },
-              { icon: "📈", title: "Buybacks", desc: "Supporting token value through market purchases", color: "text-green-400" },
-              { icon: "📣", title: "Marketing", desc: "Growing the community through partnerships and campaigns", color: "text-purple-400" },
-              { icon: "🏦", title: "Reserve", desc: "Ensuring long-term stability and operational runway", color: "text-yellow-400" },
-            ].map((item, i) => (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 20 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.1 }}
-                className="text-center"
-              >
-                <div className="text-4xl mb-3">{item.icon}</div>
-                <h4 className={`font-bold mb-2 ${item.color}`}>{item.title}</h4>
-                <p className="text-slate-400 text-sm">{item.desc}</p>
-              </motion.div>
-            ))}
-              </div>
-        </motion.div>
-
-        {/* Industry Comparison */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="glass-card rounded-2xl p-8"
-        >
-          <h3 className="text-2xl font-bold mb-6 text-center">Industry Comparison</h3>
-          {/* Mobile: stacked centered cards (no side-scrolling) */}
-          <div className="space-y-3 sm:hidden">
-            {INDUSTRY_COMPARISON.map((row) => (
-              <div
-                key={row.platform}
-                className={`rounded-xl border px-4 py-3 text-center ${
-                  row.highlight ? "border-green-500/30 bg-green-500/5" : "border-white/10 bg-black/20"
-                }`}
-              >
-                <p className={`font-semibold ${row.highlight ? "text-green-400" : "text-slate-300"}`}>{row.platform}</p>
-                <p className={`font-mono text-lg ${row.highlight ? "text-green-400" : "text-slate-400"}`}>{row.rake}</p>
-                <p className="text-xs text-slate-500">{row.model}</p>
-              </div>
-            ))}
-          </div>
-          {/* Desktop: table */}
-          <div className="hidden sm:block">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-left py-3 px-4 text-slate-400 font-medium">Platform</th>
-                  <th className="text-center py-3 px-4 text-slate-400 font-medium">Rake/Edge</th>
-                  <th className="text-center py-3 px-4 text-slate-400 font-medium">Model</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {INDUSTRY_COMPARISON.map((row) => (
-                  <tr key={row.platform} className={row.highlight ? "bg-green-500/5" : ""}>
-                    <td className={`py-3 px-4 ${row.highlight ? "font-semibold text-green-400" : "text-slate-300"}`}>{row.platform}</td>
-                    <td className={`py-3 px-4 text-center font-mono ${row.highlight ? "text-green-400" : "text-slate-400"}`}>{row.rake}</td>
-                    <td className={`py-3 px-4 text-center ${row.highlight ? "text-slate-300" : "text-slate-400"}`}>{row.model}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <p className="text-center text-slate-500 text-sm mt-4">
-            Our 5% rake is competitive with industry leaders.
-          </p>
-        </motion.div>
-
-        {/* Bottom CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="mt-12 text-center"
-        >
-          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-6 py-3 rounded-full bg-gradient-to-r from-green-500/20 to-cyan-500/20 border border-green-500/30">
-            <span className="text-green-400 font-semibold">🔒 Transparent</span>
-            <span className="text-slate-500">•</span>
-            <span className="text-cyan-400 font-semibold">📊 Sustainable</span>
-            <span className="text-slate-500">•</span>
-            <span className="text-purple-400 font-semibold">🚀 Growth-Focused</span>
-          </div>
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
 // Team Section
 function TeamSection() {
   return (
@@ -1609,7 +1316,7 @@ function TeamSection() {
           viewport={{ once: true }}
           className="text-center mb-10 md:mb-16"
         >
-          <ChapterTag no="08">Team</ChapterTag>
+          <ChapterTag no="07">Team</ChapterTag>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
             Built by <span className="text-cyan-400">Builders</span>
           </h2>
@@ -1891,7 +1598,7 @@ function RoadmapSection() {
           viewport={{ once: true }}
           className="text-center mb-12"
         >
-          <ChapterTag no="09">{t("roadmap.kicker")}</ChapterTag>
+          <ChapterTag no="08">{t("roadmap.kicker")}</ChapterTag>
           <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
             {locale === "zh-TW" ? (
               <span className="text-purple-400">{t("roadmap.title")}</span>
@@ -2349,7 +2056,6 @@ function WhitepaperPageContent() {
       <WhaleStatusSection />
       <GachaSystemSection />
       <EconomySection />
-      <PlatformEconomicsSection />
       <TeamSection />
       <RoadmapSection />
       <Changelog />
