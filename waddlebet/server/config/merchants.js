@@ -42,7 +42,7 @@ export const MERCHANTS = {
         name: 'Copper Clive',
         title: 'Supply & Gear',
         emoji: '🔧',
-        greeting: "Backpack tight? I expand packs with timber — sell logs for emergency gold or buy axes with wood.",
+        greeting: "Backpack tight? I expand packs with timber — sell logs for gold, or grab a starter axe for just 1g.",
         acceptsCategories: ['wood', 'tool', 'rod'],
         npcSellRatio: 1.0,
         sellTransactionType: 'wood_sell_npc',
@@ -56,8 +56,7 @@ export const MERCHANTS = {
             })),
             {
                 itemId: 'basic_axe',
-                cost: 0,
-                woodRequired: ECONOMY.TOOLS.basic_axe.woodRequired,
+                cost: 1,
                 label: 'Basic Axe'
             },
             {

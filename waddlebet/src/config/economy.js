@@ -71,9 +71,9 @@ export const WOOD_LABELS = {
     ironwood_log: 'Ironwood'
 };
 
-/** @deprecated Server uses wood-only axe costs — display from merchants.js woodRequired */
+/** @deprecated Display from merchants.js listing cost / woodRequired */
 export const MERCHANT_TOOL_COSTS = {
-    basic_axe: 100,
+    basic_axe: 1,
     iron_axe: 450,
     steel_axe: 1400,
     master_axe: 3800

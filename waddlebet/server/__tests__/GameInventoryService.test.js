@@ -199,19 +199,18 @@ describe('GameInventoryService', () => {
         expect(mockAddCoins).not.toHaveBeenCalled();
     });
 
-    it('buyFromMerchant adds basic axe with wood only (no gold)', async () => {
+    it('buyFromMerchant adds basic axe for 1 gold', async () => {
         const wallet = 'TestWallet1111111111111111111111111111111111';
-        const slots = Array.from({ length: 5 }, (_, i) => {
-            if (i === 0) return { itemId: 'pine_log', quantity: 80, metadata: { category: 'wood' } };
-            return { itemId: null, quantity: 0, metadata: {} };
-        });
+        const slots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
         const user = makeUser(slots, 5);
-        user.coins = 200;
+        user.coins = 1;
 
         mockGetUser.mockResolvedValue(user);
+        mockAddCoins.mockResolvedValue({ success: true, newBalance: 0 });
         mockFindOneAndUpdate.mockImplementation(async () => {
             const saved = makeUser(slots, 5);
-            saved.gameInventory.slots[1] = {
+            saved.coins = 0;
+            saved.gameInventory.slots[0] = {
                 itemId: 'basic_axe',
                 quantity: 1,
                 metadata: {
@@ -222,16 +221,16 @@ describe('GameInventoryService', () => {
                     maxDurability: 100
                 }
             };
-            saved.gameInventory.hotbar[0] = { inventorySlot: 1 };
+            saved.gameInventory.hotbar[0] = { inventorySlot: 0 };
             return saved;
         });
 
         const result = await service.buyFromMerchant(wallet, 'supply_merchant', 'basic_axe');
 
         expect(result.success).toBe(true);
-        expect(result.goldSpent).toBe(0);
+        expect(result.goldSpent).toBe(1);
         expect(result.itemId).toBe('basic_axe');
-        expect(mockAddCoins).not.toHaveBeenCalled();
+        expect(mockAddCoins).toHaveBeenCalled();
     });
 
     it('upgradeBackpack unlocks more slots with wood only', async () => {

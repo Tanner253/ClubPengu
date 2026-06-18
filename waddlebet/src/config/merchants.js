@@ -4,7 +4,6 @@
 import { NPC_EMERGENCY_SELL_RATIO } from './goldEconomy';
 
 const AXE_WOOD_REQUIRED = {
-    basic_axe: { pine_log: 80 },
     iron_axe: { pine_log: 120, birch_log: 64 },
     steel_axe: { pine_log: 160, birch_log: 96, oak_log: 48 },
     master_axe: { pine_log: 200, birch_log: 128, oak_log: 80, ironwood_log: 32 },
@@ -65,7 +64,7 @@ export const MERCHANTS = {
                 label: 'Fine Timber Lot',
                 description: '40 birch + 32 oak + 16 ironwood → 45 gold',
             },
-            { itemId: 'basic_axe', cost: 0, woodRequired: AXE_WOOD_REQUIRED.basic_axe, label: 'Basic Axe', emoji: '🪓' },
+            { itemId: 'basic_axe', cost: 1, label: 'Basic Axe', emoji: '🪓' },
             { itemId: 'iron_axe', cost: 0, woodRequired: AXE_WOOD_REQUIRED.iron_axe, label: 'Iron Axe', emoji: '⛏️' },
             { itemId: 'steel_axe', cost: 0, woodRequired: AXE_WOOD_REQUIRED.steel_axe, label: 'Steel Axe', emoji: '🪓' },
             { itemId: 'master_axe', cost: 0, woodRequired: AXE_WOOD_REQUIRED.master_axe, label: 'Master Axe', emoji: '🪓' }

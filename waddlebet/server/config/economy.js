@@ -122,8 +122,7 @@ export const ECONOMY = {
 
         basic_axe: {
             id: 'basic_axe',
-            cost: 0,
-            woodRequired: { pine_log: 80 },
+            cost: 1,
             maxDurability: 80,
             /** @deprecated use getChopDurabilityLoss — kept for fallback */
             durabilityLossPerChop: 1,
