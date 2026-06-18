@@ -31,11 +31,18 @@ export const MERCHANTS = {
         name: 'Ranger Pike',
         title: 'Whiskerwood Ranger',
         emoji: '🌲',
-        greeting: "Logs for the cabin ledger? I pay trail rates — Clive in town pays more if you've got the hike in you.",
+        greeting: "Need a starter axe? One gold gets you chopping — I also buy timber at trail rates.",
         acceptsCategories: ['wood', 'forage'],
         npcSellRatio: 0.65,
         sellTransactionType: 'wood_sell_ranger',
-        sells: []
+        buyTransactionType: 'merchant_buy',
+        sells: [
+            {
+                itemId: 'basic_axe',
+                cost: 1,
+                label: 'Basic Axe'
+            }
+        ]
     },
     supply_merchant: {
         id: 'supply_merchant',

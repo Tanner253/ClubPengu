@@ -85,13 +85,13 @@ export const HOTBAR = {
 
 export const STAGE_DURABILITY_LOSS = {
     sapling: 1,
-    baby: 3,
-    mature: 6,
-    elder: 12
+    baby: 2,
+    mature: 4,
+    elder: 8
 };
 
 export const AXE_DURABILITY_MULTIPLIER = {
-    basic_axe: 1.35,
+    basic_axe: 1.0,
     iron_axe: 1.0,
     steel_axe: 0.75,
     master_axe: 0.5
@@ -104,10 +104,10 @@ export function getChopDurabilityLoss(stage, axeItemId = 'basic_axe') {
 }
 
 export const TOOL_DURABILITY = {
-    basic_axe: { max: 80, lossPerChop: 1 },
-    iron_axe: { max: 220, lossPerChop: 1 },
-    steel_axe: { max: 400, lossPerChop: 1 },
-    master_axe: { max: 650, lossPerChop: 1 }
+    basic_axe: { max: 200, lossPerChop: 1 },
+    iron_axe: { max: 450, lossPerChop: 1 },
+    steel_axe: { max: 750, lossPerChop: 1 },
+    master_axe: { max: 1200, lossPerChop: 1 }
 };
 
 export const AXE_ITEM_IDS = ['basic_axe', 'iron_axe', 'steel_axe', 'master_axe'];

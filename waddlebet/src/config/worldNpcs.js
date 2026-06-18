@@ -127,11 +127,12 @@ export const WORLD_NPCS = [
             npcCosmetics: { rangerHat: true, handAxe: true }
         },
         greetings: [
-            "Welcome to Whiskerwood. Got timber for the ledger?",
+            "Welcome to Whiskerwood. Need a starter axe? One gold and you're set.",
             "Trail rates today — not as rich as town, but your pack gets lighter.",
             "Patrol's quiet. Chop, sell, craft — that's how rangers earn their stripes."
         ],
         actions: [
+            { id: 'buy_basic_axe', label: 'Buy Basic Axe (1g)', icon: '🪓', requiresBuyTool: true, itemId: 'basic_axe' },
             { id: 'open_backpack', label: 'Sell timber & mushrooms', icon: '🪵' },
             { id: 'quest_mushroom_ticket', label: 'Trade mushrooms for ferry ticket', icon: '🎫', requiresMushrooms: true },
             { id: 'lore_quests', label: 'Forest quests & XP', icon: '📜', loreText: 'Gather forest mushrooms from trail clusters (they grow back slowly). Bring 5 to me for a ferry ticket to Town — then fish and chop for gold, or challenge players to wagers!' },

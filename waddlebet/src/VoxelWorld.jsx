@@ -7527,6 +7527,7 @@ const VoxelWorld = ({
                 sceneRef.current?.remove(playerRef.current);
                 playerRef.current = null;
             }
+            bubbleSpriteRef.current = null;
 
             for (const [, data] of otherPlayerMeshesRef.current) {
                 if (data.mesh) {
@@ -8747,7 +8748,7 @@ const VoxelWorld = ({
         }, 5000);
         
         return () => clearTimeout(timeout);
-    }, [activeBubble]);
+    }, [activeBubble, meshBuilderReady, penguinData?.characterType]);
 
     useEffect(() => {
         if (!forestStumpHover?.regrowAt) return undefined;
@@ -10505,7 +10506,8 @@ const VoxelWorld = ({
             return upgradeRod?.('fish_buyer');
         }
         if (actionId === 'buy_basic_axe') {
-            const r = await buyFromMerchant?.('supply_merchant', 'basic_axe');
+            const merchantId = npcDef?.merchantId || 'supply_merchant';
+            const r = await buyFromMerchant?.(merchantId, 'basic_axe');
             if (r && !r.error) playSfx('merchant_buy');
             return r;
         }
@@ -11188,6 +11190,9 @@ const VoxelWorld = ({
             const { position, room: targetRoom } = e.detail;
             
             if (!position) return;
+
+            lastRoomNotifyRef.current = { room: null, x: null, z: null };
+            bubbleSpriteRef.current = null;
             
             // Clear any seated state first
             if (seatedRef.current) {
@@ -11197,25 +11202,7 @@ const VoxelWorld = ({
                 mpSendEmote(null);
             }
             
-            // If target room is different, change room first
-            if (targetRoom && room !== targetRoom) {
-                onChangeRoom(targetRoom);
-                // Position will be set after room change
-                setTimeout(() => {
-                    posRef.current.x = position.x || 0;
-                    posRef.current.y = position.y || 0;
-                    posRef.current.z = position.z || 0;
-                    velRef.current = { x: 0, y: 0, z: 0 };
-                    if (playerRef.current) {
-                        playerRef.current.position.set(position.x || 0, position.y || 0, position.z || 0);
-                    }
-                    // Snap camera to new position
-                    if (cameraControllerRef.current) {
-                        cameraControllerRef.current.snapToTarget();
-                    }
-                }, 100);
-            } else {
-                // Same room - just teleport
+            const applyPosition = () => {
                 posRef.current.x = position.x || 0;
                 posRef.current.y = position.y || 0;
                 posRef.current.z = position.z || 0;
@@ -11224,10 +11211,28 @@ const VoxelWorld = ({
                 if (playerRef.current) {
                     playerRef.current.position.set(position.x || 0, position.y || 0, position.z || 0);
                 }
-                // Snap camera to new position
                 if (cameraControllerRef.current) {
                     cameraControllerRef.current.snapToTarget();
                 }
+                if (targetRoom) {
+                    mpChangeRoom(
+                        targetRoom,
+                        { x: position.x || 0, y: position.y ?? 0, z: position.z || 0 }
+                    );
+                    lastRoomNotifyRef.current = {
+                        room: targetRoom,
+                        x: position.x || 0,
+                        z: position.z || 0
+                    };
+                }
+            };
+            
+            // If target room is different, change room first
+            if (targetRoom && room !== targetRoom) {
+                onChangeRoom(targetRoom);
+                setTimeout(applyPosition, 100);
+            } else {
+                applyPosition();
             }
             
             console.log('✨ Teleported to:', position, targetRoom ? `(room: ${targetRoom})` : '');
@@ -11235,7 +11240,7 @@ const VoxelWorld = ({
         
         window.addEventListener('teleport', handleTeleport);
         return () => window.removeEventListener('teleport', handleTeleport);
-    }, [room, onChangeRoom, mpSendEmote]);
+    }, [room, onChangeRoom, mpSendEmote, mpChangeRoom]);
     
     // Listen for room counts updates from server (for igloo occupancy bubbles)
     useEffect(() => {

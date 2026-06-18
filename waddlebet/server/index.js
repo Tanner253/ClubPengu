@@ -3031,6 +3031,7 @@ async function handleMessage(playerId, message) {
                     const destPos = destinationPlayer.position;
                     const tpPlayer = players.get(teleportingPlayer.id);
                     if (tpPlayer) {
+                        const priorRoom = tpPlayer.room;
                         tpPlayer.position = { ...destPos };
                         
                         // If player is in a different room, move them to destination's room
@@ -3078,6 +3079,25 @@ async function handleMessage(playerId, message) {
                             position: destPos,
                             room: destinationPlayer.room
                         });
+
+                        if (priorRoom !== destinationPlayer.room && destinationPlayer.room) {
+                            sendToPlayer(teleportingPlayer.id, {
+                                type: 'room_state',
+                                room: destinationPlayer.room,
+                                players: getPlayersInRoom(destinationPlayer.room, teleportingPlayer.id)
+                            });
+                            ChatService.getScopeHistory('room', destinationPlayer.room)
+                                .then((roomHistory) => {
+                                    sendToPlayer(teleportingPlayer.id, {
+                                        type: 'chat_history_room',
+                                        room: destinationPlayer.room,
+                                        messages: roomHistory.map((doc) =>
+                                            ChatService.toClientPayload(doc, teleportingPlayer.id)
+                                        )
+                                    });
+                                })
+                                .catch((err) => console.error('[TP] chat history:', err.message));
+                        }
                         
                         // Send confirmation to admin/moderator
                         sendChatFeedback(playerId, `✅ Teleported ${teleportingPlayer.name} to ${destinationPlayer.name}`);

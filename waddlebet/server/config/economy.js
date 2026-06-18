@@ -94,9 +94,9 @@ export const ECONOMY = {
          */
         STAGE_DURABILITY_LOSS: {
             sapling: 1,
-            baby: 3,
-            mature: 6,
-            elder: 12
+            baby: 2,
+            mature: 4,
+            elder: 8
         }
 
     },
@@ -123,18 +123,17 @@ export const ECONOMY = {
         basic_axe: {
             id: 'basic_axe',
             cost: 1,
-            maxDurability: 80,
+            maxDurability: 200,
             /** @deprecated use getChopDurabilityLoss — kept for fallback */
             durabilityLossPerChop: 1,
-            /** Higher = more wear per chop (basic is punishing on big trees) */
-            durabilityDamageMultiplier: 1.35,
+            durabilityDamageMultiplier: 1.0,
             chopSpeedMultiplier: 1
         },
         iron_axe: {
             id: 'iron_axe',
             cost: 0,
             woodRequired: { pine_log: 120, birch_log: 64 },
-            maxDurability: 220,
+            maxDurability: 450,
             durabilityLossPerChop: 1,
             durabilityDamageMultiplier: 1.0,
             chopSpeedMultiplier: 0.82
@@ -143,7 +142,7 @@ export const ECONOMY = {
             id: 'steel_axe',
             cost: 0,
             woodRequired: { pine_log: 160, birch_log: 96, oak_log: 48 },
-            maxDurability: 400,
+            maxDurability: 750,
             durabilityLossPerChop: 1,
             durabilityDamageMultiplier: 0.75,
             chopSpeedMultiplier: 0.68
@@ -152,7 +151,7 @@ export const ECONOMY = {
             id: 'master_axe',
             cost: 0,
             woodRequired: { pine_log: 200, birch_log: 128, oak_log: 80, ironwood_log: 32 },
-            maxDurability: 650,
+            maxDurability: 1200,
             durabilityLossPerChop: 1,
             durabilityDamageMultiplier: 0.5,
             chopSpeedMultiplier: 0.55

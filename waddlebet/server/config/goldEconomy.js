@@ -13,6 +13,9 @@ export const STARTING_COINS = 10;
 
 export const FERRY_GOLD_COST = 1;
 
+/** Direct town ↔ forest route (skips snow forts) — premium fare. */
+export const FERRY_FOREST_DIRECT_COST = 3;
+
 export const BAIT_ITEM_ID = 'worm';
 export const BAIT_PER_CAST = 1;
 

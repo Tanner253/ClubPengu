@@ -34,6 +34,9 @@ export const MERCHANTS = {
         acceptsCategories: ['wood', 'forage'],
         /** Trail-side sell rate (65% of emergency rate). */
         npcSellRatio: 0.65,
+        sells: [
+            { itemId: 'basic_axe', cost: 1, label: 'Basic Axe', emoji: '🪓' },
+        ],
     },
     supply_merchant: {
         id: 'supply_merchant',

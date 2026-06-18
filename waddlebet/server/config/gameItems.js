@@ -196,6 +196,7 @@ ITEM_CATALOG.set('forest_mushroom', {
 /** Ferry tickets — stack in backpack; consumed when boarding matching route. */
 const FERRY_TICKETS = [
     { id: 'ferry_ticket_town_snow', name: 'Ferry Ticket (Snow Forts)', routeId: 'town_snow_forts' },
+    { id: 'ferry_ticket_town_forest', name: 'Ferry Ticket (Forest Trails)', routeId: 'town_forest' },
     { id: 'ferry_ticket_snow_town', name: 'Ferry Ticket (Town)', routeId: 'snow_forts_town' },
     { id: 'ferry_ticket_snow_forest', name: 'Ferry Ticket (Forest)', routeId: 'snow_forts_forest' },
     { id: 'ferry_ticket_forest_snow', name: 'Ferry Ticket (Snow Forts)', routeId: 'forest_snow_forts' },

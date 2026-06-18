@@ -2,7 +2,7 @@
  * Overworld travel config (client) — keep in sync with server/config/travel.js
  */
 
-import { FERRY_GOLD_COST } from './goldEconomy.js';
+import { FERRY_GOLD_COST, FERRY_FOREST_DIRECT_COST } from './goldEconomy.js';
 
 export const TRAVEL_TIMING = {
     BOARDING_SECONDS: 25,
@@ -18,6 +18,15 @@ export const TRAVEL_ROUTES = {
         name: 'Snow Forts',
         emoji: '⛄',
         ticketCost: FERRY_GOLD_COST,
+    },
+    town_forest: {
+        id: 'town_forest',
+        fromRoom: 'town',
+        toRoom: 'forest_trails',
+        name: 'Forest Trails',
+        emoji: '🌲',
+        ticketCost: FERRY_FOREST_DIRECT_COST,
+        transitSeconds: 60,
     },
     snow_forts_town: {
         id: 'snow_forts_town',
@@ -95,6 +104,7 @@ export const TRAVEL_LOBBY_CAMERA = {
 /** Map route id → inventory item id (keep in sync with server/config/gameItems.js). */
 export const FERRY_TICKET_BY_ROUTE = {
     town_snow_forts: 'ferry_ticket_town_snow',
+    town_forest: 'ferry_ticket_town_forest',
     snow_forts_town: 'ferry_ticket_snow_town',
     snow_forts_forest: 'ferry_ticket_snow_forest',
     forest_snow_forts: 'ferry_ticket_forest_snow',
