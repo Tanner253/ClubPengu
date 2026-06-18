@@ -1019,23 +1019,21 @@ function VersionCard({ version, isExpanded, onToggle }: { version: ChangelogVers
 
 // ==================== MAIN COMPONENT ====================
 
-function getShippingMonths(changelog: ChangelogVersion[]): number {
-  const times = changelog
-    .map((entry) => new Date(entry.date).getTime())
-    .filter((time) => !Number.isNaN(time));
-  if (times.length === 0) return 6;
+/** First git commit (`init`, 2025-12-09). Changelog date strings use ranges that parse incorrectly. */
+const REPO_INCEPTION = new Date(2025, 11, 9);
 
-  const start = new Date(Math.min(...times));
+function getShippingMonths(): number {
   const end = new Date();
   let months =
-    (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
-  if (end.getDate() < start.getDate()) months -= 1;
+    (end.getFullYear() - REPO_INCEPTION.getFullYear()) * 12 +
+    (end.getMonth() - REPO_INCEPTION.getMonth());
+  if (end.getDate() < REPO_INCEPTION.getDate()) months -= 1;
   return Math.max(1, months);
 }
 
 function formatShippingHighlight(months: number, locale: string): string {
-  if (locale === "zh") return `連續 ${months} 個月以上交付。`;
-  return `${months}+ months of shipping.`;
+  if (locale === "zh") return `自 2025 年 12 月起連續交付 ${months} 個月以上。`;
+  return `${months}+ months of shipping since Dec 2025.`;
 }
 
 export default function Changelog() {
@@ -1071,7 +1069,7 @@ export default function Changelog() {
   const totalFiles = CHANGELOG_DATA.reduce((acc, v) => acc + (v.stats?.filesChanged || 0), 0);
 
   const { t, locale } = useWhitepaperLanguage();
-  const shippingHighlight = formatShippingHighlight(getShippingMonths(CHANGELOG_DATA), locale);
+  const shippingHighlight = formatShippingHighlight(getShippingMonths(), locale);
 
   return (
     <section id="changelog" className="py-16 md:py-32 px-4 sm:px-6 relative">
