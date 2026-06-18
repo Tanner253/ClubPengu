@@ -51,6 +51,7 @@ import nftOwnershipService from './services/NFTOwnershipService.js';
 import rentScheduler from './schedulers/RentScheduler.js';
 import solanaPaymentService from './services/SolanaPaymentService.js';
 import devBotService, { BOT_CONFIG } from './services/DevBotService.js';
+import nametagTierService from './services/NametagTierService.js';
 import MushroomService from './services/MushroomService.js';
 import WormForageService from './services/WormForageService.js';
 import WorldDropService from './services/WorldDropService.js';
@@ -861,8 +862,8 @@ const getPlayerByWalletGlobal = (wallet) => {
 };
 pebbleService.setPlayerLookup(getPlayerByWalletGlobal);
 
-// Initialize DevBot for development testing
-if (IS_DEV) {
+// Initialize WagerBot practice opponent (all environments unless DISABLE_WAGER_BOT=true)
+if (devBotService.isActive) {
     /**
      * Callback for when bot accepts a challenge
      * This goes through the proper match creation flow
@@ -911,8 +912,9 @@ if (IS_DEV) {
                     gameType: match.gameType,
                     player1: { id: match.player1.id, name: match.player1.name, appearance: match.player1.appearance },
                     player2: { id: match.player2.id, name: match.player2.name, appearance: match.player2.appearance },
-                    wagerAmount: challenge.wagerAmount || 0,
-                    wagerToken: challenge.wagerToken || null,
+                    wagerAmount: 0,
+                    wagerToken: null,
+                    isPractice: true,
                     yourRole: 'player1'
                 },
                 initialState: matchService.getMatchState(match.id, challenge.challengerId),
@@ -1149,16 +1151,9 @@ if (IS_DEV) {
     };
     
     devBotService.init({ challengeService, matchService, sendToPlayer, onBotAcceptChallenge, onBotMakeMove });
-    // Add bot to players map
-    const bot = devBotService.getBotPlayer();
-    if (bot) {
-        players.set(bot.id, bot);
-        // Add bot to town room
-        if (!rooms.has('town')) {
-            rooms.set('town', new Set());
-        }
-        rooms.get('town').add(bot.id);
-        console.log(`🤖 DevBot added to town at position (${bot.position.x}, ${bot.position.z})`);
+    if (devBotService.ensureRegistered(players, rooms)) {
+        const bot = players.get(BOT_CONFIG.id);
+        console.log(`🤖 WagerBot added to town at position (${bot?.position?.x}, ${bot?.position?.z})`);
     }
 }
 
@@ -1438,7 +1433,18 @@ function joinRoom(playerId, roomId) {
     broadcastServerPopulation();
 }
 
+function getNametagTierFields(player) {
+    return {
+        cpBalance: player?.cpBalance ?? 0,
+        cpNametagTier: player?.cpNametagTier || 'standard',
+    };
+}
+
 function getPlayersInRoom(roomId, excludeId = null) {
+    if (roomId === 'town' && devBotService.isActive) {
+        devBotService.ensureRegistered(players, rooms);
+    }
+
     const roomPlayers = rooms.get(roomId);
     if (!roomPlayers) return [];
     
@@ -1470,7 +1476,10 @@ function getPlayersInRoom(roomId, excludeId = null) {
                 trailPoints,
                 isAuthenticated: player.isAuthenticated || false,
                 heldHotbarItem: player.heldHotbarItem || null,
-                role: player.role || null
+                role: player.role || null,
+                isBot: player.isBot || false,
+                isPracticeBot: player.isPracticeBot || player.isBot || false,
+                ...getNametagTierFields(player),
             });
         }
     }
@@ -1518,14 +1527,18 @@ async function handleWagerEscrow(player1, player2, wagerAmount, matchId) {
 const _payoutInProgress = new Set();
 
 async function handleMatchPayout(match, winnerId, isDraw = false) {
-    // Guard against double-processing
     if (_payoutInProgress.has(match.id)) {
         console.log(`⚠️ Payout already in progress for match ${match.id}, skipping`);
         return { skipped: true, reason: 'already_processing' };
     }
     _payoutInProgress.add(match.id);
-    
+
     try {
+        if (devBotService.isPracticeMatch(match)) {
+            console.log(`🤖 Practice match ${match.id} complete — no wager payout or stats`);
+            return { practice: true, coinsWon: 0 };
+        }
+
         const totalPot = match.wagerAmount * 2;
         let settlementResult = null;
         
@@ -2047,6 +2060,8 @@ async function handleMessage(playerId, message) {
                 
                 // Associate wallet with inbox
                 inboxService.associateWallet(walletAddress, playerId);
+
+                await nametagTierService.refreshPlayerTier(player);
                 
                 // Send success with full user data
                 sendToPlayer(playerId, {
@@ -2054,7 +2069,8 @@ async function handleMessage(playerId, message) {
                     token: authResult.token,
                     user: authResult.user,
                     isNewUser: authResult.isNewUser,
-                    referralApplied: authResult.referralApplied || false
+                    referralApplied: authResult.referralApplied || false,
+                    ...getNametagTierFields(player),
                 });
 
                 await sendGameInventorySnapshot(playerId, walletAddress);
@@ -2113,7 +2129,8 @@ async function handleMessage(playerId, message) {
                         type: 'player_authenticated',
                         playerId,
                         name: player.name,
-                        appearance: player.appearance
+                        appearance: player.appearance,
+                        ...getNametagTierFields(player),
                     }, playerId);
                 }
             } catch (error) {
@@ -2387,13 +2404,16 @@ async function handleMessage(playerId, message) {
                 user.lastActiveAt = new Date();
                 await user.save();
                 
+                await nametagTierService.refreshPlayerTier(player);
+
                 // Send restored session response (use async to include gacha cosmetics)
                 sendToPlayer(playerId, {
                     type: 'auth_success',
                     token,
                     user: await user.getFullDataAsync(),
                     isNewUser: false,
-                    restored: true
+                    restored: true,
+                    ...getNametagTierFields(player),
                 });
 
                 await sendGameInventorySnapshot(playerId, walletAddress);
@@ -2700,6 +2720,10 @@ async function handleMessage(playerId, message) {
                 }
             }
 
+            if (player.walletAddress) {
+                await nametagTierService.refreshPlayerTier(player);
+            }
+
             const existingPlayers = getPlayersInRoom(roomId, playerId);
             
             // Get updated user data for authenticated users (includes locked username status)
@@ -2743,7 +2767,10 @@ async function handleMessage(playerId, message) {
                     afkMessage: player.afkMessage || null,
                     isAuthenticated: player.isAuthenticated,
                     heldHotbarItem: player.heldHotbarItem || null,
-                    role: player.role || null
+                    role: player.role || null,
+                    isBot: player.isBot || false,
+                    isPracticeBot: player.isPracticeBot || player.isBot || false,
+                    ...getNametagTierFields(player),
                 }
             }, playerId);
             
@@ -3870,8 +3897,12 @@ async function handleMessage(playerId, message) {
         
         // ==================== CHALLENGES ====================
         case 'challenge_send': {
-            const targetPlayer = players.get(message.targetPlayerId);
-            if (!targetPlayer) {
+            let resolvedTarget = players.get(message.targetPlayerId);
+            if (!resolvedTarget && devBotService.isBot(message.targetPlayerId)) {
+                devBotService.ensureRegistered(players, rooms);
+                resolvedTarget = players.get(message.targetPlayerId);
+            }
+            if (!resolvedTarget) {
                 sendToPlayer(playerId, {
                     type: 'challenge_error',
                     error: 'PLAYER_NOT_FOUND',
@@ -3879,9 +3910,16 @@ async function handleMessage(playerId, message) {
                 });
                 break;
             }
+
+            const targetIsPracticeBot = devBotService.isBot(message.targetPlayerId);
+            if (targetIsPracticeBot) {
+                message.wagerAmount = 0;
+                message.wagerToken = null;
+                message.wagerDepositTx = null;
+            }
             
             // Check for SPL token wager (x402 protocol enhancement)
-            const hasTokenWager = message.wagerToken?.tokenAddress && message.wagerToken?.tokenAmount > 0;
+            const hasTokenWager = !targetIsPracticeBot && message.wagerToken?.tokenAddress && message.wagerToken?.tokenAmount > 0;
             
             // Validate wager requirements (coin wager)
             if (message.wagerAmount > 0) {
@@ -3901,7 +3939,7 @@ async function handleMessage(playerId, message) {
                     });
                     break;
                 }
-                if (!targetPlayer.isAuthenticated) {
+                if (!resolvedTarget.isAuthenticated) {
                     sendToPlayer(playerId, {
                         type: 'challenge_error',
                         error: 'TARGET_NOT_AUTH',
@@ -3934,7 +3972,7 @@ async function handleMessage(playerId, message) {
                 }
                 
                 // Skip wallet check for bot targets - bot uses rent wallet
-                if (!targetPlayer.isBot && (!targetPlayer.isAuthenticated || !targetPlayer.walletAddress)) {
+                if (!resolvedTarget.isBot && (!resolvedTarget.isAuthenticated || !resolvedTarget.walletAddress)) {
                     sendToPlayer(playerId, {
                         type: 'challenge_error',
                         error: 'TARGET_NO_WALLET',
@@ -4043,9 +4081,9 @@ async function handleMessage(playerId, message) {
                     walletAddress: player.walletAddress 
                 },
                 { 
-                    ...targetPlayer, 
+                    ...resolvedTarget, 
                     id: message.targetPlayerId,
-                    walletAddress: targetPlayer.walletAddress || (targetPlayer.isBot ? process.env.RENT_WALLET_ADDRESS : null)
+                    walletAddress: resolvedTarget.walletAddress || (resolvedTarget.isBot ? process.env.RENT_WALLET_ADDRESS : null)
                 },
                 message.gameType,
                 message.wagerAmount,
@@ -4064,7 +4102,7 @@ async function handleMessage(playerId, message) {
                     type: 'challenge_sent',
                     challengeId: result.challenge.id,
                     targetPlayerId: message.targetPlayerId,
-                    targetName: targetPlayer.name,
+                    targetName: resolvedTarget.name,
                     gameType: result.challenge.gameType,
                     wagerAmount: result.challenge.wagerAmount,
                     wagerToken: result.challenge.wagerToken || null
@@ -4093,7 +4131,7 @@ async function handleMessage(playerId, message) {
                 });
                 
                 // Handle DevBot challenge (auto-accept in dev mode)
-                if (IS_DEV && devBotService.isBot(message.targetPlayerId)) {
+                if (devBotService.isBot(message.targetPlayerId)) {
                     devBotService.handleChallenge(result.challenge);
                 }
             }
@@ -4322,7 +4360,7 @@ async function handleMessage(playerId, message) {
                     sendToPlayer(challenge.targetId, matchStartMsg2);
                     
                     // Handle DevBot match start
-                    if (IS_DEV && (devBotService.isBot(challenge.challengerId) || devBotService.isBot(challenge.targetId))) {
+                    if (devBotService.isBot(challenge.challengerId) || devBotService.isBot(challenge.targetId)) {
                         devBotService.handleMatchStart(match);
                     }
                     
@@ -4447,13 +4485,11 @@ async function handleMessage(playerId, message) {
             sendToPlayer(match.player1.id, { type: 'match_state', matchId: match.id, state: state1 });
             sendToPlayer(match.player2.id, { type: 'match_state', matchId: match.id, state: state2 });
             
-            // Handle DevBot state update (bot doesn't have real WebSocket)
-            if (IS_DEV) {
-                if (devBotService.isBot(match.player1.id)) {
-                    devBotService.handleMatchState(match.id, state1);
-                } else if (devBotService.isBot(match.player2.id)) {
-                    devBotService.handleMatchState(match.id, state2);
-                }
+            // Handle WagerBot state update (bot doesn't have real WebSocket)
+            if (devBotService.isBot(match.player1.id)) {
+                devBotService.handleMatchState(match.id, state1);
+            } else if (devBotService.isBot(match.player2.id)) {
+                devBotService.handleMatchState(match.id, state2);
             }
             
             // Broadcast to spectators
@@ -4673,7 +4709,7 @@ async function handleMessage(playerId, message) {
                 await matchService.endMatch(match.id);
                 
                 // Handle DevBot match end
-                if (IS_DEV && (devBotService.isBot(match.player1.id) || devBotService.isBot(match.player2.id))) {
+                if (devBotService.isBot(match.player1.id) || devBotService.isBot(match.player2.id)) {
                     devBotService.handleMatchEnd(match.id);
                 }
             }
@@ -4731,8 +4767,8 @@ async function handleMessage(playerId, message) {
             
             await matchService.voidMatch(match.id, 'forfeit');
             
-            // Handle DevBot forfeit end
-            if (IS_DEV && (devBotService.isBot(match.player1.id) || devBotService.isBot(match.player2.id))) {
+            // Handle WagerBot forfeit end
+            if (devBotService.isBot(match.player1.id) || devBotService.isBot(match.player2.id)) {
                 devBotService.handleMatchEnd(match.id);
             }
             
@@ -8425,6 +8461,7 @@ async function handleMessage(playerId, message) {
             }
             break;
         }
+
         
         // ==================== REFERRAL SYSTEM ====================
         case 'referral_info': {

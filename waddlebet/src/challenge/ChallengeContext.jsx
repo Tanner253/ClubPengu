@@ -17,6 +17,7 @@ const ChallengeContext = createContext(null);
 
 // Maximum distance to view/challenge another player
 const PROFILE_PROXIMITY_DISTANCE = 8;
+const WAGER_BOT_ID = 'dev_bot_wager';
 
 export function ChallengeProvider({ children }) {
     const { connected, playerId, playersDataRef, sendChat, updateUserCoins } = useMultiplayer();
@@ -550,11 +551,11 @@ export function ChallengeProvider({ children }) {
     const selectPlayer = useCallback((playerData) => {
         if (!playerData || playerData.id === playerId) return;
         
-        // Check proximity before opening profile
+        const isPracticeBot = playerData.isPracticeBot || playerData.isBot || playerData.id === WAGER_BOT_ID;
         const localPos = localPlayerPositionRef.current;
         const targetPos = playerData.position;
         
-        if (!checkProximity(localPos, targetPos)) {
+        if (!isPracticeBot && !checkProximity(localPos, targetPos)) {
             showNotification('Player is too far away', 'info');
             return;
         }
@@ -591,15 +592,18 @@ export function ChallengeProvider({ children }) {
     // tokenWager is optional: { tokenAddress, tokenSymbol, tokenDecimals, tokenAmount, amountRaw }
     const sendChallenge = useCallback(async (targetPlayerId, gameType, wagerAmount, tokenWager = null) => {
         if (!targetPlayerId || !gameType) return;
-        if (wagerAmount < 0) return;
-        const hasTokenWager = tokenWager?.tokenAddress && tokenWager?.tokenAmount > 0;
+
+        const isPracticeBot = targetPlayerId === WAGER_BOT_ID;
+        const safeWager = isPracticeBot ? 0 : wagerAmount;
+        if (safeWager < 0) return;
+        const hasTokenWager = !isPracticeBot && tokenWager?.tokenAddress && tokenWager?.tokenAmount > 0;
         // Zero coin + zero token = casual PvP for guests; coin/token wagers validated on server
         
         const message = {
             type: 'challenge_send',
             targetPlayerId,
             gameType,
-            wagerAmount: wagerAmount || 0
+            wagerAmount: safeWager || 0
         };
         
         // Add token wager if present

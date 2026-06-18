@@ -322,10 +322,7 @@ export function updateCasinoSetpieceAnimations(host, time, delta, playerPos, ani
     // Casino exterior — marquee, roulette, slot reels, dice towers (needs delta!)
     if (frame % 2 === 0) {
         animatedCache.casinos?.forEach((mesh) => {
-            if (!mesh.userData?.update) return;
-            const dx = px - mesh.position.x;
-            const dz = pz - mesh.position.z;
-            if (dx * dx + dz * dz < ANIMATION_DISTANCE_SQ) {
+            if (mesh.userData?.update) {
                 mesh.userData.update(time, safeDelta);
             }
         });
@@ -375,15 +372,6 @@ export function updateCasinoSetpieceAnimations(host, time, delta, playerPos, ani
             }
         };
 
-        if (cullCache.casinoSign?.sprite) {
-            const entry = cullCache.casinoSign;
-            const dx = px - entry.parentMesh.position.x;
-            const dz = pz - entry.parentMesh.position.z;
-            const distSq = dx * dx + dz * dz;
-            const shouldShow = entry.wasVisible ? distSq < HIDE_DIST_SQ : distSq < SHOW_DIST_SQ;
-            updateVisibility(entry.sprite, shouldShow, entry);
-        }
-
         if (cullCache.gameRoomPortal) {
             const entry = cullCache.gameRoomPortal;
             const dx = px - entry.worldX;
@@ -402,10 +390,6 @@ export function buildCasinoAnimationCache(host, meshes, animatedCache, cullCache
     meshes.forEach((mesh) => {
         if (mesh.name === 'casino' && mesh.userData.update) {
             animatedCache.casinos.push(mesh);
-            const casinoSign = mesh.getObjectByName('casino_title_sign');
-            if (casinoSign) {
-                cullCache.casinoSign = { sprite: casinoSign, parentMesh: mesh, wasVisible: true };
-            }
         }
         if (mesh.name === 'casino_game_room_portal' && mesh.userData.portalAnim) {
             animatedCache.gameRoomPortals.push(mesh.userData.portalAnim);

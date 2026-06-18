@@ -3,6 +3,7 @@ import { VOXEL_SIZE, PALETTE } from './constants';
 import { ASSETS } from './assets/index';
 import { IconSend } from './Icons';
 import GameHUD from './components/GameHUD';
+import WorldCompass from './components/WorldCompass';
 import Portal from './components/Portal';
 import IglooPortal from './components/IglooPortal';
 import BannerZoomOverlay from './components/BannerZoomOverlay';
@@ -18,7 +19,7 @@ import GameManager from './engine/GameManager';
 import { GOLD_SLOT_BET, GOLD_SLOT_BET_MIN, GOLD_SLOT_BET_MAX, clampGoldSlotBet } from './config/goldSlots';
 import { PVE_BJ_MIN_BET, PVE_BJ_MAX_BET } from './config/goldEconomy';
 import Puffle from './engine/Puffle';
-import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PenguinBuilder';
+import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache, playerHasAnimatedCosmetics } from './engine/PenguinBuilder';
 import TownCenter from './rooms/TownCenter';
 import { createTownIceGroundTexture } from './rooms/town/TownIceGround';
 import SnowFortsZone from './rooms/SnowFortsZone';
@@ -68,6 +69,7 @@ import {
 import { readLiveWebGLInfo } from './utils/browserCapabilities.js';
 import { applyLowEndMode } from './utils/lowEndRender.js';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
+import { animateBuildingBanner } from './buildings/buildingBanner';
 import IceFishingGame from './games/IceFishingGame';
 import { canPickWorldAt } from './utils/worldPickInput';
 import { getResumePosition, savePlayerSession } from './utils/playerSession';
@@ -99,12 +101,56 @@ import { loadSnowFortsQuadrant, loadForestQuadrant } from './world/overworldLoad
 import { HARVESTABLE_MUSHROOMS, MUSHROOM_INTERACTION_RADIUS, MUSHROOM_HARVEST_MS } from './config/harvestableMushrooms';
 import { FORAGEABLE_LOGS, WORM_FORAGE_RADIUS, WORM_FORAGE_CHANNEL_MS } from './config/forageableLogs';
 import { findActiveScavengeSpot } from './config/scavenge';
+import { ARCADE_MACHINES } from './config/arcadeZone';
 import { formatScavengeCountdown, getScavengeRemainingMs, getScavengeSpotPrompt } from './utils/scavengeStatus';
 import { updateHeldGameItem, removeHeldGameItem } from './items/HeldGameItemBuilder';
 import { getActiveHotbarEntry, ownsAnyRod } from './utils/gameHotbar';
 import { canFitItemInBackpack } from './utils/inventoryCapacity';
 import StarterRodPickup from './systems/StarterRodPickup';
 import GameInventoryModal from './components/GameInventoryModal';
+import { resolveNametagStyle, isStyledNametag, getParticlePresetForNametagStyle } from './config/whaleNametagTiers.js';
+import { drawNametagToCanvas } from './utils/nametagCanvas.js';
+
+function disposeNameSprite(sprite) {
+    if (!sprite) return;
+    sprite.material?.map?.dispose();
+    sprite.material?.dispose();
+}
+
+function syncMeshNametagParticles(meshData, playerData, scene, THREE, position, camera, time, delta, distSq) {
+    const preset = getParticlePresetForNametagStyle(resolveNametagStyle(playerData));
+    const enabled = performanceManager.shouldShowNametagParticles(distSq);
+
+    if (!meshData._particlePreset) meshData._particlePreset = null;
+
+    if (!enabled || !preset) {
+        if (meshData.goldRainSystem) meshData.goldRainSystem.setVisible(false);
+        return;
+    }
+
+    if (!meshData.goldRainSystem || meshData._particlePreset !== preset) {
+        if (meshData.goldRainSystem) {
+            meshData.goldRainSystem.dispose();
+            meshData.goldRainSystem = null;
+        }
+        meshData.goldRainSystem = new LocalizedParticleSystem(THREE, scene, preset);
+        meshData.goldRainSystem.create({ x: position.x, y: position.y || 0, z: position.z });
+        meshData._particlePreset = preset;
+    }
+
+    meshData.goldRainSystem.setVisible(true);
+    meshData.goldRainSystem.update(time, delta, position, camera?.position);
+}
+
+function animateNametagSprite(sprite, time, isStyled) {
+    if (!sprite?.material) return;
+    if (!isStyled) {
+        sprite.material.opacity = 1;
+        return;
+    }
+    const phase = sprite.userData.animationPhase || 0;
+    sprite.material.opacity = 0.88 + Math.sin(time * 2.8 + phase) * 0.12;
+}
 
 function syncRemotePlayerHeldItem(meshData, playerData, buildPartMerged) {
     if (!meshData?.mesh || !buildPartMerged) return;
@@ -149,7 +195,8 @@ const VoxelWorld = ({
     const sceneRef = useRef(null);
     const playerRef = useRef(null);
     const playerNameSpriteRef = useRef(null); // Player's own name tag
-    const playerGoldRainRef = useRef(null); // Gold rain particle system for Day 1 nametag
+    const playerGoldRainRef = useRef(null); // Nametag particle system (gold/whale/sparkle)
+    const playerGoldRainPresetRef = useRef(null);
     const cameraRef = useRef(null);
     const rendererRef = useRef(null);
     const controlsRef = useRef(null);
@@ -166,8 +213,6 @@ const VoxelWorld = ({
     const roomDataRef = useRef(null); // Store room data (including beach ball) for multiplayer sync
     const raycasterRef = useRef(null); // For player click detection
     const mouseRef = useRef({ x: 0, y: 0 }); // Mouse position for raycasting
-    const wagerBotMeshRef = useRef(null); // WagerBot NPC mesh (dev mode only)
-    const wagerBotPuffleRef = useRef(null); // WagerBot's puffle {mesh, instance} (dev mode only)
     const isInMatchRef = useRef(isInMatch); // Track match state for game loop
     const matchBannersRef = useRef(new Map()); // matchId -> { sprite, canvas, ctx }
     const pveBannersRef = useRef(new Map()); // playerId -> { sprite, canvas, ctx } for PvE activities
@@ -546,7 +591,7 @@ const VoxelWorld = ({
                 mpUpdateAppearanceRef.current({
                     ...penguinData,
                     mountEnabled: settings.mountEnabled !== false,
-                    nametagStyle: isAuthenticated ? (settings.nametagStyle || 'day1') : 'default',
+                    nametagStyle: isAuthenticated ? (settings.nametagStyle || 'tier') : 'default',
                     greenCandlesEnabled: settings.greenCandlesEnabled === true
                 });
             } catch {
@@ -859,6 +904,7 @@ const VoxelWorld = ({
     // World merchant NPCs (Old Salty, Copper Clive, …)
     const worldNpcManagerRef = useRef(null);
     const travelNpcManagerRef = useRef(null);
+    const townBuildingBannersRef = useRef([]);
     const travelLobbyRef = useRef(null);
     const [nearbyNpcInteraction, setNearbyNpcInteraction] = useState(null);
     const nearbyNpcInteractionRef = useRef(null);
@@ -1997,6 +2043,7 @@ const VoxelWorld = ({
         // Reset portal list — entries reference meshes from this init; without this,
         // re-inits (room changes) accumulate stale entries pointing at dead scenes.
         portalsRef.current = [];
+        townBuildingBannersRef.current = [];
         
         for (const building of BUILDINGS) {
             let buildingGroup;
@@ -2052,6 +2099,11 @@ const VoxelWorld = ({
             }
             
             scene.add(buildingGroup);
+            buildingGroup.traverse((child) => {
+                if (child.userData?.isBuildingBanner) {
+                    townBuildingBannersRef.current.push(child);
+                }
+            });
             
             // Calculate door position based on rotation
             const doorOffset = building.size.d / 2 + 1.5;
@@ -2874,75 +2926,6 @@ const VoxelWorld = ({
                 blackjackDealersRef.current.push(dealerMesh);
                 console.log(`🎰 Blackjack dealer spawned at table ${dealerPos.tableId}`);
             });
-        }
-
-        // --- WAGERBOT NPC (Town only, Development mode) ---
-        // Static NPC for testing token wagering - challenge this bot to test wagers
-        const isDev = import.meta.env.DEV || window.location.hostname === 'localhost';
-        if (room === 'town' && isDev) {
-            const wagerBotData = {
-                characterType: 'doginal',
-                skin: 'purple',
-                hat: 'none',
-                eyes: 'none',
-                mouth: 'none',
-                bodyItem: 'none',
-                dogPrimaryColor: '#D2691E',
-                dogSecondaryColor: '#8B4513'
-            };
-            const wagerBotMesh = buildPenguinMesh(wagerBotData);
-            // Slightly bigger than normal penguins to stand out
-            wagerBotMesh.scale.set(1.15, 1.15, 1.15);
-            // Position near spawn (visible when entering town)
-            wagerBotMesh.position.set(105, 0, 100);
-            wagerBotMesh.name = 'wagerbot_npc';
-            wagerBotMesh.userData.isWagerBot = true; // Mark for click detection
-            scene.add(wagerBotMesh);
-            wagerBotMeshRef.current = wagerBotMesh; // Store ref for click detection
-            
-            // Create WagerBot's puffle (gold puffle with crown!)
-            const botPuffleInstance = new Puffle({
-                id: 'bot_puffle_001',
-                name: 'BotPuffle',
-                color: 'gold',
-                happiness: 100,
-                energy: 100,
-                hunger: 0
-            });
-            // Set equipped accessories
-            botPuffleInstance.equippedAccessories = { hat: 'crown', glasses: 'none', neckwear: 'bowtie' };
-            const botPuffleMesh = botPuffleInstance.createMesh(THREE);
-            botPuffleMesh.position.set(106.5, 0.5, 101.5); // Near WagerBot
-            botPuffleMesh.name = 'wagerbot_puffle';
-            scene.add(botPuffleMesh);
-            wagerBotPuffleRef.current = { mesh: botPuffleMesh, instance: botPuffleInstance };
-            console.log('🐾 WagerBot puffle spawned (gold with crown)');
-            
-            // Add floating name tag above bot
-            const canvas = document.createElement('canvas');
-            canvas.width = 256;
-            canvas.height = 64;
-            const ctx = canvas.getContext('2d');
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.roundRect(0, 0, 256, 64, 8);
-            ctx.fill();
-            ctx.fillStyle = '#00FF88';
-            ctx.font = 'bold 24px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('🤖 WagerBot', 128, 40);
-            
-            const texture = new THREE.CanvasTexture(canvas);
-            const spriteMat = new THREE.SpriteMaterial({ map: texture, transparent: true });
-            const sprite = new THREE.Sprite(spriteMat);
-            sprite.scale.set(4, 1, 1);
-            sprite.position.set(105, 5, 100); // Above the bot
-            sprite.name = 'wagerbot_label';
-            scene.add(sprite);
-            
-            console.log('🤖 WagerBot NPC spawned at (105, 0, 100) in town - DEV MODE');
-        } else {
-            wagerBotMeshRef.current = null; // Clear ref if not in town/dev
-            wagerBotPuffleRef.current = null; // Clear puffle ref too
         }
 
         // --- INPUT HANDLING ---
@@ -4863,7 +4846,7 @@ const VoxelWorld = ({
                 // Cache is built once when mesh is created, avoiding expensive tree traversal
                 const animCache = playerRef.current.userData._animatedPartsCache;
                 if (animCache) {
-                    animateCosmeticsFromCache(animCache, time, delta);
+                    animateCosmeticsFromCache(animCache, time, delta, VOXEL_SIZE);
                 }
                 
                 // --- WIZARD HAT WORLD-SPACE TRAIL (Per-Player Pools) ---
@@ -5851,6 +5834,27 @@ const VoxelWorld = ({
             for (const [id, meshData] of otherMeshes) {
                 const playerData = playersData.get(id);
                 if (!playerData || !meshData.mesh) continue;
+
+                if (playerData.needsNametagRebuild && createNameSpriteRef.current) {
+                    const newSprite = createNameSpriteRef.current(playerData.name || 'Player', playerData);
+                    if (newSprite) {
+                        if (meshData.nameSprite) {
+                            meshData.mesh.remove(meshData.nameSprite);
+                            disposeNameSprite(meshData.nameSprite);
+                        }
+                        const characterType = playerData.appearance?.characterType || 'penguin';
+                        const nameHeight = characterType === 'marcus' ? NAME_HEIGHT_MARCUS : characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
+                        newSprite.position.set(0, nameHeight, 0);
+                        meshData.mesh.add(newSprite);
+                        meshData.nameSprite = newSprite;
+                    }
+                    if (meshData.goldRainSystem) {
+                        meshData.goldRainSystem.dispose();
+                        meshData.goldRainSystem = null;
+                        meshData._particlePreset = null;
+                    }
+                    playerData.needsNametagRebuild = false;
+                }
                 
                 // Rebuild mesh if appearance changed
                 if (playerData.needsMeshRebuild && buildPenguinMeshRef.current) {
@@ -5862,6 +5866,7 @@ const VoxelWorld = ({
                     
                     // Store nametag and other attachments
                     const nameSprite = meshData.nameSprite;
+                    const pvpLabelSprite = meshData.pvpLabelSprite;
                     const bubble = meshData.bubble;
                     const goldRainSystem = meshData.goldRainSystem;
                     
@@ -5871,6 +5876,10 @@ const VoxelWorld = ({
                     
                     // Build new mesh with updated appearance
                     const newMesh = buildPenguinMeshRef.current(playerData.appearance);
+                    const isWagerBot = playerData.isBot || playerData.isPracticeBot || id === 'dev_bot_wager';
+                    if (isWagerBot) {
+                        newMesh.scale.set(1.12, 1.12, 1.12);
+                    }
                     newMesh.position.copy(currentPos);
                     newMesh.rotation.y = currentRot;
                     scene.add(newMesh);
@@ -5878,6 +5887,10 @@ const VoxelWorld = ({
                     // Reattach nametag
                     if (nameSprite) {
                         newMesh.add(nameSprite);
+                    }
+
+                    if (pvpLabelSprite) {
+                        newMesh.add(pvpLabelSprite);
                     }
                     
                     // Reattach bubble if it exists
@@ -5898,24 +5911,7 @@ const VoxelWorld = ({
                     
                     // Update animated cosmetics flag
                     const appearance = playerData.appearance || {};
-                    // Animated skin colors (all animated skins from PenguinBuilder)
-                    const animatedSkins = ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula', 'lava', 'ocean', 'sunset', 'frost', 'matrix', 'glitch', 'chromatic', 'holographic'];
-                    // Animated feathers
-                    const animatedHats = ['propeller', 'flamingCrown', 'auroraFeathers', 'crystalFeathers', 'voidFeathers'];
-                    meshData.hasAnimatedCosmetics = animatedHats.includes(appearance.hat) ||
-                                                     appearance.mouth === 'cigarette' || 
-                                                     appearance.mouth === 'pipe' ||
-                                                     appearance.mouth === 'cigar' ||
-                                                     appearance.mouth === 'fireBreath' ||
-                                                     appearance.mouth === 'iceBreath' ||
-                                                     appearance.mouth === 'bubblegum' ||
-                                                     appearance.eyes === 'laser' ||
-                                                     appearance.eyes === 'fire' ||
-                                                     appearance.bodyItem === 'angelWings' ||
-                                                     appearance.bodyItem === 'demonWings' ||
-                                                     appearance.bodyItem === 'fireAura' ||
-                                                     appearance.bodyItem === 'lightningAura' ||
-                                                     animatedSkins.includes(appearance.skin);
+                    meshData.hasAnimatedCosmetics = playerHasAnimatedCosmetics(appearance);
                     
                     // Clear the rebuild flag
                     playerData.needsMeshRebuild = false;
@@ -6167,18 +6163,23 @@ const VoxelWorld = ({
                         !forestTreeManagerRef.current?.isRemoteManualChopping?.(id)
                     );
                     animateMesh(meshData.mesh, isMoving, meshData.currentEmote, meshData.emoteStartTime, playerData.seatedOnFurniture || false, playerData.appearance?.characterType || 'penguin', otherPlayerMounted, otherIsAirborne, time, null, isOtherHoldChopping);
-                    
-                    // Animate cosmetics for other players with animated items (distance-based LOD)
-                    if (meshData.hasAnimatedCosmetics && performanceManager.shouldAnimateCosmetics(distSq)) {
-                        if (!meshData.mesh.userData._animatedPartsCache) {
-                            meshData.mesh.userData._animatedPartsCache = cacheAnimatedParts(meshData.mesh);
-                        }
-                        animateCosmeticsFromCache(meshData.mesh.userData._animatedPartsCache, time, delta);
+                }
+
+                // Animated skins/feathers run independently of walk-animation LOD
+                if (meshData.hasAnimatedCosmetics && performanceManager.shouldAnimateCosmetics(distSq)) {
+                    if (!meshData.mesh.userData._animatedPartsCache) {
+                        meshData.mesh.userData._animatedPartsCache = cacheAnimatedParts(meshData.mesh);
                     }
+                    animateCosmeticsFromCache(
+                        meshData.mesh.userData._animatedPartsCache,
+                        time,
+                        delta,
+                        VOXEL_SIZE
+                    );
                 }
                 
-                // Mount animation for other players (also throttled for distant players)
                 if (shouldAnimateThisFrame && meshData.mesh.userData?.mount && meshData.mesh.userData?.mountData?.animated) {
+                    // Mount animation for other players (also throttled for distant players)
                     const mountGroup = getMountGroup(meshData.mesh);
                     const mountData = meshData.mesh.userData.mountData;
                     
@@ -6749,22 +6750,53 @@ const VoxelWorld = ({
                         1
                     );
                     
-                    // Animated nametag floating effect (day1 and whale)
+                    // Animated nametag floating + pulse (styled tiers)
                     const nameStyle = meshData.nameSprite.userData.nametagStyle;
-                    if (nameStyle === 'day1' || nameStyle === 'whale') {
+                    if (isStyledNametag(nameStyle)) {
                         const phase = meshData.nameSprite.userData.animationPhase || 0;
                         const floatOffset = Math.sin(time * 1.5 + phase) * 0.1;
                         const characterType = meshData.mesh.userData?.characterType || 'penguin';
                         const baseHeight = characterType === 'marcus' ? NAME_HEIGHT_MARCUS : characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
                         meshData.nameSprite.position.y = baseHeight + floatOffset;
+                        animateNametagSprite(meshData.nameSprite, time, true);
+                    } else {
+                        animateNametagSprite(meshData.nameSprite, time, false);
                     }
-                    
-                    
-                    // Update gold rain particle system for Day 1 nametag (other players)
-                    // DISABLED: Gold rain removed for performance boost
-                    if (meshData.goldRainSystem) {
-                        meshData.goldRainSystem.setVisible(false);
-                    }
+                }
+
+                if (meshData.pvpLabelSprite && camera) {
+                    const distToCamera = camera.position.distanceTo(meshData.mesh.position);
+                    const minDist = 8;
+                    const maxDist = 25;
+                    const minScale = 0.25;
+                    const maxScale = 1.0;
+                    const t = Math.min(1, Math.max(0, (distToCamera - minDist) / (maxDist - minDist)));
+                    const scaleFactor = minScale + t * (maxScale - minScale);
+                    const baseScale = meshData.pvpLabelSprite.userData.baseScale || { x: 5, y: 1.1 };
+                    meshData.pvpLabelSprite.scale.set(
+                        baseScale.x * scaleFactor,
+                        baseScale.y * scaleFactor,
+                        1
+                    );
+                    const floatOffset = Math.sin(time * 2 + (meshData.pvpLabelSprite.userData.animationPhase || 0)) * 0.08;
+                    const characterType = meshData.mesh.userData?.characterType || 'penguin';
+                    const baseHeight = characterType === 'marcus' ? NAME_HEIGHT_MARCUS : characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
+                    meshData.pvpLabelSprite.position.y = baseHeight + 1.4 + floatOffset;
+                }
+                
+                // Update nametag particle system for other players
+                if (meshData.goldRainSystem || getParticlePresetForNametagStyle(resolveNametagStyle(playerData))) {
+                    syncMeshNametagParticles(
+                        meshData,
+                        playerData,
+                        sceneRef.current,
+                        window.THREE,
+                        meshData.mesh.position,
+                        camera,
+                        time,
+                        delta,
+                        distSq
+                    );
                 }
                 
                 // Handle chat bubbles for other players
@@ -6825,22 +6857,64 @@ const VoxelWorld = ({
                     1
                 );
                 
-                // Animated nametag floating effect for local player (day1 and whale)
+                // Animated nametag floating + pulse for local player (styled tiers)
                 const localNameStyle = playerNameSpriteRef.current.userData.nametagStyle;
-                if (localNameStyle === 'day1' || localNameStyle === 'whale') {
+                if (isStyledNametag(localNameStyle)) {
                     const phase = playerNameSpriteRef.current.userData.animationPhase || 0;
                     const floatOffset = Math.sin(time * 1.5 + phase) * 0.1;
                     const baseHeight = penguinDataRef.current?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : penguinDataRef.current?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
                     playerNameSpriteRef.current.position.y = baseHeight + floatOffset;
+                    animateNametagSprite(playerNameSpriteRef.current, time, true);
+                } else {
+                    animateNametagSprite(playerNameSpriteRef.current, time, false);
                 }
                 
             }
             
-            // Update world-space nametag particle rain for local player
-            // Controlled by same setting as snow particles
-            // DISABLED: Gold rain removed for performance boost
-            if (playerGoldRainRef.current) {
-                playerGoldRainRef.current.setVisible(false);
+            // Update world-space nametag particles for local player
+            if (playerRef.current && playerGoldRainRef) {
+                const localPlayerData = {
+                    appearance: { nametagStyle: (() => {
+                        try {
+                            const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
+                            return isAuthenticated ? (settings.nametagStyle || 'tier') : 'default';
+                        } catch { return 'default'; }
+                    })() },
+                    cpNametagTier: userDataRef.current?.cpNametagTier,
+                    isAuthenticated,
+                    walletAddress: walletAddress || userDataRef.current?.walletAddress,
+                };
+                const preset = getParticlePresetForNametagStyle(resolveNametagStyle(localPlayerData));
+                const localDistSq = camera
+                    ? (camera.position.x - posRef.current.x) ** 2 + (camera.position.z - posRef.current.z) ** 2
+                    : 0;
+                const enabled = performanceManager.shouldShowNametagParticles(localDistSq);
+
+                if (!enabled || !preset) {
+                    if (playerGoldRainRef.current) playerGoldRainRef.current.setVisible(false);
+                } else {
+                    if (!playerGoldRainRef.current || playerGoldRainPresetRef.current !== preset) {
+                        if (playerGoldRainRef.current) {
+                            playerGoldRainRef.current.dispose();
+                            playerGoldRainRef.current = null;
+                        }
+                        if (sceneRef.current && window.THREE) {
+                            const system = new LocalizedParticleSystem(window.THREE, sceneRef.current, preset);
+                            system.create({ x: posRef.current.x, y: posRef.current.y, z: posRef.current.z });
+                            playerGoldRainRef.current = system;
+                            playerGoldRainPresetRef.current = preset;
+                        }
+                    }
+                    if (playerGoldRainRef.current) {
+                        playerGoldRainRef.current.setVisible(true);
+                        playerGoldRainRef.current.update(
+                            time,
+                            delta,
+                            posRef.current,
+                            camera?.position
+                        );
+                    }
+                }
             }
 
             // PARKOUR PERFORMANCE MODE: Skip heavy animations when player is high up (parkour course 4+)
@@ -6860,6 +6934,7 @@ const VoxelWorld = ({
                 if (showPerfDebugRef.current) {
                     perfStatsRef.current.timings.townUpdate = performance.now() - t0;
                 }
+                townBuildingBannersRef.current.forEach((sprite) => animateBuildingBanner(sprite, time));
             }
             if (snowFortsZoneRef.current && roomRef.current === 'snow_forts' && !inParkourPerformanceMode) {
                 const t1 = showPerfDebugRef.current ? performance.now() : 0;
@@ -7791,31 +7866,6 @@ const VoxelWorld = ({
                 meshToPuffleOwnerMap.set(localPuffleMesh, { ownerId: 'self', puffleMesh: localPuffleMesh, puffleInstance: playerPuffleRef.current });
             }
             
-            // Add WagerBot NPC to clickable meshes (dev mode)
-            if (wagerBotMeshRef.current) {
-                const botMesh = wagerBotMeshRef.current;
-                playerMeshes.push(botMesh);
-                botMesh.traverse(child => {
-                    if (child.isMesh) {
-                        meshToPlayerMap.set(child, 'dev_bot_wager');
-                    }
-                });
-                meshToPlayerMap.set(botMesh, 'dev_bot_wager');
-            }
-            
-            // Add WagerBot's puffle for petting (dev mode)
-            if (wagerBotPuffleRef.current?.mesh) {
-                const botPuffleMesh = wagerBotPuffleRef.current.mesh;
-                const botPuffleInstance = wagerBotPuffleRef.current.instance;
-                puffleMeshes.push(botPuffleMesh);
-                botPuffleMesh.traverse(child => {
-                    if (child.isMesh) {
-                        meshToPuffleOwnerMap.set(child, { ownerId: 'dev_bot_wager', puffleMesh: botPuffleMesh, puffleInstance: botPuffleInstance });
-                    }
-                });
-                meshToPuffleOwnerMap.set(botPuffleMesh, { ownerId: 'dev_bot_wager', puffleMesh: botPuffleMesh, puffleInstance: botPuffleInstance });
-            }
-            
             // Collect banner sprites for click detection
             const bannerSprites = [];
             // Igloo banners
@@ -8038,30 +8088,6 @@ const VoxelWorld = ({
                 }
                 
                 if (clickedPlayerId) {
-                    // Handle WagerBot NPC click (dev mode)
-                    if (clickedPlayerId === 'dev_bot_wager') {
-                        console.log('🖱️ Clicked on WagerBot NPC');
-                        // Use the same appearance as defined in server/services/DevBotService.js BOT_CONFIG
-                        onPlayerClick({
-                            id: 'dev_bot_wager',
-                            name: '🤖 WagerBot',
-                            appearance: {
-                                characterType: 'doginal',
-                                skin: 'purple',
-                                hat: 'none',
-                                eyes: 'none',
-                                mouth: 'none',
-                                bodyItem: 'none',
-                                dogPrimaryColor: '#D2691E',
-                                dogSecondaryColor: '#8B4513'
-                            },
-                            position: { x: 105, y: 0, z: 100 },
-                            isAuthenticated: true, // Bot is "authenticated" so can accept wagers
-                            isBot: true // Mark as bot for UI
-                        });
-                        return;
-                    }
-                    
                     const playerData = playersDataRef.current.get(clickedPlayerId);
                     if (playerData) {
                         console.log('🖱️ Clicked/tapped on player:', playerData.name);
@@ -8070,7 +8096,10 @@ const VoxelWorld = ({
                             name: playerData.name,
                             appearance: playerData.appearance,
                             position: playerData.position,
-                            isAuthenticated: playerData.isAuthenticated
+                            isAuthenticated: playerData.isAuthenticated,
+                            isBot: playerData.isBot || playerData.isPracticeBot || clickedPlayerId === 'dev_bot_wager',
+                            isPracticeBot: playerData.isPracticeBot || playerData.isBot || clickedPlayerId === 'dev_bot_wager',
+                            cpNametagTier: playerData.cpNametagTier || 'standard',
                         });
                     }
                 }
@@ -8511,16 +8540,6 @@ const VoxelWorld = ({
                         }
                     });
                 }
-            }
-            
-            // Add WagerBot (clickable)
-            if (wagerBotMeshRef.current) {
-                wagerBotMeshRef.current.traverse(child => {
-                    if (child.isMesh) {
-                        interactiveObjects.push(child);
-                        objectTypeMap.set(child, 'player');
-                    }
-                });
             }
             
             // Add puffles (clickable for petting)
@@ -9380,19 +9399,15 @@ const VoxelWorld = ({
         }
         
         const playerPos = posRef.current;
-        const C = 110; // TownCenter.CENTER
         const interactionRadius = 4;
         
-        // All arcade machine positions and their game types
-        const arcadeMachines = [
-            { x: C + 21.5, z: C - 5.2, game: 'battleship', gameKey: 'game.battleship', icon: '🚢' },
-            { x: C + 26.5, z: C - 5.2, game: 'flappy_penguin', gameKey: 'game.flappyPenguin', icon: '🐧' },
-            { x: C + 31.5, z: C - 5.2, game: 'snake', gameKey: 'game.snake', icon: '🐍' },
-            { x: C + 36.5, z: C - 5.2, game: 'pong', gameKey: 'game.icePong', icon: '🏒' },
-            { x: C + 41.5, z: C - 5.2, game: 'memory', gameKey: 'game.memoryMatch', icon: '🧠' },
-            { x: C + 46.5, z: C - 5.2, game: 'thin_ice', gameKey: 'game.thinIce', icon: '❄️' },
-            { x: C + 51.5, z: C - 5.2, game: 'avalanche_run', gameKey: 'game.avalancheRun', icon: '🏔️' }
-        ];
+        const arcadeMachines = ARCADE_MACHINES.map((machine) => ({
+            x: machine.x,
+            z: machine.z,
+            game: machine.game,
+            gameKey: machine.gameKey,
+            icon: machine.icon,
+        }));
         
         // Find the closest arcade machine in range
         let closestArcade = null;
@@ -11291,234 +11306,125 @@ const VoxelWorld = ({
     // ==================== MULTIPLAYER SYNC (OPTIMIZED) ====================
     
     // ==================== NAMETAG STYLE SYSTEM ====================
-    // Nametag styles: 'default', 'day1' (Day One supporter badge), 'whale' (Whale status)
-    const NAME_SPRITE_BASE_SCALE = { x: 4, y: 1 }; // Default/max scale
-    
-    // Helper to create name sprite for players (including self)
-    // style: 'default' | 'day1' | 'whale'
-    const createNameSprite = useCallback((name, style = 'day1') => {
+    // Diamond Flippers: balance-based tiers + manual day1/default overrides
+    const NAME_SPRITE_BASE_SCALE = { x: 4, y: 1 };
+
+    const createNameSprite = useCallback((name, styleOrPlayerData = 'default') => {
         const THREE = window.THREE;
         if (!THREE) return null;
-        
+
+        let resolvedStyle = 'default';
+        if (typeof styleOrPlayerData === 'object' && styleOrPlayerData !== null) {
+            resolvedStyle = resolveNametagStyle(styleOrPlayerData);
+        } else {
+            const manual = styleOrPlayerData;
+            if (manual === 'tier' || manual === 'auto' || manual === 'whale') {
+                resolvedStyle = resolveNametagStyle({
+                    appearance: { nametagStyle: manual },
+                    cpNametagTier: userDataRef.current?.cpNametagTier,
+                    isAuthenticated: isAuthenticated,
+                    walletAddress: walletAddress || userDataRef.current?.walletAddress,
+                });
+            } else {
+                resolvedStyle = manual;
+            }
+        }
+
         const canvas = document.createElement('canvas');
-        canvas.width = 512; // Higher res for animated styles
+        canvas.width = 512;
         canvas.height = 128;
         const ctx = canvas.getContext('2d');
-        
-        if (style === 'whale') {
-            // Whale Status - Premium diamond/legendary style
-            // Outer glow with cyan/purple shimmer
-            ctx.shadowColor = 'rgba(6, 182, 212, 0.9)';
-            ctx.shadowBlur = 25;
-            
-            // Gradient border
-            const borderGradient = ctx.createLinearGradient(20, 0, 492, 0);
-            borderGradient.addColorStop(0, 'rgba(6, 182, 212, 1)');     // Cyan
-            borderGradient.addColorStop(0.5, 'rgba(168, 85, 247, 1)');  // Purple
-            borderGradient.addColorStop(1, 'rgba(236, 72, 153, 1)');    // Pink
-            ctx.fillStyle = borderGradient;
-            ctx.beginPath();
-            ctx.roundRect(20, 20, 472, 88, 20);
-            ctx.fill();
-            
-            // Inner background - darker with luxury feel
-            ctx.shadowBlur = 0;
-            const innerGradient = ctx.createLinearGradient(28, 28, 28, 100);
-            innerGradient.addColorStop(0, 'rgba(15, 23, 42, 0.95)');
-            innerGradient.addColorStop(1, 'rgba(30, 41, 59, 0.95)');
-            ctx.fillStyle = innerGradient;
-            ctx.beginPath();
-            ctx.roundRect(28, 28, 456, 72, 16);
-            ctx.fill();
-            
-            // Inner shimmer border
-            ctx.strokeStyle = 'rgba(6, 182, 212, 0.6)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.roundRect(28, 28, 456, 72, 16);
-            ctx.stroke();
-            
-            // Whale emoji
-            ctx.font = 'bold 36px sans-serif';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('🐳', 45, 64);
-            
-            // Separator line with gradient
-            const sepGradient = ctx.createLinearGradient(100, 38, 100, 90);
-            sepGradient.addColorStop(0, 'rgba(6, 182, 212, 0)');
-            sepGradient.addColorStop(0.5, 'rgba(6, 182, 212, 0.8)');
-            sepGradient.addColorStop(1, 'rgba(6, 182, 212, 0)');
-            ctx.fillStyle = sepGradient;
-            ctx.fillRect(100, 38, 2, 52);
-            
-            // Player name with animated gradient effect
-            const nameGradient = ctx.createLinearGradient(120, 0, 470, 0);
-            nameGradient.addColorStop(0, '#67e8f9');    // Cyan
-            nameGradient.addColorStop(0.5, '#c084fc');  // Purple
-            nameGradient.addColorStop(1, '#f472b6');    // Pink
-            ctx.fillStyle = nameGradient;
-            ctx.font = 'bold 38px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            // Truncate long names
-            let displayName = name;
-            if (ctx.measureText(name).width > 300) {
-                while (ctx.measureText(displayName + '...').width > 300 && displayName.length > 0) {
-                    displayName = displayName.slice(0, -1);
-                }
-                displayName += '...';
-            }
-            ctx.fillText(displayName, 290, 64);
-            
-        } else if (style === 'day1') {
-            // Day One Supporter - Golden gradient badge
-            const gradient = ctx.createLinearGradient(20, 0, 492, 0);
-            gradient.addColorStop(0, 'rgba(234, 179, 8, 0.9)');     // Gold
-            gradient.addColorStop(0.3, 'rgba(251, 191, 36, 0.9)');  // Amber
-            gradient.addColorStop(0.7, 'rgba(245, 158, 11, 0.9)');  // Orange-gold
-            gradient.addColorStop(1, 'rgba(234, 179, 8, 0.9)');     // Gold
-            
-            // Outer glow
-            ctx.shadowColor = 'rgba(234, 179, 8, 0.8)';
-            ctx.shadowBlur = 20;
-            ctx.fillStyle = gradient;
-            ctx.beginPath();
-            ctx.roundRect(20, 20, 472, 88, 20);
-            ctx.fill();
-            
-            // Inner darker background
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.beginPath();
-            ctx.roundRect(28, 28, 456, 72, 16);
-            ctx.fill();
-            
-            // Border shimmer
-            ctx.strokeStyle = 'rgba(251, 191, 36, 0.6)';
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.roundRect(28, 28, 456, 72, 16);
-            ctx.stroke();
-            
-            // Day 1 badge icon (star)
-            ctx.fillStyle = '#fbbf24'; // Gold
-            ctx.font = 'bold 32px sans-serif';
-            ctx.textAlign = 'left';
-            ctx.textBaseline = 'middle';
-            ctx.fillText('⭐', 48, 64);
-            
-            // "DAY 1" text
-            ctx.fillStyle = '#fbbf24';
-            ctx.font = 'bold 18px sans-serif';
-            ctx.textAlign = 'left';
-            ctx.fillText('DAY 1', 88, 50);
-            
-            // Supporter subtitle
-            ctx.fillStyle = 'rgba(251, 191, 36, 0.7)';
-            ctx.font = '12px sans-serif';
-            ctx.fillText('SUPPORTER', 88, 72);
-            
-            // Separator line
-            ctx.fillStyle = 'rgba(251, 191, 36, 0.4)';
-            ctx.fillRect(170, 38, 2, 52);
-            
-            // Player name with golden glow
-            ctx.shadowColor = 'rgba(251, 191, 36, 0.5)';
-            ctx.shadowBlur = 8;
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 36px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            
-            // Truncate long names
-            let displayName = name;
-            if (ctx.measureText(name).width > 250) {
-                while (ctx.measureText(displayName + '...').width > 250 && displayName.length > 0) {
-                    displayName = displayName.slice(0, -1);
-                }
-                displayName += '...';
-            }
-            ctx.fillText(displayName, 330, 64);
-            
-        } else {
-            // Default style - simple clean background
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.beginPath();
-            ctx.roundRect(64, 32, 384, 64, 16);
-            ctx.fill();
-            
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            ctx.roundRect(64, 32, 384, 64, 16);
-            ctx.stroke();
-            
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 36px sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(name, 256, 64);
-        }
-        
+        drawNametagToCanvas(ctx, name, resolvedStyle);
+
         const texture = new THREE.CanvasTexture(canvas);
-        const material = new THREE.SpriteMaterial({ 
-            map: texture, 
+        const material = new THREE.SpriteMaterial({
+            map: texture,
             depthTest: false,
             depthWrite: false,
-            transparent: true
+            transparent: true,
         });
         const sprite = new THREE.Sprite(material);
-        
-        // Ensure nametags ALWAYS render on top of trails, particles, everything
+
         sprite.renderOrder = 9999;
-        
-        // Styled nametags are wider
-        const isStyled = style === 'day1' || style === 'whale';
-        const scaleX = isStyled ? 5.5 : NAME_SPRITE_BASE_SCALE.x;
-        const scaleY = isStyled ? 1.4 : NAME_SPRITE_BASE_SCALE.y;
-        sprite.scale.set(scaleX, scaleY, 1);
-        sprite.userData.baseScale = { x: scaleX, y: scaleY };
-        sprite.userData.nametagStyle = style;
-        
-        // Store animation data for styled nametags
+
+        const isStyled = isStyledNametag(resolvedStyle);
+        sprite.scale.set(NAME_SPRITE_BASE_SCALE.x, NAME_SPRITE_BASE_SCALE.y, 1);
+        sprite.userData.baseScale = { x: NAME_SPRITE_BASE_SCALE.x, y: NAME_SPRITE_BASE_SCALE.y };
+        sprite.userData.nametagStyle = resolvedStyle;
+
         if (isStyled) {
             sprite.userData.animationPhase = Math.random() * Math.PI * 2;
         }
-        
-        // Mark if this nametag needs gold rain (created separately as world-space effect)
-        sprite.userData.needsGoldRain = (style === 'day1');
-        
+
+        return sprite;
+    }, [isAuthenticated, walletAddress]);
+
+    const createNameSpriteRef = useRef(createNameSprite);
+    useEffect(() => {
+        createNameSpriteRef.current = createNameSprite;
+    }, [createNameSprite]);
+
+    const createPvpLabelSprite = useCallback(() => {
+        const THREE = window.THREE;
+        if (!THREE) return null;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 96;
+        const ctx = canvas.getContext('2d');
+
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+        ctx.beginPath();
+        ctx.roundRect(16, 16, 480, 64, 12);
+        ctx.fill();
+
+        ctx.strokeStyle = '#00FF88';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(16, 16, 480, 64, 12);
+        ctx.stroke();
+
+        ctx.fillStyle = '#00FF88';
+        ctx.font = 'bold 28px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText('CLICK ME TO PVP', 256, 48);
+        const texture = new THREE.CanvasTexture(canvas);
+        const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, transparent: true }));
+        sprite.userData.baseScale = { x: 5, y: 1.1 };
+        sprite.scale.set(5, 1.1, 1);
         return sprite;
     }, []);
     
     // Listen for nametag style changes from settings
     useEffect(() => {
         const handleNametagChange = (e) => {
-            // Guests can only use 'default' style - enforce even if UI didn't block it
-            const requestedStyle = e.detail?.style || 'day1';
+            const requestedStyle = e.detail?.style || 'tier';
             const newStyle = isAuthenticated ? requestedStyle : 'default';
             
-            // Remove old nametag from player mesh
             if (playerRef.current && playerNameSpriteRef.current) {
+                disposeNameSprite(playerNameSpriteRef.current);
                 playerRef.current.remove(playerNameSpriteRef.current);
                 playerNameSpriteRef.current = null;
             }
             
-            // Dispose old gold rain system if present
             if (playerGoldRainRef.current) {
                 playerGoldRainRef.current.dispose();
                 playerGoldRainRef.current = null;
+                playerGoldRainPresetRef.current = null;
             }
             
-            // Create new nametag with new style
             if (playerRef.current && playerName) {
                 const THREE = window.THREE;
                 if (THREE) {
-                    const nameSprite = createNameSprite(playerName, newStyle);
+                    const localData = {
+                        appearance: { nametagStyle: newStyle },
+                        cpNametagTier: userDataRef.current?.cpNametagTier,
+                        isAuthenticated,
+                        walletAddress: walletAddress || userDataRef.current?.walletAddress,
+                    };
+                    const nameSprite = createNameSprite(playerName, localData);
                     if (nameSprite) {
-                        // Determine character type for height
                         let characterType = 'penguin';
                         try {
                             const customization = JSON.parse(localStorage.getItem('penguin_customization') || '{}');
@@ -11528,20 +11434,10 @@ const VoxelWorld = ({
                         nameSprite.position.set(0, nameHeight, 0);
                         playerRef.current.add(nameSprite);
                         playerNameSpriteRef.current = nameSprite;
-                        
-                        // Create world-space particle rain for Day 1 or Whale nametag (only for authenticated)
-                        if (isAuthenticated && (newStyle === 'day1' || newStyle === 'whale') && sceneRef.current) {
-                            const playerPos = playerRef.current.position;
-                            const preset = newStyle === 'day1' ? 'goldRain' : 'whaleRain';
-                            const particleRain = new LocalizedParticleSystem(THREE, sceneRef.current, preset);
-                            particleRain.create({ x: playerPos.x, y: playerPos.y, z: playerPos.z });
-                            playerGoldRainRef.current = particleRain;
-                        }
                     }
                 }
             }
             
-            // Broadcast to server via appearance update
             if (mpUpdateAppearanceRef.current) {
                 try {
                     const savedSettings = JSON.parse(localStorage.getItem('game_settings') || '{}');
@@ -11557,7 +11453,19 @@ const VoxelWorld = ({
         
         window.addEventListener('nametagChanged', handleNametagChange);
         return () => window.removeEventListener('nametagChanged', handleNametagChange);
-    }, [createNameSprite, isAuthenticated, playerName]);
+    }, [createNameSprite, isAuthenticated, playerName, walletAddress]);
+
+    // Rebuild local nametag when server reports a new $CP tier
+    useEffect(() => {
+        if (!isAuthenticated || !playerRef.current || !playerName) return;
+        try {
+            const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
+            const mode = settings.nametagStyle || 'tier';
+            if (mode !== 'tier' && mode !== 'auto' && mode !== 'whale') return;
+        } catch { return; }
+
+        window.dispatchEvent(new CustomEvent('nametagChanged', { detail: { style: 'tier' } }));
+    }, [userData?.cpNametagTier, isAuthenticated, playerName]);
     
     // Join room once per connection when world + mesh builder are ready (room changes use change_room)
     useEffect(() => {
@@ -11583,7 +11491,7 @@ const VoxelWorld = ({
             const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
             mountEnabled = settings.mountEnabled !== false;
             // Only authenticated users can use non-default nametag styles
-            nametagStyle = isAuthenticated ? (settings.nametagStyle || 'day1') : 'default';
+            nametagStyle = isAuthenticated ? (settings.nametagStyle || 'tier') : 'default';
             greenCandlesEnabled = settings.greenCandlesEnabled === true;
         } catch { /* use default */ }
         
@@ -11608,28 +11516,21 @@ const VoxelWorld = ({
         
         // Add player's own name tag (so they can see their username)
         if (playerRef.current && playerName && !playerNameSpriteRef.current) {
-            
-            const nameSprite = createNameSprite(playerName, nametagStyle);
+            const localNametagData = {
+                appearance: { nametagStyle },
+                cpNametagTier: userDataRef.current?.cpNametagTier,
+                isAuthenticated,
+                walletAddress: walletAddress || userDataRef.current?.walletAddress,
+            };
+            const nameSprite = createNameSprite(playerName, localNametagData);
             if (nameSprite) {
                 const nameHeight = penguinData?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : penguinData?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
                 nameSprite.position.set(0, nameHeight, 0);
                 playerRef.current.add(nameSprite);
                 playerNameSpriteRef.current = nameSprite;
-                
-                // Create world-space particle rain for Day 1 or Whale nametag
-                if ((nametagStyle === 'day1' || nametagStyle === 'whale') && sceneRef.current && !playerGoldRainRef.current) {
-                    const THREE = window.THREE;
-                    if (THREE) {
-                        const playerPos = playerRef.current.position;
-                        const preset = nametagStyle === 'day1' ? 'goldRain' : 'whaleRain';
-                        const particleRain = new LocalizedParticleSystem(THREE, sceneRef.current, preset);
-                        particleRain.create({ x: playerPos.x, y: playerPos.y, z: playerPos.z });
-                        playerGoldRainRef.current = particleRain;
-                    }
-                }
             }
         }
-    }, [connected, playerId, penguinData, room, playerName, createNameSprite, isAuthenticated, playerPuffle, turnstileToken, mpJoinRoom, meshBuilderReady, isRestoringSession]);
+    }, [connected, playerId, penguinData, room, playerName, createNameSprite, isAuthenticated, playerPuffle, turnstileToken, mpJoinRoom, meshBuilderReady, isRestoringSession, walletAddress]);
     
     // Send position updates (throttled) - OPTIMIZED: 100ms interval, only when changed
     useEffect(() => {
@@ -12121,6 +12022,9 @@ const VoxelWorld = ({
                 if (data.goldRainSystem) {
                     data.goldRainSystem.dispose();
                 }
+                if (data.pvpLabelSprite) {
+                    data.mesh?.remove(data.pvpLabelSprite);
+                }
                 // Clean up their trail points
                 if (mountTrailSystemRef.current) {
                     mountTrailSystemRef.current.removePlayerTrails(id);
@@ -12139,12 +12043,19 @@ const VoxelWorld = ({
             console.log(`🐧 Creating mesh for ${playerData.name} (characterType=${playerData.appearance?.characterType || 'penguin'})`, playerData.puffle ? `with ${playerData.puffle.color} puffle` : '(no puffle)');
             
             const mesh = buildPenguinMeshRef.current(playerData.appearance);
+            const isWagerBot = playerData.isBot || playerData.isPracticeBot || id === 'dev_bot_wager';
+            if (isWagerBot) {
+                mesh.scale.set(1.12, 1.12, 1.12);
+            }
             mesh.position.set(
                 playerData.position?.x || 0,
                 0,
                 playerData.position?.z || 0
             );
-            mesh.rotation.y = playerData.rotation || 0;
+            const rotY = typeof playerData.rotation === 'object'
+                ? (playerData.rotation?.y || 0)
+                : (playerData.rotation || 0);
+            mesh.rotation.y = rotY;
             
             // LOD: Calculate initial distance and set shadow state accordingly
             // This prevents all players from having shadows enabled on spawn
@@ -12171,32 +12082,38 @@ const VoxelWorld = ({
 
             syncRemotePlayerHeldItem({ mesh }, playerData, buildPartMergedRef.current);
             
-            // Create name tag - adjust height for character type
-            // Use player's chosen nametag style from appearance (default to 'day1')
-            const playerNametagStyle = playerData.appearance?.nametagStyle || 'day1';
-            const nameSprite = createNameSprite(playerData.name || 'Player', playerNametagStyle);
+            // Diamond Flippers tier from server + manual style override
+            const nameSprite = createNameSprite(playerData.name || 'Player', playerData);
             if (nameSprite) {
                 const nameHeight = playerData.appearance?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : playerData.appearance?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
                 nameSprite.position.set(0, nameHeight, 0);
                 mesh.add(nameSprite);
             }
-            
-            // Create world-space particle rain for Day 1 or Whale nametag
-            let goldRainSystem = null;
-            if ((playerNametagStyle === 'day1' || playerNametagStyle === 'whale') && scene) {
-                const pos = playerData.position || { x: 0, y: 0, z: 0 };
-                const preset = playerNametagStyle === 'day1' ? 'goldRain' : 'whaleRain';
-                goldRainSystem = new LocalizedParticleSystem(THREE, scene, preset);
-                goldRainSystem.create({ x: pos.x, y: pos.y || 0, z: pos.z });
+
+            let pvpLabelSprite = null;
+            if (isWagerBot) {
+                pvpLabelSprite = createPvpLabelSprite();
+                if (pvpLabelSprite) {
+                    const nameHeight = playerData.appearance?.characterType === 'marcus' ? NAME_HEIGHT_MARCUS : playerData.appearance?.characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
+                    pvpLabelSprite.position.set(0, nameHeight + 1.4, 0);
+                    mesh.add(pvpLabelSprite);
+                }
             }
+            
+            // Nametag particles are created lazily in the game loop (syncMeshNametagParticles)
+            let goldRainSystem = null;
             
             // Create puffle if player has one
             let puffleMesh = null;
+            let puffleInstance = null;
             if (playerData.puffle) {
                 console.log(`🐾 Creating puffle mesh: ${playerData.puffle.color}`);
-                const puffleInstance = new Puffle({
+                puffleInstance = new Puffle({
                     color: playerData.puffle.color,
-                    name: playerData.puffle.name
+                    name: playerData.puffle.name,
+                    equippedAccessories: playerData.puffle.equippedAccessories || {},
+                    equippedToy: playerData.puffle.equippedToy,
+                    ownedAccessories: playerData.puffle.ownedAccessories,
                 });
                 puffleMesh = puffleInstance.createMesh(THREE);
                 // Set initial puffle position
@@ -12211,30 +12128,15 @@ const VoxelWorld = ({
             
             // OPTIMIZATION: Check if player has animated cosmetics
             const appearance = playerData.appearance || {};
-            // Animated skin colors (all animated skins from PenguinBuilder)
-            const animatedSkins = ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula', 'lava', 'ocean', 'sunset', 'frost', 'matrix', 'glitch', 'chromatic', 'holographic'];
-            // Animated feathers
-            const animatedHats = ['propeller', 'flamingCrown', 'auroraFeathers', 'crystalFeathers', 'voidFeathers'];
-            const hasAnimatedCosmetics = animatedHats.includes(appearance.hat) ||
-                                         appearance.mouth === 'cigarette' || 
-                                         appearance.mouth === 'pipe' ||
-                                         appearance.mouth === 'cigar' ||
-                                         appearance.mouth === 'fireBreath' ||
-                                         appearance.mouth === 'iceBreath' ||
-                                         appearance.mouth === 'bubblegum' ||
-                                         appearance.eyes === 'laser' ||
-                                         appearance.eyes === 'fire' ||
-                                         appearance.bodyItem === 'angelWings' ||
-                                         appearance.bodyItem === 'demonWings' ||
-                                         appearance.bodyItem === 'fireAura' ||
-                                         appearance.bodyItem === 'lightningAura' ||
-                                         animatedSkins.includes(appearance.skin);
+            const hasAnimatedCosmetics = playerHasAnimatedCosmetics(appearance);
             
             meshes.set(id, { 
                 mesh, 
                 bubble: null, 
-                puffleMesh, 
+                puffleMesh,
+                puffleInstance: puffleInstance,
                 nameSprite,
+                pvpLabelSprite,
                 goldRainSystem, // World-space gold rain for Day 1 nametag
                 // Initialize emote from playerData (player might already be sitting)
                 currentEmote: playerData.emote || null,
@@ -12248,7 +12150,7 @@ const VoxelWorld = ({
             playerData.needsMeshRebuild = false;
             console.log(`🐧 Created mesh for ${playerData.name}, emote: ${playerData.emote}, seatedOnFurniture: ${playerData.seatedOnFurniture}`);
         }
-    }, [playerList, createNameSprite, meshBuilderReady, meshSyncVersion]);
+    }, [playerList, createNameSprite, createPvpLabelSprite, meshBuilderReady, meshSyncVersion]);
     
     // Notify server after world spawn is ready (posRef is stale if sent before initWorld finishes)
     useEffect(() => {
@@ -12612,6 +12514,21 @@ const VoxelWorld = ({
                 </div>
              )}
              
+             {/* PUBG-style compass — top center */}
+             <WorldCompass
+                yawRef={rotRef}
+                positionRef={posRef}
+                room={room}
+                isPortrait={isMobile && !isLandscape}
+                visible={
+                    !blackjackGameActive
+                    && !arcadeGameActive
+                    && !fishingGameActive
+                    && !isInMatch
+                    && !showSettings
+                }
+             />
+
              {/* HUD - Top Right */}
              <GameHUD 
                 onOpenSettings={() => setShowSettings(true)}
@@ -13245,20 +13162,27 @@ const VoxelWorld = ({
                     className={`world-interaction-prompt absolute bg-gradient-to-b from-sky-900/95 to-cyan-950/95 backdrop-blur-sm rounded-xl border border-sky-400/50 text-center z-20 shadow-lg shadow-sky-500/20 ${
                         isMobile
                             ? isLandscape
-                                ? 'bottom-[180px] right-28 p-3'
-                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
-                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                                ? 'bottom-[180px] right-28 p-3 min-w-[220px]'
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3 min-w-[240px]'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4 min-w-[280px]'
                     }`}
                 >
+                    <p className="text-sky-100 retro-text text-xs uppercase tracking-widest mb-1">⛴️ Ice Ferry</p>
                     <p className="text-sky-200 retro-text text-sm mb-2">
-                        {isMobile ? 'Tap to talk to Captain Skipper' : nearbyTravelNpcInteraction.prompt}
+                        {isMobile
+                            ? (nearbyTravelNpcInteraction.routes?.length
+                                ? `Travel to ${nearbyTravelNpcInteraction.routes.map((route) => route.name).join(', ')}`
+                                : 'Tap to buy ferry tickets')
+                            : nearbyTravelNpcInteraction.prompt}
                     </p>
                     <button
                         type="button"
-                        className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm bg-gradient-to-b from-sky-500 to-cyan-700 hover:from-sky-400 hover:to-cyan-600 text-white transition-all active:scale-95"
+                        className="w-full px-6 py-2.5 font-bold rounded-lg retro-text text-sm bg-gradient-to-b from-sky-500 to-cyan-700 hover:from-sky-400 hover:to-cyan-600 text-white transition-all active:scale-95"
                         onClick={() => openTravelDialogue(nearbyTravelNpcInteraction)}
                     >
-                        ⛴️ Ferry
+                        {nearbyTravelNpcInteraction.routes?.length === 1
+                            ? `⛴️ Ticket to ${nearbyTravelNpcInteraction.routes[0].name}`
+                            : '⛴️ Buy Ferry Ticket'}
                     </button>
                     {!isMobile && (
                         <p className="text-white/50 text-[10px] mt-1 retro-text">{t('interact.orPressE')}</p>

@@ -212,6 +212,9 @@ class ArcadeMachine extends BaseProp {
         this.mesh.userData.gameType = gameTitle.toLowerCase().replace(/\s+/g, '_');
         
         this.setPosition(x, y, z);
+        if (typeof options.rotationY === 'number') {
+            this.setRotation(options.rotationY);
+        }
         return this;
     }
     

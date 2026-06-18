@@ -47,6 +47,33 @@ import {
  * Animated skin color configurations
  * Colors shift over time for various effects
  */
+export const ANIMATED_SKIN_IDS = [
+    'cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula', 'lava', 'ocean',
+    'sunset', 'frost', 'matrix', 'glitch', 'chromatic', 'holographic',
+];
+
+export const ANIMATED_HAT_IDS = [
+    'propeller', 'flamingCrown', 'auroraFeathers', 'crystalFeathers', 'voidFeathers',
+];
+
+/** Whether a player's appearance includes cosmetics that need per-frame animation */
+export function playerHasAnimatedCosmetics(appearance = {}) {
+    return ANIMATED_HAT_IDS.includes(appearance.hat)
+        || appearance.mouth === 'cigarette'
+        || appearance.mouth === 'pipe'
+        || appearance.mouth === 'cigar'
+        || appearance.mouth === 'fireBreath'
+        || appearance.mouth === 'iceBreath'
+        || appearance.mouth === 'bubblegum'
+        || appearance.eyes === 'laser'
+        || appearance.eyes === 'fire'
+        || appearance.bodyItem === 'angelWings'
+        || appearance.bodyItem === 'demonWings'
+        || appearance.bodyItem === 'fireAura'
+        || appearance.bodyItem === 'lightningAura'
+        || ANIMATED_SKIN_IDS.includes(appearance.skin);
+}
+
 export const ANIMATED_SKIN_COLORS = {
     cosmic: {
         // Galaxy with shifting purples, deep blues, and magenta hints

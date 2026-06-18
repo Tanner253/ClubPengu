@@ -26,7 +26,7 @@ import CosmeticTemplate from '../db/models/CosmeticTemplate.js';
 const PROMO_EXCLUSIVE_IDS = [
     // Eyes
     'lmao', 'bonkEyes', 'mistorEyes',
-    // Hats
+    // Hats (promo — not in gacha)
     'bonkExclamation', 'mistorHair',
     // Body Items
     'joe', 'bonkShirt', 'mistorShirt', 'penguShirt',
@@ -34,7 +34,6 @@ const PROMO_EXCLUSIVE_IDS = [
     'penguMount', 'minecraftBoat'
 ];
 
-// ========== FREE ITEMS (not gacha, always available) ==========
 const FREE_ITEMS = ['none', 'normal', 'beak'];
 
 // ========== FREE SKIN COLORS (only blue is free now) ==========

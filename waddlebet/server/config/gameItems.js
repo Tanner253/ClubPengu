@@ -183,6 +183,26 @@ for (const wood of WOOD_TYPES) {
     });
 }
 
+ITEM_CATALOG.set('charcoal', {
+    id: 'charcoal',
+    name: 'Charcoal',
+    emoji: '⬛',
+    category: 'resource',
+    npcValue: 4,
+    maxStack: MAX_STACK,
+    tier: 1
+});
+
+ITEM_CATALOG.set('iron_ore', {
+    id: 'iron_ore',
+    name: 'Iron Ore',
+    emoji: '🪨',
+    category: 'resource',
+    npcValue: 8,
+    maxStack: MAX_STACK,
+    tier: 2
+});
+
 ITEM_CATALOG.set('forest_mushroom', {
     id: 'forest_mushroom',
     name: 'Forest Mushroom',

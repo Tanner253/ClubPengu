@@ -96,6 +96,7 @@ const EconomyGuideModal = ({ isOpen, onClose }) => {
                             <li>{t('economyGuide.earnFish')}</li>
                             <li>{t('economyGuide.earnWood')}</li>
                             <li>{t('economyGuide.earnDaily')}</li>
+                            <li>{t('economyGuide.earnSpinner')}</li>
                             <li>{t('economyGuide.earnScavenge')}</li>
                             <li>{t('economyGuide.earnWager')}</li>
                         </ul>
@@ -107,6 +108,10 @@ const EconomyGuideModal = ({ isOpen, onClose }) => {
 
                     <Section emoji="🪵" title={t('economyGuide.materialsHead')}>
                         <p className="text-white/70 text-xs sm:text-sm leading-relaxed">{t('economyGuide.materialsDesc')}</p>
+                    </Section>
+
+                    <Section emoji="🎡" title={t('economyGuide.spinnerHead')}>
+                        <p className="text-white/70 text-xs sm:text-sm leading-relaxed">{t('economyGuide.spinnerDesc')}</p>
                     </Section>
 
                     <Section emoji="🏪" title={t('economyGuide.marketsHead')}>

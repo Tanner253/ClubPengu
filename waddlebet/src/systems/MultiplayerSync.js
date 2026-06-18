@@ -3,18 +3,10 @@
  * Extracted from VoxelWorld.jsx for modularity
  */
 
+import { playerHasAnimatedCosmetics } from '../engine/PenguinBuilder.js';
+
 // Emotes that don't auto-end (continuous/looping)
 const CONTINUOUS_EMOTES = ['Sit', 'Breakdance', 'DJ', '67', 'Headbang', 'Dance', 'Sleep', 'Cry', 'Flex'];
-
-// Cosmetics that need per-frame animation
-const ANIMATED_COSMETICS = {
-    hats: ['propeller', 'flamingCrown', 'wizardHat'],
-    mouths: ['cigarette', 'pipe', 'cigar', 'fireBreath', 'iceBreath', 'bubblegum'],
-    eyes: ['laser', 'fire'],
-    bodyItems: ['angelWings', 'demonWings', 'fireAura', 'lightningAura'],
-    // Animated skin colors (rainbow, cosmic, etc.) need per-frame color cycling
-    skins: ['cosmic', 'galaxy', 'rainbow', 'prismatic', 'nebula', 'lava', 'ocean', 'sunset', 'frost', 'matrix', 'glitch', 'chromatic', 'holographic']
-};
 
 /**
  * Check if appearance has animated cosmetics
@@ -22,13 +14,7 @@ const ANIMATED_COSMETICS = {
  * @returns {boolean}
  */
 export function hasAnimatedCosmetics(appearance) {
-    if (!appearance) return false;
-    
-    return ANIMATED_COSMETICS.hats.includes(appearance.hat) ||
-           ANIMATED_COSMETICS.mouths.includes(appearance.mouth) ||
-           ANIMATED_COSMETICS.eyes.includes(appearance.eyes) ||
-           ANIMATED_COSMETICS.bodyItems.includes(appearance.bodyItem) ||
-           ANIMATED_COSMETICS.skins.includes(appearance.skin);
+    return playerHasAnimatedCosmetics(appearance);
 }
 
 /**

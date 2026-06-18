@@ -1328,7 +1328,7 @@ class SnowFortsZone {
                 casinos: [],
                 gameRoomPortals: [],
             };
-            this._cullCache = { casinoSign: null, gameRoomPortal: null };
+            this._cullCache = { gameRoomPortal: null };
             this.meshes.forEach((mesh) => {
                 if (mesh.name === 'campfire' && mesh.userData.campfireInstance) {
                     this._animatedCache.campfires.push({

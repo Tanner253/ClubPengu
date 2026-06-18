@@ -580,13 +580,21 @@ class Engine {
         return mesh;
     }
 
-    // Reveal hole card - exact from source
-    revealHoleCard(mesh) {
+    // Reveal hole card — flip and swap to face texture
+    revealHoleCard(mesh, cardData) {
         if (!mesh) return;
+        const data = cardData || mesh.userData?.cardData || mesh.userData?.cardInfo;
         gsap.to(mesh.rotation, {
             y: 0,
             duration: 0.4,
-            ease: "power2.out"
+            ease: "power2.out",
+            onComplete: () => {
+                if (data?.suit && data?.value) {
+                    const tex = this.assets.createCardTexture(data.suit, data.value);
+                    mesh.material[4].map = tex;
+                    mesh.material[4].needsUpdate = true;
+                }
+            }
         });
     }
 
@@ -654,6 +662,8 @@ class BlackjackGame {
         this.currentBet = 0;
         this.gameState = 'BETTING'; 
         this.holeCardMesh = null;
+        this.playerCardMeshes = [];
+        this.dealerCardMeshes = [];
     }
 
     createDeck() {
@@ -680,6 +690,9 @@ class BlackjackGame {
         this.playerHand = [];
         this.dealerHand = [];
         this.engine.clearCards();
+        this.playerCardMeshes = [];
+        this.dealerCardMeshes = [];
+        this.holeCardMesh = null;
 
         // Start position - from dealer (exact from source)
         const startPos = { x: 0, y: 5, z: -25 };
@@ -720,6 +733,9 @@ class BlackjackGame {
         const mesh = this.engine.spawnCard(card, startPos, endPos);
         mesh.userData.cardInfo = card;
         
+        if (who === 'player') this.playerCardMeshes.push(mesh);
+        else this.dealerCardMeshes.push(mesh);
+
         if (hidden) this.holeCardMesh = mesh;
 
         await MathUtils.delay(400);
@@ -736,7 +752,9 @@ class BlackjackGame {
         const offset = (this.playerHand.length - 1) * 2;
         const endPos = new THREE.Vector3(-2 + offset, 0.1 + this.playerHand.length * 0.02, 12);
         
-        this.engine.spawnCard(card, startPos, endPos);
+        const mesh = this.engine.spawnCard(card, startPos, endPos);
+        mesh.userData.cardInfo = card;
+        this.playerCardMeshes.push(mesh);
         
         const score = this.calculateScore(this.playerHand);
         if (score > 21) {
@@ -751,7 +769,7 @@ class BlackjackGame {
         // Reveal hole card - exact from source
         const holeCardData = this.dealerHand[1];
         if (holeCardData) holeCardData.hidden = false;
-        this.engine.revealHoleCard(this.holeCardMesh);
+        this.engine.revealHoleCard(this.holeCardMesh, holeCardData);
         
         await MathUtils.delay(800);
 
@@ -764,7 +782,9 @@ class BlackjackGame {
             const offset = (this.dealerHand.length - 1) * 2;
             const endPos = new THREE.Vector3(-2 + offset, 0.1 + 10 * 0.02, -2);
             
-            this.engine.spawnCard(card, startPos, endPos);
+            const mesh = this.engine.spawnCard(card, startPos, endPos);
+            mesh.userData.cardInfo = card;
+            this.dealerCardMeshes.push(mesh);
             await MathUtils.delay(800);
         }
 
@@ -831,12 +851,70 @@ class BlackjackGame {
         };
     }
 
-    /** Render hands dealt by the server (authenticated play). */
-    async renderServerHands(state) {
-        this.engine.clearCards();
-        this.holeCardMesh = null;
-        this.gameState = state.phase === 'complete' ? 'END' : 'PLAYING';
+    /** Initial server deal animation (playing phase). */
+    async syncServerPlayingState(state) {
+        const nextPlayerHand = (state.playerHand || []).map((c) => ({ ...c, hidden: false }));
+        const nextDealerHand = (state.dealerHand || []).map((c) => (
+            c.hidden
+                ? { suit: '♠', value: '?', hidden: true }
+                : { ...c, hidden: false }
+        ));
 
+        if (this.playerCardMeshes.length === 0) {
+            this.gameState = 'PLAYING';
+            this.engine.clearCards();
+            this.playerCardMeshes = [];
+            this.dealerCardMeshes = [];
+            this.holeCardMesh = null;
+            this.playerHand = nextPlayerHand;
+            this.dealerHand = nextDealerHand;
+
+            const startPos = new THREE.Vector3(0, 5, -25);
+            for (let i = 0; i < this.playerHand.length; i++) {
+                const endPos = new THREE.Vector3(-2 + i * 2, 0.1 + i * 0.02, 12);
+                const mesh = this.engine.spawnCard(this.playerHand[i], startPos, endPos);
+                mesh.userData.cardInfo = this.playerHand[i];
+                this.playerCardMeshes.push(mesh);
+                await MathUtils.delay(400);
+            }
+            for (let i = 0; i < this.dealerHand.length; i++) {
+                const card = this.dealerHand[i];
+                const endPos = new THREE.Vector3(-2 + i * 2, 0.1 + i * 0.02, -2);
+                const mesh = this.engine.spawnCard(card, startPos, endPos);
+                mesh.userData.cardInfo = card;
+                this.dealerCardMeshes.push(mesh);
+                if (card.hidden) {
+                    mesh.rotation.y = Math.PI;
+                    this.holeCardMesh = mesh;
+                }
+                await MathUtils.delay(400);
+            }
+            return;
+        }
+
+        const prevPlayerCount = this.playerHand.length;
+        this.playerHand = nextPlayerHand;
+        this.dealerHand = nextDealerHand;
+
+        if (this.playerHand.length > prevPlayerCount) {
+            const startPos = new THREE.Vector3(0, 5, -25);
+            for (let i = prevPlayerCount; i < this.playerHand.length; i++) {
+                const endPos = new THREE.Vector3(-2 + i * 2, 0.1 + i * 0.02, 12);
+                const mesh = this.engine.spawnCard(this.playerHand[i], startPos, endPos);
+                mesh.userData.cardInfo = this.playerHand[i];
+                this.playerCardMeshes.push(mesh);
+                await MathUtils.delay(400);
+            }
+        }
+    }
+
+    /** Reveal dealer hole, draw extra cards, then return outcome (mirrors local stand()). */
+    async animateServerSettlement(state, { onDealerScore } = {}) {
+        if (this.playerCardMeshes.length === 0) {
+            await this.syncServerPlayingState({ ...state, phase: 'playing' });
+        }
+
+        this.gameState = 'DEALER_TURN';
         this.playerHand = (state.playerHand || []).map((c) => ({ ...c, hidden: false }));
         this.dealerHand = (state.dealerHand || []).map((c) => (
             c.hidden
@@ -844,34 +922,36 @@ class BlackjackGame {
                 : { ...c, hidden: false }
         ));
 
-        const startPos = new THREE.Vector3(0, 5, -25);
+        const holeIndex = this.dealerHand.findIndex((c) => c.hidden) !== -1
+            ? this.dealerHand.findIndex((c) => c.hidden)
+            : 0;
+        const holeData = state.dealerHand?.[holeIndex];
+        const holeMesh = this.dealerCardMeshes[holeIndex] || this.holeCardMesh;
 
-        for (let i = 0; i < this.playerHand.length; i++) {
-            const endPos = new THREE.Vector3(-2 + i * 2, 0.1 + i * 0.02, 12);
-            const mesh = this.engine.spawnCard(this.playerHand[i], startPos, endPos);
-            mesh.userData.cardInfo = this.playerHand[i];
-            await MathUtils.delay(120);
+        if (holeMesh && holeData?.suit && holeData?.value) {
+            this.dealerHand[holeIndex] = { ...holeData, hidden: false };
+            this.engine.revealHoleCard(holeMesh, this.dealerHand[holeIndex]);
+            await MathUtils.delay(800);
+            onDealerScore?.(this.calculateScore(this.dealerHand.map((c) => ({ ...c, hidden: false }))));
         }
 
-        for (let i = 0; i < this.dealerHand.length; i++) {
-            const card = this.dealerHand[i];
+        const startPos = new THREE.Vector3(0, 5, -25);
+        for (let i = this.dealerCardMeshes.length; i < this.dealerHand.length; i++) {
+            const card = { ...this.dealerHand[i], hidden: false };
             const endPos = new THREE.Vector3(-2 + i * 2, 0.1 + i * 0.02, -2);
             const mesh = this.engine.spawnCard(card, startPos, endPos);
             mesh.userData.cardInfo = card;
-            if (card.hidden) {
-                mesh.rotation.y = Math.PI;
-                this.holeCardMesh = mesh;
-            }
-            await MathUtils.delay(120);
+            this.dealerCardMeshes.push(mesh);
+            await MathUtils.delay(800);
+            onDealerScore?.(this.calculateScore(this.dealerHand.slice(0, i + 1)));
         }
 
-        if (state.phase === 'complete' && this.holeCardMesh) {
-            const holeData = state.dealerHand?.[0];
-            if (holeData && !holeData.hidden && holeData.suit) {
-                this.dealerHand[0] = { ...holeData, hidden: false };
-                this.engine.revealHoleCard(this.holeCardMesh);
-            }
-        }
+        this.gameState = 'END';
+        return {
+            result: state.result,
+            playerScore: state.playerScore,
+            dealerScore: state.dealerScore,
+        };
     }
 
     reset() {
@@ -880,6 +960,8 @@ class BlackjackGame {
         this.playerHand = [];
         this.dealerHand = [];
         this.holeCardMesh = null;
+        this.playerCardMeshes = [];
+        this.dealerCardMeshes = [];
     }
 }
 
@@ -1041,21 +1123,26 @@ const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
     const applyServerState = useCallback(async (state, betAmount) => {
         if (!gameRef.current || !state) return;
         gameRef.current.currentBet = betAmount ?? state.bet ?? bet;
-        await gameRef.current.renderServerHands(state);
-        setPlayerScore(state.playerScore);
-        setDealerScore(state.phase === 'complete' ? state.dealerScore : '?');
+
         if (state.phase === 'complete' && state.result) {
+            setPhase('dealer');
+            setDealerScore('...');
+            const gameResult = await gameRef.current.animateServerSettlement(state, {
+                onDealerScore: (score) => setDealerScore(score),
+            });
+            setPlayerScore(gameResult.playerScore);
+            setDealerScore(gameResult.dealerScore);
             finishGameRef.current?.(
-                {
-                    result: state.result,
-                    playerScore: state.playerScore,
-                    dealerScore: state.dealerScore,
-                },
+                gameResult,
                 { serverPayout: state.payout ?? 0, skipServerPayout: true }
             );
-        } else {
-            setPhase('playing');
+            return;
         }
+
+        await gameRef.current.syncServerPlayingState(state);
+        setPlayerScore(state.playerScore);
+        setDealerScore('?');
+        setPhase('playing');
     }, [bet]);
 
     const sendPveAction = useCallback(async (type, extra = {}) => {
@@ -1294,7 +1381,7 @@ const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
             if (isDemo && balanceRef.current < MIN_BET) {
                 updateBalance(DEMO_BANKROLL);
             }
-        }, 2500);
+        }, 4000);
     }, [bet, send, updateBalance, isDemo]);
 
     finishGameRef.current = finishGame;

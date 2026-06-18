@@ -32,7 +32,7 @@ export function updateNpcMarkerSymbol(sprite, symbol) {
 }
 
 /** Vertical gap between the top of a shop banner and the quest marker. */
-const MARKER_SIGN_GAP = 0.75;
+const MARKER_SIGN_GAP = 1.1;
 /** Default height above penguin root when no shop banner exists. */
 const MARKER_HEAD_Y = 2.85;
 

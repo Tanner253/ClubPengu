@@ -2,9 +2,22 @@
  * TravelNpcManager — ferry captain NPCs at overworld zone docks.
  */
 
-import { getTravelNpcsForRoom, getNpcDisplayName } from '../config/travelNpcs';
+import { getTravelNpcsForRoom, getNpcDisplayName, getRoutesForNpc } from '../config/travelNpcs';
 import { buildWorldNpc } from './NpcStandBuilder';
 import { attachNpcMarker, createNpcMarkerSprite, syncNpcMarkerToSign, updateNpcMarkerSymbol } from './NpcMarkerSprite';
+import { animateBuildingBanner } from '../buildings/buildingBanner';
+
+function formatTravelPrompt(def) {
+    const routes = getRoutesForNpc(def);
+    const names = routes.map((route) => route.name).join(', ');
+    if (def.isHub && names) {
+        return `Press E — ferry to ${names}`;
+    }
+    if (routes.length === 1) {
+        return `Press E — ticket to ${routes[0].name} (${routes[0].ticketCost}g)`;
+    }
+    return `Press E to talk to ${getNpcDisplayName(def)}`;
+}
 
 export default class TravelNpcManager {
     constructor(THREE) {
@@ -48,10 +61,10 @@ export default class TravelNpcManager {
 
             const penguin = group.getObjectByName('npc_penguin');
             const signSprite = group.children[0]?.userData?.signSprite ?? null;
-            const marker = createNpcMarkerSprite(this.THREE, null);
-            marker.visible = false;
+            const marker = createNpcMarkerSprite(this.THREE, '?');
+            marker.scale.set(2, 2, 1);
+            marker.visible = true;
             attachNpcMarker(marker, group, penguin, signSprite);
-            if (signSprite) signSprite.userData.baseY = signSprite.position.y;
 
             const colliderId = this.registerStandCollision(group);
             if (propMeshes && !propMeshes.includes(group)) propMeshes.push(group);
@@ -110,8 +123,13 @@ export default class TravelNpcManager {
                 : routeStatuses.some(s => s.routeId === inst.def.routeId && s.status === 'boarding');
 
             if (inst.marker) {
-                const inRange = dist < radius;
-                updateNpcMarkerSymbol(inst.marker, inRange && hasActiveFerry ? '!' : null);
+                let markerSymbol = null;
+                if (hasActiveFerry) {
+                    markerSymbol = '!';
+                } else if (dist >= radius) {
+                    markerSymbol = '?';
+                }
+                updateNpcMarkerSymbol(inst.marker, markerSymbol);
             }
 
             if (dist < radius && dist < closestDist) {
@@ -121,7 +139,8 @@ export default class TravelNpcManager {
                     def: inst.def,
                     dist,
                     markerType: hasActiveFerry ? '!' : null,
-                    prompt: `Press E to talk to ${getNpcDisplayName(inst.def)}`
+                    prompt: formatTravelPrompt(inst.def),
+                    routes: getRoutesForNpc(inst.def),
                 };
             }
         }
@@ -135,8 +154,8 @@ export default class TravelNpcManager {
         const t = performance.now() * 0.001;
         for (const { marker, signSprite } of this.instances.values()) {
             if (marker?.visible) marker.quaternion.copy(camera.quaternion);
-            if (signSprite?.userData?.baseY != null) {
-                signSprite.position.y = signSprite.userData.baseY + Math.sin(t * 1.8) * 0.08;
+            if (signSprite) {
+                animateBuildingBanner(signSprite, t);
             }
             if (marker?.userData?.anchor === 'sign' && signSprite) {
                 syncNpcMarkerToSign(marker, signSprite);

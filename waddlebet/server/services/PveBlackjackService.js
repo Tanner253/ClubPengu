@@ -225,6 +225,9 @@ export default class PveBlackjackService {
 
     async _finish(playerId, session, balanceHint = null) {
         session.phase = 'complete';
+        if (session.dealerHand[0]?.hidden) {
+            session.dealerHand[0].hidden = false;
+        }
         let newBalance = balanceHint;
 
         if (session.payout > 0) {

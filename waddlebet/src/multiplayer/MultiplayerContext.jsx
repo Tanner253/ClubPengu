@@ -522,7 +522,11 @@ export function MultiplayerProvider({ children }) {
                 setIsAuthenticated(true);
                 setWalletAddress(message.user.walletAddress);
                 setAuthToken(message.token);
-                setUserData(message.user);
+                setUserData({
+                    ...message.user,
+                    cpBalance: message.cpBalance ?? 0,
+                    cpNametagTier: message.cpNametagTier || 'standard',
+                });
                 setIsNewUser(message.isNewUser);
                 setAuthError(null);
                 setIsAuthenticating(false);
@@ -665,7 +669,7 @@ export function MultiplayerProvider({ children }) {
                 }
                 callbacksRef.current.onDailyBonusResult?.(message);
                 break;
-                
+
             // ==================== INVENTORY MESSAGES ====================
             case 'inventory_data':
                 // Full inventory data with pagination
@@ -1851,6 +1855,12 @@ export function MultiplayerProvider({ children }) {
                     authPlayer.name = message.name;
                     authPlayer.appearance = message.appearance;
                     authPlayer.isAuthenticated = true;
+                    authPlayer.cpBalance = message.cpBalance ?? authPlayer.cpBalance ?? 0;
+                    const authTier = message.cpNametagTier || 'standard';
+                    if (authPlayer.cpNametagTier !== authTier) {
+                        authPlayer.needsNametagRebuild = true;
+                    }
+                    authPlayer.cpNametagTier = authTier;
                     authPlayer.needsMeshRebuild = true;
                 }
                 break;
@@ -1909,6 +1919,7 @@ export function MultiplayerProvider({ children }) {
                     const existingPlayer = playersDataRef.current.get(p.id);
                     const incomingAppearance = p.appearance || existingPlayer?.appearance;
                     const cosmeticsChanged = appearanceCosmeticsChanged(existingPlayer?.appearance, p.appearance);
+                    const tierChanged = existingPlayer?.cpNametagTier !== (p.cpNametagTier || 'standard');
                     const playerData = {
                         id: p.id,
                         name: p.name,
@@ -1927,10 +1938,15 @@ export function MultiplayerProvider({ children }) {
                         isAfkBubble: p.isAfk || existingPlayer?.isAfkBubble || false,
                         isAuthenticated: p.isAuthenticated || existingPlayer?.isAuthenticated || false,
                         role: p.role || existingPlayer?.role || null,
+                        isBot: p.isBot || existingPlayer?.isBot || false,
+                        isPracticeBot: p.isPracticeBot || p.isBot || existingPlayer?.isPracticeBot || false,
+                        cpBalance: p.cpBalance ?? existingPlayer?.cpBalance ?? 0,
+                        cpNametagTier: p.cpNametagTier || existingPlayer?.cpNametagTier || 'standard',
                         heldHotbarItem: p.heldHotbarItem ?? existingPlayer?.heldHotbarItem ?? null,
                         needsHeldItemUpdate: true,
                         needsMesh: existingPlayer ? (existingPlayer.needsMesh || cosmeticsChanged) : true,
-                        needsMeshRebuild: (existingPlayer?.needsMeshRebuild || false) || cosmeticsChanged
+                        needsMeshRebuild: (existingPlayer?.needsMeshRebuild || false) || cosmeticsChanged,
+                        needsNametagRebuild: tierChanged || existingPlayer?.needsNametagRebuild || false,
                     };
                     playersDataRef.current.set(p.id, playerData);
                     ids.push(p.id);
@@ -1957,7 +1973,15 @@ export function MultiplayerProvider({ children }) {
                     existingJoined.isAfk = message.player.isAfk || false;
                     existingJoined.afkMessage = message.player.afkMessage || null;
                     existingJoined.isAuthenticated = message.player.isAuthenticated || false;
+                    existingJoined.isBot = message.player.isBot || existingJoined.isBot || false;
+                    existingJoined.isPracticeBot = message.player.isPracticeBot || message.player.isBot || existingJoined.isPracticeBot || false;
                     existingJoined.role = message.player.role || existingJoined.role || null;
+                    existingJoined.cpBalance = message.player.cpBalance ?? existingJoined.cpBalance ?? 0;
+                    const joinedTier = message.player.cpNametagTier || 'standard';
+                    if (existingJoined.cpNametagTier !== joinedTier) {
+                        existingJoined.needsNametagRebuild = true;
+                    }
+                    existingJoined.cpNametagTier = joinedTier;
                     existingJoined.heldHotbarItem = message.player.heldHotbarItem ?? null;
                     existingJoined.needsHeldItemUpdate = true;
                     existingJoined.needsMesh = true;
@@ -1982,7 +2006,11 @@ export function MultiplayerProvider({ children }) {
                         chatTime: message.player.isAfk ? Date.now() : null,
                         isAfkBubble: message.player.isAfk || false,
                         isAuthenticated: message.player.isAuthenticated || false,
+                        isBot: message.player.isBot || false,
+                        isPracticeBot: message.player.isPracticeBot || message.player.isBot || false,
                         role: message.player.role || null,
+                        cpBalance: message.player.cpBalance ?? 0,
+                        cpNametagTier: message.player.cpNametagTier || 'standard',
                         heldHotbarItem: message.player.heldHotbarItem || null,
                         needsHeldItemUpdate: true,
                         needsMesh: true
@@ -2038,6 +2066,9 @@ export function MultiplayerProvider({ children }) {
                     const prevAppearance = appearancePlayer.appearance;
                     console.log(`🎨 Received appearance update for ${appearancePlayer.name} (characterType=${message.appearance?.characterType || 'penguin'})`);
                     appearancePlayer.appearance = message.appearance;
+                    if (prevAppearance?.nametagStyle !== message.appearance?.nametagStyle) {
+                        appearancePlayer.needsNametagRebuild = true;
+                    }
                     // Settings-only updates (mount toggle, nametag, etc.) skip full mesh rebuild —
                     // VoxelWorld game loop handles mount visibility without respawning the mesh.
                     if (appearanceCosmeticsChanged(prevAppearance, message.appearance)) {

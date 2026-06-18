@@ -527,11 +527,20 @@ class PerformanceManager {
      * @returns {boolean} True if should animate cosmetics
      */
     shouldAnimateCosmetics(distanceSq) {
-        if (!this.settings.animateDistantCosmetics) {
-            const threshold = this.settings.distantPlayerThreshold * 0.7;
-            return distanceSq <= threshold * threshold;
-        }
-        return true;
+        // Skins, feather hats, and animated cosmetics always run for nearby players
+        // (all devices/presets — identity visuals should not be preset-gated).
+        if (distanceSq <= LOD_THRESHOLDS_SQ.HIGH_QUALITY) return true;
+        if (!this.settings.animateDistantCosmetics) return false;
+        const threshold = this.settings.distantPlayerThreshold * 0.7;
+        return distanceSq <= threshold * threshold;
+    }
+
+    /**
+     * Nametag tier particles (gold rain, sparkles, whale rain) — always on for
+     * nearby players regardless of the ambient gold-rain performance toggle.
+     */
+    shouldShowNametagParticles(distanceSq) {
+        return distanceSq <= LOD_THRESHOLDS_SQ.HIGH_QUALITY;
     }
     
     /**

@@ -77,9 +77,7 @@ const WagerModal = () => {
     
     // Handle escape key using shared hook
     useEscapeKey(closeWagerModal, showWagerModal);
-    
-    if (!showWagerModal || !selectedPlayer) return null;
-    
+
     const gameNames = {
         'card_jitsu': 'Card Jitsu',
         'connect4': 'Connect 4',
@@ -87,9 +85,10 @@ const WagerModal = () => {
         'tic_tac_toe': 'Tic Tac Toe',
         'monopoly': 'Monopoly',
         'uno': 'UNO',
+        'blackjack': 'Blackjack',
         'battleship': 'Battleship'
     };
-    
+
     const gameEmojis = {
         'card_jitsu': '⚔️',
         'connect4': '🔴',
@@ -97,8 +96,71 @@ const WagerModal = () => {
         'tic_tac_toe': '⭕',
         'monopoly': '🎩',
         'uno': '🃏',
+        'blackjack': '🂡',
         'battleship': '🚢'
     };
+
+    const handleModalInteraction = (e) => {
+        e.stopPropagation();
+    };
+
+    const handleBackdropClick = (e) => {
+        if (e.target === e.currentTarget) {
+            closeWagerModal();
+        }
+    };
+    
+    if (!showWagerModal || !selectedPlayer) return null;
+
+    const isPracticeBot = selectedPlayer.isBot || selectedPlayer.id === 'dev_bot_wager';
+
+    if (isPracticeBot) {
+        const practiceContent = (
+            <div
+                data-player-modal="true"
+                className="fixed inset-0 z-[10100] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 pointer-events-auto"
+                onClick={handleBackdropClick}
+            >
+                <div className="relative" onClick={handleModalInteraction}>
+                    <button
+                        onClick={closeWagerModal}
+                        className="absolute -top-3 -right-3 z-10 w-9 h-9 bg-gray-800 hover:bg-gray-700 border border-white/20 rounded-full flex items-center justify-center text-white/70 hover:text-white text-base shadow-lg"
+                    >
+                        ✕
+                    </button>
+                    <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-2xl border border-emerald-400/30 shadow-2xl p-5 w-[300px] sm:w-[340px]">
+                        <h3 className="text-lg font-bold text-white mb-2">🤖 Practice Match</h3>
+                        <p className="text-emerald-300 text-sm font-semibold mb-2">
+                            {gameEmojis[wagerGameType]} {gameNames[wagerGameType] || wagerGameType}
+                        </p>
+                        <p className="text-white/70 text-xs leading-relaxed mb-3">
+                            WagerBot is for learning the minigames — no coins, no tokens, and your win/loss record stays unchanged.
+                        </p>
+                        <p className="text-white/50 text-[11px] leading-relaxed mb-4">
+                            Want to wager for real? Close this and click any other player in the plaza to challenge them.
+                        </p>
+                        <div className="flex gap-2">
+                            <button
+                                type="button"
+                                onClick={closeWagerModal}
+                                className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm bg-gray-600 hover:bg-gray-500"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => sendChallenge(selectedPlayer.id, wagerGameType, 0, null)}
+                                className="flex-1 py-2.5 rounded-xl font-bold text-white text-sm bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500"
+                            >
+                                Start Practice
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+        return createPortal(practiceContent, document.body);
+    }
     
     const handleWagerChange = (e) => {
         const value = e.target.value.replace(/[^0-9]/g, '');
@@ -145,19 +207,9 @@ const WagerModal = () => {
         setWagerAmount(String(Math.min(amount, playerCoins, MAX_WAGER_GOLD)));
         setError('');
     };
-    
-    const handleModalInteraction = (e) => {
-        e.stopPropagation();
-    };
 
     const stopTouchPropagation = (e) => {
         e.stopPropagation();
-    };
-    
-    const handleBackdropClick = (e) => {
-        if (e.target === e.currentTarget) {
-            closeWagerModal();
-        }
     };
     
     // Landscape mobile layout

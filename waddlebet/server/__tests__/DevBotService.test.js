@@ -49,6 +49,17 @@ describe('DevBotService', () => {
             expect(devBotService.isBot(BOT_CONFIG.id)).toBe(true);
             expect(devBotService.isBot('some_other_id')).toBe(false);
         });
+
+        it('should correctly identify practice matches', () => {
+            expect(devBotService.isPracticeMatch({
+                player1: { id: BOT_CONFIG.id },
+                player2: { id: 'human' }
+            })).toBe(true);
+            expect(devBotService.isPracticeMatch({
+                player1: { id: 'human1' },
+                player2: { id: 'human2' }
+            })).toBe(false);
+        });
     });
     
     describe('challenge handling', () => {
@@ -182,7 +193,7 @@ describe('DevBotService', () => {
         it('should make a move on empty board', () => {
             const state = {
                 board: [null, null, null, null, null, null, null, null, null],
-                currentTurn: 'X'
+                currentTurn: 'player1'
             };
             
             devBotService.makeTicTacToeMove('ttt_match', state);
@@ -203,7 +214,7 @@ describe('DevBotService', () => {
         it('should only move to empty cells', () => {
             const state = {
                 board: ['X', 'O', 'X', 'O', 'X', 'O', 'X', null, null],
-                currentTurn: 'X'
+                currentTurn: 'player1'
             };
             
             devBotService.makeTicTacToeMove('ttt_match', state);
@@ -241,15 +252,21 @@ describe('DevBotService', () => {
         it('should respond to state update when it is bot turn', async () => {
             const state = {
                 board: ['X', null, null, null, null, null, null, null, null],
-                currentTurn: 'player2' // Bot's turn (bot is player2 since isBotPlayer1: false)
+                currentTurn: 'player2',
+                phase: 'playing'
             };
+
+            mockMatchService.getMatch.mockReturnValue({
+                id: 'state_match',
+                status: 'active',
+                state
+            });
             
             devBotService.handleMatchState('state_match', state);
             
-            // Wait for delayed move (1000-2000ms delay + buffer)
-            await new Promise(resolve => setTimeout(resolve, 2500));
+            // Wait for delayed move (700-1600ms delay + buffer)
+            await new Promise(resolve => setTimeout(resolve, 2000));
             
-            // TicTacToe uses playCard, not makeMove
             expect(mockMatchService.playCard).toHaveBeenCalled();
         });
         
@@ -317,10 +334,19 @@ describe('BOT_CONFIG', () => {
     it('should have required properties', () => {
         expect(BOT_CONFIG.id).toBe('dev_bot_wager');
         expect(BOT_CONFIG.name).toBe('🤖 WagerBot');
-        expect(BOT_CONFIG.room).toBe('nightclub');
-        expect(BOT_CONFIG.position).toEqual({ x: 8.2, y: 0, z: 11.2 });
+        expect(BOT_CONFIG.room).toBe('town');
+        expect(BOT_CONFIG.position).toEqual({ x: 126.2, y: 0, z: 91.6 });
     });
     
+    it('registers bot in town room', () => {
+        const playersMap = new Map();
+        const roomsMap = new Map();
+        const ok = devBotService.ensureRegistered(playersMap, roomsMap);
+        expect(ok).toBe(true);
+        expect(playersMap.get(BOT_CONFIG.id)?.position).toEqual({ x: 126.2, y: 0, z: 91.6 });
+        expect(roomsMap.get('town')?.has(BOT_CONFIG.id)).toBe(true);
+    });
+
     it('should have appearance settings matching client format', () => {
         expect(BOT_CONFIG.appearance).toBeDefined();
         expect(BOT_CONFIG.appearance.characterType).toBe('doginal');

@@ -268,10 +268,10 @@ class Dojo extends BaseBuilding {
         addBuildingBanner(this.THREE, group, {
             title: 'The Dojo',
             subtitle: 'Card Jitsu · Sensei',
-            y: h + 6,
+            y: h + 1.8,
             z: d / 2 + 3.5,
-            scaleX: 14,
-            scaleY: 3.2,
+            scaleX: 20,
+            scaleY: 5,
             primaryColor: '#FFD700',
             glowColor: '#CC2200',
             name: 'dojo_banner',

@@ -12,6 +12,24 @@ import { useLanguage } from '../i18n';
 import TippingPanel from './TippingPanel';
 import GiftPanel from './GiftPanel';
 import PenguinPreview3D from './PenguinPreview3D';
+import { getPlayerProfileStatusLabels } from '../config/whaleNametagTiers';
+
+const WAGER_BOT_ID = 'dev_bot_wager';
+
+const ProfileStatusRow = ({ player, isPracticeBot }) => {
+    if (isPracticeBot) return null;
+    const labels = getPlayerProfileStatusLabels(player);
+    if (!labels.length) return null;
+    return (
+        <div className="flex flex-col items-center gap-0.5 mb-1.5">
+            {labels.map((label) => (
+                <p key={label} className="text-cyan-300/90 text-[10px] sm:text-xs font-semibold text-center">
+                    {label}
+                </p>
+            ))}
+        </div>
+    );
+};
 
 const ProfileMenu = () => {
     const {
@@ -51,8 +69,9 @@ const ProfileMenu = () => {
     useEscapeKey(handleClose, !!selectedPlayer && !hasSubModal);
     
     if (!selectedPlayer) return null;
-    
-    const stats = selectedPlayerStats?.[selectedPlayer.id];
+
+    const isPracticeBot = selectedPlayer.isBot || selectedPlayer.id === WAGER_BOT_ID;
+    const stats = isPracticeBot ? null : selectedPlayerStats?.[selectedPlayer.id];
     // Use server-authoritative coins from userData for authenticated users
     // In dev mode, give guests coins for testing
     const isDev = import.meta.env.DEV;
@@ -67,6 +86,10 @@ const ProfileMenu = () => {
     
     const handleGameSelect = (gameType) => {
         setShowGameDropdown(false);
+        if (isPracticeBot) {
+            openWagerModal(gameType);
+            return;
+        }
         openWagerModal(gameType);
     };
     
@@ -129,6 +152,7 @@ const ProfileMenu = () => {
                             <h3 className="text-white font-bold text-sm mt-1.5 text-center max-w-[90px] truncate">
                                 {selectedPlayer.name}
                             </h3>
+                            <ProfileStatusRow player={selectedPlayer} isPracticeBot={isPracticeBot} />
                             {selectedPlayer.appearance?.hat && selectedPlayer.appearance.hat !== 'none' && (
                                 <p className="text-white/40 text-[9px] truncate max-w-[90px]">
                                     {selectedPlayer.appearance.hat}
@@ -136,7 +160,14 @@ const ProfileMenu = () => {
                             )}
                         </div>
                         
-                        {/* Middle: Stats (compact grid) */}
+                        {/* Middle: Stats (compact grid) or practice bot info */}
+                        {isPracticeBot ? (
+                        <div className="bg-emerald-500/10 border border-emerald-400/30 rounded-lg p-2 min-w-[140px] text-[10px]">
+                            <p className="text-emerald-300 font-bold mb-1">Practice PvP Bot</p>
+                            <p className="text-white/70 leading-relaxed">Free matches — no wagers, no stat changes.</p>
+                            <p className="text-white/50 mt-1 leading-relaxed">Click other players to wager for real.</p>
+                        </div>
+                        ) : (
                         <div className="bg-black/30 rounded-lg p-2 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] min-w-[140px]">
                             <span className="text-white/50">💰 Theirs</span>
                             <span className="text-yellow-400 font-bold text-right">
@@ -171,6 +202,7 @@ const ProfileMenu = () => {
                                 {playerCoins}
                             </span>
                         </div>
+                        )}
                         
                         {/* Right: Challenge — casual (0 wager) for everyone; gifts need both authenticated */}
                         {canChallenge && (
@@ -187,9 +219,9 @@ const ProfileMenu = () => {
                                             }`}
                                         >
                                             <span>⚔️</span>
-                                            <span>Challenge</span>
+                                            <span>{isPracticeBot ? 'Practice' : 'Challenge'}</span>
                                         </button>
-                                        {isAuthenticated && selectedPlayer?.isAuthenticated && (
+                                        {isAuthenticated && selectedPlayer?.isAuthenticated && !isPracticeBot && (
                                             <button
                                                 onClick={() => setShowGiftDropdown(!showGiftDropdown)}
                                                 className="px-3 py-2 rounded-lg font-bold text-white text-xs flex items-center justify-center gap-1.5 transition-all bg-gradient-to-r from-pink-500 to-purple-500 active:scale-95"
@@ -336,8 +368,20 @@ const ProfileMenu = () => {
                     <h3 className="text-center text-base sm:text-lg font-bold text-white mb-1 truncate px-6">
                         {selectedPlayer.name}
                     </h3>
-                    
-                    {/* Hat indicator */}
+                    <ProfileStatusRow player={selectedPlayer} isPracticeBot={isPracticeBot} />
+
+                    {isPracticeBot ? (
+                        <div className="bg-emerald-500/10 border border-emerald-400/30 rounded-xl p-3 mb-3 text-center">
+                            <p className="text-emerald-300 text-xs font-bold mb-1">Practice PvP Bot</p>
+                            <p className="text-white/70 text-[11px] leading-relaxed">
+                                Free matches only — no coin or token wagers. Wins and losses here do not affect your stats.
+                            </p>
+                            <p className="text-white/50 text-[10px] mt-2 leading-relaxed">
+                                To wager for real, click any other player in the plaza.
+                            </p>
+                        </div>
+                    ) : (
+                    <>
                     {selectedPlayer.appearance?.hat && selectedPlayer.appearance.hat !== 'none' && (
                         <p className="text-center text-white/50 text-[10px] sm:text-xs mb-2">
                             Wearing: {selectedPlayer.appearance.hat}
@@ -396,6 +440,8 @@ const ProfileMenu = () => {
                             </span>
                         </div>
                     </div>
+                    </>
+                    )}
                     
                     {/* Challenge — casual PvP for guests; wagers require auth on server */}
                     {canChallenge && (
@@ -411,7 +457,7 @@ const ProfileMenu = () => {
                                     }`}
                                 >
                                     <span>⚔️</span>
-                                    <span>Challenge</span>
+                                    <span>{isPracticeBot ? 'Practice PvP' : 'Challenge'}</span>
                                     <span className={`transition-transform ${showGameDropdown ? 'rotate-180' : ''}`}>▼</span>
                                 </button>
                                 
@@ -444,7 +490,7 @@ const ProfileMenu = () => {
                     )}
                     
                     {/* Gift Button - for authenticated users */}
-                    {isAuthenticated && selectedPlayer?.isAuthenticated && (
+                    {isAuthenticated && selectedPlayer?.isAuthenticated && !isPracticeBot && (
                         <div className="relative mt-2">
                             <button
                                 onClick={() => setShowGiftDropdown(!showGiftDropdown)}

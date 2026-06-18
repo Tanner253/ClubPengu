@@ -252,10 +252,10 @@ class GiftShop extends BaseBuilding {
         addBuildingBanner(this.THREE, group, {
             title: 'Puffle Shop',
             subtitle: 'Adopt · Care · Play',
-            y: h + roofHeight + 3.5,
+            y: h + roofHeight + 2.8,
             z: d / 2 + 3.5,
-            scaleX: 14,
-            scaleY: 3.6,
+            scaleX: 18,
+            scaleY: 4.5,
             primaryColor: '#FF69B4',
             glowColor: '#FF1493',
             name: 'puffle_shop_banner',

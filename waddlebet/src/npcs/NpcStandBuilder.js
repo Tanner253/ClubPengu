@@ -11,6 +11,8 @@ import { getMaterialManager } from '../props/PropMaterials';
 import { getGeometryManager } from '../props/PropGeometries';
 import { createPenguinBuilder } from '../engine/PenguinBuilder';
 import { PALETTE } from '../constants';
+import { getRoutesForNpc } from '../config/travelNpcs';
+import { addBuildingBanner } from '../buildings/buildingBanner';
 
 /** Penguin feet sit at ~y=0.1 when wrapper.y=0 (inner mesh offset + scale). */
 const PENGUIN_FEET_Y = 0.1;
@@ -239,18 +241,26 @@ function buildTravelDock(THREE, npcDef) {
     valance.position.set(0, 2.2, 1.35);
     stand.add(valance);
 
-    const route = npcDef.routeId?.includes('forest') ? '🌲' : npcDef.routeId?.includes('snow') ? '⛄' : '🏘️';
-    mountFrontSign(stand, THREE, { x: 0, y: 6.45, z: 1.55, postSpread: 2.05 }, {
-        title: 'ICE FERRY',
-        subtitle: 'Captain Skipper',
-        emoji: route,
-        accent: ['#0c2340', '#1a4a7a', '#0c2340'],
-        border: '#7dd3fc',
-        text: '#e0f2fe',
-        scale: [8.4, 2.55, 1],
-        titleFontSize: 46,
-        subtitleFontSize: 24,
+    const routes = getRoutesForNpc(npcDef);
+    const isHub = Boolean(npcDef.isHub);
+    const destinations = routes.map((route) => `${route.emoji} ${route.name}`).join('  ·  ');
+    const signY = 4.4;
+    const signZ = 1.75;
+
+    const banner = addBuildingBanner(THREE, stand, {
+        title: 'Ice Ferry',
+        subtitle: isHub ? destinations : `To ${routes[0]?.name || 'Town'}`,
+        y: signY,
+        z: signZ,
+        scaleX: isHub ? 10.5 : 8.5,
+        scaleY: isHub ? 3.1 : 2.7,
+        primaryColor: '#bae6fd',
+        glowColor: '#0284c7',
+        name: 'travel_ferry_banner',
     });
+    banner.userData.isTravelSign = true;
+    banner.userData.bobAmount = 0.12;
+    stand.userData.signSprite = banner;
 
     const ticketBooth = new THREE.Mesh(geo.box(1.6, 1.1, 0.8), wood);
     ticketBooth.position.set(-1.8, 0.65, 0.8);
@@ -511,7 +521,7 @@ function mountFrontSign(stand, THREE, mount, spriteOpts) {
 
     const sign = createShopSignSprite(THREE, spriteOpts);
     sign.position.set(x, y, z + 0.2);
-    sign.renderOrder = 10;
+    sign.renderOrder = spriteOpts.renderOrder ?? 10;
     stand.add(sign);
     stand.userData.signSprite = sign;
     return sign;
@@ -524,6 +534,7 @@ function createShopSignSprite(THREE, opts) {
     const {
         title,
         subtitle = '',
+        tagline = '',
         emoji = '',
         accent = ['#0c4a6e', '#0369a1', '#0c4a6e'],
         border = '#7dd3fc',
@@ -531,11 +542,14 @@ function createShopSignSprite(THREE, opts) {
         scale = [4, 1.2, 1],
         titleFontSize = 40,
         subtitleFontSize = 22,
+        taglineFontSize = 20,
+        canvasWidth = 512,
+        canvasHeight = tagline ? 220 : 160,
     } = opts;
 
     const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 160;
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -549,22 +563,29 @@ function createShopSignSprite(THREE, opts) {
     ctx.fill();
 
     ctx.strokeStyle = border;
-    ctx.lineWidth = 5;
+    ctx.lineWidth = 6;
     ctx.stroke();
 
     ctx.shadowColor = '#000000';
-    ctx.shadowBlur = 6;
+    ctx.shadowBlur = 8;
     ctx.fillStyle = text;
     ctx.font = `bold ${titleFontSize}px Arial, sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    const titleText = emoji ? `${emoji} ${title}` : title;
-    ctx.fillText(titleText, canvas.width / 2, subtitle ? 58 : 80);
+    const titleText = emoji ? `${emoji}  ${title}` : title;
+    const titleY = tagline ? 56 : (subtitle ? 58 : 80);
+    ctx.fillText(titleText, canvas.width / 2, titleY);
 
     if (subtitle) {
         ctx.font = `bold ${subtitleFontSize}px Arial, sans-serif`;
         ctx.fillStyle = border;
-        ctx.fillText(subtitle, canvas.width / 2, 108);
+        ctx.fillText(subtitle, canvas.width / 2, tagline ? 108 : 108);
+    }
+
+    if (tagline) {
+        ctx.font = `bold ${taglineFontSize}px Arial, sans-serif`;
+        ctx.fillStyle = '#dbeafe';
+        ctx.fillText(tagline, canvas.width / 2, 162);
     }
 
     const texture = new THREE.CanvasTexture(canvas);

@@ -51,7 +51,7 @@
 | 7-day login streak (CP days + gold-only days 3 & 6) | ✅ Shipped |
 | Tier 1 economy fixes (sell math, Clive gold, loaner axe) | ✅ Shipped |
 | Economy Guide (Settings) + Tutorial | ✅ Live |
-| Daily spin wheel | 📋 Step 2 |
+| Daily spin wheel | 📋 Planned — [DAILY_SPINNER.md](./DAILY_SPINNER.md) (pay-to-roll in `$CP` only) |
 | Gold merchant shop + spend hints | 📋 Step 3 |
 | Telemetry (gold created vs destroyed) | 📋 Step 4 |
 | Gold ↔ $CP player market | 📋 Step 5 |
@@ -59,7 +59,7 @@
 | Crafting (`recipes.js`) | 📋 Step 7 |
 | Phone UI shell | 📋 Step 8 |
 
-**Next implementation focus:** [ECONOMY_ROLLOUT.md](./ECONOMY_ROLLOUT.md) Step 2 — daily task rotation + spin wheel.
+**Next implementation focus:** [ECONOMY_ROLLOUT.md](./ECONOMY_ROLLOUT.md) Step 2 — generic daily tasks (prize wheel documented only; see [DAILY_SPINNER.md](./DAILY_SPINNER.md)).
 
 ---
 

@@ -37,7 +37,7 @@
 | Step | Deliverable | Exit criteria |
 |:----:|:------------|:--------------|
 | **1** | **Daily Quest HUD + NPC daily orders** | ✅ **Shipped** — contract accept, HUD tracker, trader UI |
-| **2** | **Daily task rotation + spin wheel** | 3 generic tasks/day on same HUD |
+| **2** | **Daily task rotation + spin wheel** | ✅ **Shipped** — spin wheel live; generic daily tasks 📋 next |
 | **3** | **Gold merchant shop + spend hints** | New `sells` at merchants; rotating footer hints for pebbles/$CP sinks |
 | **4** | **Telemetry** | Daily gold created vs destroyed query |
 | **5** | **Gold ↔ $CP market** | Escrow listings; onboarding complete + wallet gate; 5% rake |
@@ -45,7 +45,9 @@
 | **7** | **Crafting** | `recipes.js`; after sinks proven |
 | **8** | **Phone UI** | Marketplace, ledger, inbox as apps; trim HUD |
 
-**Current focus: Step 2** (daily task rotation + spin wheel).
+**Current focus: Step 2** (daily task rotation — prize wheel spec only; see [DAILY_SPINNER.md](./DAILY_SPINNER.md)).
+
+See **[DAILY_SPINNER.md](./DAILY_SPINNER.md)** for planned free spin + paid **`$CP`** roll design (not implemented).
 
 ---
 

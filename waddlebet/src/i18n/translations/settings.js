@@ -116,8 +116,8 @@ export default {
     'settings.nametagDay1': {
         en: 'DAY 1', zh: '首日', es: 'DÍA 1', pt: 'DIA 1', ko: 'DAY 1', ja: 'DAY 1', fr: 'JOUR 1', de: 'TAG 1', ru: 'ДЕНЬ 1', ar: 'يوم 1',
     },
-    'settings.nametagWhale': {
-        en: 'WHALE', zh: '鲸鱼', es: 'BALLENA', pt: 'BALEIA', ko: '고래', ja: 'クジラ', fr: 'BALEINE', de: 'WAL', ru: 'КИТ', ar: 'حوت',
+    'settings.nametagTier': {
+        en: 'DIAMOND FLIPPERS', zh: '钻石脚蹼', es: 'DIAMOND FLIPPERS', pt: 'DIAMOND FLIPPERS', ko: '다이아몬드 플리퍼', ja: 'ダイヤフリッパー', fr: 'DIAMOND FLIPPERS', de: 'DIAMOND FLIPPERS', ru: 'DIAMOND FLIPPERS', ar: 'ماسي فلابر',
     },
     'settings.nametagDefault': {
         en: 'DEFAULT', zh: '默认', es: 'DEFECTO', pt: 'PADRÃO', ko: '기본', ja: 'デフォルト', fr: 'DÉFAUT', de: 'STANDARD', ru: 'ПО УМОЛЧ.', ar: 'افتراضي',

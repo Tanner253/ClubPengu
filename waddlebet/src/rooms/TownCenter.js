@@ -7,6 +7,7 @@ import { createPark } from '../props/Park';
 import Lighthouse from '../props/Lighthouse';
 import { applyGroundPathSurface, groundPathMaterialProps } from '../utils/groundPathSurface';
 import { TOWN_TRASH_CANS } from '../config/scavenge';
+import { ARCADE_AISLE, ARCADE_MACHINES, ARCADE_ZONE } from '../config/arcadeZone';
 
 /**
  * Helper: Attach collision/interaction data from a prop to its mesh
@@ -727,31 +728,32 @@ class TownCenter {
         );
         
         // ==================== ARCADE GAME ZONE ====================
-        // Multiple arcade machines for different minigames!
-        // Positioned in a small arcade area near the Puffle Shop
-        const arcadeBaseX = C + 21.5;
-        const arcadeBaseZ = C - 5.2;
-        
+        // West side of T-stem — grocery-aisle layout (rows face each other)
+        ARCADE_MACHINES.forEach((machine) => {
+            props.push({
+                type: 'arcade_machine',
+                id: machine.id,
+                x: machine.x,
+                z: machine.z,
+                game: machine.game,
+                rotation: machine.rotationY ?? 0,
+            });
+        });
+
+        props.push({
+            type: 'floating_title',
+            x: ARCADE_ZONE.floatingTitle.x,
+            z: ARCADE_ZONE.floatingTitle.z,
+            text: ARCADE_ZONE.floatingTitle.text,
+            height: ARCADE_ZONE.floatingTitle.height,
+        });
+
+        // Arcade aisle lighting — lamp posts on each row at the north/south aisle ends
         props.push(
-            // Battleship - classic naval combat
-            { type: 'arcade_machine', id: 'battleship_arcade', x: arcadeBaseX, z: arcadeBaseZ, game: 'battleship' },
-            // Flappy Penguin - tap to fly!
-            { type: 'arcade_machine', id: 'flappy_arcade', x: arcadeBaseX + 5, z: arcadeBaseZ, game: 'flappy_penguin' },
-            // Snake - eat fish and grow!
-            { type: 'arcade_machine', id: 'snake_arcade', x: arcadeBaseX + 10, z: arcadeBaseZ, game: 'snake' },
-            // Pong - classic ice hockey pong
-            { type: 'arcade_machine', id: 'pong_arcade', x: arcadeBaseX + 15, z: arcadeBaseZ, game: 'pong' },
-            // Memory Match - flip and match cards
-            { type: 'arcade_machine', id: 'memory_arcade', x: arcadeBaseX + 20, z: arcadeBaseZ, game: 'memory' },
-            // Thin Ice - classic puffle puzzle game
-            { type: 'arcade_machine', id: 'thinice_arcade', x: arcadeBaseX + 25, z: arcadeBaseZ, game: 'thin_ice' },
-            // Avalanche Run - endless runner down a mountain
-            { type: 'arcade_machine', id: 'avalanche_arcade', x: arcadeBaseX + 30, z: arcadeBaseZ, game: 'avalanche_run' }
-        );
-        
-        // Floating title for the arcade area
-        props.push(
-            { type: 'floating_title', x: arcadeBaseX + 15, z: arcadeBaseZ - 3, text: '🎮 ARCADE ZONE', height: 8 }
+            { type: 'lamp_post', x: ARCADE_AISLE.westX, z: ARCADE_AISLE.northZ, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: ARCADE_AISLE.eastX, z: ARCADE_AISLE.northZ, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: ARCADE_AISLE.westX, z: ARCADE_AISLE.southZ, isOn: true, castShadow: false },
+            { type: 'lamp_post', x: ARCADE_AISLE.eastX, z: ARCADE_AISLE.southZ, isOn: true, castShadow: false },
         );
         
         // Pond area decorations - snowy surroundings (no zone banner)
@@ -1689,7 +1691,8 @@ class TownCenter {
                         gameType: gameType,
                         gameTitle: config.title,
                         accentColor: config.accentColor,
-                        screenColor: config.screenColor
+                        screenColor: config.screenColor,
+                        rotationY: prop.rotation ?? 0,
                     });
                     mesh = arcadeProp.mesh;
                     mesh.name = prop.id || 'arcade_machine';
@@ -1763,7 +1766,7 @@ class TownCenter {
             
             if (mesh) {
                 mesh.position.set(prop.x, 0, prop.z);
-                if (prop.rotation) mesh.rotation.y = prop.rotation;
+                if (typeof prop.rotation === 'number') mesh.rotation.y = prop.rotation;
                 scene.add(mesh);
                 this.propMeshes.push(mesh);
                 this.collisionSystem.registerProp(
@@ -2173,7 +2176,6 @@ class TownCenter {
             // Billboard STRUCTURE stays visible, only the ADVERT IMAGE is hidden at distance
             this._cullCache = {
                 billboardAdverts: [],
-                nightclubSign: null,
                 floatingTitles: [],
             };
             
@@ -2190,11 +2192,6 @@ class TownCenter {
                 }
                 if (mesh.name === 'nightclub' && mesh.userData.nightclubUpdate) {
                     this._animatedCache.nightclubs.push(mesh);
-                    // Cache nightclub sign for visibility culling
-                    const sign = mesh.getObjectByName('nightclub_title_sign');
-                    if (sign) {
-                        this._cullCache.nightclubSign = { sprite: sign, parentMesh: mesh, wasVisible: true };
-                    }
                 }
                 // Floating title signs - cache for visibility culling
                 if (mesh.name === 'floating_title' && mesh.userData.floatingSign) {
@@ -2250,11 +2247,7 @@ class TownCenter {
         if (frame % 2 === 0) {
             this._animatedCache.nightclubs.forEach(mesh => {
                 if (mesh.userData.nightclubUpdate) {
-                    const dx = px - mesh.position.x;
-                    const dz = pz - mesh.position.z;
-                    if (dx * dx + dz * dz < ANIMATION_DISTANCE_SQ) {
-                        mesh.userData.nightclubUpdate(time);
-                    }
+                    mesh.userData.nightclubUpdate(time);
                 }
             });
 
@@ -2410,19 +2403,6 @@ class TownCenter {
                     : distSq < BILLBOARD_SHOW_SQ;
                 updateVisibility(entry.advertMesh, shouldShow, entry);
             });
-            
-            // Nightclub title sign (sprite - safe to cull)
-            if (this._cullCache.nightclubSign) {
-                const entry = this._cullCache.nightclubSign;
-                const dx = px - entry.parentMesh.position.x;
-                const dz = pz - entry.parentMesh.position.z;
-                const distSq = dx * dx + dz * dz;
-                
-                const shouldShow = entry.wasVisible 
-                    ? distSq < HIDE_DIST_SQ 
-                    : distSq < SHOW_DIST_SQ;
-                updateVisibility(entry.sprite, shouldShow, entry);
-            }
             
             // Floating titles (ARCADE, FISHING zones - sprites, safe to cull)
             this._cullCache.floatingTitles.forEach(entry => {

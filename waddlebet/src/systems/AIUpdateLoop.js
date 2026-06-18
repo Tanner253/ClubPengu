@@ -12,6 +12,8 @@
  */
 
 import { AI_CONVERSATIONS } from '../config/roomConfig';
+import { VOXEL_SIZE } from '../constants';
+import { playerHasAnimatedCosmetics } from '../engine/PenguinBuilder';
 
 // PERF: lookup maps are rebuilt only when the agent/puffle arrays change
 // (identity or length), not on every frame.
@@ -890,18 +892,7 @@ function updateAICosmetics(ai, ctx) {
     
     // Check and cache animated cosmetics flag once
     if (ai._hasAnimatedCosmetics === undefined) {
-        ai._hasAnimatedCosmetics = aiAppearance.hat === 'propeller' || 
-                                   aiAppearance.hat === 'flamingCrown' ||
-                                   aiAppearance.hat === 'wizardHat' ||
-                                   aiAppearance.mouth === 'cigarette' || 
-                                   aiAppearance.mouth === 'pipe' ||
-                                   aiAppearance.mouth === 'cigar' ||
-                                   aiAppearance.eyes === 'laser' ||
-                                   aiAppearance.eyes === 'fire' ||
-                                   aiAppearance.bodyItem === 'angelWings' ||
-                                   aiAppearance.bodyItem === 'demonWings' ||
-                                   aiAppearance.bodyItem === 'fireAura' ||
-                                   aiAppearance.bodyItem === 'lightningAura';
+        ai._hasAnimatedCosmetics = playerHasAnimatedCosmetics(aiAppearance);
     }
     
     if (ai._hasAnimatedCosmetics) {
@@ -909,7 +900,7 @@ function updateAICosmetics(ai, ctx) {
         if (!ai.mesh.userData._animatedPartsCache) {
             ai.mesh.userData._animatedPartsCache = cacheAnimatedParts(ai.mesh);
         }
-        animateCosmeticsFromCache(ai.mesh.userData._animatedPartsCache, time, delta);
+        animateCosmeticsFromCache(ai.mesh.userData._animatedPartsCache, time, delta, VOXEL_SIZE);
     }
 }
 
