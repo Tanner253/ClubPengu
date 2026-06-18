@@ -20,8 +20,6 @@ class Connect4Game extends Minigame {
             id: 'connect4',
             name: 'Connect 4',
             description: 'Get 4 in a row to win!',
-            baseReward: 75,
-            winBonus: 150,
             maxRounds: 1,
             ...config
         });

@@ -3,6 +3,7 @@
  */
 
 import { ECONOMY } from './economy.js';
+import { BAIT_GOLD_BUNDLE, GOLD_MINT_RECIPES } from './goldEconomy.js';
 
 export const MERCHANTS = {
     fish_buyer: {
@@ -10,12 +11,20 @@ export const MERCHANTS = {
         name: 'Old Salty',
         title: 'Fish Buyer',
         emoji: '🧓',
-        greeting: "I'll buy your catch — fair prices, no questions.",
+        greeting: "I'll buy your catch at emergency rates — or sell you worm bait in bulk. Flip mossy logs in the forest for free worms!",
         acceptsCategories: ['fish'],
+        /** Multiplier on NPC_EMERGENCY_SELL_RATIO (1.0 = full emergency rate). */
         npcSellRatio: 1.0,
         sellTransactionType: 'fish_sell_npc',
-        buyTransactionType: 'rod_upgrade',
-        sells: []
+        buyTransactionType: 'merchant_buy',
+        sells: [
+            {
+                itemId: BAIT_GOLD_BUNDLE.itemId,
+                quantity: BAIT_GOLD_BUNDLE.quantity,
+                cost: BAIT_GOLD_BUNDLE.goldCost,
+                label: `Worm bait (×${BAIT_GOLD_BUNDLE.quantity})`,
+            },
+        ],
     },
     forest_ranger: {
         id: 'forest_ranger',
@@ -24,7 +33,6 @@ export const MERCHANTS = {
         emoji: '🌲',
         greeting: "Logs for the cabin ledger? I pay trail rates — Clive in town pays more if you've got the hike in you.",
         acceptsCategories: ['wood', 'forage'],
-        /** Emergency trail sell — lower than Copper Clive (1.0). */
         npcSellRatio: 0.65,
         sellTransactionType: 'wood_sell_ranger',
         sells: []
@@ -34,30 +42,40 @@ export const MERCHANTS = {
         name: 'Copper Clive',
         title: 'Supply & Gear',
         emoji: '🔧',
-        greeting: "Backpack tight? I expand packs and stock tools for gatherers.",
-        acceptsCategories: ['wood'],
+        greeting: "Backpack tight? I expand packs with timber — sell logs for emergency gold or buy axes with wood.",
+        acceptsCategories: ['wood', 'tool', 'rod'],
         npcSellRatio: 1.0,
         sellTransactionType: 'wood_sell_npc',
         buyTransactionType: 'merchant_buy',
         sells: [
+            ...GOLD_MINT_RECIPES.filter((r) => r.itemId.startsWith('gold_mint_wood')).map((r) => ({
+                itemId: r.itemId,
+                goldMintOutput: r.goldOutput,
+                materialCost: r.materialCost,
+                label: r.label,
+            })),
             {
                 itemId: 'basic_axe',
-                cost: ECONOMY.TOOLS.basic_axe.cost,
+                cost: 0,
+                woodRequired: ECONOMY.TOOLS.basic_axe.woodRequired,
                 label: 'Basic Axe'
             },
             {
                 itemId: 'iron_axe',
-                cost: ECONOMY.TOOLS.iron_axe.cost,
+                cost: 0,
+                woodRequired: ECONOMY.TOOLS.iron_axe.woodRequired,
                 label: 'Iron Axe'
             },
             {
                 itemId: 'steel_axe',
-                cost: ECONOMY.TOOLS.steel_axe.cost,
+                cost: 0,
+                woodRequired: ECONOMY.TOOLS.steel_axe.woodRequired,
                 label: 'Steel Axe'
             },
             {
                 itemId: 'master_axe',
-                cost: ECONOMY.TOOLS.master_axe.cost,
+                cost: 0,
+                woodRequired: ECONOMY.TOOLS.master_axe.woodRequired,
                 label: 'Master Axe'
             }
         ]

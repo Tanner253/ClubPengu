@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from '../engine/PenguinBuilder';
 import GameManager from '../engine/GameManager';
+import { PVE_BJ_MIN_BET, PVE_BJ_MAX_BET } from '../config/goldEconomy';
 
 // --- UTILITIES --- (exact from source)
 const MathUtils = {
@@ -830,6 +831,49 @@ class BlackjackGame {
         };
     }
 
+    /** Render hands dealt by the server (authenticated play). */
+    async renderServerHands(state) {
+        this.engine.clearCards();
+        this.holeCardMesh = null;
+        this.gameState = state.phase === 'complete' ? 'END' : 'PLAYING';
+
+        this.playerHand = (state.playerHand || []).map((c) => ({ ...c, hidden: false }));
+        this.dealerHand = (state.dealerHand || []).map((c) => (
+            c.hidden
+                ? { suit: '♠', value: '?', hidden: true }
+                : { ...c, hidden: false }
+        ));
+
+        const startPos = new THREE.Vector3(0, 5, -25);
+
+        for (let i = 0; i < this.playerHand.length; i++) {
+            const endPos = new THREE.Vector3(-2 + i * 2, 0.1 + i * 0.02, 12);
+            const mesh = this.engine.spawnCard(this.playerHand[i], startPos, endPos);
+            mesh.userData.cardInfo = this.playerHand[i];
+            await MathUtils.delay(120);
+        }
+
+        for (let i = 0; i < this.dealerHand.length; i++) {
+            const card = this.dealerHand[i];
+            const endPos = new THREE.Vector3(-2 + i * 2, 0.1 + i * 0.02, -2);
+            const mesh = this.engine.spawnCard(card, startPos, endPos);
+            mesh.userData.cardInfo = card;
+            if (card.hidden) {
+                mesh.rotation.y = Math.PI;
+                this.holeCardMesh = mesh;
+            }
+            await MathUtils.delay(120);
+        }
+
+        if (state.phase === 'complete' && this.holeCardMesh) {
+            const holeData = state.dealerHand?.[0];
+            if (holeData && !holeData.hidden && holeData.suit) {
+                this.dealerHand[0] = { ...holeData, hidden: false };
+                this.engine.revealHoleCard(this.holeCardMesh);
+            }
+        }
+    }
+
     reset() {
         this.gameState = 'BETTING';
         this.currentBet = 0;
@@ -843,7 +887,13 @@ class BlackjackGame {
 const DEMO_BANKROLL = 1000;
 
 const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
-    const { send, userData, updateUserCoins, isAuthenticated } = useMultiplayer();
+    const {
+        send,
+        userData,
+        isAuthenticated,
+        addMessageHandler,
+        removeMessageHandler,
+    } = useMultiplayer();
     const containerRef = useRef(null);
     const engineRef = useRef(null);
     const gameRef = useRef(null);
@@ -864,9 +914,33 @@ const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
     const balanceRef = useRef(isDemo ? DEMO_BANKROLL : (userData?.coins ?? GameManager.getInstance().getCoins() ?? 0));
     const [displayBalance, setDisplayBalance] = useState(balanceRef.current);
     
-    const CHIP_VALUES = [10, 50, 100, 500, 1000];
-    const MIN_BET = 10;
-    const MAX_BET = 5000;
+    const CHIP_VALUES = [1, 5, 10, 25, 50];
+    const MIN_BET = PVE_BJ_MIN_BET;
+    const MAX_BET = PVE_BJ_MAX_BET;
+    const useServerPlay = !isDemo && isAuthenticated;
+    const pveWaiterRef = useRef(null);
+
+    const waitPveResponse = useCallback(() => new Promise((resolve) => {
+        pveWaiterRef.current = resolve;
+        setTimeout(() => {
+            if (pveWaiterRef.current === resolve) {
+                pveWaiterRef.current = null;
+                resolve({ type: 'pve_blackjack_error', error: 'TIMEOUT' });
+            }
+        }, 12000);
+    }), []);
+
+    useEffect(() => {
+        const onMsg = (msg) => {
+            if (msg.type !== 'pve_blackjack_state' && msg.type !== 'pve_blackjack_error') return;
+            const waiter = pveWaiterRef.current;
+            if (!waiter) return;
+            pveWaiterRef.current = null;
+            waiter(msg);
+        };
+        addMessageHandler(onMsg);
+        return () => removeMessageHandler(onMsg);
+    }, [addMessageHandler, removeMessageHandler]);
     
     // Update balance helper that updates both ref and display state
     const updateBalance = useCallback((newBalance) => {
@@ -962,37 +1036,85 @@ const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
         setPendingBet(0);
     }, []);
     
+    const finishGameRef = useRef(null);
+
+    const applyServerState = useCallback(async (state, betAmount) => {
+        if (!gameRef.current || !state) return;
+        gameRef.current.currentBet = betAmount ?? state.bet ?? bet;
+        await gameRef.current.renderServerHands(state);
+        setPlayerScore(state.playerScore);
+        setDealerScore(state.phase === 'complete' ? state.dealerScore : '?');
+        if (state.phase === 'complete' && state.result) {
+            finishGameRef.current?.(
+                {
+                    result: state.result,
+                    playerScore: state.playerScore,
+                    dealerScore: state.dealerScore,
+                },
+                { serverPayout: state.payout ?? 0, skipServerPayout: true }
+            );
+        } else {
+            setPhase('playing');
+        }
+    }, [bet]);
+
+    const sendPveAction = useCallback(async (type, extra = {}) => {
+        send({ type, ...extra });
+        const msg = await waitPveResponse();
+        if (msg.type === 'pve_blackjack_error' || msg.error) {
+            return { error: msg.error || 'REQUEST_FAILED' };
+        }
+        if (msg.newBalance != null) {
+            updateBalance(msg.newBalance);
+        }
+        return { state: msg.state };
+    }, [send, waitPveResponse, updateBalance]);
+
     const deal = useCallback(async () => {
         if (pendingBet < MIN_BET || pendingBet > balanceRef.current) return;
         if (!gameRef.current) return;
-        
+
         setIsLoading(true);
-        
-        // Optimistically deduct balance locally
-        const newBalance = balanceRef.current - pendingBet;
-        updateBalance(newBalance);
-        
-        // Send to server for persistence (skip in guest demo mode)
-        if (!isDemo) {
-            send({ type: 'blackjack_deduct_bet', amount: pendingBet });
-        }
-        
-        gameRef.current.currentBet = pendingBet;
-        setBet(pendingBet);
-        setPendingBet(0);
         setResult(null);
         setPayout(0);
-        
+
+        const placedBet = pendingBet;
+
+        if (useServerPlay) {
+            send({ type: 'pve_blackjack_start', amount: placedBet });
+            const msg = await waitPveResponse();
+            setIsLoading(false);
+
+            if (msg.type === 'pve_blackjack_error' || msg.error) {
+                return;
+            }
+
+            if (msg.newBalance != null) {
+                updateBalance(msg.newBalance);
+            }
+
+            setBet(placedBet);
+            setPendingBet(0);
+            await applyServerState(msg.state, placedBet);
+            return;
+        }
+
+        const newBalance = balanceRef.current - placedBet;
+        updateBalance(newBalance);
+
+        gameRef.current.currentBet = placedBet;
+        setBet(placedBet);
+        setPendingBet(0);
+
         const dealResult = await gameRef.current.deal();
-        
+
         if (dealResult) {
             const playerScoreVal = dealResult.playerScore || gameRef.current.calculateScore(gameRef.current.playerHand);
             setPlayerScore(playerScoreVal);
             setDealerScore('?');
             setPhase('playing');
-            
-            // Send initial game state for PvE spectator banner
-            const dealerVisibleCard = gameRef.current.dealerHand?.[1]; // Second card is visible
+
+            const dealerVisibleCard = gameRef.current.dealerHand?.[1];
             send({
                 type: 'blackjack_update',
                 playerHand: gameRef.current.playerHand?.map(c => ({ suit: c.suit, value: c.value })),
@@ -1002,24 +1124,29 @@ const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
                 phase: 'playing'
             });
         }
-        
+
         setIsLoading(false);
-        
-        // Check for natural blackjack
+
         if (dealResult?.result) {
             finishGame(dealResult);
         }
-    }, [pendingBet, send, updateBalance, isDemo]);
-    
-    const hit = useCallback(() => {
+    }, [pendingBet, send, updateBalance, useServerPlay, waitPveResponse, applyServerState]);
+
+    const hit = useCallback(async () => {
         if (!gameRef.current || phase !== 'playing') return;
-        
+
+        if (useServerPlay) {
+            const { error, state } = await sendPveAction('pve_blackjack_hit');
+            if (error || !state) return;
+            await applyServerState(state);
+            return;
+        }
+
         const result = gameRef.current.hit();
         if (!result) return;
-        
+
         setPlayerScore(result.score);
-        
-        // Update spectators with new hand
+
         const dealerVisibleCard = gameRef.current.dealerHand?.[1];
         send({
             type: 'blackjack_update',
@@ -1028,94 +1155,111 @@ const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
             playerScore: result.score,
             phase: 'playing'
         });
-        
+
         if (result.bust) {
             finishGame({ result: 'BUST', playerScore: result.score, dealerScore: gameRef.current.calculateScore(gameRef.current.dealerHand) });
         }
-    }, [phase, send]);
-    
+    }, [phase, send, useServerPlay, sendPveAction, applyServerState]);
+
     const stand = useCallback(async () => {
         if (!gameRef.current || phase !== 'playing') return;
-        
+
+        if (useServerPlay) {
+            setPhase('dealer');
+            setDealerScore('...');
+            const { error, state } = await sendPveAction('pve_blackjack_stand');
+            if (error || !state) return;
+            await applyServerState(state);
+            return;
+        }
+
         setPhase('dealer');
         setDealerScore('...');
-        
+
         const result = await gameRef.current.stand();
         finishGame(result);
-    }, [phase]);
-    
+    }, [phase, useServerPlay, sendPveAction, applyServerState]);
+
     const doubleDown = useCallback(async () => {
         if (!gameRef.current || phase !== 'playing') return;
         if (gameRef.current.playerHand.length !== 2) return;
         if (balanceRef.current < bet) return;
-        
-        // Optimistically deduct double amount
+
+        if (useServerPlay) {
+            const x = MathUtils.randFloat(-2, 2);
+            const z = MathUtils.randFloat(8, 10);
+            engineRef.current?.spawnChip(bet, { x, y: 2, z });
+            const { error, state } = await sendPveAction('pve_blackjack_double');
+            if (error || !state) return;
+            setBet(state.bet ?? bet * 2);
+            await applyServerState(state);
+            return;
+        }
+
         const newBalance = balanceRef.current - bet;
         updateBalance(newBalance);
-        
-        if (!isDemo) {
-            send({ type: 'blackjack_deduct_bet', amount: bet });
-        }
-        
-        // Add chip for double
+
         const x = MathUtils.randFloat(-2, 2);
         const z = MathUtils.randFloat(8, 10);
         engineRef.current?.spawnChip(bet, { x, y: 2, z });
-        
+
         const result = gameRef.current.double(true);
         setBet(prev => prev * 2);
-        
+
         if (!result) return;
-        
+
         setPlayerScore(result.score);
-        
+
         if (result.bust) {
             finishGame({ result: 'BUST', playerScore: result.score, dealerScore: gameRef.current.calculateScore(gameRef.current.dealerHand) });
         } else {
-            // Auto-stand after double
             setPhase('dealer');
             const standResult = await gameRef.current.stand();
             finishGame(standResult);
         }
-    }, [phase, bet, send, updateBalance, isDemo]);
-    
-    const finishGame = useCallback((gameResult) => {
+    }, [phase, bet, send, updateBalance, useServerPlay, sendPveAction, applyServerState]);
+
+    const finishGame = useCallback((gameResult, options = {}) => {
+        const { serverPayout, skipServerPayout = false } = options;
         setPhase('result');
         setResult(gameResult.result);
         setPlayerScore(gameResult.playerScore);
         setDealerScore(gameResult.dealerScore);
-        
+
         let winAmount = 0;
-        
-        if (gameResult.result === 'WIN') {
+
+        if (serverPayout != null) {
+            winAmount = serverPayout;
+        } else if (gameResult.result === 'WIN') {
             winAmount = bet * 2;
-            engineRef.current?.dealer.emote('lose');
-            engineRef.current?.clearChips(false); // Chips to player
         } else if (gameResult.result === 'BLACKJACK') {
-            winAmount = bet + Math.floor(bet * 1.5); // 3:2 payout
+            winAmount = bet + Math.floor(bet * 1.5);
+        } else if (gameResult.result === 'PUSH') {
+            winAmount = bet;
+        }
+
+        if (gameResult.result === 'WIN' || gameResult.result === 'BLACKJACK') {
             engineRef.current?.dealer.emote('lose');
             engineRef.current?.clearChips(false);
         } else if (gameResult.result === 'PUSH') {
-            winAmount = bet; // Return bet
+            engineRef.current?.clearChips(false);
         } else {
-            // BUST or LOSE - balance already deducted when betting
             engineRef.current?.dealer.emote('win');
-            engineRef.current?.clearChips(true); // Chips to dealer
+            engineRef.current?.clearChips(true);
         }
-        
+
         setPayout(winAmount);
-        
-        // Get hands for spectator display
+
         const playerHandData = gameRef.current?.playerHand?.map(c => ({ suit: c.suit, value: c.value }));
         const dealerHandData = gameRef.current?.dealerHand?.map(c => ({ suit: c.suit, value: c.value }));
-        
-        if (!isDemo) {
+
+        if (!isDemo && !skipServerPayout) {
             if (winAmount > 0) {
                 const newBal = balanceRef.current + winAmount;
                 updateBalance(newBal);
-                send({ 
-                    type: 'blackjack_payout', 
-                    amount: winAmount, 
+                send({
+                    type: 'blackjack_payout',
+                    amount: winAmount,
                     result: gameResult.result,
                     playerScore: gameResult.playerScore,
                     dealerScore: gameResult.dealerScore,
@@ -1123,9 +1267,9 @@ const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
                     dealerHand: dealerHandData
                 });
             } else {
-                send({ 
-                    type: 'blackjack_payout', 
-                    amount: 0, 
+                send({
+                    type: 'blackjack_payout',
+                    amount: 0,
                     result: gameResult.result,
                     playerScore: gameResult.playerScore,
                     dealerScore: gameResult.dealerScore,
@@ -1133,10 +1277,10 @@ const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
                     dealerHand: dealerHandData
                 });
             }
-        } else if (winAmount > 0) {
+        } else if (isDemo && winAmount > 0) {
             updateBalance(balanceRef.current + winAmount);
         }
-        
+
         // Auto-loop back to betting phase after showing result briefly
         setTimeout(() => {
             gameRef.current?.reset();
@@ -1152,6 +1296,8 @@ const CasinoBlackjack = ({ tableId, onLeave, isDemo = false }) => {
             }
         }, 2500);
     }, [bet, send, updateBalance, isDemo]);
+
+    finishGameRef.current = finishGame;
     
     const newGame = useCallback(() => {
         gameRef.current?.reset();

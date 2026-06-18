@@ -9,6 +9,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useMultiplayer } from '../multiplayer';
+import StreakCalendar from './StreakCalendar';
 import { formatTokenText } from '../utils/tokenDisplay.js';
 
 // Generate secure random nonce for replay protection
@@ -62,7 +63,8 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                         cooldownExpired: false,
                         timeUntilClaim: 24 * 60 * 60 * 1000,
                         totalClaimed: (prev.totalClaimed || 0) + 1,
-                        totalWaddleEarned: (prev.totalWaddleEarned || 0) + (msg.amount || 5000),
+                        totalWaddleEarned: (prev.totalWaddleEarned || 0) + (msg.amount || 0),
+                        streakDay: msg.streakDay != null ? (msg.streakDay >= 7 ? 1 : msg.streakDay + 1) : prev.streakDay,
                         lastClaimAt: new Date().toISOString()
                     } : prev);
                     setReceivedAt(Date.now());
@@ -203,15 +205,34 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                         </div>
                     ) : (
                         <>
-                            {/* Reward Info Card */}
-                            <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-2xl p-4 border border-cyan-500/20">
-                                <div className="text-center">
-                                    <div className="text-3xl mb-2">💰</div>
-                                    <div className="text-2xl font-bold text-cyan-300">
-                                        5,000 $CP
+                            {/* 7-Day Streak Calendar */}
+                            <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-2xl p-3 sm:p-4 border border-cyan-500/20">
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-white text-sm font-bold">7-Day Streak</span>
+                                    <span className="text-cyan-300 text-xs font-mono tabular-nums">
+                                        Day {status?.streakDay || 1} / 7
+                                    </span>
+                                </div>
+                                <StreakCalendar
+                                    currentDay={status?.streakDay || 1}
+                                    completedDays={status?.streakCompletedDays || 0}
+                                />
+                                <div className="text-center mt-3 pt-3 border-t border-white/10">
+                                    <div className="text-xl sm:text-2xl font-bold tabular-nums">
+                                        {(status?.rewardAmount || 0) > 0 && (
+                                            <span className="text-cyan-300">
+                                                {(status.rewardAmount).toLocaleString()} $CP
+                                            </span>
+                                        )}
+                                        {(status?.goldReward || 0) > 0 && (
+                                            <span className={`text-amber-300 ${(status?.rewardAmount || 0) > 0 ? 'text-base sm:text-lg ml-2' : 'text-xl sm:text-2xl'}`}>
+                                                {(status?.rewardAmount || 0) > 0 ? '+' : ''}{status.goldReward}g
+                                            </span>
+                                        )}
                                     </div>
-                                    <p className="text-white/50 text-xs mt-1">
-                                        Daily reward for active players
+                                    <p className="text-white/50 text-[10px] sm:text-xs mt-1">
+                                        Today&apos;s reward after 60 min play
+                                        {(status?.rewardAmount || 0) > 0 ? ' · ~$0.002 per 1k $CP at current cap' : ' · gold day, no $CP'}
                                     </p>
                                 </div>
                             </div>
@@ -388,7 +409,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                 </span>
                             ) : status.canClaim ? (
                                 <span className="flex items-center justify-center gap-2">
-                                    🎁 Claim 5,000 $CP
+                                    Claim Day {status.streakDay || 1} Reward
                                 </span>
                             ) : status.onboardingComplete === false ? (
                                 <span className="flex items-center justify-center gap-2">

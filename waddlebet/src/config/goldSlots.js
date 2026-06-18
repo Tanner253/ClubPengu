@@ -2,7 +2,15 @@
  * Gold lobby slot machine configuration (client display)
  */
 
-export const GOLD_SLOT_BET = 25;
+import {
+    GOLD_SLOT_BET_DEFAULT,
+    GOLD_SLOT_BET_MIN,
+    GOLD_SLOT_BET_MAX,
+    clampGoldSlotBet,
+} from './goldEconomy.js';
+
+export const GOLD_SLOT_BET = GOLD_SLOT_BET_DEFAULT;
+export { GOLD_SLOT_BET_MIN, GOLD_SLOT_BET_MAX, clampGoldSlotBet };
 
 export const GOLD_SLOT_SYMBOLS = {
     cherry: { label: 'Cherry', color: '#e11d48', emoji: '🍒' },
@@ -26,6 +34,7 @@ export const GOLD_SLOT_PAYTABLE = {
     gold7: 200
 };
 
-export function formatGoldSlotPayout(mult) {
-    return `${mult}x (${mult * GOLD_SLOT_BET}g)`;
+export function formatGoldSlotPayout(mult, bet = GOLD_SLOT_BET_DEFAULT) {
+    const safeBet = clampGoldSlotBet(bet);
+    return `${mult}x (${mult * safeBet}g)`;
 }

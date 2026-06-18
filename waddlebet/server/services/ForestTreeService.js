@@ -294,7 +294,8 @@ class ForestTreeService {
             treeId,
             stage: tree.stage,
             axeItemId,
-            chopMode: mode
+            chopMode: mode,
+            woodType: def?.woodType,
         });
 
         const preHarvest = {

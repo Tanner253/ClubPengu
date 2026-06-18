@@ -37,7 +37,7 @@ export const SCAVENGE_SPOTS = {
     casino_trash: {
         id: 'casino_trash',
         room: 'snow_forts',
-        goldReward: 50,
+        goldReward: 20,
         localX: 133,
         localZ: 108,
         interactionRadius: 2.5,

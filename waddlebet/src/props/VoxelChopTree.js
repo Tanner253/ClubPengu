@@ -7,6 +7,7 @@ import { MANUAL_CHOP, STAGE_TREE_SCALE, createTreeRng } from '../config/manualCh
 import { playManualFallSound } from '../utils/manualChopSounds';
 import { PropColors } from './PropColors';
 import { buildPineCrownMeshes } from './PineCrownBuilder';
+import { getTreeWoodSpecies } from '../config/treeWoodSpecies';
 
 const { VOXEL, TRUNK_RADIUS, STUMP_H, CUT_H } = MANUAL_CHOP;
 const MAX_VOXELS = 4000;
@@ -23,11 +24,13 @@ class VoxelChopTree {
     constructor(THREE, config) {
         this.THREE = THREE;
         this.config = { ...config };
+        this.species = getTreeWoodSpecies(config.woodType || 'pine_log');
         this.group = new THREE.Group();
         this.group.name = `voxel_chop_tree_${config.id}`;
         this.group.userData.harvestableTreeId = config.id;
         this.group.userData.isHarvestableTree = true;
         this.group.userData.chopMode = 'manual';
+        this.group.userData.woodType = this.species.id;
 
         this.leftCut = 0;
         this.rightCut = 0;
@@ -64,13 +67,15 @@ class VoxelChopTree {
 
     _initMaterials() {
         const THREE = this.THREE;
+        const barkHex = this.species.barkColor || PropColors.barkMedium;
+        const woodHex = this.species.foliageAccent || PropColors.plankLight;
         this.barkMat = new THREE.MeshStandardMaterial({
-            color: hexToInt(PropColors.barkMedium),
+            color: hexToInt(barkHex),
             roughness: 0.94,
             metalness: 0
         });
         this.woodMat = new THREE.MeshStandardMaterial({
-            color: hexToInt(PropColors.plankLight),
+            color: hexToInt(woodHex),
             roughness: 0.68
         });
     }
@@ -326,7 +331,7 @@ class VoxelChopTree {
         this.neckMesh.name = 'chop_neck';
         this.upperTreeGroup.add(this.neckMesh);
 
-        const { foliageMesh, snowMesh } = buildPineCrownMeshes(THREE, this.config.stage);
+        const { foliageMesh, snowMesh } = buildPineCrownMeshes(THREE, this.config.stage, this.species);
         this.crownGroup = new THREE.Group();
         this.crownGroup.name = 'chop_crown';
         // Crown foliage base sits on neck top (PineCrownBuilder starts layers at y≈0).

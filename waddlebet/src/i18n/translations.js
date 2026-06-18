@@ -12,6 +12,8 @@ import fishing from './translations/fishing.js';
 import changelog from './translations/changelog.js';
 import misc from './translations/misc.js';
 import tokenomics from './translations/tokenomics.js';
+import economyGuide from './translations/economyGuide.js';
+import creatorPitch from './translations/creatorPitch.js';
 import hud from './translations/hud.js';
 import loading from './translations/loading.js';
 
@@ -41,6 +43,8 @@ export const translations = {
     ...changelog,
     ...misc,
     ...tokenomics,
+    ...economyGuide,
+    ...creatorPitch,
     ...hud,
     ...loading,
 };

@@ -3,6 +3,8 @@
  */
 
 export const MUSHROOM_RESPAWN_MS = 8 * 60 * 1000; // 8 minutes per cluster
+/** Client channel time before harvest completes (server validates proximity only). */
+export const MUSHROOM_HARVEST_MS = 4000;
 
 /** @typedef {{ id: string, localX: number, localZ: number }} HarvestableMushroomDef */
 

@@ -18,6 +18,7 @@ import {
     MUSHROOM_QUEST_REQUIRED,
     MUSHROOM_QUEST_REWARD_ITEM
 } from '../config/harvestableMushrooms.js';
+import { STARTER_BAIT_QUANTITY, BAIT_ITEM_ID } from '../config/goldEconomy.js';
 
 const GI = ECONOMY.GAME_INVENTORY;
 
@@ -790,6 +791,11 @@ class GameInventoryService {
         const autoEquipped = await this.autoEquipToolToHotbar(walletAddress, 'basic_rod');
         if (autoEquipped) inventory = autoEquipped;
 
+        const baitResult = await this.addItem(walletAddress, BAIT_ITEM_ID, STARTER_BAIT_QUANTITY, {});
+        if (!baitResult.error) {
+            inventory = baitResult.inventory;
+        }
+
         await User.findOneAndUpdate(
             { walletAddress },
             { $set: { 'fishingProgress.starterRodClaimed': true } },
@@ -800,6 +806,39 @@ class GameInventoryService {
             success: true,
             itemId: 'basic_rod',
             inventory
+        };
+    }
+
+    /**
+     * Grant a loaner basic axe on first arrival in Forest Trails (onboarding chop step).
+     */
+    async grantForestLoanerAxeIfNeeded(walletAddress) {
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return { error: 'USER_NOT_FOUND' };
+
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+        const axeIds = ['basic_axe', 'iron_axe', 'steel_axe', 'master_axe'];
+        const hasAxe = axeIds.some((id) => this.countItemInSlots(slots, id) > 0);
+        if (hasAxe) return { skipped: true, message: 'Already has an axe' };
+
+        const addResult = await this.addItem(
+            walletAddress,
+            'basic_axe',
+            1,
+            this.getGearMetadataForNewItem('basic_axe')
+        );
+        if (addResult.error) return addResult;
+
+        let inventory = addResult.inventory;
+        const autoEquipped = await this.autoEquipToolToHotbar(walletAddress, 'basic_axe');
+        if (autoEquipped) inventory = autoEquipped;
+
+        return {
+            success: true,
+            itemId: 'basic_axe',
+            inventory,
+            message: 'Loaner axe equipped — chop trees, then visit Clive in Town for your own.',
         };
     }
 
@@ -832,17 +871,19 @@ class GameInventoryService {
             }
         }
 
-        const deduct = await this.userService.addCoins(
-            walletAddress,
-            -upgrade.cost,
-            'backpack_upgrade',
-            {
-                fromSlots: unlockedSlots,
-                toSlots: upgrade.nextSlots,
-                woodRequired: upgrade.woodRequired || undefined
-            },
-            `Backpack upgrade ${unlockedSlots}→${upgrade.nextSlots} slots`
-        );
+        const deduct = upgrade.cost > 0
+            ? await this.userService.addCoins(
+                walletAddress,
+                -upgrade.cost,
+                'backpack_upgrade',
+                {
+                    fromSlots: unlockedSlots,
+                    toSlots: upgrade.nextSlots,
+                    woodRequired: upgrade.woodRequired || undefined
+                },
+                `Backpack upgrade ${unlockedSlots}→${upgrade.nextSlots} slots`
+            )
+            : { success: true };
         if (!deduct.success) {
             return {
                 error: 'INSUFFICIENT_FUNDS',
@@ -930,22 +971,25 @@ class GameInventoryService {
         }
 
         const userFresh = await this.userService.getUser(walletAddress);
-        if (!userFresh || userFresh.coins < step.goldCost) {
-            return {
-                error: 'INSUFFICIENT_FUNDS',
-                message: `Need ${step.goldCost}g (you have ${userFresh?.coins || 0}g)`,
-                cost: step.goldCost
-            };
-        }
+        let deduct = { success: true, newBalance: userFresh?.coins ?? 0 };
+        if (step.goldCost > 0) {
+            if (!userFresh || userFresh.coins < step.goldCost) {
+                return {
+                    error: 'INSUFFICIENT_FUNDS',
+                    message: `Need ${step.goldCost}g (you have ${userFresh?.coins || 0}g)`,
+                    cost: step.goldCost
+                };
+            }
 
-        const deduct = await this.userService.addCoins(
-            walletAddress,
-            -step.goldCost,
-            'rod_upgrade',
-            { stepId: step.id, merchantId },
-            `Rod upgrade: ${step.label}`
-        );
-        if (!deduct.success) return deduct;
+            deduct = await this.userService.addCoins(
+                walletAddress,
+                -step.goldCost,
+                'rod_upgrade',
+                { stepId: step.id, merchantId },
+                `Rod upgrade: ${step.label}`
+            );
+            if (!deduct.success) return deduct;
+        }
 
         for (const [woodId, qty] of Object.entries(step.woodRequired)) {
             let remaining = qty;
@@ -1015,6 +1059,96 @@ class GameInventoryService {
     }
 
     /**
+     * Burn materials at a merchant to mint gold (intentional faucet).
+     */
+    async mintGoldFromMerchant(walletAddress, merchantId, listing) {
+        const merchant = getMerchant(merchantId);
+        if (!merchant) return { error: 'UNKNOWN_MERCHANT' };
+
+        const goldOutput = Math.floor(Number(listing.goldMintOutput) || 0);
+        if (goldOutput <= 0) return { error: 'INVALID_MINT', message: 'Invalid gold mint recipe' };
+
+        const materialCost = listing.materialCost || null;
+        if (!materialCost || !Object.keys(materialCost).length) {
+            return { error: 'INVALID_MINT', message: 'Mint recipe has no material cost' };
+        }
+
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return { error: 'USER_NOT_FOUND' };
+
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+
+        for (const [matId, qty] of Object.entries(materialCost)) {
+            const have = this.countItemInSlots(slots, matId);
+            if (have < qty) {
+                return {
+                    error: 'INSUFFICIENT_MATERIALS',
+                    message: `Need ${qty} ${matId.replace(/_/g, ' ')} (have ${have})`,
+                    materialCost,
+                    itemId: matId,
+                    need: qty,
+                    have,
+                };
+            }
+        }
+
+        const coinResult = await this.userService.addCoins(
+            walletAddress,
+            goldOutput,
+            'gold_mint',
+            {
+                merchantId,
+                merchantName: merchant.name,
+                recipeId: listing.itemId,
+                materialsSpent: materialCost,
+            },
+            `Minted ${goldOutput}g at ${merchant.name}`
+        );
+        if (!coinResult.success) return coinResult;
+
+        for (const [matId, qty] of Object.entries(materialCost)) {
+            let remaining = qty;
+            for (let i = 0; i < slots.length && remaining > 0; i++) {
+                const slot = slots[i];
+                if (slot?.itemId !== matId) continue;
+                const take = Math.min(remaining, slot.quantity);
+                slot.quantity -= take;
+                remaining -= take;
+                if (slot.quantity <= 0) slots[i] = emptySlot();
+            }
+        }
+
+        try {
+            await this.persistUserInventory(walletAddress, slots);
+        } catch (persistErr) {
+            await this.userService.addCoins(
+                walletAddress,
+                -goldOutput,
+                'gold_mint_rollback',
+                { recipeId: listing.itemId },
+                'Mint rollback — inventory save failed'
+            );
+            throw persistErr;
+        }
+
+        const inventory = await this.getInventory(walletAddress);
+
+        return {
+            success: true,
+            goldMinted: goldOutput,
+            goldEarned: goldOutput,
+            materialsSpent: materialCost,
+            newBalance: coinResult.newBalance,
+            merchantId,
+            merchantName: merchant.name,
+            recipeId: listing.itemId,
+            label: listing.label || 'Gold mint',
+            inventory,
+        };
+    }
+
+    /**
      * Buy a listed item from a merchant (tools, bait, etc.).
      */
     async buyFromMerchant(walletAddress, merchantId, itemId) {
@@ -1023,6 +1157,10 @@ class GameInventoryService {
 
         const listing = merchant.sells?.find(s => s.itemId === itemId);
         if (!listing) return { error: 'NOT_FOR_SALE', message: 'That item is not sold here' };
+
+        if (listing.goldMintOutput) {
+            return this.mintGoldFromMerchant(walletAddress, merchantId, listing);
+        }
 
         const itemDef = getGameItem(itemId);
         if (!itemDef) return { error: 'INVALID_ITEM' };
@@ -1052,6 +1190,10 @@ class GameInventoryService {
         }
 
         const woodRequired = listing.woodRequired || ECONOMY.RODS?.[itemId]?.woodRequired || null;
+        const materialCost = listing.materialCost || null;
+        const purchaseQty = listing.quantity || 1;
+        const goldCost = listing.cost || 0;
+
         if (woodRequired) {
             for (const [woodId, qty] of Object.entries(woodRequired)) {
                 const have = this.countItemInSlots(slots, woodId);
@@ -1068,50 +1210,88 @@ class GameInventoryService {
             }
         }
 
-        const userFresh = await this.userService.getUser(walletAddress);
-        if (!userFresh || userFresh.coins < listing.cost) {
-            return {
-                error: 'INSUFFICIENT_FUNDS',
-                message: `Need ${listing.cost}g (you have ${userFresh?.coins || 0}g)`,
-                cost: listing.cost
-            };
-        }
-
-        const deduct = await this.userService.addCoins(
-            walletAddress,
-            -listing.cost,
-            merchant.buyTransactionType || 'merchant_buy',
-            { itemId, merchantId, merchantName: merchant.name, cost: listing.cost },
-            `Bought ${itemDef.name} from ${merchant.name}`
-        );
-
-        if (!deduct.success) return deduct;
-
-        if (woodRequired) {
-            for (const [woodId, qty] of Object.entries(woodRequired)) {
-                let remaining = qty;
-                for (let i = 0; i < slots.length && remaining > 0; i++) {
-                    const slot = slots[i];
-                    if (slot?.itemId !== woodId) continue;
-                    const take = Math.min(remaining, slot.quantity);
-                    slot.quantity -= take;
-                    remaining -= take;
-                    if (slot.quantity <= 0) slots[i] = emptySlot();
+        if (materialCost) {
+            for (const [matId, qty] of Object.entries(materialCost)) {
+                const have = this.countItemInSlots(slots, matId);
+                if (have < qty) {
+                    return {
+                        error: 'INSUFFICIENT_MATERIALS',
+                        message: `Need ${qty} ${matId.replace(/_/g, ' ')} (have ${have})`,
+                        materialCost,
+                        itemId: matId,
+                        need: qty,
+                        have
+                    };
                 }
             }
-            await this.persistUserInventory(walletAddress, slots);
         }
 
-        const toolMeta = this.getGearMetadataForNewItem(itemId);
-        const addResult = await this.addItem(walletAddress, itemId, 1, toolMeta);
-        if (addResult.error) {
-            await this.userService.addCoins(
+        let deduct = { success: true, newBalance: user.coins };
+        if (goldCost > 0) {
+            const userFresh = await this.userService.getUser(walletAddress);
+            if (!userFresh || userFresh.coins < goldCost) {
+                return {
+                    error: 'INSUFFICIENT_FUNDS',
+                    message: `Need ${goldCost}g (you have ${userFresh?.coins || 0}g)`,
+                    cost: goldCost
+                };
+            }
+
+            deduct = await this.userService.addCoins(
                 walletAddress,
-                listing.cost,
-                'merchant_buy_refund',
-                { itemId, merchantId },
-                `Refund — ${addResult.message || addResult.error}`
+                -goldCost,
+                merchant.buyTransactionType || 'merchant_buy',
+                { itemId, merchantId, merchantName: merchant.name, cost: goldCost },
+                `Bought ${itemDef.name} from ${merchant.name}`
             );
+
+            if (!deduct.success) return deduct;
+        }
+
+        const deductMaterials = async (slotsRef) => {
+            if (woodRequired) {
+                for (const [woodId, qty] of Object.entries(woodRequired)) {
+                    let remaining = qty;
+                    for (let i = 0; i < slotsRef.length && remaining > 0; i++) {
+                        const slot = slotsRef[i];
+                        if (slot?.itemId !== woodId) continue;
+                        const take = Math.min(remaining, slot.quantity);
+                        slot.quantity -= take;
+                        remaining -= take;
+                        if (slot.quantity <= 0) slotsRef[i] = emptySlot();
+                    }
+                }
+            }
+            if (materialCost) {
+                for (const [matId, qty] of Object.entries(materialCost)) {
+                    let remaining = qty;
+                    for (let i = 0; i < slotsRef.length && remaining > 0; i++) {
+                        const slot = slotsRef[i];
+                        if (slot?.itemId !== matId) continue;
+                        const take = Math.min(remaining, slot.quantity);
+                        slot.quantity -= take;
+                        remaining -= take;
+                        if (slot.quantity <= 0) slotsRef[i] = emptySlot();
+                    }
+                }
+            }
+            await this.persistUserInventory(walletAddress, slotsRef);
+        };
+
+        await deductMaterials(slots);
+
+        const toolMeta = this.getGearMetadataForNewItem(itemId);
+        const addResult = await this.addItem(walletAddress, itemId, purchaseQty, toolMeta);
+        if (addResult.error) {
+            if (goldCost > 0) {
+                await this.userService.addCoins(
+                    walletAddress,
+                    goldCost,
+                    'merchant_buy_refund',
+                    { itemId, merchantId },
+                    `Refund — ${addResult.message || addResult.error}`
+                );
+            }
             return addResult;
         }
         let inventory = addResult.inventory;
@@ -1124,7 +1304,8 @@ class GameInventoryService {
             success: true,
             itemId,
             itemName: itemDef.name,
-            goldSpent: listing.cost,
+            goldSpent: goldCost,
+            materialsSpent: materialCost || null,
             woodSpent: woodRequired || null,
             newBalance: deduct.newBalance,
             merchantId,
@@ -1159,8 +1340,10 @@ class GameInventoryService {
         const categoryRatio = (category === 'wood' || category === 'forage')
             ? ECONOMY.WOODCUTTING.NPC_SELL_RATIO
             : ECONOMY.FISHING.NPC_SELL_RATIO;
-        const merchantRatio = merchant.npcSellRatio ?? categoryRatio;
-        const goldEarned = Math.floor(unitValue * merchantRatio) * sellQty;
+        const merchantMultiplier = merchant.npcSellRatio ?? 1;
+        const effectiveRatio = categoryRatio * merchantMultiplier;
+        const grossGold = Math.floor(unitValue * effectiveRatio * sellQty);
+        const goldEarned = Math.max((unitValue > 0 && sellQty > 0) ? 1 : 0, grossGold);
         if (goldEarned <= 0) {
             return { error: 'NO_VALUE' };
         }
@@ -1363,6 +1546,64 @@ class GameInventoryService {
         return total;
     }
 
+    async countMixedItems(walletAddress, items) {
+        const breakdown = [];
+        let totalHave = 0;
+        let totalRequired = 0;
+        for (const entry of items) {
+            const have = await this.countItem(walletAddress, entry.itemId);
+            const capped = Math.min(have, entry.quantity);
+            breakdown.push({
+                itemId: entry.itemId,
+                quantity: entry.quantity,
+                have: capped,
+            });
+            totalHave += capped;
+            totalRequired += entry.quantity;
+        }
+        const ready = breakdown.every((row) => row.have >= row.quantity);
+        return { have: totalHave, required: totalRequired, breakdown, ready };
+    }
+
+    async removeMixedItems(walletAddress, items) {
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return { error: 'USER_NOT_FOUND' };
+
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+
+        for (const entry of items) {
+            let remaining = entry.quantity;
+            for (let i = 0; i < slots.length && remaining > 0; i++) {
+                const slot = slots[i];
+                if (slot?.itemId !== entry.itemId) continue;
+                const take = Math.min(remaining, slot.quantity);
+                slot.quantity -= take;
+                remaining -= take;
+                if (slot.quantity <= 0) slots[i] = emptySlot();
+            }
+            if (remaining > 0) {
+                const have = entry.quantity - remaining;
+                return {
+                    error: 'NOT_ENOUGH',
+                    message: `Need ${entry.quantity} ${entry.itemId.replace(/_/g, ' ')} (you have ${have}).`,
+                    have,
+                    required: entry.quantity,
+                    itemId: entry.itemId,
+                };
+            }
+        }
+
+        const hotbar = this.normalizeHotbar(user.gameInventory?.hotbar);
+        this.sanitizeHotbar(slots, hotbar);
+        const updated = await this.persistUserInventory(walletAddress, slots, null, {
+            'gameInventory.hotbar': hotbar,
+        });
+        if (!updated) return { error: 'SAVE_FAILED' };
+
+        return { success: true, inventory: this.serializeInventory(updated) };
+    }
+
     async removeItemsById(walletAddress, itemId, quantity = 1) {
         const user = await this.ensureInventory(walletAddress);
         if (!user) return { error: 'USER_NOT_FOUND' };
@@ -1412,28 +1653,168 @@ class GameInventoryService {
      * Ranger quest — trade mushrooms for a ferry ticket back toward town.
      */
     async turnInMushroomQuest(walletAddress) {
-        const have = await this.countItem(walletAddress, 'forest_mushroom');
-        if (have < MUSHROOM_QUEST_REQUIRED) {
+        return this.turnInNpcQuestMaterials(walletAddress, {
+            itemId: 'forest_mushroom',
+            quantity: MUSHROOM_QUEST_REQUIRED,
+            rewardType: 'item',
+            rewardItemId: MUSHROOM_QUEST_REWARD_ITEM,
+        });
+    }
+
+    /** Total fish count across all stacks. */
+    async countFishTotal(walletAddress) {
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return 0;
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+        let total = 0;
+        for (const slot of slots) {
+            if (!slot?.itemId || !slot.quantity) continue;
+            const isFish = slot.category === 'fish' || isFishItem(slot.itemId);
+            if (isFish) total += Number(slot.quantity) || 0;
+        }
+        return total;
+    }
+
+    fishTier(slot) {
+        if (!slot?.itemId) return 0;
+        const isFish = slot.category === 'fish' || isFishItem(slot.itemId);
+        if (!isFish) return 0;
+        return Number(slot.tier ?? slot.metadata?.tier ?? getGameItem(slot.itemId)?.tier ?? 1) || 1;
+    }
+
+    async countFishMinTier(walletAddress, minTier) {
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return 0;
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+        let total = 0;
+        for (const slot of slots) {
+            if (!slot?.itemId || !slot.quantity) continue;
+            if (this.fishTier(slot) >= minTier) total += Number(slot.quantity) || 0;
+        }
+        return total;
+    }
+
+    /**
+     * Remove fish meeting min tier (prefers lower-tier fish first to preserve trophies).
+     */
+    async removeFishMinTier(walletAddress, quantity, minTier) {
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return { error: 'USER_NOT_FOUND' };
+        if (quantity <= 0) return { error: 'INVALID_QUANTITY' };
+
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+        const indices = [];
+        for (let i = 0; i < slots.length; i++) {
+            const slot = slots[i];
+            if (!slot?.itemId || !slot.quantity) continue;
+            if (this.fishTier(slot) >= minTier) {
+                indices.push({ i, tier: this.fishTier(slot) });
+            }
+        }
+        indices.sort((a, b) => a.tier - b.tier || a.i - b.i);
+
+        let remaining = quantity;
+        for (const { i } of indices) {
+            if (remaining <= 0) break;
+            const slot = slots[i];
+            const take = Math.min(remaining, slot.quantity);
+            slot.quantity -= take;
+            remaining -= take;
+            if (slot.quantity <= 0) slots[i] = emptySlot();
+        }
+
+        if (remaining > 0) {
+            const have = quantity - remaining;
             return {
                 error: 'NOT_ENOUGH',
-                message: `Need ${MUSHROOM_QUEST_REQUIRED} forest mushrooms (you have ${have}).`,
+                message: `Need ${quantity} tier ${minTier}+ fish (you have ${have}).`,
                 have,
-                required: MUSHROOM_QUEST_REQUIRED
+                required: quantity,
             };
         }
 
-        const removed = await this.removeItemsById(walletAddress, 'forest_mushroom', MUSHROOM_QUEST_REQUIRED);
+        const hotbar = this.normalizeHotbar(user.gameInventory?.hotbar);
+        this.sanitizeHotbar(slots, hotbar);
+        const updated = await this.persistUserInventory(walletAddress, slots, null, {
+            'gameInventory.hotbar': hotbar,
+        });
+        if (!updated) return { error: 'SAVE_FAILED' };
+
+        return { success: true, inventory: this.serializeInventory(updated) };
+    }
+
+    /**
+     * Remove `quantity` fish from inventory (any species, arbitrary stack order).
+     */
+    async removeFishTotal(walletAddress, quantity) {
+        const user = await this.ensureInventory(walletAddress);
+        if (!user) return { error: 'USER_NOT_FOUND' };
+        if (quantity <= 0) return { error: 'INVALID_QUANTITY' };
+
+        const unlockedSlots = this.getUnlockedSlots(user);
+        const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
+        let remaining = quantity;
+
+        for (let i = 0; i < slots.length && remaining > 0; i++) {
+            const slot = slots[i];
+            if (!slot?.itemId || !slot.quantity) continue;
+            const isFish = slot.category === 'fish' || isFishItem(slot.itemId);
+            if (!isFish) continue;
+            const take = Math.min(remaining, slot.quantity);
+            slot.quantity -= take;
+            remaining -= take;
+            if (slot.quantity <= 0) slots[i] = emptySlot();
+        }
+
+        if (remaining > 0) {
+            const have = quantity - remaining;
+            return {
+                error: 'NOT_ENOUGH',
+                message: `Need ${quantity} fish (you have ${have}).`,
+                have,
+                required: quantity,
+            };
+        }
+
+        const hotbar = this.normalizeHotbar(user.gameInventory?.hotbar);
+        this.sanitizeHotbar(slots, hotbar);
+        const updated = await this.persistUserInventory(walletAddress, slots, null, {
+            'gameInventory.hotbar': hotbar,
+        });
+        if (!updated) return { error: 'SAVE_FAILED' };
+
+        return { success: true, inventory: this.serializeInventory(updated) };
+    }
+
+    async turnInNpcQuestMaterials(walletAddress, { itemId, quantity, rewardType, rewardItemId, goldReward }) {
+        const have = await this.countItem(walletAddress, itemId);
+        if (have < quantity) {
+            return {
+                error: 'NOT_ENOUGH',
+                message: `Need ${quantity} (you have ${have}).`,
+                have,
+                required: quantity,
+            };
+        }
+
+        const removed = await this.removeItemsById(walletAddress, itemId, quantity);
         if (removed.error) return removed;
 
-        const added = await this.addItem(walletAddress, MUSHROOM_QUEST_REWARD_ITEM, 1);
-        if (added.error) return added;
+        if (rewardType === 'item') {
+            const added = await this.addItem(walletAddress, rewardItemId, 1);
+            if (added.error) return added;
+            return {
+                success: true,
+                itemsTurnedIn: quantity,
+                rewardItemId,
+                inventory: added.inventory,
+            };
+        }
 
-        return {
-            success: true,
-            mushroomsTurnedIn: MUSHROOM_QUEST_REQUIRED,
-            rewardItemId: MUSHROOM_QUEST_REWARD_ITEM,
-            inventory: added.inventory
-        };
+        return { success: true, inventory: removed.inventory, goldReward };
     }
 }
 

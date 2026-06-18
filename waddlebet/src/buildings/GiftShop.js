@@ -4,6 +4,7 @@
  */
 
 import BaseBuilding from './BaseBuilding';
+import { addBuildingBanner } from './buildingBanner';
 
 class GiftShop extends BaseBuilding {
     build({ w = 10, h = 6, d = 10 } = {}) {
@@ -247,6 +248,18 @@ class GiftShop extends BaseBuilding {
         interiorLight.position.set(0, h / 2, 0);
         group.add(interiorLight);
         this.lights.push(interiorLight);
+
+        addBuildingBanner(this.THREE, group, {
+            title: 'Puffle Shop',
+            subtitle: 'Adopt · Care · Play',
+            y: h + roofHeight + 3.5,
+            z: d / 2 + 3.5,
+            scaleX: 14,
+            scaleY: 3.6,
+            primaryColor: '#FF69B4',
+            glowColor: '#FF1493',
+            name: 'puffle_shop_banner',
+        });
 
         // Collision data
         group.userData.collision = {

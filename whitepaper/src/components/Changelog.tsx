@@ -81,6 +81,25 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.3.3",
+    date: "June 16, 2026",
+    title: "📊 Economy Hardening, 7-Day Streak & Trader UI",
+    description:
+      "Closes gold inflation leaks, rebalances NPC contracts, adds a 7-day $CP login calendar with bonus gold days, loaner axe onboarding, and mobile-optimized Tarkov-style merchant panels with canvas offer art.",
+    highlight: true,
+    changes: [
+      { type: "fix", text: "Emergency NPC sell uses total stack value (floor(unit×ratio×qty)) — stops per-item 1g exploit" },
+      { type: "fix", text: "Forest ferry arrival grants loaner basic axe if player has none — onboarding chop step unblocked" },
+      { type: "feature", text: "7-day login streak calendar — 1k→5k $CP escalating rewards; days 3 & 6 add +5g / +10g gold bonus" },
+      { type: "feature", text: "NPC contract flow — accept at merchant, track on HUD, return to turn in (Clive timber + Salty catch)" },
+      { type: "feature", text: "TraderOfferCanvas — animated chests, crates, axes & contracts replace emoji merchant tiles" },
+      { type: "improvement", text: "Clive daily contractor gold rebalance (~12 + 12% of bundle size)" },
+      { type: "improvement", text: "Merchant UI mobile layout — 2-col grid, compact speech column, scrollable detail strip" },
+      { type: "improvement", text: "MaterialBreakdown progress bars on mint recipes & timber contracts" },
+      { type: "content", text: "Whitepaper economics section — closed-loop diagram + dual-currency copy" },
+    ],
+  },
+  {
     version: "1.3.2",
     date: "June 16, 2026",
     title: "🔊 Zone Music, Ambient Audio & Ferry Fixes",

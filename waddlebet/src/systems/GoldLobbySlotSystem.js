@@ -3,7 +3,7 @@
  * Each machine has independent state, display, and spin lifecycle.
  */
 
-import { GOLD_SLOT_BET } from '../config/goldSlots.js';
+import { GOLD_SLOT_BET, GOLD_SLOT_BET_MIN, GOLD_SLOT_BET_MAX, clampGoldSlotBet } from '../config/goldSlots.js';
 
 const INTERACTION_RADIUS = 2.8;
 
@@ -63,7 +63,8 @@ class GoldLobbySlotSystem {
             || this.getDisplay(machineId)?.isServerSpinning === true;
     }
 
-    checkInteraction(playerX, playerZ, playerCoins, isAuthenticated, playerY = 0) {
+    checkInteraction(playerX, playerZ, playerCoins, isAuthenticated, playerY = 0, bet = GOLD_SLOT_BET) {
+        const safeBet = clampGoldSlotBet(bet);
         if (playerY > 1.5) {
             this.nearbyMachine = null;
             return null;
@@ -88,7 +89,7 @@ class GoldLobbySlotSystem {
         const inUse = this.isMachineInUse(nearest.id);
         const remotePlayer = this.remoteSpinning.get(nearest.id);
 
-        let prompt = `Press E to Spin — ${GOLD_SLOT_BET} gold`;
+        let prompt = `Press E to Spin — ${safeBet} gold`;
         let canSpin = true;
         let reason = null;
 
@@ -100,8 +101,8 @@ class GoldLobbySlotSystem {
             prompt = 'Sign in to play for gold';
             canSpin = false;
             reason = 'NOT_AUTHENTICATED';
-        } else if ((playerCoins || 0) < GOLD_SLOT_BET) {
-            prompt = `Need ${GOLD_SLOT_BET} gold (you have ${playerCoins || 0})`;
+        } else if ((playerCoins || 0) < safeBet) {
+            prompt = `Need ${safeBet} gold (you have ${playerCoins || 0})`;
             canSpin = false;
             reason = 'INSUFFICIENT_GOLD';
         }
@@ -111,7 +112,10 @@ class GoldLobbySlotSystem {
             prompt,
             canSpin,
             reason,
-            cost: GOLD_SLOT_BET,
+            cost: safeBet,
+            bet: safeBet,
+            betMin: GOLD_SLOT_BET_MIN,
+            betMax: GOLD_SLOT_BET_MAX,
             isSpinning: inUse
         };
     }

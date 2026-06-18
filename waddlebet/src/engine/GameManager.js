@@ -47,48 +47,6 @@ class GameManager {
         return GameManager.instance;
     }
     
-    // ==================== MIGRATION SUPPORT ====================
-    
-    /**
-     * Get localStorage data for migration to server (first-time auth)
-     * This is called ONCE when user authenticates for the first time
-     */
-    getMigrationData() {
-        try {
-            const saved = localStorage.getItem('clubpenguin_save');
-            if (!saved) return null;
-            
-            const data = JSON.parse(saved);
-            console.log('📦 Found localStorage data for migration:', data);
-            return {
-                coins: data.coins || 0,
-                stamps: data.stamps || [],
-                stats: data.stats || {},
-                unlockedItems: data.unlockedItems || []
-            };
-        } catch (e) {
-            console.warn('Failed to read migration data:', e);
-            return null;
-        }
-    }
-    
-    /**
-     * Clear localStorage game data after successful migration
-     * Called after auth_success for first-time users
-     */
-    clearMigrationData() {
-        try {
-            // Clear game save data
-            localStorage.removeItem('clubpenguin_save');
-            // Clear cosmetic unlocks (now server-managed)
-            localStorage.removeItem('unlocked_mounts');
-            localStorage.removeItem('unlocked_cosmetics');
-            console.log('🧹 Cleared localStorage migration data');
-        } catch (e) {
-            console.warn('Failed to clear migration data:', e);
-        }
-    }
-    
     // ==================== SERVER SYNC ====================
     
     /**
@@ -122,11 +80,6 @@ class GameManager {
                 gamesWon: userData.gameStats?.overall?.totalGamesWon || 0,
                 ...userData.stats.session
             };
-        }
-        
-        // Clear migration data after first successful sync
-        if (isNewUser) {
-            this.clearMigrationData();
         }
         
         console.log(`📦 GameManager synced from server: ${this.coins} coins, ${this.puffles?.length || 0} puffles`);

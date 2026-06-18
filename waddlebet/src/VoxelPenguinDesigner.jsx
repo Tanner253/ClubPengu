@@ -42,6 +42,7 @@ import {
 import WalletAuth from './components/WalletAuth';
 import LanguageToggle from './components/LanguageToggle';
 import WebGLStatusBanner from './components/WebGLStatusBanner';
+import CreatorPitchModal from './components/CreatorPitchModal';
 import { useLanguage } from './i18n';
 import performanceManager from './systems/PerformanceManager';
 import { initBrowserCapabilities, usesPrivacyBrowserOptimizations, readLiveWebGLInfo } from './utils/browserCapabilities';
@@ -240,6 +241,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     // Collapsible section states (for cleaner UI)
     const [colorsExpanded, setColorsExpanded] = useState(false);
     const [walletExpanded, setWalletExpanded] = useState(false);
+    const [showCreatorPitch, setShowCreatorPitch] = useState(false);
     const [characterExpanded, setCharacterExpanded] = useState(false);
     
     // Character emoji mapping for grid display
@@ -2079,15 +2081,31 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         const badgeTextClass = compact ? 'max-w-[5.5rem] text-center' : '';
 
         return (
-            <div className={`flex shrink-0 items-center pointer-events-auto ${compact ? 'gap-1 flex-wrap justify-end max-w-[58vw]' : 'gap-2'}`}>
+            <div className={`flex shrink-0 items-center pointer-events-auto ${compact ? 'gap-1 flex-wrap justify-end max-w-[72vw]' : 'gap-2'}`}>
+                <button
+                    type="button"
+                    onClick={() => setShowCreatorPitch(true)}
+                    title={t('creatorPitch.badge')}
+                    className={`creator-pitch-link flex shrink-0 items-center rounded-lg border font-bold text-fuchsia-100 shadow-md transition-transform hover:scale-[1.03] active:scale-95 ${linkClass}`}
+                >
+                    <span className="creator-pitch-icon shrink-0 text-sm leading-none" aria-hidden="true">🎰</span>
+                    <span className={`retro-text uppercase tracking-wide ${badgeTextClass}`}>
+                        {compact ? t('creatorPitch.badgeShort') : t('creatorPitch.badge')}
+                    </span>
+                </button>
                 <a
                     href="https://whitepaper.waddle.bet/"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className={`flex shrink-0 items-center rounded-lg border border-cyan-500/45 bg-cyan-950/60 font-bold text-cyan-200 shadow-md transition-colors hover:bg-cyan-900/60 active:scale-95 ${linkClass}`}
+                    title={t('menu.whitepaperCta')}
+                    className={`creator-whitepaper-link flex shrink-0 items-center rounded-lg border font-bold text-cyan-100 shadow-md transition-transform hover:scale-[1.03] active:scale-95 ${linkClass}`}
                 >
-                    <IconWorld size={iconSize} />
-                    {t('menu.whitepaperCta')}
+                    <span className="creator-whitepaper-icon shrink-0">
+                        <IconWorld size={iconSize} />
+                    </span>
+                    <span className={`retro-text uppercase tracking-wide ${badgeTextClass}`}>
+                        {compact ? t('menu.whitepaperBadgeShort') : t('menu.whitepaperBadge')}
+                    </span>
                 </a>
                 <a
                     href={GITHUB_REPO_URL}
@@ -3133,6 +3151,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     {t('common.loading')}...
                 </div>
             )}
+
+            <CreatorPitchModal
+                isOpen={showCreatorPitch}
+                onClose={() => setShowCreatorPitch(false)}
+            />
         </div>
     );
 }

@@ -4,13 +4,25 @@ import GameManager from '../engine/GameManager';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useMultiplayer } from '../multiplayer';
 import PuffleTrainingGame from '../minigames/PuffleTrainingGame';
+import PuffleCanvasPreview from './PuffleCanvasPreview';
+import PuffleShopTabs from './PuffleShopTabs';
 
 /**
  * PufflePanel - Enhanced Puffle management
  * Duck Life style training, tricks, toys, and more!
  * Server-authoritative: adoption goes through server for authenticated users
  */
-const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUnequip, onUpdate, onClose }) => {
+const PufflePanel = ({
+    equippedPuffle,
+    ownedPuffles = [],
+    onAdopt,
+    onEquip,
+    onUnequip,
+    onUpdate,
+    onClose,
+    includeShop = false,
+    disableTricks = false,
+}) => {
     const [tab, setTab] = useState('inventory'); // 'shop' | 'inventory' | 'training' | 'tricks'
     const [name, setName] = useState('Fluffy');
     const [selectedColor, setSelectedColor] = useState('blue');
@@ -241,8 +253,12 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
                 {/* Header */}
                 <div className="flex justify-between items-center mb-3">
                     <div className="flex items-center gap-2">
-                        <span className="text-2xl">🐾</span>
-                        <h3 className="retro-text text-lg text-white">Puffle Care</h3>
+                        {equippedPuffle ? (
+                            <PuffleCanvasPreview puffle={equippedPuffle} size={40} />
+                        ) : (
+                            <span className="text-2xl">🐾</span>
+                        )}
+                        <h3 className="retro-text text-lg text-white">{includeShop ? 'Pet Shop' : 'Puffle Care'}</h3>
                     </div>
                     <div className="flex items-center gap-3">
                         <span className="text-yellow-400 text-sm">💰 {coins}</span>
@@ -282,6 +298,7 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
                     >
                         💪 Train
                     </button>
+                    {!disableTricks && (
                     <button 
                         onClick={() => setTab('tricks')}
                         className={`flex-1 py-1.5 rounded-lg retro-text text-[10px] transition-all ${
@@ -292,6 +309,19 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
                     >
                         🎪 Tricks
                     </button>
+                    )}
+                    {includeShop && (
+                    <button 
+                        onClick={() => setTab('supplies')}
+                        className={`flex-1 py-1.5 rounded-lg retro-text text-[10px] transition-all ${
+                            tab === 'supplies' 
+                                ? 'bg-emerald-600 text-white' 
+                                : 'bg-black/30 text-white/60 hover:bg-black/50'
+                        }`}
+                    >
+                        🛒 Shop
+                    </button>
+                    )}
                     <button 
                         onClick={() => setTab('shop')}
                         className={`flex-1 py-1.5 rounded-lg retro-text text-[10px] transition-all ${
@@ -369,40 +399,17 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
                                                                 if (canAfford) handleAdopt(color);
                                                             }}
                                                             disabled={!canAfford}
-                                                            className={`relative group w-12 h-12 rounded-lg border-2 transition-all ${
+                                                            className={`relative group w-14 h-14 rounded-lg border-2 transition-all overflow-hidden ${
                                                                 !canAfford 
                                                                     ? 'opacity-40 cursor-not-allowed border-transparent' 
                                                                     : 'hover:scale-110 border-transparent hover:border-white'
-                                                            } ${colorData.special === 'rainbow' ? 'animate-pulse' : ''}`}
-                                                            style={{ 
-                                                                backgroundColor: colorData.hex,
-                                                                boxShadow: colorData.special === 'glow' 
-                                                                    ? `0 0 10px ${colorData.hex}` 
-                                                                    : 'none'
-                                                            }}
+                                                            }`}
                                                             title={`${colorData.name} - ${colorData.personality}`}
                                                         >
-                                                            {colorData.special === 'rainbow' && (
-                                                                <span className="absolute inset-0 bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-blue-500 to-purple-500 opacity-80 rounded-lg" />
-                                                            )}
-                                                            {colorData.special === 'dog' && (
-                                                                <span className="absolute inset-0 flex items-center justify-center text-2xl">🐕</span>
-                                                            )}
-                                                            {colorData.special === 'shrimp' && (
-                                                                <span className="absolute inset-0 flex items-center justify-center text-2xl">🦐</span>
-                                                            )}
-                                                            {colorData.special === 'duck' && (
-                                                                <span className="absolute inset-0 flex items-center justify-center text-2xl">🦆</span>
-                                                            )}
-                                                            {colorData.special === 'babyPenguin' && (
-                                                                <span className="absolute inset-0 flex items-center justify-center text-2xl">🐧</span>
-                                                            )}
+                                                            <PuffleCanvasPreview color={color} size={52} className="pointer-events-none" />
                                                             {owned && (
-                                                                <span className="absolute -top-1 -right-1 text-xs">✓</span>
+                                                                <span className="absolute top-0 right-0 text-[8px] bg-green-500 text-white px-1 rounded-bl">✓</span>
                                                             )}
-                                                            <span className="absolute opacity-0 group-hover:opacity-100 bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-black/90 text-white text-[10px] rounded whitespace-nowrap z-10">
-                                                                {colorData.name}
-                                                            </span>
                                                         </button>
                                                     );
                                                 })}
@@ -421,23 +428,13 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
                             {equippedPuffle ? (
                                 <div className="bg-gradient-to-r from-purple-800/50 to-pink-800/50 rounded-xl p-3 border border-purple-400/30">
                                     <div className="flex items-center gap-3">
-                                        <div 
-                                            className="w-14 h-14 rounded-full border-3 border-white/40 flex items-center justify-center relative"
-                                            style={{ 
-                                                backgroundColor: Puffle.COLORS[equippedPuffle.color]?.hex,
-                                                boxShadow: Puffle.COLORS[equippedPuffle.color]?.special === 'glow' 
-                                                    ? `0 0 15px ${Puffle.COLORS[equippedPuffle.color]?.hex}` 
-                                                    : 'none'
-                                            }}
-                                        >
-                                            {/* Level badge */}
-                                            <span className="absolute -bottom-1 -right-1 bg-yellow-500 text-black text-[10px] font-bold px-1.5 rounded-full">
-                                                Lv{equippedPuffle.level || 1}
-                                            </span>
-                                        </div>
+                                        <PuffleCanvasPreview puffle={equippedPuffle} size={72} className="shrink-0" />
                                         <div className="flex-1">
                                             <div className="font-bold text-white flex items-center gap-2">
                                                 {equippedPuffle.name}
+                                                <span className="text-yellow-400 text-[10px] bg-black/40 px-1.5 py-0.5 rounded-full">
+                                                    Lv{equippedPuffle.level || 1}
+                                                </span>
                                                 <span className="text-lg">{equippedPuffle.getMoodEmoji?.() || '😊'}</span>
                                             </div>
                                             <div className="text-purple-300 text-xs">
@@ -646,15 +643,7 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
                                                             : 'bg-black/20 hover:bg-black/30'
                                                     }`}
                                                 >
-                                                    <div 
-                                                        className="w-10 h-10 rounded-full border-2 border-white/30"
-                                                        style={{ 
-                                                            backgroundColor: colorData.hex,
-                                                            boxShadow: colorData.special === 'glow' 
-                                                                ? `0 0 8px ${colorData.hex}` 
-                                                                : 'none'
-                                                        }}
-                                                    />
+                                                    <PuffleCanvasPreview puffle={puffle} size={44} className="shrink-0" />
                                                     <div className="flex-1 min-w-0">
                                                         <div className="text-white text-sm truncate">{puffle.name}</div>
                                                         <div className="text-white/50 text-xs">
@@ -1033,7 +1022,7 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
                                                 })}
                                             </div>
                                         ) : (
-                                            <p className="text-white/40 text-xs">No toys yet! Visit the Puffle Food Vending Machine in town.</p>
+                                            <p className="text-white/40 text-xs">No toys yet! Buy toys in the Pet Shop.</p>
                                         )}
                                     </div>
                                 </>
@@ -1044,6 +1033,19 @@ const PufflePanel = ({ equippedPuffle, ownedPuffles = [], onAdopt, onEquip, onUn
                                 </div>
                             )}
                         </div>
+                    )}
+
+                    {/* Pet Shop supplies — food, toys, cosmetics */}
+                    {tab === 'supplies' && includeShop && (
+                        <PuffleShopTabs
+                            equippedPuffle={equippedPuffle}
+                            coins={coins}
+                            setFeedback={setFeedback}
+                            onPurchase={() => {
+                                forceUpdate((n) => n + 1);
+                                onUpdate?.(equippedPuffle);
+                            }}
+                        />
                     )}
                 </div>
             </div>

@@ -4,6 +4,7 @@
  */
 
 import BaseBuilding from './BaseBuilding';
+import { addBuildingBanner } from './buildingBanner';
 
 class Dojo extends BaseBuilding {
     build({ w = 14, h = 8, d = 14 } = {}) {
@@ -263,6 +264,18 @@ class Dojo extends BaseBuilding {
         const symbol = new THREE.Mesh(symbolGeo, goldMat);
         symbol.position.set(0, h - 0.3, d / 2 + 0.12);
         group.add(symbol);
+
+        addBuildingBanner(this.THREE, group, {
+            title: 'The Dojo',
+            subtitle: 'Card Jitsu · Sensei',
+            y: h + 6,
+            z: d / 2 + 3.5,
+            scaleX: 14,
+            scaleY: 3.2,
+            primaryColor: '#FFD700',
+            glowColor: '#CC2200',
+            name: 'dojo_banner',
+        });
 
         return group;
     }

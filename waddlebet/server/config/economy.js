@@ -26,19 +26,19 @@ export const ECONOMY = {
 
         SLOTS_PER_UPGRADE: 5,
 
-        /** Exponential gold cost: base × multiplier^tier (5→10, 10→15, …) */
+        /** Backpack slot upgrades use wood only — no gold sink here. */
 
-        UPGRADE_BASE_COST: 250,
+        UPGRADE_BASE_COST: 0,
 
-        UPGRADE_COST_MULTIPLIER: 3.5,
+        UPGRADE_COST_MULTIPLIER: 1,
 
         /** Wood types unlock one at a time on early tiers; later tiers need all four. */
         BACKPACK_WOOD_TYPES: ['pine_log', 'birch_log', 'oak_log', 'ironwood_log'],
 
         BACKPACK_WOOD_STACK: 64,
 
-        /** Upgrade 5→10 is gold-only; 10→15+ needs wood */
-        BACKPACK_WOOD_STARTS_AT_UPGRADE: 2,
+        /** Every backpack tier costs wood — gold is for bait, travel, wagers, puffles. */
+        BACKPACK_WOOD_STARTS_AT_UPGRADE: 1,
 
         /**
          * Explicit wood cost per wood-gated tier (tier 1 = 10→15 slots).
@@ -61,11 +61,16 @@ export const ECONOMY = {
 
     FISHING: {
 
-        BAIT_COST: 5,
+        /** Bait consumed per cast from backpack (see goldEconomy.BAIT_ITEM_ID). */
+        BAIT_ITEM_ID: 'worm',
+        BAIT_PER_CAST: 1,
 
-        /** NPC pays this fraction of catalog npcValue (1.0 = full listed price) */
+        /** @deprecated gold bait removed */
+        BAIT_COST: 0,
 
-        NPC_SELL_RATIO: 1.0,
+        /** NPC pays this fraction of catalog npcValue (emergency sell — mint recipes are primary). */
+
+        NPC_SELL_RATIO: 0.1,
 
         XP_PER_CATCH: 10,
 
@@ -77,7 +82,7 @@ export const ECONOMY = {
 
         CHOP_DURATION_MS: 2500,
 
-        NPC_SELL_RATIO: 1.0,
+        NPC_SELL_RATIO: 0.1,
 
         XP_PER_LOG: 8,
 
@@ -117,7 +122,8 @@ export const ECONOMY = {
 
         basic_axe: {
             id: 'basic_axe',
-            cost: 100,
+            cost: 0,
+            woodRequired: { pine_log: 80 },
             maxDurability: 80,
             /** @deprecated use getChopDurabilityLoss — kept for fallback */
             durabilityLossPerChop: 1,
@@ -127,7 +133,8 @@ export const ECONOMY = {
         },
         iron_axe: {
             id: 'iron_axe',
-            cost: 450,
+            cost: 0,
+            woodRequired: { pine_log: 120, birch_log: 64 },
             maxDurability: 220,
             durabilityLossPerChop: 1,
             durabilityDamageMultiplier: 1.0,
@@ -135,7 +142,8 @@ export const ECONOMY = {
         },
         steel_axe: {
             id: 'steel_axe',
-            cost: 1400,
+            cost: 0,
+            woodRequired: { pine_log: 160, birch_log: 96, oak_log: 48 },
             maxDurability: 400,
             durabilityLossPerChop: 1,
             durabilityDamageMultiplier: 0.75,
@@ -143,7 +151,8 @@ export const ECONOMY = {
         },
         master_axe: {
             id: 'master_axe',
-            cost: 3800,
+            cost: 0,
+            woodRequired: { pine_log: 200, birch_log: 128, oak_log: 80, ironwood_log: 32 },
             maxDurability: 650,
             durabilityLossPerChop: 1,
             durabilityDamageMultiplier: 0.5,

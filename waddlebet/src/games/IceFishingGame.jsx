@@ -20,6 +20,11 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
 import { playSfx } from '../audio';
+import {
+    getAllowedTiersFromHoleStatus,
+    getTierSpawnWeights,
+    getHoleStockLabel,
+} from '../utils/fishingHoleStock';
 
 // ==================== GAME CONFIG ====================
 const GAME_CONFIG = {
@@ -187,23 +192,46 @@ const TIER_UNLOCK_DEPTHS = {
     10: 1350,  // Unlocks at 1350m
 };
 
-// Generate game fish pool - randomly selects 2 fish per tier for this game session
-// This creates variety while keeping the "must play multiple times" feel
-const generateGameFishPool = () => {
+// Generate game fish pool — only tiers stocked at this hole; variety scales with stock level
+const generateGameFishPool = (allowedTiers, tierWeights = {}) => {
     const pool = {};
     for (let tier = 1; tier <= 10; tier++) {
+        if (!allowedTiers?.has(tier)) continue;
         const tierFish = FISH_BY_TIER[tier];
-        // Shuffle and pick 2 (or all if < 2)
+        if (!tierFish?.length) continue;
+
+        const stockWeight = tierWeights[tier] ?? 1;
+        let pickCount = tier === 1 ? 3 : 2;
+        if (tier > 1 && stockWeight < 0.35) pickCount = 1;
+        else if (tier > 1 && stockWeight < 0.6) pickCount = 1;
+
         const shuffled = [...tierFish].sort(() => Math.random() - 0.5);
-        pool[tier] = shuffled.slice(0, Math.min(2, shuffled.length));
+        pool[tier] = shuffled.slice(0, Math.min(pickCount, shuffled.length));
     }
     return pool;
 };
 
-// Get all available fish at a given depth (cumulative!)
-const getAvailableFishAtDepth = (depth, fishPool) => {
+function pickWeightedFish(candidates, tierWeights) {
+    if (!candidates?.length) return null;
+    let total = 0;
+    const weighted = candidates.map((fish) => {
+        const w = Math.max(0.01, tierWeights[fish.tier] ?? 1);
+        total += w;
+        return { fish, w };
+    });
+    let roll = Math.random() * total;
+    for (const { fish, w } of weighted) {
+        roll -= w;
+        if (roll <= 0) return fish;
+    }
+    return weighted[weighted.length - 1].fish;
+}
+
+// Get all available fish at a given depth (cumulative, filtered by hole stock)
+const getAvailableFishAtDepth = (depth, fishPool, allowedTiers) => {
     const available = [];
     for (let tier = 1; tier <= 10; tier++) {
+        if (allowedTiers && !allowedTiers.has(tier)) continue;
         if (depth >= TIER_UNLOCK_DEPTHS[tier] && fishPool[tier]) {
             available.push(...fishPool[tier].map(f => ({ ...f, tier })));
         }
@@ -621,6 +649,7 @@ export default function IceFishingGame({
     playerName,
     isDemo = false,
     spotId,
+    holeStatus = null,
     fishingResult = null
 }) {
     const containerRef = useRef(null);
@@ -637,11 +666,14 @@ export default function IceFishingGame({
     const lastTimeRef = useRef(0);
     const velocityRef = useRef(0); // For smooth movement
     
-    // Game-specific randomized fish pool (1 fish per tier, regenerated each game)
+    // Game-specific randomized fish pool (filtered by hole stock for this session)
     const gameFishPoolRef = useRef(null);
+    const sessionHoleStockRef = useRef(null);
     const coinsSpawnedRef = useRef(0); // Track coins spawned this game (max 3)
     const gameEndingRef = useRef(false); // For smooth end animation
     
+    const [holeStockLabel] = useState(() => getHoleStockLabel(holeStatus));
+    const minnowOnlyHole = holeStatus?.minnowOnly ?? false;
     const [gamePhase, setGamePhase] = useState('intro');
     const [missReason, setMissReason] = useState(null);
     const [depth, setDepth] = useState(0);
@@ -1717,11 +1749,20 @@ export default function IceFishingGame({
         
         // Generate fish pool on first spawn if not yet created
         if (!gameFishPoolRef.current) {
-            gameFishPoolRef.current = generateGameFishPool();
+            const stock = sessionHoleStockRef.current || {
+                allowedTiers: getAllowedTiersFromHoleStatus(holeStatus),
+                tierWeights: getTierSpawnWeights(holeStatus),
+            };
+            gameFishPoolRef.current = generateGameFishPool(stock.allowedTiers, stock.tierWeights);
         }
-        
-        // Get ALL available fish at this depth (cumulative!)
-        const availableFish = getAvailableFishAtDepth(laneDepth, gameFishPoolRef.current);
+
+        const stock = sessionHoleStockRef.current || {
+            allowedTiers: getAllowedTiersFromHoleStatus(holeStatus),
+            tierWeights: getTierSpawnWeights(holeStatus),
+        };
+
+        // Get available fish at this depth (cumulative, hole-stock filtered)
+        const availableFish = getAvailableFishAtDepth(laneDepth, gameFishPoolRef.current, stock.allowedTiers);
         if (availableFish.length === 0) return;
         
         // Lane direction - random
@@ -1737,10 +1778,11 @@ export default function IceFishingGame({
         const depthOffset = (Math.random() - 0.5) * 2;
         const actualDepth = laneDepth + depthOffset;
         
-        // ========== DENSITY INCREASES WITH DEPTH (more fish types = more density) ==========
-        // More available fish types = longer streams with more variety
-        const tierCount = Math.min(10, Math.floor(laneDepth / 100) + 1);
-        const densityMultiplier = 1 + (tierCount - 1) * 0.15; // Up to 2.35x at max depth
+        // Density scales with how many tier types are actually in the water here
+        const tierCount = new Set(availableFish.map((f) => f.tier)).size;
+        const densityMultiplier = stock.allowedTiers?.size === 1
+            ? 0.85
+            : 1 + (tierCount - 1) * 0.15;
         
         // Stream length scales with depth and tier count
         const streamLength = (40 + depthProgress * 50) * densityMultiplier;
@@ -1754,16 +1796,19 @@ export default function IceFishingGame({
         
         // Place fish along the stream with gaps
         while (currentPos < streamLength) {
-            // Weight selection toward higher tier fish (rarer but more valuable)
+            const tierWeights = stock.tierWeights || {};
+            const maxTierHere = Math.max(...availableFish.map((f) => f.tier));
             let selectedFish;
             if (Math.random() < 0.3 && availableFish.length > 1) {
-                // 30% chance: pick from higher tiers (more valuable)
-                const highTierFish = availableFish.filter(f => f.tier >= Math.max(1, tierCount - 2));
-                selectedFish = highTierFish[Math.floor(Math.random() * highTierFish.length)] || availableFish[0];
+                const highTierFish = availableFish.filter((f) => f.tier >= Math.max(1, maxTierHere - 2));
+                selectedFish = pickWeightedFish(
+                    highTierFish.length ? highTierFish : availableFish,
+                    tierWeights
+                );
             } else {
-                // 70% chance: any available fish
-                selectedFish = availableFish[Math.floor(Math.random() * availableFish.length)];
+                selectedFish = pickWeightedFish(availableFish, tierWeights);
             }
+            if (!selectedFish) break;
             
             // Size scales slightly with depth
             const sizeBonus = 1 + depthProgress * 0.25;
@@ -2383,7 +2428,7 @@ export default function IceFishingGame({
                                 if (!isJellyfish) {
                                     setCatchStorageStatus(isDemo ? 'demo' : 'pending');
                                 }
-                                if (onCatch) onCatch(hitFish.userData.type, collectedCoinsRef.current);
+                                if (onCatch) onCatch(hitFish.userData.type, collectedCoinsRef.current, Math.floor(state.depth));
                             }
                         };
                         animate();
@@ -2393,7 +2438,7 @@ export default function IceFishingGame({
 
                 if (isJellyfish) {
                     setGamePhase('stung');
-                    if (onCatch) onCatch(hitFish.userData.type, collectedCoinsRef.current);
+                    if (onCatch) onCatch(hitFish.userData.type, collectedCoinsRef.current, Math.floor(state.depth));
                 } else {
                     setReelCatchDepth(Math.floor(state.depth));
                     setReelingFish(hitFish.userData.type);
@@ -2452,7 +2497,7 @@ export default function IceFishingGame({
         
         // Continue loop
         animationFrameRef.current = requestAnimationFrame(gameLoop);
-    }, [spawnLane, checkCollision, onCatch, onMiss, getZone]);
+    }, [spawnLane, checkCollision, onCatch, onMiss, getZone, holeStatus]);
     
     // Start countdown
     useEffect(() => {
@@ -2490,8 +2535,16 @@ export default function IceFishingGame({
             collectedCoinsRef.current = 0;
             setCollectedCoins(0); // Reset bonus coins
             
-            // Generate new randomized fish pool for this game (1 fish per tier)
-            gameFishPoolRef.current = generateGameFishPool();
+            // Generate new fish pool locked to this hole's stock for the session
+            sessionHoleStockRef.current = {
+                allowedTiers: getAllowedTiersFromHoleStatus(holeStatus),
+                tierWeights: getTierSpawnWeights(holeStatus),
+                minnowOnly: holeStatus?.minnowOnly ?? false,
+            };
+            gameFishPoolRef.current = generateGameFishPool(
+                sessionHoleStockRef.current.allowedTiers,
+                sessionHoleStockRef.current.tierWeights
+            );
             coinsSpawnedRef.current = 0; // Reset coin counter
             gameEndingRef.current = false; // Reset ending flag
             setMissReason(null);
@@ -2523,7 +2576,7 @@ export default function IceFishingGame({
                 cancelAnimationFrame(animationFrameRef.current);
             }
         };
-    }, [gamePhase, gameLoop, spawnLane]);
+    }, [gamePhase, gameLoop, spawnLane, holeStatus]);
     
     // Keyboard input
     useEffect(() => {
@@ -2665,7 +2718,9 @@ export default function IceFishingGame({
                 {gamePhase === 'playing' && depth < 50 && (
                     <div className="absolute top-20 left-1/2 -translate-x-1/2 text-center animate-pulse">
                         <div className="bg-black/60 backdrop-blur-sm rounded-lg px-4 py-2 text-yellow-300 text-sm">
-                            🐟 Find gaps between fish to descend! 🐟
+                            {minnowOnlyHole
+                                ? '🐟 Minnows only — legends moved on from this hole'
+                                : '🐟 Find gaps between fish to descend! 🐟'}
                         </div>
                     </div>
                 )}
@@ -2710,7 +2765,20 @@ export default function IceFishingGame({
                                 {countdown}
                             </div>
                             <div className="text-2xl text-blue-300 mt-6 font-medium">Get ready to fish!</div>
-                            <div className="text-gray-400 mt-2">Dodge fish • Go deep • Catch legends!</div>
+                            {minnowOnlyHole ? (
+                                <div className="text-amber-300 mt-3 text-lg font-semibold max-w-md mx-auto">
+                                    ⚠️ Hole depleted — only minnows swim here today
+                                </div>
+                            ) : holeStockLabel ? (
+                                <div className="text-cyan-200/90 mt-3 text-sm max-w-md mx-auto">
+                                    🌊 In stock: {holeStockLabel}
+                                </div>
+                            ) : null}
+                            <div className="text-gray-400 mt-2">
+                                {minnowOnlyHole
+                                    ? 'Small fry only — try another hole for legends'
+                                    : 'Dodge fish • Go deep • Catch what\'s left in the hole'}
+                            </div>
                         </div>
                     </div>
                 )}

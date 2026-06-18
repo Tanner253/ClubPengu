@@ -30,6 +30,7 @@ import {
     GameInventoryService,
     WoodcuttingService,
     ForestTreeService,
+    FishingHoleService,
     IglooService,
     BlackjackService,
     GachaService,
@@ -51,10 +52,13 @@ import rentScheduler from './schedulers/RentScheduler.js';
 import solanaPaymentService from './services/SolanaPaymentService.js';
 import devBotService, { BOT_CONFIG } from './services/DevBotService.js';
 import MushroomService from './services/MushroomService.js';
+import WormForageService from './services/WormForageService.js';
 import WorldDropService from './services/WorldDropService.js';
 import { GOLD_BAG_ITEM_ID, MIN_GOLD_DROP, MAX_GOLD_DROP, isGoldWorldDrop } from './config/worldDrops.js';
 import ScavengeService from './services/ScavengeService.js';
 import OnboardingQuestService from './services/OnboardingQuestService.js';
+import NpcDailyOrderService from './services/NpcDailyOrderService.js';
+import { getNpcDailyOrder } from './config/npcOrders.js';
 import { getScavengeSpot } from './config/scavenge.js';
 import wagerSettlementService from './services/WagerSettlementService.js';
 import dailyBonusService from './services/DailyBonusService.js';
@@ -67,9 +71,10 @@ import {
     CLIENT_PLAYER_SFX,
 } from './utils/proximitySfx.js';
 import { getFishRarityLabel } from './config/gameItems.js';
-import { getMinigameReward, getMinigameRewardConfig, normalizeMinigameId } from './config/minigameRewards.js';
+import { isValidWagerGold, MAX_WAGER_GOLD } from './config/goldEconomy.js';
 import { isPlayerNearMerchant } from './config/worldNpcs.js';
-import { isPlayerNearHarvestableTree } from './config/harvestableTrees.js';
+import { isPlayerNearHarvestableTree, HARVEST_INTERACTION_RADIUS } from './config/harvestableTrees.js';
+import PveBlackjackService from './services/PveBlackjackService.js';
 
 const PORT = process.env.PORT || 3001;
 const MAX_CONNECTIONS_PER_IP = 2;
@@ -210,6 +215,7 @@ setInterval(() => {
 
 // ==================== SERVICES INITIALIZATION ====================
 const userService = new UserService();
+dailyBonusService.setUserService(userService);
 const authService = new AuthService();
 const statsService = new StatsService(userService);
 const inboxService = new InboxService();
@@ -589,10 +595,12 @@ const slotService = new SlotService(userService, broadcastToRoom, sendToPlayer);
 const goldSlotsService = new GoldSlotsService(userService, broadcastToRoom, sendToPlayer, publishChatMessage);
 const gameInventoryService = new GameInventoryService(userService);
 const forestTreeService = new ForestTreeService();
+const fishingHoleService = new FishingHoleService();
 const mushroomService = new MushroomService();
+const wormForageService = new WormForageService(gameInventoryService);
 const worldDropService = new WorldDropService();
 const scavengeService = new ScavengeService(userService);
-const fishingService = new FishingService(userService, gameInventoryService, broadcastToRoom, sendToPlayer);
+const fishingService = new FishingService(userService, gameInventoryService, broadcastToRoom, sendToPlayer, fishingHoleService);
 const woodcuttingService = new WoodcuttingService(userService, gameInventoryService, forestTreeService, sendToPlayer);
 
 /** Server-initiated room move (travel ferry / transit lobby). */
@@ -664,6 +672,18 @@ async function transferPlayerRoom(playerId, newRoom, position, voyageMeta = null
     if (voyageMeta?.phase === 'arrived' && player.walletAddress && voyageMeta.routeId) {
         onboardingQuestService.handleTravelArrival(player.walletAddress, voyageMeta.routeId)
             .catch((err) => console.error('[OnboardingQuest] travel arrival:', err));
+        if (voyageMeta.routeId === 'snow_forts_forest') {
+            gameInventoryService.grantForestLoanerAxeIfNeeded(player.walletAddress)
+                .then((axeResult) => {
+                    if (axeResult?.success && axeResult.inventory) {
+                        sendToPlayer(playerId, {
+                            type: 'game_inventory_update',
+                            inventory: axeResult.inventory,
+                        });
+                    }
+                })
+                .catch((err) => console.error('[OnboardingQuest] loaner axe:', err));
+        }
     }
 }
 
@@ -676,6 +696,13 @@ function getPlayerByWallet(walletAddress) {
 }
 
 const onboardingQuestService = new OnboardingQuestService(
+    userService,
+    sendToPlayer,
+    getPlayerByWallet
+);
+
+const npcDailyOrderService = new NpcDailyOrderService(
+    gameInventoryService,
     userService,
     sendToPlayer,
     getPlayerByWallet
@@ -711,6 +738,19 @@ setInterval(async () => {
     if (mushroomsRegrown.length > 0) {
         const mushrooms = mushroomsRegrown.map(id => mushroomService.getPublicState(id)).filter(Boolean);
         broadcastToRoomAll('forest_trails', { type: 'mushrooms_update', mushrooms });
+    }
+    const fishingHolesRegrown = await fishingHoleService.tickRegrowth();
+    if (fishingHolesRegrown.length > 0) {
+        const byRoom = new Map();
+        for (const holeId of fishingHolesRegrown) {
+            const state = fishingHoleService.getPublicState(holeId);
+            if (!state?.room) continue;
+            if (!byRoom.has(state.room)) byRoom.set(state.room, []);
+            byRoom.get(state.room).push(state);
+        }
+        for (const [room, holes] of byRoom) {
+            broadcastToRoomAll(room, { type: 'fishing_holes_update', holes });
+        }
     }
     const expiredDrops = worldDropService.purgeExpired();
     if (expiredDrops.length > 0) {
@@ -785,6 +825,7 @@ async function syncPlayerHeldItem(playerId, { broadcast = true } = {}) {
     }
 }
 const blackjackService = new BlackjackService(userService, broadcastToRoom, sendToPlayer);
+const pveBlackjackService = new PveBlackjackService(userService, sendToPlayer);
 const gachaService = new GachaService(userService, broadcastToRoom, sendToPlayer, broadcastToAll, publishChatMessage);
 const pebbleService = new PebbleService(solanaPaymentService, custodialWalletService, sendToPlayer);
 
@@ -2007,6 +2048,15 @@ async function handleMessage(playerId, message) {
                 onboardingQuestService.sendStatusToPlayer(playerId, walletAddress)
                     .catch((err) => console.error('[OnboardingQuest] auth status:', err));
 
+                npcDailyOrderService.sendStatusToPlayer(playerId, walletAddress)
+                    .catch((err) => console.error('[DailyQuest] auth status:', err));
+
+                dailyBonusService.getStatus(walletAddress)
+                    .then((bonusStatus) => {
+                        sendToPlayer(playerId, { type: 'daily_bonus_status', ...bonusStatus });
+                    })
+                    .catch((err) => console.error('[DailyBonus] auth status:', err));
+
                 if (player.room) {
                     await sendChatHistory(playerId, player.room);
                 }
@@ -2337,6 +2387,15 @@ async function handleMessage(playerId, message) {
 
                 onboardingQuestService.sendStatusToPlayer(playerId, walletAddress)
                     .catch((err) => console.error('[OnboardingQuest] restore status:', err));
+
+                npcDailyOrderService.sendStatusToPlayer(playerId, walletAddress)
+                    .catch((err) => console.error('[DailyQuest] restore status:', err));
+
+                dailyBonusService.getStatus(walletAddress)
+                    .then((bonusStatus) => {
+                        sendToPlayer(playerId, { type: 'daily_bonus_status', ...bonusStatus });
+                    })
+                    .catch((err) => console.error('[DailyBonus] restore status:', err));
 
                 if (player.room) {
                     await sendChatHistory(playerId, player.room);
@@ -2712,6 +2771,13 @@ async function handleMessage(playerId, message) {
                 });
             }
 
+            if (roomId === 'town' || roomId === 'snow_forts') {
+                sendToPlayer(playerId, {
+                    type: 'fishing_holes_snapshot',
+                    holes: fishingHoleService.getSnapshotForRoom(roomId),
+                });
+            }
+
             sendToPlayer(playerId, {
                 type: 'world_drops_snapshot',
                 drops: worldDropService.getSnapshot(roomId),
@@ -3060,24 +3126,6 @@ async function handleMessage(playerId, message) {
                     // Track chat stat and maybe award coins
                     if (player.walletAddress) {
                         statsService.recordChat(player.walletAddress);
-                        
-                        // 30% chance to earn 5 coins for chatting
-                        if (Math.random() > 0.7) {
-                            const result = await userService.addCoins(
-                                player.walletAddress, 
-                                5, 
-                                'chat_bonus',
-                                {},
-                                'Earned from chatting'
-                            );
-                            if (result.success) {
-                                sendToPlayer(playerId, {
-                                    type: 'coins_update',
-                                    coins: result.newBalance,
-                                    isAuthenticated: true
-                                });
-                            }
-                        }
                     }
                 }
             }
@@ -3793,6 +3841,14 @@ async function handleMessage(playerId, message) {
             
             // Validate wager requirements (coin wager)
             if (message.wagerAmount > 0) {
+                if (!isValidWagerGold(message.wagerAmount)) {
+                    sendToPlayer(playerId, {
+                        type: 'challenge_error',
+                        error: 'WAGER_TOO_HIGH',
+                        message: `Gold wagers are capped at ${MAX_WAGER_GOLD} coins`,
+                    });
+                    break;
+                }
                 if (!player.isAuthenticated) {
                     sendToPlayer(playerId, {
                         type: 'challenge_error',
@@ -4014,6 +4070,14 @@ async function handleMessage(playerId, message) {
             if (message.response === 'accept') {
                 // Validate funds for wagers
                 if (challenge.wagerAmount > 0) {
+                    if (!isValidWagerGold(challenge.wagerAmount)) {
+                        sendToPlayer(playerId, {
+                            type: 'challenge_error',
+                            error: 'WAGER_TOO_HIGH',
+                            message: `Gold wagers are capped at ${MAX_WAGER_GOLD} coins`,
+                        });
+                        break;
+                    }
                     if (!player.isAuthenticated || !player.walletAddress) {
                         sendToPlayer(playerId, {
                             type: 'challenge_error',
@@ -4901,8 +4965,7 @@ async function handleMessage(playerId, message) {
                 player.walletAddress,
                 message.puffleId,
                 message.category,
-                message.itemId,
-                message.price
+                message.accessoryId || message.itemId
             );
             
             sendToPlayer(playerId, {
@@ -5231,8 +5294,7 @@ async function handleMessage(playerId, message) {
                 player.walletAddress,
                 message.puffleId,
                 message.category,
-                message.accessoryId,
-                message.price
+                message.accessoryId || message.itemId
             );
             
             sendToPlayer(playerId, {
@@ -5480,7 +5542,7 @@ async function handleMessage(playerId, message) {
 
         // ==================== GOLD LOBBY SLOTS ====================
         case 'gold_slot_spin': {
-            const { machineId } = message;
+            const { machineId, bet } = message;
 
             console.log(`[GoldSlot] ${player.name} (${playerId.slice(0, 8)}) spin request machine=${machineId} room=${player.room} auth=${!!player.walletAddress}`);
 
@@ -5500,7 +5562,8 @@ async function handleMessage(playerId, message) {
                 player.room,
                 machineId,
                 player.name,
-                player.position
+                player.position,
+                bet
             );
 
             if (spinResult.error || spinResult.allowed === false) {
@@ -5610,6 +5673,7 @@ async function handleMessage(playerId, message) {
                         sessionId: fishResult.sessionId,
                         newBalance: fishResult.newBalance,
                         baitCost: fishResult.baitCost,
+                        holeStatus: fishResult.holeStatus,
                         isDemo: fishResult.isDemo
                     });
                     
@@ -5752,6 +5816,16 @@ async function handleMessage(playerId, message) {
             break;
         }
         
+        case 'fishing_holes_sync': {
+            if (player.room === 'town' || player.room === 'snow_forts') {
+                sendToPlayer(playerId, {
+                    type: 'fishing_holes_snapshot',
+                    holes: fishingHoleService.getSnapshotForRoom(player.room),
+                });
+            }
+            break;
+        }
+
         case 'fishing_info': {
             // Get fishing info (fish types, costs)
             try {
@@ -5867,6 +5941,137 @@ async function handleMessage(playerId, message) {
             break;
         }
 
+        case 'worm_forage_get': {
+            try {
+                if (!player.walletAddress) break;
+                const user = await userService.getUser(player.walletAddress);
+                if (!user) break;
+                sendToPlayer(playerId, {
+                    type: 'worm_forage_status',
+                    statuses: wormForageService.getAllLogStatuses(user.toObject()),
+                });
+            } catch (error) {
+                console.error('🪱 Error in worm_forage_get:', error);
+            }
+            break;
+        }
+
+        case 'worm_forage': {
+            try {
+                if (!player.walletAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'worm_forage_error',
+                        error: 'NOT_AUTHENTICATED',
+                        message: 'Sign in to search logs for worms'
+                    });
+                    break;
+                }
+                const logId = message.logId;
+                const result = await wormForageService.forage(
+                    player.walletAddress,
+                    logId,
+                    { x: player.position?.x, z: player.position?.z, room: player.room }
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'worm_forage_error',
+                        error: result.error,
+                        message: result.message,
+                        logId,
+                        displayRemainingSeconds: result.displayRemainingSeconds,
+                    });
+                    break;
+                }
+                if (result.inventory) {
+                    sendToPlayer(playerId, {
+                        type: 'worm_forage_result',
+                        logId: result.logId,
+                        itemId: result.itemId,
+                        quantity: result.quantity,
+                        message: result.message,
+                        inventory: result.inventory,
+                        displayRemainingSeconds: result.displayRemainingSeconds,
+                    });
+                    break;
+                }
+                sendToPlayer(playerId, {
+                    type: 'worm_forage_result',
+                    logId: result.logId,
+                    itemId: result.itemId,
+                    quantity: result.quantity,
+                    message: result.message,
+                    displayRemainingSeconds: result.displayRemainingSeconds,
+                });
+            } catch (error) {
+                console.error('🪱 Error in worm_forage:', error);
+                sendToPlayer(playerId, {
+                    type: 'worm_forage_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to search log'
+                });
+            }
+            break;
+        }
+
+        case 'npc_quest_accept': {
+            try {
+                if (!player.walletAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'npc_quest_error',
+                        error: 'NOT_AUTHENTICATED',
+                        message: 'Sign in to accept contracts',
+                    });
+                    break;
+                }
+
+                const questId = message.questId;
+                const order = getNpcDailyOrder(questId);
+                if (!order) {
+                    sendToPlayer(playerId, {
+                        type: 'npc_quest_error',
+                        error: 'UNKNOWN_QUEST',
+                        message: 'Unknown contract',
+                    });
+                    break;
+                }
+                if (!isPlayerNearMerchant(player, order.merchantId)) {
+                    const npcName = order.merchantId === 'fish_buyer' ? 'Old Salty' : 'Copper Clive';
+                    sendToPlayer(playerId, {
+                        type: 'npc_quest_error',
+                        error: 'TOO_FAR',
+                        message: `You need to be at ${npcName}`,
+                    });
+                    break;
+                }
+
+                const result = await npcDailyOrderService.acceptQuest(player.walletAddress, questId);
+                if (result.error) {
+                    sendToPlayer(playerId, {
+                        type: 'npc_quest_error',
+                        error: result.error,
+                        message: result.message,
+                    });
+                    break;
+                }
+
+                sendToPlayer(playerId, {
+                    type: 'npc_quest_accepted',
+                    questId,
+                    message: result.message,
+                    dailyQuest: result.status,
+                });
+                npcDailyOrderService.notifyWallet(player.walletAddress, result.status);
+            } catch (error) {
+                console.error('📜 Error in npc_quest_accept:', error);
+                sendToPlayer(playerId, {
+                    type: 'npc_quest_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to accept contract',
+                });
+            }
+            break;
+        }
+
         case 'npc_quest_turnin': {
             try {
                 if (!player.walletAddress) {
@@ -5877,7 +6082,40 @@ async function handleMessage(playerId, message) {
                     });
                     break;
                 }
-                if (message.questId !== 'mushroom_ticket') {
+
+                const questId = message.questId || 'mushroom_ticket';
+
+                if (questId === 'mushroom_ticket') {
+                    if (!isPlayerNearMerchant(player, 'forest_ranger')) {
+                        sendToPlayer(playerId, {
+                            type: 'npc_quest_error',
+                            error: 'TOO_FAR',
+                            message: 'You need to be at Ranger Pike'
+                        });
+                        break;
+                    }
+                    const result = await gameInventoryService.turnInMushroomQuest(player.walletAddress);
+                    if (result.error) {
+                        sendToPlayer(playerId, {
+                            type: 'npc_quest_error',
+                            error: result.error,
+                            message: result.message
+                        });
+                        break;
+                    }
+                    sendToPlayer(playerId, {
+                        type: 'npc_quest_result',
+                        questId: 'mushroom_ticket',
+                        rewardItemId: result.rewardItemId,
+                        mushroomsTurnedIn: result.itemsTurnedIn ?? 5,
+                        inventory: result.inventory,
+                        message: 'Ranger Pike traded you a ferry ticket to Town!'
+                    });
+                    break;
+                }
+
+                const order = getNpcDailyOrder(questId);
+                if (!order) {
                     sendToPlayer(playerId, {
                         type: 'npc_quest_error',
                         error: 'UNKNOWN_QUEST',
@@ -5885,15 +6123,17 @@ async function handleMessage(playerId, message) {
                     });
                     break;
                 }
-                if (!isPlayerNearMerchant(player, 'forest_ranger')) {
+                if (!isPlayerNearMerchant(player, order.merchantId)) {
+                    const npcName = order.merchantId === 'fish_buyer' ? 'Old Salty' : 'Copper Clive';
                     sendToPlayer(playerId, {
                         type: 'npc_quest_error',
                         error: 'TOO_FAR',
-                        message: 'You need to be at Ranger Pike'
+                        message: `You need to be at ${npcName}`
                     });
                     break;
                 }
-                const result = await gameInventoryService.turnInMushroomQuest(player.walletAddress);
+
+                const result = await npcDailyOrderService.turnIn(player.walletAddress, questId);
                 if (result.error) {
                     sendToPlayer(playerId, {
                         type: 'npc_quest_error',
@@ -5902,14 +6142,26 @@ async function handleMessage(playerId, message) {
                     });
                     break;
                 }
+
                 sendToPlayer(playerId, {
                     type: 'npc_quest_result',
-                    questId: 'mushroom_ticket',
-                    rewardItemId: result.rewardItemId,
-                    mushroomsTurnedIn: result.mushroomsTurnedIn,
+                    questId,
+                    goldReward: result.goldReward,
+                    newBalance: result.newBalance,
                     inventory: result.inventory,
-                    message: 'Ranger Pike traded you a ferry ticket to Town!'
+                    message: result.message,
+                    dailyQuest: result.status,
                 });
+
+                if (result.newBalance != null) {
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: result.newBalance,
+                        isAuthenticated: true,
+                    });
+                }
+
+                npcDailyOrderService.notifyWallet(player.walletAddress, result.status);
             } catch (error) {
                 console.error('📜 Error in npc_quest_turnin:', error);
                 sendToPlayer(playerId, {
@@ -5917,6 +6169,22 @@ async function handleMessage(playerId, message) {
                     error: 'SERVER_ERROR',
                     message: 'Quest turn-in failed'
                 });
+            }
+            break;
+        }
+
+        case 'daily_quest_status': {
+            try {
+                if (!player.walletAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'daily_quest_status',
+                        error: 'NOT_AUTHENTICATED',
+                    });
+                    break;
+                }
+                await npcDailyOrderService.sendStatusToPlayer(playerId, player.walletAddress);
+            } catch (error) {
+                console.error('📋 Error in daily_quest_status:', error);
             }
             break;
         }
@@ -6022,7 +6290,10 @@ async function handleMessage(playerId, message) {
                     });
                     break;
                 }
-                if (!isPlayerNearHarvestableTree(player, treeId)) {
+                const chopPosition = (message.position?.x != null && message.position?.z != null)
+                    ? message.position
+                    : player.position;
+                if (!isPlayerNearHarvestableTree(player, treeId, HARVEST_INTERACTION_RADIUS, chopPosition)) {
                     sendToPlayer(playerId, {
                         type: 'wood_chop_error',
                         error: 'TOO_FAR',
@@ -6036,7 +6307,7 @@ async function handleMessage(playerId, message) {
                     player.walletAddress,
                     treeId,
                     demoMode,
-                    player.position
+                    chopPosition
                 );
                 if (result.error) {
                     sendToPlayer(playerId, {
@@ -6177,7 +6448,10 @@ async function handleMessage(playerId, message) {
                     });
                     break;
                 }
-                if (!isPlayerNearHarvestableTree(player, treeId)) {
+                const chopPosition = (message.position?.x != null && message.position?.z != null)
+                    ? message.position
+                    : player.position;
+                if (!isPlayerNearHarvestableTree(player, treeId, HARVEST_INTERACTION_RADIUS, chopPosition)) {
                     sendToPlayer(playerId, {
                         type: 'manual_chop_error',
                         error: 'TOO_FAR',
@@ -6200,7 +6474,7 @@ async function handleMessage(playerId, message) {
                     player.walletAddress,
                     treeId,
                     demoMode,
-                    player.position
+                    chopPosition
                 );
                 if (result.error) {
                     sendToPlayer(playerId, {
@@ -7016,7 +7290,8 @@ async function handleMessage(playerId, message) {
                 console.error('🐟 Error in merchant_sell:', error);
                 sendToPlayer(playerId, {
                     type: 'merchant_sell_error',
-                    error: 'SERVER_ERROR'
+                    error: 'SERVER_ERROR',
+                    message: error?.message || 'Failed to sell items'
                 });
             }
             break;
@@ -7081,7 +7356,8 @@ async function handleMessage(playerId, message) {
                 console.error('🐟 Error in merchant_sell_batch:', error);
                 sendToPlayer(playerId, {
                     type: 'merchant_sell_error',
-                    error: 'SERVER_ERROR'
+                    error: 'SERVER_ERROR',
+                    message: error?.message || 'Failed to sell items'
                 });
             }
             break;
@@ -7165,9 +7441,10 @@ async function handleMessage(playerId, message) {
                 } else {
                     sendToPlayer(playerId, {
                         type: 'merchant_buy_result',
-                        itemId: result.itemId,
-                        itemName: result.itemName,
+                        itemId: result.itemId || result.recipeId,
+                        itemName: result.itemName || result.label,
                         goldSpent: result.goldSpent,
+                        goldMinted: result.goldMinted,
                         merchantId: result.merchantId,
                         merchantName: result.merchantName,
                         newBalance: result.newBalance,
@@ -7187,7 +7464,8 @@ async function handleMessage(playerId, message) {
                 console.error('🛒 Error in merchant_buy:', error);
                 sendToPlayer(playerId, {
                     type: 'merchant_buy_error',
-                    error: 'SERVER_ERROR'
+                    error: 'SERVER_ERROR',
+                    message: error?.message || 'Failed to complete purchase'
                 });
             }
             break;
@@ -7363,38 +7641,86 @@ async function handleMessage(playerId, message) {
             break;
         }
         
-        case 'blackjack_deduct_bet': {
-            // Simple PvE blackjack - just deduct coins (activity starts on first update with cards)
-            const { amount, isDemo } = message;
-            
-            if (isDemo || !player.isAuthenticated || !player.walletAddress) {
-                if (!isDemo && (!player.isAuthenticated || !player.walletAddress)) {
-                    sendToPlayer(playerId, { type: 'blackjack_error', error: 'Must be authenticated' });
-                }
+        case 'pve_blackjack_start': {
+            if (!player.isAuthenticated || !player.walletAddress) {
+                sendToPlayer(playerId, { type: 'pve_blackjack_error', error: 'NOT_AUTHENTICATED' });
                 break;
             }
-            
-            const betAmount = Math.min(Math.max(10, amount || 0), 5000);
-            const currentBalance = await userService.getUserCoins(player.walletAddress);
-            
-            if (currentBalance < betAmount) {
-                sendToPlayer(playerId, { type: 'blackjack_error', error: 'Insufficient funds' });
-                break;
-            }
-            
             try {
-                await userService.updateCoins(player.walletAddress, -betAmount);
-                const newBalance = await userService.getUserCoins(player.walletAddress);
-                console.log(`🎰 Blackjack bet deducted: ${player.name} bet $${betAmount}, new balance: $${newBalance}`);
-                sendToPlayer(playerId, { type: 'coins_update', coins: newBalance, isAuthenticated: true });
-                
-                // Track total bet for server-authoritative payout (supports double-down)
-                player.blackjackBet = (player.blackjackBet || 0) + betAmount;
-                
+                const result = await pveBlackjackService.start(
+                    playerId,
+                    player.walletAddress,
+                    message.amount
+                );
+                if (result.error) {
+                    sendToPlayer(playerId, { type: 'pve_blackjack_error', ...result });
+                    break;
+                }
+                if (result.newBalance != null) {
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: result.newBalance,
+                        isAuthenticated: true,
+                    });
+                }
+                sendToPlayer(playerId, {
+                    type: 'pve_blackjack_state',
+                    state: result.state,
+                    newBalance: result.newBalance,
+                });
             } catch (err) {
-                console.error('🎰 Blackjack bet deduction error:', err);
-                sendToPlayer(playerId, { type: 'blackjack_error', error: 'Failed to deduct bet' });
+                console.error('🎰 PvE blackjack start error:', err);
+                sendToPlayer(playerId, { type: 'pve_blackjack_error', error: 'SERVER_ERROR' });
             }
+            break;
+        }
+
+        case 'pve_blackjack_hit':
+        case 'pve_blackjack_stand':
+        case 'pve_blackjack_double': {
+            if (!player.isAuthenticated || !player.walletAddress) {
+                sendToPlayer(playerId, { type: 'pve_blackjack_error', error: 'NOT_AUTHENTICATED' });
+                break;
+            }
+            try {
+                let result;
+                if (message.type === 'pve_blackjack_hit') {
+                    result = await pveBlackjackService.hit(playerId);
+                } else if (message.type === 'pve_blackjack_stand') {
+                    result = await pveBlackjackService.stand(playerId);
+                } else {
+                    result = await pveBlackjackService.double(playerId);
+                }
+                if (result.error) {
+                    sendToPlayer(playerId, { type: 'pve_blackjack_error', ...result });
+                    break;
+                }
+                if (result.newBalance != null) {
+                    sendToPlayer(playerId, {
+                        type: 'coins_update',
+                        coins: result.newBalance,
+                        isAuthenticated: true,
+                    });
+                }
+                sendToPlayer(playerId, {
+                    type: 'pve_blackjack_state',
+                    state: result.state,
+                    newBalance: result.newBalance,
+                    complete: result.state?.phase === 'complete',
+                });
+            } catch (err) {
+                console.error('🎰 PvE blackjack action error:', err);
+                sendToPlayer(playerId, { type: 'pve_blackjack_error', error: 'SERVER_ERROR' });
+            }
+            break;
+        }
+
+        case 'blackjack_deduct_bet': {
+            sendToPlayer(playerId, {
+                type: 'blackjack_error',
+                error: 'DEPRECATED',
+                message: 'Use server blackjack (pve_blackjack_start). Update your client.',
+            });
             break;
         }
 
@@ -7427,130 +7753,18 @@ async function handleMessage(playerId, message) {
         }
         
         case 'blackjack_payout': {
-            // PvE blackjack — server computes payout from stored bet + result (client amount ignored)
-            const { result, playerScore, dealerScore, playerHand, dealerHand, isDemo } = message;
-            
+            // Legacy client-trusted payouts disabled — server pays via PveBlackjackService.
+            const { isDemo } = message;
             if (isDemo) {
                 endPveActivity(playerId);
                 break;
             }
-            
-            if (!player.isAuthenticated || !player.walletAddress) {
-                sendToPlayer(playerId, {
-                    type: 'blackjack_error',
-                    error: 'Must be authenticated for payouts'
-                });
-                break;
-            }
-
-            const bet = player.blackjackBet || 0;
-            if (bet < 10 || bet > 10000) {
-                sendToPlayer(playerId, {
-                    type: 'blackjack_error',
-                    error: 'Invalid bet state'
-                });
-                break;
-            }
-
-            let validatedAmount = 0;
-            const playerWon = result === 'WIN' || result === 'BLACKJACK';
-
-            switch (result) {
-                case 'WIN':
-                    validatedAmount = bet * 2;
-                    break;
-                case 'BLACKJACK':
-                    validatedAmount = bet + Math.floor(bet * 1.5);
-                    break;
-                case 'PUSH':
-                    validatedAmount = bet;
-                    break;
-                default:
-                    validatedAmount = 0;
-                    break;
-            }
-
-            validatedAmount = Math.min(Math.max(0, validatedAmount), 25000);
-            
-            if (validatedAmount > 0) {
-                try {
-                    const payoutResult = await userService.addCoins(
-                        player.walletAddress,
-                        validatedAmount,
-                        'blackjack_win',
-                        { result, bet, playerScore, dealerScore },
-                        `Blackjack ${result}`
-                    );
-                    if (!payoutResult.success) {
-                        console.error('🎰 Blackjack payout failed:', payoutResult.error);
-                        sendToPlayer(playerId, {
-                            type: 'blackjack_error',
-                            error: payoutResult.error || 'Payout failed'
-                        });
-                        break;
-                    }
-                    
-                    const newBalance = payoutResult.newBalance ?? await userService.getUserCoins(player.walletAddress);
-                    
-                    console.log(`🎰 Blackjack payout to ${player.name}: +${validatedAmount} coins (${result}, bet=${bet}), new balance: ${newBalance}`);
-                    
-                    sendToPlayer(playerId, {
-                        type: 'coins_update',
-                        coins: newBalance,
-                        isAuthenticated: true
-                    });
-                    
-                } catch (e) {
-                    console.error('🎰 Blackjack payout error:', e);
-                    sendToPlayer(playerId, {
-                        type: 'blackjack_error',
-                        error: 'Payout failed: ' + (e.message || 'Unknown error')
-                    });
-                }
-            } else {
-                const newBalance = await userService.getUserCoins(player.walletAddress);
-                sendToPlayer(playerId, {
-                    type: 'coins_update',
-                    coins: newBalance,
-                    isAuthenticated: true
-                });
-            }
-            
-            // End PvE activity with final state
-            const activity = activePveActivities.get(playerId);
-            if (activity && activity.activity === 'blackjack') {
-                endPveActivity(playerId, {
-                    result: result,
-                    playerScore: playerScore || 0,
-                    dealerScore: dealerScore || 0,
-                    playerHand: playerHand || activity.state.playerHand,
-                    dealerHand: dealerHand || activity.state.dealerHand,
-                    payout: validatedAmount,
-                    bet,
-                    won: playerWon
-                });
-            }
-            
-            // Record blackjack stats
-            try {
-                const user = await userService.getUser(player.walletAddress);
-                if (user && user.recordBlackjackResult) {
-                    user.recordBlackjackResult({
-                        result: result,
-                        isPvE: true,
-                        coinsDelta: playerWon ? validatedAmount : bet,
-                        gotBlackjack: result === 'BLACKJACK',
-                        busted: playerScore > 21
-                    });
-                    await user.save();
-                    console.log(`🎰 Recorded blackjack stats for ${player.name}: ${result}`);
-                }
-            } catch (statErr) {
-                console.error('Failed to record blackjack stats:', statErr);
-            }
-            
+            sendToPlayer(playerId, {
+                type: 'blackjack_error',
+                error: 'DEPRECATED',
+                message: 'Payouts are server-authoritative. Update your client.',
+            });
             delete player.blackjackBet;
-            
             break;
         }
         
@@ -8140,6 +8354,13 @@ async function handleMessage(playerId, message) {
                         type: 'daily_bonus_status',
                         ...status
                     });
+                    if (result.goldNewBalance != null) {
+                        sendToPlayer(playerId, {
+                            type: 'coins_update',
+                            coins: result.goldNewBalance,
+                            isAuthenticated: true,
+                        });
+                    }
                 }
             } catch (error) {
                 console.error('🎁 Daily bonus claim error:', error);
@@ -8691,55 +8912,21 @@ async function handleMessage(playerId, message) {
             break;
         }
         
-        // ==================== MINIGAME REWARDS ====================
-        case 'minigame_reward': {
-            // Server-authoritative solo minigame rewards — amount from config, not client
+        // ==================== SOLO MINIGAME COMPLETE (stats + onboarding only) ====================
+        case 'minigame_complete': {
             if (!player.isAuthenticated || !player.walletAddress) {
                 break;
             }
-            
+
             const { gameId, won } = message;
-            const normalizedGameId = normalizeMinigameId(gameId);
-            const rewardConfig = getMinigameRewardConfig(gameId);
-            const validatedCoins = getMinigameReward(gameId, !!won);
-            
-            if (validatedCoins == null || validatedCoins <= 0) {
-                console.warn(`[MINIGAME] rejected reward gameId=${gameId} player=${playerId}`);
-                break;
+            const normalizedGameId = gameId === 'card-jitsu' ? 'card_jitsu' : gameId;
+
+            if (won) {
+                statsService.recordResult(player.walletAddress, normalizedGameId, true, 0);
             }
 
-            if (rewardConfig?.requiredRoom && player.room !== rewardConfig.requiredRoom) {
-                sendChatFeedback(
-                    playerId,
-                    rewardConfig.requiredRoom === 'dojo'
-                        ? '🥋 Challenge Sensei in the Dojo for gold rewards.'
-                        : '❌ You cannot earn that reward here.'
-                );
-                break;
-            }
-            
-            const result = await userService.addCoins(
-                player.walletAddress,
-                validatedCoins,
-                'minigame_reward',
-                { gameId: normalizedGameId, won: !!won },
-                `${won ? 'Won' : 'Played'} ${normalizedGameId}`
-            );
-            
-            if (result.success) {
-                sendToPlayer(playerId, {
-                    type: 'coins_update',
-                    coins: result.newBalance,
-                    isAuthenticated: true
-                });
-                
-                if (won) {
-                    statsService.recordResult(player.walletAddress, normalizedGameId, true, 0);
-                }
-
-                onboardingQuestService.handleMinigameReward(player.walletAddress, player.room)
-                    .catch((err) => console.error('[OnboardingQuest] minigame:', err));
-            }
+            onboardingQuestService.handleMinigameComplete(player.walletAddress, player.room, !!won)
+                .catch((err) => console.error('[OnboardingQuest] minigame:', err));
             break;
         }
     }
@@ -9064,6 +9251,7 @@ async function start() {
         await IglooService.initializeIgloos();
 
         await forestTreeService.loadFromDatabase();
+        await fishingHoleService.loadFromDatabase();
         
         // Start rent scheduler (checks for overdue rentals)
         rentScheduler.start();

@@ -2,6 +2,9 @@
  * Tool upgrade chains (client) — keep in sync with server/config/toolTiers.js
  */
 
+/** Starter gear — one-time free pickup, not a commodity. */
+export const STARTER_TOOL_IDS = new Set(['basic_axe', 'basic_rod']);
+
 export const TOOL_UPGRADE_CHAINS = {
     axe: ['basic_axe', 'iron_axe', 'steel_axe', 'master_axe'],
     fishing_rod: ['basic_rod', 'iron_rod', 'pro_rod', 'master_rod'],

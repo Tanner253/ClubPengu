@@ -58,7 +58,9 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
     const lastPointerRef = useRef({ x: 0, y: 0 });
     const dragStartPosRef = useRef({ x: 0, y: 0 });
     const longPressTimerRef = useRef(null);
-    const longPressTriggeredRef = useRef(false);
+    const longPressSellRef = useRef(false);
+    const stackDragFullRef = useRef(false);
+    const suppressClickRef = useRef(false);
     const [isMobileLayout, setIsMobileLayout] = useState(false);
 
     const dropSlotToWorld = useCallback(async (slotIndex, quantity = 1) => {
@@ -108,7 +110,8 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                 clearTimeout(longPressTimerRef.current);
                 longPressTimerRef.current = null;
             }
-            longPressTriggeredRef.current = false;
+            longPressSellRef.current = false;
+            stackDragFullRef.current = false;
         }
     }, [isOpen]);
 
@@ -171,21 +174,31 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
             }
         };
 
+        const resolveDropTarget = (x, y, from) => {
+            const hovered = hoverSlotRef.current;
+            const pointSlot = findInventorySlotUnderPoint(x, y);
+            if (hovered != null && hovered !== from) return hovered;
+            if (pointSlot != null && pointSlot !== from) return pointSlot;
+            return null;
+        };
+
         const finishDrag = async () => {
             if (longPressTimerRef.current) {
                 clearTimeout(longPressTimerRef.current);
                 longPressTimerRef.current = null;
             }
-            if (longPressTriggeredRef.current) {
-                longPressTriggeredRef.current = false;
+            if (longPressSellRef.current) {
+                longPressSellRef.current = false;
                 setDragSource(null);
                 setHoverSlot(null);
                 dragMovedRef.current = false;
+                stackDragFullRef.current = false;
                 return;
             }
             const from = dragSourceRef.current;
-            const { x, y } = lastPointerRef.current;
-            const to = findInventorySlotUnderPoint(x, y) ?? hoverSlotRef.current;
+            const { x, y, shiftKey } = lastPointerRef.current;
+            const didDrag = dragMovedRef.current;
+            const to = resolveDropTarget(x, y, from);
             const hotbarIndex = findHotbarSlotUnderPoint(x, y);
             const draggedSlot = from != null ? storedSlotsRef.current[from] : null;
             const droppedOnSellTray = canSell
@@ -194,32 +207,37 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                     const rect = sellTrayRef.current.getBoundingClientRect();
                     return x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom;
                 })();
-            const droppedInWorld = dragMovedRef.current
+            const droppedInWorld = didDrag
                 && isInventoryWorldDropTarget(x, y, {
                     modalPanel: modalPanelRef.current,
                     sellTray: sellTrayRef.current,
                     canSell
                 });
+            const dropQty = stackDragFullRef.current || shiftKey
+                ? (draggedSlot?.quantity || 1)
+                : 1;
 
-            if (from !== null && droppedInWorld && slotHasItem(draggedSlot) && isAuthenticated) {
-                const dropQty = lastPointerRef.current.shiftKey
-                    ? (draggedSlot.quantity || 1)
-                    : 1;
-                dropSlotToWorld(from, dropQty);
+            if (from !== null && to !== null && didDrag) {
+                moveGameInventorySlot?.(from, to);
+                setSelectedSlot(to);
             } else if (from !== null && droppedOnSellTray && isSellableSlot(from)) {
                 addToSellSelection(from);
             } else if (from !== null && hotbarIndex != null && isHotbarItem(draggedSlot)) {
                 await setGameHotbarSlot?.(hotbarIndex, from);
                 if (!dragMovedRef.current) setSelectedSlot(from);
-            } else if (from !== null && to !== null && from !== to && dragMovedRef.current) {
-                moveGameInventorySlot?.(from, to);
-                setSelectedSlot(to);
-            } else if (from !== null && !dragMovedRef.current) {
+            } else if (from !== null && droppedInWorld && slotHasItem(draggedSlot) && isAuthenticated) {
+                dropSlotToWorld(from, dropQty);
+            } else if (from !== null && !didDrag) {
                 setSelectedSlot(from);
+            }
+            if (didDrag) {
+                suppressClickRef.current = true;
+                window.setTimeout(() => { suppressClickRef.current = false; }, 0);
             }
             setDragSource(null);
             setHoverSlot(null);
             dragMovedRef.current = false;
+            stackDragFullRef.current = false;
         };
 
         const pointerOpts = { passive: false, capture: true };
@@ -288,45 +306,55 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
 
     const sellQueueTotal = sellQueue.reduce((sum, entry) => sum + entry.totalGold, 0);
 
+    const handleShiftSlotAction = useCallback((index, hasItem) => {
+        if (!hasItem) return false;
+        if (canSell && isSellableSlot(index)) {
+            toggleSellSelection(index);
+            return true;
+        }
+        if (isAuthenticated) {
+            dropSlotToWorld(index, storedSlotsRef.current[index]?.quantity || 1);
+            return true;
+        }
+        return false;
+    }, [canSell, isSellableSlot, toggleSellSelection, dropSlotToWorld, isAuthenticated]);
+
     const handlePointerDown = useCallback((e, index, hasItem, locked) => {
         if (locked || !hasItem) return;
+
         e.preventDefault();
         e.stopPropagation();
 
-        if (e.shiftKey && canSell && isSellableSlot(index)) {
-            toggleSellSelection(index);
-            return;
-        }
-
-        if (e.shiftKey && isAuthenticated && hasItem) {
-            dropSlotToWorld(index, storedSlotsRef.current[index]?.quantity || 1);
-            return;
-        }
-
         dragMovedRef.current = false;
-        longPressTriggeredRef.current = false;
+        longPressSellRef.current = false;
+        stackDragFullRef.current = false;
         dragStartPosRef.current = { x: e.clientX, y: e.clientY };
         lastPointerRef.current = { x: e.clientX, y: e.clientY, shiftKey: e.shiftKey };
         setDragSource(index);
         setHoverSlot(index);
 
-        if (e.currentTarget.setPointerCapture) {
-            try {
-                e.currentTarget.setPointerCapture(e.pointerId);
-            } catch {
-                // ignore — capture unsupported on some browsers
-            }
-        }
-
-        if (isMobileLayout && canSell && isSellableSlot(index)) {
+        if (isMobileLayout) {
             clearLongPressTimer();
             longPressTimerRef.current = setTimeout(() => {
                 longPressTimerRef.current = null;
-                longPressTriggeredRef.current = true;
-                toggleSellSelection(index);
+                if (canSell && isSellableSlot(index)) {
+                    longPressSellRef.current = true;
+                    toggleSellSelection(index);
+                } else {
+                    stackDragFullRef.current = true;
+                    dragMovedRef.current = true;
+                }
             }, 480);
         }
-    }, [canSell, isSellableSlot, toggleSellSelection, isMobileLayout, clearLongPressTimer, dropSlotToWorld, isAuthenticated]);
+    }, [canSell, isSellableSlot, toggleSellSelection, isMobileLayout, clearLongPressTimer]);
+
+    const handleSlotClick = useCallback((e, index, hasItem, locked) => {
+        if (locked || !hasItem || dragMovedRef.current || suppressClickRef.current) return;
+        if (e.shiftKey) {
+            e.preventDefault();
+            handleShiftSlotAction(index, hasItem);
+        }
+    }, [handleShiftSlotAction]);
 
     const handlePointerMove = useCallback((e) => {
         if (dragSourceRef.current === null) return;
@@ -410,6 +438,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
 
     const inventoryGrid = (
         <div
+            data-inventory-no-drop="true"
             className="grid gap-1.5 select-none touch-none"
             style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}
         >
@@ -436,6 +465,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                         data-inventory-slot={index}
                         disabled={locked}
                         onPointerDown={(e) => handlePointerDown(e, index, hasItem, locked)}
+                        onClick={(e) => handleSlotClick(e, index, hasItem, locked)}
                         onPointerMove={handlePointerMove}
                         onPointerEnter={() => {
                             if (!locked && dragSourceRef.current !== null) setHoverSlot(index);
@@ -571,21 +601,34 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
         <div
             ref={modalOverlayRef}
             data-player-modal="true"
-            {...(isDragging ? { 'data-inventory-world-drop': 'true' } : {})}
             className={`fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm p-2 sm:p-4 ${isDragging ? 'touch-none overscroll-none' : ''}`}
         >
             {isDragging && (
+                isMobileLayout ? (
+                    <div
+                        data-inventory-world-drop-zone="true"
+                        className="absolute inset-x-3 top-3 bottom-[calc(92vh+0.75rem)] z-[1] flex items-start justify-center pt-2"
+                    >
+                        <div className="rounded-xl border-2 border-dashed border-cyan-400/60 bg-cyan-950/55 px-4 py-2.5 shadow-lg pointer-events-none">
+                            <p className="text-cyan-200 retro-text text-xs sm:text-sm text-center">
+                                ↑ Release here to drop in world
+                            </p>
+                        </div>
+                    </div>
+                ) : (
                 <div
-                    className={`absolute inset-x-3 z-[1] flex items-center justify-center pointer-events-none ${
-                        isMobileLayout ? 'top-3 bottom-[calc(92vh+0.75rem)]' : 'top-4 h-20'
-                    }`}
+                    className="absolute inset-x-3 z-[1] flex items-center justify-center pointer-events-none top-4 h-20"
                 >
-                    <div className="rounded-xl border-2 border-dashed border-cyan-400/60 bg-cyan-950/55 px-4 py-2.5 shadow-lg">
+                    <div
+                        data-inventory-world-drop-zone="true"
+                        className="pointer-events-auto rounded-xl border-2 border-dashed border-cyan-400/60 bg-cyan-950/55 px-4 py-2.5 shadow-lg"
+                    >
                         <p className="text-cyan-200 retro-text text-xs sm:text-sm text-center">
-                            {isMobileLayout ? '↑ Release here to drop in world' : 'Release above backpack to drop in world'}
+                            Release above backpack to drop in world
                         </p>
                     </div>
                 </div>
+                )
             )}
             <div ref={modalPanelRef} data-inventory-panel className={`relative z-10 bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-cyan-500/40 rounded-2xl shadow-2xl w-full ${canSell ? 'max-w-3xl' : 'max-w-lg'} ${canSell && isMobileLayout ? 'h-[92vh]' : 'max-h-[92vh] sm:max-h-[90vh]'} overflow-hidden flex flex-col ${isDragging ? 'touch-none' : ''}`}>
                 <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/20">
@@ -646,8 +689,8 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                         {!canSell && (
                         <p className="text-gray-500 text-[10px] mt-2 text-center">
                             {isMobileLayout
-                                ? 'Drag between slots · Drag up outside grid to drop in world'
-                                : 'Drag items between slots · Drag outside backpack to drop in world'}
+                                ? 'Drag between slots · Long-press for full stack · Release in drop zone to place in world'
+                                : 'Drag items between slots · Drag to drop zone above to place in world'}
                         </p>
                         )}
                     </div>
@@ -764,8 +807,8 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                                     ? 'Tap a stack to inspect · Long-press to queue for sale'
                                     : 'Click a stack to inspect · Shift+click to queue for sale')
                                 : (isMobileLayout
-                                    ? 'Tap a stack to inspect · Drag up to drop in world'
-                                    : 'Click a stack to inspect · Shift+click to drop stack · Drag outside to drop 1 · Shift+drag outside for full stack')}
+                                    ? 'Tap a stack to inspect · Long-press stack then drag to move/drop all'
+                                    : 'Click a stack to inspect · Shift+click to drop stack · Drag between slots · Drag to drop zone for 1 (Shift for full stack)')}
                         </p>
                     )}
                     {dropFeedback && (

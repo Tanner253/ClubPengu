@@ -10,9 +10,10 @@ export { default as AuthService } from './AuthService.js';
 export { default as UserService } from './UserService.js';
 export { default as PromoCodeService } from './PromoCodeService.js';
 export { default as SlotService, SPIN_COST as SLOT_SPIN_COST } from './SlotService.js';
-export { default as FishingService, FISHING_COST } from './FishingService.js';
+export { default as FishingService, FISHING_BAIT_PER_CAST } from './FishingService.js';
 export { default as WoodcuttingService } from './WoodcuttingService.js';
 export { default as ForestTreeService } from './ForestTreeService.js';
+export { default as FishingHoleService } from './FishingHoleService.js';
 export { default as GameInventoryService } from './GameInventoryService.js';
 export { default as X402Service } from './X402Service.js';
 export { default as IglooService } from './IglooService.js';
@@ -25,3 +26,4 @@ export { default as GoldSlotsService, GOLD_SLOT_BET } from './GoldSlotsService.j
 export { default as ChatService, MAX_MESSAGES_PER_SCOPE } from './ChatService.js';
 export { default as TravelService } from './TravelService.js';
 export { default as OnboardingQuestService } from './OnboardingQuestService.js';
+export { default as NpcDailyOrderService } from './NpcDailyOrderService.js';

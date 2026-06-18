@@ -71,29 +71,34 @@ export function findHotbarSlotUnderPoint(clientX, clientY) {
 }
 
 export function findInventorySlotUnderPoint(clientX, clientY) {
-    const el = document.elementFromPoint(clientX, clientY);
-    const slotEl = el?.closest?.('[data-inventory-slot]');
-    if (!slotEl) return null;
-    const index = Number(slotEl.dataset.inventorySlot);
-    return Number.isFinite(index) ? index : null;
+    const elements = typeof document.elementsFromPoint === 'function'
+        ? document.elementsFromPoint(clientX, clientY)
+        : [document.elementFromPoint(clientX, clientY)].filter(Boolean);
+    for (const el of elements) {
+        const slotEl = el?.closest?.('[data-inventory-slot]');
+        if (!slotEl) continue;
+        const index = Number(slotEl.dataset.inventorySlot);
+        if (Number.isFinite(index)) return index;
+    }
+    return null;
 }
 
 /**
- * True when a drag release should drop the stack into the world (backdrop / drop zone / panel chrome).
+ * True when a drag release should drop the stack into the world (backdrop / drop zone only).
  */
 export function isInventoryWorldDropTarget(clientX, clientY, { modalPanel = null, sellTray = null, canSell = false } = {}) {
-    const el = document.elementFromPoint(clientX, clientY);
-    if (el?.closest?.('[data-inventory-world-drop]')) return true;
-
-    if (modalPanel) {
-        const rect = modalPanel.getBoundingClientRect();
-        if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
-            return true;
-        }
-    }
-
     if (findInventorySlotUnderPoint(clientX, clientY) != null) return false;
     if (findHotbarSlotUnderPoint(clientX, clientY) != null) return false;
+
+    const elements = typeof document.elementsFromPoint === 'function'
+        ? document.elementsFromPoint(clientX, clientY)
+        : [document.elementFromPoint(clientX, clientY)].filter(Boolean);
+
+    for (const el of elements) {
+        if (el?.closest?.('[data-inventory-world-drop-zone]')) return true;
+        if (el?.closest?.('[data-inventory-no-drop]')) return false;
+        if (el?.closest?.('[data-sell-tray]')) return false;
+    }
 
     if (canSell && sellTray) {
         const trayRect = sellTray.getBoundingClientRect();
@@ -105,9 +110,15 @@ export function isInventoryWorldDropTarget(clientX, clientY, { modalPanel = null
         }
     }
 
-    if (el?.closest?.('[data-inventory-no-drop]')) return false;
+    if (modalPanel) {
+        const rect = modalPanel.getBoundingClientRect();
+        if (clientX < rect.left || clientX > rect.right || clientY < rect.top || clientY > rect.bottom) {
+            return true;
+        }
+        return false;
+    }
 
-    return Boolean(el?.closest?.('[data-inventory-panel]') || el?.closest?.('[data-player-modal]'));
+    return false;
 }
 
 /** SFX event for selecting a hotbar slot with an item equipped. */

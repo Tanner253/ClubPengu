@@ -1,85 +1,61 @@
 import { describe, it, expect } from 'vitest';
 import {
     rollWoodChopLoot,
-    AXE_WOOD_WEIGHTS,
     WOOD_LOG_IDS,
-    STAGE_YIELD_BASE
+    STAGE_YIELD_BASE,
+    getWoodChopQuantityForLog,
 } from '../config/woodcuttingLoot.js';
+import { HARVESTABLE_TREES, getHarvestableTree } from '../config/harvestableTrees.js';
+import { TREE_WOOD_SPECIES } from '../config/treeWoodSpecies.js';
 
 describe('woodcuttingLoot', () => {
-    it('basic axe heavily favors pine on elder trees', () => {
-        let pine = 0;
-        const trials = 500;
-        for (let i = 0; i < trials; i++) {
-            const loot = rollWoodChopLoot({
-                treeId: `ht_${i}`,
-                stage: 'elder',
-                axeItemId: 'basic_axe',
-                chopMode: 'hold',
-                rng: () => (i * 0.6180339887) % 1
-            });
-            if (loot.logItemId === 'pine_log') pine++;
-        }
-        expect(pine / trials).toBeGreaterThan(0.45);
+    it('returns the tree species log type — not a random axe roll', () => {
+        const birchTree = HARVESTABLE_TREES.find((t) => t.woodType === 'birch_log');
+        expect(birchTree).toBeTruthy();
+
+        const loot = rollWoodChopLoot({
+            treeId: birchTree.id,
+            stage: 'mature',
+            axeItemId: 'basic_axe',
+            chopMode: 'hold',
+        });
+        expect(loot.logItemId).toBe('birch_log');
     });
 
-    it('master axe can roll ironwood', () => {
+    it('ironwood trees always grant ironwood', () => {
+        const ironTree = HARVESTABLE_TREES.find((t) => t.woodType === 'ironwood_log');
+        expect(ironTree).toBeTruthy();
         const loot = rollWoodChopLoot({
-            treeId: 'ht_elder',
+            treeId: ironTree.id,
             stage: 'elder',
             axeItemId: 'master_axe',
             chopMode: 'hold',
-            rng: () => 0.99
         });
-        expect(WOOD_LOG_IDS).toContain(loot.logItemId);
-        expect(loot.quantity).toBeGreaterThanOrEqual(1);
+        expect(loot.logItemId).toBe('ironwood_log');
     });
 
     it('rarer logs drop smaller stacks on the same tree stage', () => {
-        const pine = rollWoodChopLoot({
-            treeId: 't1',
-            stage: 'mature',
-            axeItemId: 'master_axe',
-            chopMode: 'hold',
-            rng: () => 0.05
-        });
-        const iron = rollWoodChopLoot({
-            treeId: 't2',
-            stage: 'mature',
-            axeItemId: 'master_axe',
-            chopMode: 'hold',
-            rng: () => 0.95
-        });
-        if (pine.logItemId === 'pine_log' && iron.logItemId === 'ironwood_log') {
-            expect(pine.quantity).toBeGreaterThan(iron.quantity);
-        }
+        const pineQty = getWoodChopQuantityForLog('mature', 'pine_log', 'master_axe', 'hold');
+        const ironQty = getWoodChopQuantityForLog('mature', 'ironwood_log', 'master_axe', 'hold');
+        expect(pineQty).toBeGreaterThan(ironQty);
         expect(STAGE_YIELD_BASE.mature).toBe(7);
     });
 
-    it('manual chop applies quantity bonus', () => {
-        const hold = rollWoodChopLoot({
-            treeId: 'ht_manual',
-            stage: 'baby',
-            axeItemId: 'basic_axe',
-            chopMode: 'hold',
-            rng: () => 0.01
-        });
-        const manual = rollWoodChopLoot({
-            treeId: 'ht_manual',
-            stage: 'baby',
-            axeItemId: 'basic_axe',
-            chopMode: 'manual',
-            rng: () => 0.01
-        });
-        expect(manual.logItemId).toBe(hold.logItemId);
-        expect(manual.quantity).toBeGreaterThan(hold.quantity);
+    it('manual chop applies quantity bonus silently', () => {
+        const hold = getWoodChopQuantityForLog('baby', 'pine_log', 'basic_axe', 'hold');
+        const manual = getWoodChopQuantityForLog('baby', 'pine_log', 'basic_axe', 'manual');
+        expect(manual).toBeGreaterThan(hold);
     });
 
-    it('every axe tier defines weights for all log types', () => {
-        for (const axeId of Object.keys(AXE_WOOD_WEIGHTS)) {
-            for (const logId of WOOD_LOG_IDS) {
-                expect(AXE_WOOD_WEIGHTS[axeId][logId]).toBeGreaterThan(0);
-            }
+    it('spawn weights sum to 100 across all species', () => {
+        const total = WOOD_LOG_IDS.reduce((sum, id) => sum + TREE_WOOD_SPECIES[id].spawnWeight, 0);
+        expect(total).toBe(100);
+    });
+
+    it('every harvestable tree has a wood type', () => {
+        for (const tree of HARVESTABLE_TREES) {
+            expect(WOOD_LOG_IDS).toContain(tree.woodType);
+            expect(getHarvestableTree(tree.id)?.woodType).toBe(tree.woodType);
         }
     });
 });

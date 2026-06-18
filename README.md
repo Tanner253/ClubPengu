@@ -1,250 +1,179 @@
-# 🐧 Waddlebet 🐧 Club penguin inspired remake 🐧
+# 🐧 Waddlebet
 
 <div align="center">
 
 ![Waddlebet](whitepaper/public/character.png)
 
-**The First Trencher Social Platform on Solana**
+**Club Penguin–inspired 3D social MMO on Solana**
 
-*Penguin-powered Web3 gaming with wagering, tradeable cosmetics, and virtual property rentals.*
+*Gather, trade, wager, and customize — with a closed NPC economy and on-chain $CP rewards.*
 
 [![Solana](https://img.shields.io/badge/Built%20on-Solana-9945FF?style=for-the-badge&logo=solana)](https://solana.com)
 [![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-In%20Development-yellow?style=for-the-badge)]()
+[![Status](https://img.shields.io/badge/Status-Live%20Beta-green?style=for-the-badge)]()
 
-[Whitepaper](./whitepaper) • [Play Now](https://waddle.bet) • [Community](https://x.com/i/communities/1998537610592137381) • [Buy $CPC](https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump)
+[Play Now](https://waddle.bet) • [Whitepaper](./whitepaper) • [Community](https://x.com/i/communities/1998537610592137381) • [Buy $CP](https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump)
 
 </div>
 
 ---
 
-> **📢 Rebrand Notice:** Waddlebet was formerly known as "Club Pengu" / "Club Penguin on Solana". Same team, same vision, new name!
+> **Rebrand:** Waddlebet was formerly "Club Pengu" / "Club Penguin on Solana". Same team, new name.
 
 ---
 
-## 🎮 What is Waddlebet?
+## What is Waddlebet?
 
-Waddlebet is a **Web3 social gaming platform** that combines the nostalgic charm of classic penguin social games with modern blockchain technology. Built on Solana, it offers:
-
-- **🐧 Classic Penguin Vibes** - 3D voxel world, penguin customization, puffles, emotes, and the social experience you remember
-- **🏢 GTA V-Style Properties** - Rent igloos, apartments, and lounges. Paywall your space with any token
-- **🔄 RuneScape Trading** - Open gacha for rare cosmetics. Trade items with other players
+A **Web3 social MMO** built in React + Three.js with a real-time multiplayer server. Players explore a voxel world, customize penguins, adopt puffles, play minigames, and participate in a dual-currency economy backed by the **$CP** SPL token.
 
 ---
 
-## ✨ Features
+## Economy (current build)
 
-### 🎨 Deep Customization
-- **24+ Penguin Colors** - From classic blue to legendary rainbow and ghost variants
-- **17+ Headwear Options** - Crowns, viking helmets, party hats, ninja masks
-- **17+ Eye Styles** - Normal, shades, angry, sleepy, hearts, stars
-- **12+ Mouth Options** - Beaks, smiles, beards, and special expressions
-- **20+ Clothing Items** - Scarves, hoodies, suits, and exclusive outfits
+| Layer | Role |
+|-------|------|
+| **Gold** | Soft currency — ferries, bait, wagers, puffles. Infinite supply. |
+| **Wood / fish** | Progression materials — gear upgrades and NPC daily contracts. |
+| **$CP** | On-chain token — 7-day login streak, igloo rent, cosmetic bazaar. |
 
-### 🎮 Minigames
-- **Card Jitsu** - Fire beats Snow, Snow beats Water, Water beats Fire
-- **Connect 4** - Classic four-in-a-row strategy
-- **Tic Tac Toe** - Quick matches, high stakes
-- **Pong** - Fast reflexes, winner takes all
-- *More coming soon...*
+### Player loop
 
-### 🐾 Puffle Companions
-Adopt fluffy puffle pets with tiered rarity:
-- **Common** - Blue, Red, Green (50 coins)
-- **Uncommon** - Pink, Yellow, Orange (100 coins)
-- **Rare** - Purple, White, Brown (200 coins)
-- **Epic** - Black, Gold (500 coins)
-- **Legendary** - Rainbow, Ghost (1000 coins) - *Special effects!*
+1. **Gather** — fish ice holes, chop forest trees, forage worms  
+2. **Upgrade** — wood-only axes, rods, and backpack tiers at merchant NPCs  
+3. **Contracts** — visit NPC → accept daily order → track on HUD → turn in for gold  
+4. **Streak** — 60 min play per UTC day → $CP on days 1, 2, 4, 5, 7 (1k→5k); gold only on days 3 & 6  
 
-### 💰 $CPC Token Economy
-The native platform token powers the ecosystem:
-- **Property Rentals** - Rent igloos, apartments, and exclusive spaces
-- **Gacha System** - Spend $CPC to unlock rare, tradeable cosmetics
-- **Trading** - All items are tradeable between players
+### Key NPCs
 
-### 🎲 P2P Wagering
-Bet on minigames with **any Solana token**:
-- $SOL, $CPC, $BONK, $WIF, $PENGU, or any SPL token
-- You choose the token, you set the stakes
-- Winner takes all with instant Solana settlement
+| NPC | Role |
+|-----|------|
+| **Old Salty** | Fish buyer, rod upgrades, catch contracts |
+| **Copper Clive** | Axes, backpack, wood mint recipes, timber contracts |
+| **Ranger Pike** | Trail-side timber sell, mushroom ferry quest |
+| **Captain Skipper** | Ice Ferry between Town, Snow Forts, and Forest |
 
-### 🏠 Virtual Properties
-GTA V-style property system:
-- Rent igloos and apartments
-- Customize your space
-- Set paywalls with any token
-- Invite players for exclusive hangouts
+Full economics (public): **[whitepaper](./whitepaper)**. Internal build plans: **[waddlebet/docs/ECONOMY_README.md](waddlebet/docs/ECONOMY_README.md)**.
 
 ---
 
-## 🗺️ Game World
+## Features
 
-### Current Locations
-- **Town Center** - Central hub with shops and social areas
-- **The Dojo** - Battle arena for Card Jitsu
+### Customization
+24+ colors, 17+ hats, 17+ eyes, 12+ mouths, 20+ clothing items — plus puffles from common to legendary.
 
-### Coming Soon
-- **Ski Village** - Northern mountain area with winter sports
-- **Plaza** - Eastern area with Pet Shop and Stage
-- **Beach & Dock** - Southern coastline with lighthouse
-- **Forest & Cove** - Dense forest trails and hidden areas
-- **Underground Mines** - Crystal caverns and mine cart rides
+### Minigames
+Card Jitsu, Connect 4, Tic Tac Toe, Pong, Blackjack, and more — with optional P2P wagering in gold or SPL tokens.
+
+### World & travel
+- **Town Center** — social hub, Dojo, shops  
+- **Snow Forts** — starter fishing, rod pickup  
+- **Forest Trails** — woodcutting, Ranger Pike, Copper Clive  
+- **Ice Ferry** — 1g travel between zones  
+
+### Daily systems
+- 9-step onboarding quest for new wallets  
+- NPC daily contracts (Salty + Clive)  
+- 7-day login streak — $CP days 1/2/4/5/7 (1k→5k), gold-only days 3 (+5g) & 6 (+10g)  
 
 ---
 
-## 🚀 Getting Started
+## Getting started
 
 ### Prerequisites
-- Node.js 18+ 
-- npm or yarn
+- Node.js 18+
+- npm
 
-### Installation
+### Game client + server
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/Tanner253/waddlebet.git
-   cd waddlebet
-   ```
+```bash
+git clone https://github.com/Tanner253/waddlebet.git
+cd waddlebet/waddlebet
+npm install
+npm run dev          # client → http://localhost:5173
+npm run dev:server   # WebSocket server (separate terminal)
+# or
+npm run dev:all
+```
 
-2. **Install dependencies for the game**
-   ```bash
-   cd waddlebet
-   npm install
-   ```
+Restart the server after pulling economy or inventory changes.
 
-3. **Run the game demo**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:5173](http://localhost:5173) in your browser.
+### Whitepaper site
 
-4. **Run the server (for multiplayer)**
-   ```bash
-   npm run dev:server
-   ```
+```bash
+cd whitepaper
+npm install
+npm run dev          # → http://localhost:3000
+```
 
-5. **Run both client and server**
-   ```bash
-   npm run dev:all
-   ```
+### Tests
 
-### Running the Whitepaper Site
-
-1. **Navigate to whitepaper folder** (from repo root)
-   ```bash
-   cd whitepaper
-   ```
-
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
-
-3. **Run the development server**
-   ```bash
-   npm run dev
-   ```
-   Open [http://localhost:3000](http://localhost:3000) in your browser.
+```bash
+cd waddlebet/server
+npm test
+```
 
 ---
 
-## 📁 Repository Structure
+## Repository structure
 
 ```
-waddlebet/
-├── waddlebet/          # Game client & server
-│   ├── src/            # React frontend
-│   ├── server/         # Node.js backend
-│   ├── public/         # Static assets
-│   └── package.json    # Game dependencies
-├── whitepaper/         # Documentation site (Next.js)
-├── documentation/      # Technical docs & specs
+├── waddlebet/          # Game client (Vite/React/Three.js) + server (Node/MongoDB)
+│   └── docs/           # Internal economy, MMORPG, cosmetics dev plans
+├── whitepaper/         # Public docs site — tokenomics, changelog
 ├── LICENSE
-└── README.md
+└── README.md           # This file
 ```
 
----
-
-## 🎮 Controls
-
-| Key | Action |
-|-----|--------|
-| `W` / `↑` | Move Forward |
-| `S` / `↓` | Move Backward |
-| `A` / `←` | Turn Left |
-| `D` / `→` | Turn Right |
-| `E` | Interact / Emote Wheel |
-| `Enter` | Open Chat |
-| `Mouse` | Orbit Camera |
+Developer quick reference: [waddlebet/README.md](waddlebet/README.md)
 
 ---
 
-## 🛠️ Tech Stack
+## Tech stack
 
-### Game Client
-- **React** - UI Framework
-- **Three.js** - 3D Graphics Engine
-- **Vite** - Build Tool
-- **Tailwind CSS** - Styling
-
-### Whitepaper Site
-- **Next.js 14** - React Framework
-- **TypeScript** - Type Safety
-- **Framer Motion** - Animations
-- **Tailwind CSS** - Styling
-
-### Blockchain
-- **Solana** - Fast, low-fee transactions
-- **SPL Tokens** - Multi-token support
+| Layer | Stack |
+|-------|-------|
+| Client | React, Three.js, Vite, Tailwind |
+| Server | Node.js, WebSocket, MongoDB |
+| Chain | Solana, SPL tokens ($CP) |
+| Docs | Next.js, TypeScript, Framer Motion |
 
 ---
 
-## 📍 Roadmap
+## Roadmap
 
-### Phase 1: Foundation ✅
-- [x] 3D Voxel World Engine
-- [x] Penguin Customization System
-- [x] Puffle Companion System
-- [x] Card Jitsu Minigame
-- [x] AI NPCs & Social Features
-- [ ] Playable Demo Release
+### Shipped
+- [x] 3D voxel world + multiplayer  
+- [x] Penguin customization + puffles  
+- [x] Card Jitsu, Connect 4, Tic Tac Toe, Pong  
+- [x] Ice Ferry, Snow Forts, Forest Trails  
+- [x] Fishing, woodcutting, merchant NPCs, daily contracts  
+- [x] 7-day $CP login streak + onboarding quest  
+- [x] Tarkov-style trader UI + quest accept flow  
 
-### Phase 2: Expansion
-- [ ] New Locations (Beach, Ski Village, Plaza)
-- [ ] Additional Minigames (Pong, Connect 4, Tic Tac Toe)
-- [ ] Property Rental System
-- [ ] Igloo Customization
-- [ ] $CPC Token Integration
+### In progress
+- [ ] Property rental system  
+- [ ] $CP cosmetic bazaar (full rollout)  
+- [ ] Gold ↔ $CP player market  
 
-### Phase 3: Wagering
-- [ ] P2P Wagering System
-- [ ] Multi-Token Support
-- [ ] x403 Integration
-- [ ] x402 Integration
-- [ ] Leaderboards & Rankings
-
-### Phase 4: Economy
-- [ ] Gacha System Launch
-- [ ] Tradeable Cosmetics Marketplace
-- [ ] Property Paywalls
-- [ ] Advanced Social Features
-- [ ] Mobile Companion App
+### Planned
+- [ ] Gacha + tradeable cosmetics marketplace  
+- [ ] Property paywalls  
+- [ ] Level gates + skill progression  
+- [ ] Mobile companion  
 
 ---
 
-## 🔗 Links
+## Links
 
 | Resource | Link |
 |----------|------|
-| 🎮 **Play Now** | [waddle.bet](https://waddle.bet) |
-| 🌐 **Whitepaper** | [View Whitepaper](./whitepaper) |
-| 🐦 **X Community** | [Join Community](https://x.com/i/communities/1998537610592137381) |
-| 💰 **Buy $CPC** | [PumpFun](https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump) |
-| 📦 **GitHub** | [Repository](https://github.com/Tanner253/waddlebet) |
+| Play | [waddle.bet](https://waddle.bet) |
+| Whitepaper | [./whitepaper](./whitepaper) |
+| X Community | [Join](https://x.com/i/communities/1998537610592137381) |
+| Buy $CP | [PumpFun](https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump) |
+| GitHub | [Tanner253/waddlebet](https://github.com/Tanner253/waddlebet) |
 
----
-
-## 📜 Contract Address
+### Contract address
 
 ```
 PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump
@@ -252,17 +181,15 @@ PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump
 
 ---
 
-## ⚠️ Disclaimer
+## Disclaimer
 
-**Waddlebet is currently in active development.** Features, tokenomics, and gameplay mechanics described in this repository are subject to change. This is not financial advice. Always do your own research before participating in any cryptocurrency projects.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Waddlebet is in active development. Features, tokenomics, and mechanics may change. This is not financial advice.
 
 ---
+
+## License
+
+MIT — see [LICENSE](LICENSE).
 
 <div align="center">
 

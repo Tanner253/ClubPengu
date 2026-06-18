@@ -99,8 +99,8 @@ ITEM_CATALOG.set('iron_rod', {
     name: 'Iron Rod',
     emoji: '🎣',
     category: 'rod',
-    npcValue: 0,
-    maxStack: 1,
+    npcValue: 18,
+    maxStack: 32,
     tier: 2
 });
 
@@ -109,8 +109,8 @@ ITEM_CATALOG.set('pro_rod', {
     name: 'Pro Rod',
     emoji: '🎣',
     category: 'rod',
-    npcValue: 0,
-    maxStack: 1,
+    npcValue: 45,
+    maxStack: 32,
     tier: 3
 });
 
@@ -119,8 +119,8 @@ ITEM_CATALOG.set('master_rod', {
     name: 'Master Rod',
     emoji: '🎣',
     category: 'rod',
-    npcValue: 0,
-    maxStack: 1,
+    npcValue: 110,
+    maxStack: 32,
     tier: 4
 });
 
@@ -139,8 +139,8 @@ ITEM_CATALOG.set('iron_axe', {
     name: 'Iron Axe',
     emoji: '⛏️',
     category: 'tool',
-    npcValue: 0,
-    maxStack: 1,
+    npcValue: 15,
+    maxStack: 32,
     tier: 2
 });
 
@@ -149,8 +149,8 @@ ITEM_CATALOG.set('steel_axe', {
     name: 'Steel Axe',
     emoji: '🪓',
     category: 'tool',
-    npcValue: 0,
-    maxStack: 1,
+    npcValue: 40,
+    maxStack: 32,
     tier: 3
 });
 
@@ -159,8 +159,8 @@ ITEM_CATALOG.set('master_axe', {
     name: 'Master Axe',
     emoji: '🪓',
     category: 'tool',
-    npcValue: 0,
-    maxStack: 1,
+    npcValue: 100,
+    maxStack: 32,
     tier: 4
 });
 

@@ -662,6 +662,92 @@ input, textarea {
   animation: creator-oss-icon-bob 2s ease-in-out infinite;
 }
 
+/* Penguin Maker — tokenomics / play-to-earn pitch badge */
+@keyframes creator-pitch-glow {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(217, 70, 239, 0.35), 0 0 0 1px rgba(217, 70, 239, 0.45);
+    border-color: rgba(217, 70, 239, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(251, 191, 36, 0.55), 0 0 0 1px rgba(244, 114, 182, 0.75);
+    border-color: rgba(251, 191, 36, 0.85);
+  }
+}
+
+@keyframes creator-pitch-shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+@keyframes creator-pitch-icon-spin {
+  0%, 100% { transform: scale(1) rotate(-8deg); }
+  50% { transform: scale(1.08) rotate(8deg); }
+}
+
+.creator-pitch-link {
+  background-image: linear-gradient(
+    110deg,
+    rgba(88, 28, 135, 0.9) 0%,
+    rgba(88, 28, 135, 0.9) 38%,
+    rgba(251, 191, 36, 0.4) 50%,
+    rgba(88, 28, 135, 0.9) 62%,
+    rgba(88, 28, 135, 0.9) 100%
+  );
+  background-size: 200% 100%;
+  animation: creator-pitch-glow 2s ease-in-out infinite, creator-pitch-shimmer 3s linear infinite;
+}
+
+.creator-pitch-link:hover {
+  animation-duration: 1.2s, 1.8s;
+}
+
+.creator-pitch-icon {
+  animation: creator-pitch-icon-spin 2.4s ease-in-out infinite;
+}
+
+/* Penguin Maker — whitepaper badge */
+@keyframes creator-whitepaper-glow {
+  0%, 100% {
+    box-shadow: 0 0 6px rgba(34, 211, 238, 0.35), 0 0 0 1px rgba(34, 211, 238, 0.45);
+    border-color: rgba(34, 211, 238, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 14px rgba(34, 211, 238, 0.65), 0 0 0 1px rgba(103, 232, 249, 0.85);
+    border-color: rgba(103, 232, 249, 0.9);
+  }
+}
+
+@keyframes creator-whitepaper-shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+@keyframes creator-whitepaper-icon-bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(-1px) rotate(6deg); }
+}
+
+.creator-whitepaper-link {
+  background-image: linear-gradient(
+    110deg,
+    rgba(8, 51, 68, 0.9) 0%,
+    rgba(8, 51, 68, 0.9) 40%,
+    rgba(34, 211, 238, 0.35) 50%,
+    rgba(8, 51, 68, 0.9) 60%,
+    rgba(8, 51, 68, 0.9) 100%
+  );
+  background-size: 200% 100%;
+  animation: creator-whitepaper-glow 2.2s ease-in-out infinite, creator-whitepaper-shimmer 3.5s linear infinite;
+}
+
+.creator-whitepaper-link:hover {
+  animation-duration: 1.4s, 2s;
+}
+
+.creator-whitepaper-icon {
+  animation: creator-whitepaper-icon-bob 2s ease-in-out infinite;
+}
+
 /* Slide up animation for bottom sheets */
 @keyframes slide-up {
   from {
@@ -756,6 +842,93 @@ input, textarea {
 
 .npc-choice-btn:not(:disabled):active {
   box-shadow: none !important;
+}
+
+/* Tarkov-style trader panel */
+.npc-trader-tab-active {
+  color: #f5d565;
+  border-bottom: 2px solid #c9a227;
+  margin-bottom: -1px;
+}
+
+.npc-trader-card:not(:disabled):hover {
+  filter: brightness(1.12);
+  transform: translateY(-1px);
+}
+
+.npc-trader-card-selected {
+  border-color: rgba(201, 162, 39, 0.65) !important;
+  box-shadow: inset 0 0 0 1px rgba(201, 162, 39, 0.35), 0 0 12px rgba(201, 162, 39, 0.15);
+  background: rgba(201, 162, 39, 0.08) !important;
+}
+
+.npc-trader-deal-btn {
+  background: linear-gradient(180deg, #3d4a2a 0%, #2a331c 100%);
+  border-color: #6b7c3e;
+  color: #e8d48b;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+}
+
+.npc-trader-deal-btn:not(:disabled):hover {
+  background: linear-gradient(180deg, #4a5a32 0%, #354020 100%);
+  border-color: #8fa84f;
+  color: #fff3b0;
+}
+
+.npc-trader-deal-btn:not(:disabled):active {
+  box-shadow: none;
+}
+
+.npc-trader-offers {
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.28) 100%);
+}
+
+.npc-trader-grid {
+  overflow: hidden;
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+@media (max-width: 639px) {
+  .npc-trader-panel {
+    max-height: 92vh;
+  }
+
+  .npc-trader-detail {
+    max-height: 36vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .npc-trader-tab {
+    min-height: 44px;
+    min-width: 72px;
+  }
+
+  .npc-trader-card {
+    min-height: 100px;
+    touch-action: manipulation;
+  }
+
+  .npc-trader-deal-btn {
+    min-height: 48px;
+    font-size: 0.875rem;
+  }
+}
+
+.trader-offer-canvas {
+  image-rendering: auto;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
+}
+
+.npc-trader-card-selected .trader-offer-canvas {
+  filter: drop-shadow(0 0 14px rgba(201, 162, 39, 0.45)) drop-shadow(0 4px 10px rgba(0, 0, 0, 0.45));
 }
 
 /* Galaxy/Cosmic animated color shifts for special feather colors */

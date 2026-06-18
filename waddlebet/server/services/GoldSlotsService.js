@@ -7,6 +7,8 @@ import {
     GOLD_SLOT_BET,
     GOLD_SLOT_SPIN_MS,
     GOLD_SLOT_MACHINE_SET,
+    GOLD_SLOT_BET_DEFAULT,
+    clampGoldSlotBet,
     rollGoldSlotSymbol,
     calculateGoldSlotPayout,
     calculateGoldSlotRTP,
@@ -26,7 +28,7 @@ class GoldSlotsService {
         this.machineStates = new Map();
         this.playerSpinCounts = new Map();
 
-        console.log(`🎰 GoldSlotsService initialized (bet: ${GOLD_SLOT_BET} gold)`);
+        console.log(`🎰 GoldSlotsService initialized (bet: ${GOLD_SLOT_BET_DEFAULT}g default, max ${clampGoldSlotBet(25)}g)`);
         const rtp = calculateGoldSlotRTP();
         console.log(`   RTP: ${(rtp * 100).toFixed(2)}% | House edge: ${((1 - rtp) * 100).toFixed(2)}%`);
     }
@@ -60,7 +62,8 @@ class GoldSlotsService {
         return GOLD_SLOT_MACHINE_SET.has(machineId);
     }
 
-    async canSpin(playerId, walletAddress, machineId, room) {
+    async canSpin(playerId, walletAddress, machineId, room, bet = GOLD_SLOT_BET_DEFAULT) {
+        const safeBet = clampGoldSlotBet(bet);
         if (!room) {
             return { allowed: false, error: 'NO_ROOM', message: 'Not in a room — re-enter town and try again' };
         }
@@ -87,30 +90,31 @@ class GoldSlotsService {
             return { allowed: false, error: 'USER_NOT_FOUND', message: 'User not found' };
         }
 
-        if ((user.coins || 0) < GOLD_SLOT_BET) {
+        if ((user.coins || 0) < safeBet) {
             return {
                 allowed: false,
                 error: 'INSUFFICIENT_GOLD',
-                message: `You need ${GOLD_SLOT_BET} gold (you have ${user.coins || 0})`,
+                message: `You need ${safeBet} gold (you have ${user.coins || 0})`,
                 coinBalance: user.coins || 0,
-                required: GOLD_SLOT_BET
+                required: safeBet
             };
         }
 
-        return { allowed: true, coinBalance: user.coins };
+        return { allowed: true, coinBalance: user.coins, bet: safeBet };
     }
 
-    async spin(playerId, walletAddress, room, machineId, playerName, playerPosition) {
-        const canSpinResult = await this.canSpin(playerId, walletAddress, machineId, room);
+    async spin(playerId, walletAddress, room, machineId, playerName, playerPosition, bet = GOLD_SLOT_BET_DEFAULT) {
+        const safeBet = clampGoldSlotBet(bet);
+        const canSpinResult = await this.canSpin(playerId, walletAddress, machineId, room, safeBet);
         if (!canSpinResult.allowed) {
             return canSpinResult;
         }
 
         const betResult = await this.userService.addCoins(
             walletAddress,
-            -GOLD_SLOT_BET,
+            -safeBet,
             'slot_spin',
-            { machineId, room },
+            { machineId, room, bet: safeBet },
             `Gold slot bet on ${machineId}`
         );
 
@@ -123,7 +127,7 @@ class GoldSlotsService {
         }
 
         const reels = [rollGoldSlotSymbol(), rollGoldSlotSymbol(), rollGoldSlotSymbol()];
-        const payout = calculateGoldSlotPayout(reels, GOLD_SLOT_BET);
+        const payout = calculateGoldSlotPayout(reels, safeBet);
         const isJackpot = reels[0] === reels[1] && reels[1] === reels[2] && reels[0] === 'gold7';
 
         let newCoinBalance = betResult.newBalance;
@@ -156,9 +160,9 @@ class GoldSlotsService {
             startTime: Date.now(),
             reels,
             payout,
-            net: payout - GOLD_SLOT_BET,
+            net: payout - safeBet,
             isJackpot,
-            bet: GOLD_SLOT_BET,
+            bet: safeBet,
             newCoinBalance,
             revealedReels: 0
         };
@@ -174,7 +178,7 @@ class GoldSlotsService {
         return {
             success: true,
             machineId,
-            bet: GOLD_SLOT_BET,
+            bet: safeBet,
             newCoinBalance
         };
     }

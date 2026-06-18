@@ -240,7 +240,13 @@ export default {
         en: '$CP & Resources', zh: '$CP 与资源', es: '$CP y recursos', pt: '$CP e recursos', ko: '$CP 및 자료', ja: '$CP とリソース', fr: '$CP et ressources', de: '$CP & Ressourcen', ru: '$CP и ресурсы', ar: '$CP والموارد',
     },
     'settings.linksHint': {
-        en: 'Whitepaper, tokenomics, and live chart', zh: '白皮书、代币经济与实时图表', es: 'Whitepaper, tokenomics y gráfico', pt: 'Whitepaper, tokenomics e gráfico', ko: '백서, 토크노믹스, 실시간 차트', ja: 'ホワイトペーパー・トークノミクス・チャート', fr: 'Livre blanc, tokenomics et graphique', de: 'Whitepaper, Tokenomics und Chart', ru: 'Whitepaper, токеномика и график', ar: 'الورقة البيضاء واقتصاد الرمز والرسم',
+        en: 'Economy guide, $CP tokenomics, and live chart', zh: '经济指南、$CP 代币经济与实时图表', es: 'Guía de economía, tokenomics y gráfico', pt: 'Guia da economia, tokenomics e gráfico', ko: '경제 가이드, 토크노믹스, 실시간 차트', ja: '経済ガイド・トークノミクス・チャート', fr: 'Guide économie, tokenomics et graphique', de: 'Wirtschaftsleitfaden, Tokenomics und Chart', ru: 'Гайд по экономике, токеномика и график', ar: 'دليل الاقتصاد واقتصاد الرمز والرسم',
+    },
+    'settings.economyGuideBtn': {
+        en: 'Game Economy Guide', zh: '游戏经济指南', es: 'Guía de economía', pt: 'Guia da economia', ko: '게임 경제 가이드', ja: 'ゲーム経済ガイド', fr: 'Guide économie du jeu', de: 'Spielwirtschaft', ru: 'Гайд по экономике', ar: 'دليل اقتصاد اللعبة',
+    },
+    'settings.economyGuideDesc': {
+        en: 'Gold grind, materials, markets & balance', zh: '金币刷取、物资、市场与平衡', es: 'Oro, materiales, mercados y equilibrio', pt: 'Ouro, materiais, mercados e equilíbrio', ko: '골드, 자원, 마켓, 균형', ja: 'ゴールド・素材・マーケット・均衡', fr: 'Or, matériaux, marchés et équilibre', de: 'Gold, Materialien, Märkte & Balance', ru: 'Золото, ресурсы, рынки', ar: 'الذهب والموارد والأسواق',
     },
     'settings.tokenomicsBtn': {
         en: '$CP Tokenomics', zh: '$CP 代币经济', es: 'Tokenomics $CP', pt: 'Tokenomics $CP', ko: '$CP 토크노믹스', ja: '$CP トークノミクス', fr: 'Tokenomics $CP', de: '$CP Tokenomics', ru: 'Токеномика $CP', ar: 'اقتصاد رمز $CP',

@@ -3,6 +3,7 @@
  */
 
 import { getWoodYield as getBaseWoodYield, MANUAL_WOOD_MULTIPLIER } from './woodcuttingLoot.js';
+import { pickWoodTypeForPosition } from './treeWoodSpecies.js';
 
 export { MANUAL_WOOD_MULTIPLIER };
 
@@ -131,7 +132,7 @@ function pickStage(x, z) {
 
 function pickChopMode(x, z) {
     const h = Math.abs(Math.sin(x * 0.73 + z * 0.41) * 1000) % 100;
-    return h < 50 ? 'manual' : 'hold';
+    return h < 75 ? 'manual' : 'hold';
 }
 
 function canPlaceTree(trees, localX, localZ) {
@@ -171,6 +172,7 @@ export function generateHarvestableTreePlacements() {
                     localX,
                     localZ,
                     stage: pickStage(localX, localZ),
+                    woodType: pickWoodTypeForPosition(localX, localZ),
                     chopMode: pickChopMode(localX, localZ)
                 });
             }
@@ -202,12 +204,13 @@ export function getWoodYield(stage, treeDef = null) {
     return getBaseWoodYield(stage, chopMode);
 }
 
-export function isPlayerNearHarvestableTree(player, treeId, radius = HARVEST_INTERACTION_RADIUS) {
+export function isPlayerNearHarvestableTree(player, treeId, radius = HARVEST_INTERACTION_RADIUS, positionOverride = null) {
     const tree = getHarvestableTree(treeId);
-    if (!tree || !player?.position || player.room !== 'forest_trails') return false;
+    const position = positionOverride || player?.position;
+    if (!tree || !position || player.room !== 'forest_trails') return false;
     const world = getHarvestableTreeWorldPosition(tree);
-    const dx = player.position.x - world.x;
-    const dz = player.position.z - world.z;
+    const dx = position.x - world.x;
+    const dz = position.z - world.z;
     return Math.sqrt(dx * dx + dz * dz) <= radius;
 }
 

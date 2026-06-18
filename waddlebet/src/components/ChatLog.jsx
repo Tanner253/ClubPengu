@@ -110,12 +110,18 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
     }, []);
 
     useEffect(() => {
+        if (minigameMode) {
+            setMinimized(true);
+        }
+    }, [minigameMode]);
+
+    useEffect(() => {
         const panelEl = panelRef.current;
         if (!panelEl) return undefined;
 
         panelEl.addEventListener('wheel', handleChatWheel, { passive: false });
         return () => panelEl.removeEventListener('wheel', handleChatWheel);
-    }, [handleChatWheel, isMinimized, isMobile, isOpen]);
+    }, [handleChatWheel, isMinimized, isMobile, isOpen, minigameMode]);
 
     const scrollMessagesToBottom = useCallback((instant = false) => {
         const el = messagesRef.current;
@@ -688,7 +694,12 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         );
     }
 
-    const chatPositionClass = minigameMode ? 'bottom-4 right-4' : 'bottom-20 left-4';
+    const chatPositionClass = minigameMode
+        ? 'bottom-28 left-4'
+        : isMobile
+            ? 'bottom-24 left-3'
+            : 'bottom-20 left-4';
+    const chatWidthClass = minigameMode ? 'w-[18rem] max-w-[42vw]' : 'w-[30rem]';
     const chatZClass = minigameMode ? 'z-[10050]' : 'z-30';
 
     if (isMinimized) {
@@ -712,7 +723,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
             ref={containerRef}
             onMouseEnter={() => setIsActive(true)}
             onMouseLeave={() => !document.activeElement?.closest('.chat-log') && resetFadeTimer()}
-            className={`chat-log fixed pointer-events-auto transition-opacity duration-300 w-[30rem] flex flex-col ${chatPositionClass} ${chatZClass} ${isActive ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}
+            className={`chat-log fixed pointer-events-auto transition-opacity duration-300 flex flex-col ${chatPositionClass} ${chatWidthClass} ${chatZClass} ${isActive ? 'opacity-100' : 'opacity-70 hover:opacity-100'}`}
             data-no-camera="true"
         >
             {renderPanel({ showMinimize: true })}

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import TravelService from '../services/TravelService.js';
+import { FERRY_GOLD_COST } from '../config/goldEconomy.js';
 
 function makeDeps(overrides = {}) {
     const players = new Map();
@@ -169,7 +170,7 @@ describe('TravelService disconnect/reconnect', () => {
         expect(leave.success).toBe(true);
         expect(ctx.deps.userService.addCoins).toHaveBeenCalledWith(
             'wallet1',
-            25,
+            FERRY_GOLD_COST,
             'travel_refund',
             expect.anything()
         );
@@ -215,10 +216,10 @@ describe('TravelService disconnect/reconnect', () => {
         const book = await service.handleBook('p1', 'town_snow_forts', ['guest1']);
 
         expect(book.success).toBe(true);
-        expect(book.goldSpent).toBe(25);
+        expect(book.goldSpent).toBe(FERRY_GOLD_COST);
         expect(ctx.deps.userService.addCoins).toHaveBeenCalledWith(
             'wallet1',
-            -25,
+            -FERRY_GOLD_COST,
             'travel_ticket',
             expect.anything()
         );

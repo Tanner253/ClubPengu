@@ -3,6 +3,7 @@
  */
 
 import { getWoodYield as getBaseWoodYield, MANUAL_WOOD_MULTIPLIER } from './woodcuttingLoot';
+import { pickWoodTypeForPosition } from './treeWoodSpecies';
 
 export { MANUAL_WOOD_MULTIPLIER };
 
@@ -129,7 +130,7 @@ function pickStage(x, z) {
 
 function pickChopMode(x, z) {
     const h = Math.abs(Math.sin(x * 0.73 + z * 0.41) * 1000) % 100;
-    return h < 50 ? 'manual' : 'hold';
+    return h < 75 ? 'manual' : 'hold';
 }
 
 function canPlaceTree(trees, localX, localZ) {
@@ -169,6 +170,7 @@ export function generateHarvestableTreePlacements() {
                     localX,
                     localZ,
                     stage: pickStage(localX, localZ),
+                    woodType: pickWoodTypeForPosition(localX, localZ),
                     chopMode: pickChopMode(localX, localZ)
                 });
             }

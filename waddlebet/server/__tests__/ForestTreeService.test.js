@@ -60,7 +60,7 @@ describe('ForestTreeService', () => {
             chopMode: 'manual',
         });
         expect(result.wood).toBeGreaterThanOrEqual(1);
-        expect(['pine_log', 'birch_log', 'oak_log', 'ironwood_log']).toContain(result.logItemId);
+        expect(result.logItemId).toBe(getHarvestableTree(manual.id)?.woodType);
         expect(result.chopMode).toBe('manual');
     });
 

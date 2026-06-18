@@ -61,9 +61,11 @@ export const WORLD_NPCS = [
             "The pond's cold but the coin's warm. What'll it be?"
         ],
         actions: [
-            { id: 'open_backpack', label: 'Sell my catch', icon: '🐟', requiresFish: true },
+            { id: 'quest_salty_daily', label: "Today's catch contract", requiresDailyOrder: 'salty_daily_catch' },
+            { id: 'buy_worm_bait', label: 'Worm bait pack', requiresMerchantRecipe: true, itemId: 'worm' },
+            { id: 'open_backpack', label: 'Emergency sell catch', icon: '🐟', requiresFish: true },
             { id: 'upgrade_rod', label: 'Upgrade fishing rod', icon: '🎣', requiresRodUpgrade: true },
-            { id: 'lore_fishing', label: 'Tips for fishing', icon: '🎣', loreText: 'Pick up the free rod by my shack, equip it, then fish any ice hole. Upgrade the rod here in two steps per tier — first step uses a new wood type, second step costs more of the same wood plus gold. Better rods reach deeper fish and land heavier catches!' },
+            { id: 'lore_fishing', label: 'Tips for fishing', icon: '🎣', loreText: 'Pick up the free rod by my shack, equip it, then fish any ice hole — check the stock before you cast! Holes run out of rare fish and regrow over time, so roam between holes for legendaries. Search mossy fallen logs in the forest for worms, or buy bait here for 1g per 5. Emergency fish sells pay pennies.' },
             { id: 'close', label: 'See you later, Salty', icon: '👋' }
         ],
         interactionRadius: 5.5
@@ -91,13 +93,17 @@ export const WORLD_NPCS = [
             "Grab an axe and hit the Forest Trails south of Snow Forts!"
         ],
         actions: [
+            { id: 'quest_clive_daily', label: "Today's timber contract", requiresDailyOrder: 'clive_daily_timber' },
+            { id: 'mint_gold_wood_char', label: 'Pine charcoal trade', requiresMerchantRecipe: true, itemId: 'gold_mint_wood_char' },
+            { id: 'mint_gold_wood_lumber', label: 'Mixed lumber crate', requiresMerchantRecipe: true, itemId: 'gold_mint_wood_lumber' },
+            { id: 'mint_gold_wood_fine', label: 'Fine timber lot', requiresMerchantRecipe: true, itemId: 'gold_mint_wood_fine' },
             { id: 'upgrade_backpack', label: 'Upgrade backpack', icon: '🎒', requiresUpgrade: true },
             { id: 'buy_basic_axe', label: 'Buy Basic Axe', icon: '🪓', requiresBuyTool: true, itemId: 'basic_axe' },
             { id: 'buy_iron_axe', label: 'Buy Iron Axe', icon: '⛏️', requiresBuyTool: true, itemId: 'iron_axe' },
             { id: 'buy_steel_axe', label: 'Buy Steel Axe', icon: '🪓', requiresBuyTool: true, itemId: 'steel_axe' },
             { id: 'buy_master_axe', label: 'Buy Master Axe', icon: '👑', requiresBuyTool: true, itemId: 'master_axe' },
             { id: 'open_backpack', label: 'Sell timber / organize', icon: '🪵' },
-            { id: 'lore_tools', label: 'Forest trails', icon: '🌲', loreText: 'Head south through Snow Forts into the Forest Trails. Stand near a tall pine with your axe equipped and chop! Bring logs back here for full price — or sell to Ranger Pike at Whiskerwood Cabin for quick coin on the trail.' },
+            { id: 'lore_tools', label: 'Forest trails', loreText: 'Head south through Snow Forts into the Forest Trails. A loaner axe is yours on arrival — chop pines and bring logs to me. Mint full bundles here when your pack is stuffed; sell singles on the trail for pocket change only.' },
             { id: 'close', label: 'Thanks, Clive', icon: '👋' }
         ],
         interactionRadius: 5.5
@@ -128,7 +134,7 @@ export const WORLD_NPCS = [
         actions: [
             { id: 'open_backpack', label: 'Sell timber & mushrooms', icon: '🪵' },
             { id: 'quest_mushroom_ticket', label: 'Trade mushrooms for ferry ticket', icon: '🎫', requiresMushrooms: true },
-            { id: 'lore_quests', label: 'Forest quests & XP', icon: '📜', loreText: 'Gather forest mushrooms from trail clusters (they grow back slowly). Bring 5 to me for a ferry ticket to Town — then challenge Sensei in the Dojo for your first gold!' },
+            { id: 'lore_quests', label: 'Forest quests & XP', icon: '📜', loreText: 'Gather forest mushrooms from trail clusters (they grow back slowly). Bring 5 to me for a ferry ticket to Town — then fish and chop for gold, or challenge players to wagers!' },
             { id: 'lore_crafting', label: 'Crafting orders', icon: '🪚', loreText: 'The workshop wing is still being stocked. Soon you\'ll turn pine and oak into planks, furniture, and camp gear — higher value than raw logs. Save rare ironwood for those recipes.' },
             { id: 'lore_town_prices', label: 'Better prices in town?', icon: '🏘️', loreText: 'Copper Clive in town pays full catalog gold for timber. I buy at 65% — convenience tax for not hiking back. Every sale still earns woodcutting XP either way.' },
             { id: 'close', label: 'Stay safe on the trails', icon: '👋' }

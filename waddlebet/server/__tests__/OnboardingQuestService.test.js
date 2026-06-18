@@ -38,13 +38,40 @@ describe('OnboardingQuestService', () => {
         const first = await service.tryCompleteStep('wallet1', 'dojo_gold');
         expect(first.updated).toBe(true);
         expect(mockUser.onboardingQuest.completedSteps).toEqual(['dojo_gold']);
+        expect(userService.addCoins).toHaveBeenCalledWith(
+            'wallet1',
+            1,
+            'dojo_sensei_win',
+            {},
+            'Beat Sensei in the Dojo'
+        );
         expect(sendToPlayer).toHaveBeenCalledWith(
             'player-1',
-            expect.objectContaining({ type: 'onboarding_quest_update', justCompletedStepId: 'dojo_gold' })
+            expect.objectContaining({ type: 'onboarding_quest_update', justCompletedStepId: 'dojo_gold', dojoRewardGold: 1 })
+        );
+        expect(sendToPlayer).toHaveBeenCalledWith(
+            'player-1',
+            expect.objectContaining({ type: 'coins_update', coins: 600 })
         );
     });
 
-    it('awards 500 gold when final step completes', async () => {
+    it('dojo step requires beating Sensei (win only)', async () => {
+        await service.handleMinigameComplete('wallet1', 'dojo', false);
+        expect(mockUser.onboardingQuest.completedSteps).toEqual([]);
+        expect(userService.addCoins).not.toHaveBeenCalled();
+
+        await service.handleMinigameComplete('wallet1', 'dojo', true);
+        expect(mockUser.onboardingQuest.completedSteps).toEqual(['dojo_gold']);
+        expect(userService.addCoins).toHaveBeenCalledWith(
+            'wallet1',
+            1,
+            'dojo_sensei_win',
+            {},
+            'Beat Sensei in the Dojo'
+        );
+    });
+
+    it('awards 10 gold when final step completes', async () => {
         mockUser.onboardingQuest.completedSteps = [
             'dojo_gold',
             'ferry_snow_forts',
@@ -60,7 +87,7 @@ describe('OnboardingQuestService', () => {
         expect(result.updated).toBe(true);
         expect(userService.addCoins).toHaveBeenCalledWith(
             'wallet1',
-            500,
+            10,
             'onboarding_quest_reward',
             expect.any(Object),
             expect.any(String)

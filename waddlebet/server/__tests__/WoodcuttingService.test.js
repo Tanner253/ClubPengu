@@ -65,8 +65,11 @@ vi.mock('../config/gameItems.js', () => ({
 
 
 const { default: WoodcuttingService } = await import('../services/WoodcuttingService.js');
-const { getHarvestableTree } = await import('../config/harvestableTrees.js');
+const { HARVESTABLE_TREES, getHarvestableTree } = await import('../config/harvestableTrees.js');
 const { getChopDurabilityLoss } = await import('../config/economy.js');
+
+const HOLD_TREE = HARVESTABLE_TREES.find((t) => t.chopMode === 'hold');
+const MANUAL_TREE = HARVESTABLE_TREES.find((t) => t.chopMode === 'manual');
 
 
 
@@ -115,14 +118,14 @@ describe('WoodcuttingService', () => {
             success: true,
             treeState: { id: 'ht_001', state: 'ready', choppingBy: 'p1' }
         });
-        mockForestTreeService.harvestTree.mockReturnValue({
+        mockForestTreeService.harvestTree.mockImplementation(async (treeId) => ({
             wood: 1,
-            logItemId: 'pine_log',
+            logItemId: getHarvestableTree(treeId)?.woodType || 'pine_log',
             stage: 'sapling',
             label: 'Sapling',
             regrowAt: Date.now() + 1800000,
-            preHarvest: { state: 'ready', stage: 'mature', regrowAt: null, choppingBy: 'p1', chopStartedAt: 1 }
-        });
+            preHarvest: { state: 'ready', stage: getHarvestableTree(treeId)?.stage || 'mature', regrowAt: null, choppingBy: 'p1', chopStartedAt: 1 }
+        }));
         mockForestTreeService.getTreePublicState.mockReturnValue({
             id: 'ht_01',
             state: 'harvested',
@@ -161,7 +164,7 @@ describe('WoodcuttingService', () => {
 
         mockGetEquippedTool.mockReturnValue(null);
 
-        const result = await service.startChop('p1', 'wallet', 'ht_001', false);
+        const result = await service.startChop('p1', 'wallet', HOLD_TREE.id, false);
 
         expect(result.error).toBe('NO_AXE');
 
@@ -171,13 +174,13 @@ describe('WoodcuttingService', () => {
 
     it('starts session when axe is equipped on hotbar', async () => {
 
-        const result = await service.startChop('p1', 'wallet', 'ht_001', false);
+        const result = await service.startChop('p1', 'wallet', HOLD_TREE.id, false);
 
         expect(result.success).toBe(true);
 
         expect(result.sessionId).toBeTruthy();
 
-        expect(result.treeId).toBe('ht_001');
+        expect(result.treeId).toBe(HOLD_TREE.id);
 
         expect(result.axeDurability).toBe(50);
 
@@ -187,7 +190,7 @@ describe('WoodcuttingService', () => {
 
     it('grants stage wood and damages axe on successful chop result', async () => {
 
-        const start = await service.startChop('p1', 'wallet', 'ht_001', false);
+        const start = await service.startChop('p1', 'wallet', HOLD_TREE.id, false);
 
         const result = await service.handleChopResult('p1', 'wallet', {
 
@@ -199,32 +202,31 @@ describe('WoodcuttingService', () => {
 
         expect(result.success).toBe(true);
 
-        expect(result.wood.id).toBe('pine_log');
+        expect(result.wood.id).toBe(HOLD_TREE.woodType);
 
-        expect(mockForestTreeService.harvestTree).toHaveBeenCalledWith('ht_001', expect.objectContaining({
+        expect(mockForestTreeService.harvestTree).toHaveBeenCalledWith(HOLD_TREE.id, expect.objectContaining({
             axeItemId: 'basic_axe',
             chopMode: 'hold',
-            loot: expect.objectContaining({ logItemId: expect.any(String), quantity: expect.any(Number) })
+            loot: expect.objectContaining({ logItemId: HOLD_TREE.woodType, quantity: expect.any(Number) })
         }));
 
-        expect(mockAddItem).toHaveBeenCalledWith('wallet', 'pine_log', 1, expect.any(Object));
+        expect(mockAddItem).toHaveBeenCalledWith('wallet', HOLD_TREE.woodType, 1, expect.any(Object));
 
         expect(mockDamageEquippedTool).toHaveBeenCalledWith(
             'wallet',
-            getChopDurabilityLoss(getHarvestableTree('ht_001').stage, 'basic_axe')
+            getChopDurabilityLoss(getHarvestableTree(HOLD_TREE.id).stage, 'basic_axe')
         );
 
     });
 
     it('rejects hold chop on manual tree', async () => {
-        const manualTree = getHarvestableTree('ht_002');
-        expect(manualTree?.chopMode).toBe('manual');
-        const result = await service.startChop('p1', 'wallet', 'ht_002', false);
+        expect(MANUAL_TREE?.chopMode).toBe('manual');
+        const result = await service.startChop('p1', 'wallet', MANUAL_TREE.id, false);
         expect(result.error).toBe('MANUAL_TREE');
     });
 
     it('starts manual chop session for voxel trees', async () => {
-        const result = await service.startManualChop('p1', 'wallet', 'ht_002', false);
+        const result = await service.startManualChop('p1', 'wallet', MANUAL_TREE.id, false);
         expect(result.success).toBe(true);
         expect(result.chopMode).toBe('manual');
         expect(result.woodYield).toBeGreaterThan(1);
@@ -232,7 +234,7 @@ describe('WoodcuttingService', () => {
 
     it('manual chop hit tracks cuts and triggers fall', async () => {
         vi.useFakeTimers();
-        const start = await service.startManualChop('p1', 'wallet', 'ht_002', false);
+        const start = await service.startManualChop('p1', 'wallet', MANUAL_TREE.id, false);
         let falling = false;
         for (let i = 0; i < 80 && !falling; i++) {
             vi.advanceTimersByTime(150);
@@ -256,7 +258,7 @@ describe('WoodcuttingService', () => {
         expect(extraHit.error).toBeUndefined();
         const complete = await service.completeManualChop('p1', 'wallet', { sessionId: start.sessionId });
         expect(complete.success).toBe(true);
-        expect(mockForestTreeService.harvestTree).toHaveBeenCalledWith('ht_002', expect.objectContaining({
+        expect(mockForestTreeService.harvestTree).toHaveBeenCalledWith(MANUAL_TREE.id, expect.objectContaining({
             axeItemId: 'basic_axe',
             chopMode: 'manual'
         }));
@@ -269,7 +271,7 @@ describe('WoodcuttingService', () => {
             message: 'Backpack is full — upgrade or sell items'
         });
 
-        const result = await service.startChop('p1', 'wallet', 'ht_001', false);
+        const result = await service.startChop('p1', 'wallet', HOLD_TREE.id, false);
         expect(result.error).toBe('INVENTORY_FULL');
         expect(mockForestTreeService.reserveTree).not.toHaveBeenCalled();
     });
@@ -279,7 +281,7 @@ describe('WoodcuttingService', () => {
             .mockResolvedValueOnce({ ok: true })
             .mockResolvedValue({ ok: false, error: 'INVENTORY_FULL', message: 'Backpack is full — upgrade or sell items' });
 
-        const start = await service.startChop('p1', 'wallet', 'ht_001', false);
+        const start = await service.startChop('p1', 'wallet', HOLD_TREE.id, false);
         expect(start.success).toBe(true);
         const result = await service.handleChopResult('p1', 'wallet', {
             sessionId: start.sessionId,
@@ -297,7 +299,7 @@ describe('WoodcuttingService', () => {
             message: 'Backpack is full — upgrade or sell items'
         });
 
-        const start = await service.startChop('p1', 'wallet', 'ht_001', false);
+        const start = await service.startChop('p1', 'wallet', HOLD_TREE.id, false);
         const result = await service.handleChopResult('p1', 'wallet', {
             sessionId: start.sessionId,
             success: true

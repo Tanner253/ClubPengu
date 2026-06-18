@@ -3,6 +3,7 @@
  */
 
 export const MUSHROOM_INTERACTION_RADIUS = 2.2;
+export const MUSHROOM_HARVEST_MS = 4000;
 
 export const HARVESTABLE_MUSHROOMS = [
     { id: 'mushroom_1', localX: 38, localZ: 82 },

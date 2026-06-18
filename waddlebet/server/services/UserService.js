@@ -4,6 +4,13 @@
  */
 
 import { User, Transaction, Puffle, OwnedCosmetic, CosmeticTemplate } from '../db/models/index.js';
+import {
+    applyGoldBalanceRetention,
+    GOLD_ECONOMY_VERSION,
+    PUFFLE_SOCIAL_GOLD_REWARD,
+    isValidWagerGold,
+} from '../config/goldEconomy.js';
+import { getPuffleShopItems, getPuffleAccessoryEntry } from '../config/puffleAccessories.js';
 
 // ========== FREE ITEMS (always available, no gacha needed) ==========
 const FREE_ITEMS = ['none', 'normal', 'beak'];
@@ -23,6 +30,38 @@ const PROMO_EXCLUSIVE_IDS = [
 ];
 
 class UserService {
+    /**
+     * One-time gold balance haircut when economy version bumps.
+     */
+    async ensureGoldEconomyApplied(user) {
+        if (!user) return null;
+
+        const { coins, applied } = applyGoldBalanceRetention(
+            user.coins,
+            user.goldEconomyVersion || 0
+        );
+
+        if (!applied) return user;
+
+        const before = user.coins || 0;
+        user.coins = coins;
+        user.goldEconomyVersion = GOLD_ECONOMY_VERSION;
+        await user.save();
+
+        await Transaction.record({
+            type: 'gold_economy_rebalance',
+            toWallet: user.walletAddress,
+            amount: coins - before,
+            toBalanceBefore: before,
+            toBalanceAfter: coins,
+            reason: `Gold economy v${GOLD_ECONOMY_VERSION} — retained ${Math.round(coins / Math.max(before, 1) * 100)}%`,
+            metadata: { version: GOLD_ECONOMY_VERSION, before, after: coins },
+        });
+
+        console.log(`💰 Gold rebalance ${user.walletAddress.slice(0, 8)}… ${before}g → ${coins}g`);
+        return user;
+    }
+
     /**
      * Get user by wallet address
      */
@@ -259,8 +298,11 @@ class UserService {
      * Check if user has enough coins for a wager
      */
     async canAffordWager(walletAddress, amount) {
+        if (!isValidWagerGold(amount)) return false;
+        const n = Math.floor(Number(amount) || 0);
+        if (n <= 0) return true;
         const user = await this.getUser(walletAddress);
-        return user && user.coins >= amount;
+        return user && user.coins >= n;
     }
 
     /**
@@ -472,32 +514,42 @@ class UserService {
     }
 
     /**
-     * Buy accessory for puffle
+     * Buy accessory for puffle — price from server catalog only.
      */
-    async buyPuffleAccessory(walletAddress, puffleId, category, itemId, price) {
+    async buyPuffleAccessory(walletAddress, puffleId, category, accessoryId) {
         const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
         if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
 
-        // Check if already owned
-        const categoryMap = { hat: 'hats', glasses: 'glasses', neckwear: 'neckwear' };
-        const arrayKey = categoryMap[category] || category;
-        if (puffle.ownedAccessories[arrayKey]?.includes(itemId)) {
-            return { success: false, error: 'ALREADY_OWNED' };
+        const entry = getPuffleAccessoryEntry(category, accessoryId);
+        if (!entry) {
+            return { success: false, error: 'INVALID_ACCESSORY' };
+        }
+
+        const price = entry.price;
+        if (price <= 0) {
+            return { success: false, error: 'NOT_PURCHASABLE' };
         }
 
         const user = await this.getUser(walletAddress);
         if (!user || user.coins < price) {
-            return { success: false, error: 'INSUFFICIENT_FUNDS', required: price };
+            return { success: false, error: 'INSUFFICIENT_FUNDS', required: price, have: user?.coins || 0 };
         }
 
-        // Deduct coins
-        await this.addCoins(walletAddress, -price, 'puffle_accessory', { puffleId, category, itemId }, `Bought ${itemId} ${category}`);
+        const result = puffle.addAccessory(category, accessoryId);
+        if (!result.success) {
+            return result;
+        }
 
-        // Add accessory
-        puffle.addAccessory(category, itemId);
+        await this.addCoins(
+            walletAddress,
+            -price,
+            'puffle_accessory',
+            { puffleId, category, accessoryId },
+            `Bought ${accessoryId} for puffle`
+        );
         await puffle.save();
 
-        return { success: true, puffle: puffle.toClientData() };
+        return { success: true, puffle: puffle.toClientData(), category, accessoryId, price };
     }
 
     /**
@@ -610,8 +662,7 @@ class UserService {
         await puffle.save();
         await otherPuffle.save();
 
-        // Award gold to both players
-        const goldReward = 10;
+        const goldReward = PUFFLE_SOCIAL_GOLD_REWARD;
         await this.addCoins(walletAddress, goldReward, 'puffle_social', { otherWallet: otherWalletAddress }, 'Puffle social bonus');
         await this.addCoins(otherWalletAddress, goldReward, 'puffle_social', { otherWallet: walletAddress }, 'Puffle social bonus');
 
@@ -663,7 +714,7 @@ class UserService {
      * Get puffle shop items (food, toys, accessories)
      */
     getPuffleShopItems() {
-        return Puffle.getShopItems();
+        return getPuffleShopItems();
     }
 
     /**
@@ -714,31 +765,6 @@ class UserService {
         await puffle.save();
 
         return { success: true, puffle: puffle.toClientData(), ...feedResult, usedFromInventory: true };
-    }
-
-    /**
-     * Buy accessory for puffle
-     */
-    async buyPuffleAccessory(walletAddress, puffleId, category, accessoryId, price) {
-        const puffle = await Puffle.findOne({ puffleId, ownerWallet: walletAddress });
-        if (!puffle) return { success: false, error: 'PUFFLE_NOT_FOUND' };
-
-        const user = await this.getUser(walletAddress);
-        if (!user || user.coins < price) {
-            return { success: false, error: 'INSUFFICIENT_FUNDS', required: price, have: user?.coins || 0 };
-        }
-
-        // Check if already owned
-        const result = puffle.addAccessory(category, accessoryId);
-        if (!result.success) {
-            return result;
-        }
-
-        // Deduct coins
-        await this.addCoins(walletAddress, -price, 'puffle_accessory', { puffleId, category, accessoryId }, `Bought ${accessoryId} for puffle`);
-        await puffle.save();
-
-        return { success: true, puffle: puffle.toClientData(), category, accessoryId };
     }
 
     /**
@@ -993,16 +1019,24 @@ class UserService {
     /**
      * Purchase a cosmetic
      */
-    async purchaseCosmetic(walletAddress, cosmeticId, price, category = 'cosmetic') {
+    async purchaseCosmetic(walletAddress, cosmeticId, _clientPrice, category = 'cosmetic') {
         const user = await this.getUser(walletAddress);
         if (!user) return { success: false, error: 'USER_NOT_FOUND' };
 
-        // Check if already owned
         if (user.ownsCosmetic(cosmeticId)) {
             return { success: false, error: 'ALREADY_OWNED' };
         }
 
-        // Check funds
+        const template = await CosmeticTemplate.findOne({ templateId: cosmeticId });
+        if (!template) {
+            return { success: false, error: 'UNKNOWN_COSMETIC' };
+        }
+
+        const price = Math.max(0, Math.floor(template.goldPrice ?? template.price ?? 0));
+        if (price <= 0) {
+            return { success: false, error: 'NOT_PURCHASABLE' };
+        }
+
         if (user.coins < price) {
             return { success: false, error: 'INSUFFICIENT_FUNDS', required: price, have: user.coins };
         }

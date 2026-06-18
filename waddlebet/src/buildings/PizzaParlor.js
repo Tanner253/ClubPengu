@@ -4,6 +4,7 @@
  */
 
 import BaseBuilding from './BaseBuilding';
+import { addBuildingBanner } from './buildingBanner';
 
 class PizzaParlor extends BaseBuilding {
     build({ w = 12, h = 7, d = 10 } = {}) {
@@ -253,6 +254,18 @@ class PizzaParlor extends BaseBuilding {
             bulb.position.set(-3 + i, h - 0.1 + Math.sin(i * 0.8) * 0.12, d / 2 + 0.6);
             group.add(bulb);
         }
+
+        addBuildingBanner(this.THREE, group, {
+            title: 'Pizza Parlor',
+            subtitle: 'Hot slices · Daily specials',
+            y: h + 5.5,
+            z: d / 2 + 3.8,
+            scaleX: 15,
+            scaleY: 3.8,
+            primaryColor: '#FFA500',
+            glowColor: '#FF4500',
+            name: 'pizza_parlor_banner',
+        });
 
         return group;
     }

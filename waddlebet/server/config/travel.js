@@ -3,6 +3,8 @@
  * Every passenger requires a paid ticket; one payer may buy tickets for others at the dock.
  */
 
+import { FERRY_GOLD_COST } from './goldEconomy.js';
+
 export const TRAVEL_TIMING = {
     /** Seconds to wait at dock after the first ticket before departure */
     BOARDING_SECONDS: 25,
@@ -50,7 +52,7 @@ export const TRAVEL_ROUTES = {
         toRoom: 'snow_forts',
         name: 'Snow Forts',
         emoji: '⛄',
-        ticketCost: 25,
+        ticketCost: FERRY_GOLD_COST,
     },
     snow_forts_town: {
         id: 'snow_forts_town',
@@ -58,7 +60,7 @@ export const TRAVEL_ROUTES = {
         toRoom: 'town',
         name: 'Town',
         emoji: '🏘️',
-        ticketCost: 25,
+        ticketCost: FERRY_GOLD_COST,
     },
     snow_forts_forest: {
         id: 'snow_forts_forest',
@@ -66,7 +68,7 @@ export const TRAVEL_ROUTES = {
         toRoom: 'forest_trails',
         name: 'Forest Trails',
         emoji: '🌲',
-        ticketCost: 35,
+        ticketCost: FERRY_GOLD_COST,
         transitSeconds: 45,
     },
     forest_snow_forts: {
@@ -75,7 +77,7 @@ export const TRAVEL_ROUTES = {
         toRoom: 'snow_forts',
         name: 'Snow Forts',
         emoji: '⛄',
-        ticketCost: 35,
+        ticketCost: FERRY_GOLD_COST,
         transitSeconds: 45,
     },
     forest_town: {
@@ -84,7 +86,7 @@ export const TRAVEL_ROUTES = {
         toRoom: 'town',
         name: 'Town',
         emoji: '🏘️',
-        ticketCost: 35,
+        ticketCost: FERRY_GOLD_COST,
         transitSeconds: 45,
     },
 };

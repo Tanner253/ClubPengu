@@ -156,8 +156,8 @@ const en: Record<string, string> = {
   "roadmap.mmorpg.bullet2": "Skills — Fishing, Woodcutting, Parkour improve yields",
   "roadmap.mmorpg.bullet3": "Economy — Gold circulates; $CP earns are capped; materials trade on market",
   "roadmap.mmorpg.bullet4": "Property — Igloo rentals today; more ownership options explored with community",
-  "roadmap.mmorpg.fullDoc": "Read the full investor roadmap on GitHub",
-  "roadmap.mmorpg.fullDocHref": "https://github.com/Tanner253/ClubPengu/blob/main/waddlebet/docs/MMORPG_ROADMAP.md",
+  "roadmap.mmorpg.fullDoc": "Read the full MMORPG roadmap on GitHub",
+  "roadmap.mmorpg.fullDocHref": "https://github.com/Tanner253/waddlebet/blob/main/waddlebet/docs/MMORPG_ROADMAP.md",
 
   "finalCta.title": "Ready to waddle in?",
   "finalCta.sub":
@@ -313,8 +313,8 @@ const zhTW: Record<string, string> = {
   "roadmap.mmorpg.bullet2": "技能——釣魚、伐木、跑酷提升收益",
   "roadmap.mmorpg.bullet3": "經濟——金幣循環；$CP 有上限；材料可交易",
   "roadmap.mmorpg.bullet4": "地產——冰屋租賃已上線；更多持有形式依社群需求探索",
-  "roadmap.mmorpg.fullDoc": "完整投資人路線圖見 GitHub",
-  "roadmap.mmorpg.fullDocHref": "https://github.com/Tanner253/ClubPengu/blob/main/waddlebet/docs/MMORPG_ROADMAP.md",
+  "roadmap.mmorpg.fullDoc": "完整 MMORPG 路線圖見 GitHub",
+  "roadmap.mmorpg.fullDocHref": "https://github.com/Tanner253/waddlebet/blob/main/waddlebet/docs/MMORPG_ROADMAP.md",
 
   "finalCta.title": "準備好搖搖擺擺進場了嗎？",
   "finalCta.sub": "你剛讀到的一切現在都已上線。進入世界、打造你的企鵝，在牌桌前入座。",

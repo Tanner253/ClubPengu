@@ -6,12 +6,12 @@ import { useMultiplayer } from '../multiplayer';
 /**
  * Card Jitsu - The Dojo card battle minigame
  * Fire beats Snow, Snow beats Water, Water beats Fire
- * Server-authoritative rewards for authenticated users
+ * Practice vs Sensei — beat him once for 1g (onboarding). Challenge players in town for gold wagers.
  */
 const CardJitsu = ({ penguinData, onExit }) => {
     const { send, isAuthenticated } = useMultiplayer();
     
-    // Pass server send function to game for rewards
+    // Pass server send for onboarding quest progress (no solo gold)
     const [game] = useState(() => new CardJitsuGame({
         serverSend: isAuthenticated ? send : null
     }));
@@ -65,9 +65,6 @@ const CardJitsu = ({ penguinData, onExit }) => {
                             setBattleResult(null);
                             setGameOver({
                                 won: battleResult.gameResult === 'player',
-                                coins: battleResult.gameResult === 'player' 
-                                    ? game.baseReward + game.winBonus 
-                                    : game.baseReward
                             });
                         }, 2000);
                     }
@@ -226,15 +223,13 @@ const CardJitsu = ({ penguinData, onExit }) => {
                 {renderWinTracker(gameState.playerWins, 'You')}
             </div>
 
-            {/* How to Play */}
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-10">
-                <div className="bg-black/60 backdrop-blur-sm border border-white/10 rounded-xl px-4 py-3 text-xs text-white/80 max-w-lg shadow-lg">
-                    <div className="flex flex-wrap gap-3 items-center justify-center">
-                        <span className="retro-text text-yellow-300 text-[10px] tracking-wide">HOW TO PLAY</span>
-                        <span>🔥 beats ❄️</span>
-                        <span>❄️ beats 💧</span>
-                        <span>💧 beats 🔥</span>
-                        <span className="text-white/60">Win with 3 of same element or 1 of each</span>
+            {/* How to Play — compact on mobile */}
+            <div className="absolute top-12 md:top-16 left-1/2 -translate-x-1/2 z-10 max-w-[92vw] md:max-w-lg">
+                <div className="bg-black/60 backdrop-blur-sm border border-white/10 rounded-lg md:rounded-xl px-2 py-1 md:px-4 md:py-2 text-[10px] md:text-xs text-white/80 shadow-lg">
+                    <div className="flex flex-col md:flex-row md:flex-wrap gap-0.5 md:gap-3 items-center justify-center">
+                        <span className="retro-text text-yellow-300 text-[9px] md:text-[10px] tracking-wide">HOW TO PLAY</span>
+                        <span>🔥 beats ❄️ · ❄️ beats 💧 · 💧 beats 🔥</span>
+                        <span className="text-white/60 text-center">Win with 3 of same element or 1 of each</span>
                     </div>
                 </div>
             </div>
@@ -346,11 +341,12 @@ const CardJitsu = ({ penguinData, onExit }) => {
                                 ? 'You have mastered the elements!' 
                                 : 'The Sensei was too powerful...'}
                         </p>
-                        <div className="bg-yellow-500/20 rounded-lg p-4 mb-6">
-                            <p className="text-yellow-400 text-lg retro-text">
-                                +{gameOver.coins} 💰
+                        <div className="bg-purple-500/20 border border-purple-400/30 rounded-lg p-4 mb-6 text-left">
+                            <p className="text-purple-200 text-sm retro-text font-bold mb-1">Practice mode</p>
+                            <p className="text-white/70 text-xs leading-relaxed">
+                                Solo games don&apos;t mint gold — it stays valuable.
+                                Right-click a penguin in town to challenge for a gold wager, or play for fun.
                             </p>
-                            <p className="text-white/60 text-xs">Coins Earned</p>
                         </div>
                         <div className="flex gap-4 justify-center">
                             <button 

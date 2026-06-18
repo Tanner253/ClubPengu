@@ -9,14 +9,14 @@ import BannerZoomOverlay from './components/BannerZoomOverlay';
 import IglooRentalGuide from './components/IglooRentalGuide';
 import GachaDropRatesGuide from './components/GachaDropRatesGuide';
 import PufflePanel from './components/PufflePanel';
-import PuffleShopModal from './components/PuffleShopModal';
 import VirtualJoystick from './components/VirtualJoystick';
 import TouchCameraControl from './components/TouchCameraControl';
 import SettingsMenu from './components/SettingsMenu';
 import ChangelogModal from './components/ChangelogModal';
 import EmoteWheel from './components/EmoteWheel';
 import GameManager from './engine/GameManager';
-import { GOLD_SLOT_BET } from './config/goldSlots';
+import { GOLD_SLOT_BET, GOLD_SLOT_BET_MIN, GOLD_SLOT_BET_MAX, clampGoldSlotBet } from './config/goldSlots';
+import { PVE_BJ_MIN_BET, PVE_BJ_MAX_BET } from './config/goldEconomy';
 import Puffle from './engine/Puffle';
 import { createPenguinBuilder, cacheAnimatedParts, animateCosmeticsFromCache } from './engine/PenguinBuilder';
 import TownCenter from './rooms/TownCenter';
@@ -32,7 +32,8 @@ import { useChallenge } from './challenge';
 import { useIgloo } from './igloo';
 import { getRoomLabel } from './utils/roomLabels';
 import { useLanguage } from './i18n';
-import { EMOTE_WHEEL_ITEMS, LOOPING_EMOTES, EMOTE_EMOJI_MAP } from './systems';
+import { EMOTE_WHEEL_ITEMS, LOOPING_EMOTES, EMOTE_EMOJI_MAP, createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, GoldLobbySlotSystem, JackpotCelebration, IceFishingSystem, createMountainBackground, performanceManager, PERFORMANCE_PRESETS } from './systems';
+import { getHoleStockRows, getHoleStockSignature, formatRegrowEta, getHoleStatusById } from './utils/fishingHoleStock';
 import { playSfx, stopTravelHum, setMusicEnergy, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME, normalizeMusicVolume, updateProximityAmbient, stopProximityAmbient, handleRemotePlayerSfx } from './audio';
 import { 
     CITY_SIZE, 
@@ -64,7 +65,6 @@ import {
     IGLOO_BANNER_STYLES,
     IGLOO_BANNER_CONTENT
 } from './config';
-import { createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, GoldLobbySlotSystem, JackpotCelebration, IceFishingSystem, createMountainBackground, performanceManager, PERFORMANCE_PRESETS } from './systems';
 import { readLiveWebGLInfo } from './utils/browserCapabilities.js';
 import { applyLowEndMode } from './utils/lowEndRender.js';
 import { createDojo, createGiftShop, createPizzaParlor, generateDojoInterior, generatePizzaInterior } from './buildings';
@@ -96,13 +96,15 @@ import WorldDropManager from './systems/WorldDropManager';
 import { WORLD_DROP_PICKUP_RADIUS, isGoldWorldDrop } from './config/worldDrops';
 import { getOverworldMountainConfig, OVERWORLD_CENTER_SPAWN } from './config/overworldConfig';
 import { loadSnowFortsQuadrant, loadForestQuadrant } from './world/overworldLoader';
-import { HARVESTABLE_MUSHROOMS, MUSHROOM_INTERACTION_RADIUS } from './config/harvestableMushrooms';
+import { HARVESTABLE_MUSHROOMS, MUSHROOM_INTERACTION_RADIUS, MUSHROOM_HARVEST_MS } from './config/harvestableMushrooms';
+import { FORAGEABLE_LOGS, WORM_FORAGE_RADIUS, WORM_FORAGE_CHANNEL_MS } from './config/forageableLogs';
 import { findActiveScavengeSpot } from './config/scavenge';
 import { formatScavengeCountdown, getScavengeRemainingMs, getScavengeSpotPrompt } from './utils/scavengeStatus';
 import { updateHeldGameItem, removeHeldGameItem } from './items/HeldGameItemBuilder';
 import { getActiveHotbarEntry, ownsAnyRod } from './utils/gameHotbar';
 import { canFitItemInBackpack } from './utils/inventoryCapacity';
 import StarterRodPickup from './systems/StarterRodPickup';
+import GameInventoryModal from './components/GameInventoryModal';
 
 function syncRemotePlayerHeldItem(meshData, playerData, buildPartMerged) {
     if (!meshData?.mesh || !buildPartMerged) return;
@@ -117,7 +119,6 @@ function syncRemotePlayerHeldItem(meshData, playerData, buildPartMerged) {
         removeHeldGameItem(meshData.mesh);
     }
 }
-import GameInventoryModal from './components/GameInventoryModal';
 
 const VoxelWorld = ({ 
     penguinData, 
@@ -407,9 +408,14 @@ const VoxelWorld = ({
         cancelManualChop,
         fetchForestTrees,
         forestTrees,
+        fetchFishingHoles,
+        fishingHoles,
         fetchMushrooms,
         mushroomClusters,
         harvestMushroom,
+        forageLogWorms,
+        wormForageCooldowns,
+        fetchWormForageStatus,
         worldDrops,
         pickupWorldDrop,
         fetchWorldDrops,
@@ -417,6 +423,10 @@ const VoxelWorld = ({
         scavengeCooldowns,
         fetchScavengeStatus,
         turnInMushroomQuest,
+        turnInNpcQuest,
+        acceptNpcQuest,
+        dailyQuestStatus,
+        fetchDailyQuestStatus,
         roomTravelVoyages,
         travelRouteStatuses,
         myTravelVoyage,
@@ -698,7 +708,7 @@ const VoxelWorld = ({
     const emoteSelectionRef = useRef(-1); // Sticky selection - persists until changed
     const emoteWheelKeyHeld = useRef(false); // Track if T is currently held
     const emoteRef = useRef({ type: null, startTime: 0 });
-    const [showPufflePanel, setShowPufflePanel] = useState(false);
+    const [showPetShop, setShowPetShop] = useState(false);
     const playerPuffleRef = useRef(null);
     const puffleInteractionsRef = useRef(new Map()); // Track player -> last interaction time
     const puffleInteractionActiveRef = useRef(null); // Currently active interaction {playerId, startTime}
@@ -762,6 +772,7 @@ const VoxelWorld = ({
     // Slot Machine Interaction State
     const [slotInteraction, setSlotInteraction] = useState(null); // { machine, prompt, canSpin }
     const [goldSlotInteraction, setGoldSlotInteraction] = useState(null);
+    const [goldSlotBet, setGoldSlotBet] = useState(GOLD_SLOT_BET);
     
     // Blackjack Table Interaction State
     const [blackjackInteraction, setBlackjackInteraction] = useState(null); // { tableId, prompt, canPlay }
@@ -775,6 +786,8 @@ const VoxelWorld = ({
     const [forestStumpHover, setForestStumpHover] = useState(null);
     const forestStumpHoverRef = useRef(null);
     const [mushroomInteraction, setMushroomInteraction] = useState(null);
+    const [mushroomHarvestProgress, setMushroomHarvestProgress] = useState(null);
+    const [logForageInteraction, setLogForageInteraction] = useState(null);
     const [worldDropInteraction, setWorldDropInteraction] = useState(null);
     const [scavengeInteraction, setScavengeInteraction] = useState(null);
     const scavengeLockRef = useRef(false);
@@ -788,7 +801,21 @@ const VoxelWorld = ({
             fetchScavengeStatus?.();
         }
     }, [room, isAuthenticated, fetchScavengeStatus]);
+    useEffect(() => {
+        if (room === 'forest_trails' && isAuthenticated) {
+            fetchWormForageStatus?.();
+        }
+    }, [room, isAuthenticated, fetchWormForageStatus]);
+
+    const wormForageCooldownsRef = useRef(wormForageCooldowns);
+    useEffect(() => {
+        wormForageCooldownsRef.current = wormForageCooldowns;
+    }, [wormForageCooldowns]);
+
     const mushroomLockRef = useRef(false);
+    const mushroomHarvestTimerRef = useRef(null);
+    const logForageLockRef = useRef(false);
+    const logForageTimerRef = useRef(null);
     const worldDropLockRef = useRef(false);
     const [woodChopProgress, setWoodChopProgress] = useState(null);
     const [manualChopActive, setManualChopActive] = useState(false); // { progress 0-1, spotId }
@@ -1367,6 +1394,7 @@ const VoxelWorld = ({
                 iceFishingSystemRef.current.initForTown(townCenter.fishingSpots, scene);
                 // Set players ref for positioning catch bubbles above players
                 iceFishingSystemRef.current.setPlayersRef(() => playersDataRef.current);
+                fetchFishingHoles?.();
                 if (!woodcuttingSystemRef.current) {
                     woodcuttingSystemRef.current = new WoodcuttingSystem();
                 }
@@ -1739,6 +1767,7 @@ const VoxelWorld = ({
                 }
                 iceFishingSystemRef.current.initForTown(sf.fishingSpots, scene);
                 iceFishingSystemRef.current.setPlayersRef(() => playersDataRef.current);
+                fetchFishingHoles?.();
                 if (!starterRodPickupRef.current) {
                     starterRodPickupRef.current = new StarterRodPickup();
                 }
@@ -9090,7 +9119,8 @@ const VoxelWorld = ({
             playerPos.z,
             playerCoins,
             isAuthenticated,
-            playerPos.y || 0
+            playerPos.y || 0,
+            goldSlotBet
         );
 
         if (interaction) {
@@ -9098,7 +9128,8 @@ const VoxelWorld = ({
                 || goldSlotInteraction.machine?.id !== interaction.machine?.id
                 || goldSlotInteraction.prompt !== interaction.prompt
                 || goldSlotInteraction.canSpin !== interaction.canSpin
-                || goldSlotInteraction.isSpinning !== interaction.isSpinning;
+                || goldSlotInteraction.isSpinning !== interaction.isSpinning
+                || goldSlotInteraction.bet !== interaction.bet;
             if (changed) {
                 setGoldSlotInteraction(interaction);
             }
@@ -9190,7 +9221,7 @@ const VoxelWorld = ({
             const playerCoins = isDemo
                 ? DEMO_BANKROLL
                 : (userData?.coins || GameManager.getInstance().getCoins());
-            const canPlay = isDemo || playerCoins >= 10;
+            const canPlay = isDemo || playerCoins >= PVE_BJ_MIN_BET;
             
             const newInteraction = {
                 tableId: nearestTable.tableId,
@@ -9230,12 +9261,21 @@ const VoxelWorld = ({
             isAuthenticated,
             gameInventory,
             {
-                isMounted
+                isMounted,
+                fishingHoles,
             }
         );
         
         if (interaction) {
-            if (!fishingInteraction || fishingInteraction.spot?.id !== interaction.spot?.id) {
+            const stockSig = getHoleStockSignature(interaction.holeStatus);
+            const prevSig = getHoleStockSignature(fishingInteraction?.holeStatus);
+            if (
+                !fishingInteraction
+                || fishingInteraction.spot?.id !== interaction.spot?.id
+                || stockSig !== prevSig
+                || fishingInteraction.prompt !== interaction.prompt
+                || fishingInteraction.canFish !== interaction.canFish
+            ) {
                 setFishingInteraction(interaction);
             }
         } else if (fishingInteraction) {
@@ -9369,7 +9409,7 @@ const VoxelWorld = ({
     };
 
     const checkMushroomSpots = () => {
-        if (room !== 'forest_trails') {
+        if (room !== 'forest_trails' || mushroomHarvestProgress) {
             if (mushroomInteraction) setMushroomInteraction(null);
             return;
         }
@@ -9398,6 +9438,51 @@ const VoxelWorld = ({
             }
         } else if (mushroomInteraction) {
             setMushroomInteraction(null);
+        }
+    };
+
+    const checkLogForageSpots = () => {
+        if (room !== 'forest_trails' || logForageLockRef.current) {
+            if (logForageInteraction) setLogForageInteraction(null);
+            return;
+        }
+        const playerPos = posRef.current;
+        let closest = null;
+        let closestDist = Infinity;
+        for (const def of FORAGEABLE_LOGS) {
+            const dx = playerPos.x - def.localX;
+            const dz = playerPos.z - def.localZ;
+            const dist = Math.sqrt(dx * dx + dz * dz);
+            if (dist < WORM_FORAGE_RADIUS && dist < closestDist) {
+                closestDist = dist;
+                closest = def;
+            }
+        }
+        if (closest) {
+            const cooldownEndsAt = wormForageCooldownsRef.current?.[closest.id] || 0;
+            const remainingMs = cooldownEndsAt > Date.now() ? cooldownEndsAt - Date.now() : 0;
+            const canForage = remainingMs === 0;
+            const remainingSeconds = Math.ceil(remainingMs / 1000);
+            setLogForageInteraction((prev) => {
+                if (
+                    prev?.logId === closest.id
+                    && prev?.canForage === canForage
+                    && prev?.remainingSeconds === remainingSeconds
+                ) {
+                    return prev;
+                }
+                return {
+                    logId: closest.id,
+                    mossy: closest.mossy,
+                    canForage,
+                    remainingSeconds,
+                    prompt: canForage
+                        ? (isMobile ? 'Tap to search log for worms' : 'Press E to search log for worms')
+                        : `Picked over — ready in ${formatScavengeCountdown(remainingSeconds)}`,
+                };
+            });
+        } else if (logForageInteraction) {
+            setLogForageInteraction(null);
         }
     };
 
@@ -9540,9 +9625,6 @@ const VoxelWorld = ({
         }
     };
     
-    // State for puffle shop modal (opened via portal interaction)
-    const [showPuffleShop, setShowPuffleShop] = useState(false);
-    
     useEffect(() => {
         const interval = setInterval(() => {
             checkTravelNpcs();
@@ -9555,6 +9637,7 @@ const VoxelWorld = ({
             checkStarterRodPickup();
             checkWoodcuttingSpots();
             checkMushroomSpots();
+            checkLogForageSpots();
             checkWorldDropSpots();
             checkScavengeSpots();
             checkWorldNpcs();
@@ -9562,7 +9645,7 @@ const VoxelWorld = ({
             checkArcadeMachines();
         }, 200);
         return () => clearInterval(interval);
-    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, blackjackInteraction, blackjackGameActive, fishingInteraction, woodcuttingInteraction, woodChopProgress, mushroomInteraction, worldDropInteraction, scavengeInteraction, scavengeCooldowns, lordFishnuInteraction, arcadeInteraction, showPuffleShop, userData?.coins, userData?.fishingProgress?.starterRodClaimed, isAuthenticated, gameInventory, starterRodInteraction, mushroomClusters, worldDrops, nearbyNpcInteraction, nearbyTravelNpcInteraction, travelRouteStatuses]);
+    }, [nearbyPortal, room, slotInteraction, goldSlotInteraction, goldSlotBet, blackjackInteraction, blackjackGameActive, fishingInteraction, fishingHoles, woodcuttingInteraction, woodChopProgress, mushroomInteraction, mushroomHarvestProgress, logForageInteraction, worldDropInteraction, scavengeInteraction, scavengeCooldowns, wormForageCooldowns, lordFishnuInteraction, arcadeInteraction, showPetShop, userData?.coins, userData?.fishingProgress?.starterRodClaimed, isAuthenticated, gameInventory, starterRodInteraction, mushroomClusters, worldDrops, nearbyNpcInteraction, nearbyTravelNpcInteraction, travelRouteStatuses, isMobile]);
 
     useEffect(() => {
         starterRodPickupRef.current?.setVisible(shouldShowStarterRod());
@@ -9574,7 +9657,7 @@ const VoxelWorld = ({
         
         // Special action portals (no room transition)
         if (nearbyPortal.action === 'puffle_shop') {
-            setShowPuffleShop(true);
+            setShowPetShop(true);
             nearbyPortalRef.current = null;
             setNearbyPortal(null);
             return;
@@ -9837,7 +9920,7 @@ const VoxelWorld = ({
             goldLobbySlotSystemRef.current.startLocalSpin(machineId);
         }
 
-        spinGoldSlot(machineId).then(result => {
+        spinGoldSlot(machineId, current.bet ?? goldSlotBet).then(result => {
             if (result.error) {
                 setGoldSlotInteraction(current);
                 if (goldLobbySlotSystemRef.current) {
@@ -9847,7 +9930,7 @@ const VoxelWorld = ({
         }).finally(() => {
             setTimeout(() => { goldSpinLockRef.current = false; }, 500);
         });
-    }, [spinGoldSlot]);
+    }, [spinGoldSlot, goldSlotBet]);
     
     useEffect(() => {
         const handleSlotKeyPress = (e) => {
@@ -9918,6 +10001,7 @@ const VoxelWorld = ({
         setFishingGameSpot({ 
             id: spotId, 
             isDemo,
+            holeStatus: result.holeStatus || currentFishingInteraction.holeStatus || getHoleStatusById(fishingHoles, spotId),
             ...currentFishingInteraction.spot 
         });
         setFishingGameActive(true);
@@ -9928,20 +10012,15 @@ const VoxelWorld = ({
         }
         
         setTimeout(() => { fishingLockRef.current = false; }, 300);
-    }, [startFishing, playerName, fishingGameActive]);
+    }, [startFishing, playerName, fishingGameActive, fishingHoles]);
     
     // Track depth for fishing game result
     const fishingDepthRef = useRef(0);
     
     // Handle fishing game catch result
-    const handleFishingCatch = useCallback((fish) => {
+    const handleFishingCatch = useCallback((fish, _bonusCoins, catchDepth = 0) => {
         if (!fishingGameSpot) return;
-        
-        const catchDepth = fishingDepthRef.current;
-        
-        // Send catch to server for coin reward (with depth)
-        // Server will broadcast to room for catch bubble display
-        attemptCatch(fishingGameSpot.id, fish, catchDepth);
+        attemptCatch(fishingGameSpot.id, fish, catchDepth || 0);
     }, [fishingGameSpot, attemptCatch]);
     
     // Handle fishing game miss (hit bottom)
@@ -9980,10 +10059,11 @@ const VoxelWorld = ({
         if (!interaction?.canChop || !(interaction.treeId || interaction.spotId)) return;
 
         const treeId = interaction.treeId || interaction.spotId;
+        const chopPosition = { x: posRef.current.x, y: posRef.current.y, z: posRef.current.z };
         if (interaction.chopMode === 'manual') {
             woodcuttingLockRef.current = true;
             woodcuttingSystemRef.current?.setLocalManualChopping(treeId);
-            const result = await startManualChop?.(treeId);
+            const result = await startManualChop?.(treeId, chopPosition);
             if (result?.error) {
                 woodcuttingSystemRef.current?.clearLocalChopping();
                 woodcuttingLockRef.current = false;
@@ -10061,7 +10141,7 @@ const VoxelWorld = ({
         woodcuttingLockRef.current = true;
         woodcuttingSystemRef.current?.setLocalChopping(treeId);
 
-        const result = await startWoodChop?.(treeId);
+        const result = await startWoodChop?.(treeId, chopPosition);
         if (result?.error) {
             woodcuttingSystemRef.current?.clearLocalChopping();
             woodcuttingLockRef.current = false;
@@ -10180,20 +10260,74 @@ const VoxelWorld = ({
     }, [manualChopActive, exitManualChop]);
 
     const handleMushroomHarvest = useCallback(async () => {
-        if (mushroomLockRef.current) return;
+        if (mushroomLockRef.current || mushroomHarvestProgress) return;
         const interaction = mushroomInteraction;
         if (!interaction?.canHarvest || !interaction.mushroomId) return;
         mushroomLockRef.current = true;
-        const result = await harvestMushroom?.(interaction.mushroomId);
-        if (result?.success) playSfx('mushroom_pick');
-        mushroomLockRef.current = false;
-        if (result?.error) {
-            setActiveBubble(result.message || 'Could not pick mushrooms');
-            return;
-        }
-        setActiveBubble('🍄 Forest mushroom added to backpack');
+        const mushroomId = interaction.mushroomId;
+        const startedAt = Date.now();
+        setMushroomHarvestProgress({ mushroomId, progress: 0 });
         setMushroomInteraction(null);
-    }, [mushroomInteraction, harvestMushroom]);
+
+        const tick = () => {
+            const elapsed = Date.now() - startedAt;
+            const progress = Math.min(1, elapsed / MUSHROOM_HARVEST_MS);
+            setMushroomHarvestProgress({ mushroomId, progress });
+            if (progress < 1) {
+                mushroomHarvestTimerRef.current = requestAnimationFrame(tick);
+            } else {
+                setMushroomHarvestProgress({ mushroomId, progress: 1, finishing: true });
+                (async () => {
+                    const result = await harvestMushroom?.(mushroomId);
+                    if (result?.success) playSfx('mushroom_pick');
+                    mushroomLockRef.current = false;
+                    setMushroomHarvestProgress(null);
+                    if (result?.error) {
+                        setActiveBubble(result.message || 'Could not pick mushrooms');
+                        return;
+                    }
+                    setActiveBubble('🍄 Forest mushroom added to backpack');
+                })();
+            }
+        };
+        mushroomHarvestTimerRef.current = requestAnimationFrame(tick);
+    }, [mushroomInteraction, mushroomHarvestProgress, harvestMushroom]);
+
+    const handleLogForageAction = useCallback(async () => {
+        if (logForageLockRef.current) return;
+        const interaction = logForageInteraction;
+        if (!interaction?.canForage || !interaction.logId) return;
+        logForageLockRef.current = true;
+        const logId = interaction.logId;
+        const startedAt = Date.now();
+        setLogForageInteraction((prev) => prev ? { ...prev, searching: true, progress: 0 } : prev);
+
+        const tick = () => {
+            const elapsed = Date.now() - startedAt;
+            const progress = Math.min(1, elapsed / WORM_FORAGE_CHANNEL_MS);
+            setLogForageInteraction((prev) => prev ? { ...prev, searching: true, progress } : prev);
+            if (progress < 1) {
+                logForageTimerRef.current = requestAnimationFrame(tick);
+            } else {
+                (async () => {
+                    const result = await forageLogWorms?.(logId);
+                    logForageLockRef.current = false;
+                    setLogForageInteraction(null);
+                    if (result?.error) {
+                        setActiveBubble(result.message || 'Could not search log');
+                        return;
+                    }
+                    if (result?.quantity > 0) {
+                        playSfx('ui_confirm');
+                        setActiveBubble(result.message || `🪱 Found ${result.quantity} worms`);
+                    } else {
+                        setActiveBubble(result.message || 'No worms under this log');
+                    }
+                })();
+            }
+        };
+        logForageTimerRef.current = requestAnimationFrame(tick);
+    }, [logForageInteraction, forageLogWorms]);
 
     const handleWorldDropPickup = useCallback(async () => {
         if (worldDropLockRef.current) return;
@@ -10287,7 +10421,15 @@ const VoxelWorld = ({
         return () => window.removeEventListener('travelTransfer', onTravelTransfer);
     }, [onChangeRoom]);
 
-    const handleNpcDialogueAction = useCallback(async (actionId, npcDef) => {
+    const handleNpcDialogueAction = useCallback(async (actionId, npcDef, meta = null) => {
+        if (actionId === 'merchant_recipe' && npcDef?.merchantId && meta?.itemId) {
+            const r = await buyFromMerchant?.(npcDef.merchantId, meta.itemId);
+            if (r && !r.error) {
+                playSfx(r.goldMinted ? 'coins' : 'merchant_buy');
+                fetchGameInventory?.();
+            }
+            return r;
+        }
         if (actionId === 'upgrade_backpack') {
             return upgradeBackpack?.('supply_merchant');
         }
@@ -10333,8 +10475,37 @@ const VoxelWorld = ({
             fetchGameInventory?.();
             return { success: true, message: result.message || 'Earned a ferry ticket to Town!' };
         }
+        if (actionId === 'quest_accept' && meta?.questId) {
+            const result = await acceptNpcQuest?.(meta.questId);
+            if (result?.error) {
+                return { error: result.error, message: result.message };
+            }
+            playSfx('quest_step');
+            fetchDailyQuestStatus?.();
+            return { success: true, message: result.message || 'Contract accepted!' };
+        }
+        if (actionId === 'quest_salty_daily') {
+            const result = await turnInNpcQuest?.('salty_daily_catch');
+            if (result?.error) {
+                return { error: result.error, message: result.message };
+            }
+            playSfx('quest_complete');
+            fetchGameInventory?.();
+            fetchDailyQuestStatus?.();
+            return { success: true, message: result.message || 'Catch order complete!' };
+        }
+        if (actionId === 'quest_clive_daily') {
+            const result = await turnInNpcQuest?.('clive_daily_timber');
+            if (result?.error) {
+                return { error: result.error, message: result.message };
+            }
+            playSfx('quest_complete');
+            fetchGameInventory?.();
+            fetchDailyQuestStatus?.();
+            return { success: true, message: result.message || 'Timber order complete!' };
+        }
         return null;
-    }, [upgradeBackpack, upgradeRod, buyFromMerchant, fetchGameInventory, turnInMushroomQuest]);
+    }, [upgradeBackpack, upgradeRod, buyFromMerchant, fetchGameInventory, turnInMushroomQuest, turnInNpcQuest, acceptNpcQuest, fetchDailyQuestStatus]);
     
     // Handle arcade game close (PvE Battleship)
     const handleArcadeGameClose = useCallback(() => {
@@ -10381,8 +10552,12 @@ const VoxelWorld = ({
                     handleWoodChopAction();
                     return;
                 }
-                if (mushroomInteraction?.canHarvest && !nearbyPortal && !emoteWheelOpen && !mushroomLockRef.current) {
+                if (mushroomInteraction?.canHarvest && !nearbyPortal && !emoteWheelOpen && !mushroomLockRef.current && !mushroomHarvestProgress) {
                     handleMushroomHarvest();
+                    return;
+                }
+                if (logForageInteraction?.canForage && !nearbyPortal && !emoteWheelOpen && !logForageLockRef.current) {
+                    handleLogForageAction();
                     return;
                 }
             }
@@ -10396,7 +10571,7 @@ const VoxelWorld = ({
         };
         window.addEventListener('keydown', handleFishingKeyPress);
         return () => window.removeEventListener('keydown', handleFishingKeyPress);
-    }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction, handleWoodChopAction, handleMushroomHarvest, handleScavengeAction, handleWorldDropPickup, handleStarterRodClaim, woodChopProgress, mushroomInteraction, worldDropInteraction, scavengeInteraction, starterRodInteraction, fishingGameActive]);
+    }, [nearbyPortal, emoteWheelOpen, room, handleFishingAction, handleWoodChopAction, handleMushroomHarvest, handleLogForageAction, handleScavengeAction, handleWorldDropPickup, handleStarterRodClaim, woodChopProgress, mushroomInteraction, mushroomHarvestProgress, logForageInteraction, worldDropInteraction, scavengeInteraction, starterRodInteraction, fishingGameActive]);
     
     // E key handler for arcade machines (Battleship PvE)
     useEffect(() => {
@@ -11746,11 +11921,10 @@ const VoxelWorld = ({
                     playSfx('wood_chop_complete');
                     const qty = data.wood.quantity || 1;
                     const label = `${data.wood.emoji || '🪵'} ${qty}× ${data.wood.name}`;
-                    const multNote = data.woodMultiplier > 1 ? ' (manual 1.5×)' : '';
                     setActiveBubble(
                         data.axeBroken
-                            ? `Chopped ${label}${multNote}! Your axe broke — buy a new one from Clive.`
-                            : `Chopped ${label}${multNote}!`
+                            ? `Chopped ${label}! Your axe broke — buy a new one from Clive.`
+                            : `Chopped ${label}!`
                     );
                 }
             },
@@ -12177,6 +12351,7 @@ const VoxelWorld = ({
              {fishingGameActive && fishingGameSpot && (
                 <IceFishingGame
                     spotId={fishingGameSpot.id}
+                    holeStatus={fishingGameSpot.holeStatus}
                     playerName={playerName}
                     isDemo={fishingGameSpot.isDemo}
                     fishingResult={fishingResult}
@@ -12366,7 +12541,6 @@ const VoxelWorld = ({
              
              {/* HUD - Top Right */}
              <GameHUD 
-                onOpenPuffles={() => setShowPufflePanel(true)}
                 onOpenSettings={() => setShowSettings(true)}
                 isMobile={isMobile}
                 playerCount={playerCount}
@@ -12425,12 +12599,26 @@ const VoxelWorld = ({
                         </p>
                     )}
                     {goldSlotInteraction.canSpin && !goldSlotSpinning && (
+                        <div className="flex items-center gap-2 mb-2">
+                            <label className="text-xs text-gray-400">Bet</label>
+                            <input
+                                type="number"
+                                min={GOLD_SLOT_BET_MIN}
+                                max={GOLD_SLOT_BET_MAX}
+                                value={goldSlotBet}
+                                onChange={(e) => setGoldSlotBet(clampGoldSlotBet(e.target.value))}
+                                className="w-16 px-2 py-1 rounded bg-black/50 border border-yellow-500/40 text-yellow-200 text-sm text-center"
+                            />
+                            <span className="text-xs text-gray-500">g (max {GOLD_SLOT_BET_MAX})</span>
+                        </div>
+                    )}
+                    {goldSlotInteraction.canSpin && !goldSlotSpinning && (
                         <button
                             className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm bg-gradient-to-b from-yellow-400 to-yellow-600 hover:from-yellow-300 hover:to-yellow-500 text-black transition-all active:scale-95 shadow-lg"
                             onClick={handleGoldSlotSpin}
                             disabled={goldSlotSpinning}
                         >
-                            {`🎰 SPIN (${GOLD_SLOT_BET}g)`}
+                            {`🎰 SPIN (${clampGoldSlotBet(goldSlotBet)}g)`}
                         </button>
                     )}
                     <p className="text-gray-500 text-xs mt-2">🍒🍋🍊 3× match pays · Gold 7 = 200×</p>
@@ -12558,7 +12746,7 @@ const VoxelWorld = ({
                     }`}>
                         {blackjackInteraction.isDemo
                             ? 'Fun play — no real gold wagered'
-                            : blackjackInteraction.canPlay ? 'Min $10 • Max $5000' : 'Need 10+ coins to play'}
+                            : blackjackInteraction.canPlay ? `Min ${PVE_BJ_MIN_BET}g • Max ${PVE_BJ_MAX_BET}g` : `Need ${PVE_BJ_MIN_BET}+ coins to play`}
                     </p>
                     
                     {blackjackInteraction.canPlay && (
@@ -12612,16 +12800,16 @@ const VoxelWorld = ({
              {/* Ice Fishing Interaction UI */}
              {fishingInteraction && (room === 'town' || room === 'snow_forts') && (
                 <div 
-                    className={`world-interaction-prompt absolute bg-gradient-to-b from-blue-900/95 to-cyan-900/95 backdrop-blur-sm rounded-xl border text-center z-20 shadow-lg ${
+                    className={`world-interaction-prompt absolute bg-gradient-to-b from-blue-900/95 to-cyan-900/95 backdrop-blur-sm rounded-xl border text-left z-20 shadow-lg ${
                         fishingInteraction.isDemo 
                             ? 'border-green-500/50 shadow-green-500/20' 
                             : 'border-cyan-500/50 shadow-cyan-500/20'
                     } ${
                         isMobile 
                             ? isLandscape 
-                                ? 'bottom-[180px] right-28 p-3' 
-                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3'
-                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                                ? 'bottom-[180px] right-28 p-3 w-64' 
+                                : 'bottom-[170px] left-1/2 -translate-x-1/2 p-3 w-[min(100vw-2rem,300px)]'
+                            : 'bottom-24 left-1/2 -translate-x-1/2 p-4 w-72'
                     }`}
                 >
                     <div className="text-3xl mb-1">{fishingInteraction.isDemo ? '🎁' : '🎣'}</div>
@@ -12651,6 +12839,42 @@ const VoxelWorld = ({
                         </div>
                     )}
                     
+                    {/* Hole stock — visible before casting */}
+                    {!fishingInteraction.isLocalFishing && fishingInteraction.holeStatus && (
+                        <div className="mb-2 text-left w-full min-w-[200px] max-w-[min(100vw-3rem,280px)] mx-auto">
+                            <p className={`text-[10px] uppercase tracking-wide mb-1 ${
+                                fishingInteraction.holeStatus.minnowOnly ? 'text-amber-400' : 'text-cyan-300/80'
+                            }`}>
+                                {fishingInteraction.holeStatus.minnowOnly
+                                    ? `⚠️ ${t('fishing.holeDepleted')}`
+                                    : `🌊 ${t('fishing.holeStock')}`}
+                            </p>
+                            {fishingInteraction.stockSummary && (
+                                <p className={`text-[11px] mb-1.5 ${
+                                    fishingInteraction.holeStatus.minnowOnly ? 'text-amber-300/90' : 'text-slate-300'
+                                }`}>
+                                    {fishingInteraction.stockSummary}
+                                </p>
+                            )}
+                            <div className="space-y-0.5">
+                                {getHoleStockRows(fishingInteraction.holeStatus).map((row) => (
+                                    <div
+                                        key={row.tier}
+                                        className={`flex items-center justify-between gap-2 text-[11px] px-2 py-0.5 rounded bg-black/30 border border-white/10 ${
+                                            row.depleted ? 'opacity-50' : ''
+                                        }`}
+                                        title={row.depleted && row.regrowInMs ? `${row.label} regrows in ${formatRegrowEta(row.regrowInMs)}` : row.label}
+                                    >
+                                        <span className={row.colorClass}>{row.label}</span>
+                                        <span className={`tabular-nums text-white/80 ${row.depleted ? 'line-through' : ''}`}>
+                                            {row.current}/{row.max}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {/* Prompt text */}
                     <p className={`retro-text mb-2 text-sm ${
                         fishingInteraction.currentState === 'bite' ? 'text-red-400 font-bold animate-bounce' :
@@ -12756,7 +12980,7 @@ const VoxelWorld = ({
                         {isMobile ? 'Touch & drag across the tree to chop' : 'Click & drag across the tree to chop'}
                     </p>
                     <p className="text-amber-200/80 text-xs">
-                        {isMobile ? 'Swing across the trunk · 1.5× wood reward' : 'Esc to cancel · 1.5× wood reward'}
+                        {isMobile ? 'Swing across the trunk' : 'Esc to cancel'}
                     </p>
                 </div>
              )}
@@ -12792,19 +13016,63 @@ const VoxelWorld = ({
                 </div>
              )}
 
-             {mushroomInteraction && room === 'forest_trails' && !nearbyPortal && !woodcuttingInteraction && !woodChopProgress && !fishingGameActive && (
+             {(mushroomInteraction || mushroomHarvestProgress) && room === 'forest_trails' && !nearbyPortal && !woodcuttingInteraction && !woodChopProgress && !fishingGameActive && (
                 <div className={`world-interaction-prompt absolute bg-black/80 backdrop-blur-sm rounded-xl border border-purple-500/40 text-center z-20 ${
-                    isMobile ? 'bottom-[170px] left-1/2 -translate-x-1/2 p-3' : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                    isMobile ? 'bottom-[170px] left-1/2 -translate-x-1/2 p-3 w-[min(100vw-2rem,280px)]' : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
                 }`}>
                     <div className="text-3xl mb-1">🍄</div>
-                    <p className="retro-text mb-2 text-sm text-purple-200">{mushroomInteraction.prompt}</p>
-                    <button
-                        type="button"
-                        className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm bg-gradient-to-b from-purple-400 to-fuchsia-700 text-white"
-                        onClick={handleMushroomHarvest}
-                    >
-                        Pick mushrooms
-                    </button>
+                    {mushroomHarvestProgress ? (
+                        <>
+                            <p className="retro-text mb-2 text-sm text-purple-200">Gathering mushrooms…</p>
+                            <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden mb-1">
+                                <div
+                                    className="h-full bg-gradient-to-r from-purple-400 to-fuchsia-500 transition-all"
+                                    style={{ width: `${Math.round((mushroomHarvestProgress.progress || 0) * 100)}%` }}
+                                />
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            <p className="retro-text mb-2 text-sm text-purple-200">{mushroomInteraction.prompt}</p>
+                            <button
+                                type="button"
+                                className="w-full px-6 py-2 font-bold rounded-lg retro-text text-sm bg-gradient-to-b from-purple-400 to-fuchsia-700 text-white"
+                                onClick={handleMushroomHarvest}
+                            >
+                                Pick mushrooms
+                            </button>
+                        </>
+                    )}
+                </div>
+             )}
+
+             {logForageInteraction && room === 'forest_trails' && !nearbyPortal && !woodcuttingInteraction && !woodChopProgress && !mushroomInteraction && !mushroomHarvestProgress && !fishingGameActive && (
+                <div className={`world-interaction-prompt absolute bg-black/80 backdrop-blur-sm rounded-xl border border-amber-600/40 text-center z-20 ${
+                    isMobile ? 'bottom-[170px] left-1/2 -translate-x-1/2 p-3 w-[min(100vw-2rem,280px)]' : 'bottom-24 left-1/2 -translate-x-1/2 p-4'
+                }`}>
+                    <div className="text-3xl mb-1">{logForageInteraction.mossy ? '🪵' : '🪵'}</div>
+                    <p className="retro-text mb-2 text-sm text-amber-200">{logForageInteraction.prompt}</p>
+                    {logForageInteraction.searching ? (
+                        <div className="w-full h-2 bg-black/40 rounded-full overflow-hidden">
+                            <div
+                                className="h-full bg-gradient-to-r from-amber-400 to-orange-500 transition-all"
+                                style={{ width: `${Math.round((logForageInteraction.progress || 0) * 100)}%` }}
+                            />
+                        </div>
+                    ) : (
+                        <button
+                            type="button"
+                            disabled={!logForageInteraction.canForage}
+                            className={`w-full px-6 py-2 font-bold rounded-lg retro-text text-sm ${
+                                logForageInteraction.canForage
+                                    ? 'bg-gradient-to-b from-amber-500 to-orange-700 text-white'
+                                    : 'bg-gray-700 text-gray-400 cursor-not-allowed opacity-70'
+                            }`}
+                            onClick={handleLogForageAction}
+                        >
+                            {logForageInteraction.canForage ? 'Search for worms' : 'Log picked over'}
+                        </button>
+                    )}
                 </div>
              )}
 
@@ -12870,6 +13138,7 @@ const VoxelWorld = ({
                 onAction={handleNpcDialogueAction}
                 gameInventory={gameInventory}
                 coins={userData?.coins ?? 0}
+                dailyOrders={dailyQuestStatus?.orders || []}
              />
 
              <TravelDialogueModal
@@ -13258,8 +13527,8 @@ const VoxelWorld = ({
                 </div>
              )}
 
-             {/* Puffle Panel */}
-             {showPufflePanel && (
+             {/* Pet Shop — adopt, care, equip, food, toys, cosmetics */}
+             {showPetShop && (
                 <PufflePanel
                     equippedPuffle={puffle}
                     ownedPuffles={ownedPuffles}
@@ -13267,21 +13536,9 @@ const VoxelWorld = ({
                     onEquip={handleEquipPuffle}
                     onUnequip={handleUnequipPuffle}
                     onUpdate={handleUpdatePuffle}
-                    onClose={() => setShowPufflePanel(false)}
-                />
-             )}
-             
-             {/* Puffle Shop Modal */}
-             {showPuffleShop && (
-                <PuffleShopModal
-                    equippedPuffle={puffle}
-                    onClose={() => setShowPuffleShop(false)}
-                    onPurchase={(type, item) => {
-                        // Update local puffle state after purchases
-                        if (puffle) {
-                            handleUpdatePuffle(puffle);
-                        }
-                    }}
+                    onClose={() => setShowPetShop(false)}
+                    includeShop
+                    disableTricks
                 />
              )}
              

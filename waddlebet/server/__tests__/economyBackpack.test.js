@@ -7,15 +7,15 @@ import {
 } from '../config/economy.js';
 
 describe('backpack wood upgrade costs', () => {
-    it('first wood tier is pine-only and moderate', () => {
-        expect(getBackpackWoodRequirements(10)).toEqual({ pine_log: 32 });
-        expect(getBackpackWoodRequirements(5)).toBeNull();
+    it('first wood tier at 5 slots is pine-only', () => {
+        expect(getBackpackWoodRequirements(5)).toEqual({ pine_log: 32 });
+        expect(getBackpackWoodRequirements(10)).toEqual({ pine_log: 64, birch_log: 40 });
     });
 
     it('higher tiers require steep multi-type wood', () => {
         const mid = getBackpackWoodRequirements(30);
-        const late = getBackpackWoodRequirements(50);
-        const final = getBackpackWoodRequirements(55);
+        const late = getBackpackWoodRequirements(45);
+        const final = getBackpackWoodRequirements(50);
 
         expect(Object.keys(mid).length).toBe(4);
         expect(Object.keys(late).length).toBe(4);
@@ -50,6 +50,7 @@ describe('backpack wood upgrade costs', () => {
     it('upgrade info includes wood from tier costs table', () => {
         const info = getBackpackUpgradeInfo(25);
         expect(info.nextSlots).toBe(30);
-        expect(info.woodRequired).toEqual(ECONOMY.GAME_INVENTORY.BACKPACK_WOOD_TIER_COSTS[4]);
+        expect(info.woodRequired).toEqual(ECONOMY.GAME_INVENTORY.BACKPACK_WOOD_TIER_COSTS[5]);
+        expect(info.cost).toBe(0);
     });
 });

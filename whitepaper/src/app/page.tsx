@@ -25,6 +25,9 @@ import {
 } from "lucide-react";
 import Changelog from "../components/Changelog";
 import GachaSystemSection from "../components/GachaSystem";
+import { EconomyLoopCanvas } from "../components/EconomyLoopCanvas";
+import StreakRewardCanvas from "../components/StreakRewardCanvas";
+import RevenueFlywheelCanvas from "../components/RevenueFlywheelCanvas";
 import { SolanaHistoryChart } from "../components/SolanaHistoryChart";
 import { ChapterTag } from "../components/ChapterTag";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
@@ -1353,9 +1356,38 @@ function PlatformEconomicsSection() {
             Platform <span className="text-green-400">Economics</span>
           </h2>
           <p className="text-slate-400 text-lg max-w-2xl mx-auto">
-            A sustainable revenue model that funds continuous development, 
-            supports token value, and grows the ecosystem.
+            Dual-currency design: infinite soft gold for gameplay, on-chain $CP for property and cosmetics —
+            closed NPC loops that reward long-term gathering without inflating the token.
           </p>
+        </motion.div>
+
+        {/* In-Game Closed Loop (shipped) */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="glass-card rounded-2xl p-6 sm:p-8 mb-12 border border-cyan-500/25 bg-gradient-to-br from-cyan-500/5 to-emerald-500/5"
+        >
+          <h3 className="text-xl font-bold text-center mb-2 text-cyan-300">Closed NPC Economy Loop</h3>
+          <p className="text-center text-slate-400 text-sm mb-6 max-w-xl mx-auto">
+            Fish &amp; wood are progression currencies. Gold pays for ferries, bait, and wagers.
+            $CP is earned on a 7-day login streak (1k→5k on CP days; gold-only on days 3 &amp; 6) and spent on igloo rent &amp; the cosmetic bazaar.
+          </p>
+          <EconomyLoopCanvas className="mb-6" />
+          <StreakRewardCanvas className="mb-4" />
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
+            {[
+              { t: "Gather", d: "Fishing holes & forest trees regrow. Worms from mossy logs." },
+              { t: "Gear", d: "Axes, rods & backpack tiers cost wood — not gold." },
+              { t: "Contracts", d: "Visit NPCs, accept daily timber/catch orders, turn in for bonuses." },
+              { t: "7-Day Streak", d: "1k→5k $CP on days 1, 2, 4, 5, 7; gold-only bonus on days 3 & 6 after 60 min play." },
+            ].map((item) => (
+              <div key={item.t} className="bg-black/30 rounded-lg p-3 border border-white/10">
+                <div className="font-bold text-cyan-200 mb-1">{item.t}</div>
+                <div className="text-slate-400 text-xs leading-relaxed">{item.d}</div>
+              </div>
+            ))}
+          </div>
         </motion.div>
 
         {/* Revenue Flywheel Diagram */}
@@ -1365,25 +1397,9 @@ function PlatformEconomicsSection() {
           viewport={{ once: true }}
           className="glass-card rounded-2xl p-8 mb-12 border border-green-500/20 bg-gradient-to-br from-green-500/5 to-cyan-500/5"
         >
-          <h3 className="text-xl font-bold text-center mb-8 text-green-400">💫 The Growth Flywheel</h3>
-          <div className="grid md:grid-cols-5 gap-4 items-center">
-            {[
-              { step: "1", label: "Players Wager", icon: "🎮" },
-              { step: "2", label: "Platform Earns", icon: "💰" },
-              { step: "3", label: "Revenue Reinvested", icon: "📊" },
-              { step: "4", label: "Platform Improves", icon: "🚀" },
-              { step: "5", label: "More Players Join", icon: "👥" },
-            ].map((item, i) => (
-              <div key={i} className="text-center">
-                <div className="text-3xl mb-2">{item.icon}</div>
-                <div className="w-8 h-8 mx-auto mb-2 rounded-full bg-green-500/20 border border-green-500/40 flex items-center justify-center text-green-400 text-sm font-bold">
-                  {item.step}
-                </div>
-                <p className="text-sm text-slate-300">{item.label}</p>
-              </div>
-            ))}
-          </div>
-          <p className="text-center text-slate-500 text-sm mt-6">
+          <h3 className="text-xl font-bold text-center mb-4 text-green-400">Platform Revenue Flywheel</h3>
+          <RevenueFlywheelCanvas className="mb-4" />
+          <p className="text-center text-slate-500 text-sm">
             ↻ Sustainable growth cycle — platform profits benefit everyone
           </p>
         </motion.div>

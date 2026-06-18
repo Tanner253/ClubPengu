@@ -56,8 +56,12 @@ const userSchema = new mongoose.Schema({
     // ========== CURRENCY (Server-Authoritative) ==========
     coins: {
         type: Number,
-        default: 100,  // Starting coins
+        default: 10,
         min: 0
+    },
+    goldEconomyVersion: {
+        type: Number,
+        default: 0
     },
     
     // ========== PEBBLES (Premium Currency for Gacha) ==========
@@ -149,6 +153,13 @@ const userSchema = new mongoose.Schema({
     onboardingQuest: {
         completedSteps: { type: [String], default: [] },
         rewardClaimed: { type: Boolean, default: false },
+    },
+
+    /** NPC daily orders — resets at UTC midnight (see NpcDailyOrderService). */
+    dailyNpcOrders: {
+        utcDay: { type: String, default: null },
+        completedQuestIds: { type: [String], default: [] },
+        acceptedQuestIds: { type: [String], default: [] },
     },
 
     // ========== COMPREHENSIVE STATISTICS ==========
@@ -366,7 +377,11 @@ const userSchema = new mongoose.Schema({
         claimNonce: { type: String, default: null },         // Last claim ID for anti-replay
         processedClaimNonces: { type: [String], default: [] }, // Client nonces used for completed claims
         currentSessionMinutes: { type: Number, default: 0 }, // Session time tracking
-        sessionStartTime: { type: Date, default: null }      // Current session start
+        sessionStartTime: { type: Date, default: null },      // Current session start
+        /** Next streak tier to claim (1–7). Resets to 1 if a UTC day is missed. */
+        streakDay: { type: Number, default: 1 },
+        /** UTC YYYY-MM-DD of last streak reward claim. */
+        streakLastUtcDay: { type: String, default: null },
     },
 
     // ========== REFERRAL SYSTEM (CRITICAL - DO NOT REMOVE) ==========

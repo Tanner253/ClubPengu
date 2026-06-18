@@ -53,13 +53,13 @@ describe('ScavengeService', () => {
         });
 
         expect(result.success).toBe(true);
-        expect(result.goldEarned).toBe(50);
+        expect(result.goldEarned).toBe(20);
         expect(userService.addCoins).toHaveBeenCalledWith(
             'wallet123',
-            50,
+            20,
             'scavenge',
             { spotId: 'casino_trash', room: 'snow_forts' },
-            'Scavenged 50g from casino_trash'
+            'Scavenged 20g from casino_trash'
         );
     });
 

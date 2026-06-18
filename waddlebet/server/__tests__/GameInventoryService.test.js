@@ -117,7 +117,7 @@ describe('GameInventoryService', () => {
 
         expect(result.success).toBe(true);
         expect(result.merchantName).toBe('Old Salty');
-        expect(result.goldEarned).toBeGreaterThan(0);
+        expect(result.goldEarned).toBe(1);
         expect(mockAddCoins).toHaveBeenCalled();
     });
 
@@ -137,7 +137,7 @@ describe('GameInventoryService', () => {
 
         expect(result.success).toBe(true);
         expect(result.merchantName).toBe('Ranger Pike');
-        expect(result.goldEarned).toBe(2);
+        expect(result.goldEarned).toBe(1);
         expect(mockAddCoins).toHaveBeenCalled();
     });
 
@@ -161,6 +161,29 @@ describe('GameInventoryService', () => {
         expect(mockAddCoins).toHaveBeenCalledTimes(1);
     });
 
+    it('mintGoldFromMerchant burns materials and grants gold', async () => {
+        const wallet = 'TestWalletMint111111111111111111111111111111';
+        const slots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
+        slots[0] = { itemId: 'pine_log', quantity: 80, metadata: { category: 'wood', npcValue: 3 } };
+
+        mockGetUser.mockResolvedValue(makeUser(slots, 12));
+        mockFindOneAndUpdate.mockImplementation(async () => makeUser(slots, 12));
+        mockAddCoins.mockResolvedValue({ success: true, newBalance: 22 });
+
+        const result = await service.buyFromMerchant(wallet, 'supply_merchant', 'gold_mint_wood_char');
+
+        expect(result.success).toBe(true);
+        expect(result.goldMinted).toBe(10);
+        expect(result.newBalance).toBe(22);
+        expect(mockAddCoins).toHaveBeenCalledWith(
+            wallet,
+            10,
+            'gold_mint',
+            expect.objectContaining({ recipeId: 'gold_mint_wood_char' }),
+            expect.any(String)
+        );
+    });
+
     it('buyFromMerchant rejects iron axe without basic axe in backpack', async () => {
         const wallet = 'TestWallet4444444444444444444444444444444444';
         const slots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
@@ -176,17 +199,19 @@ describe('GameInventoryService', () => {
         expect(mockAddCoins).not.toHaveBeenCalled();
     });
 
-    it('buyFromMerchant adds basic axe and deducts gold', async () => {
+    it('buyFromMerchant adds basic axe with wood only (no gold)', async () => {
         const wallet = 'TestWallet1111111111111111111111111111111111';
-        const slots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
+        const slots = Array.from({ length: 5 }, (_, i) => {
+            if (i === 0) return { itemId: 'pine_log', quantity: 80, metadata: { category: 'wood' } };
+            return { itemId: null, quantity: 0, metadata: {} };
+        });
         const user = makeUser(slots, 5);
         user.coins = 200;
 
         mockGetUser.mockResolvedValue(user);
-        mockAddCoins.mockResolvedValue({ success: true, newBalance: 125 });
         mockFindOneAndUpdate.mockImplementation(async () => {
             const saved = makeUser(slots, 5);
-            saved.gameInventory.slots[0] = {
+            saved.gameInventory.slots[1] = {
                 itemId: 'basic_axe',
                 quantity: 1,
                 metadata: {
@@ -197,30 +222,26 @@ describe('GameInventoryService', () => {
                     maxDurability: 100
                 }
             };
-            saved.gameInventory.hotbar[0] = { inventorySlot: 0 };
+            saved.gameInventory.hotbar[0] = { inventorySlot: 1 };
             return saved;
         });
 
         const result = await service.buyFromMerchant(wallet, 'supply_merchant', 'basic_axe');
 
         expect(result.success).toBe(true);
-        expect(result.goldSpent).toBe(100);
+        expect(result.goldSpent).toBe(0);
         expect(result.itemId).toBe('basic_axe');
-        expect(mockAddCoins).toHaveBeenCalledWith(
-            wallet,
-            -100,
-            'merchant_buy',
-            expect.any(Object),
-            expect.any(String)
-        );
+        expect(mockAddCoins).not.toHaveBeenCalled();
     });
 
-    it('upgradeBackpack unlocks more slots for gold', async () => {
+    it('upgradeBackpack unlocks more slots with wood only', async () => {
         const wallet = 'TestWallet1111111111111111111111111111111111';
-        const slots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
+        const slots = Array.from({ length: 5 }, (_, i) => {
+            if (i === 0) return { itemId: 'pine_log', quantity: 32, metadata: { category: 'wood' } };
+            return { itemId: null, quantity: 0, metadata: {} };
+        });
 
         mockGetUser.mockResolvedValue(makeUser(slots, 5));
-        mockAddCoins.mockResolvedValue({ success: true, newBalance: 50 });
         mockFindOneAndUpdate.mockImplementation(async () =>
             makeUser(Array.from({ length: 10 }, () => ({ itemId: null, quantity: 0, metadata: {} })), 10)
         );
@@ -229,11 +250,12 @@ describe('GameInventoryService', () => {
 
         expect(result.success).toBe(true);
         expect(result.unlockedSlots).toBe(10);
-        expect(result.goldSpent).toBe(250);
-        expect(result.woodSpent).toBeNull();
+        expect(result.goldSpent).toBe(0);
+        expect(result.woodSpent).toEqual({ pine_log: 32 });
+        expect(mockAddCoins).not.toHaveBeenCalled();
     });
 
-    it('upgradeBackpack from 10 slots requires pine only on first wood tier', async () => {
+    it('upgradeBackpack from 10 slots requires pine and birch on second wood tier', async () => {
         const wallet = 'TestWallet2222222222222222222222222222222222';
         const slots = Array.from({ length: 10 }, (_, i) => {
             if (i === 0) return { itemId: 'birch_log', quantity: 32, metadata: { category: 'wood' } };
@@ -249,15 +271,15 @@ describe('GameInventoryService', () => {
         expect(result.itemId).toBe('pine_log');
     });
 
-    it('upgradeBackpack from 10 slots consumes pine and gold when stocked', async () => {
+    it('upgradeBackpack from 10 slots consumes pine and birch when stocked', async () => {
         const wallet = 'TestWallet3333333333333333333333333333333333';
         const slots = Array.from({ length: 10 }, (_, i) => {
-            if (i === 0) return { itemId: 'pine_log', quantity: 32, metadata: { category: 'wood' } };
+            if (i === 0) return { itemId: 'pine_log', quantity: 64, metadata: { category: 'wood' } };
+            if (i === 1) return { itemId: 'birch_log', quantity: 40, metadata: { category: 'wood' } };
             return { itemId: null, quantity: 0, metadata: {} };
         });
 
         mockGetUser.mockResolvedValue(makeUser(slots, 10));
-        mockAddCoins.mockResolvedValue({ success: true, newBalance: 4000 });
         mockFindOneAndUpdate.mockImplementation(async (_q, update) => {
             const saved = makeUser(Array.from({ length: 15 }, () => ({ itemId: null, quantity: 0, metadata: {} })), 15);
             if (update?.$set?.['gameInventory.unlockedSlots']) {
@@ -270,8 +292,10 @@ describe('GameInventoryService', () => {
 
         expect(result.success).toBe(true);
         expect(result.unlockedSlots).toBe(15);
+        expect(result.goldSpent).toBe(0);
         expect(result.woodSpent).toEqual({
-            pine_log: 32
+            pine_log: 64,
+            birch_log: 40,
         });
     });
 
@@ -332,7 +356,7 @@ describe('GameInventoryService', () => {
         const result = await service.upgradeRod(wallet, 'fish_buyer');
         expect(result.success).toBe(true);
         expect(result.isPartialStep).toBe(true);
-        expect(result.goldSpent).toBe(140);
+        expect(result.goldSpent).toBe(0);
         expect(result.woodSpent).toEqual({ pine_log: 14 });
     });
 
@@ -357,6 +381,6 @@ describe('GameInventoryService', () => {
         const result = await service.upgradeRod(wallet, 'fish_buyer');
         expect(result.success).toBe(true);
         expect(result.grantsRodId).toBe('iron_rod');
-        expect(result.goldSpent).toBe(260);
+        expect(result.goldSpent).toBe(0);
     });
 });

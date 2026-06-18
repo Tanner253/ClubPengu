@@ -18,7 +18,7 @@ export const ROD_UPGRADE_STEPS = [
         stepInTier: 1,
         requiredRodId: 'basic_rod',
         grantsRodId: null,
-        goldCost: 140,
+        goldCost: 0,
         woodRequired: { pine_log: 14 },
         label: 'Iron Rod — Step 1',
         sublabel: 'Wrap the blank in pine — lighter catches improve'
@@ -29,7 +29,7 @@ export const ROD_UPGRADE_STEPS = [
         stepInTier: 2,
         requiredRodId: 'basic_rod',
         grantsRodId: 'iron_rod',
-        goldCost: 260,
+        goldCost: 0,
         woodRequired: { pine_log: 32 },
         label: 'Forge Iron Rod',
         sublabel: 'Full iron reel & guides — reach deeper tiers'
@@ -40,7 +40,7 @@ export const ROD_UPGRADE_STEPS = [
         stepInTier: 1,
         requiredRodId: 'iron_rod',
         grantsRodId: null,
-        goldCost: 520,
+        goldCost: 0,
         woodRequired: { birch_log: 18 },
         label: 'Pro Rod — Step 1',
         sublabel: 'Birch-carbon wrap — better species at depth'
@@ -51,7 +51,7 @@ export const ROD_UPGRADE_STEPS = [
         stepInTier: 2,
         requiredRodId: 'iron_rod',
         grantsRodId: 'pro_rod',
-        goldCost: 920,
+        goldCost: 0,
         woodRequired: { birch_log: 38 },
         label: 'Craft Pro Rod',
         sublabel: 'Full pro blank — heavy fish & deep pools'
@@ -62,7 +62,7 @@ export const ROD_UPGRADE_STEPS = [
         stepInTier: 1,
         requiredRodId: 'pro_rod',
         grantsRodId: null,
-        goldCost: 1600,
+        goldCost: 0,
         woodRequired: { oak_log: 22 },
         label: 'Master Rod — Step 1',
         sublabel: 'Oak core reinforcement — mythic species bias'
@@ -73,7 +73,7 @@ export const ROD_UPGRADE_STEPS = [
         stepInTier: 2,
         requiredRodId: 'pro_rod',
         grantsRodId: 'master_rod',
-        goldCost: 2800,
+        goldCost: 0,
         woodRequired: { oak_log: 50 },
         label: 'Complete Master Rod',
         sublabel: 'Legendary tackle — max weight & depth'

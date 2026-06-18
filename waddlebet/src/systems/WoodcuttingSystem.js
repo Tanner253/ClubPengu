@@ -2,8 +2,9 @@
  * WoodcuttingSystem — harvestable tree proximity & interaction prompts.
  */
 
-import { FOREST_ZONE_OFFSET, FOREST_ZONE_SIZE, getStageConfig, getWoodYield, MANUAL_WOOD_MULTIPLIER } from '../config/harvestableTrees';
+import { FOREST_ZONE_OFFSET, FOREST_ZONE_SIZE, getStageConfig, getWoodYield } from '../config/harvestableTrees';
 import { getWoodYieldLabel } from '../config/woodcuttingLoot';
+import { getTreeWoodSpecies } from '../config/treeWoodSpecies';
 import { hasEquippedAxe, getEquippedHotbarTool, ownsAnyAxe } from '../utils/gameHotbar';
 import { getChopDurabilityLoss } from '../config/economy';
 import { canFitWoodChopLoot } from '../utils/inventoryCapacity';
@@ -75,7 +76,8 @@ class WoodcuttingSystem {
                 gameInventory,
                 nearest.stage,
                 nearest.chopMode || 'hold',
-                this.equippedTool?.itemId || 'basic_axe'
+                this.equippedTool?.itemId || 'basic_axe',
+                nearest.woodType || 'pine_log'
             )
         ) {
             canChop = false;
@@ -88,6 +90,7 @@ class WoodcuttingSystem {
             treeId: nearest.treeId,
             spotId: nearest.treeId,
             stage: nearest.stage,
+            woodType: nearest.woodType || 'pine_log',
             chopMode: nearest.chopMode || 'hold',
             woodYield: nearest.woodYield,
             canChop,
@@ -126,11 +129,13 @@ class WoodcuttingSystem {
         const axeId = equippedTool?.itemId || 'basic_axe';
         const wear = tree.stage ? getChopDurabilityLoss(tree.stage, axeId) : 1;
         const durText = dur != null && maxDur != null ? ` · axe ${dur}/${maxDur} (−${wear})` : '';
-        const yieldLabel = getWoodYieldLabel(tree.stage, tree.chopMode || 'hold', axeId);
+        const species = getTreeWoodSpecies(tree.woodType || 'pine_log');
+        const yieldLabel = getWoodYieldLabel(tree.stage, tree.chopMode || 'hold', axeId, species.id);
+        const speciesLabel = `${species.label} ${stageCfg?.label || tree.label}`;
         if (tree.chopMode === 'manual') {
-            return `Press E to chop voxel tree (+${yieldLabel} wood, ${MANUAL_WOOD_MULTIPLIER}×)${durText} — drag to swing`;
+            return `Press E to chop ${speciesLabel} (+${yieldLabel} ${species.logLabel})${durText} — drag to swing`;
         }
-        return `Press E to chop ${stageCfg?.label || tree.label} (+${yieldLabel} wood)${durText}`;
+        return `Press E to chop ${speciesLabel} (+${yieldLabel} ${species.logLabel})${durText}`;
     }
 
     setLocalChopping(treeId) {

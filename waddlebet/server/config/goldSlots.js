@@ -1,9 +1,20 @@
 /**
  * Gold lobby slot machine configuration (server-authoritative)
- * ~7% house edge (~93% RTP) via tuned symbol weights + paytable below
+ * Player chooses bet (default 1g, max 25g) — caps jackpot exposure.
  */
 
-export const GOLD_SLOT_BET = 25;
+import {
+    GOLD_SLOT_BET_DEFAULT,
+    GOLD_SLOT_BET_MIN,
+    GOLD_SLOT_BET_MAX,
+    clampGoldSlotBet,
+} from './goldEconomy.js';
+
+export const GOLD_SLOT_BET = GOLD_SLOT_BET_DEFAULT;
+export { GOLD_SLOT_BET_DEFAULT, GOLD_SLOT_BET_MIN, GOLD_SLOT_BET_MAX, clampGoldSlotBet };
+export const GOLD_SLOT_BET_MIN_EXPORT = GOLD_SLOT_BET_MIN;
+export const GOLD_SLOT_BET_MAX_EXPORT = GOLD_SLOT_BET_MAX;
+
 export const GOLD_SLOT_SPIN_MS = 2400;
 export const GOLD_SLOT_TARGET_RTP = 0.93;
 
@@ -18,7 +29,6 @@ export const GOLD_SLOT_SYMBOLS = [
     'gold7'
 ];
 
-/** Payout multipliers (× bet) for 3-of-a-kind on center line */
 export const GOLD_SLOT_PAYTABLE = {
     cherry: 3,
     lemon: 4,
@@ -30,13 +40,8 @@ export const GOLD_SLOT_PAYTABLE = {
     gold7: 200
 };
 
-/** Two cherries anywhere on the line (any position) */
 export const GOLD_SLOT_TWO_CHERRY_MULT = 2;
 
-/**
- * Weighted reel stops — tuned for ~93% RTP with paytable above.
- * Cherry weight is higher because 2-cherry partial wins drive most returns.
- */
 export const GOLD_SLOT_WEIGHTS = {
     cherry: 53,
     lemon: 22,
@@ -69,20 +74,20 @@ export function rollGoldSlotSymbol() {
     return 'cherry';
 }
 
-export function calculateGoldSlotPayout(reels, bet = GOLD_SLOT_BET) {
+export function calculateGoldSlotPayout(reels, bet = GOLD_SLOT_BET_DEFAULT) {
+    const safeBet = clampGoldSlotBet(bet);
     const [a, b, c] = reels;
     if (a === b && b === c) {
         const mult = GOLD_SLOT_PAYTABLE[a] || 0;
-        return mult * bet;
+        return mult * safeBet;
     }
     const cherryCount = reels.filter(s => s === 'cherry').length;
     if (cherryCount >= 2) {
-        return GOLD_SLOT_TWO_CHERRY_MULT * bet;
+        return GOLD_SLOT_TWO_CHERRY_MULT * safeBet;
     }
     return 0;
 }
 
-/** Theoretical RTP (0–1) from weights + paytable — independent weighted reels */
 export function calculateGoldSlotRTP(
     weights = GOLD_SLOT_WEIGHTS,
     paytable = GOLD_SLOT_PAYTABLE,
@@ -106,7 +111,9 @@ export function calculateGoldSlotRTP(
 export function getGoldSlotInfo() {
     const rtp = calculateGoldSlotRTP();
     return {
-        bet: GOLD_SLOT_BET,
+        bet: GOLD_SLOT_BET_DEFAULT,
+        betMin: GOLD_SLOT_BET_MIN,
+        betMax: GOLD_SLOT_BET_MAX,
         currency: 'gold',
         symbols: GOLD_SLOT_SYMBOLS,
         paytable: GOLD_SLOT_PAYTABLE,

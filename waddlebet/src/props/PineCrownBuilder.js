@@ -64,30 +64,35 @@ function mergeGeometries(THREE, geometries) {
 /**
  * @param {typeof import('three')} THREE
  * @param {'sapling'|'baby'|'mature'|'elder'|string} stage
+ * @param {{ foliageColor?: string, foliageAccent?: string, snowCovered?: boolean, crownShape?: 'pine'|'round' }} [species]
  */
-export function buildPineCrownMeshes(THREE, stage = 'mature') {
+export function buildPineCrownMeshes(THREE, stage = 'mature', species = null) {
     const crownKey = STAGE_TO_CROWN[stage] || 'medium';
     const cfg = CROWN_SIZES[crownKey];
     const matManager = getMaterialManager(THREE);
+    const isRound = species?.crownShape === 'round';
+    const showSnow = species?.snowCovered !== false;
 
     const foliageGeos = [];
     const snowGeos = [];
     let currentY = 0;
 
     for (let i = 0; i < cfg.layers; i++) {
-        const layerRatio = 1 - (i / cfg.layers) * 0.68;
-        const radius = cfg.baseRadius * layerRatio;
-        const height = cfg.layerH * layerRatio;
+        const layerRatio = 1 - (i / cfg.layers) * (isRound ? 0.45 : 0.68);
+        const radius = cfg.baseRadius * layerRatio * (isRound ? 1.18 : 1);
+        const height = cfg.layerH * layerRatio * (isRound ? 0.72 : 1);
 
-        const coneGeo = new THREE.ConeGeometry(radius, height, 10);
+        const coneGeo = new THREE.ConeGeometry(radius, height, isRound ? 12 : 10);
         coneGeo.translate(0, currentY + height / 2, 0);
         foliageGeos.push(coneGeo);
 
-        const snowCapGeo = new THREE.ConeGeometry(radius * 0.82, cfg.snowDepth, 10);
-        snowCapGeo.translate(0, currentY + height - cfg.snowDepth / 2, 0);
-        snowGeos.push(snowCapGeo);
+        if (showSnow) {
+            const snowCapGeo = new THREE.ConeGeometry(radius * 0.82, cfg.snowDepth, 10);
+            snowCapGeo.translate(0, currentY + height - cfg.snowDepth / 2, 0);
+            snowGeos.push(snowCapGeo);
+        }
 
-        if (crownKey !== 'small' && i < 2) {
+        if (showSnow && crownKey !== 'small' && i < 2) {
             for (let j = 0; j < 3; j++) {
                 const angle = (j / 3) * Math.PI * 2 + i * 0.4;
                 const dist = radius * 0.55;
@@ -102,20 +107,22 @@ export function buildPineCrownMeshes(THREE, stage = 'mature') {
             }
         }
 
-        currentY += height * 0.62;
+        currentY += height * (isRound ? 0.48 : 0.62);
     }
 
-    const topSnow = new THREE.SphereGeometry(cfg.snowDepth * 2.2, 8, 6);
-    topSnow.scale(1, 0.55, 1);
-    topSnow.translate(0, currentY + cfg.snowDepth * 0.5, 0);
-    snowGeos.push(topSnow);
+    if (showSnow) {
+        const topSnow = new THREE.SphereGeometry(cfg.snowDepth * 2.2, 8, 6);
+        topSnow.scale(1, 0.55, 1);
+        topSnow.translate(0, currentY + cfg.snowDepth * 0.5, 0);
+        snowGeos.push(topSnow);
+    }
 
     const foliageGeo = mergeGeometries(THREE, foliageGeos);
-    const snowGeo = mergeGeometries(THREE, snowGeos);
+    const snowGeo = showSnow ? mergeGeometries(THREE, snowGeos) : null;
     foliageGeos.forEach(g => g.dispose());
     snowGeos.forEach(g => g.dispose());
 
-    const foliageMat = matManager.get(PropColors.pineMedium, { roughness: 0.88 });
+    const foliageMat = matManager.get(species?.foliageColor || PropColors.pineMedium, { roughness: 0.88 });
     const snowMat = matManager.get(PropColors.snowLight, { roughness: 0.58 });
 
     const foliageMesh = foliageGeo ? new THREE.Mesh(foliageGeo, foliageMat) : null;

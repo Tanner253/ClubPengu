@@ -133,7 +133,7 @@ function WalletAuth({ onAuthSuccess }) {
             <div className="p-4 space-y-2">
                 <div className="flex items-center gap-2 text-xs text-white/80">
                     <span className="text-green-400">✓</span>
-                    <span>Earn and keep coins from minigames</span>
+                    <span>Earn gold from fishing, wood, and quests</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-white/80">
                     <span className="text-green-400">✓</span>

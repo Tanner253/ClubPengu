@@ -11,6 +11,7 @@ import GameHotbar from './GameHotbar';
 import MarketplaceModal from './MarketplaceModal';
 import TutorialModal, { shouldShowTutorial } from './TutorialModal';
 import OnboardingQuestHUD from './OnboardingQuestHUD';
+import DailyQuestHUD from './DailyQuestHUD';
 import DailyBonusModal from './DailyBonusModal';
 import DropGoldModal from './DropGoldModal';
 import { playSfx } from '../audio';
@@ -23,7 +24,7 @@ import { getRoomLabel } from '../utils/roomLabels';
  * GameHUD - Heads Up Display showing coins, stats, and quick actions
  * Responsive: horizontal on landscape/desktop, vertical sidebar on portrait mobile
  */
-const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenSettings, isMobile = false, playerCount = 0, totalPlayerCount = 0, onRequestAuth, currentRoom, isInsideOwnedIgloo = false, onOpenIglooSettings }) => {
+const GameHUD = ({ showMinimap = false, showInbox = true, onOpenSettings, isMobile = false, playerCount = 0, totalPlayerCount = 0, onRequestAuth, currentRoom, isInsideOwnedIgloo = false, onOpenIglooSettings }) => {
     const [coins, setCoins] = useState(0);
     const [showStatsModal, setShowStatsModal] = useState(false);  // Full stats modal
     const [recentReward, setRecentReward] = useState(null);
@@ -322,15 +323,6 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                         </button>
                     )}
                     
-                    {/* Puffles */}
-                    <button
-                        onClick={onOpenPuffles}
-                        className={`${compactBtn} bg-purple-600/80`}
-                        title={t('hud.puffles')}
-                    >
-                        🐾
-                    </button>
-                    
                     {/* Stats */}
                     <button 
                         onClick={() => setShowStatsModal(true)}
@@ -434,6 +426,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 />
 
                 <OnboardingQuestHUD isMobile={isMobile} isPortrait={isPortrait} />
+                <DailyQuestHUD isMobile={isMobile} isPortrait={isPortrait} />
 
                 {isAuthenticated && (
                     <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
@@ -493,15 +486,6 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
                 
                 {/* Inbox Button */}
                 {showInbox && <InboxButton compact />}
-                
-                {/* Puffles Button */}
-                <button
-                    onClick={onOpenPuffles}
-                    className={`${navIconBtn} bg-purple-600/80 hover:bg-purple-500 active:bg-purple-400 text-white retro-text`}
-                    title={t('hud.managePuffles')}
-                >
-                    🐾
-                </button>
                 
                 {/* Wallet Connection Button */}
                 <WalletButton onRequestAuth={onRequestAuth} size="sm" useMobileOverlay={isMobile} />
@@ -659,6 +643,7 @@ const GameHUD = ({ showMinimap = false, onOpenPuffles, showInbox = true, onOpenS
             />
 
             <OnboardingQuestHUD isMobile={isMobile} isPortrait={isPortrait} />
+            <DailyQuestHUD isMobile={isMobile} isPortrait={isPortrait} />
         </>
     );
 };

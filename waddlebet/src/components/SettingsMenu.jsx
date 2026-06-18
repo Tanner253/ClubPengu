@@ -11,6 +11,7 @@ import { formatSupportDiagnostics } from '../utils/browserCapabilities';
 import ReferralPanel from './ReferralPanel';
 import LanguageToggle from './LanguageToggle';
 import TokenomicsModal from './TokenomicsModal';
+import EconomyGuideModal from './EconomyGuideModal';
 import { applyGameSettings, MUSIC_TRACKS, DEFAULT_MUSIC_VOLUME } from '../audio';
 
 const WHITEPAPER_URL = 'https://whitepaper.waddle.bet';
@@ -58,6 +59,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
     const [activeTab, setActiveTab] = useState('general');
     const [rebindingKey, setRebindingKey] = useState(null); // Which keybind is being rebound
     const [showTokenomics, setShowTokenomics] = useState(false);
+    const [showEconomyGuide, setShowEconomyGuide] = useState(false);
     const [lowEndActive, setLowEndActive] = useState(() => performanceManager.isLowEndMode());
     
     useEffect(() => {
@@ -312,6 +314,26 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                         <span className="text-white/30 group-hover:text-white/60 transition-colors">↗</span>
                                     </div>
                                 </a>
+
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowEconomyGuide(true);
+                                        onClose();
+                                    }}
+                                    className="w-full p-3 rounded-xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all text-left group"
+                                >
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                            <span className="text-lg">⚖️</span>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-white text-sm font-bold">{t('settings.economyGuideBtn')}</div>
+                                            <p className="text-white/40 text-xs truncate">{t('settings.economyGuideDesc')}</p>
+                                        </div>
+                                        <span className="text-white/30 group-hover:text-white/60 transition-colors">→</span>
+                                    </div>
+                                </button>
 
                                 <button
                                     type="button"
@@ -717,6 +739,25 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                             <button
                                 onClick={() => {
                                     onClose();
+                                    setShowEconomyGuide(true);
+                                }}
+                                className="w-full p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 hover:border-amber-500/40 transition-all text-left group"
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                        <span className="text-xl">⚖️</span>
+                                    </div>
+                                    <div className="flex-1">
+                                        <div className="text-white font-bold">{t('settings.economyGuideBtn')}</div>
+                                        <p className="text-white/40 text-xs">{t('settings.economyGuideDesc')}</p>
+                                    </div>
+                                    <span className="text-white/30 group-hover:text-white/60 transition-colors">→</span>
+                                </div>
+                            </button>
+
+                            <button
+                                onClick={() => {
+                                    onClose();
                                     window.dispatchEvent(new CustomEvent('openTutorial'));
                                 }}
                                 className="w-full p-4 rounded-2xl bg-gradient-to-r from-purple-500/10 to-pink-500/10 border border-purple-500/20 hover:border-purple-500/40 transition-all text-left group"
@@ -803,6 +844,10 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
         <TokenomicsModal
             isOpen={showTokenomics}
             onClose={() => setShowTokenomics(false)}
+        />
+        <EconomyGuideModal
+            isOpen={showEconomyGuide}
+            onClose={() => setShowEconomyGuide(false)}
         />
         </>
     );

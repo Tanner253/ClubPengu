@@ -33,7 +33,7 @@ const transactionSchema = new mongoose.Schema({
             'starting_bonus',    // New player starting coins
             'migration',         // Migration from localStorage
             'chat_bonus',        // Coins earned from chatting
-            'minigame_reward',   // Coins earned from single-player minigames
+            'minigame_reward',   // Legacy — solo minigame gold removed
             'slot_spin',         // Slot machine spin cost
             'slot_payout',       // Slot machine winnings
             'fishing_bait',      // Bait cost for fishing
@@ -42,8 +42,13 @@ const transactionSchema = new mongoose.Schema({
             'fish_sell_npc',     // Fish sold at Fish Buyer NPC for gold
             'wood_sell_npc',     // Wood sold at supply merchant for gold
             'wood_sell_ranger',  // Wood/forage sold at forest ranger for gold
+            'gold_mint',         // Materials burned at merchant for intentional gold
+            'gold_mint_rollback', // Rollback when gold mint inventory save fails
+            'npc_daily_order',   // Daily NPC material turn-in contractor bonus
+            'npc_daily_order_rollback', // Rollback when daily turn-in fails after gold grant
             'merchant_buy',      // Tool/consumable purchased from merchant NPC
             'merchant_buy_refund', // Refund when purchase inventory add fails
+            'puffle_social',     // Gold drip when two active puffles interact
             'backpack_upgrade',  // Gold spent to unlock more backpack slots
             'travel_ticket',     // Ferry / overworld travel ticket purchase
             'travel_refund',     // Ferry ticket refund (leave boarding / cancel)
@@ -51,6 +56,7 @@ const transactionSchema = new mongoose.Schema({
             'world_gold_drop',   // Gold placed as a world pickup bag
             'world_gold_pickup', // Gold collected from a world pickup bag
             'onboarding_quest_reward', // Gold for completing the guided onboarding quest
+            'dojo_sensei_win',       // One-time gold for beating Sensei (onboarding step)
             'blackjack_bet',     // PvE blackjack bet
             'blackjack_win',     // PvE blackjack payout
             // ========== GACHA/PEBBLE TYPES ==========
@@ -69,7 +75,8 @@ const transactionSchema = new mongoose.Schema({
             'gift_pebbles',      // Pebbles gifted to another player
             'gift_item',         // Item gifted to another player
             // ========== DAILY BONUS TYPES ==========
-            'daily_bonus'        // Daily login bonus WADDLE reward
+            'daily_bonus',        // Daily login bonus $CP reward
+            'daily_streak_gold',  // Bonus gold on streak calendar days 3 & 6
         ],
         index: true
     },

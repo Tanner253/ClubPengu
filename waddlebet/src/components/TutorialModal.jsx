@@ -87,45 +87,45 @@ const TUTORIAL_SLIDES = [
     },
     {
         id: 'earn-gold',
-        title: '💰 Ways to Earn Gold',
+        title: '💰 Gold & Grind Loop',
         icon: '🪙',
         content: (
             <div className="space-y-3">
                 <p className="text-white/90 text-sm">
-                    <strong className="text-amber-400">Gold</strong> is the in-game currency. Here's how to earn it:
+                    <strong className="text-amber-400">Gold</strong> is scarce in-game currency. Earn it by grinding — not from chat or solo Dojo practice.
                 </p>
                 <div className="space-y-2">
                     <div className="flex items-center gap-2 bg-black/30 rounded-lg p-2 border border-blue-500/30">
                         <span className="text-lg">🎣</span>
                         <div className="flex-1">
-                            <div className="text-blue-400 font-bold text-sm">Ice Fishing</div>
-                            <p className="text-white/60 text-xs">Catch fish at fishing holes - earn 10-500 gold per catch!</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center gap-2 bg-black/30 rounded-lg p-2 border border-purple-500/30">
-                        <span className="text-lg">🎰</span>
-                        <div className="flex-1">
-                            <div className="text-purple-400 font-bold text-sm">Slot Machines</div>
-                            <p className="text-white/60 text-xs">Try your luck at the Casino - hit jackpots!</p>
+                            <div className="text-blue-400 font-bold text-sm">Fish → Sell</div>
+                            <p className="text-white/60 text-xs">Catch fish (uses worms), then emergency-sell at Old Salty in Snow Forts.</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 bg-black/30 rounded-lg p-2 border border-green-500/30">
-                        <span className="text-lg">📅</span>
+                        <span className="text-lg">🪵</span>
                         <div className="flex-1">
-                            <div className="text-green-400 font-bold text-sm">Daily Bonus</div>
-                            <p className="text-white/60 text-xs">Login daily for free gold - streaks give more!</p>
+                            <div className="text-green-400 font-bold text-sm">Wood → Mint</div>
+                            <p className="text-white/60 text-xs">Chop forest trees, mint logs at Copper Clive in town (best wood→gold path).</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2 bg-black/30 rounded-lg p-2 border border-amber-500/30">
+                        <span className="text-lg">📋</span>
+                        <div className="flex-1">
+                            <div className="text-amber-400 font-bold text-sm">Daily Orders</div>
+                            <p className="text-white/60 text-xs">Turn in fish/wood to Salty & Clive for contractor gold bonuses (2/day).</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 bg-black/30 rounded-lg p-2 border border-cyan-500/30">
                         <span className="text-lg">⚔️</span>
                         <div className="flex-1">
-                            <div className="text-cyan-400 font-bold text-sm">Win Wagers</div>
-                            <p className="text-white/60 text-xs">Challenge players to gold wagers and win!</p>
+                            <div className="text-cyan-400 font-bold text-sm">PvP Wagers</div>
+                            <p className="text-white/60 text-xs">Win gold wagers vs other players (max 50g stake, zero-sum).</p>
                         </div>
                     </div>
                 </div>
-                <p className="text-xs text-white/50 text-center italic">
-                    Gold has no real value - it's for fun and practice!
+                <p className="text-xs text-white/50 text-center">
+                    Backpack &amp; tool upgrades use <strong className="text-green-400">wood</strong>, not gold. Settings → Game Economy Guide for full details.
                 </p>
             </div>
         )
@@ -265,8 +265,8 @@ const TUTORIAL_SLIDES = [
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
                         <span className="text-lg">🏪</span>
                         <div>
-                            <div className="text-pink-400 font-bold text-sm">Marketplace</div>
-                            <p className="text-white/60 text-xs">Buy & sell cosmetics with other players!</p>
+                            <div className="text-pink-400 font-bold text-sm">Cosmetic Bazaar</div>
+                            <p className="text-white/60 text-xs">Buy &amp; sell cosmetics with Pebbles — separate from gold grind!</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
@@ -424,21 +424,21 @@ const TUTORIAL_SLIDES = [
                         <span className="text-lg">🎣</span>
                         <div>
                             <div className="text-blue-400 font-bold text-sm">Ice Fishing</div>
-                            <p className="text-white/60 text-xs">Click fishing holes - catch fish for gold!</p>
+                            <p className="text-white/60 text-xs">Fish go to your backpack — sell at Old Salty for gold. Forage worms in the forest for free bait.</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
                         <span className="text-lg">🎰</span>
                         <div>
-                            <div className="text-purple-400 font-bold text-sm">Casino Slots</div>
-                            <p className="text-white/60 text-xs">Spin for gold - match symbols for jackpots!</p>
+                            <div className="text-purple-400 font-bold text-sm">Casino (gold sink)</div>
+                            <p className="text-white/60 text-xs">Gold slots &amp; blackjack (1–50g) — house edge drains gold, not a primary income source.</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">
-                        <span className="text-lg">🃏</span>
+                        <span className="text-lg">🥋</span>
                         <div>
-                            <div className="text-green-400 font-bold text-sm">Card Games</div>
-                            <p className="text-white/60 text-xs">Blackjack tables in the Casino - wager gold or tokens!</p>
+                            <div className="text-amber-400 font-bold text-sm">Dojo Card Jitsu</div>
+                            <p className="text-white/60 text-xs">Practice vs Sensei — no free gold. Challenge players in town for real wagers.</p>
                         </div>
                     </div>
                     <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2">

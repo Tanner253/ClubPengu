@@ -10,15 +10,18 @@
 import crypto from 'crypto';
 import { ECONOMY } from '../config/economy.js';
 import { getEffectiveRodCatchConfig } from '../config/rodUpgrades.js';
-import { rollCatchAtDepth } from '../config/fishingLoot.js';
+import { rollCatchAtDepth, isFishAllowedAtDepth } from '../config/fishingLoot.js';
+import { getRodCatchConfig } from '../config/economy.js';
 import {
     getGameItem,
     isInventoryCatch,
     isJellyfishId,
     getFishRarityLabel
 } from '../config/gameItems.js';
+import { BAIT_ITEM_ID, BAIT_PER_CAST, BAIT_MISS_EXTRA_LOSS_CHANCE } from '../config/goldEconomy.js';
 
-const FISHING_COST = ECONOMY.FISHING.BAIT_COST;
+const FISHING_BAIT_ITEM = BAIT_ITEM_ID;
+const FISHING_BAIT_PER_CAST = BAIT_PER_CAST;
 const SESSION_TTL_MS = 10 * 60 * 1000;
 
 const FISH_TYPES = [
@@ -30,11 +33,12 @@ const FISH_TYPES = [
 ];
 
 class FishingService {
-    constructor(userService, gameInventoryService, broadcastToRoom, sendToPlayer) {
+    constructor(userService, gameInventoryService, broadcastToRoom, sendToPlayer, fishingHoleService = null) {
         this.userService = userService;
         this.gameInventoryService = gameInventoryService;
         this.broadcastToRoom = broadcastToRoom;
         this.sendToPlayer = sendToPlayer;
+        this.fishingHoleService = fishingHoleService;
         /** @type {Map<string, object>} */
         this.sessions = new Map();
     }
@@ -112,10 +116,11 @@ class FishingService {
             const rodUpgradeStep = user.fishingProgress?.rodUpgradeStep ?? 0;
             const catchConfig = getEffectiveRodCatchConfig(rodItemId, rodUpgradeStep);
 
-            if (!user.coins || user.coins < FISHING_COST) {
+            const baitHave = await this.gameInventoryService.countItem(walletAddress, FISHING_BAIT_ITEM);
+            if (baitHave < FISHING_BAIT_PER_CAST) {
                 return {
-                    error: 'INSUFFICIENT_FUNDS',
-                    message: `Need ${FISHING_COST} coins for bait (you have ${user?.coins || 0})`
+                    error: 'NO_BAIT',
+                    message: 'Need worm bait — search mossy logs in the forest or buy from Old Salty'
                 };
             }
 
@@ -132,18 +137,17 @@ class FishingService {
                 };
             }
 
-            const deductResult = await this.userService.addCoins(
+            const baitRemoved = await this.gameInventoryService.removeItemsById(
                 walletAddress,
-                -FISHING_COST,
-                'fishing_bait',
-                { spotId, room },
-                'Fishing bait'
+                FISHING_BAIT_ITEM,
+                FISHING_BAIT_PER_CAST
             );
-
-            if (!deductResult.success) {
-                return { error: 'DEDUCT_FAILED', message: 'Failed to buy bait' };
+            if (baitRemoved.error) {
+                return baitRemoved;
             }
-            newBalance = deductResult.newBalance;
+
+            const userFresh = await this.userService.getUser(walletAddress);
+            newBalance = userFresh?.coins ?? user.coins ?? 0;
 
             const damageResult = await this.gameInventoryService.damageEquippedRod(walletAddress);
             if (damageResult.broken) {
@@ -156,6 +160,8 @@ class FishingService {
 
             const sessionId = this._createSession(playerId, spotId, room, false, rodItemId, catchConfig);
 
+            const holeStatus = this.fishingHoleService?.getPublicState(spotId) ?? null;
+
             console.log(`🎣 ${playerName} started fishing at spot ${spotId} session=${sessionId.slice(0, 8)} rod=${rodItemId}`);
 
             return {
@@ -163,30 +169,16 @@ class FishingService {
                 spotId,
                 sessionId,
                 newBalance,
-                baitCost: FISHING_COST,
+                baitCost: FISHING_BAIT_PER_CAST,
+                baitItemId: FISHING_BAIT_ITEM,
+                holeStatus,
                 isDemo: false
             };
-        } else {
-            if (guestCoins < FISHING_COST) {
-                return {
-                    error: 'INSUFFICIENT_FUNDS',
-                    message: `Need ${FISHING_COST} coins for bait`
-                };
-            }
-            newBalance = guestCoins - FISHING_COST;
         }
 
-        const sessionId = this._createSession(playerId, spotId, room, false, 'basic_rod');
-
-        console.log(`🎣 ${playerName} started fishing at spot ${spotId} session=${sessionId.slice(0, 8)}`);
-
         return {
-            success: true,
-            spotId,
-            sessionId,
-            newBalance,
-            baitCost: FISHING_COST,
-            isDemo: false
+            error: 'NOT_AUTHENTICATED',
+            message: 'Sign in to fish — each cast uses worm bait from your backpack'
         };
     }
 
@@ -214,7 +206,30 @@ class FishingService {
 
         if (!success) {
             console.log(`[FISHING] miss player=${playerId} depth=${depth}`);
-            return { success: true, missed: true, depth };
+            let baitLostExtra = 0;
+            if (
+                walletAddress
+                && !isDemo
+                && Math.random() < BAIT_MISS_EXTRA_LOSS_CHANCE
+            ) {
+                const extraRemove = await this.gameInventoryService.removeItemsById(
+                    walletAddress,
+                    FISHING_BAIT_ITEM,
+                    1
+                );
+                if (!extraRemove.error) {
+                    baitLostExtra = 1;
+                }
+            }
+            return {
+                success: true,
+                missed: true,
+                depth,
+                baitLostExtra,
+                message: baitLostExtra
+                    ? 'Missed — your bait snapped off!'
+                    : 'Missed this catch',
+            };
         }
 
         if (clientFish?.id && isJellyfishId(clientFish.id)) {
@@ -230,26 +245,53 @@ class FishingService {
             );
         }
 
-        const catchRoll = rollCatchAtDepth(depth, rodItemId, session.catchConfig);
-        const rolled = catchRoll.fish;
+        const catchRoll = rollCatchAtDepth(
+            depth,
+            rodItemId,
+            session.catchConfig,
+            this.fishingHoleService?.getAvailableTiers(session.spotId)
+        );
+        const effectiveDepth = Math.max(0, (Number(depth) || 0) + (session.catchConfig?.catchDepthBonusM || getRodCatchConfig(rodItemId).catchDepthBonusM || 0));
+
+        let rolled = catchRoll.fish;
+        const clientId = clientFish?.id;
+        const clientCatalog = clientId ? getGameItem(clientId) : null;
+        const availableTiers = this.fishingHoleService?.getAvailableTiers(session.spotId);
+        if (clientCatalog?.category === 'fish' && isFishAllowedAtDepth(clientId, effectiveDepth)) {
+            const clientTier = clientCatalog.tier || 1;
+            if (!availableTiers || availableTiers.has(clientTier)) {
+                rolled = clientCatalog;
+                console.log(`[FISHING] validated client catch player=${playerId} depth=${effectiveDepth} fish=${clientId}`);
+            } else {
+                console.warn(`[FISHING] client fish rejected — hole depleted tier=${clientTier} fish=${clientId}`);
+            }
+        } else if (clientId && clientCatalog?.category === 'fish') {
+            console.warn(`[FISHING] client fish rejected depth=${effectiveDepth} fish=${clientId} — server roll=${rolled?.id}`);
+        }
+
         if (!rolled || rolled.category !== 'fish') {
             return { error: 'INVALID_ROLL', message: 'Could not determine catch' };
         }
+
+        const weightKg = catchRoll.weightKg;
+        const npcValue = clientCatalog?.id === rolled.id
+            ? catchRoll.npcValue
+            : Math.max(1, Math.floor((rolled.npcValue || 1) * (catchRoll.weightMultiplier || 1)));
 
         const fishData = {
             id: rolled.id,
             name: rolled.name,
             emoji: rolled.emoji,
-            coins: catchRoll.npcValue,
+            coins: npcValue,
             weightKg: catchRoll.weightKg,
             caughtWithRod: catchRoll.caughtWithRod
         };
 
         console.log(
-            `[FISHING] server roll player=${playerId} depth=${depth} rod=${rodItemId} rolled=${rolled.id} value=${catchRoll.npcValue}g weight=${catchRoll.weightKg}kg clientClaim=${clientFish?.id || 'none'}`
+            `[FISHING] server roll player=${playerId} depth=${depth} effective=${effectiveDepth} rod=${rodItemId} granted=${rolled.id} value=${npcValue}g weight=${weightKg}kg clientClaim=${clientFish?.id || 'none'}`
         );
 
-        return this.handleCatch(
+        const catchResult = await this.handleCatch(
             playerId,
             walletAddress,
             room,
@@ -259,6 +301,24 @@ class FishingService {
             isDemo,
             guestBalance
         );
+
+        if (catchResult.success && !catchResult.missed && !isJellyfishId(rolled.id) && this.fishingHoleService && session.spotId) {
+            const grantedItem = getGameItem(rolled.id);
+            const stockResult = await this.fishingHoleService.consumeTierStock(
+                session.spotId,
+                grantedItem?.tier || rolled.tier || 1
+            );
+            catchResult.holeStatus = this.fishingHoleService.getPublicState(session.spotId);
+            catchResult.holeStockConsumed = stockResult.consumed;
+            if (this.broadcastToRoom && room) {
+                this.broadcastToRoom(room, {
+                    type: 'fishing_holes_update',
+                    holes: [catchResult.holeStatus],
+                });
+            }
+        }
+
+        return catchResult;
     }
 
     /**
@@ -394,7 +454,8 @@ class FishingService {
     static getFishingInfo() {
         const totalWeight = FISH_TYPES.reduce((sum, f) => sum + f.weight, 0);
         return {
-            cost: FISHING_COST,
+            baitItemId: FISHING_BAIT_ITEM,
+            baitPerCast: FISHING_BAIT_PER_CAST,
             sellAtNpc: true,
             fish: FISH_TYPES.map(f => ({
                 id: f.id,
@@ -408,4 +469,4 @@ class FishingService {
 }
 
 export default FishingService;
-export { FISH_TYPES, FISHING_COST };
+export { FISH_TYPES, FISHING_BAIT_ITEM, FISHING_BAIT_PER_CAST };

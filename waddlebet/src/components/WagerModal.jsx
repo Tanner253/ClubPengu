@@ -11,6 +11,7 @@ import { useChallenge } from '../challenge';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import { useDeviceDetection, useEscapeKey } from '../hooks';
 import WagerTokenSelector from './WagerTokenSelector';
+import { MAX_WAGER_GOLD, clampWagerGold } from '../config/goldEconomy';
 
 const WagerModal = () => {
     const {
@@ -109,7 +110,7 @@ const WagerModal = () => {
         e.preventDefault();
         e.stopPropagation();
         
-        const amount = parseInt(wagerAmount, 10) || 0;
+        const amount = clampWagerGold(parseInt(wagerAmount, 10) || 0);
         const hasTokenWager = tokenWager.tokenAddress && tokenWager.tokenAmount > 0;
         
         // Allow free play for monopoly in dev mode
@@ -123,6 +124,11 @@ const WagerModal = () => {
             setError('Enter a coin amount or add a token wager');
             return;
         }
+
+        if (amount > MAX_WAGER_GOLD) {
+            setError(`Gold wagers are capped at ${MAX_WAGER_GOLD} coins`);
+            return;
+        }
         
         if (amount > playerCoins) {
             setError(`You only have ${playerCoins} coins`);
@@ -133,10 +139,10 @@ const WagerModal = () => {
         sendChallenge(selectedPlayer.id, wagerGameType, amount, hasTokenWager ? tokenWager : null);
     };
     
-    const quickAmounts = [10, 50, 100, 250];
+    const quickAmounts = [10, 25, 50].filter((n) => n <= MAX_WAGER_GOLD);
     
     const handleQuickAmount = (amount) => {
-        setWagerAmount(String(Math.min(amount, playerCoins)));
+        setWagerAmount(String(Math.min(amount, playerCoins, MAX_WAGER_GOLD)));
         setError('');
     };
     

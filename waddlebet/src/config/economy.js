@@ -8,11 +8,11 @@ export const GAME_INVENTORY = {
     DEFAULT_SLOTS: 5,
     MAX_SLOTS: 60,
     SLOTS_PER_UPGRADE: 5,
-    UPGRADE_BASE_COST: 250,
-    UPGRADE_COST_MULTIPLIER: 3.5,
+    UPGRADE_BASE_COST: 0,
+    UPGRADE_COST_MULTIPLIER: 1,
     BACKPACK_WOOD_TYPES: ['pine_log', 'birch_log', 'oak_log', 'ironwood_log'],
     BACKPACK_WOOD_STACK: 64,
-    BACKPACK_WOOD_STARTS_AT_UPGRADE: 2,
+    BACKPACK_WOOD_STARTS_AT_UPGRADE: 1,
     BACKPACK_WOOD_TIER_COSTS: {
         1: { pine_log: 32 },
         2: { pine_log: 64, birch_log: 40 },
@@ -71,7 +71,7 @@ export const WOOD_LABELS = {
     ironwood_log: 'Ironwood'
 };
 
-/** Tool prices at Copper Clive — sync with server/config/economy.js */
+/** @deprecated Server uses wood-only axe costs — display from merchants.js woodRequired */
 export const MERCHANT_TOOL_COSTS = {
     basic_axe: 100,
     iron_axe: 450,

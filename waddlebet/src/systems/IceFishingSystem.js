@@ -9,10 +9,20 @@
 
 import { canFitFishCatch } from '../utils/inventoryCapacity';
 import { hasEquippedRod, ownsAnyRod } from '../utils/gameHotbar';
+import { BAIT_ITEM_ID, BAIT_PER_CAST } from '../config/goldEconomy.js';
+import { formatHoleStockSummary, getHoleStatusById } from '../utils/fishingHoleStock.js';
 
 const INTERACTION_RADIUS = 3;
 const BUBBLE_DISPLAY_TIME = 4000; // Show catch bubble for 4 seconds
 const BUBBLE_HEIGHT_ABOVE_PLAYER = 4;
+
+function countItemInInventory(gameInventory, itemId) {
+    const slots = gameInventory?.slots || [];
+    return slots.reduce(
+        (sum, slot) => (slot?.itemId === itemId ? sum + (Number(slot.quantity) || 0) : sum),
+        0
+    );
+}
 
 class IceFishingSystem {
     constructor(THREE, scene) {
@@ -62,7 +72,7 @@ class IceFishingSystem {
      * Check if player is near a fishing spot
      */
     checkInteraction(playerX, playerZ, playerCoins, isAuthenticated, gameInventory = null, options = {}) {
-        const { isMounted = false } = options;
+        const { isMounted = false, fishingHoles = null } = options;
         let nearestSpot = null;
         let nearestDist = Infinity;
         
@@ -81,9 +91,10 @@ class IceFishingSystem {
         if (!nearestSpot) return null;
         
         const isLocalFishing = this.localFishingSpot === nearestSpot.id;
+        const holeStatus = getHoleStatusById(fishingHoles, nearestSpot.id);
+        const stockSummary = formatHoleStockSummary(holeStatus);
         
-        const FISHING_COST = 5;
-        let prompt = `Press E to Fish - Bait: ${FISHING_COST}g`;
+        let prompt = `Press E to Fish — ${BAIT_PER_CAST} worm bait`;
         let canFish = true;
         let reason = null;
         let isDemo = false;
@@ -111,18 +122,24 @@ class IceFishingSystem {
             prompt = 'Backpack full — upgrade or sell fish before fishing';
             canFish = false;
             reason = 'INVENTORY_FULL';
-        } else if (playerCoins < FISHING_COST) {
-            prompt = `Need ${FISHING_COST}g bait (you have ${playerCoins}g)`;
-            canFish = false;
-            reason = 'INSUFFICIENT_FUNDS';
+        } else {
+            const wormCount = countItemInInventory(gameInventory, BAIT_ITEM_ID);
+            if (wormCount < BAIT_PER_CAST) {
+                prompt = 'Need worm bait — search mossy logs in the forest or buy from Old Salty';
+                canFish = false;
+                reason = 'NO_BAIT';
+            }
         }
 
         return {
             spot: nearestSpot,
             prompt,
+            stockSummary,
+            holeStatus,
             canFish,
             reason,
-            cost: isDemo ? 0 : FISHING_COST,
+            cost: isDemo ? 0 : BAIT_PER_CAST,
+            baitItemId: BAIT_ITEM_ID,
             isDemo,
             isLocalFishing
         };
@@ -292,8 +309,8 @@ class IceFishingSystem {
     }
 }
 
-// Constants for external use
-const FISHING_COST = 5;
+// Constants for external use (legacy export — bait is material-based now)
+const FISHING_COST = 0;
 
 export default IceFishingSystem;
-export { FISHING_COST };
+export { FISHING_COST, BAIT_ITEM_ID, BAIT_PER_CAST };

@@ -16,8 +16,6 @@ class CardJitsuGame extends Minigame {
             id: 'card-jitsu',
             name: 'Card Jitsu',
             description: 'The ancient art of card combat!',
-            baseReward: 75,
-            winBonus: 150,
             maxRounds: 10,
             ...config
         });

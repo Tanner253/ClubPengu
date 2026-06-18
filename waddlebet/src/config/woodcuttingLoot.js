@@ -27,13 +27,6 @@ const AXE_CHOP_SPEED = {
     master_axe: 0.55
 };
 
-export const AXE_WOOD_WEIGHTS = {
-    basic_axe: { pine_log: 62, birch_log: 28, oak_log: 9, ironwood_log: 1 },
-    iron_axe: { pine_log: 40, birch_log: 32, oak_log: 22, ironwood_log: 6 },
-    steel_axe: { pine_log: 25, birch_log: 28, oak_log: 30, ironwood_log: 17 },
-    master_axe: { pine_log: 15, birch_log: 22, oak_log: 30, ironwood_log: 33 }
-};
-
 export function getWoodYield(stage, chopMode = 'hold') {
     let base = STAGE_YIELD_BASE[stage] || 2;
     if (chopMode === 'manual') {
@@ -42,22 +35,12 @@ export function getWoodYield(stage, chopMode = 'hold') {
     return base;
 }
 
-/** UI hint — min–max logs after rarity roll (matches what players actually receive). */
-export function getWoodYieldLabel(stage, chopMode = 'hold', axeItemId = 'basic_axe') {
-    const mode = chopMode === 'manual' ? 'manual' : 'hold';
-    let min = Infinity;
-    let max = 0;
-    for (const logId of WOOD_LOG_IDS) {
-        const qty = getWoodChopQuantityForLog(stage, logId, axeItemId, mode);
-        min = Math.min(min, qty);
-        max = Math.max(max, qty);
-    }
-    if (!Number.isFinite(min)) return '1';
-    if (min === max) return `${min}`;
-    return `${min}–${max}`;
+/** Logs for this tree species (matches server chop math). */
+export function getWoodYieldLabel(stage, chopMode = 'hold', axeItemId = 'basic_axe', woodType = 'pine_log') {
+    const qty = getWoodChopQuantityForLog(stage, woodType, axeItemId, chopMode);
+    return `${qty}`;
 }
 
-/** Quantity for a specific log type (mirrors server rollWoodChopLoot math). */
 export function getWoodChopQuantityForLog(stage, logItemId, axeItemId = 'basic_axe', chopMode = 'hold') {
     let quantity = STAGE_YIELD_BASE[stage] || 2;
     quantity = Math.max(1, Math.round(quantity * (LOG_RARITY_QTY_MULT[logItemId] || 1)));

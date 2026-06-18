@@ -8,6 +8,10 @@ import nacl from 'tweetnacl';
 import bs58 from 'bs58';
 import { User, AuthSession } from '../db/models/index.js';
 import { getReferralService } from './ReferralService.js';
+import UserService from './UserService.js';
+import { STARTING_COINS, GOLD_ECONOMY_VERSION } from '../config/goldEconomy.js';
+
+const userServiceForAuth = new UserService();
 
 // JWT configuration
 const IS_DEV = process.env.NODE_ENV !== 'production';
@@ -156,7 +160,7 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
      * Create or update user and generate JWT token
      * @param {string} walletAddress - Verified wallet address
      * @param {string} playerId - Session player ID
-     * @param {object} clientData - Optional client data for migration
+     * @param {object} clientData - Optional client customization payload
      * @param {string} ipAddress - Client IP
      * @returns {Promise<{ token: string, user: object, isNewUser: boolean, referralApplied?: boolean }>}
      */
@@ -182,32 +186,25 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
                     console.log(`⚠️ Default username taken, assigned: ${username}`);
                 }
 
-                // Create new user with optional migration data
+                // Create new user
                 user = new User({
                     walletAddress,
                     username,
                     characterType: clientData.characterType || 'penguin',
                     customization: clientData.customization || {},
-                    coins: 100, // Starting bonus
+                    coins: STARTING_COINS,
+                    goldEconomyVersion: GOLD_ECONOMY_VERSION,
                     gameInventory: {
                         columns: 10,
                         displayRows: 6,
                         unlockedSlots: 5,
                         slots: Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }))
                     },
-                    // Migration data if provided
-                    migrationSource: clientData.migrateFrom ? 'localStorage' : null,
-                    migratedAt: clientData.migrateFrom ? new Date() : null,
                     // Initialize referral fields
                     referral: {
                         referralCode: username  // Default referral code is username
                     }
                 });
-
-                // If migrating, apply localStorage data
-                if (clientData.migrateFrom === 'localStorage' && clientData.migrationData) {
-                    await this.applyMigrationData(user, clientData.migrationData);
-                }
 
                 await user.save();
                 
@@ -230,15 +227,16 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
                 await Transaction.record({
                     type: 'starting_bonus',
                     toWallet: walletAddress,
-                    amount: 100,
+                    amount: STARTING_COINS,
                     toBalanceBefore: 0,
-                    toBalanceAfter: 100,
+                    toBalanceAfter: STARTING_COINS,
                     reason: 'New player starting bonus'
                 });
 
                 console.log(`🆕 New user created: ${username} (${walletAddress.slice(0, 8)}...) - isEstablished: ${user.isEstablishedUser()}`);
             } else {
                 console.log(`👤 Existing user found: ${user.username} (${walletAddress.slice(0, 8)}...) - isEstablished: ${user.isEstablishedUser()}, lastUsernameChangeAt: ${user.lastUsernameChangeAt ? 'SET' : 'null'}`);
+                await userServiceForAuth.ensureGoldEconomyApplied(user);
             }
 
             // Migration: Set lastUsernameChangeAt for established users who don't have it
@@ -299,43 +297,6 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
             console.error('Authentication error:', error);
             throw error;
         }
-    }
-
-    /**
-     * Apply migration data from localStorage
-     */
-    async applyMigrationData(user, data) {
-        // Coins (cap at reasonable amount to prevent exploits)
-        if (data.coins && data.coins > 0) {
-            user.coins = Math.min(data.coins, 100000); // Cap at 100k
-        }
-
-        // Unlocked items
-        if (data.unlockedItems && Array.isArray(data.unlockedItems)) {
-            user.unlockedCosmetics = [...new Set([...user.unlockedCosmetics, ...data.unlockedItems])];
-        }
-
-        // Stamps
-        if (data.stamps && Array.isArray(data.stamps)) {
-            user.stamps = data.stamps;
-        }
-
-        // Stats (merge with defaults)
-        if (data.stats) {
-            if (data.stats.gamesPlayed) {
-                user.gameStats.overall.totalGamesPlayed = data.stats.gamesPlayed;
-            }
-            if (data.stats.gamesWon) {
-                user.gameStats.overall.totalGamesWon = data.stats.gamesWon;
-            }
-        }
-
-        // Customization
-        if (data.customization) {
-            user.customization = { ...user.customization, ...data.customization };
-        }
-
-        console.log(`📦 Migration data applied for ${user.walletAddress}`);
     }
 
     /**

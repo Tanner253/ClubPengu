@@ -5,6 +5,7 @@
 import User from '../db/models/User.js';
 import {
     ONBOARDING_REWARD_GOLD,
+    DOJO_SENSEI_WIN_GOLD,
     ONBOARDING_STEPS,
     TRAVEL_ROUTE_QUEST_STEPS,
     isTownTrashSpot,
@@ -100,8 +101,36 @@ export default class OnboardingQuestService {
         };
         await user.save();
 
+        let dojoReward = null;
+        if (stepId === 'dojo_gold') {
+            const coinResult = await this.userService.addCoins(
+                walletAddress,
+                DOJO_SENSEI_WIN_GOLD,
+                'dojo_sensei_win',
+                {},
+                'Beat Sensei in the Dojo'
+            );
+            if (coinResult.success) {
+                dojoReward = {
+                    dojoRewardGold: DOJO_SENSEI_WIN_GOLD,
+                    newBalance: coinResult.newBalance,
+                };
+                const player = this.getPlayerByWallet(walletAddress);
+                if (player) {
+                    this.sendToPlayer(player.id, {
+                        type: 'coins_update',
+                        coins: coinResult.newBalance,
+                        isAuthenticated: true,
+                    });
+                }
+            }
+        }
+
         const status = this.buildStatus(user);
-        this.notifyWallet(walletAddress, status, { justCompletedStepId: stepId });
+        this.notifyWallet(walletAddress, status, {
+            justCompletedStepId: stepId,
+            ...dojoReward,
+        });
 
         if (status.allDone && !status.rewardClaimed) {
             const rewardResult = await this.claimReward(walletAddress);
@@ -163,8 +192,8 @@ export default class OnboardingQuestService {
         return this.tryCompleteStep(walletAddress, stepId);
     }
 
-    handleMinigameReward(walletAddress, roomId) {
-        if (roomId !== 'dojo') return Promise.resolve(null);
+    handleMinigameComplete(walletAddress, roomId, won = false) {
+        if (roomId !== 'dojo' || !won) return Promise.resolve(null);
         return this.tryCompleteStep(walletAddress, 'dojo_gold');
     }
 

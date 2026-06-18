@@ -14,7 +14,7 @@ import { getHarvestableTree, getStageConfig, getWoodYield } from '../config/harv
 
 import { getGameItem } from '../config/gameItems.js';
 
-import { rollWoodChopLoot, WOOD_LOG_IDS, getWoodChopQuantityForLog } from '../config/woodcuttingLoot.js';
+import { rollWoodChopLoot, getWoodChopQuantityForLog } from '../config/woodcuttingLoot.js';
 
 import { MANUAL_CHOP, computeCutAmount, shouldManualTreeFall } from '../config/manualChop.js';
 
@@ -410,28 +410,27 @@ class WoodcuttingService {
         const tree = this.forestTreeService.getTree(treeId);
         const def = getHarvestableTree(treeId);
         const stage = tree?.stage || def?.stage || 'mature';
+        const woodType = def?.woodType || 'pine_log';
 
-        for (const logId of WOOD_LOG_IDS) {
-            const qty = getWoodChopQuantityForLog(stage, logId, axeItemId, chopMode);
-            const itemDef = getGameItem(logId);
-            const capacity = await this.gameInventoryService.canAddItem(
-                walletAddress,
-                logId,
-                qty,
-                {
-                    name: itemDef?.name,
-                    emoji: itemDef?.emoji,
-                    npcValue: itemDef?.npcValue,
-                    category: 'wood',
-                    tier: itemDef?.tier
-                }
-            );
-            if (capacity.ok) return null;
-        }
+        const qty = getWoodChopQuantityForLog(stage, woodType, axeItemId, chopMode);
+        const itemDef = getGameItem(woodType);
+        const capacity = await this.gameInventoryService.canAddItem(
+            walletAddress,
+            woodType,
+            qty,
+            {
+                name: itemDef?.name,
+                emoji: itemDef?.emoji,
+                npcValue: itemDef?.npcValue,
+                category: 'wood',
+                tier: itemDef?.tier
+            }
+        );
+        if (capacity.ok) return null;
 
         return {
-            error: 'INVENTORY_FULL',
-            message: 'Backpack is full — upgrade or sell items'
+            error: capacity.error || 'INVENTORY_FULL',
+            message: capacity.message || 'Backpack is full — upgrade or sell items'
         };
     }
 
@@ -452,7 +451,8 @@ class WoodcuttingService {
             treeId: session.treeId,
             stage,
             axeItemId,
-            chopMode
+            chopMode,
+            woodType: def?.woodType,
         });
 
         const itemDef = getGameItem(loot.logItemId);
@@ -668,7 +668,7 @@ class WoodcuttingService {
 
                 stage,
 
-                woodYield: getWoodYield(stage, 'manual'),
+                woodYield: getWoodYield(stage, { chopMode: 'manual' }),
 
                 isDemo: true,
 
@@ -740,7 +740,7 @@ class WoodcuttingService {
 
             stage,
 
-            woodYield: getWoodYield(stage, 'manual'),
+            woodYield: getWoodYield(stage, { chopMode: 'manual' }),
 
             isDemo: false,
 

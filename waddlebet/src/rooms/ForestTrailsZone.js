@@ -403,7 +403,6 @@ class ForestTrailsZone {
         const posts = [
             { x: 70, z: 26, style: 'topped' },
             { x: 81, z: 58, style: 'plain' },
-            { x: 90, z: 72, style: 'topped' },
             { x: 68, z: 100, style: 'plain' },
             { x: 108.5, z: 100, style: 'plain' },
             { x: 132.5, z: 107, style: 'plain' },

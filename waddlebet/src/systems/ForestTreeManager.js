@@ -62,6 +62,7 @@ class ForestTreeManager {
         const instance = new TreeClass(this.THREE, {
             id: def.id,
             stage,
+            woodType: def.woodType || 'pine_log',
             state: state.state || 'ready',
             regrowAt: state.regrowAt,
             choppingBy: state.choppingBy || null
@@ -249,6 +250,7 @@ class ForestTreeManager {
         const instance = new TreeClass(this.THREE, {
             id: entry.def.id,
             stage,
+            woodType: entry.def.woodType || 'pine_log',
             state: state.state || 'ready',
             regrowAt: state.regrowAt,
             choppingBy: state.choppingBy || null
@@ -304,6 +306,7 @@ class ForestTreeManager {
                 nearest = {
                     treeId: id,
                     stage,
+                    woodType: entry.def.woodType || 'pine_log',
                     chopMode: entry.def.chopMode || 'hold',
                     woodYield: getWoodYield(stage, entry.def),
                     label: stageCfg?.label || 'Tree',

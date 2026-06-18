@@ -1,5 +1,7 @@
 /** World item drops — despawn timing and interaction radii (server-authoritative). */
 
+import { MAX_WAGER_GOLD } from './goldEconomy.js';
+
 export const WORLD_DROP_DESPAWN_MS = 5 * 60 * 1000;
 
 /** Horizontal distance from player to pick up a drop. */
@@ -13,7 +15,8 @@ export const GOLD_BAG_ITEM_ID = 'gold_bag';
 
 export const MIN_GOLD_DROP = 1;
 
-export const MAX_GOLD_DROP = 999_999;
+/** Cap world gold transfers to scarce-economy band. */
+export const MAX_GOLD_DROP = MAX_WAGER_GOLD;
 
 export function isGoldWorldDrop(drop) {
     if (!drop) return false;

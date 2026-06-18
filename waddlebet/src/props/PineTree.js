@@ -20,10 +20,12 @@ class PineTree extends BaseProp {
     /**
      * @param {THREE} THREE - Three.js library
      * @param {string} size - 'small' | 'medium' | 'large'
+     * @param {{ barkColor?: string, foliageColor?: string, snowCovered?: boolean }} [options]
      */
-    constructor(THREE, size = 'medium') {
+    constructor(THREE, size = 'medium', options = {}) {
         super(THREE);
         this.size = size;
+        this.options = options;
         this.matManager = getMaterialManager(THREE);
         this.geoManager = getGeometryManager(THREE);
     }
@@ -193,8 +195,9 @@ class PineTree extends BaseProp {
         const { trunkGeo, foliageGeo, snowGeo } = this._getMergedGeometry();
         
         // Materials
-        const trunkMat = this.matManager.get(PropColors.barkMedium, { roughness: 0.95 });
-        const foliageMat = this.matManager.get(PropColors.pineMedium, { roughness: 0.9 });
+        const trunkMat = this.matManager.get(this.options.barkColor || PropColors.barkMedium, { roughness: 0.95 });
+        const foliageMat = this.matManager.get(this.options.foliageColor || PropColors.pineMedium, { roughness: 0.9 });
+        const showSnow = this.options.snowCovered !== false;
         const snowMat = this.matManager.get(PropColors.snowLight, { roughness: 0.6 });
         
         // ONLY 3 MESHES instead of 14!
@@ -212,8 +215,8 @@ class PineTree extends BaseProp {
             this.addMesh(foliage, group);
         }
         
-        // Snow (all snow parts merged)
-        if (snowGeo) {
+        // Snow (all snow parts merged) — birch/pine only
+        if (snowGeo && showSnow) {
             const snow = new THREE.Mesh(snowGeo, snowMat);
             snow.castShadow = true;
             this.addMesh(snow, group);

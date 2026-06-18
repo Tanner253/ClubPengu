@@ -65,6 +65,8 @@ describe('FishingService sessions', () => {
             ensureInventory: vi.fn().mockResolvedValue({ coins: 100, gameInventory: {} }),
             getEquippedRod: vi.fn().mockReturnValue({ itemId: 'basic_rod', metadata: { durability: 70, maxDurability: 70 } }),
             damageEquippedRod: vi.fn().mockResolvedValue({ broken: false }),
+            countItem: vi.fn().mockResolvedValue(12),
+            removeItemsById: vi.fn().mockResolvedValue({ success: true }),
             addItem: vi.fn().mockResolvedValue({
                 inventory: { usedSlots: 1, slots: [{ itemId: 'minnow' }] }
             }),
@@ -131,6 +133,29 @@ describe('FishingService sessions', () => {
         expect(isFishAllowedAtDepth(result.fish.id, 10)).toBe(true);
     });
 
+    it('grants deep client catch when depth allows (kraken fix)', async () => {
+        const start = await service.startFishing('p1', 'wallet', 'town', 'spot1', 'Test', 0, false);
+
+        const result = await service.handleGameResult(
+            'p1',
+            'wallet',
+            'town',
+            'Test',
+            { sessionId: start.sessionId, success: true, depth: 1400, fish: { id: 'kraken' } },
+            false,
+            0
+        );
+
+        expect(result.success).toBe(true);
+        expect(result.fish.id).toBe('kraken');
+        expect(gameInventoryService.addItem).toHaveBeenCalledWith(
+            'wallet',
+            'kraken',
+            1,
+            expect.objectContaining({ depth: 1400 })
+        );
+    });
+
     it('rejects start when backpack is full', async () => {
         gameInventoryService.canAddItem.mockResolvedValue({
             ok: false,
@@ -140,7 +165,7 @@ describe('FishingService sessions', () => {
 
         const start = await service.startFishing('p1', 'wallet', 'town', 'spot1', 'Test', 0, false);
         expect(start.error).toBe('INVENTORY_FULL');
-        expect(userService.addCoins).not.toHaveBeenCalled();
+        expect(gameInventoryService.removeItemsById).not.toHaveBeenCalled();
     });
 
     it('rejects start when no rod equipped', async () => {
@@ -148,7 +173,15 @@ describe('FishingService sessions', () => {
 
         const start = await service.startFishing('p1', 'wallet', 'town', 'spot1', 'Test', 0, false);
         expect(start.error).toBe('NO_ROD');
-        expect(userService.addCoins).not.toHaveBeenCalled();
+        expect(gameInventoryService.removeItemsById).not.toHaveBeenCalled();
+    });
+
+    it('rejects start when no bait worms', async () => {
+        gameInventoryService.countItem.mockResolvedValue(0);
+
+        const start = await service.startFishing('p1', 'wallet', 'town', 'spot1', 'Test', 0, false);
+        expect(start.error).toBe('NO_BAIT');
+        expect(gameInventoryService.removeItemsById).not.toHaveBeenCalled();
     });
 
     it('demo mode skips rod requirement', async () => {

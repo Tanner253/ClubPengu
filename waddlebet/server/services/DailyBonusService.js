@@ -14,6 +14,13 @@ import custodialWalletService from './CustodialWalletService.js';
 import crypto from 'crypto';
 import { getReferralService } from './ReferralService.js';
 import { getOnboardingProgress, isOnboardingQuestComplete } from '../config/onboardingQuest.js';
+import {
+    DAILY_STREAK_REWARDS,
+    STREAK_LENGTH,
+    getStreakReward,
+    getUtcDayKey,
+    utcDayDiff,
+} from '../config/dailyBonusStreak.js';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONFIGURATION
@@ -24,8 +31,8 @@ const CONFIG = {
     REQUIRED_SESSION_MINUTES: 60,           // 1 hour of play time required
     COOLDOWN_HOURS: 24,                     // 24 hour cooldown between claims
     
-    // Reward amount
-    REWARD_AMOUNT: 5000,                    // 5,000 $CP
+    // Legacy max reference (day 5–7 rewards)
+    MAX_REWARD_CP: 5000,
     
     // Token config (loaded after env)
     getTokenAddress: () => process.env.CPW3_TOKEN_ADDRESS || '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump',
@@ -54,9 +61,40 @@ const CLAIM_ATTEMPT_COOLDOWN_MS = 30 * 1000; // 30 seconds between attempts
 
 class DailyBonusService {
     constructor() {
+        this.userService = null;
         // Clean up old nonces periodically
         setInterval(() => this._cleanupNonces(), 60 * 1000);
         console.log('🎁 DailyBonusService initialized');
+    }
+
+    /** @param {import('./UserService.js').default} userService */
+    setUserService(userService) {
+        this.userService = userService;
+    }
+
+    _resolveClaimStreakDay(user) {
+        const today = getUtcDayKey();
+        let claimDay = user.dailyBonus?.streakDay || 1;
+        const lastStreakUtcDay = user.dailyBonus?.streakLastUtcDay || null;
+
+        if (lastStreakUtcDay) {
+            const gap = utcDayDiff(lastStreakUtcDay, today);
+            if (gap > 1) claimDay = 1;
+        }
+
+        claimDay = Math.max(1, Math.min(STREAK_LENGTH, claimDay));
+        const reward = getStreakReward(claimDay);
+        const consecutive = !lastStreakUtcDay || utcDayDiff(lastStreakUtcDay, today) <= 1;
+        const completedDays = consecutive ? Math.max(0, claimDay - 1) : 0;
+
+        return {
+            today,
+            claimDay,
+            reward,
+            consecutive,
+            completedDays,
+            nextDayAfterClaim: claimDay >= STREAK_LENGTH ? 1 : claimDay + 1,
+        };
     }
     
     /**
@@ -217,6 +255,8 @@ class DailyBonusService {
 
             const onboardingProgress = getOnboardingProgress(user);
             const onboardingComplete = onboardingProgress.complete;
+
+            const streak = this._resolveClaimStreakDay(user);
             
             // Can claim if cooldown expired AND has enough session time AND intro quest done
             const canClaim = cooldownExpired && hasEnoughTime && onboardingComplete;
@@ -241,7 +281,12 @@ class DailyBonusService {
                 onboardingComplete,
                 onboardingCompletedCount: onboardingProgress.completedCount,
                 onboardingTotalSteps: onboardingProgress.totalSteps,
-                rewardAmount: CONFIG.REWARD_AMOUNT,                // $CP reward amount
+                rewardAmount: streak.reward.cp,
+                goldReward: streak.reward.gold,
+                streakDay: streak.claimDay,
+                streakCompletedDays: streak.completedDays,
+                streakRewards: DAILY_STREAK_REWARDS,
+                streakLastUtcDay: user.dailyBonus?.streakLastUtcDay || null,
                 totalClaimed: user.dailyBonus?.totalClaimed || 0,
                 totalWaddleEarned: user.dailyBonus?.totalWaddleEarned || 0,
                 lastClaimAt: lastClaim,
@@ -317,6 +362,9 @@ class DailyBonusService {
 
         let reservedClaimId = null;
         let previousLastClaim = null;
+        let previousStreakDay = null;
+        let previousStreakUtcDay = null;
+        let cpAmount = 0;
         
         try {
             // ═══════════════════════════════════════════════════════════════
@@ -376,6 +424,11 @@ class DailyBonusService {
                     timeRemaining
                 };
             }
+
+            const streak = this._resolveClaimStreakDay(user);
+            const reward = streak.reward;
+            const cpAmount = reward.cp;
+            const goldAmount = reward.gold || 0;
             
             // ═══════════════════════════════════════════════════════════════
             // ATOMIC CLAIM WITH NONCE PROTECTION
@@ -408,8 +461,10 @@ class DailyBonusService {
                     },
                     $inc: {
                         'dailyBonus.totalClaimed': 1,
-                        'dailyBonus.totalWaddleEarned': CONFIG.REWARD_AMOUNT
-                    }
+                        'dailyBonus.totalWaddleEarned': cpAmount
+                    },
+                    'dailyBonus.streakDay': streak.nextDayAfterClaim,
+                    'dailyBonus.streakLastUtcDay': streak.today,
                 }
             );
             
@@ -421,17 +476,89 @@ class DailyBonusService {
 
             reservedClaimId = claimId;
             previousLastClaim = lastClaim;
+            previousStreakDay = user.dailyBonus?.streakDay ?? 1;
+            previousStreakUtcDay = user.dailyBonus?.streakLastUtcDay ?? null;
             
             console.log(`🎁 [DailyBonus] Processing claim for ${walletAddress.slice(0, 8)}...`);
             console.log(`   Claim ID: ${claimId}`);
-            console.log(`   Reward: ${CONFIG.REWARD_AMOUNT} $CP`);
-            
+            console.log(`   Streak day ${streak.claimDay}: ${cpAmount} $CP${goldAmount > 0 ? ` + ${goldAmount}g` : ''}`);
+
+            let goldNewBalance = null;
+            if (goldAmount > 0 && this.userService) {
+                const coinResult = await this.userService.addCoins(
+                    walletAddress,
+                    goldAmount,
+                    'daily_streak_gold',
+                    { claimId, streakDay: streak.claimDay },
+                    `Day ${streak.claimDay} streak gold bonus`
+                );
+                if (coinResult.error) {
+                    await User.updateOne(
+                        { walletAddress, 'dailyBonus.claimNonce': claimId },
+                        {
+                            'dailyBonus.lastClaimAt': previousLastClaim,
+                            'dailyBonus.streakDay': previousStreakDay,
+                            'dailyBonus.streakLastUtcDay': previousStreakUtcDay,
+                            $pull: { 'dailyBonus.processedClaimNonces': clientNonce },
+                            $inc: {
+                                'dailyBonus.totalClaimed': -1,
+                                'dailyBonus.totalWaddleEarned': -cpAmount
+                            }
+                        }
+                    );
+                    _usedNonces.delete(clientNonce);
+                    return {
+                        success: false,
+                        error: 'GOLD_GRANT_FAILED',
+                        message: 'Could not grant gold bonus. Please try again.'
+                    };
+                }
+                goldNewBalance = coinResult.newBalance;
+            }
+
+            // Gold-only streak days — skip on-chain $CP transfer
+            if (cpAmount <= 0) {
+                if (isDBConnected()) {
+                    try {
+                        await Transaction.record({
+                            type: 'daily_streak_gold',
+                            fromWallet: null,
+                            toWallet: walletAddress,
+                            amount: goldAmount,
+                            currency: 'GOLD',
+                            relatedData: {
+                                claimId,
+                                clientNonce,
+                                sessionMinutes,
+                                streakDay: streak.claimDay,
+                                goldOnly: true,
+                            },
+                            reason: `Daily streak day ${streak.claimDay} (gold only)`
+                        });
+                    } catch (txErr) {
+                        console.warn('[DailyBonus] Failed to record gold-only transaction:', txErr.message);
+                    }
+                }
+
+                return {
+                    success: true,
+                    txSignature: null,
+                    amount: 0,
+                    goldReward: goldAmount,
+                    goldNewBalance,
+                    streakDay: streak.claimDay,
+                    tokenSymbol: '$CP',
+                    claimId,
+                    message: `Day ${streak.claimDay} reward: ${goldAmount} gold!`
+                };
+            }
+
             // ═══════════════════════════════════════════════════════════════
             // SEND TOKENS FROM CUSTODIAL WALLET
             // ═══════════════════════════════════════════════════════════════
             
             const tokenAddress = CONFIG.getTokenAddress();
-            const amountRaw = BigInt(CONFIG.REWARD_AMOUNT) * BigInt(10 ** CONFIG.TOKEN_DECIMALS);
+            const amountRaw = BigInt(cpAmount) * BigInt(10 ** CONFIG.TOKEN_DECIMALS);
             
             const txResult = await custodialWalletService._sendPayoutTransaction(
                 walletAddress,
@@ -447,6 +574,19 @@ class DailyBonusService {
                 }
                 console.log(`🎁 [DailyBonus] ✅ Claim successful!`);
                 console.log(`   Tx: ${txSignature}`);
+
+                if (goldAmount > 0 && this.userService && goldNewBalance == null) {
+                    const coinResult = await this.userService.addCoins(
+                        walletAddress,
+                        goldAmount,
+                        'daily_streak_gold',
+                        { claimId, streakDay: streak.claimDay },
+                        `Day ${streak.claimDay} streak gold bonus`
+                    );
+                    if (!coinResult.error) {
+                        goldNewBalance = coinResult.newBalance;
+                    }
+                }
                 
                 // Record transaction
                 if (isDBConnected()) {
@@ -455,29 +595,35 @@ class DailyBonusService {
                             type: 'daily_bonus',
                             fromWallet: 'custodial',
                             toWallet: walletAddress,
-                            amount: CONFIG.REWARD_AMOUNT,
+                            amount: cpAmount,
                             currency: 'WADDLE',
                             relatedData: {
                                 claimId,
                                 clientNonce,
                                 txSignature,
                                 sessionMinutes,
+                                streakDay: streak.claimDay,
+                                goldBonus: goldAmount,
                                 confirmationUncertain: !txResult.success
                             },
-                            reason: 'Daily login bonus claim'
+                            reason: `Daily streak day ${streak.claimDay}`
                         });
                     } catch (txErr) {
                         console.warn('[DailyBonus] Failed to record transaction:', txErr.message);
                     }
                 }
                 
+                const goldPart = goldAmount > 0 ? ` and ${goldAmount} gold` : '';
                 return {
                     success: true,
                     txSignature,
-                    amount: CONFIG.REWARD_AMOUNT,
+                    amount: cpAmount,
+                    goldReward: goldAmount,
+                    goldNewBalance,
+                    streakDay: streak.claimDay,
                     tokenSymbol: '$CP',
                     claimId,
-                    message: `Successfully claimed ${CONFIG.REWARD_AMOUNT.toLocaleString()} $CP!`
+                    message: `Day ${streak.claimDay} reward: ${cpAmount.toLocaleString()} $CP${goldPart}!`
                 };
                 
             } else {
@@ -488,10 +634,12 @@ class DailyBonusService {
                     { walletAddress, 'dailyBonus.claimNonce': claimId },
                     {
                         'dailyBonus.lastClaimAt': previousLastClaim,
+                        'dailyBonus.streakDay': previousStreakDay,
+                        'dailyBonus.streakLastUtcDay': previousStreakUtcDay,
                         $pull: { 'dailyBonus.processedClaimNonces': clientNonce },
                         $inc: {
                             'dailyBonus.totalClaimed': -1,
-                            'dailyBonus.totalWaddleEarned': -CONFIG.REWARD_AMOUNT
+                            'dailyBonus.totalWaddleEarned': -cpAmount
                         }
                     }
                 );
@@ -514,10 +662,12 @@ class DailyBonusService {
                         { walletAddress, 'dailyBonus.claimNonce': reservedClaimId },
                         {
                             'dailyBonus.lastClaimAt': previousLastClaim,
+                            'dailyBonus.streakDay': previousStreakDay,
+                            'dailyBonus.streakLastUtcDay': previousStreakUtcDay,
                             $pull: { 'dailyBonus.processedClaimNonces': clientNonce },
                             $inc: {
                                 'dailyBonus.totalClaimed': -1,
-                                'dailyBonus.totalWaddleEarned': -CONFIG.REWARD_AMOUNT
+                                'dailyBonus.totalWaddleEarned': -cpAmount
                             }
                         }
                     );

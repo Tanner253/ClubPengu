@@ -14,6 +14,7 @@ import {
     buildAuthRestoreMessage,
     clearStoredSession
 } from './sessionRestore.js';
+import { clampGoldSlotBet } from '../config/goldEconomy.js';
 
 const MultiplayerContext = createContext(null);
 
@@ -229,9 +230,13 @@ export function MultiplayerProvider({ children }) {
     const [gameInventory, setGameInventory] = useState(null);
     /** @type {[Record<string, number>, Function]} spotId -> cooldown end timestamp (ms) */
     const [scavengeCooldowns, setScavengeCooldowns] = useState({});
+    const [wormForageCooldowns, setWormForageCooldowns] = useState({});
     const [backpackError, setBackpackError] = useState(null);
     const [onboardingQuest, setOnboardingQuest] = useState(null);
+    const [dailyQuestStatus, setDailyQuestStatus] = useState(null);
+    const [dailyBonusStatus, setDailyBonusStatus] = useState(null);
     const [forestTrees, setForestTrees] = useState([]);
+    const [fishingHoles, setFishingHoles] = useState([]);
     const [mushroomClusters, setMushroomClusters] = useState([]);
     const [worldDrops, setWorldDrops] = useState([]);
     const [roomTravelVoyages, setRoomTravelVoyages] = useState([]);
@@ -251,10 +256,12 @@ export function MultiplayerProvider({ children }) {
     const rodUpgradeCallbackRef = useRef(null);
     const hotbarSetCallbackRef = useRef(null);
     const mushroomHarvestCallbackRef = useRef(null);
+    const wormForageCallbackRef = useRef(null);
     const worldDropCallbackRef = useRef(null);
     const worldPickupCallbackRef = useRef(null);
     const scavengeCallbackRef = useRef(null);
     const npcQuestCallbackRef = useRef(null);
+    const dailyBonusClaimCallbackRef = useRef(null);
     const callbacksRef = useRef({
         onPlayerJoined: null,
         onPlayerLeft: null,
@@ -631,15 +638,22 @@ export function MultiplayerProvider({ children }) {
             case 'daily_bonus_status':
                 // Daily bonus eligibility status
                 console.log(`🎁 Daily bonus status:`, message.canClaim ? 'Can claim!' : 'Not ready');
+                if (!message.error) {
+                    setDailyBonusStatus({ ...message, receivedAt: Date.now() });
+                }
                 callbacksRef.current.onDailyBonusStatus?.(message);
                 break;
                 
             case 'daily_bonus_result':
-                // Daily bonus claim result
                 if (message.success) {
-                    console.log(`🎁 Daily bonus claimed! ${message.amount} ${message.tokenSymbol}`);
-                } else {
-                    console.warn(`🎁 Daily bonus claim failed: ${message.error}`);
+                    if (message.goldNewBalance != null) {
+                        GameManager.getInstance().setCoinsFromServer(message.goldNewBalance);
+                        setUserData((prev) => (prev ? { ...prev, coins: message.goldNewBalance } : prev));
+                    }
+                }
+                if (dailyBonusClaimCallbackRef.current) {
+                    dailyBonusClaimCallbackRef.current(message);
+                    dailyBonusClaimCallbackRef.current = null;
                 }
                 callbacksRef.current.onDailyBonusResult?.(message);
                 break;
@@ -1104,6 +1118,13 @@ export function MultiplayerProvider({ children }) {
                 fishingSessionIdRef.current = message.sessionId || null;
                 setFishingActive(true);
                 setFishingResult(null);
+                if (message.holeStatus?.id) {
+                    setFishingHoles(prev => {
+                        const map = new Map((prev || []).map(h => [h.id, h]));
+                        map.set(message.holeStatus.id, message.holeStatus);
+                        return Array.from(map.values());
+                    });
+                }
                 callbacksRef.current.onFishingStarted?.(message);
                 if (fishingCallbackRef.current) {
                     fishingCallbackRef.current({ success: true, ...message });
@@ -1397,6 +1418,23 @@ export function MultiplayerProvider({ children }) {
                 break;
             }
 
+            case 'fishing_holes_snapshot': {
+                setFishingHoles(message.holes || []);
+                break;
+            }
+
+            case 'fishing_holes_update': {
+                const holeUpdates = message.holes || [];
+                if (!holeUpdates.length) break;
+                setFishingHoles(prev => {
+                    const map = new Map((prev || []).map(h => [h.id, h]));
+                    for (const u of holeUpdates) map.set(u.id, { ...map.get(u.id), ...u });
+                    return Array.from(map.values());
+                });
+                callbacksRef.current.onFishingHolesUpdate?.(holeUpdates);
+                break;
+            }
+
             case 'mushrooms_snapshot': {
                 setMushroomClusters(message.mushrooms || []);
                 break;
@@ -1435,6 +1473,51 @@ export function MultiplayerProvider({ children }) {
                 if (mushroomHarvestCallbackRef.current) {
                     mushroomHarvestCallbackRef.current({ error: message.error, message: message.message, waitSeconds: message.waitSeconds });
                     mushroomHarvestCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'worm_forage_status': {
+                const next = {};
+                for (const [logId, status] of Object.entries(message.statuses || {})) {
+                    if (!status?.canForage && status.displayRemainingMs > 0) {
+                        next[logId] = Date.now() + status.displayRemainingMs;
+                    }
+                }
+                setWormForageCooldowns(next);
+                break;
+            }
+
+            case 'worm_forage_result': {
+                if (message.inventory) setGameInventory(message.inventory);
+                if (message.logId && message.displayRemainingSeconds) {
+                    setWormForageCooldowns(prev => ({
+                        ...prev,
+                        [message.logId]: Date.now() + message.displayRemainingSeconds * 1000,
+                    }));
+                }
+                if (wormForageCallbackRef.current) {
+                    wormForageCallbackRef.current(message);
+                    wormForageCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'worm_forage_error': {
+                if (message.logId && message.displayRemainingSeconds) {
+                    setWormForageCooldowns(prev => ({
+                        ...prev,
+                        [message.logId]: Date.now() + message.displayRemainingSeconds * 1000,
+                    }));
+                }
+                if (wormForageCallbackRef.current) {
+                    wormForageCallbackRef.current({
+                        error: message.error,
+                        message: message.message,
+                        displayRemainingSeconds: message.displayRemainingSeconds,
+                        logId: message.logId,
+                    });
+                    wormForageCallbackRef.current = null;
                 }
                 break;
             }
@@ -1600,11 +1683,64 @@ export function MultiplayerProvider({ children }) {
                     GameManager.getInstance().setCoinsFromServer(message.newBalance);
                     setUserData((prev) => (prev ? { ...prev, coins: message.newBalance } : prev));
                 }
+                if (message.rewardGranted) {
+                    if (wsRef.current?.readyState === WebSocket.OPEN) {
+                        wsRef.current.send(JSON.stringify({ type: 'daily_quest_status' }));
+                        wsRef.current.send(JSON.stringify({ type: 'daily_bonus_status' }));
+                    }
+                }
+                break;
+            }
+
+            case 'daily_quest_status':
+            case 'daily_quest_update': {
+                if (!message.error) {
+                    setDailyQuestStatus({
+                        onboardingComplete: message.onboardingComplete !== false,
+                        orders: message.orders || [],
+                        completedCount: message.completedCount ?? 0,
+                        totalOrders: message.totalOrders ?? 0,
+                        allComplete: !!message.allComplete,
+                        utcDay: message.utcDay ?? null,
+                    });
+                }
                 break;
             }
 
             case 'npc_quest_result': {
                 if (message.inventory) setGameInventory(message.inventory);
+                if (message.dailyQuest) {
+                    setDailyQuestStatus({
+                        onboardingComplete: message.dailyQuest.onboardingComplete !== false,
+                        orders: message.dailyQuest.orders || [],
+                        completedCount: message.dailyQuest.completedCount ?? 0,
+                        totalOrders: message.dailyQuest.totalOrders ?? 0,
+                        allComplete: !!message.dailyQuest.allComplete,
+                        utcDay: message.dailyQuest.utcDay ?? null,
+                    });
+                }
+                if (message.newBalance != null) {
+                    GameManager.getInstance().setCoinsFromServer(message.newBalance);
+                    setUserData((prev) => (prev ? { ...prev, coins: message.newBalance } : prev));
+                }
+                if (npcQuestCallbackRef.current) {
+                    npcQuestCallbackRef.current(message);
+                    npcQuestCallbackRef.current = null;
+                }
+                break;
+            }
+
+            case 'npc_quest_accepted': {
+                if (message.dailyQuest) {
+                    setDailyQuestStatus({
+                        onboardingComplete: message.dailyQuest.onboardingComplete !== false,
+                        orders: message.dailyQuest.orders || [],
+                        completedCount: message.dailyQuest.completedCount ?? 0,
+                        totalOrders: message.dailyQuest.totalOrders ?? 0,
+                        allComplete: !!message.dailyQuest.allComplete,
+                        utcDay: message.dailyQuest.utcDay ?? null,
+                    });
+                }
                 if (npcQuestCallbackRef.current) {
                     npcQuestCallbackRef.current(message);
                     npcQuestCallbackRef.current = null;
@@ -2404,10 +2540,6 @@ export function MultiplayerProvider({ children }) {
         // Step 4: Send signed challenge to server
         // IMPORTANT: Do NOT send stale data from previous wallet
         // Server is authoritative - it will send back the correct data for this wallet
-        const gm = GameManager.getInstance();
-        
-        // Only include migration data for genuinely new users (localStorage data from before any auth)
-        const migrationData = gm.getMigrationData();
         
         // Get pending referral code (from URL or sessionStorage)
         const pendingReferral = referralCode || sessionStorage.getItem('pending_referral');
@@ -2419,9 +2551,6 @@ export function MultiplayerProvider({ children }) {
             clientData: {
                 // DON'T send username - new users should pick it in the designer
                 // Server will assign a default "Penguin..." name that they can change
-                // Only send migration data for first-time users migrating from localStorage
-                migrateFrom: migrationData ? 'localStorage' : null,
-                migrationData: migrationData,
                 // Include referral code if user came from a referral link
                 referralCode: pendingReferral || undefined
             }
@@ -2743,7 +2872,7 @@ export function MultiplayerProvider({ children }) {
         });
     }, [connected, isAuthenticated, send]);
 
-    const spinGoldSlot = useCallback((machineId) => {
+    const spinGoldSlot = useCallback((machineId, bet = 1) => {
         return new Promise((resolve) => {
             if (!connected) {
                 resolve({ error: 'NOT_CONNECTED', message: 'Not connected to server' });
@@ -2762,7 +2891,7 @@ export function MultiplayerProvider({ children }) {
             setGoldSlotResult(null);
             goldSlotCallbackRef.current = resolve;
 
-            const sent = send({ type: 'gold_slot_spin', machineId });
+            const sent = send({ type: 'gold_slot_spin', machineId, bet: clampGoldSlotBet(bet) });
             if (!sent) {
                 setGoldSlotSpinning(false);
                 goldSlotCallbackRef.current = null;
@@ -2940,6 +3069,11 @@ export function MultiplayerProvider({ children }) {
         send({ type: 'forest_trees_get' });
     }, [connected, send]);
 
+    const fetchFishingHoles = useCallback(() => {
+        if (!connected) return;
+        send({ type: 'fishing_holes_sync' });
+    }, [connected, send]);
+
     const fetchMushrooms = useCallback(() => {
         if (!connected) return;
         send({ type: 'mushrooms_get' });
@@ -2953,6 +3087,25 @@ export function MultiplayerProvider({ children }) {
             setTimeout(() => {
                 if (mushroomHarvestCallbackRef.current === resolve) {
                     mushroomHarvestCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, send]);
+
+    const fetchWormForageStatus = useCallback(() => {
+        if (!connected) return;
+        send({ type: 'worm_forage_get' });
+    }, [connected, send]);
+
+    const forageLogWorms = useCallback((logId) => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            wormForageCallbackRef.current = resolve;
+            send({ type: 'worm_forage', logId });
+            setTimeout(() => {
+                if (wormForageCallbackRef.current === resolve) {
+                    wormForageCallbackRef.current = null;
                     resolve({ error: 'TIMEOUT', message: 'Request timed out' });
                 }
             }, 10000);
@@ -3031,17 +3184,59 @@ export function MultiplayerProvider({ children }) {
         send({ type: 'scavenge_get' });
     }, [connected, send]);
 
-    const turnInMushroomQuest = useCallback(() => {
+    const turnInNpcQuest = useCallback((questId) => {
         if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
         return new Promise((resolve) => {
             npcQuestCallbackRef.current = resolve;
-            send({ type: 'npc_quest_turnin', questId: 'mushroom_ticket' });
+            send({ type: 'npc_quest_turnin', questId });
             setTimeout(() => {
                 if (npcQuestCallbackRef.current === resolve) {
                     npcQuestCallbackRef.current = null;
                     resolve({ error: 'TIMEOUT', message: 'Request timed out' });
                 }
             }, 10000);
+        });
+    }, [connected, send]);
+
+    const acceptNpcQuest = useCallback((questId) => {
+        if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            npcQuestCallbackRef.current = resolve;
+            send({ type: 'npc_quest_accept', questId });
+            setTimeout(() => {
+                if (npcQuestCallbackRef.current === resolve) {
+                    npcQuestCallbackRef.current = null;
+                    resolve({ error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 10000);
+        });
+    }, [connected, send]);
+
+    const turnInMushroomQuest = useCallback(() => {
+        return turnInNpcQuest('mushroom_ticket');
+    }, [turnInNpcQuest]);
+
+    const fetchDailyQuestStatus = useCallback(() => {
+        if (!connected) return;
+        send({ type: 'daily_quest_status' });
+    }, [connected, send]);
+
+    const fetchDailyBonusStatus = useCallback(() => {
+        if (!connected) return;
+        send({ type: 'daily_bonus_status' });
+    }, [connected, send]);
+
+    const claimDailyBonus = useCallback((nonce) => {
+        if (!connected) return Promise.resolve({ success: false, error: 'NOT_CONNECTED' });
+        return new Promise((resolve) => {
+            dailyBonusClaimCallbackRef.current = resolve;
+            send({ type: 'daily_bonus_claim', nonce });
+            setTimeout(() => {
+                if (dailyBonusClaimCallbackRef.current === resolve) {
+                    dailyBonusClaimCallbackRef.current = null;
+                    resolve({ success: false, error: 'TIMEOUT', message: 'Request timed out' });
+                }
+            }, 30000);
         });
     }, [connected, send]);
 
@@ -3115,11 +3310,16 @@ export function MultiplayerProvider({ children }) {
         });
     }, [connected, send]);
 
-    const startWoodChop = useCallback((treeId) => {
+    const startWoodChop = useCallback((treeId, position = null) => {
         if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
         return new Promise((resolve) => {
             woodChopCallbackRef.current = resolve;
-            send({ type: 'wood_chop_start', treeId, spotId: treeId });
+            send({
+                type: 'wood_chop_start',
+                treeId,
+                spotId: treeId,
+                ...(position?.x != null && position?.z != null ? { position } : {}),
+            });
             setTimeout(() => {
                 if (woodChopCallbackRef.current === resolve) {
                     woodChopCallbackRef.current = null;
@@ -3145,11 +3345,16 @@ export function MultiplayerProvider({ children }) {
         woodChopSessionIdRef.current = null;
     }, [connected, send]);
 
-    const startManualChop = useCallback((treeId) => {
+    const startManualChop = useCallback((treeId, position = null) => {
         if (!connected) return Promise.resolve({ error: 'NOT_CONNECTED' });
         return new Promise((resolve) => {
             manualChopCallbackRef.current = resolve;
-            send({ type: 'manual_chop_start', treeId, spotId: treeId });
+            send({
+                type: 'manual_chop_start',
+                treeId,
+                spotId: treeId,
+                ...(position?.x != null && position?.z != null ? { position } : {}),
+            });
             setTimeout(() => {
                 if (manualChopCallbackRef.current === resolve) {
                     manualChopCallbackRef.current = null;
@@ -3398,6 +3603,8 @@ export function MultiplayerProvider({ children }) {
         setActiveHotbarSlot,
         fetchForestTrees,
         forestTrees,
+        fetchFishingHoles,
+        fishingHoles,
         fetchMushrooms,
         mushroomClusters,
         fetchWorldDrops,
@@ -3406,11 +3613,21 @@ export function MultiplayerProvider({ children }) {
         dropWorldGold,
         pickupWorldDrop,
         harvestMushroom,
+        forageLogWorms,
+        wormForageCooldowns,
+        fetchWormForageStatus,
         scavengeSpot,
         scavengeCooldowns,
         fetchScavengeStatus,
         onboardingQuest,
+        dailyQuestStatus,
+        dailyBonusStatus,
+        fetchDailyQuestStatus,
+        fetchDailyBonusStatus,
+        claimDailyBonus,
         turnInMushroomQuest,
+        turnInNpcQuest,
+        acceptNpcQuest,
         sellAtMerchant,
         sellBatchAtMerchant,
         sellFishAtNpc,
@@ -3492,7 +3709,7 @@ export function MultiplayerProvider({ children }) {
         spinSlot, slotSpinning, slotResult, clearSlotResult, activeSlotSpins,
         spinGoldSlot, goldSlotSpinning, goldSlotResult, clearGoldSlotResult, syncGoldSlots, activeGoldSlotSpins,
         startFishing, attemptCatch, cancelFishing, fishingActive, fishingResult, clearFishingResult,
-        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, setGameHotbarSlot, setActiveHotbarSlot, fetchForestTrees, forestTrees, fetchMushrooms, mushroomClusters, fetchWorldDrops, worldDrops, dropWorldItem, dropWorldGold, pickupWorldDrop, harvestMushroom, scavengeSpot, onboardingQuest, turnInMushroomQuest, sellAtMerchant, sellBatchAtMerchant, sellFishAtNpc, buyFromMerchant, claimStarterRod, upgradeBackpack, startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop,
+        gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, setGameHotbarSlot, setActiveHotbarSlot, fetchForestTrees, forestTrees, fetchFishingHoles, fishingHoles, fetchMushrooms, mushroomClusters, fetchWorldDrops, worldDrops, dropWorldItem, dropWorldGold, pickupWorldDrop, harvestMushroom, forageLogWorms, wormForageCooldowns, fetchWormForageStatus, scavengeSpot, onboardingQuest, turnInMushroomQuest, sellAtMerchant, sellBatchAtMerchant, sellFishAtNpc, buyFromMerchant, claimStarterRod, upgradeBackpack, startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop,
         roomTravelVoyages, myTravelVoyage, travelPending, fetchTravelState, bookTravel, leaveTravel,
         adoptPuffle, puffleAdopting,
         setName, joinRoom, sendPosition, sendChat, sendAfk, sendEmoteBubble, sendEmote, stopEmote,

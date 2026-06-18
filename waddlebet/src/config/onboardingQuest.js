@@ -2,13 +2,13 @@
  * Client copy of onboarding quest labels — keep step ids in sync with server/config/onboardingQuest.js
  */
 
-export const ONBOARDING_REWARD_GOLD = 500;
+export const ONBOARDING_REWARD_GOLD = 10;
 
 export const ONBOARDING_STEPS = [
     {
         id: 'dojo_gold',
-        label: 'Earn gold in the Dojo',
-        hint: 'Enter the Dojo and challenge Sensei in Card Jitsu.',
+        label: 'Beat Sensei in Card Jitsu',
+        hint: 'Win a match in the Dojo for 1g — then challenge players in town for gold wagers.',
     },
     {
         id: 'ferry_snow_forts',
@@ -43,7 +43,7 @@ export const ONBOARDING_STEPS = [
     {
         id: 'upgrade_backpack',
         label: 'Upgrade your backpack',
-        hint: 'Visit Copper Clive in town — later upgrades need every wood type plus gold.',
+        hint: 'Visit Copper Clive in town — backpack upgrades cost harvested wood, not gold.',
     },
     {
         id: 'search_trash',
