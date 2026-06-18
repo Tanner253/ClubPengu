@@ -1,200 +1,224 @@
-# 🐧 Waddlebet
+# Waddlebet
 
 <div align="center">
 
 ![Waddlebet](whitepaper/public/character.png)
 
-**Club Penguin–inspired 3D social MMO on Solana**
+### The penguin MMO that pays you to play.
 
-*Gather, trade, wager, and customize — with a closed NPC economy and on-chain $CP rewards.*
+**Club Penguin nostalgia. Solana ownership. A living economy you can actually grind.**
 
+[![Play](https://img.shields.io/badge/▶_Play-waddle.bet-22d3ee?style=for-the-badge)](https://waddle.bet)
 [![Solana](https://img.shields.io/badge/Built%20on-Solana-9945FF?style=for-the-badge&logo=solana)](https://solana.com)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Live%20Beta-green?style=for-the-badge)]()
+[![Open Source](https://img.shields.io/badge/Open%20Source-MIT-34d399?style=for-the-badge)](LICENSE)
 
-[Play Now](https://waddle.bet) • [Whitepaper](./whitepaper) • [Community](https://x.com/i/communities/1998537610592137381) • [Buy $CP](https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump)
+[Whitepaper](./whitepaper) · [Community](https://x.com/i/communities/1998537610592137381) · [$CP on Pump](https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump)
 
 </div>
 
 ---
 
-> **Rebrand:** Waddlebet was formerly "Club Pengu" / "Club Penguin on Solana". Same team, new name.
+## The hook
+
+You waddle into a **3D voxel world** with your friends, customize your penguin, adopt puffles, and hang out like the old days — except your wallet is connected, your cosmetics can be tradeable, and **showing up every day earns real $CP**.
+
+This isn't a menu of disconnected minigames. It's a **connected overworld**: ferry across the ice, fish the holes, chop the forest, strike deals with NPC merchants, wager SPL tokens on PvP, and rent igloos — all in one persistent multiplayer session.
 
 ---
 
-## What is Waddlebet?
+## How the world works
 
-A **Web3 social MMO** built in React + Three.js with a real-time multiplayer server. Players explore a voxel world, customize penguins, adopt puffles, play minigames, and participate in a dual-currency economy backed by the **$CP** SPL token.
+```mermaid
+flowchart LR
+    subgraph WORLD["🌍 Overworld"]
+        T[Town Center]
+        S[Snow Forts]
+        F[Forest Trails]
+        T -->|Ice Ferry 1g| S
+        S -->|Ice Ferry 1g| F
+    end
 
----
+    subgraph GATHER["⚒️ Gather"]
+        FISH[Fish ice holes]
+        WOOD[Chop trees]
+        FORAGE[Forage worms]
+    end
 
-## Economy (current build)
+    subgraph NPCS["🏪 NPC Economy"]
+        SALTY[Old Salty]
+        CLIVE[Copper Clive]
+        PIKE[Ranger Pike]
+    end
 
-| Layer | Role |
-|-------|------|
-| **Gold** | Soft currency — ferries, bait, wagers, puffles. Infinite supply. |
-| **Wood / fish** | Progression materials — gear upgrades and NPC daily contracts. |
-| **$CP** | On-chain token — 7-day login streak, igloo rent, cosmetic bazaar. |
+    subgraph REWARD["💰 Rewards"]
+        GOLD[Gold — soft currency]
+        CP[$CP — on-chain SPL]
+    end
 
-### Player loop
+    S --> FISH
+    F --> WOOD
+    FISH --> SALTY
+    WOOD --> CLIVE
+    WOOD --> PIKE
+    SALTY --> GOLD
+    CLIVE --> GOLD
+    GOLD -->|wagers, bait, ferries| WORLD
+    CP -->|streak, rent, cosmetics| REWARD
+```
 
-1. **Gather** — fish ice holes, chop forest trees, forage worms  
-2. **Upgrade** — wood-only axes, rods, and backpack tiers at merchant NPCs  
-3. **Contracts** — visit NPC → accept daily order → track on HUD → turn in for gold  
-4. **Streak** — 60 min play per UTC day → $CP on days 1, 2, 4, 5, 7 (1k→5k); gold only on days 3 & 6  
+**Gold** is infinite soft currency — ferries, bait, casino, puffles, PvP gold wagers.  
+**Wood & fish** are progression — upgrade axes, rods, and backpack tiers at merchants.  
+**$CP** is the on-chain SPL token — daily login streak, igloo rent, SPL wagers, cosmetic bazaar.
 
-### Key NPCs
-
-| NPC | Role |
-|-----|------|
-| **Old Salty** | Fish buyer, rod upgrades, catch contracts |
-| **Copper Clive** | Axes, backpack, wood mint recipes, timber contracts |
-| **Ranger Pike** | Trail-side timber sell, mushroom ferry quest |
-| **Captain Skipper** | Ice Ferry between Town, Snow Forts, and Forest |
-
-Full economics (public): **[whitepaper](./whitepaper)**. Internal build plans: **[waddlebet/docs/ECONOMY_README.md](waddlebet/docs/ECONOMY_README.md)**.
-
----
-
-## Features
-
-### Customization
-24+ colors, 17+ hats, 17+ eyes, 12+ mouths, 20+ clothing items — plus puffles from common to legendary.
-
-### Minigames
-Card Jitsu, Connect 4, Tic Tac Toe, Pong, Blackjack, and more — with optional P2P wagering in gold or SPL tokens.
-
-### World & travel
-- **Town Center** — social hub, Dojo, shops  
-- **Snow Forts** — starter fishing, rod pickup  
-- **Forest Trails** — woodcutting, Ranger Pike, Copper Clive  
-- **Ice Ferry** — 1g travel between zones  
-
-### Daily systems
-- 9-step onboarding quest for new wallets  
-- NPC daily contracts (Salty + Clive)  
-- 7-day login streak — $CP days 1/2/4/5/7 (1k→5k), gold-only days 3 (+5g) & 6 (+10g)  
+Gold and $CP are **separate layers**. Grinding fish doesn't print tokens. Showing up, playing, and completing contracts does.
 
 ---
 
-## Getting started
+## What you actually do
 
-### Prerequisites
-- Node.js 18+
-- npm
+### Explore & socialize
+Walk a live multiplayer voxel map with real players. Emotes, chat, puffles, igloos, and the vibe of classic penguin social games — rebuilt for Web3.
 
-### Game client + server
+### Gather & progress
+- **Snow Forts** — pick up your rod, fish the ice, sell your catch  
+- **Forest Trails** — chop pine, birch, oak; upgrade your axe and backpack with wood (not gold)  
+- **Captain Skipper's Ice Ferry** — 1g between zones  
+
+Gear tiers matter. Better rod = better fish prices. Better axe = faster wood. Backpack size gates how much you haul before heading back to town.
+
+### Daily contracts (the habit loop)
+Visit **Old Salty** or **Copper Clive**, accept today's contract from the trader UI, track progress on your **Today** HUD, return and turn in for a gold bonus. Miss a day? Streak resets. Show up? Escalating rewards.
+
+### 7-day login streak
+Play 60 minutes per UTC day and claim from your calendar:
+
+| Day | Reward |
+|-----|--------|
+| 1 | 1,000 $CP |
+| 2 | 2,000 $CP |
+| 3 | **5g** (gold day) |
+| 4 | 3,000 $CP |
+| 5 | 4,000 $CP |
+| 6 | **10g** (gold day) |
+| 7 | 5,000 $CP |
+
+$CP days scale 1k → 5k. Days 3 & 6 are gold-only — pocket change for ferries and bait, balanced for early market cap.
+
+### Wager anything
+Challenge players to Card Jitsu, Connect 4, Tic Tac Toe, Pong, Blackjack, and more — stake **gold or any SPL token** including $CP, $SOL, $BONK. Winner takes the pot. Instant Solana settlement.
+
+### Own & flex
+- **24+ colors**, hats, eyes, mouths, outfits — legendary rainbow and ghost variants  
+- **Puffles** from common to legendary with special effects  
+- **Igloo rentals** paid in $CP  
+- **Whale nametags** tied to $CP balance tiers  
+- **Pebbles** (SOL-backed) for gacha and the cosmetic bazaar — separate from the grind cash-out path  
+
+---
+
+## The merchant experience
+
+NPCs aren't text menus anymore. **Tarkov-style trader panels** — typewriter dialogue, tabbed offer grids, animated contract art, material breakdown bars, accept → track → turn in.
+
+| NPC | What they do |
+|-----|----------------|
+| **Old Salty** | Buys fish, sells rods & bait, daily catch contracts |
+| **Copper Clive** | Axes, backpack upgrades, wood mint recipes, timber contracts |
+| **Ranger Pike** | Emergency timber sell (65%), mushroom ferry quest |
+| **Captain Skipper** | Ice Ferry captain |
+
+---
+
+## $CP utility
+
+$CP is not decoration. It's the token that connects gameplay to ownership:
+
+- **7-day login streak** — escalating on-chain rewards for daily play  
+- **Igloo rent** — virtual property subscriptions  
+- **SPL wagers** — bet $CP on PvP minigames  
+- **Cosmetic bazaar** — tradeable skins (Pebbles path for premium gacha)  
+- **Whale status** — balance-tier nametags with animated effects  
+
+Full tokenomics, economy diagrams, and changelog: **[whitepaper](./whitepaper)** (live site with canvas visuals).
+
+---
+
+## Architecture at a glance
+
+```mermaid
+flowchart TB
+    subgraph CLIENT["Client — React + Three.js"]
+        VW[Voxel World]
+        HUD[Today HUD + Merchants]
+        WALLET[Solana Wallet]
+    end
+
+    subgraph SERVER["Server — Node + WebSocket"]
+        AUTH[Auth & Sessions]
+        INV[Game Inventory]
+        ECON[Economy Services]
+        MP[Multiplayer Sync]
+    end
+
+    subgraph CHAIN["Solana"]
+        CP[$CP SPL Token]
+        X402[x402 Payments]
+    end
+
+    VW <--> MP
+    HUD <--> ECON
+    WALLET <--> AUTH
+    ECON -->|streak payouts| CP
+    WALLET <--> X402
+```
+
+Server-authoritative inventory, fishing, woodcutting, and economy. Client renders; server decides. MongoDB for persistence. Custodial wallet for $CP streak payouts.
+
+---
+
+## Repo layout
+
+| Path | What it is |
+|------|------------|
+| [`waddlebet/`](waddlebet/) | Game client + multiplayer server |
+| [`whitepaper/`](whitepaper/) | Public docs site — tokenomics, economy visuals, changelog |
+| [`waddlebet/docs/`](waddlebet/docs/) | Internal design docs for active development |
+
+---
+
+## Run locally
 
 ```bash
-git clone https://github.com/Tanner253/waddlebet.git
-cd waddlebet/waddlebet
-npm install
-npm run dev          # client → http://localhost:5173
-npm run dev:server   # WebSocket server (separate terminal)
-# or
-npm run dev:all
+cd waddlebet && npm install && npm run dev:all
 ```
 
-Restart the server after pulling economy or inventory changes.
-
-### Whitepaper site
+Client → `http://localhost:5173` · Server restarts required after economy pulls.
 
 ```bash
-cd whitepaper
-npm install
-npm run dev          # → http://localhost:3000
+cd whitepaper && npm install && npm run dev
 ```
 
-### Tests
-
-```bash
-cd waddlebet/server
-npm test
-```
-
----
-
-## Repository structure
-
-```
-├── waddlebet/          # Game client (Vite/React/Three.js) + server (Node/MongoDB)
-│   └── docs/           # Internal economy, MMORPG, cosmetics dev plans
-├── whitepaper/         # Public docs site — tokenomics, changelog
-├── LICENSE
-└── README.md           # This file
-```
-
-Developer quick reference: [waddlebet/README.md](waddlebet/README.md)
-
----
-
-## Tech stack
-
-| Layer | Stack |
-|-------|-------|
-| Client | React, Three.js, Vite, Tailwind |
-| Server | Node.js, WebSocket, MongoDB |
-| Chain | Solana, SPL tokens ($CP) |
-| Docs | Next.js, TypeScript, Framer Motion |
-
----
-
-## Roadmap
-
-### Shipped
-- [x] 3D voxel world + multiplayer  
-- [x] Penguin customization + puffles  
-- [x] Card Jitsu, Connect 4, Tic Tac Toe, Pong  
-- [x] Ice Ferry, Snow Forts, Forest Trails  
-- [x] Fishing, woodcutting, merchant NPCs, daily contracts  
-- [x] 7-day $CP login streak + onboarding quest  
-- [x] Tarkov-style trader UI + quest accept flow  
-
-### In progress
-- [ ] Property rental system  
-- [ ] $CP cosmetic bazaar (full rollout)  
-- [ ] Gold ↔ $CP player market  
-
-### Planned
-- [ ] Gacha + tradeable cosmetics marketplace  
-- [ ] Property paywalls  
-- [ ] Level gates + skill progression  
-- [ ] Mobile companion  
+Docs site → `http://localhost:3000`
 
 ---
 
 ## Links
 
-| Resource | Link |
-|----------|------|
-| Play | [waddle.bet](https://waddle.bet) |
-| Whitepaper | [./whitepaper](./whitepaper) |
-| X Community | [Join](https://x.com/i/communities/1998537610592137381) |
-| Buy $CP | [PumpFun](https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump) |
-| GitHub | [Tanner253/waddlebet](https://github.com/Tanner253/waddlebet) |
-
-### Contract address
-
-```
-PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump
-```
+| | |
+|---|---|
+| **Play** | [waddle.bet](https://waddle.bet) |
+| **Whitepaper** | [whitepaper.waddle.bet](https://whitepaper.waddle.bet) |
+| **$CP mint** | `PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump` |
+| **GitHub** | [Tanner253/waddlebet](https://github.com/Tanner253/waddlebet) |
 
 ---
-
-## Disclaimer
-
-Waddlebet is in active development. Features, tokenomics, and mechanics may change. This is not financial advice.
-
----
-
-## License
-
-MIT — see [LICENSE](LICENSE).
 
 <div align="center">
 
-**Built with ❄️ by the Waddlebet Team**
+*Waddlebet was formerly Club Pengu / Club Penguin on Solana. Same team, bigger vision.*
 
-*Waddle on!* 🐧
+**Built with ❄️ — Waddle on!** 🐧
+
+Not financial advice. Active development — mechanics may change.
 
 </div>

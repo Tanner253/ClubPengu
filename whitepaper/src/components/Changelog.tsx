@@ -83,20 +83,94 @@ const CHANGELOG_DATA: ChangelogVersion[] = [
   {
     version: "1.3.3",
     date: "June 16, 2026",
-    title: "📊 Economy Hardening, 7-Day Streak & Trader UI",
+    title: "📊 Economy Step 1 — Daily Loop, Gold Scarcity & Trader Overhaul",
     description:
-      "Closes gold inflation leaks, rebalances NPC contracts, adds a 7-day $CP login calendar with bonus gold days, loaner axe onboarding, and mobile-optimized Tarkov-style merchant panels with canvas offer art.",
+      "The largest economy pass since 1.3.0: gold scarcity tuning, server-authoritative fishing holes, NPC daily contracts with Tarkov-style merchant UI, 7-day $CP streak calendar, Today HUD, PvE blackjack, puffle shop tabs, economy guide, and closed-loop whitepaper visuals. 137 files — +10,149 / −1,894 lines.",
     highlight: true,
+    stats: { filesChanged: 137, additions: 10149, deletions: 1894 },
     changes: [
-      { type: "fix", text: "Emergency NPC sell uses total stack value (floor(unit×ratio×qty)) — stops per-item 1g exploit" },
-      { type: "fix", text: "Forest ferry arrival grants loaner basic axe if player has none — onboarding chop step unblocked" },
-      { type: "feature", text: "7-day login streak calendar — 1k→5k $CP escalating rewards; days 3 & 6 add +5g / +10g gold bonus" },
-      { type: "feature", text: "NPC contract flow — accept at merchant, track on HUD, return to turn in (Clive timber + Salty catch)" },
-      { type: "feature", text: "TraderOfferCanvas — animated chests, crates, axes & contracts replace emoji merchant tiles" },
-      { type: "improvement", text: "Clive daily contractor gold rebalance (~12 + 12% of bundle size)" },
-      { type: "improvement", text: "Merchant UI mobile layout — 2-col grid, compact speech column, scrollable detail strip" },
-      { type: "improvement", text: "MaterialBreakdown progress bars on mint recipes & timber contracts" },
-      { type: "content", text: "Whitepaper economics section — closed-loop diagram + dual-currency copy" },
+      // ── Gold economy & scarcity ──
+      { type: "backend", text: "goldEconomy.js — single source of truth for starting coins (10g), ferry cost, bait bundles, wager caps, emergency sell ratio, mint recipes, and economy version migration" },
+      { type: "backend", text: "Gold economy v2 migration — existing wallets receive 10% balance retention on login (relative wealth preserved, inflation drained)" },
+      { type: "fix", text: "Emergency NPC sell uses floor(unit×ratio×qty) on total stack — stops per-item 1g exploit on bulk wood/fish dumps" },
+      { type: "improvement", text: "Onboarding quest completion reward reduced to 10g (was 500g); Dojo Sensei win grants 1g once during onboarding only" },
+      { type: "improvement", text: "Solo minigames no longer mint gold — Card Jitsu practice, Connect 4, and Tic Tac Toe are wager-only or fun; gold stays scarce" },
+      { type: "backend", text: "Removed minigameRewards.js flat gold faucets; PvP wagers capped at 50g; gold slot bets clamped 1–25g" },
+      { type: "feature", text: "Wood mint recipes at Copper Clive — burn log stacks at better rates than emergency sell to intentionally mint gold" },
+
+      // ── Fishing holes (server-authoritative) ──
+      { type: "feature", text: "FishingHoleService — per-hole tier stock (minnow → trophy) depletes on catch and regrows on server tick, mirrored to all players in the room" },
+      { type: "feature", text: "FishingHoleWorldState Mongo model + fishingHoles.js defs — room-scoped hole snapshots, rare-bias per location, minnows always available" },
+      { type: "backend", text: "fishingLoot.js overhaul — catch tables keyed to rod tier and hole tier stock; server rejects casts when hole tier is empty" },
+      { type: "improvement", text: "IceFishingGame + IceFishingSystem — client shows hole stock tiers, respects server depletion, bait miss extra-loss chance" },
+      { type: "improvement", text: "fishingHoleStock.js client util — tier color coding and stock labels synced from server broadcasts" },
+
+      // ── Wood, worms & gathering ──
+      { type: "feature", text: "treeWoodSpecies.js — pine/birch/oak/ironwood species mapping for harvestable trees with tier-appropriate yields" },
+      { type: "feature", text: "WormForageService — forage mossy logs in forest for worm bait; forageableLogs.js spawn defs" },
+      { type: "improvement", text: "woodcuttingLoot.js + axe durability tuning — yields scale with tree stage and axe tier; HarvestableTree props simplified" },
+      { type: "fix", text: "Forest ferry arrival grants loaner basic axe if player has none — onboarding chop step no longer soft-locks" },
+
+      // ── NPC daily contracts (Step 1) ──
+      { type: "feature", text: "NpcDailyOrderService — daily Salty catch + Clive timber orders with UTC midnight rotation, accept gate, and one turn-in per day" },
+      { type: "feature", text: "npcOrders.js — rotating contract copy, mixed-wood bundle requirements, gold contractor bonus (~12 + 12% of bundle size)" },
+      { type: "feature", text: "NPC contract flow — accept at merchant Tasks tab (npc_quest_accept), track on Today HUD, turn in via npc_quest_turnin" },
+      { type: "feature", text: "DailyQuestHUD — persistent Today panel after onboarding: accepted contracts with live fish/wood progress, streak calendar, 60 min bar, claim button, spend hints" },
+      { type: "improvement", text: "Contracts-available hint when orders exist but none accepted — directs players to Old Salty / Copper Clive" },
+      { type: "improvement", text: "OnboardingQuestHUD hands off to Today panel after reward; panel auto-expands when dailies incomplete; collapse persists in localStorage" },
+
+      // ── 7-day $CP streak ──
+      { type: "feature", text: "7-day login streak calendar — $CP on days 1/2/4/5/7 (1k→5k); gold-only bonus days 3 (+5g) & 6 (+10g) skip on-chain transfer" },
+      { type: "feature", text: "StreakCalendar.jsx — mobile-first 7-cell grid with amber gold-days and cyan $CP-days; shown in Today HUD and DailyBonusModal" },
+      { type: "backend", text: "DailyBonusService rewrite — streakDay/streakLastUtcDay on User, gold-only claim path, daily_streak_gold transaction type, custodial $CP payout on CP days" },
+      { type: "backend", text: "dailyBonusStreak.js config (server + client sync) — resolveNextStreakDay, UTC miss resets to day 1" },
+
+      // ── Tarkov-style merchant UI ──
+      { type: "feature", text: "NpcDialogueModal Tarkov overhaul — split layout: typewriter speech left, tabbed offer grid right, detail strip + DEAL / ACCEPT CONTRACT / TURN IN" },
+      { type: "feature", text: "TraderOfferCanvas — animated chests, crates, axes, rods, and contract art replace emoji merchant tiles; selection glow + open animation" },
+      { type: "feature", text: "MaterialBreakdown.jsx — wood progress bars on mint recipes and timber contracts showing have/need per log type" },
+      { type: "feature", text: "merchantOfferArt.js — maps actions to canvas variants (tier, art type, display names)" },
+      { type: "mobile", text: "Merchant UI mobile — 2-col offer grid, 92vh panel cap, scrollable detail strip, 44px tabs, 48px DEAL button, touch-action manipulation" },
+
+      // ── Inventory & merchants ──
+      { type: "backend", text: "GameInventoryService expansion — loaner axe grant, mint gold from recipes, sell batch fix, npc order material burn on turn-in, starter rod+worms pickup" },
+      { type: "improvement", text: "GameInventoryModal — tier-colored wood cells, sell feedback, emergency vs mint value hints" },
+      { type: "improvement", text: "merchants.js + worldNpcs.js — Clive lore mentions loaner axe; Salty/Clive daily contract dialogue actions; Ranger Pike emergency sell at 65%" },
+      { type: "improvement", text: "AuthService — new wallets start with 10g only; rod + worms claimed at Snow Forts world pickup (claimStarterRod)" },
+
+      // ── Casino & puffles ──
+      { type: "feature", text: "PveBlackjackService (server) — authoritative PvE blackjack with blackjackRules.js; bets 1–50g; CasinoBlackjack.jsx client rewrite" },
+      { type: "feature", text: "PuffleShopTabs + PuffleCanvasPreview — tabbed puffle shop with canvas-rendered preview; puffleAccessories.js config" },
+      { type: "improvement", text: "PufflePanel polish — accessory equip flow and shop integration" },
+      { type: "improvement", text: "GoldSlotsService + goldSlots config aligned to goldEconomy bet caps" },
+
+      // ── Player-facing guides & creator ──
+      { type: "feature", text: "EconomyGuideModal — Settings → Game Economy Guide explaining gold vs pebbles vs $CP, grind loop, and sustainability (separate from TokenomicsModal)" },
+      { type: "feature", text: "CreatorPitchModal + TOKENOMICS badge on Penguin Maker — play-to-earn pitch with grind → bank → $CP flow" },
+      { type: "improvement", text: "VoxelPenguinDesigner header badges — animated WHITEPAPER, TOKENOMICS, and OPEN SOURCED links matching retro shimmer style" },
+      { type: "improvement", text: "TutorialModal + economyGuide i18n — updated copy for dual-currency loop and daily systems" },
+      { type: "feature", text: "buildingBanner.js — raised shop signage for Dojo, Gift Shop, Pizza Parlor matching NPC stand style" },
+
+      // ── Multiplayer & server wiring ──
+      { type: "backend", text: "server/index.js — npc_quest_accept, npc_quest_turnin, daily_npc_orders_status, forest loaner axe on arrival, fishing hole sync, PvE BJ handlers" },
+      { type: "backend", text: "MultiplayerContext — dailyQuestStatus, streak claim with goldNewBalance, quest accept/turn-in senders, session timer merge" },
+      { type: "backend", text: "User model — dailyBonus.streakDay, streakLastUtcDay, acceptedQuestIds on dailyNpcOrders" },
+      { type: "backend", text: "Transaction types — daily_streak_gold, npc_order_turnin; UserService gold economy version on login" },
+
+      // ── Tests ──
+      { type: "backend", text: "Test suite +8 files — NpcDailyOrderService, FishingHoleService, goldEconomy, dailyBonusStreak, PveBlackjackService, expanded GameInventory/Woodcutting/Fishing tests" },
+
+      // ── Whitepaper & docs ──
+      { type: "content", text: "Whitepaper economics section — EconomyLoopCanvas, StreakRewardCanvas, RevenueFlywheelCanvas; dual-currency copy; MMORPG link to GitHub roadmap" },
+      { type: "content", text: "Changelog v1.3.3 entry; README rewrites (root, waddlebet, whitepaper) with mermaid diagrams and feature hooks" },
+      { type: "content", text: "waddlebet/docs economy dev plans restored — ECONOMY_GROUNDED_PLAN, ECONOMY_ROLLOUT (Step 1 ✅), MARKET_ARCHITECTURE, MMORPG_ROADMAP" },
+
+      // ── Misc fixes & polish ──
+      { type: "improvement", text: "VoxelWorld.jsx — fishing hole stock UI, NPC quest markers, merchant interaction wiring, forest axe grant hook" },
+      { type: "improvement", text: "index.css — npc-trader-* styles, creator badge animations (pitch, OSS, whitepaper)" },
+      { type: "improvement", text: "i18n — creatorPitch, economyGuide, fishing hole tiers, menu whitepaper badges (EN + 9 locales)" },
+      { type: "fix", text: "DailyQuestHUD gold-day display — days 3 & 6 show gold reward only (not 0 $CP) in preview and claim toast" },
+      { type: "refactor", text: "GameManager coin faucet removed from client minigame base class — server is sole gold authority" },
     ],
   },
   {

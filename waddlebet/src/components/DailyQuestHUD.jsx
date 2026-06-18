@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { getDailySpendHint } from '../config/npcOrders';
-import StreakCalendar from './StreakCalendar';
 import { playSfx } from '../audio';
 
 const STORAGE_KEY = 'waddlebet_daily_quest_collapsed';
@@ -261,24 +260,13 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
                 <li
                     className={`rounded-lg px-2 py-2 text-xs border ${
                         dailyBonusStatus?.canClaim
-                            ? 'bg-purple-950/60 border-purple-400/50 text-purple-100'
+                            ? 'bg-emerald-950/50 border-emerald-400/45 text-emerald-100'
                             : 'bg-white/5 border-white/10 text-white/60'
                     }`}
                 >
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                        <span className="font-medium">7-Day Streak</span>
-                        <span className="text-[10px] tabular-nums text-purple-200/80">
-                            Day {dailyBonusStatus?.streakDay || 1}
-                        </span>
-                    </div>
-                    <StreakCalendar
-                        compact
-                        currentDay={dailyBonusStatus?.streakDay || 1}
-                        completedDays={dailyBonusStatus?.streakCompletedDays || 0}
-                    />
-                    <div className="flex items-center justify-between gap-2 mt-2 mb-1">
-                        <span className="text-[10px] text-white/50">{sessionLabel}</span>
-                        <span className="text-[10px] font-bold text-purple-200 tabular-nums">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="font-medium">Daily bonus</span>
+                        <span className="text-[10px] font-bold text-emerald-300/90 tabular-nums">
                             {(dailyBonusStatus?.rewardAmount || 0) > 0 && (
                                 <>{(dailyBonusStatus.rewardAmount).toLocaleString()} $CP</>
                             )}
@@ -290,9 +278,12 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
                             )}
                         </span>
                     </div>
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                        <span className="text-[10px] text-white/50">{sessionLabel}</span>
+                    </div>
                     <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
                         <div
-                            className="h-full bg-gradient-to-r from-purple-500 to-pink-400 transition-all duration-500"
+                            className="h-full bg-gradient-to-r from-emerald-500 to-green-400 transition-all duration-500"
                             style={{ width: `${sessionPct}%` }}
                         />
                     </div>
@@ -301,16 +292,16 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
                             type="button"
                             onClick={handleClaimBonus}
                             disabled={claiming}
-                            className="mt-2 w-full py-1.5 rounded-md bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-[11px] font-bold touch-manipulation"
+                            className="mt-2 w-full py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-[11px] font-bold touch-manipulation"
                         >
-                            {claiming ? 'Claiming…' : `Claim Day ${dailyBonusStatus?.streakDay || 1}`}
+                            {claiming ? 'Claiming…' : 'Claim reward'}
                         </button>
                     ) : (
                         <span className="block text-[10px] mt-1 text-white/40">
                             {hasEnoughTime
                                 ? dailyBonusStatus?.onboardingComplete === false
                                     ? 'Finish Getting Started to unlock'
-                                    : 'Already claimed — streak continues tomorrow'
+                                    : 'Already claimed — come back tomorrow'
                                 : 'Play 60 min to unlock today\'s reward'}
                         </span>
                     )}
