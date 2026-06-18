@@ -154,7 +154,11 @@ const IS_DEV = process.env.NODE_ENV !== 'production';
 const ts = () => new Date().toISOString().slice(11, 23); // HH:MM:SS.mmm
 
 /** Canonical player appearance — server is source of truth; all clients receive this shape. */
-function normalizeAppearance(appearance = {}) {
+function normalizeAppearance(appearance = {}, user = null) {
+    let nametagStyle = appearance.nametagStyle || 'default';
+    if (nametagStyle === 'day1' && (!user || !user.hasDay1NametagUnlocked?.())) {
+        nametagStyle = 'tier';
+    }
     return {
         skin: appearance.skin || 'blue',
         hat: appearance.hat || 'none',
@@ -171,7 +175,7 @@ function normalizeAppearance(appearance = {}) {
         tortoisePrimaryColor: appearance.tortoisePrimaryColor,
         tortoiseSecondaryColor: appearance.tortoiseSecondaryColor,
         mountEnabled: appearance.mountEnabled !== false,
-        nametagStyle: appearance.nametagStyle || 'default',
+        nametagStyle,
         greenCandlesEnabled: appearance.greenCandlesEnabled === true
     };
 }
@@ -2540,7 +2544,7 @@ async function handleMessage(playerId, message) {
                         mountEnabled: clientAppearance.mountEnabled,
                         nametagStyle: clientAppearance.nametagStyle,
                         greenCandlesEnabled: clientAppearance.greenCandlesEnabled
-                    });
+                    }, user);
                     
                     console.log(`[${ts()}] 🎨 Player appearance set: characterType=${resolvedCharacterType} (client=${clientAppearance.characterType}, db=${userPlain.characterType})`);
                     
@@ -3518,10 +3522,14 @@ async function handleMessage(playerId, message) {
         
         case 'update_appearance': {
             const newAppearance = message.appearance || {};
+            let appearanceUser = null;
+            if (player.walletAddress) {
+                appearanceUser = await userService.getUser(player.walletAddress);
+            }
             player.appearance = normalizeAppearance({
                 ...player.appearance,
                 ...newAppearance
-            });
+            }, appearanceUser);
             
             console.log(`[${ts()}] 🎨 Appearance update for ${player.name}: characterType=${player.appearance.characterType}`);
             

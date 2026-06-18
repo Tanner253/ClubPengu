@@ -4,6 +4,7 @@
  */
 
 import mongoose from 'mongoose';
+import { DAY1_NAMETAG_CLOSE_DATE } from '../../config/day1Nametag.js';
 
 const userSchema = new mongoose.Schema({
     // ========== IDENTITY (Primary Key) ==========
@@ -99,6 +100,8 @@ const userSchema = new mongoose.Schema({
         type: [String],
         default: ['penguin']
     },
+    /** OG Day 1 nametag — no longer granted to new accounts */
+    day1NametagUnlocked: { type: Boolean, default: false },
     stamps: [{
         id: String,
         name: String,
@@ -723,6 +726,28 @@ userSchema.methods.isEstablishedUser = function() {
 };
 
 /**
+ * Day 1 nametag — closed to new unlocks; only grandfathered / stamped accounts keep access.
+ */
+userSchema.methods.hasDay1NametagUnlocked = function() {
+    if (this.day1NametagUnlocked) return true;
+    return (this.stamps || []).some((s) => s.id === 'day1_supporter');
+};
+
+/**
+ * One-time grandfather for established accounts created before the close date.
+ * @returns {boolean} true if unlock was newly granted
+ */
+userSchema.methods.ensureDay1NametagGrandfather = function() {
+    if (this.hasDay1NametagUnlocked()) return false;
+
+    if (this.createdAt && this.createdAt < DAY1_NAMETAG_CLOSE_DATE && this.isEstablishedUser()) {
+        this.day1NametagUnlocked = true;
+        return true;
+    }
+    return false;
+};
+
+/**
  * Get full user data (for authenticated user only)
  * This is synchronous - for gacha items, use getFullDataAsync
  */
@@ -752,6 +777,7 @@ userSchema.methods.getFullData = function() {
         lastUsernameChangeAt: this.lastUsernameChangeAt,
         canChangeUsername: this.canChangeUsername(),
         isEstablishedUser: isEstablished,  // Tells client if user has entered world before
+        day1NametagUnlocked: this.hasDay1NametagUnlocked(),
         role: this.role || null
     };
 };

@@ -237,6 +237,9 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
             } else {
                 console.log(`👤 Existing user found: ${user.username} (${walletAddress.slice(0, 8)}...) - isEstablished: ${user.isEstablishedUser()}, lastUsernameChangeAt: ${user.lastUsernameChangeAt ? 'SET' : 'null'}`);
                 await userServiceForAuth.ensureGoldEconomyApplied(user);
+                if (user.ensureDay1NametagGrandfather()) {
+                    console.log(`⭐ Day 1 nametag grandfathered for ${user.username}`);
+                }
             }
 
             // Migration: Set lastUsernameChangeAt for established users who don't have it

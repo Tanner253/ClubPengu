@@ -32,6 +32,7 @@ import { useMultiplayer } from './multiplayer';
 import { useChallenge } from './challenge';
 import { useIgloo } from './igloo';
 import { getRoomLabel } from './utils/roomLabels';
+import { releaseHudFocusForGameKey } from './utils/gameHudFocus';
 import { useLanguage } from './i18n';
 import { EMOTE_WHEEL_ITEMS, LOOPING_EMOTES, EMOTE_EMOJI_MAP, createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, GoldLobbySlotSystem, JackpotCelebration, IceFishingSystem, createMountainBackground, performanceManager, PERFORMANCE_PRESETS } from './systems';
 import { getHoleStockRows, getHoleStockSignature, formatRegrowEta, getHoleStatusById } from './utils/fishingHoleStock';
@@ -108,7 +109,7 @@ import { getActiveHotbarEntry, ownsAnyRod } from './utils/gameHotbar';
 import { canFitItemInBackpack } from './utils/inventoryCapacity';
 import StarterRodPickup from './systems/StarterRodPickup';
 import GameInventoryModal from './components/GameInventoryModal';
-import { resolveNametagStyle, isStyledNametag, getParticlePresetForNametagStyle } from './config/whaleNametagTiers.js';
+import { resolveNametagStyle, isStyledNametag, getNametagParticleEffect } from './config/whaleNametagTiers.js';
 import { drawNametagToCanvas } from './utils/nametagCanvas.js';
 
 function disposeNameSprite(sprite) {
@@ -118,24 +119,30 @@ function disposeNameSprite(sprite) {
 }
 
 function syncMeshNametagParticles(meshData, playerData, scene, THREE, position, camera, time, delta, distSq) {
-    const preset = getParticlePresetForNametagStyle(resolveNametagStyle(playerData));
+    const effect = getNametagParticleEffect(resolveNametagStyle(playerData));
     const enabled = performanceManager.shouldShowNametagParticles(distSq);
 
     if (!meshData._particlePreset) meshData._particlePreset = null;
+    if (meshData._particleColor === undefined) meshData._particleColor = null;
 
-    if (!enabled || !preset) {
+    if (!enabled || !effect) {
         if (meshData.goldRainSystem) meshData.goldRainSystem.setVisible(false);
         return;
     }
 
-    if (!meshData.goldRainSystem || meshData._particlePreset !== preset) {
+    const needsRecreate = !meshData.goldRainSystem
+        || meshData._particlePreset !== effect.preset
+        || meshData._particleColor !== effect.color;
+
+    if (needsRecreate) {
         if (meshData.goldRainSystem) {
             meshData.goldRainSystem.dispose();
             meshData.goldRainSystem = null;
         }
-        meshData.goldRainSystem = new LocalizedParticleSystem(THREE, scene, preset);
+        meshData.goldRainSystem = new LocalizedParticleSystem(THREE, scene, effect.preset, { color: effect.color });
         meshData.goldRainSystem.create({ x: position.x, y: position.y || 0, z: position.z });
-        meshData._particlePreset = preset;
+        meshData._particlePreset = effect.preset;
+        meshData._particleColor = effect.color;
     }
 
     meshData.goldRainSystem.setVisible(true);
@@ -196,7 +203,7 @@ const VoxelWorld = ({
     const playerRef = useRef(null);
     const playerNameSpriteRef = useRef(null); // Player's own name tag
     const playerGoldRainRef = useRef(null); // Nametag particle system (gold/whale/sparkle)
-    const playerGoldRainPresetRef = useRef(null);
+    const playerGoldRainEffectKeyRef = useRef(null);
     const cameraRef = useRef(null);
     const rendererRef = useRef(null);
     const controlsRef = useRef(null);
@@ -2971,6 +2978,9 @@ const VoxelWorld = ({
             if (isInputFocused) {
                 return;
             }
+
+            // HUD buttons must not steal Space / WASD after a mouse click
+            releaseHudFocusForGameKey(e.code, { preventDefault: () => e.preventDefault() });
             
             keysRef.current[e.code] = true;
             
@@ -5847,13 +5857,14 @@ const VoxelWorld = ({
                         newSprite.position.set(0, nameHeight, 0);
                         meshData.mesh.add(newSprite);
                         meshData.nameSprite = newSprite;
+                        playerData.needsNametagRebuild = false;
+                        if (meshData.goldRainSystem) {
+                            meshData.goldRainSystem.dispose();
+                            meshData.goldRainSystem = null;
+                            meshData._particlePreset = null;
+                            meshData._particleColor = null;
+                        }
                     }
-                    if (meshData.goldRainSystem) {
-                        meshData.goldRainSystem.dispose();
-                        meshData.goldRainSystem = null;
-                        meshData._particlePreset = null;
-                    }
-                    playerData.needsNametagRebuild = false;
                 }
                 
                 // Rebuild mesh if appearance changed
@@ -5865,7 +5876,7 @@ const VoxelWorld = ({
                     const currentRot = meshData.mesh.rotation.y;
                     
                     // Store nametag and other attachments
-                    const nameSprite = meshData.nameSprite;
+                    let nameSprite = meshData.nameSprite;
                     const pvpLabelSprite = meshData.pvpLabelSprite;
                     const bubble = meshData.bubble;
                     const goldRainSystem = meshData.goldRainSystem;
@@ -5884,7 +5895,13 @@ const VoxelWorld = ({
                     newMesh.rotation.y = currentRot;
                     scene.add(newMesh);
                     
-                    // Reattach nametag
+                    // Reattach nametag (recreate if missing)
+                    if (!nameSprite && createNameSpriteRef.current) {
+                        nameSprite = createNameSpriteRef.current(playerData.name || 'Player', playerData);
+                        if (nameSprite) {
+                            meshData.nameSprite = nameSprite;
+                        }
+                    }
                     if (nameSprite) {
                         newMesh.add(nameSprite);
                     }
@@ -6785,7 +6802,7 @@ const VoxelWorld = ({
                 }
                 
                 // Update nametag particle system for other players
-                if (meshData.goldRainSystem || getParticlePresetForNametagStyle(resolveNametagStyle(playerData))) {
+                if (meshData.goldRainSystem || getNametagParticleEffect(resolveNametagStyle(playerData))) {
                     syncMeshNametagParticles(
                         meshData,
                         playerData,
@@ -6881,28 +6898,30 @@ const VoxelWorld = ({
                         } catch { return 'default'; }
                     })() },
                     cpNametagTier: userDataRef.current?.cpNametagTier,
+                    day1NametagUnlocked: userDataRef.current?.day1NametagUnlocked,
                     isAuthenticated,
                     walletAddress: walletAddress || userDataRef.current?.walletAddress,
                 };
-                const preset = getParticlePresetForNametagStyle(resolveNametagStyle(localPlayerData));
+                const effect = getNametagParticleEffect(resolveNametagStyle(localPlayerData));
+                const effectKey = effect ? `${effect.preset}:${effect.color}` : null;
                 const localDistSq = camera
                     ? (camera.position.x - posRef.current.x) ** 2 + (camera.position.z - posRef.current.z) ** 2
                     : 0;
                 const enabled = performanceManager.shouldShowNametagParticles(localDistSq);
 
-                if (!enabled || !preset) {
+                if (!enabled || !effect) {
                     if (playerGoldRainRef.current) playerGoldRainRef.current.setVisible(false);
                 } else {
-                    if (!playerGoldRainRef.current || playerGoldRainPresetRef.current !== preset) {
+                    if (!playerGoldRainRef.current || playerGoldRainEffectKeyRef.current !== effectKey) {
                         if (playerGoldRainRef.current) {
                             playerGoldRainRef.current.dispose();
                             playerGoldRainRef.current = null;
                         }
                         if (sceneRef.current && window.THREE) {
-                            const system = new LocalizedParticleSystem(window.THREE, sceneRef.current, preset);
+                            const system = new LocalizedParticleSystem(window.THREE, sceneRef.current, effect.preset, { color: effect.color });
                             system.create({ x: posRef.current.x, y: posRef.current.y, z: posRef.current.z });
                             playerGoldRainRef.current = system;
-                            playerGoldRainPresetRef.current = preset;
+                            playerGoldRainEffectKeyRef.current = effectKey;
                         }
                     }
                     if (playerGoldRainRef.current) {
@@ -11402,40 +11421,42 @@ const VoxelWorld = ({
             const requestedStyle = e.detail?.style || 'tier';
             const newStyle = isAuthenticated ? requestedStyle : 'default';
             
-            if (playerRef.current && playerNameSpriteRef.current) {
-                disposeNameSprite(playerNameSpriteRef.current);
-                playerRef.current.remove(playerNameSpriteRef.current);
-                playerNameSpriteRef.current = null;
+            if (!playerRef.current || !playerName) return;
+
+            const THREE = window.THREE;
+            if (!THREE) return;
+
+            const localData = {
+                appearance: { nametagStyle: newStyle },
+                cpNametagTier: userDataRef.current?.cpNametagTier,
+                day1NametagUnlocked: userDataRef.current?.day1NametagUnlocked,
+                isAuthenticated,
+                walletAddress: walletAddress || userDataRef.current?.walletAddress,
+            };
+            const nameSprite = createNameSprite(playerName, localData);
+            if (!nameSprite) return;
+
+            let characterType = 'penguin';
+            try {
+                const customization = JSON.parse(localStorage.getItem('penguin_customization') || '{}');
+                characterType = customization.characterType || 'penguin';
+            } catch { /* use default */ }
+            const nameHeight = characterType === 'marcus' ? NAME_HEIGHT_MARCUS : characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
+            nameSprite.position.set(0, nameHeight, 0);
+
+            const prevSprite = playerNameSpriteRef.current;
+            playerRef.current.add(nameSprite);
+            playerNameSpriteRef.current = nameSprite;
+
+            if (prevSprite && prevSprite !== nameSprite) {
+                playerRef.current.remove(prevSprite);
+                disposeNameSprite(prevSprite);
             }
-            
+
             if (playerGoldRainRef.current) {
                 playerGoldRainRef.current.dispose();
                 playerGoldRainRef.current = null;
-                playerGoldRainPresetRef.current = null;
-            }
-            
-            if (playerRef.current && playerName) {
-                const THREE = window.THREE;
-                if (THREE) {
-                    const localData = {
-                        appearance: { nametagStyle: newStyle },
-                        cpNametagTier: userDataRef.current?.cpNametagTier,
-                        isAuthenticated,
-                        walletAddress: walletAddress || userDataRef.current?.walletAddress,
-                    };
-                    const nameSprite = createNameSprite(playerName, localData);
-                    if (nameSprite) {
-                        let characterType = 'penguin';
-                        try {
-                            const customization = JSON.parse(localStorage.getItem('penguin_customization') || '{}');
-                            characterType = customization.characterType || 'penguin';
-                        } catch { /* use default */ }
-                        const nameHeight = characterType === 'marcus' ? NAME_HEIGHT_MARCUS : characterType === 'whiteWhale' ? NAME_HEIGHT_WHALE : NAME_HEIGHT_PENGUIN;
-                        nameSprite.position.set(0, nameHeight, 0);
-                        playerRef.current.add(nameSprite);
-                        playerNameSpriteRef.current = nameSprite;
-                    }
-                }
+                playerGoldRainEffectKeyRef.current = null;
             }
             
             if (mpUpdateAppearanceRef.current) {
@@ -11456,8 +11477,15 @@ const VoxelWorld = ({
     }, [createNameSprite, isAuthenticated, playerName, walletAddress]);
 
     // Rebuild local nametag when server reports a new $CP tier
+    const prevCpTierRef = useRef(undefined);
     useEffect(() => {
         if (!isAuthenticated || !playerRef.current || !playerName) return;
+        const tier = userData?.cpNametagTier;
+        if (prevCpTierRef.current === tier) return;
+        const hadPreviousTier = prevCpTierRef.current !== undefined;
+        prevCpTierRef.current = tier;
+        if (!hadPreviousTier) return;
+
         try {
             const settings = JSON.parse(localStorage.getItem('game_settings') || '{}');
             const mode = settings.nametagStyle || 'tier';
@@ -11519,6 +11547,7 @@ const VoxelWorld = ({
             const localNametagData = {
                 appearance: { nametagStyle },
                 cpNametagTier: userDataRef.current?.cpNametagTier,
+                day1NametagUnlocked: userDataRef.current?.day1NametagUnlocked,
                 isAuthenticated,
                 walletAddress: walletAddress || userDataRef.current?.walletAddress,
             };
@@ -13853,6 +13882,7 @@ const VoxelWorld = ({
                 onSettingsChange={setGameSettings}
                 onOpenChangelog={() => setShowChangelog(true)}
                 isAuthenticated={isAuthenticated}
+                day1NametagUnlocked={userData?.day1NametagUnlocked === true}
              />
              
              {/* Changelog Modal */}

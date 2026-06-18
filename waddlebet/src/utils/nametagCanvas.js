@@ -4,7 +4,7 @@
  * Status labels (Diamond Flipper tier, Day 1, etc.) belong in the profile modal.
  */
 
-import { getTierConfig } from '../config/whaleNametagTiers.js';
+import { getTierConfig, DAY1_NAMETAG_COLORS } from '../config/whaleNametagTiers.js';
 
 function truncateName(ctx, name, maxWidth, font) {
     ctx.font = font;
@@ -63,13 +63,7 @@ function drawStyledNameTag(ctx, name, cfg, tier) {
  */
 export function drawNametagToCanvas(ctx, name, style = 'default') {
     if (style === 'day1') {
-        const cfg = {
-            textColor: '#fbbf24',
-            glowColor: 'rgba(251, 191, 36, 0.75)',
-            borderColors: ['rgba(234, 179, 8, 0.95)', 'rgba(245, 158, 11, 0.85)'],
-            bgColor: 'rgba(20, 14, 0, 0.88)',
-        };
-        drawStyledNameTag(ctx, name, cfg, 'gold');
+        drawStyledNameTag(ctx, name, DAY1_NAMETAG_COLORS, 'gold');
         return;
     }
 

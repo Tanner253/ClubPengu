@@ -58,7 +58,7 @@ const PRESETS = {
 };
 
 class LocalizedParticleSystem {
-    constructor(THREE, scene, preset = 'goldRain') {
+    constructor(THREE, scene, preset = 'goldRain', options = {}) {
         this.THREE = THREE;
         this.scene = scene;
         
@@ -72,7 +72,7 @@ class LocalizedParticleSystem {
         this.fallSpeed = config.fallSpeed;
         this.driftSpeed = config.driftSpeed;
         this.particleSize = config.particleSize;
-        this.color = config.color;
+        this.color = options.color ?? config.color;
         this.minOpacity = config.minOpacity;
         this.maxOpacity = config.maxOpacity;
         this.zOffset = config.zOffset || 0;

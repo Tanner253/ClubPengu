@@ -3,6 +3,14 @@
  * Thresholds use whole-token UI amounts (same units as on-chain uiAmount).
  */
 
+export const DAY1_NAMETAG_COLORS = {
+    textColor: '#fbbf24',
+    glowColor: 'rgba(251, 191, 36, 0.75)',
+    borderColors: ['rgba(234, 179, 8, 0.95)', 'rgba(245, 158, 11, 0.85)'],
+    bgColor: 'rgba(20, 14, 0, 0.88)',
+    particleColor: '#fbbf24',
+};
+
 export const WHALE_NAMETAG_TIERS = [
     {
         id: 'standard',
@@ -14,6 +22,7 @@ export const WHALE_NAMETAG_TIERS = [
         bgColor: 'rgba(0, 0, 0, 0.7)',
         emoji: null,
         particlePreset: null,
+        particleColor: null,
         styled: false,
     },
     {
@@ -25,7 +34,8 @@ export const WHALE_NAMETAG_TIERS = [
         borderColors: ['rgba(180, 83, 9, 0.9)', 'rgba(251, 191, 36, 0.7)'],
         bgColor: 'rgba(20, 12, 4, 0.85)',
         emoji: '🥉',
-        particlePreset: null,
+        particlePreset: 'sparkle',
+        particleColor: '#d97706',
         styled: true,
     },
     {
@@ -38,6 +48,7 @@ export const WHALE_NAMETAG_TIERS = [
         bgColor: 'rgba(15, 23, 42, 0.9)',
         emoji: '🥈',
         particlePreset: 'sparkle',
+        particleColor: '#e2e8f0',
         styled: true,
     },
     {
@@ -50,6 +61,7 @@ export const WHALE_NAMETAG_TIERS = [
         bgColor: 'rgba(20, 14, 0, 0.88)',
         emoji: '🥇',
         particlePreset: 'goldRain',
+        particleColor: '#fbbf24',
         styled: true,
     },
     {
@@ -62,6 +74,7 @@ export const WHALE_NAMETAG_TIERS = [
         bgColor: 'rgba(8, 20, 35, 0.92)',
         emoji: '💎',
         particlePreset: 'whaleRain',
+        particleColor: '#67e8f9',
         styled: true,
     },
     {
@@ -74,6 +87,7 @@ export const WHALE_NAMETAG_TIERS = [
         bgColor: 'rgba(25, 10, 40, 0.92)',
         emoji: '👑',
         particlePreset: 'whaleRain',
+        particleColor: '#e879f9',
         styled: true,
     },
 ];
@@ -93,15 +107,55 @@ export function getTierConfig(tierId) {
     return TIER_BY_ID[tierId] || TIER_BY_ID.standard;
 }
 
+function hexToParticleColor(hex) {
+    if (!hex || typeof hex !== 'string') return 0xffffff;
+    const normalized = hex.replace('#', '');
+    const parsed = Number.parseInt(normalized, 16);
+    return Number.isFinite(parsed) ? parsed : 0xffffff;
+}
+
+/**
+ * Particle preset + color matched to the resolved nametag style.
+ * @returns {{ preset: string, color: number } | null}
+ */
+export function getNametagParticleEffect(style) {
+    if (style === 'day1') {
+        return { preset: 'goldRain', color: hexToParticleColor(DAY1_NAMETAG_COLORS.particleColor) };
+    }
+
+    const tier = getTierConfig(style);
+    if (!tier.particlePreset) return null;
+
+    return {
+        preset: tier.particlePreset,
+        color: hexToParticleColor(tier.particleColor || tier.textColor),
+    };
+}
+
+/** @deprecated use getNametagParticleEffect */
+export function getParticlePresetForNametagStyle(style) {
+    return getNametagParticleEffect(style)?.preset || null;
+}
+
+export function canUseDay1Nametag(playerData = {}) {
+    if (playerData.day1NametagUnlocked === false) return false;
+    if (playerData.day1NametagUnlocked === true) return true;
+    // Remote players: server strips invalid day1 from appearance before broadcast
+    return playerData.appearance?.nametagStyle === 'day1';
+}
+
 /**
  * Resolve which nametag visual to render for a player.
- * - day1: manual OG supporter badge
+ * - day1: OG supporter badge (unlock required)
  * - default: plain white tag
  * - whale / tier / auto / unset + authenticated: $CP tier colors (Diamond Flippers)
  */
 export function resolveNametagStyle(playerData = {}) {
     const manual = playerData.appearance?.nametagStyle;
-    if (manual === 'day1') return 'day1';
+    if (manual === 'day1') {
+        if (canUseDay1Nametag(playerData)) return 'day1';
+        // Fall through to balance tier when day1 is locked
+    }
     if (manual === 'default') return 'default';
 
     const tier = playerData.cpNametagTier;
@@ -116,12 +170,6 @@ export function resolveNametagStyle(playerData = {}) {
     }
 
     return 'default';
-}
-
-export function getParticlePresetForNametagStyle(style) {
-    if (style === 'day1') return 'goldRain';
-    const tier = getTierConfig(style);
-    return tier.particlePreset || null;
 }
 
 export function isStyledNametag(style) {
@@ -141,7 +189,7 @@ export function getDiamondFlipperProfileLabel(tierId) {
 
 export function getPlayerProfileStatusLabels(player = {}) {
     const labels = [];
-    if (player.appearance?.nametagStyle === 'day1') {
+    if (canUseDay1Nametag(player) && player.appearance?.nametagStyle === 'day1') {
         labels.push('⭐ Day 1 Supporter');
     }
     const tierLabel = getDiamondFlipperProfileLabel(player.cpNametagTier);

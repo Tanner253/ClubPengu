@@ -2,10 +2,12 @@ import { describe, it, expect } from 'vitest';
 import {
     getTierFromBalance,
     resolveNametagStyle,
+    getNametagParticleEffect,
     getParticlePresetForNametagStyle,
     isStyledNametag,
     getDiamondFlipperProfileLabel,
     getPlayerProfileStatusLabels,
+    canUseDay1Nametag,
 } from '../config/whaleNametagTiers.js';
 
 describe('whaleNametagTiers', () => {
@@ -19,13 +21,22 @@ describe('whaleNametagTiers', () => {
         expect(getTierFromBalance(10_000_000)).toBe('legendary');
     });
 
-    it('resolves manual day1 and default overrides', () => {
+    it('resolves day1 only when unlocked', () => {
         expect(resolveNametagStyle({
             appearance: { nametagStyle: 'day1' },
+            day1NametagUnlocked: true,
             cpNametagTier: 'gold',
             isAuthenticated: true,
             walletAddress: 'abc',
         })).toBe('day1');
+
+        expect(resolveNametagStyle({
+            appearance: { nametagStyle: 'day1' },
+            day1NametagUnlocked: false,
+            cpNametagTier: 'gold',
+            isAuthenticated: true,
+            walletAddress: 'abc',
+        })).toBe('gold');
 
         expect(resolveNametagStyle({
             appearance: { nametagStyle: 'default' },
@@ -51,7 +62,17 @@ describe('whaleNametagTiers', () => {
         })).toBe('gold');
     });
 
-    it('assigns particle presets by resolved style', () => {
+    it('assigns tier-matched particle colors', () => {
+        expect(getNametagParticleEffect('bronze')).toEqual({ preset: 'sparkle', color: 0xd97706 });
+        expect(getNametagParticleEffect('silver')).toEqual({ preset: 'sparkle', color: 0xe2e8f0 });
+        expect(getNametagParticleEffect('gold')).toEqual({ preset: 'goldRain', color: 0xfbbf24 });
+        expect(getNametagParticleEffect('diamond')).toEqual({ preset: 'whaleRain', color: 0x67e8f9 });
+        expect(getNametagParticleEffect('legendary')).toEqual({ preset: 'whaleRain', color: 0xe879f9 });
+        expect(getNametagParticleEffect('day1')).toEqual({ preset: 'goldRain', color: 0xfbbf24 });
+        expect(getNametagParticleEffect('default')).toBeNull();
+    });
+
+    it('keeps legacy preset helper', () => {
         expect(getParticlePresetForNametagStyle('day1')).toBe('goldRain');
         expect(getParticlePresetForNametagStyle('silver')).toBe('sparkle');
         expect(getParticlePresetForNametagStyle('gold')).toBe('goldRain');
@@ -73,7 +94,20 @@ describe('whaleNametagTiers', () => {
 
         expect(getPlayerProfileStatusLabels({
             appearance: { nametagStyle: 'day1' },
+            day1NametagUnlocked: true,
             cpNametagTier: 'gold',
         })).toEqual(['⭐ Day 1 Supporter', '🥇 Gold Diamond Flipper']);
+
+        expect(getPlayerProfileStatusLabels({
+            appearance: { nametagStyle: 'day1' },
+            day1NametagUnlocked: false,
+            cpNametagTier: 'gold',
+        })).toEqual(['🥇 Gold Diamond Flipper']);
+    });
+
+    it('detects day1 unlock eligibility', () => {
+        expect(canUseDay1Nametag({ day1NametagUnlocked: true })).toBe(true);
+        expect(canUseDay1Nametag({ day1NametagUnlocked: false })).toBe(false);
+        expect(canUseDay1Nametag({ appearance: { nametagStyle: 'day1' } })).toBe(true);
     });
 });

@@ -53,7 +53,7 @@ const getKeyDisplayName = (code) => {
     return code;
 };
 
-const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChangelog, isAuthenticated }) => {
+const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChangelog, isAuthenticated, day1NametagUnlocked = false }) => {
     const { t } = useLanguage();
     const menuRef = useRef(null);
     const [activeTab, setActiveTab] = useState('general');
@@ -117,6 +117,15 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
         applyGameSettings(next);
         onSettingsChange(next);
     };
+
+    // Day 1 path is closed
+    useEffect(() => {
+        if (!isAuthenticated || day1NametagUnlocked) return;
+        if (settings.nametagStyle !== 'day1') return;
+        const next = { ...settings, nametagStyle: 'tier' };
+        syncSettings(next);
+        window.dispatchEvent(new CustomEvent('nametagChanged', { detail: { style: 'tier' } }));
+    }, [isAuthenticated, day1NametagUnlocked, settings.nametagStyle]);
 
     const handleToggle = (key) => {
         const defaultsToTrue = ['musicEnabled', 'sfxEnabled', 'soundEnabled', 'snowEnabled', 'mountEnabled'];
@@ -421,28 +430,29 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                         </div>
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className={`grid gap-2 ${day1NametagUnlocked ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                                    {isAuthenticated && day1NametagUnlocked && (
+                                        <button
+                                            onClick={() => {
+                                                syncSettings({ ...settings, nametagStyle: 'day1' });
+                                                window.dispatchEvent(new CustomEvent('nametagChanged', { detail: { style: 'day1' } }));
+                                            }}
+                                            className={`p-3 rounded-xl border-2 transition-all ${
+                                                settings.nametagStyle === 'day1'
+                                                    ? 'border-amber-500 bg-amber-500/10'
+                                                    : 'border-white/10 bg-white/5 hover:border-white/20'
+                                            }`}
+                                        >
+                                            <span className="text-2xl block mb-1">⭐</span>
+                                            <span className="text-amber-400 text-xs font-bold">{t('settings.nametagDay1')}</span>
+                                        </button>
+                                    )}
                                     {isAuthenticated && (
-                                        <>
-                                            <button
-                                                onClick={() => {
-                                                    onSettingsChange({ ...settings, nametagStyle: 'day1' });
-                                                    window.dispatchEvent(new CustomEvent('nametagChanged', { detail: { style: 'day1' } }));
-                                                }}
-                                                className={`p-3 rounded-xl border-2 transition-all ${
-                                                    settings.nametagStyle === 'day1'
-                                                        ? 'border-amber-500 bg-amber-500/10'
-                                                        : 'border-white/10 bg-white/5 hover:border-white/20'
-                                                }`}
-                                            >
-                                                <span className="text-2xl block mb-1">⭐</span>
-                                                <span className="text-amber-400 text-xs font-bold">{t('settings.nametagDay1')}</span>
-                                            </button>
-                                            <button
-                                                onClick={() => {
-                                                    onSettingsChange({ ...settings, nametagStyle: 'tier' });
-                                                    window.dispatchEvent(new CustomEvent('nametagChanged', { detail: { style: 'tier' } }));
-                                                }}
+                                        <button
+                                            onClick={() => {
+                                                syncSettings({ ...settings, nametagStyle: 'tier' });
+                                                window.dispatchEvent(new CustomEvent('nametagChanged', { detail: { style: 'tier' } }));
+                                            }}
                                                 className={`p-3 rounded-xl border-2 transition-all ${
                                                     settings.nametagStyle === 'tier' || settings.nametagStyle === 'whale' || settings.nametagStyle === 'auto' || (!settings.nametagStyle && isAuthenticated)
                                                         ? 'border-cyan-500 bg-cyan-500/10'
@@ -452,11 +462,10 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                                 <span className="text-2xl block mb-1">💎</span>
                                                 <span className="text-cyan-400 text-xs font-bold">{t('settings.nametagTier')}</span>
                                             </button>
-                                        </>
                                     )}
                                     <button
                                         onClick={() => {
-                                            onSettingsChange({ ...settings, nametagStyle: 'default' });
+                                            syncSettings({ ...settings, nametagStyle: 'default' });
                                             window.dispatchEvent(new CustomEvent('nametagChanged', { detail: { style: 'default' } }));
                                         }}
                                         className={`p-3 rounded-xl border-2 transition-all ${
