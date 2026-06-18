@@ -897,28 +897,35 @@ input, textarea {
 
 @media (max-width: 639px) {
   .npc-trader-panel {
-    max-height: 92vh;
+    max-height: min(92dvh, 100%);
+  }
+
+  .npc-trader-sidebar .npc-speech-box p {
+    font-size: 0.75rem;
+    line-height: 1.35;
+    min-height: 2rem;
   }
 
   .npc-trader-detail {
-    max-height: 36vh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    max-height: none;
+    overflow: visible;
   }
 
   .npc-trader-tab {
-    min-height: 44px;
-    min-width: 72px;
+    min-height: 40px;
+    min-width: 64px;
+    padding-top: 0.375rem;
+    padding-bottom: 0.375rem;
   }
 
   .npc-trader-card {
-    min-height: 100px;
+    min-height: 78px;
     touch-action: manipulation;
   }
 
   .npc-trader-deal-btn {
-    min-height: 48px;
-    font-size: 0.875rem;
+    min-height: 40px;
+    font-size: 0.75rem;
   }
 }
 

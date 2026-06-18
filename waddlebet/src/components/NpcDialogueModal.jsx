@@ -407,8 +407,21 @@ export default function NpcDialogueModal({
     const [selectedActionId, setSelectedActionId] = useState(null);
     const [questBriefingText, setQuestBriefingText] = useState(null);
     const [chestOpening, setChestOpening] = useState(false);
+    const [isMobileLayout, setIsMobileLayout] = useState(false);
 
     useEscapeKey(onClose, isOpen);
+
+    useEffect(() => {
+        const updateLayout = () => {
+            setIsMobileLayout(
+                window.innerWidth < 640
+                || ('ontouchstart' in window && window.matchMedia('(pointer: coarse)').matches)
+            );
+        };
+        updateLayout();
+        window.addEventListener('resize', updateLayout);
+        return () => window.removeEventListener('resize', updateLayout);
+    }, []);
 
     useEffect(() => {
         if (!isOpen) return;
@@ -798,10 +811,10 @@ export default function NpcDialogueModal({
             />
 
             <div
-                className={`npc-trader-panel npc-dialogue-panel pointer-events-auto relative w-full max-w-5xl animate-slide-up sm:animate-fade-in bg-gradient-to-b ${theme.panelBg} border border-white/15 rounded-sm overflow-hidden`}
+                className={`npc-trader-panel npc-dialogue-panel pointer-events-auto relative w-full max-w-5xl max-h-[min(92dvh,100%)] flex flex-col overflow-hidden animate-slide-up sm:animate-fade-in bg-gradient-to-b ${theme.panelBg} border border-white/15 rounded-sm`}
                 style={{ boxShadow: `0 0 0 1px rgba(0,0,0,0.6), 0 0 32px ${theme.glow}, 0 24px 64px rgba(0,0,0,0.75)` }}
             >
-                <div className={`relative bg-gradient-to-r ${theme.banner} px-4 py-2 flex items-center justify-between border-b border-black/30`}>
+                <div className={`relative bg-gradient-to-r ${theme.banner} flex items-center justify-between border-b border-black/30 shrink-0 ${isMobileLayout ? 'px-3 py-1.5' : 'px-4 py-2'}`}>
                     <div className="flex items-center gap-2.5 min-w-0">
                         <span className="text-lg shrink-0 drop-shadow">{theme.stallIcon}</span>
                         <div className="min-w-0">
@@ -829,34 +842,37 @@ export default function NpcDialogueModal({
                     </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row sm:h-[min(88vh,540px)] sm:max-h-[540px]">
-                    <div className={`npc-trader-sidebar sm:w-[36%] lg:w-[34%] border-b sm:border-b-0 sm:border-r border-white/10 p-2.5 sm:p-4 flex flex-col gap-2 sm:gap-3 bg-black/25 max-h-[38vh] sm:max-h-none`}>
-                        <div className="flex gap-3 items-center shrink-0">
+                <div className="flex flex-1 min-h-0 flex-col sm:flex-row sm:h-[min(88vh,540px)] sm:max-h-[540px]">
+                    <div className={`npc-trader-sidebar sm:w-[36%] lg:w-[34%] border-b sm:border-b-0 sm:border-r border-white/10 flex flex-col gap-2 sm:gap-3 bg-black/25 shrink-0 sm:shrink ${
+                        isMobileLayout ? 'p-2 max-h-[min(24vh,132px)]' : 'p-2.5 sm:p-4 max-h-[38vh] sm:max-h-none'
+                    }`}>
+                        <div className={`flex gap-2 items-center shrink-0 ${isMobileLayout ? '' : 'gap-3'}`}>
                             <div
-                                className={`shrink-0 w-14 h-14 rounded-sm bg-gradient-to-br ${theme.portraitRing} p-[2px]`}
+                                className={`shrink-0 rounded-sm bg-gradient-to-br ${theme.portraitRing} p-[2px] ${isMobileLayout ? 'w-10 h-10' : 'w-14 h-14'}`}
                                 style={{ boxShadow: `0 2px 12px ${theme.glow}` }}
                             >
-                                <div className="w-full h-full rounded-[2px] bg-[#0a0a12] flex items-center justify-center text-2xl border border-black/50">
+                                <div className={`w-full h-full rounded-[2px] bg-[#0a0a12] flex items-center justify-center border border-black/50 ${isMobileLayout ? 'text-lg' : 'text-2xl'}`}>
                                     {merchant?.emoji || theme.stallIcon}
                                 </div>
                             </div>
                             <div className="min-w-0">
-                                <h2 className={`font-black retro-text text-sm sm:text-base leading-tight truncate ${theme.accent}`}>{name}</h2>
+                                <h2 className={`font-black retro-text leading-tight truncate ${theme.accent} ${isMobileLayout ? 'text-xs' : 'text-sm sm:text-base'}`}>{name}</h2>
                                 <p className={`text-[10px] font-semibold uppercase tracking-wider truncate ${theme.accentMuted}`}>{title}</p>
                             </div>
                         </div>
-                        <div className="flex-1 min-h-[120px] sm:min-h-0 flex flex-col">
+                        <div className="flex-1 min-h-0 flex flex-col">
                             <NpcSpeechBox
                                 text={speechText}
                                 active={isOpen}
                                 theme={theme}
                                 npcPitch={npcPitch}
                                 onComplete={handleSpeechComplete}
+                                className={isMobileLayout ? 'px-3 py-2 rounded-lg' : ''}
                             />
                         </div>
                     </div>
 
-                    <div className="npc-trader-offers sm:flex-1 flex flex-col min-h-0 p-2.5 sm:p-4 overflow-hidden">
+                    <div className="npc-trader-offers sm:flex-1 flex flex-col min-h-0 overflow-y-auto overscroll-contain p-2 sm:p-4">
                         <div className="flex gap-0.5 shrink-0 border-b border-white/10 mb-2 sm:mb-3 overflow-x-auto scrollbar-none -mx-0.5 px-0.5">
                             {visibleTabs.map((tab) => (
                                 <button
@@ -875,7 +891,9 @@ export default function NpcDialogueModal({
                             ))}
                         </div>
 
-                        <div className="npc-trader-grid grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-2.5 flex-1 content-start auto-rows-fr min-h-[200px] sm:min-h-0 sm:max-h-none overflow-hidden">
+                        <div className={`npc-trader-grid grid grid-cols-2 sm:grid-cols-3 gap-1.5 sm:gap-2.5 content-start ${
+                            isMobileLayout ? 'min-h-0' : 'flex-1 auto-rows-fr min-h-[200px] sm:min-h-0 sm:max-h-none overflow-hidden'
+                        }`}>
                             {tabActions.map((entry) => {
                                 const { action, disabled, label, costBadge, order } = entry;
                                 const isSelected = selectedActionId === action.id;
@@ -885,6 +903,7 @@ export default function NpcDialogueModal({
                                     : null;
                                 const art = resolveOfferArt(action, { listing, order });
                                 const displayName = getOfferDisplayName(action, entry, listing);
+                                const canvasSize = isMobileLayout ? (isSelected ? 48 : 42) : (isSelected ? 64 : 56);
 
                                 return (
                                     <button
@@ -892,8 +911,9 @@ export default function NpcDialogueModal({
                                         type="button"
                                         onClick={() => handleSelectAction(action, entry)}
                                         className={`
-                                            npc-trader-card relative flex flex-col items-center justify-end gap-1 p-2 pb-2.5 rounded-sm border text-center
-                                            transition-all duration-100 min-h-[108px] sm:min-h-[124px]
+                                            npc-trader-card relative flex flex-col items-center justify-end gap-0.5 p-1.5 pb-2 rounded-sm border text-center
+                                            transition-all duration-100
+                                            ${isMobileLayout ? 'min-h-[78px]' : 'min-h-[108px] sm:min-h-[124px]'}
                                             ${isSelected ? 'npc-trader-card-selected' : ''}
                                             ${disabled ? 'opacity-45 border-white/5 bg-black/30' : theme.choiceBg}
                                         `}
@@ -903,7 +923,7 @@ export default function NpcDialogueModal({
                                             tier={art.tier}
                                             selected={isSelected}
                                             opening={isSelected && chestOpening}
-                                            size={isSelected ? 64 : 56}
+                                            size={canvasSize}
                                         />
                                         <span className={`text-[10px] sm:text-[11px] font-bold leading-tight line-clamp-2 px-0.5 w-full ${disabled ? 'text-white/35' : 'text-white/90'}`}>
                                             {isPending ? '…' : shortCardLabel(displayName || label)}
@@ -919,22 +939,22 @@ export default function NpcDialogueModal({
                         </div>
 
                         {selectedState && (
-                            <div className="npc-trader-detail mt-3 pt-3 border-t border-white/10 shrink-0">
-                                <div className="flex items-start gap-3">
-                                    <div className="shrink-0 w-[88px] sm:w-[96px]">
+                            <div className={`npc-trader-detail mt-2 pt-2 border-t border-white/10 shrink-0 ${isMobileLayout ? 'pb-1' : 'mt-3 pt-3'}`}>
+                                <div className="flex items-start gap-2 sm:gap-3">
+                                    <div className={`shrink-0 ${isMobileLayout ? 'w-[56px]' : 'w-[88px] sm:w-[96px]'}`}>
                                         <TraderOfferCanvas
                                             variant={selectedArt.variant}
                                             tier={selectedArt.tier}
                                             selected
                                             opening={chestOpening}
-                                            size={88}
+                                            size={isMobileLayout ? 56 : 88}
                                         />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className={`text-sm font-bold retro-text leading-snug ${selectedState.disabled && !questCanAccept ? 'text-white/40' : 'text-white'}`}>
+                                        <p className={`font-bold retro-text leading-snug ${isMobileLayout ? 'text-xs' : 'text-sm'} ${selectedState.disabled && !questCanAccept ? 'text-white/40' : 'text-white'}`}>
                                             {getOfferDisplayName(selectedAction, selectedState, selectedListing) || selectedState.label}
                                         </p>
-                                        <p className={`text-[11px] mt-1 leading-relaxed ${theme.accentMuted}`}>
+                                        <p className={`mt-0.5 leading-relaxed ${theme.accentMuted} ${isMobileLayout ? 'text-[10px]' : 'text-[11px]'}`}>
                                             {getOfferSubtitle(selectedAction, selectedState, selectedListing) || selectedState.sublabel}
                                         </p>
                                         {materialRows.length > 0 && (
@@ -966,8 +986,9 @@ export default function NpcDialogueModal({
                                         disabled={!canDeal || isDealPending}
                                         onClick={() => handleAction(selectedAction)}
                                         className={`
-                                            npc-trader-deal-btn mt-3 w-full py-2.5 rounded-sm border-2 font-black retro-text text-sm uppercase tracking-widest
+                                            npc-trader-deal-btn mt-2 sm:mt-3 w-full rounded-sm border-2 font-black retro-text uppercase tracking-widest
                                             transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed
+                                            ${isMobileLayout ? 'py-2 text-xs' : 'py-2.5 text-sm'}
                                             ${canDeal ? 'active:translate-y-[1px]' : ''}
                                         `}
                                     >
@@ -979,7 +1000,7 @@ export default function NpcDialogueModal({
                     </div>
                 </div>
 
-                <div className="px-4 py-2 border-t border-white/5 bg-black/30 flex items-center justify-between gap-2">
+                <div className={`border-t border-white/5 bg-black/30 flex items-center justify-between gap-2 shrink-0 ${isMobileLayout ? 'px-3 py-1.5' : 'px-4 py-2'}`}>
                     <button
                         type="button"
                         onClick={() => handleAction({ id: 'close' })}

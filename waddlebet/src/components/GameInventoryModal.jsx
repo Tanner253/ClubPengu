@@ -455,9 +455,10 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
 
     const acceptsLabel = canSell ? getMerchantAcceptsLabel(sellMerchantId) : '';
     const gridColumns = isMobileLayout && canSell ? 5 : columns;
+    const displayRowCount = isMobileLayout && canSell ? Math.min(rows, 4) : rows;
 
     const sellHint = canSell ? (
-        <p className="text-[10px] text-amber-200/80 mb-2 text-center uppercase tracking-wide">
+        <p className={`text-amber-200/80 mb-1.5 text-center uppercase tracking-wide ${isMobileLayout ? 'text-[9px]' : 'text-[10px] mb-2'}`}>
             {isMobileLayout
                 ? 'Tap stacks to inspect · Long-press to queue for sale'
                 : 'Shift+click stacks · Drag to merchant tray →'}
@@ -470,7 +471,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
             className="grid gap-1.5 select-none touch-none"
             style={{ gridTemplateColumns: `repeat(${gridColumns}, minmax(0, 1fr))` }}
         >
-            {displayCells.slice(0, columns * rows).map(({ index, locked, slot }) => {
+            {displayCells.slice(0, gridColumns * displayRowCount).map(({ index, locked, slot }) => {
                 const hasItem = !locked && slotHasItem(slot);
                 const sellable = hasItem && merchantAcceptsSlot(slot, sellMerchantId);
                 const visual = hasItem ? getInventorySlotVisual(slot) : null;
@@ -502,7 +503,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                         className={`
                             aspect-square rounded-lg border-2 flex flex-col items-center justify-center
                             relative transition-colors
-                            ${isMobileLayout && canSell ? 'min-h-[44px]' : 'min-h-[36px]'}
+                            ${isMobileLayout && canSell ? 'min-h-[34px]' : isMobileLayout ? 'min-h-[40px]' : 'min-h-[36px]'}
                             ${cellBorder}
                             ${canSell && hasItem && !sellable ? 'opacity-35 saturate-50' : ''}
                             ${isDragSource ? 'ring-2 ring-cyan-400 opacity-80 scale-95' : ''}
@@ -529,7 +530,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                                     />
                                 )}
                                 <span
-                                    className={`${isMobileLayout && canSell ? 'text-xl' : 'text-2xl'} leading-none pointer-events-none select-none`}
+                                    className={`${isMobileLayout && canSell ? 'text-lg' : isMobileLayout ? 'text-xl' : 'text-2xl'} leading-none pointer-events-none select-none`}
                                     role="img"
                                     aria-label={slot.name}
                                 >
@@ -626,6 +627,49 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
         </div>
     ) : null;
 
+    const mobileSellDetailBar = canSell && isMobileLayout && selected && slotHasItem(selected) ? (
+        <div className="shrink-0 mx-2 mb-1 px-2 py-1.5 rounded-lg border border-amber-500/30 bg-amber-950/35 flex items-center gap-2">
+            <span className="text-lg shrink-0" role="img" aria-label={selected.name}>
+                {getInventorySlotVisual(selected).emoji || selected.emoji || '📦'}
+            </span>
+            <div className="flex-1 min-w-0">
+                <p className="text-[11px] text-white font-bold truncate">{selected.name}</p>
+                <p className="text-[10px] text-amber-200/80 tabular-nums">
+                    ×{selected.quantity}
+                    {stackTotalValue > 0 ? ` · ${stackTotalValue}g` : ''}
+                </p>
+            </div>
+            <div className="flex gap-1 shrink-0">
+                <button
+                    type="button"
+                    disabled={selling}
+                    onClick={() => handleSell(1)}
+                    className="bg-amber-600 hover:bg-amber-500 disabled:opacity-60 text-white px-2 py-1.5 rounded text-[10px] font-bold"
+                >
+                    Sell 1
+                </button>
+                {selected.quantity > 1 && (
+                    <button
+                        type="button"
+                        disabled={selling}
+                        onClick={() => handleSell(selected.quantity)}
+                        className="bg-amber-700 hover:bg-amber-600 disabled:opacity-60 text-white px-2 py-1.5 rounded text-[10px] font-bold"
+                    >
+                        All
+                    </button>
+                )}
+                <button
+                    type="button"
+                    disabled={selling}
+                    onClick={() => addToSellSelection(selectedSlot)}
+                    className="bg-amber-900/70 border border-amber-500/30 text-amber-100 px-2 py-1.5 rounded text-[10px] font-bold"
+                >
+                    {sellSelection.has(selectedSlot) ? '✓' : '+'}
+                </button>
+            </div>
+        </div>
+    ) : null;
+
     return createPortal(
         <div
             ref={modalOverlayRef}
@@ -636,7 +680,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                 isMobileLayout ? (
                     <div
                         data-inventory-world-drop-zone="true"
-                        className="absolute inset-x-3 top-3 bottom-[calc(92vh+0.75rem)] z-[1] flex items-start justify-center pt-2"
+                        className="absolute inset-x-3 top-3 bottom-[calc(min(90dvh,100%)+0.75rem)] z-[1] flex items-start justify-center pt-2"
                     >
                         <div className="rounded-xl border-2 border-dashed border-cyan-400/60 bg-cyan-950/55 px-4 py-2.5 shadow-lg pointer-events-none">
                             <p className="text-cyan-200 retro-text text-xs sm:text-sm text-center">
@@ -659,8 +703,8 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                 </div>
                 )
             )}
-            <div ref={modalPanelRef} data-inventory-panel className={`relative z-10 bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-cyan-500/40 rounded-2xl shadow-2xl w-full ${canSell ? 'max-w-3xl' : 'max-w-lg'} ${canSell && isMobileLayout ? 'h-[92vh]' : 'max-h-[92vh] sm:max-h-[90vh]'} overflow-hidden flex flex-col ${isDragging ? 'touch-none' : ''}`}>
-                <div className="flex items-center justify-between px-4 py-3 border-b border-cyan-500/20">
+            <div ref={modalPanelRef} data-inventory-panel className={`relative z-10 bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-cyan-500/40 rounded-2xl shadow-2xl w-full ${canSell ? 'max-w-3xl' : 'max-w-lg'} max-h-[min(90dvh,100%)] overflow-hidden flex flex-col ${isDragging ? 'touch-none' : ''}`}>
+                <div className={`flex items-center justify-between border-b border-cyan-500/20 shrink-0 ${canSell && isMobileLayout ? 'px-3 py-2' : 'px-4 py-3'}`}>
                     <div className="flex items-center gap-2">
                         <span className="text-2xl">{canSell ? (sellMerchant?.emoji || '🪙') : '🎒'}</span>
                         <div>
@@ -700,13 +744,17 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                 {canSell && isMobileLayout ? (
                     <>
                         <div
-                            className={`flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 pt-2 pb-1 ${isDragging ? 'overflow-hidden touch-none' : ''}`}
+                            className={`flex-1 min-h-0 overflow-y-auto overscroll-contain px-2 pt-1 pb-1 ${isDragging ? 'overflow-hidden touch-none' : ''}`}
                             style={{ WebkitOverflowScrolling: 'touch' }}
                         >
                             {sellHint}
                             {inventoryGrid}
                         </div>
-                        <div className="shrink-0 border-t border-amber-500/25 bg-amber-950/15 px-3 py-2">
+                        {mobileSellDetailBar}
+                        <div className="shrink-0 border-t border-amber-500/25 bg-amber-950/15 px-2 py-1.5">
+                            {sellFeedback && (
+                                <p className="text-amber-300 text-center text-xs mb-1 font-bold">{sellFeedback}</p>
+                            )}
                             {merchantTrayPanel}
                         </div>
                     </>
@@ -737,17 +785,18 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                 )}
 
                 {canSell && isAuthenticated && (
-                <div className="px-4 py-2 border-t border-cyan-500/20 bg-black/40 shrink-0" data-inventory-no-drop="true">
+                <div className={`border-t border-cyan-500/20 bg-black/40 shrink-0 ${isMobileLayout ? 'px-2 py-1' : 'px-4 py-2'}`} data-inventory-no-drop="true">
+                    {!isMobileLayout && (
                     <p className="text-[10px] text-center text-gray-400 mb-2 uppercase tracking-wide">
                         Hand hotbar · drag items here to equip
                     </p>
+                    )}
                     <GameHotbar className="justify-center" inventoryMode suppressClickRef={suppressClickRef} />
                 </div>
                 )}
 
-                <div className={`shrink-0 border-t border-cyan-500/20 bg-black/30 flex flex-col ${
-                    canSell && isMobileLayout ? 'max-h-[38vh] overflow-y-auto overscroll-contain' : 'min-h-[172px] justify-center'
-                } px-3 sm:px-4 py-3`} data-inventory-no-drop="true" style={canSell && isMobileLayout ? { WebkitOverflowScrolling: 'touch' } : undefined}>
+                {!(canSell && isMobileLayout) && (
+                <div className={`shrink-0 border-t border-cyan-500/20 bg-black/30 flex flex-col min-h-[172px] justify-center px-3 sm:px-4 py-3`} data-inventory-no-drop="true">
                     {isDragging ? (
                         <p className="text-cyan-300/90 text-xs text-center retro-text">
                             Drag up to the drop zone to place in world…
@@ -866,6 +915,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                         <p className="text-amber-300 text-center text-sm mt-2 font-bold">{sellFeedback}</p>
                     )}
                 </div>
+                )}
             </div>
         </div>,
         document.body
