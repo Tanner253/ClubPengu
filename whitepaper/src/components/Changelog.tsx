@@ -81,6 +81,76 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.3.4",
+    date: "June 18, 2026",
+    title: "🧭 Compass, Diamond Flippers & HUD Overhaul",
+    description:
+      "Navigation and identity pass: PUBG-style world compass with quest markers, on-chain $CP Diamond Flippers nametag tiers, unified top HUD (desktop + mobile), Day 1 nametag sunset, town↔forest direct ferry, arcade aisle layout, DevBot refactor, and whitepaper economics section trim. 74 files — +4,353 / −2,304 lines.",
+    highlight: true,
+    stats: { filesChanged: 74, additions: 4353, deletions: 2304 },
+    changes: [
+      // ── Top HUD redesign ──
+      { type: "feature", text: "HudTopBar — zoned top strip: compact economy readout (🪙 gold, 💎 pebbles, $CP) | action icons (🎒📦🏪) | account menu" },
+      { type: "feature", text: "HudSystemMenu — overflow tray for daily bonus, inbox, settings, stats, igloo guide, and disconnect" },
+      { type: "feature", text: "GameHUD unified layout — desktop and mobile portrait share one top bar; removed legacy vertical icon rail (~200 lines)" },
+      { type: "feature", text: "formatCompactNumber — HUD balances show 6.88M-style compact notation for large holdings" },
+      { type: "mobile", text: "Mobile portrait HUD — slim top bar + compass strip; touch-friendly 44px targets and hud i18n (EN + 9 locales)" },
+      { type: "fix", text: "Spacebar / WASD focus steal — GameHudButton blurs on pointer down; VoxelWorld releases HUD focus on game keys so Space jumps instead of re-firing nav" },
+      { type: "backend", text: "gameHudFocus.js + GameHudButton — data-game-hud focus guard; +gameHudFocus.test.js" },
+
+      // ── Diamond Flippers nametags ──
+      { type: "feature", text: "Diamond Flippers — $CP wallet balance → nametag tier: Bronze 1K, Silver 10K, Gold 100K, Diamond 1M, Legendary 10M (whaleNametagTiers.js)" },
+      { type: "feature", text: "NametagTierService — server checks on-chain $CP balance on login/refresh; broadcasts cpNametagTier + cpBalance to room (5 min RPC cache)" },
+      { type: "feature", text: "nametagCanvas.js — tier-colored borders, glow, emoji badges, and animated canvas nametags synced across multiplayer" },
+      { type: "feature", text: "Tier-matched nametag particles — sparkle / goldRain / whaleRain presets tinted to each tier color (LocalizedParticleSystem color override)" },
+      { type: "improvement", text: "Default authenticated nametagStyle: tier — below 1K $CP renders plain nametag; Settings can force Default (plain) override" },
+      { type: "fix", text: "Nametag disappearance after updates — atomic sprite swap, tier rebuild only on change, recreate nametag on mesh rebuild if missing" },
+
+      // ── Day 1 nametag sunset ──
+      { type: "feature", text: "Day 1 nametag closed — accounts created on/after 2026-06-18 cannot unlock; grandfather flag day1NametagUnlocked for existing supporters" },
+      { type: "backend", text: "day1Nametag.js close date + User.hasDay1NametagUnlocked(); normalizeAppearance strips day1 style for non-unlocked users" },
+      { type: "improvement", text: "SettingsMenu — Day 1 option hidden unless unlocked; auto-resets stale day1 selection to tier or default" },
+
+      // ── World compass ──
+      { type: "feature", text: "WorldCompass — PUBG-style horizontal heading strip scrolls with player yaw; cardinal ticks every 15°" },
+      { type: "feature", text: "compassLandmarks.js — room-scoped POI markers (shops, ferry, casino, dojo) with distance-aware labels on the strip" },
+      { type: "feature", text: "compassQuestMarkers.js — onboarding + daily contract targets (Salty, Clive, turn-in) appear as quest pins when accepted" },
+      { type: "mobile", text: "Compass mobile portrait — slim strip under HUD; fewer landmark/quest slots to avoid clutter" },
+
+      // ── Travel & economy QOL ──
+      { type: "feature", text: "Direct town ↔ forest ferry — skips Snow Forts hop; premium 3g fare (FERRY_FOREST_DIRECT_COST) vs 1g standard legs" },
+      { type: "improvement", text: "Ranger Pike sells Basic Axe for 1g at trail rates — forest onboarding no longer hard-depends on town ferry for gear" },
+      { type: "improvement", text: "Economy config sync — server/client goldEconomy, travelConfig, merchants, and worldNpcs aligned for new routes and shop stock" },
+
+      // ── Arcade & town layout ──
+      { type: "feature", text: "arcadeZone.js — grocery-aisle arcade layout in town west T-stem; 7 machines in two facing rows with floating ARCADE ZONE signage" },
+      { type: "improvement", text: "TownCenter + casinoSetpiece — arcade positions, travel NPC stands, and building banners updated to match new zone config" },
+      { type: "improvement", text: "buildingBanner.js — raised shop signage for Dojo, Gift Shop, Pizza Parlor with NPC-stand-style floating titles" },
+
+      // ── Casino, DevBot & wagers ──
+      { type: "improvement", text: "CasinoBlackjack.jsx polish — bet UX, state sync, and table interaction refinements on PvE blackjack" },
+      { type: "refactor", text: "DevBotService rewrite — modular challenge accept/match lifecycle; wagerBot.js spawn config; expanded DevBotService.test.js" },
+      { type: "improvement", text: "WagerModal + ChallengeContext — DevBot practice PvP flow and wager bot positioning in town" },
+
+      // ── Guides & profile ──
+      { type: "feature", text: "IglooRentalGuide overhaul — step-by-step rental flow, $CP pricing tiers, mobile portrait layout, and FAQ accordion" },
+      { type: "improvement", text: "ProfileMenu — wallet/tier display hooks; EconomyGuideModal copy for Diamond Flippers tiers" },
+      { type: "improvement", text: "SettingsMenu — nametag style picker (Default / Diamond Flippers / Day 1 if unlocked)" },
+
+      // ── Performance & multiplayer ──
+      { type: "refactor", text: "VoxelWorld.jsx — nametag tier pipeline, compass hookup, arcade zone wiring, and multiplayer nametag sync cleanup" },
+      { type: "improvement", text: "MultiplayerSync + AIUpdateLoop — cpNametagTier broadcast, PerformanceManager tuning for compass/HUD tick cost" },
+      { type: "improvement", text: "PenguinBuilder — nametag sprite attachment helpers for tier rebuild path" },
+
+      // ── Docs & whitepaper ──
+      { type: "content", text: "Whitepaper page trim — removed duplicate Platform Economics section (canvas diagrams retained in Changelog v1.3.3 entry); nav chapter renumber 07 Team / 08 Roadmap" },
+      { type: "content", text: "waddlebet/docs — DAILY_SPINNER.md added; ECONOMY_README + ECONOMY_ROLLOUT updated for Step 1 follow-ups" },
+
+      // ── Tests ──
+      { type: "backend", text: "Test suite — whaleNametagTiers (tier thresholds, Day 1 gating, resolveNametagStyle), formatCompactNumber, gameHudFocus" },
+    ],
+  },
+  {
     version: "1.3.3",
     date: "June 16, 2026",
     title: "📊 Economy Step 1 — Daily Loop, Gold Scarcity & Trader Overhaul",

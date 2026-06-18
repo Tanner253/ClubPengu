@@ -23,6 +23,32 @@ const CHANGE_TYPES = {
 // ==================== CHANGELOG DATA (1:1 with whitepaper) ====================
 const CHANGELOG = [
     {
+        version: '1.3.4',
+        date: 'June 18, 2026',
+        title: '🧭 Compass, Diamond Flippers & HUD Overhaul',
+        description: 'World compass with quest markers, $CP nametag tiers, unified top HUD, Day 1 sunset, direct forest ferry, arcade aisle, DevBot refactor. 74 files.',
+        highlight: true,
+        stats: { filesChanged: 74, additions: 4353, deletions: 2304 },
+        changes: [
+            { type: 'feature', text: 'HudTopBar + HudSystemMenu — zoned economy strip, action icons, overflow menu; unified desktop/mobile layout' },
+            { type: 'feature', text: 'formatCompactNumber — compact HUD balances (e.g. 6.88M)' },
+            { type: 'fix', text: 'Space/WASD no longer re-fire HUD after click — gameHudFocus blur on game keys' },
+            { type: 'feature', text: 'Diamond Flippers — $CP tiers Bronze→Legendary with tier-colored nametags + particles' },
+            { type: 'backend', text: 'NametagTierService — on-chain $CP balance → cpNametagTier (5 min cache)' },
+            { type: 'fix', text: 'Nametag sprite swap/rebuild fixes — stops disappearing after tier updates' },
+            { type: 'feature', text: 'Day 1 nametag closed for new accounts; grandfather day1NametagUnlocked; Settings hides option' },
+            { type: 'feature', text: 'WorldCompass — PUBG-style heading strip with landmarks + quest markers' },
+            { type: 'feature', text: 'Direct town ↔ forest ferry (3g premium, skips Snow Forts)' },
+            { type: 'improvement', text: 'Ranger Pike sells Basic Axe for 1g at forest trail' },
+            { type: 'feature', text: 'arcadeZone.js — grocery-aisle arcade layout with 7 machines in town' },
+            { type: 'improvement', text: 'CasinoBlackjack polish; DevBotService rewrite + wagerBot spawn' },
+            { type: 'feature', text: 'IglooRentalGuide overhaul — rental tiers, FAQ, mobile portrait' },
+            { type: 'improvement', text: 'buildingBanner raised signage; ProfileMenu tier display' },
+            { type: 'content', text: 'Whitepaper — trimmed duplicate Platform Economics section; chapter renumber' },
+            { type: 'backend', text: '+3 test files — whaleNametagTiers, formatCompactNumber, gameHudFocus' },
+        ],
+    },
+    {
         version: '1.3.3',
         date: 'June 16, 2026',
         title: '📊 Economy Step 1 — Daily Loop, Gold Scarcity & Trader Overhaul',
