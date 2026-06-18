@@ -867,6 +867,10 @@ const VoxelWorld = ({
     const nearbyTravelNpcInteractionRef = useRef(null);
     const [showNpcBackpack, setShowNpcBackpack] = useState(false);
     const [npcBackpackSellMerchant, setNpcBackpackSellMerchant] = useState(null);
+    const showNpcBackpackRef = useRef(false);
+    useEffect(() => {
+        showNpcBackpackRef.current = showNpcBackpack;
+    }, [showNpcBackpack]);
     
     // Bench Sitting State
     const [seatedOnBench, setSeatedOnBench] = useState(null); // { benchId, snapPoint, worldPos }
@@ -7597,6 +7601,65 @@ const VoxelWorld = ({
             setActiveBubble('67!'); // Show locally above own head
         }
     };
+
+    // Tab = backpack toggle, C = sit emote, Z = mount equip/unequip
+    useEffect(() => {
+        const isTypingTarget = (el) => {
+            if (!el) return false;
+            const tag = el.tagName;
+            return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
+        };
+
+        const clearLocalEmote = () => {
+            emoteRef.current.type = null;
+            mpSendEmote(null);
+            if (playerRef.current?.children[0]) {
+                const m = playerRef.current.children[0];
+                m.position.y = 0.8;
+                m.rotation.x = 0;
+                m.rotation.z = 0;
+            }
+        };
+
+        const onKeyDown = (e) => {
+            if (e.repeat) return;
+            if (arcadeGameActiveRef.current) return;
+            if (isTypingTarget(document.activeElement)) return;
+
+            if (e.code === 'Tab') {
+                e.preventDefault();
+                if (showNpcBackpackRef.current) {
+                    setShowNpcBackpack(false);
+                    setNpcBackpackSellMerchant(null);
+                    return;
+                }
+                window.dispatchEvent(new CustomEvent('toggleGameInventory'));
+                return;
+            }
+
+            if (e.code === 'KeyC') {
+                e.preventDefault();
+                if (seatedRef.current) return;
+                if (emoteRef.current?.type === 'Sit') {
+                    clearLocalEmote();
+                } else {
+                    triggerEmote('Sit');
+                }
+                return;
+            }
+
+            if (e.code === 'KeyZ') {
+                e.preventDefault();
+                setGameSettings((prev) => ({
+                    ...prev,
+                    mountEnabled: prev.mountEnabled === false
+                }));
+            }
+        };
+
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [mpSendEmote, setGameSettings]);
     
     // ==================== EMOTE WHEEL - STICKY SELECTION ====================
     // Selection stays on last hovered sector until a DIFFERENT sector is entered

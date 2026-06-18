@@ -70,6 +70,16 @@ const GameHUD = ({ showMinimap = false, showInbox = true, onOpenSettings, isMobi
         window.addEventListener('openTutorial', handleOpenTutorial);
         return () => window.removeEventListener('openTutorial', handleOpenTutorial);
     }, []);
+
+    // Tab hotkey — toggle gameplay backpack (VoxelWorld dispatches this event)
+    useEffect(() => {
+        const handleToggleBackpack = () => {
+            if (!isAuthenticated) return;
+            setShowGameInventory((prev) => !prev);
+        };
+        window.addEventListener('toggleGameInventory', handleToggleBackpack);
+        return () => window.removeEventListener('toggleGameInventory', handleToggleBackpack);
+    }, [isAuthenticated]);
     
     // Detect narrow/portrait mode for responsive layout
     // Now triggers on PC when window is narrow (<768px) OR mobile portrait

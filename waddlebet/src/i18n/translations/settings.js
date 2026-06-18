@@ -152,6 +152,15 @@ export default {
     'settings.ctrlUnstuck': {
         en: 'Unstuck', zh: '脱困', es: 'Desatascar', pt: 'Destravar', ko: '끼임 해제', ja: 'スタック解除', fr: 'Débloquer', de: 'Befreien', ru: 'Застревание', ar: 'فك التعليق',
     },
+    'settings.ctrlBackpack': {
+        en: 'Backpack', zh: '背包', es: 'Mochila', pt: 'Mochila', ko: '배낭', ja: 'バックパック', fr: 'Sac à dos', de: 'Rucksack', ru: 'Рюкзак', ar: 'حقيبة',
+    },
+    'settings.ctrlSit': {
+        en: 'Sit emote', zh: '坐下表情', es: 'Emote sentarse', pt: 'Emote sentar', ko: '앉기 이모트', ja: '座るエモート', fr: 'Emote assis', de: 'Sitzen-Emote', ru: 'Сидеть', ar: 'جلوس',
+    },
+    'settings.ctrlMount': {
+        en: 'Mount toggle', zh: '坐骑开关', es: 'Montura', pt: 'Montaria', ko: '탈것', ja: 'マウント', fr: 'Monture', de: 'Reittier', ru: 'Маунт', ar: 'الركوب',
+    },
     'settings.snowballTitle': {
         en: 'Snowball Throw', zh: '扔雪球', es: 'Lanzar bola de nieve', pt: 'Lançar bola de neve', ko: '눈덩이 던지기', ja: '雪玉を投げる', fr: 'Lancer boule de neige', de: 'Schneeball werfen', ru: 'Бросок снежка', ar: 'رمي كرة الثلج',
     },

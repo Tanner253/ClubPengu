@@ -514,6 +514,18 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                         <span className="text-white/50">{t('settings.ctrlUnstuck')}</span>
                                         <span className="text-white/80 font-mono">/spawn</span>
                                     </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">{t('settings.ctrlBackpack')}</span>
+                                        <span className="text-white/80 font-mono">Tab</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">{t('settings.ctrlSit')}</span>
+                                        <span className="text-white/80 font-mono">C</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-white/50">{t('settings.ctrlMount')}</span>
+                                        <span className="text-white/80 font-mono">Z</span>
+                                    </div>
                                 </div>
                             </div>
                             
