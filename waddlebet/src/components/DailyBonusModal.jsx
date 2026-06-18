@@ -231,8 +231,9 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                         )}
                                     </div>
                                     <p className="text-white/50 text-[10px] sm:text-xs mt-1">
-                                        Today&apos;s reward after 60 min play
-                                        {(status?.rewardAmount || 0) > 0 ? ' · ~$0.002 per 1k $CP at current cap' : ' · gold day, no $CP'}
+                                        {(status?.rewardAmount || 0) > 0
+                                            ? "Today's reward after 60 min play"
+                                            : "Gold bonus day — no $CP payout"}
                                     </p>
                                 </div>
                             </div>
