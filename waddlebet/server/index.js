@@ -787,6 +787,23 @@ async function sendGameInventorySnapshot(playerId, walletAddress, reason = 'unsp
         console.error(`[INVENTORY] snapshot exception player=${playerId} wallet=${walletAddress?.slice(0, 8)}… reason=${reason}:`, err);
     }
 }
+function applyHeldItemFromInventory(player, inventory) {
+    if (!player) return null;
+    if (!inventory) {
+        player.heldHotbarItem = null;
+        return null;
+    }
+    const active = inventory.activeHotbar ?? 0;
+    const entry = inventory.hotbar?.[active];
+    player.heldHotbarItem = entry?.itemId ? {
+        itemId: entry.itemId,
+        category: entry.category,
+        tier: entry.tier ?? entry.metadata?.tier ?? 1,
+        quantity: entry.quantity ?? 1
+    } : null;
+    return player.heldHotbarItem;
+}
+
 async function resolvePlayerHeldItem(player) {
     if (!player?.walletAddress) {
         player.heldHotbarItem = null;
@@ -798,24 +815,21 @@ async function resolvePlayerHeldItem(player) {
             player.heldHotbarItem = null;
             return;
         }
-        const inv = result.inventory;
-        const active = inv.activeHotbar ?? 0;
-        const entry = inv.hotbar?.[active];
-        player.heldHotbarItem = entry?.itemId ? {
-            itemId: entry.itemId,
-            category: entry.category,
-            tier: entry.tier
-        } : null;
+        applyHeldItemFromInventory(player, result.inventory);
     } catch (err) {
         console.warn('resolvePlayerHeldItem failed:', err.message);
         player.heldHotbarItem = null;
     }
 }
 
-async function syncPlayerHeldItem(playerId, { broadcast = true } = {}) {
+async function syncPlayerHeldItem(playerId, { broadcast = true, inventory = null } = {}) {
     const player = players.get(playerId);
     if (!player) return;
-    await resolvePlayerHeldItem(player);
+    if (inventory) {
+        applyHeldItemFromInventory(player, inventory);
+    } else {
+        await resolvePlayerHeldItem(player);
+    }
     if (broadcast && player.room) {
         broadcastToRoom(player.room, {
             type: 'player_held_item',
@@ -6729,6 +6743,7 @@ async function handleMessage(playerId, message) {
                         type: 'game_inventory_snapshot',
                         inventory: result.inventory
                     });
+                    await syncPlayerHeldItem(playerId, { inventory: result.inventory });
                 }
             } catch (error) {
                 console.error('📦 Error in game_inventory_move:', error);
@@ -6801,6 +6816,7 @@ async function handleMessage(playerId, message) {
                     drop: worldDropService.toPublic(drop),
                     inventory: removeResult.inventory
                 });
+                await syncPlayerHeldItem(playerId, { inventory: removeResult.inventory });
             } catch (error) {
                 console.error('📦 Error in world_item_drop:', error);
                 sendToPlayer(playerId, {
@@ -7030,6 +7046,7 @@ async function handleMessage(playerId, message) {
                     quantity: drop.quantity,
                     inventory: addResult.inventory
                 });
+                await syncPlayerHeldItem(playerId, { inventory: addResult.inventory });
             } catch (error) {
                 console.error('📦 Error in world_item_pickup:', error);
                 sendToPlayer(playerId, {
@@ -7050,11 +7067,14 @@ async function handleMessage(playerId, message) {
                 break;
             }
             try {
-                const { hotbarIndex, inventorySlot } = message;
+                const hotbarIndex = Number(message.hotbarIndex);
+                const inventorySlot = message.inventorySlot == null
+                    ? null
+                    : Number(message.inventorySlot);
                 const result = await gameInventoryService.setHotbarSlot(
                     player.walletAddress,
                     hotbarIndex,
-                    inventorySlot ?? null
+                    Number.isFinite(inventorySlot) ? inventorySlot : null
                 );
                 if (result.error) {
                     sendToPlayer(playerId, {
@@ -7067,6 +7087,7 @@ async function handleMessage(playerId, message) {
                         type: 'game_inventory_snapshot',
                         inventory: result.inventory
                     });
+                    await syncPlayerHeldItem(playerId, { inventory: result.inventory });
                 }
             } catch (error) {
                 console.error('🎮 Error in game_inventory_set_hotbar:', error);
@@ -7087,7 +7108,7 @@ async function handleMessage(playerId, message) {
                 break;
             }
             try {
-                const { hotbarIndex } = message;
+                const hotbarIndex = Number(message.hotbarIndex);
                 const result = await gameInventoryService.setActiveHotbar(
                     player.walletAddress,
                     hotbarIndex
@@ -7103,6 +7124,7 @@ async function handleMessage(playerId, message) {
                         type: 'game_inventory_snapshot',
                         inventory: result.inventory
                     });
+                    await syncPlayerHeldItem(playerId, { inventory: result.inventory });
                 }
             } catch (error) {
                 console.error('🎮 Error in game_inventory_set_active_hotbar:', error);

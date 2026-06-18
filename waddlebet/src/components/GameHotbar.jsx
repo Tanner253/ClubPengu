@@ -23,7 +23,7 @@ function isTypingTarget(target) {
     return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
 }
 
-export default function GameHotbar({ className = '', inventoryMode = false }) {
+export default function GameHotbar({ className = '', inventoryMode = false, suppressClickRef = null }) {
     const {
         gameInventory,
         isAuthenticated,
@@ -94,7 +94,10 @@ export default function GameHotbar({ className = '', inventoryMode = false }) {
                         key={index}
                         type="button"
                         data-hotbar-slot={index}
-                        onClick={() => handleSlotClick(index)}
+                        onClick={() => {
+                            if (suppressClickRef?.current) return;
+                            handleSlotClick(index);
+                        }}
                         onContextMenu={(e) => handleClearSlot(e, index)}
                         title={hasItem
                             ? inventoryMode

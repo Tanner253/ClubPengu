@@ -127,6 +127,8 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
     const rows = gameInventory?.rows || GAME_INVENTORY.DISPLAY_ROWS;
     const maxSlots = gameInventory?.maxSlots || GAME_INVENTORY.MAX_SLOTS;
     const unlockedSlots = gameInventory?.unlockedSlots ?? gameInventory?.slotCount ?? GAME_INVENTORY.DEFAULT_SLOTS;
+    const unlockedSlotsRef = useRef(unlockedSlots);
+    unlockedSlotsRef.current = unlockedSlots;
     const storedSlots = gameInventory?.slots || [];
     const storedSlotsRef = useRef(storedSlots);
     storedSlotsRef.current = storedSlots;
@@ -168,17 +170,29 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                 dragMovedRef.current = true;
                 e.preventDefault();
             }
-            const slotUnder = findInventorySlotUnderPoint(e.clientX, e.clientY);
+            const slotUnder = findInventorySlotUnderPoint(e.clientX, e.clientY, {
+                unlockedSlots: unlockedSlotsRef.current
+            });
             if (slotUnder != null) {
                 setHoverSlot(slotUnder);
             }
         };
 
         const resolveDropTarget = (x, y, from) => {
-            const hovered = hoverSlotRef.current;
-            const pointSlot = findInventorySlotUnderPoint(x, y);
-            if (hovered != null && hovered !== from) return hovered;
+            if (findHotbarSlotUnderPoint(x, y) != null) return null;
+            const pointSlot = findInventorySlotUnderPoint(x, y, {
+                unlockedSlots: unlockedSlotsRef.current
+            });
             if (pointSlot != null && pointSlot !== from) return pointSlot;
+            const hovered = hoverSlotRef.current;
+            if (
+                hovered != null
+                && hovered !== from
+                && hovered >= 0
+                && hovered < unlockedSlotsRef.current
+            ) {
+                return hovered;
+            }
             return null;
         };
 
@@ -217,14 +231,16 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                 ? (draggedSlot?.quantity || 1)
                 : 1;
 
-            if (from !== null && to !== null && didDrag) {
+            if (from !== null && hotbarIndex != null && isHotbarItem(draggedSlot)) {
+                await setGameHotbarSlot?.(hotbarIndex, from);
+                suppressClickRef.current = true;
+                window.setTimeout(() => { suppressClickRef.current = false; }, 120);
+                if (!dragMovedRef.current) setSelectedSlot(from);
+            } else if (from !== null && to !== null && didDrag) {
                 moveGameInventorySlot?.(from, to);
                 setSelectedSlot(to);
             } else if (from !== null && droppedOnSellTray && isSellableSlot(from)) {
                 addToSellSelection(from);
-            } else if (from !== null && hotbarIndex != null && isHotbarItem(draggedSlot)) {
-                await setGameHotbarSlot?.(hotbarIndex, from);
-                if (!dragMovedRef.current) setSelectedSlot(from);
             } else if (from !== null && droppedInWorld && slotHasItem(draggedSlot) && isAuthenticated) {
                 dropSlotToWorld(from, dropQty);
             } else if (from !== null && !didDrag) {
@@ -366,12 +382,24 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                 clearTimeout(longPressTimerRef.current);
                 longPressTimerRef.current = null;
             }
-            const slotUnder = findInventorySlotUnderPoint(e.clientX, e.clientY);
+            const slotUnder = findInventorySlotUnderPoint(e.clientX, e.clientY, {
+                unlockedSlots: unlockedSlotsRef.current
+            });
             if (slotUnder != null) {
                 setHoverSlot(slotUnder);
             }
         }
     }, []);
+
+    const handleEquipSelectedToHotbar = useCallback(async () => {
+        if (selectedSlot == null || selectedSlot >= unlockedSlots) return;
+        const slot = storedSlotsRef.current[selectedSlot];
+        if (!slotHasItem(slot)) return;
+        const hotbar = gameInventory?.hotbar || [];
+        const emptyIndex = hotbar.findIndex((e) => !e?.itemId || Number(e.quantity) <= 0);
+        const target = emptyIndex >= 0 ? emptyIndex : (gameInventory?.activeHotbar ?? 0);
+        await setGameHotbarSlot?.(target, selectedSlot);
+    }, [selectedSlot, unlockedSlots, gameInventory?.hotbar, gameInventory?.activeHotbar, setGameHotbarSlot]);
 
     const handleSell = useCallback(async (quantity = 1) => {
         if (!canSell || selectedSlot == null || selling) return;
@@ -463,6 +491,7 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                         key={index}
                         type="button"
                         data-inventory-slot={index}
+                        data-inventory-locked={locked ? 'true' : 'false'}
                         disabled={locked}
                         onPointerDown={(e) => handlePointerDown(e, index, hasItem, locked)}
                         onClick={(e) => handleSlotClick(e, index, hasItem, locked)}
@@ -689,8 +718,8 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                         {!canSell && (
                         <p className="text-gray-500 text-[10px] mt-2 text-center">
                             {isMobileLayout
-                                ? 'Drag between slots · Long-press for full stack · Release in drop zone to place in world'
-                                : 'Drag items between slots · Drag to drop zone above to place in world'}
+                                ? 'Drag between slots · Drag to hotbar to equip · Long-press for full stack'
+                                : 'Drag items between slots · Drag to hotbar to equip · Drop zone above for world drop'}
                         </p>
                         )}
                     </div>
@@ -703,7 +732,16 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                     <p className="text-[10px] text-center text-gray-400 mb-2 uppercase tracking-wide">
                         Hand hotbar · {isMobileLayout ? 'tap equipped item to unequip' : 'right-click equipped item to unequip'}
                     </p>
-                    <GameHotbar className="justify-center" inventoryMode />
+                    <GameHotbar className="justify-center" inventoryMode suppressClickRef={suppressClickRef} />
+                </div>
+                )}
+
+                {canSell && isAuthenticated && (
+                <div className="px-4 py-2 border-t border-cyan-500/20 bg-black/40 shrink-0" data-inventory-no-drop="true">
+                    <p className="text-[10px] text-center text-gray-400 mb-2 uppercase tracking-wide">
+                        Hand hotbar · drag items here to equip
+                    </p>
+                    <GameHotbar className="justify-center" inventoryMode suppressClickRef={suppressClickRef} />
                 </div>
                 )}
 
@@ -787,6 +825,16 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                                 </div>
                             )}
 
+                            {!canSell && slotHasItem(selected) && (
+                                <button
+                                    type="button"
+                                    onClick={handleEquipSelectedToHotbar}
+                                    className="w-full mt-3 bg-cyan-800/70 hover:bg-cyan-700/80 border border-cyan-400/40 text-cyan-100 px-3 py-2 rounded-lg text-xs font-bold retro-text"
+                                >
+                                    Equip to hand (hotbar)
+                                </button>
+                            )}
+
                             {!canSell && selected.category === 'wood' && selected.npcValue > 0 && (
                                 <p className="mt-3 text-center text-xs text-orange-200/80 bg-orange-950/30 border border-orange-500/20 rounded-lg px-2 py-1.5">
                                     Walk to <span className="font-bold text-orange-300">Copper Clive</span> or{' '}
@@ -807,8 +855,8 @@ export default function GameInventoryModal({ isOpen, onClose, sellMerchantId = n
                                     ? 'Tap a stack to inspect · Long-press to queue for sale'
                                     : 'Click a stack to inspect · Shift+click to queue for sale')
                                 : (isMobileLayout
-                                    ? 'Tap a stack to inspect · Long-press stack then drag to move/drop all'
-                                    : 'Click a stack to inspect · Shift+click to drop stack · Drag between slots · Drag to drop zone for 1 (Shift for full stack)')}
+                                    ? 'Tap a stack to inspect · Drag to hotbar below to equip'
+                                    : 'Click a stack to inspect · Drag to hotbar to equip · Shift+click to drop stack')}
                         </p>
                     )}
                     {dropFeedback && (

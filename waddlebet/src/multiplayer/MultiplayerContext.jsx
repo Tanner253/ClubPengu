@@ -1397,6 +1397,7 @@ export function MultiplayerProvider({ children }) {
                 if (heldPlayer) {
                     heldPlayer.heldHotbarItem = message.heldHotbarItem || null;
                     heldPlayer.needsHeldItemUpdate = true;
+                    setPlayerList((prev) => (prev.includes(message.playerId) ? [...prev] : prev));
                 }
                 break;
             }
@@ -3060,8 +3061,10 @@ export function MultiplayerProvider({ children }) {
 
     const setActiveHotbarSlot = useCallback((hotbarIndex) => {
         if (!connected || !isAuthenticated) return;
-        setGameInventory(prev => prev ? { ...prev, activeHotbar: hotbarIndex } : prev);
-        send({ type: 'game_inventory_set_active_hotbar', hotbarIndex });
+        const index = Number(hotbarIndex);
+        if (!Number.isFinite(index)) return;
+        setGameInventory(prev => prev ? { ...prev, activeHotbar: index } : prev);
+        send({ type: 'game_inventory_set_active_hotbar', hotbarIndex: index });
     }, [connected, isAuthenticated, send]);
 
     const fetchForestTrees = useCallback(() => {

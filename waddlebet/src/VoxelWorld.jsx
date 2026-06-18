@@ -109,7 +109,9 @@ import GameInventoryModal from './components/GameInventoryModal';
 function syncRemotePlayerHeldItem(meshData, playerData, buildPartMerged) {
     if (!meshData?.mesh || !buildPartMerged) return;
     const entry = playerData?.heldHotbarItem;
-    const key = entry?.itemId ? `${entry.itemId}:${entry.tier || 0}` : '';
+    const key = entry?.itemId
+        ? `${entry.itemId}:${entry.category || ''}:${entry.tier || 0}`
+        : 'empty';
     if (meshData.lastHeldItemKey === key && !playerData.needsHeldItemUpdate) return;
     meshData.lastHeldItemKey = key;
     playerData.needsHeldItemUpdate = false;

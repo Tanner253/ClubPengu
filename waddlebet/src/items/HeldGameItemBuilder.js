@@ -323,6 +323,75 @@ function buildGoldBagVoxels(amount = 1) {
     return voxels;
 }
 
+function inferItemCategory(itemId) {
+    if (!itemId) return 'unknown';
+    if (itemId === 'gold_bag') return 'gold';
+    if (itemId === 'forest_mushroom') return 'forage';
+    if (itemId === 'worm') return 'bait';
+    if (itemId.endsWith('_log')) return 'wood';
+    if (itemId.endsWith('_axe')) return 'tool';
+    if (itemId.endsWith('_rod')) return 'rod';
+    if (itemId.startsWith('ferry_ticket')) return 'ticket';
+    if (itemId.includes('coin')) return 'currency';
+    return 'fish';
+}
+
+function resolveHeldEntry(entry) {
+    if (!entry?.itemId) return null;
+    return {
+        itemId: entry.itemId,
+        category: entry.category || entry.metadata?.category || inferItemCategory(entry.itemId),
+        tier: entry.tier ?? entry.metadata?.tier ?? 1,
+        quantity: entry.quantity ?? entry.metadata?.quantity ?? 1
+    };
+}
+
+function buildIsopodVoxels() {
+    const shell = '#8d6e63';
+    const shellLight = '#a1887f';
+    const leg = '#5d4037';
+    const voxels = [];
+    for (let x = -2; x <= 2; x++) {
+        for (let z = -1; z <= 2; z++) {
+            if (Math.abs(x) + Math.abs(z - 0.5) <= 3) {
+                voxels.push({ x, y: 0, z, c: (x + z) % 2 === 0 ? shell : shellLight });
+            }
+        }
+    }
+    for (let i = 0; i < 6; i++) {
+        const side = i < 3 ? -2 : 2;
+        voxels.push({ x: side, y: -1, z: (i % 3) - 1, c: leg });
+    }
+    return voxels;
+}
+
+function buildRayVoxels(tier = 4) {
+    const colors = FISH_TIER_PALETTES[Math.min(10, Math.max(1, tier))] || FISH_TIER_PALETTES[4];
+    const voxels = [];
+    for (let x = -3; x <= 1; x++) {
+        for (let z = -2; z <= 2; z++) {
+            if (Math.abs(z) <= 3 - Math.abs(x) * 0.5) {
+                voxels.push({ x, y: 0, z, c: colors.body });
+            }
+        }
+    }
+    voxels.push({ x: -3, y: 0, z: 0, c: colors.accent });
+    return voxels;
+}
+
+function buildWhaleVoxels(tier = 10) {
+    const colors = FISH_TIER_PALETTES[Math.min(10, Math.max(1, tier))] || FISH_TIER_PALETTES[10];
+    const voxels = [];
+    for (let x = -3; x <= 3; x++) {
+        for (let y = -1; y <= 1; y++) {
+            if (Math.abs(x) + Math.abs(y) < 5) voxels.push({ x, y, z: 0, c: colors.body });
+        }
+    }
+    voxels.push({ x: 4, y: 0, z: 0, c: colors.fin });
+    voxels.push({ x: -4, y: 0, z: 0, c: colors.accent });
+    return voxels;
+}
+
 function buildGenericVoxels(category = 'unknown') {
     const color = category === 'bait' ? '#c0392b' : '#78909c';
     const voxels = [];
@@ -337,8 +406,9 @@ function buildGenericVoxels(category = 'unknown') {
 }
 
 export function getHeldItemVoxels(entry) {
-    if (!entry?.itemId) return null;
-    const { itemId, category, tier, quantity } = entry;
+    const resolved = resolveHeldEntry(entry);
+    if (!resolved) return null;
+    const { itemId, category, tier, quantity } = resolved;
 
     if (itemId === 'gold_bag' || category === 'gold') {
         return buildGoldBagVoxels(quantity ?? tier ?? 1);
@@ -354,13 +424,19 @@ export function getHeldItemVoxels(entry) {
     if (itemId === 'giant_crab') return buildCrabVoxels();
     if (itemId.includes('squid') || itemId === 'kraken') return buildSquidVoxels(tier || 6);
     if (itemId === 'sea_turtle') return buildTurtleVoxels();
-    if (itemId.includes('shark') || itemId === 'manta_ray') return buildSharkVoxels(tier || 4);
-    if (itemId.includes('eel') || itemId === 'sea_serpent') return buildEelVoxels(tier || 5);
-    if (category === 'fish' || itemId.includes('fish')) {
-        return buildFishVoxels(tier || 1);
+    if (itemId === 'giant_isopod') return buildIsopodVoxels();
+    if (itemId === 'manta_ray') return buildRayVoxels(tier || 4);
+    if (itemId === 'leviathan') return buildWhaleVoxels(tier || 10);
+    if (itemId.includes('shark') || itemId === 'frilled_shark' || itemId === 'ghost_shark') {
+        return buildSharkVoxels(tier || 4);
     }
+    if (itemId.includes('eel') || itemId === 'sea_serpent') return buildEelVoxels(tier || 5);
     if (category === 'wood' || itemId.endsWith('_log')) return buildLogVoxels(tier || 1);
     if (itemId.includes('coin')) return buildCoinStackVoxels();
+    if (category === 'fish') return buildFishVoxels(tier || 1);
+    if (itemId.includes('fish') || itemId.includes('marlin') || itemId.includes('tuna')) {
+        return buildFishVoxels(tier || 1);
+    }
 
     return buildGenericVoxels(category);
 }
@@ -384,9 +460,10 @@ export function removeHeldGameItem(penguinWrapper) {
 export function updateHeldGameItem(penguinWrapper, buildPartMerged, entry) {
     if (!penguinWrapper || !buildPartMerged) return false;
     removeHeldGameItem(penguinWrapper);
-    if (!entry?.itemId) return false;
+    const resolved = resolveHeldEntry(entry);
+    if (!resolved?.itemId) return false;
 
-    const voxels = getHeldItemVoxels(entry);
+    const voxels = getHeldItemVoxels(resolved);
     if (!voxels?.length) return false;
 
     const flipperR = findHeldFlipper(penguinWrapper);

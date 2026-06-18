@@ -88,24 +88,27 @@ class GameInventoryService {
 
     getUnlockedSlots(user) {
         const gi = user?.gameInventory;
-        if (gi?.unlockedSlots != null && gi.unlockedSlots > 0) {
-            return Math.min(Math.max(GI.DEFAULT_SLOTS, gi.unlockedSlots), GI.MAX_SLOTS);
-        }
-
         const rawSlots = Array.isArray(gi?.slots) ? gi.slots : [];
         const highestUsed = rawSlots.reduce((max, s, i) => (
             slotHasItem(s) ? Math.max(max, i + 1) : max
         ), 0);
-        const legacyCount = (gi?.rows || GI.DISPLAY_ROWS) * (gi?.columns || GI.COLUMNS);
-        const hasItems = highestUsed > 0;
 
-        if (hasItems) {
-            return Math.min(Math.max(highestUsed, GI.DEFAULT_SLOTS), GI.MAX_SLOTS);
+        let unlocked = GI.DEFAULT_SLOTS;
+        if (gi?.unlockedSlots != null && gi.unlockedSlots > 0) {
+            unlocked = Math.max(GI.DEFAULT_SLOTS, gi.unlockedSlots);
+        } else {
+            const legacyCount = (gi?.rows || GI.DISPLAY_ROWS) * (gi?.columns || GI.COLUMNS);
+            if (highestUsed > 0) {
+                unlocked = Math.max(highestUsed, GI.DEFAULT_SLOTS);
+            } else if (legacyCount >= GI.MAX_SLOTS) {
+                unlocked = GI.DEFAULT_SLOTS;
+            }
         }
-        if (legacyCount >= GI.MAX_SLOTS) {
-            return GI.DEFAULT_SLOTS;
+
+        if (highestUsed > unlocked) {
+            unlocked = highestUsed;
         }
-        return GI.DEFAULT_SLOTS;
+        return Math.min(unlocked, GI.MAX_SLOTS);
     }
 
     buildDefaultSlots(slotCount) {
@@ -117,11 +120,15 @@ class GameInventoryService {
     }
     normalizeHotbar(rawHotbar) {
         const size = ECONOMY.HOTBAR?.SIZE || 5;
-        const hotbar = Array.isArray(rawHotbar) ? rawHotbar.map(ref => (
-            ref && typeof ref.inventorySlot === 'number'
-                ? { inventorySlot: ref.inventorySlot }
-                : null
-        )) : [];
+        const hotbar = Array.isArray(rawHotbar) ? rawHotbar.map(ref => {
+            if (!ref) return null;
+            const idx = ref.inventorySlot;
+            const slotIndex = typeof idx === 'number'
+                ? idx
+                : (typeof idx === 'string' && idx !== '' ? Number(idx) : NaN);
+            if (!Number.isFinite(slotIndex) || slotIndex < 0) return null;
+            return { inventorySlot: slotIndex };
+        }) : [];
         while (hotbar.length < size) hotbar.push(null);
         return hotbar.slice(0, size);
     }
@@ -237,23 +244,28 @@ class GameInventoryService {
         const user = await this.ensureInventory(walletAddress);
         if (!user) return { error: 'USER_NOT_FOUND' };
         const hotbarSize = ECONOMY.HOTBAR?.SIZE || 5;
-        if (hotbarIndex < 0 || hotbarIndex >= hotbarSize) {
-            return { error: 'INVALID_HOTBAR' };
+        const hbIndex = Number(hotbarIndex);
+        if (!Number.isFinite(hbIndex) || hbIndex < 0 || hbIndex >= hotbarSize) {
+            return { error: 'INVALID_HOTBAR', message: 'Invalid hotbar slot (use 1–5)' };
         }
         const unlockedSlots = this.getUnlockedSlots(user);
         const slots = normalizeSlots(user.gameInventory?.slots, unlockedSlots);
         const hotbar = this.normalizeHotbar(user.gameInventory?.hotbar);
         if (inventorySlotIndex == null) {
-            hotbar[hotbarIndex] = null;
+            hotbar[hbIndex] = null;
         } else {
-            if (inventorySlotIndex < 0 || inventorySlotIndex >= unlockedSlots) {
-                return { error: 'INVALID_SLOT' };
+            const invIndex = Number(inventorySlotIndex);
+            if (!Number.isFinite(invIndex) || invIndex < 0 || invIndex >= unlockedSlots) {
+                return {
+                    error: 'INVALID_SLOT',
+                    message: `That backpack slot is locked or invalid (unlocked: 0–${unlockedSlots - 1})`
+                };
             }
-            const slot = slots[inventorySlotIndex];
+            const slot = slots[invIndex];
             if (!slotHasItem(slot)) {
                 return { error: 'EMPTY_SLOT', message: 'That backpack slot is empty' };
             }
-            hotbar[hotbarIndex] = { inventorySlot: inventorySlotIndex };
+            hotbar[hbIndex] = { inventorySlot: invIndex };
         }
         this.sanitizeHotbar(slots, hotbar);
         const updated = await this.persistUserInventory(walletAddress, slots, null, {
@@ -266,7 +278,7 @@ class GameInventoryService {
         const user = await this.ensureInventory(walletAddress);
         if (!user) return { error: 'USER_NOT_FOUND' };
         const hotbarSize = ECONOMY.HOTBAR?.SIZE || 5;
-        const clamped = Math.min(Math.max(0, hotbarIndex), hotbarSize - 1);
+        const clamped = Math.min(Math.max(0, Number(hotbarIndex) || 0), hotbarSize - 1);
         const updated = await User.findOneAndUpdate(
             { walletAddress },
             { $set: { 'gameInventory.activeHotbar': clamped } },
@@ -737,10 +749,17 @@ class GameInventoryService {
         }
 
         const takeQty = Math.min(Math.max(1, quantity), slot.quantity);
+        const def = getGameItem(slot.itemId);
         const removed = {
             itemId: slot.itemId,
             quantity: takeQty,
-            metadata: { ...slot.metadata }
+            metadata: {
+                ...slot.metadata,
+                category: slot.metadata?.category || def?.category || null,
+                tier: slot.metadata?.tier ?? def?.tier ?? null,
+                name: slot.metadata?.name || def?.name || slot.itemId,
+                emoji: slot.metadata?.emoji || def?.emoji || null
+            }
         };
 
         slot.quantity -= takeQty;

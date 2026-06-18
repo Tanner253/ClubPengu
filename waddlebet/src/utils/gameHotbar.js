@@ -63,22 +63,31 @@ export function ownsAnyAxe(gameInventory) {
 }
 
 export function findHotbarSlotUnderPoint(clientX, clientY) {
-    const el = document.elementFromPoint(clientX, clientY);
-    const slotEl = el?.closest?.('[data-hotbar-slot]');
-    if (!slotEl) return null;
-    const index = Number(slotEl.dataset.hotbarSlot);
-    return Number.isFinite(index) ? index : null;
+    const elements = typeof document.elementsFromPoint === 'function'
+        ? document.elementsFromPoint(clientX, clientY)
+        : [document.elementFromPoint(clientX, clientY)].filter(Boolean);
+    for (const el of elements) {
+        const slotEl = el?.closest?.('[data-hotbar-slot]');
+        if (!slotEl) continue;
+        const index = Number(slotEl.dataset.hotbarSlot);
+        if (Number.isFinite(index) && index >= 0 && index < HOTBAR_SIZE) return index;
+    }
+    return null;
 }
 
-export function findInventorySlotUnderPoint(clientX, clientY) {
+export function findInventorySlotUnderPoint(clientX, clientY, { unlockedSlots = null } = {}) {
     const elements = typeof document.elementsFromPoint === 'function'
         ? document.elementsFromPoint(clientX, clientY)
         : [document.elementFromPoint(clientX, clientY)].filter(Boolean);
     for (const el of elements) {
         const slotEl = el?.closest?.('[data-inventory-slot]');
         if (!slotEl) continue;
+        if (slotEl.disabled || slotEl.getAttribute('aria-disabled') === 'true') continue;
+        if (slotEl.dataset.inventoryLocked === 'true') continue;
         const index = Number(slotEl.dataset.inventorySlot);
-        if (Number.isFinite(index)) return index;
+        if (!Number.isFinite(index)) continue;
+        if (unlockedSlots != null && (index < 0 || index >= unlockedSlots)) continue;
+        return index;
     }
     return null;
 }

@@ -383,4 +383,32 @@ describe('GameInventoryService', () => {
         expect(result.grantsRodId).toBe('iron_rod');
         expect(result.goldSpent).toBe(0);
     });
+
+    it('setHotbarSlot equips backpack slot to hand bar', async () => {
+        const wallet = 'TestWallet8888888888888888888888888888888888';
+        const slots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
+        slots[2] = { itemId: 'pine_log', quantity: 4, metadata: { category: 'wood' } };
+        const user = makeUser(slots, 5);
+
+        mockGetUser.mockResolvedValue(user);
+        mockFindOneAndUpdate.mockImplementation(async () => {
+            const saved = makeUser(slots, 5);
+            saved.gameInventory.hotbar[1] = { inventorySlot: 2 };
+            return saved;
+        });
+
+        const result = await service.setHotbarSlot(wallet, 1, 2);
+        expect(result.success).toBe(true);
+        expect(result.inventory.hotbar[1]?.itemId).toBe('pine_log');
+        expect(result.inventory.hotbar[1]?.inventorySlot).toBe(2);
+    });
+
+    it('setHotbarSlot rejects locked backpack slot index', async () => {
+        const wallet = 'TestWallet9999999999999999999999999999999999';
+        const slots = Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }));
+        mockGetUser.mockResolvedValue(makeUser(slots, 5));
+
+        const result = await service.setHotbarSlot(wallet, 0, 8);
+        expect(result.error).toBe('INVALID_SLOT');
+    });
 });
