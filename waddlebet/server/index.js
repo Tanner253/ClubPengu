@@ -2065,6 +2065,8 @@ async function handleMessage(playerId, message) {
                 npcDailyOrderService.sendStatusToPlayer(playerId, walletAddress)
                     .catch((err) => console.error('[DailyQuest] auth status:', err));
 
+                await dailyBonusService.startSession(walletAddress);
+
                 dailyBonusService.getStatus(walletAddress)
                     .then((bonusStatus) => {
                         sendToPlayer(playerId, { type: 'daily_bonus_status', ...bonusStatus });
@@ -2076,9 +2078,6 @@ async function handleMessage(playerId, message) {
                 }
                 
                 console.log(`🔐 ${authResult.user.username} authenticated (${walletAddress.slice(0, 8)}...)${authResult.referralApplied ? ' [REFERRED]' : ''}`);
-                
-                // Start daily bonus session tracking
-                dailyBonusService.startSession(walletAddress);
                 
                 // Sync NFT ownership in background (non-blocking)
                 // This ensures cosmetics are synced if user bought/sold NFTs on external marketplaces
@@ -2405,6 +2404,8 @@ async function handleMessage(playerId, message) {
                 npcDailyOrderService.sendStatusToPlayer(playerId, walletAddress)
                     .catch((err) => console.error('[DailyQuest] restore status:', err));
 
+                await dailyBonusService.startSession(walletAddress);
+
                 dailyBonusService.getStatus(walletAddress)
                     .then((bonusStatus) => {
                         sendToPlayer(playerId, { type: 'daily_bonus_status', ...bonusStatus });
@@ -2416,9 +2417,6 @@ async function handleMessage(playerId, message) {
                 }
                 
                 console.log(`[${ts()}] 🔄 Session restored: ${user.username} (${walletAddress.slice(0, 8)}...)`);
-                
-                // Start daily bonus session tracking
-                dailyBonusService.startSession(walletAddress);
             } catch (error) {
                 console.error('Session restore error:', error);
                 sendToPlayer(playerId, {
@@ -2819,19 +2817,16 @@ async function handleMessage(playerId, message) {
                 player.pufflePosition = message.pufflePosition;
             }
             
-            // Clear AFK on movement
-            const horizontalMove = posChanged && (
-                Math.abs(player.position.x - (message.position?.x || 0)) > 0.01 ||
-                Math.abs(player.position.z - (message.position?.z || 0)) > 0.01
-            );
-            if (horizontalMove && player.isAfk) {
+            // Clear AFK on movement (posChanged computed before position assignment)
+            if (posChanged && player.isAfk) {
                 player.isAfk = false;
                 player.afkMessage = null;
                 if (player.room) {
                     broadcastToRoomAll(player.room, {
                         type: 'player_afk',
                         playerId,
-                        isAfk: false
+                        isAfk: false,
+                        afkMessage: null
                     });
                 }
             }
@@ -3117,7 +3112,8 @@ async function handleMessage(playerId, message) {
                         broadcastToRoomAll(player.room, {
                             type: 'player_afk',
                             playerId,
-                            isAfk: false
+                            isAfk: false,
+                            afkMessage: null
                         });
                     }
 
@@ -3244,6 +3240,20 @@ async function handleMessage(playerId, message) {
                 name: player.name,
                 isAfk: true,
                 afkMessage: player.afkMessage
+            });
+            break;
+        }
+
+        case 'afk_clear': {
+            if (!player.room || !player.isAfk) break;
+            player.isAfk = false;
+            player.afkMessage = null;
+            broadcastToRoomAll(player.room, {
+                type: 'player_afk',
+                playerId,
+                name: player.name,
+                isAfk: false,
+                afkMessage: null
             });
             break;
         }

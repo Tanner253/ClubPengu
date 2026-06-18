@@ -89,7 +89,7 @@ export function MultiplayerProvider({ children }) {
     const mobileChatOpenRef = useRef(false);
     /** True when VoxelWorld has a fullscreen overlay (casino blackjack, arcade, fishing) */
     const [worldGameplayOverlay, setWorldGameplayOverlay] = useState(false);
-    const chatBubbleCallbackRef = useRef(null);
+    const chatBubbleCallbacksRef = useRef(new Set());
 
     useEffect(() => {
         activeChatTabRef.current = activeChatTab;
@@ -155,15 +155,23 @@ export function MultiplayerProvider({ children }) {
             if (chattingPlayer) {
                 chattingPlayer.chatMessage = message.text;
                 chattingPlayer.chatTime = Date.now();
+                chattingPlayer.isAfkBubble = false;
             }
             callbacksRef.current.onChatMessage?.(normalized);
-            chatBubbleCallbackRef.current?.({
+            const bubblePayload = {
                 senderName: normalized.name,
                 text: normalized.text,
                 playerId: message.playerId,
                 id: normalized.id,
                 isSystem: normalized.isSystem
-            });
+            };
+            for (const cb of chatBubbleCallbacksRef.current) {
+                try {
+                    cb(bubblePayload);
+                } catch (err) {
+                    console.warn('chat bubble callback error:', err);
+                }
+            }
         }
     }, [maybeMarkChatTabUnread]);
 
@@ -2329,20 +2337,18 @@ export function MultiplayerProvider({ children }) {
                 if (afkPlayer) {
                     afkPlayer.isAfk = message.isAfk;
                     afkPlayer.afkMessage = message.afkMessage || null;
-                    
+
                     if (message.isAfk) {
                         afkPlayer.chatMessage = message.afkMessage;
                         afkPlayer.chatTime = Date.now();
                         afkPlayer.isAfkBubble = true;
                     } else {
-                        if (afkPlayer.isAfkBubble) {
-                            afkPlayer.chatMessage = null;
-                            afkPlayer.chatTime = null;
-                            afkPlayer.isAfkBubble = false;
-                        }
+                        afkPlayer.chatMessage = null;
+                        afkPlayer.chatTime = null;
+                        afkPlayer.isAfkBubble = false;
                     }
                 }
-                
+
                 console.log(`${message.isAfk ? '💤' : '👋'} ${message.name || message.playerId} is ${message.isAfk ? 'now AFK' : 'back'}`);
                 break;
             }
@@ -2623,12 +2629,14 @@ export function MultiplayerProvider({ children }) {
         send({ type: 'afk', message });
     }, [send]);
 
+    const sendClearAfk = useCallback(() => {
+        send({ type: 'afk_clear' });
+    }, [send]);
+
     const registerChatBubbleCallback = useCallback((callback) => {
-        chatBubbleCallbackRef.current = callback;
+        chatBubbleCallbacksRef.current.add(callback);
         return () => {
-            if (chatBubbleCallbackRef.current === callback) {
-                chatBubbleCallbackRef.current = null;
-            }
+            chatBubbleCallbacksRef.current.delete(callback);
         };
     }, []);
     
@@ -3664,6 +3672,7 @@ export function MultiplayerProvider({ children }) {
         sendPosition,
         sendChat,
         sendAfk,
+        sendClearAfk,
         sendEmoteBubble,
         sendEmote,
         stopEmote,
@@ -3715,7 +3724,7 @@ export function MultiplayerProvider({ children }) {
         gameInventory, backpackError, fetchGameInventory, moveGameInventorySlot, setGameHotbarSlot, setActiveHotbarSlot, fetchForestTrees, forestTrees, fetchFishingHoles, fishingHoles, fetchMushrooms, mushroomClusters, fetchWorldDrops, worldDrops, dropWorldItem, dropWorldGold, pickupWorldDrop, harvestMushroom, forageLogWorms, wormForageCooldowns, fetchWormForageStatus, scavengeSpot, onboardingQuest, turnInMushroomQuest, sellAtMerchant, sellBatchAtMerchant, sellFishAtNpc, buyFromMerchant, claimStarterRod, upgradeBackpack, startWoodChop, completeWoodChop, cancelWoodChop, startManualChop, sendManualChopHit, completeManualChop, cancelManualChop,
         roomTravelVoyages, myTravelVoyage, travelPending, fetchTravelState, bookTravel, leaveTravel,
         adoptPuffle, puffleAdopting,
-        setName, joinRoom, sendPosition, sendChat, sendAfk, sendEmoteBubble, sendEmote, stopEmote,
+        setName, joinRoom, sendPosition, sendChat, sendAfk, sendClearAfk, sendEmoteBubble, sendEmote, stopEmote,
         markChatTabRead, registerChatBubbleCallback, addLocalChatMessage,
         changeRoom, updateAppearance, updatePuffle, sendPuffleEmote, syncPuffleState,
         equipPuffleAccessory, unequipPuffleAccessory, equipPuffleToy,

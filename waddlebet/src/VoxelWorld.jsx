@@ -358,6 +358,7 @@ const VoxelWorld = ({
         joinRoom: mpJoinRoom,
         sendPosition,
         sendChat: mpSendChat,
+        sendClearAfk: mpSendClearAfk,
         sendEmoteBubble: mpSendEmoteBubble,
         sendEmote: mpSendEmote,
         changeRoom: mpChangeRoom,
@@ -3459,6 +3460,7 @@ const VoxelWorld = ({
             if (anyMovementInput && isAfkRef.current) {
                 isAfkRef.current = false;
                 afkMessageRef.current = null;
+                mpSendClearAfk?.();
                 // Remove the AFK bubble
                 if (playerRef.current && bubbleSpriteRef.current) {
                     playerRef.current.remove(bubbleSpriteRef.current);
@@ -6801,6 +6803,7 @@ const VoxelWorld = ({
                     meshData.mesh.remove(meshData.bubble);
                     meshData.bubble = null;
                     meshData.lastChatMessage = null;
+                    playerData.isAfkBubble = false;
                 }
             }
             

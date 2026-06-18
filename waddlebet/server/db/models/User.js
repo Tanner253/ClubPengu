@@ -376,8 +376,10 @@ const userSchema = new mongoose.Schema({
         totalWaddleEarned: { type: Number, default: 0 },     // Total $CP earned from daily bonus (legacy field name)
         claimNonce: { type: String, default: null },         // Last claim ID for anti-replay
         processedClaimNonces: { type: [String], default: [] }, // Client nonces used for completed claims
-        currentSessionMinutes: { type: Number, default: 0 }, // Session time tracking
-        sessionStartTime: { type: Date, default: null },      // Current session start
+        currentSessionMinutes: { type: Number, default: 0 }, // Play minutes accrued in current 24h progress window
+        sessionStartTime: { type: Date, default: null },      // Current online segment start (legacy / debug)
+        /** When the current daily playtime window began (first login after claim cooldown). */
+        progressWindowStartedAt: { type: Date, default: null },
         /** Next streak tier to claim (1–7). Resets to 1 if a UTC day is missed. */
         streakDay: { type: Number, default: 1 },
         /** UTC YYYY-MM-DD of last streak reward claim. */

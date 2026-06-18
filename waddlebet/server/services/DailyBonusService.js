@@ -1,11 +1,12 @@
 /**
  * DailyBonusService - Daily login bonus with $CP token rewards
- * 
+ *
  * REQUIREMENTS:
- * 1. User must spend 1 hour on server to be eligible
- * 2. Can claim once every 24 hours
- * 3. Claims $CP from custodial wallet
- * 4. Protections against replay attacks and double claims
+ * 1. User must accrue required play minutes within a per-user 24h window
+ * 2. Playtime persists across logout/reconnect during that window
+ * 3. Can claim once every 24 hours (rolling from last claim)
+ * 4. Claims $CP from custodial wallet
+ * 5. Protections against replay attacks and double claims
  */
 
 import { User, Transaction } from '../db/models/index.js';
@@ -30,6 +31,7 @@ const CONFIG = {
     // Time requirements
     REQUIRED_SESSION_MINUTES: 60,           // 1 hour of play time required
     COOLDOWN_HOURS: 24,                     // 24 hour cooldown between claims
+    PROGRESS_WINDOW_MS: 24 * 60 * 60 * 1000, // Per-user window to finish daily playtime
     
     // Legacy max reference (day 5–7 rewards)
     MAX_REWARD_CP: 5000,
@@ -64,6 +66,8 @@ class DailyBonusService {
         this.userService = null;
         // Clean up old nonces periodically
         setInterval(() => this._cleanupNonces(), 60 * 1000);
+        // Persist in-progress playtime so disconnects do not lose progress
+        setInterval(() => this._flushActiveSessions(), 60 * 1000);
         console.log('🎁 DailyBonusService initialized');
     }
 
@@ -96,124 +100,229 @@ class DailyBonusService {
             nextDayAfterClaim: claimDay >= STREAK_LENGTH ? 1 : claimDay + 1,
         };
     }
-    
+
+    _getWindowMs() {
+        return CONFIG.PROGRESS_WINDOW_MS;
+    }
+
     /**
-     * Start tracking session time for a player
-     * Called when player authenticates
+     * Resolve per-user daily playtime window (rolling 24h from first login after cooldown).
+     * @private
+     */
+    _resolveProgressState(user, now = new Date()) {
+        const windowMs = this._getWindowMs();
+        const lastClaim = user.dailyBonus?.lastClaimAt ? new Date(user.dailyBonus.lastClaimAt) : null;
+        const cooldownExpired = !lastClaim || (now - lastClaim) >= windowMs;
+
+        if (!cooldownExpired) {
+            return {
+                canAccumulate: false,
+                needsNewWindow: false,
+                accumulatedMinutes: 0,
+                windowStartedAt: null,
+                timeUntilCooldownEnds: windowMs - (now - lastClaim),
+                timeUntilWindowEnds: 0,
+            };
+        }
+
+        const windowStartedAt = user.dailyBonus?.progressWindowStartedAt
+            ? new Date(user.dailyBonus.progressWindowStartedAt)
+            : null;
+        const accumulatedMinutes = user.dailyBonus?.currentSessionMinutes || 0;
+
+        if (!windowStartedAt || (now - windowStartedAt) >= windowMs) {
+            return {
+                canAccumulate: true,
+                needsNewWindow: true,
+                accumulatedMinutes: 0,
+                windowStartedAt: null,
+                timeUntilCooldownEnds: 0,
+                timeUntilWindowEnds: windowMs,
+            };
+        }
+
+        return {
+            canAccumulate: true,
+            needsNewWindow: false,
+            accumulatedMinutes,
+            windowStartedAt,
+            timeUntilCooldownEnds: 0,
+            timeUntilWindowEnds: Math.max(0, windowMs - (now - windowStartedAt)),
+        };
+    }
+
+    _segmentMinutes(session, now = new Date()) {
+        if (!session) return 0;
+        const raw = (now - session.segmentStart) / (1000 * 60);
+        return Math.max(0, raw);
+    }
+
+    _effectiveMinutesFromSession(session, now = new Date()) {
+        if (!session?.canAccumulate) return 0;
+        return Math.floor(session.persistedMinutes + this._segmentMinutes(session, now));
+    }
+
+    async _maybeAwardReferralPromo(walletAddress, totalMinutes, session) {
+        if (!session || session.promoAwardChecked || totalMinutes < CONFIG.REQUIRED_SESSION_MINUTES) return;
+        session.promoAwardChecked = true;
+        const referralService = getReferralService();
+        if (!referralService) return;
+        referralService.checkAndAwardPromoReward(walletAddress, totalMinutes).catch((err) => {
+            console.error('[DailyBonus] Referral promo check error:', err.message);
+        });
+    }
+
+    /**
+     * Start tracking session time for a player.
+     * Restores persisted playtime when still inside the user's 24h progress window.
      */
     async startSession(walletAddress) {
         if (!walletAddress) return;
-        
+
         const now = new Date();
-        
-        // Initialize session tracking
-        _activeSessions.set(walletAddress, {
-            startTime: now,
-            lastUpdate: now,
-            accumulatedMinutes: 0
-        });
-        
-        // Update user's session start in DB
+        let persistedMinutes = 0;
+        let windowStartedAt = null;
+        let canAccumulate = false;
+
         if (isDBConnected()) {
             try {
-                await User.updateOne(
-                    { walletAddress },
-                    { 
-                        'dailyBonus.sessionStartTime': now,
-                        'dailyBonus.currentSessionMinutes': 0
+                const user = await User.findOne({ walletAddress });
+                if (user) {
+                    const progress = this._resolveProgressState(user, now);
+                    canAccumulate = progress.canAccumulate;
+
+                    if (canAccumulate) {
+                        if (progress.needsNewWindow) {
+                            windowStartedAt = now;
+                            persistedMinutes = 0;
+                            await User.updateOne(
+                                { walletAddress },
+                                {
+                                    'dailyBonus.progressWindowStartedAt': now,
+                                    'dailyBonus.currentSessionMinutes': 0,
+                                    'dailyBonus.sessionStartTime': now,
+                                }
+                            );
+                        } else {
+                            windowStartedAt = progress.windowStartedAt;
+                            persistedMinutes = progress.accumulatedMinutes;
+                            await User.updateOne(
+                                { walletAddress },
+                                { 'dailyBonus.sessionStartTime': now }
+                            );
+                        }
                     }
-                );
+                }
             } catch (err) {
                 console.error('[DailyBonus] Failed to update session start:', err.message);
             }
         }
-        
-        console.log(`🎁 [DailyBonus] Session started for ${walletAddress.slice(0, 8)}...`);
+
+        _activeSessions.set(walletAddress, {
+            segmentStart: now,
+            persistedMinutes,
+            windowStartedAt,
+            canAccumulate,
+            lastFlushAt: now,
+            promoAwardChecked: persistedMinutes >= CONFIG.REQUIRED_SESSION_MINUTES,
+        });
+
+        console.log(
+            `🎁 [DailyBonus] Session started for ${walletAddress.slice(0, 8)}...`
+            + (canAccumulate ? ` (${persistedMinutes} min accrued in window)` : ' (claim cooldown active)')
+        );
     }
-    
+
     /**
-     * Update session time (call periodically, e.g., every minute)
+     * Persist accrued playtime for an active session segment.
+     * @private
      */
-    async updateSessionTime(walletAddress) {
-        const session = _activeSessions.get(walletAddress);
-        if (!session) return;
-        
+    async _persistSessionProgress(walletAddress, session, now = new Date()) {
+        if (!session?.canAccumulate || !session.windowStartedAt || !isDBConnected()) return 0;
+
+        const segmentMinutes = this._segmentMinutes(session, now);
+        const totalMinutes = Math.floor(session.persistedMinutes + segmentMinutes);
+
+        try {
+            await User.updateOne(
+                { walletAddress },
+                { 'dailyBonus.currentSessionMinutes': totalMinutes }
+            );
+        } catch (err) {
+            console.error('[DailyBonus] Failed to persist session progress:', err.message);
+            return totalMinutes;
+        }
+
+        await this._maybeAwardReferralPromo(walletAddress, totalMinutes, session);
+
+        session.persistedMinutes = totalMinutes;
+        session.segmentStart = now;
+        session.lastFlushAt = now;
+        return totalMinutes;
+    }
+
+    async _flushActiveSessions() {
         const now = new Date();
-        const minutesSinceLastUpdate = (now - session.lastUpdate) / (1000 * 60);
-        
-        // Track if we just crossed the 60-minute threshold
-        const wasBelow60 = session.accumulatedMinutes < 60;
-        
-        // Only count if reasonable (< 2 minutes since last update - prevents manipulation)
-        if (minutesSinceLastUpdate < 2) {
-            session.accumulatedMinutes += minutesSinceLastUpdate;
-        }
-        session.lastUpdate = now;
-        
-        // Check if user just crossed 60 minutes (for referral promo)
-        const isNow60OrMore = session.accumulatedMinutes >= 60;
-        if (wasBelow60 && isNow60OrMore) {
-            // User just completed 1 hour - check for referral promo reward
-            const referralService = getReferralService();
-            if (referralService) {
-                referralService.checkAndAwardPromoReward(walletAddress, session.accumulatedMinutes).catch(err => {
-                    console.error('[DailyBonus] Referral promo check error:', err.message);
-                });
-            }
-        }
-        
-        // Update DB periodically (every 5 minutes)
-        if (session.accumulatedMinutes % 5 < 1) {
-            if (isDBConnected()) {
-                try {
-                    await User.updateOne(
-                        { walletAddress },
-                        { 'dailyBonus.currentSessionMinutes': Math.floor(session.accumulatedMinutes) }
-                    );
-                } catch (err) {
-                    // Silent fail - not critical
-                }
+        for (const [walletAddress, session] of _activeSessions) {
+            if (!session.canAccumulate) continue;
+            const minutesSinceFlush = (now - session.lastFlushAt) / (1000 * 60);
+            if (minutesSinceFlush >= 1) {
+                await this._persistSessionProgress(walletAddress, session, now);
             }
         }
     }
-    
+
     /**
-     * End session tracking for a player
-     * Called when player disconnects
+     * End session tracking for a player — saves accrued playtime for the progress window.
      */
     async endSession(walletAddress) {
         const session = _activeSessions.get(walletAddress);
         if (!session) return;
-        
-        // Final update to DB
+
+        const now = new Date();
+        const segmentMinutes = Math.floor(this._segmentMinutes(session, now));
+
         if (isDBConnected()) {
             try {
-                await User.updateOne(
-                    { walletAddress },
-                    { 
-                        'dailyBonus.currentSessionMinutes': Math.floor(session.accumulatedMinutes),
-                        $inc: { 'stats.session.totalPlayTimeMinutes': Math.floor(session.accumulatedMinutes) }
-                    }
-                );
+                const updates = {};
+                if (session.canAccumulate && session.windowStartedAt) {
+                    const totalMinutes = Math.floor(session.persistedMinutes + this._segmentMinutes(session, now));
+                    updates['dailyBonus.currentSessionMinutes'] = totalMinutes;
+                    await this._maybeAwardReferralPromo(walletAddress, totalMinutes, session);
+                }
+                if (segmentMinutes > 0) {
+                    updates.$inc = { 'stats.session.totalPlayTimeMinutes': segmentMinutes };
+                }
+                if (Object.keys(updates).length > 0) {
+                    await User.updateOne({ walletAddress }, updates);
+                }
             } catch (err) {
                 console.error('[DailyBonus] Failed to save session time:', err.message);
             }
         }
-        
+
+        const loggedMinutes = session.canAccumulate
+            ? Math.floor(session.persistedMinutes + this._segmentMinutes(session, now))
+            : segmentMinutes;
         _activeSessions.delete(walletAddress);
-        console.log(`🎁 [DailyBonus] Session ended for ${walletAddress.slice(0, 8)}... (${Math.floor(session.accumulatedMinutes)} min)`);
+        console.log(`🎁 [DailyBonus] Session ended for ${walletAddress.slice(0, 8)}... (${loggedMinutes} min in window)`);
     }
-    
+
     /**
-     * Get current session minutes for a player
+     * Total play minutes for the current daily progress window (persisted + live segment).
      */
-    getSessionMinutes(walletAddress) {
+    getSessionMinutes(walletAddress, user = null) {
         const session = _activeSessions.get(walletAddress);
-        if (!session) return 0;
-        
         const now = new Date();
-        const currentMinutes = (now - session.startTime) / (1000 * 60);
-        return Math.floor(currentMinutes);
+
+        if (session) {
+            return this._effectiveMinutesFromSession(session, now);
+        }
+
+        if (!user) return 0;
+        const progress = this._resolveProgressState(user, now);
+        if (!progress.canAccumulate || progress.needsNewWindow) return 0;
+        return Math.floor(progress.accumulatedMinutes);
     }
     
     /**
@@ -236,7 +345,8 @@ class DailyBonusService {
             }
             
             const now = new Date();
-            const sessionMinutes = this.getSessionMinutes(walletAddress);
+            const progress = this._resolveProgressState(user, now);
+            const sessionMinutes = this.getSessionMinutes(walletAddress, user);
             
             // Check if 24h cooldown has passed
             const lastClaim = user.dailyBonus?.lastClaimAt;
@@ -249,9 +359,11 @@ class DailyBonusService {
                 timeUntilClaim = cooldownMs - (now - lastClaim);
             }
             
-            // Check session time requirement
-            const hasEnoughTime = sessionMinutes >= CONFIG.REQUIRED_SESSION_MINUTES;
-            const minutesRemaining = Math.max(0, CONFIG.REQUIRED_SESSION_MINUTES - sessionMinutes);
+            // Check playtime requirement (accrued across sessions in the progress window)
+            const hasEnoughTime = cooldownExpired && sessionMinutes >= CONFIG.REQUIRED_SESSION_MINUTES;
+            const minutesRemaining = cooldownExpired
+                ? Math.max(0, CONFIG.REQUIRED_SESSION_MINUTES - sessionMinutes)
+                : CONFIG.REQUIRED_SESSION_MINUTES;
 
             const onboardingProgress = getOnboardingProgress(user);
             const onboardingComplete = onboardingProgress.complete;
@@ -275,9 +387,12 @@ class DailyBonusService {
                 canClaim,
                 cooldownExpired,
                 timeUntilClaim,                                    // ms until can claim again
-                sessionMinutes,                                    // current session time
+                timeUntilWindowEnds: progress.timeUntilWindowEnds, // ms left to finish playtime window
+                progressWindowStartedAt: progress.windowStartedAt,
+                sessionMinutes,                                    // accrued playtime in current window
                 requiredMinutes: CONFIG.REQUIRED_SESSION_MINUTES,  // required time
                 minutesRemaining,                                  // minutes until eligible
+                hasEnoughTime,
                 onboardingComplete,
                 onboardingCompletedCount: onboardingProgress.completedCount,
                 onboardingTotalSteps: onboardingProgress.totalSteps,
@@ -386,7 +501,7 @@ class DailyBonusService {
             }
             
             const now = new Date();
-            const sessionMinutes = this.getSessionMinutes(walletAddress);
+            const sessionMinutes = this.getSessionMinutes(walletAddress, user);
 
             if (!isOnboardingQuestComplete(user)) {
                 const progress = getOnboardingProgress(user);
@@ -398,8 +513,23 @@ class DailyBonusService {
                     onboardingTotalSteps: progress.totalSteps,
                 };
             }
+
+            // Check 24h cooldown before playtime (clearer when still on cooldown)
+            const lastClaim = user.dailyBonus?.lastClaimAt;
+            const cooldownMs = CONFIG.COOLDOWN_HOURS * 60 * 60 * 1000;
+
+            if (lastClaim && (now - lastClaim) < cooldownMs) {
+                const timeRemaining = cooldownMs - (now - lastClaim);
+                const hoursRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60));
+                return {
+                    success: false,
+                    error: 'COOLDOWN_ACTIVE',
+                    message: `Can claim again in ${hoursRemaining} hours`,
+                    timeRemaining
+                };
+            }
             
-            // Check session time requirement
+            // Check playtime requirement (accrued across sessions in the progress window)
             if (sessionMinutes < CONFIG.REQUIRED_SESSION_MINUTES) {
                 const remaining = CONFIG.REQUIRED_SESSION_MINUTES - sessionMinutes;
                 return { 
@@ -410,21 +540,6 @@ class DailyBonusService {
                 };
             }
             
-            // Check 24h cooldown
-            const lastClaim = user.dailyBonus?.lastClaimAt;
-            const cooldownMs = CONFIG.COOLDOWN_HOURS * 60 * 60 * 1000;
-            
-            if (lastClaim && (now - lastClaim) < cooldownMs) {
-                const timeRemaining = cooldownMs - (now - lastClaim);
-                const hoursRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60));
-                return { 
-                    success: false, 
-                    error: 'COOLDOWN_ACTIVE', 
-                    message: `Can claim again in ${hoursRemaining} hours`,
-                    timeRemaining
-                };
-            }
-
             const streak = this._resolveClaimStreakDay(user);
             const reward = streak.reward;
             const cpAmount = reward.cp;
@@ -463,6 +578,8 @@ class DailyBonusService {
                         'dailyBonus.totalClaimed': 1,
                         'dailyBonus.totalWaddleEarned': cpAmount
                     },
+                    'dailyBonus.currentSessionMinutes': 0,
+                    'dailyBonus.progressWindowStartedAt': null,
                     'dailyBonus.streakDay': streak.nextDayAfterClaim,
                     'dailyBonus.streakLastUtcDay': streak.today,
                 }
@@ -472,6 +589,15 @@ class DailyBonusService {
             if (updateResult.modifiedCount === 0) {
                 _usedNonces.delete(clientNonce);
                 return { success: false, error: 'ALREADY_CLAIMED', message: 'Bonus already claimed' };
+            }
+
+            const activeSession = _activeSessions.get(walletAddress);
+            if (activeSession) {
+                activeSession.persistedMinutes = 0;
+                activeSession.windowStartedAt = null;
+                activeSession.canAccumulate = false;
+                activeSession.segmentStart = now;
+                activeSession.promoAwardChecked = false;
             }
 
             reservedClaimId = claimId;
