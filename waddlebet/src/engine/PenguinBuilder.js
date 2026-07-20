@@ -40,7 +40,9 @@ import {
     TortoiseGenerators,
     TORTOISE_PALETTE,
     TORTOISE_PALETTES,
-    generateTortoisePalette
+    generateTortoisePalette,
+    BlackBullGenerators,
+    BLACK_BULL_PALETTE
 } from '../characters';
 
 /**
@@ -1388,6 +1390,71 @@ export function createPenguinBuilder(THREE) {
     };
     
     /**
+     * Build BLACK BULL mesh with hat and body item support
+     */
+    const buildBlackBullMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = BlackBullGenerators.pivots();
+        const bullPalette = BLACK_BULL_PALETTE;
+        
+        const headVoxels = BlackBullGenerators.head();
+        const head = buildPartMerged(headVoxels, bullPalette);
+        head.name = 'head';
+        
+        const bodyVoxels = BlackBullGenerators.body();
+        const body = buildPartMerged(bodyVoxels, bullPalette);
+        body.name = 'body';
+        
+        const armLVoxels = BlackBullGenerators.armLeft();
+        const armL = buildPartMerged(armLVoxels, bullPalette, pivots.armLeft);
+        armL.name = 'flipper_l';
+        
+        const armRVoxels = BlackBullGenerators.armRight();
+        const armR = buildPartMerged(armRVoxels, bullPalette, pivots.armRight);
+        armR.name = 'flipper_r';
+        
+        const legLVoxels = BlackBullGenerators.legLeft();
+        const legL = buildPartMerged(legLVoxels, bullPalette, pivots.legLeft);
+        legL.name = 'foot_l';
+        
+        const legRVoxels = BlackBullGenerators.legRight();
+        const legR = buildPartMerged(legRVoxels, bullPalette, pivots.legRight);
+        legR.name = 'foot_r';
+        
+        const tailVoxels = BlackBullGenerators.tail();
+        const tail = buildPartMerged(tailVoxels, bullPalette, pivots.tail);
+        tail.name = 'tail';
+        
+        group.add(body, head, armL, armR, legL, legR, tail);
+        
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            if (hatVoxels && hatVoxels.length > 0) {
+                const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + 4, z: v.z + 4 }));
+                const hat = buildPartMerged(offsetHatVoxels, PALETTE);
+                hat.name = 'hat';
+                group.add(hat);
+            }
+        }
+        
+        if (data.bodyItem && data.bodyItem !== 'none' && ASSETS.BODY[data.bodyItem]) {
+            const bodyItemData = ASSETS.BODY[data.bodyItem];
+            const bodyItemVoxels = bodyItemData?.voxels || bodyItemData || [];
+            if (bodyItemVoxels.length > 0) {
+                const offsetBodyVoxels = bodyItemVoxels.map(v => ({ ...v, y: v.y - 3 }));
+                const bodyItemMesh = buildPartMerged(offsetBodyVoxels, PALETTE);
+                bodyItemMesh.name = 'bodyItem';
+                group.add(bodyItemMesh);
+            }
+        }
+        
+        group.scale.set(0.18, 0.18, 0.18);
+        group.position.y = 0.8;
+        
+        return group;
+    };
+    
+    /**
      * Build Frog (PEPE character) mesh with cosmetics support
      */
     const buildFrogMesh = (data) => {
@@ -2360,6 +2427,8 @@ export function createPenguinBuilder(THREE) {
             group = buildPumpMesh(data);
         } else if (data.characterType === 'tortoise') {
             group = buildTortoiseMesh(data);
+        } else if (data.characterType === 'blackBull') {
+            group = buildBlackBullMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {

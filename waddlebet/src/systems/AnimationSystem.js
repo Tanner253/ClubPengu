@@ -76,6 +76,7 @@ export function animateMesh(
     const isDuck = characterType === 'duck';
     const isTungTung = characterType === 'tungTung';
     const isTortoise = characterType === 'tortoise';
+    const isBlackBull = characterType === 'blackBull';
     
     // Use cached parts if available, otherwise look up and cache
     if (!meshWrapper._animParts) {
@@ -833,6 +834,33 @@ export function animateMesh(
             if(tail) {
                 tail.rotation.y = Math.sin(time * 4) * 0.15;
             }
+        } else if (isBlackBull) {
+            // Heavy bull charge - powerful diagonal gait with weight transfer
+            const chargeSpeed = time * 9;
+            const stride = 0.5;
+            
+            const liftWave = (phase) => {
+                const s = Math.sin(phase);
+                return s > 0 ? Math.pow(s, 0.65) : s * 0.35;
+            };
+            
+            if(flipperL) flipperL.rotation.x = liftWave(chargeSpeed) * stride;
+            if(flipperR) flipperR.rotation.x = liftWave(chargeSpeed + Math.PI) * stride;
+            if(footL) footL.rotation.x = liftWave(chargeSpeed + Math.PI) * stride;
+            if(footR) footR.rotation.x = liftWave(chargeSpeed) * stride;
+            
+            meshInner.position.y = 0.8 + Math.abs(Math.sin(chargeSpeed * 2)) * 0.05;
+            meshInner.rotation.z = Math.sin(chargeSpeed) * 0.05;
+            
+            if(head) {
+                head.rotation.x = -0.06 + Math.sin(chargeSpeed * 2) * 0.04;
+                head.rotation.y = Math.sin(chargeSpeed * 0.5) * 0.03;
+            }
+            if(hatPart) hatPart.rotation.x = -0.06 + Math.sin(chargeSpeed * 2) * 0.04;
+            
+            if(tail) {
+                tail.rotation.y = Math.sin(time * 6) * 0.2;
+            }
         } else {
             // Standard biped walking animation (penguin, marcus, whale, frog)
         if(footL) footL.rotation.x = Math.sin(walkCycle) * 0.5;
@@ -930,6 +958,18 @@ export function animateMesh(
             if(tail) {
                 const tailTwitch = Math.sin(time * 0.3) > 0.9 ? Math.sin(time * 8) * 0.1 : 0;
                 tail.rotation.y = tailTwitch;
+            }
+        } else if (isBlackBull) {
+            // Stoic bull idle - heavy breathing, head held low and forward
+            meshInner.rotation.z = Math.sin(time * 0.8) * 0.012;
+            
+            if(head) {
+                head.rotation.x = -0.05 + Math.sin(time * 0.7) * 0.015;
+                head.rotation.y = Math.sin(time * 0.25) * 0.03;
+            }
+            
+            if(tail) {
+                tail.rotation.y = Math.sin(time * 1.2) * 0.1;
             }
         } else {
         meshInner.rotation.z = Math.sin(time * 1.5) * 0.02;

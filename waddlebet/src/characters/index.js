@@ -32,6 +32,7 @@ import TungTungGenerators, { TUNG_PALETTE } from './TungTungCharacter';
 import GakeGenerators, { GAKE_PALETTE } from './GakeCharacter';
 import PumpGenerators, { PUMP_PALETTE } from './PumpCharacter';
 import TortoiseGenerators, { TORTOISE_PALETTE, TORTOISE_PALETTES, generateTortoisePalette } from './TortoiseCharacter';
+import BlackBullGenerators, { BLACK_BULL_PALETTE } from './BlackBullCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -259,6 +260,23 @@ characterRegistry.registerCharacter('tortoise', {
     }
 });
 
+characterRegistry.registerCharacter('blackBull', {
+    name: 'BLACK BULL',
+    description: 'A beefy black bull — horns, muscle, and unstoppable force',
+    generators: BlackBullGenerators,
+    palette: BLACK_BULL_PALETTE,
+    isSecret: true,
+    previewScale: 0.9,
+    customizationOptions: {
+        disableSkinColor: true,
+        disableHats: false,
+        disableEyes: true,
+        disableMouth: true,
+        disableBodyItems: false,
+        disableMounts: false,
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -296,6 +314,8 @@ export {
     TortoiseGenerators,
     TORTOISE_PALETTE,
     TORTOISE_PALETTES,
-    generateTortoisePalette
+    generateTortoisePalette,
+    BlackBullGenerators,
+    BLACK_BULL_PALETTE
 };
 export default characterRegistry;
