@@ -748,57 +748,31 @@ input, textarea {
   animation: creator-whitepaper-icon-bob 2s ease-in-out infinite;
 }
 
-/* Penguin Maker — Robinhood EVM badge */
-@keyframes creator-robinhood-glow {
-  0%, 100% {
-    box-shadow: 0 0 8px rgba(0, 200, 5, 0.4), 0 0 0 1px rgba(0, 200, 5, 0.5);
-    border-color: rgba(0, 200, 5, 0.6);
-  }
-  50% {
-    box-shadow: 0 0 18px rgba(0, 232, 6, 0.55), 0 0 0 1px rgba(0, 200, 5, 0.85);
-    border-color: rgba(0, 232, 6, 0.9);
-  }
-}
-
-@keyframes creator-robinhood-shimmer {
-  0% { background-position: 200% center; }
-  100% { background-position: -200% center; }
-}
-
-@keyframes creator-robinhood-icon-pulse {
-  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(0, 200, 5, 0.5)); }
-  50% { transform: scale(1.06); filter: drop-shadow(0 0 8px rgba(0, 232, 6, 0.75)); }
-}
-
+/* Penguin Maker — Robinhood EVM (subtle dark glass, official logo tile) */
 .creator-robinhood-link {
-  background-image: linear-gradient(
-    110deg,
-    rgba(0, 80, 20, 0.92) 0%,
-    rgba(0, 80, 20, 0.92) 40%,
-    rgba(0, 200, 5, 0.35) 50%,
-    rgba(0, 80, 20, 0.92) 60%,
-    rgba(0, 80, 20, 0.92) 100%
-  );
-  background-size: 200% 100%;
-  animation: creator-robinhood-glow 2s ease-in-out infinite, creator-robinhood-shimmer 3s linear infinite;
+  background: rgba(18, 22, 28, 0.92);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: #e2e8f0;
 }
 
 .creator-robinhood-link:hover {
-  animation-duration: 1.2s, 1.8s;
+  border-color: rgba(255, 255, 255, 0.22);
+  background: rgba(24, 28, 36, 0.95);
 }
 
-.creator-robinhood-icon {
-  animation: creator-robinhood-icon-pulse 2.2s ease-in-out infinite;
+.creator-robinhood-icon img {
+  border-radius: 0.375rem;
 }
 
 .creator-robinhood-banner {
-  background: linear-gradient(135deg, rgba(0, 80, 20, 0.55) 0%, rgba(0, 40, 10, 0.75) 50%, rgba(0, 60, 15, 0.6) 100%);
-  border: 1px solid rgba(0, 200, 5, 0.45);
-  box-shadow: 0 0 20px rgba(0, 200, 5, 0.15), inset 0 1px 0 rgba(0, 232, 6, 0.12);
+  background: rgba(15, 18, 24, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
 }
 
-.creator-robinhood-banner-pulse {
-  animation: creator-robinhood-glow 2.5s ease-in-out infinite;
+.creator-robinhood-banner:hover {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(20, 24, 32, 0.92);
 }
 
 /* Slide up animation for bottom sheets */
