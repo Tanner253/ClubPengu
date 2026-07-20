@@ -24,8 +24,9 @@ const en: Record<string, string> = {
   "nav.changelog": "Changelog",
   "nav.play": "Play Now",
   "nav.whitepaper": "Whitepaper",
+  "nav.multichain": "Multichain",
 
-  "hero.badge": "Now Building on Solana",
+  "hero.badge": "First Multichain Metaverse · Live on Solana",
   "hero.taglineStart": "The First ",
   "hero.taglineHighlight": "Permissionless",
   "hero.taglineEnd": " Social Wagering Platform",
@@ -43,7 +44,7 @@ const en: Record<string, string> = {
   "hero.stat.live": "Live",
   "hero.cta.explore": "Explore Whitepaper",
   "hero.cta.play": "Play Now",
-  "hero.token.chains": "SPL token on Solana · Powers the WaddleBet metaverse",
+  "hero.token.chains": "Solana live today · Robinhood Chain (EVM) in development",
   "hero.scroll": "Scroll",
   "hero.videoBgTitle": "WaddleBet gameplay trailer (background)",
   "hero.scrollLift": "Scroll to reveal the trailer",
@@ -94,6 +95,33 @@ const en: Record<string, string> = {
   "about.quick5": "P2P Wagers",
   "about.quick6": "Instant Settle",
 
+  "multichain.kicker": "Multichain Vision",
+  "multichain.title": "The First Multichain",
+  "multichain.titleHighlight": "Social Metaverse",
+  "multichain.lead":
+    "WaddleBet is expanding beyond Solana. We're building toward Robinhood Chain — Robinhood's Ethereum-compatible EVM layer — so millions of new users can waddle in without switching ecosystems.",
+  "multichain.robinhood.badge": "In Development",
+  "multichain.robinhood.title": "Robinhood Chain · Ethereum EVM",
+  "multichain.robinhood.p1":
+    "Robinhood is bringing crypto to a mainstream audience of 25M+ users. Their EVM-compatible chain opens the door for WaddleBet to meet that audience where they already are — with the same social wagering, cosmetics economy, and penguin metaverse they love on Solana.",
+  "multichain.robinhood.p2":
+    "We're actively preparing our Robinhood Chain deployment: contract architecture, token bridging strategy, and wallet integrations are underway. Full utility ships in phases — Solana remains live and fully playable today.",
+  "multichain.robinhood.caLabel": "Contract Address",
+  "multichain.robinhood.caValue": "Deploying Soon",
+  "multichain.why.title": "Why Multichain?",
+  "multichain.why.p1":
+    "Crypto shouldn't be a single-chain island. Supporting Ethereum via Robinhood Chain lets WaddleBet reach a broader audience — ETH holders, Robinhood traders, and EVM-native communities — while keeping our Solana roots intact.",
+  "multichain.why.b1": "First multichain social wagering metaverse in crypto",
+  "multichain.why.b2": "Broader audience — Ethereum + Robinhood's mainstream reach",
+  "multichain.why.b3": "Same penguin world, two chains — one community",
+  "multichain.why.b4": "More tokens, more liquidity, more wagers",
+  "multichain.why.b5": "Future-proof architecture as Web3 goes multichain",
+  "multichain.solana.title": "Solana · Live Now",
+  "multichain.solana.desc":
+    "Our production chain today. Instant settlement, SPL wagering, Phantom wallet auth, and the full WaddleBet experience — playable right now at waddle.bet.",
+  "multichain.solana.status": "● Live on Mainnet",
+  "multichain.robinhood.status": "🔨 Under Development",
+
   "contract.tokenLabel": "$CP",
   "contract.liveOn": "Live on",
   "contract.platform": "Solana",
@@ -116,7 +144,7 @@ const en: Record<string, string> = {
 
   "footer.tagline": "Permissionless Social Wagering",
   "footer.builtOn": "Built on",
-  "footer.chains": "Solana",
+  "footer.chains": "Solana · Robinhood Chain (EVM)",
   "footer.community": "Community",
   "footer.devNoticeTitle": "Development Notice",
   "footer.disclaimerTitle": "Disclaimer",
@@ -182,8 +210,9 @@ const zhTW: Record<string, string> = {
   "nav.changelog": "更新日誌",
   "nav.play": "立即遊玩",
   "nav.whitepaper": "白皮書",
+  "nav.multichain": "多鏈",
 
-  "hero.badge": "正在 Solana 上打造",
+  "hero.badge": "首個多鏈元宇宙 · Solana 已上線",
   "hero.taglineStart": "",
   "hero.taglineHighlight": "",
   "hero.taglineEnd": "",
@@ -202,7 +231,7 @@ const zhTW: Record<string, string> = {
   "hero.stat.live": "已上線",
   "hero.cta.explore": "閱讀白皮書",
   "hero.cta.play": "立即遊玩",
-  "hero.token.chains": "Solana 上的 SPL 代幣 · 驅動 WaddleBet 元宇宙",
+  "hero.token.chains": "Solana 今日上線 · Robinhood Chain（EVM）開發中",
   "hero.scroll": "向下捲動",
   "hero.videoBgTitle": "WaddleBet 實機預告（背景）",
   "hero.scrollLift": "捲動以揭開預告片",
@@ -251,6 +280,33 @@ const zhTW: Record<string, string> = {
   "about.quick5": "P2P 對賭",
   "about.quick6": "即時結算",
 
+  "multichain.kicker": "多鏈願景",
+  "multichain.title": "首個多鏈",
+  "multichain.titleHighlight": "社交元宇宙",
+  "multichain.lead":
+    "WaddleBet 正超越 Solana。我們正朝 Robinhood Chain——Robinhood 的以太坊相容 EVM 層——擴展，讓數百萬新用戶無需切換生態即可搖擺入場。",
+  "multichain.robinhood.badge": "開發中",
+  "multichain.robinhood.title": "Robinhood Chain · 以太坊 EVM",
+  "multichain.robinhood.p1":
+    "Robinhood 正將加密帶給 2500 萬以上的主流用戶。其 EVM 相容鏈讓 WaddleBet 能在用戶已熟悉的地方相遇——與 Solana 上相同的社交對賭、外觀經濟與企鵝元宇宙。",
+  "multichain.robinhood.p2":
+    "我們正積極準備 Robinhood Chain 部署：合約架構、代幣橋接策略與錢包整合進行中。完整功能分階段上線——Solana 今日仍完全可玩。",
+  "multichain.robinhood.caLabel": "合約地址",
+  "multichain.robinhood.caValue": "即將部署",
+  "multichain.why.title": "為何多鏈？",
+  "multichain.why.p1":
+    "加密不應是單鏈孤島。透過 Robinhood Chain 支援以太坊，讓 WaddleBet 觸及更廣受眾——ETH 持有者、Robinhood 交易者與 EVM 原生社群——同時保留 Solana 根基。",
+  "multichain.why.b1": "加密領域首個多鏈社交博弈元宇宙",
+  "multichain.why.b2": "更廣受眾——以太坊 + Robinhood 主流觸達",
+  "multichain.why.b3": "同一企鵝世界、雙鏈——一個社群",
+  "multichain.why.b4": "更多代幣、更多流動性、更多對賭",
+  "multichain.why.b5": "Web3 多鏈時代的面向未來架構",
+  "multichain.solana.title": "Solana · 現已上線",
+  "multichain.solana.desc":
+    "我們目前的生產鏈。即時結算、SPL 對賭、Phantom 錢包驗證與完整 WaddleBet 體驗——現在即可在 waddle.bet 遊玩。",
+  "multichain.solana.status": "● 主網已上線",
+  "multichain.robinhood.status": "🔨 開發中",
+
   "contract.tokenLabel": "$CP",
   "contract.liveOn": "上線於",
   "contract.platform": "Solana",
@@ -273,7 +329,7 @@ const zhTW: Record<string, string> = {
 
   "footer.tagline": "無需許可的社交博弈",
   "footer.builtOn": "建置於",
-  "footer.chains": "Solana",
+  "footer.chains": "Solana · Robinhood Chain（EVM）",
   "footer.community": "社群",
   "footer.devNoticeTitle": "開發中提醒",
   "footer.disclaimerTitle": "免責聲明",

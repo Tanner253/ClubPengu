@@ -22,10 +22,12 @@ import {
   Copy,
   Check,
   ScrollText,
+  Layers,
 } from "lucide-react";
 import Changelog from "../components/Changelog";
 import GachaSystemSection from "../components/GachaSystem";
 import { SolanaHistoryChart } from "../components/SolanaHistoryChart";
+import { RobinhoodLogo } from "../components/RobinhoodLogo";
 import { ChapterTag } from "../components/ChapterTag";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import {
@@ -139,6 +141,7 @@ function Navigation() {
 
   const navItems = [
     { label: t("nav.product"), href: "#about" },
+    { label: t("nav.multichain"), href: "#multichain" },
     { label: t("nav.team"), href: "#team" },
     { label: t("nav.roadmap"), href: "#roadmap" },
   ];
@@ -844,6 +847,115 @@ function AboutSection() {
   );
 }
 
+function MultichainSection() {
+  const { t } = useWhitepaperLanguage();
+  const whyBullets = [
+    t("multichain.why.b1"),
+    t("multichain.why.b2"),
+    t("multichain.why.b3"),
+    t("multichain.why.b4"),
+    t("multichain.why.b5"),
+  ];
+
+  return (
+    <section id="multichain" className="py-16 md:py-32 px-5 sm:px-6 relative overflow-hidden">
+      <div className="section-divider mb-16 md:mb-32" />
+      <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute top-1/3 left-0 w-96 h-96 bg-[#00C805]/10 rounded-full blur-3xl" />
+        <div className="absolute bottom-1/4 right-0 w-80 h-80 bg-purple-500/10 rounded-full blur-3xl" />
+      </div>
+
+      <div className="max-w-6xl mx-auto relative">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-12 md:mb-16"
+        >
+          <ChapterTag no="03">{t("multichain.kicker")}</ChapterTag>
+          <h2 className="text-4xl md:text-5xl font-bold mt-4 mb-6">
+            {t("multichain.title")}{" "}
+            <span className="text-[#00C805]">{t("multichain.titleHighlight")}</span>
+          </h2>
+          <p className="text-slate-400 text-lg max-w-3xl mx-auto">{t("multichain.lead")}</p>
+        </motion.div>
+
+        <div className="grid lg:grid-cols-2 gap-6 md:gap-8 mb-8">
+          <motion.div
+            initial={{ opacity: 0, x: -30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            className="glass-card rounded-2xl p-6 md:p-8 border border-cyan-500/30 bg-gradient-to-br from-cyan-500/10 to-purple-500/5"
+          >
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="text-xl font-bold text-cyan-300">{t("multichain.solana.title")}</h3>
+              <span className="text-xs font-semibold text-green-400 px-2.5 py-1 rounded-full bg-green-500/15 border border-green-500/30">
+                {t("multichain.solana.status")}
+              </span>
+            </div>
+            <p className="text-slate-300 text-sm md:text-base leading-relaxed">{t("multichain.solana.desc")}</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            className="glass-card rounded-2xl p-6 md:p-8 border-2 border-[#00C805]/40 bg-gradient-to-br from-[#00C805]/15 via-emerald-500/5 to-[#009B04]/10 robinhood-card-glow"
+          >
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <RobinhoodLogo size={44} showWordmark />
+              <span className="text-xs font-semibold text-[#00C805] px-2.5 py-1 rounded-full bg-[#00C805]/15 border border-[#00C805]/35 shrink-0">
+                {t("multichain.robinhood.badge")}
+              </span>
+            </div>
+            <h3 className="text-xl md:text-2xl font-bold text-[#00E806] mb-3">{t("multichain.robinhood.title")}</h3>
+            <p className="text-slate-300 text-sm md:text-base leading-relaxed mb-4">{t("multichain.robinhood.p1")}</p>
+            <p className="text-slate-400 text-sm leading-relaxed mb-5">{t("multichain.robinhood.p2")}</p>
+            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-black/30 border border-[#00C805]/25">
+              <span className="text-slate-500 text-xs uppercase tracking-wide">{t("multichain.robinhood.caLabel")}</span>
+              <span className="text-[#00C805] font-mono text-sm font-semibold">{t("multichain.robinhood.caValue")}</span>
+            </div>
+            <p className="mt-4 text-xs text-[#00C805]/80 font-medium">{t("multichain.robinhood.status")}</p>
+          </motion.div>
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="glass-card rounded-2xl p-6 md:p-10 border border-white/10"
+        >
+          <div className="flex flex-col lg:flex-row items-start gap-8">
+            <div className="flex-1">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00C805]/15 border border-[#00C805]/30 mb-4">
+                <Layers className="w-4 h-4 text-[#00C805]" />
+                <span className="text-[#00C805] text-sm font-semibold">{t("multichain.why.title")}</span>
+              </div>
+              <p className="text-slate-300 text-base md:text-lg leading-relaxed mb-6">{t("multichain.why.p1")}</p>
+              <ul className="space-y-3">
+                {whyBullets.map((bullet) => (
+                  <li key={bullet} className="flex gap-3 text-slate-300 text-sm md:text-base">
+                    <span className="text-[#00C805] shrink-0">→</span>
+                    <span>{bullet}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="shrink-0 flex flex-col items-center gap-4 p-6 rounded-2xl bg-[#00C805]/10 border border-[#00C805]/25 min-w-[200px]">
+              <RobinhoodLogo size={56} />
+              <p className="text-center text-sm text-[#00E806] font-semibold leading-snug">
+                Robinhood Chain
+                <br />
+                <span className="text-slate-400 font-normal">Ethereum EVM</span>
+              </p>
+            </div>
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
 // Customization Section
 function CustomizationSection() {
   const customizationOptions = [
@@ -1526,8 +1638,8 @@ function RoadmapSection() {
       title: "Ecosystem",
       status: "planned",
       items: [
-        "⏸️ Skipped for now — mobile app, DAO, revenue sharing, and cross-chain on hold",
-        "📋 Will return in a future phase after MMORPG rollout",
+        "🔨 Robinhood Chain (EVM) — multichain expansion in development",
+        "📋 Contract deployment + wallet integrations shipping in phases",
       ],
     },
     {
@@ -1989,9 +2101,14 @@ function Footer() {
               </a>
             </div>
 
-            <div className="flex items-center gap-2 text-slate-500 text-xs sm:text-sm">
+            <div className="flex items-center gap-2 text-slate-500 text-xs sm:text-sm flex-wrap justify-center">
               <span>{t("footer.builtOn")}</span>
-              <span className="text-purple-400 font-semibold">{t("footer.chains")}</span>
+              <span className="text-purple-400 font-semibold">Solana</span>
+              <span className="text-slate-700">+</span>
+              <span className="inline-flex items-center gap-1.5 text-[#00C805] font-semibold">
+                <img src="/robinhood-feather.svg" alt="" className="w-4 h-4" aria-hidden />
+                Robinhood EVM
+              </span>
               <span className="text-slate-700">•</span>
               <span>© 2025 WaddleBet</span>
             </div>
@@ -2052,6 +2169,7 @@ function WhitepaperPageContent() {
       <TickerStrip />
       <VideoSection />
       <AboutSection />
+      <MultichainSection />
       <CustomizationSection />
       <WhaleStatusSection />
       <GachaSystemSection />

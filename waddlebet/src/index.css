@@ -748,6 +748,59 @@ input, textarea {
   animation: creator-whitepaper-icon-bob 2s ease-in-out infinite;
 }
 
+/* Penguin Maker — Robinhood EVM badge */
+@keyframes creator-robinhood-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(0, 200, 5, 0.4), 0 0 0 1px rgba(0, 200, 5, 0.5);
+    border-color: rgba(0, 200, 5, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 18px rgba(0, 232, 6, 0.55), 0 0 0 1px rgba(0, 200, 5, 0.85);
+    border-color: rgba(0, 232, 6, 0.9);
+  }
+}
+
+@keyframes creator-robinhood-shimmer {
+  0% { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+@keyframes creator-robinhood-icon-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 4px rgba(0, 200, 5, 0.5)); }
+  50% { transform: scale(1.06); filter: drop-shadow(0 0 8px rgba(0, 232, 6, 0.75)); }
+}
+
+.creator-robinhood-link {
+  background-image: linear-gradient(
+    110deg,
+    rgba(0, 80, 20, 0.92) 0%,
+    rgba(0, 80, 20, 0.92) 40%,
+    rgba(0, 200, 5, 0.35) 50%,
+    rgba(0, 80, 20, 0.92) 60%,
+    rgba(0, 80, 20, 0.92) 100%
+  );
+  background-size: 200% 100%;
+  animation: creator-robinhood-glow 2s ease-in-out infinite, creator-robinhood-shimmer 3s linear infinite;
+}
+
+.creator-robinhood-link:hover {
+  animation-duration: 1.2s, 1.8s;
+}
+
+.creator-robinhood-icon {
+  animation: creator-robinhood-icon-pulse 2.2s ease-in-out infinite;
+}
+
+.creator-robinhood-banner {
+  background: linear-gradient(135deg, rgba(0, 80, 20, 0.55) 0%, rgba(0, 40, 10, 0.75) 50%, rgba(0, 60, 15, 0.6) 100%);
+  border: 1px solid rgba(0, 200, 5, 0.45);
+  box-shadow: 0 0 20px rgba(0, 200, 5, 0.15), inset 0 1px 0 rgba(0, 232, 6, 0.12);
+}
+
+.creator-robinhood-banner-pulse {
+  animation: creator-robinhood-glow 2.5s ease-in-out infinite;
+}
+
 /* Slide up animation for bottom sheets */
 @keyframes slide-up {
   from {

@@ -23,10 +23,13 @@ const notoSansTc = Noto_Sans_TC({
 });
 
 export const metadata: Metadata = {
-  title: "WaddleBet | Permissionless Social Wagering on Solana",
-  description: "No KYC. No accounts. Wager any SPL token P2P with instant on-chain settlement. x402 payment protocol, x403 wallet auth. First of its kind.",
+  title: "WaddleBet | First Multichain Social Metaverse on Solana & Robinhood EVM",
+  description: "No KYC. No accounts. Wager any SPL token P2P with instant on-chain settlement. Expanding to Robinhood Chain (Ethereum EVM). First multichain social wagering metaverse.",
   keywords: [
     "Solana",
+    "Robinhood Chain",
+    "Ethereum EVM",
+    "Multichain",
     "Web3",
     "P2P Wagering",
     "No KYC",
@@ -41,15 +44,15 @@ export const metadata: Metadata = {
     apple: "/character.png",
   },
   openGraph: {
-    title: "WaddleBet | Permissionless Social Wagering on Solana",
-    description: "No KYC. No accounts. Wager any SPL token P2P with instant on-chain settlement.",
+    title: "WaddleBet | First Multichain Social Metaverse on Solana & Robinhood EVM",
+    description: "No KYC. No accounts. Wager any SPL token P2P. Expanding to Robinhood Chain (Ethereum EVM).",
     type: "website",
     images: ["/character.png"],
   },
   twitter: {
     card: "summary_large_image",
-    title: "WaddleBet | Permissionless Social Wagering on Solana",
-    description: "No KYC. Wager any SPL token. x402 protocol. First permissionless social wagering platform.",
+    title: "WaddleBet | First Multichain Social Metaverse",
+    description: "Live on Solana. Robinhood Chain (EVM) in development. First multichain social wagering metaverse.",
     images: ["/character.png"],
   },
 };

@@ -2094,6 +2094,20 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     </span>
                 </button>
                 <a
+                    href="https://whitepaper.waddle.bet/#multichain"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={t('menu.robinhoodEvmTitle')}
+                    className={`creator-robinhood-link flex shrink-0 items-center rounded-lg border font-bold text-[#00E806] shadow-md transition-transform hover:scale-[1.03] active:scale-95 ${linkClass}`}
+                >
+                    <span className="creator-robinhood-icon shrink-0">
+                        <img src="/robinhood-feather.svg" alt="" width={iconSize} height={iconSize} aria-hidden />
+                    </span>
+                    <span className={`retro-text uppercase tracking-wide ${badgeTextClass}`}>
+                        {compact ? t('menu.robinhoodEvmBadgeShort') : t('menu.robinhoodEvmBadge')}
+                    </span>
+                </a>
+                <a
                     href="https://whitepaper.waddle.bet/"
                     target="_blank"
                     rel="noopener noreferrer"
@@ -2124,6 +2138,37 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             </div>
         );
     };
+
+    const renderRobinhoodEvmBanner = () => (
+        <a
+            href="https://whitepaper.waddle.bet/#multichain"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="creator-robinhood-banner creator-robinhood-banner-pulse block rounded-xl p-3 md:p-4 transition-transform hover:scale-[1.01] active:scale-[0.99]"
+        >
+            <div className="flex items-start gap-3">
+                <img
+                    src="/robinhood-feather.svg"
+                    alt=""
+                    className="creator-robinhood-icon w-9 h-9 shrink-0 mt-0.5"
+                    aria-hidden
+                />
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                        <span className="text-[#00E806] font-bold text-sm retro-text uppercase tracking-wide">
+                            {t('menu.multichainHeadline')}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#00C805]/20 border border-[#00C805]/40 text-[#00C805]">
+                            {t('menu.robinhoodEvmStatus')}
+                        </span>
+                    </div>
+                    <p className="text-[#00C805] text-xs font-semibold mb-1">{t('menu.robinhoodEvmTitle')}</p>
+                    <p className="text-slate-300 text-xs leading-relaxed">{t('menu.robinhoodEvmDesc')}</p>
+                    <p className="text-[#00E806] text-xs font-semibold mt-2">{t('menu.robinhoodEvmCta')} →</p>
+                </div>
+            </div>
+        </a>
+    );
 
     const renderCloudflareBadge = () => (
         <a
@@ -2171,6 +2216,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         </h1>
                         {renderCreatorHeaderLinks(isMobileView)}
                     </div>
+                    <div className="mt-2 pointer-events-auto">
+                        {renderRobinhoodEvmBanner()}
+                    </div>
                     {isMobilePortrait && (
                         <p className="absolute bottom-3 inset-x-0 text-center text-white/45 text-[10px] pointer-events-none flex items-center justify-center gap-1">
                             <IconCamera size={12} />
@@ -2202,6 +2250,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 <span className="text-yellow-400 text-sm align-top">{t('creator.deluxe')}</span>
                             </h1>
                             {renderCreatorHeaderLinks(false)}
+                        </div>
+                        <div className="mt-4 max-w-md pointer-events-auto">
+                            {renderRobinhoodEvmBanner()}
                         </div>
                     </div>
                 </>
@@ -2235,6 +2286,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     <h2 className={`text-white font-bold flex items-center gap-2 sticky top-0 bg-gray-900/50 p-2 rounded backdrop-blur-md z-20 ${isMobileView ? 'text-base mb-1' : 'text-lg mb-2'}`}>
                         <IconSettings size={isMobileView ? 16 : 20} /> {characterType === 'penguin' ? t('creator.title') : currentCharacter?.name || t('creator.character')}
                     </h2>
+
+                    {renderRobinhoodEvmBanner()}
                     
                     {/* Wallet & Account Section - Collapsible, at top */}
                     <div className="mb-2">
