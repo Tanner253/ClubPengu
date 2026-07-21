@@ -39,12 +39,18 @@ import {
     TORTOISE_PALETTE,
     generateTortoisePalette,
     BlackBullGenerators,
-    BLACK_BULL_PALETTE
+    BLACK_BULL_PALETTE,
+    BLACK_BULL_HAT_OFFSET,
+    BLACK_BULL_PROPELLER_BLADE_POS,
+    JimothyGenerators,
+    JIMOTHY_PALETTE,
+    JIMOTHY_HAT_OFFSET
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 import LanguageToggle from './components/LanguageToggle';
 import WebGLStatusBanner from './components/WebGLStatusBanner';
 import CreatorPitchModal from './components/CreatorPitchModal';
+import EntryTokenModal, { ENTRY_TOKEN_MODAL_STORAGE_KEY } from './components/EntryTokenModal';
 import { useLanguage } from './i18n';
 import performanceManager from './systems/PerformanceManager';
 import { initBrowserCapabilities, usesPrivacyBrowserOptimizations, readLiveWebGLInfo } from './utils/browserCapabilities';
@@ -244,6 +250,23 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const [colorsExpanded, setColorsExpanded] = useState(false);
     const [walletExpanded, setWalletExpanded] = useState(false);
     const [showCreatorPitch, setShowCreatorPitch] = useState(false);
+    const [showEntryTokenModal, setShowEntryTokenModal] = useState(() => {
+        try {
+            return localStorage.getItem(ENTRY_TOKEN_MODAL_STORAGE_KEY) !== 'true';
+        } catch {
+            return true;
+        }
+    });
+    const handleCloseEntryTokenModal = useCallback((dontShowAgain) => {
+        if (dontShowAgain) {
+            try {
+                localStorage.setItem(ENTRY_TOKEN_MODAL_STORAGE_KEY, 'true');
+            } catch {
+                /* ignore quota / private mode */
+            }
+        }
+        setShowEntryTokenModal(false);
+    }, []);
     const [characterExpanded, setCharacterExpanded] = useState(false);
     
     // Character emoji mapping for grid display
@@ -259,6 +282,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         pump: '💊',
         tortoise: '🐢',
         blackBull: '🐂',
+        jimothy: '🦝',
         whiteWhale: '🐋',
         blackWhale: '🖤',
         silverWhale: '🩶',
@@ -634,6 +658,12 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 setMouth('none');
             }
             
+            if (typeId === 'jimothy') {
+                setEyes('none');
+                setMouth('none');
+                setBodyItem('none');
+            }
+            
             // Duck has built-in eyes and bill, but allows hats and clothing
             if (typeId === 'duck') {
                 setEyes('none');     // Duck has its own eyes
@@ -655,7 +685,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharactersList = useMemo(() => {
         // TEMPORARY: Unlock all characters for everyone (matches cosmetics unlock)
         if (UNLOCK_ALL_COSMETICS) {
-            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'pump', 'tortoise', 'blackBull', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
+            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'pump', 'tortoise', 'blackBull', 'jimothy', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
         }
         
         const chars = ['penguin']; // Penguin always unlocked
@@ -1505,7 +1535,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 addPart(offsetBodyVoxels, 'bodyItem');
             }
         } else if (characterType === 'blackBull') {
-            addPart(BlackBullGenerators.head(), 'head', BLACK_BULL_PALETTE);
+            addPart(
+                [...BlackBullGenerators.head(), ...BlackBullGenerators.noseRing()],
+                'head',
+                BLACK_BULL_PALETTE
+            );
             addPart(BlackBullGenerators.body(), 'body', BLACK_BULL_PALETTE);
             addPart(BlackBullGenerators.armLeft(), 'flipper_l', BLACK_BULL_PALETTE);
             addPart(BlackBullGenerators.armRight(), 'flipper_r', BLACK_BULL_PALETTE);
@@ -1515,7 +1549,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             
             const bullHatVoxels = ASSETS.HATS[hat] || [];
             if (bullHatVoxels.length > 0) {
-                const offsetHatVoxels = bullHatVoxels.map(v => ({ ...v, y: v.y + 4, z: v.z + 4 }));
+                const offsetHatVoxels = bullHatVoxels.map(v => ({
+                    ...v,
+                    y: v.y + BLACK_BULL_HAT_OFFSET.y,
+                    z: v.z + BLACK_BULL_HAT_OFFSET.z,
+                }));
                 addPart(offsetHatVoxels, 'hat');
             }
             
@@ -1524,6 +1562,24 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             if (bullBodyItemVoxels.length > 0) {
                 const offsetBodyVoxels = bullBodyItemVoxels.map(v => ({ ...v, y: v.y - 3 }));
                 addPart(offsetBodyVoxels, 'bodyItem');
+            }
+        } else if (characterType === 'jimothy') {
+            addPart(JimothyGenerators.body(), 'body', JIMOTHY_PALETTE);
+            addPart(JimothyGenerators.head(), 'head', JIMOTHY_PALETTE);
+            addPart(JimothyGenerators.armLeft(), 'flipper_l', JIMOTHY_PALETTE);
+            addPart(JimothyGenerators.armRight(), 'flipper_r', JIMOTHY_PALETTE);
+            addPart(JimothyGenerators.legLeft(), 'foot_l', JIMOTHY_PALETTE);
+            addPart(JimothyGenerators.legRight(), 'foot_r', JIMOTHY_PALETTE);
+            addPart(JimothyGenerators.tail(), 'tail', JIMOTHY_PALETTE);
+            
+            const jimothyHatVoxels = ASSETS.HATS[hat] || [];
+            if (jimothyHatVoxels.length > 0) {
+                const offsetHatVoxels = jimothyHatVoxels.map(v => ({
+                    ...v,
+                    y: v.y + JIMOTHY_HAT_OFFSET.y,
+                    z: v.z + JIMOTHY_HAT_OFFSET.z,
+                }));
+                addPart(offsetHatVoxels, 'hat');
             }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body
@@ -1726,9 +1782,25 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         }
 
         if (hat === 'propeller') {
+            let bladeY = 13;
+            let bladeZ = 0;
+            if (characterType === 'blackBull') {
+                bladeY = BLACK_BULL_PROPELLER_BLADE_POS.y;
+                bladeZ = BLACK_BULL_PROPELLER_BLADE_POS.z;
+            } else if (characterType === 'jimothy') {
+                bladeY = 12 + JIMOTHY_HAT_OFFSET.y + 1;
+                bladeZ = JIMOTHY_HAT_OFFSET.z;
+            } else if (characterType === 'frog') {
+                bladeY = 15;
+                bladeZ = 2;
+            } else if (characterType === 'tortoise') {
+                bladeY = 12;
+                bladeZ = 13;
+            }
+
             const blades = new THREE.Group();
             blades.name = 'propeller_blades';
-            blades.position.set(0, 13 * VOXEL_SIZE, 0); 
+            blades.position.set(0, bladeY * VOXEL_SIZE, bladeZ * VOXEL_SIZE);
             const bladeGeo = new THREE.BoxGeometry(4, 0.2, 0.5);
             const bladeMat = new THREE.MeshStandardMaterial({color: 'red'});
             const b1 = new THREE.Mesh(bladeGeo, bladeMat);
@@ -3075,6 +3147,57 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 );
                             })}
                         </div>
+                    ) : characterType === 'jimothy' ? (
+                        <div className="space-y-3">
+                            <div className="bg-gradient-to-br from-slate-800/70 to-gray-900 rounded-xl p-4 border border-slate-500/40">
+                                <div className="text-center">
+                                    <span className="text-2xl">🦝</span>
+                                    <h3 className="text-white font-bold mt-2">{t('character.jimothy')}</h3>
+                                    <p className="text-white/60 text-xs mt-1">
+                                        {t('character.jimothyDesc')}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {[
+                                { labelKey: 'creator.headwear', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
+                                { labelKey: 'creator.mounts', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                            ].map((opt, i) => {
+                                const categoryForCheck = opt.key === 'head' ? 'hat' : opt.key === 'body' ? 'bodyItem' : opt.key;
+                                const isCurrentLocked = opt.isMount 
+                                    ? (opt.val !== 'none' && !isMountUnlocked(opt.val))
+                                    : (opt.val !== 'none' && opt.val !== opt.defaultVal && !isCosmeticUnlocked(opt.val, categoryForCheck));
+                                
+                                return (
+                                    <div key={i} className="flex flex-col gap-1">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                            {t(opt.labelKey)}
+                                            {opt.isMount && <span className="text-orange-400 ml-1">({t('creator.promo')})</span>}
+                                        </span>
+                                        <div className={`flex items-center justify-between rounded-lg p-1 ${
+                                            isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
+                                        }`}>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, -1, opt.defaultVal)}
+                                            >
+                                                <IconChevronLeft size={20} />
+                                            </button>
+                                            <span className={`text-sm font-bold capitalize ${isCurrentLocked ? 'text-red-400' : 'text-white'}`}>
+                                                {isCurrentLocked && '🔒 '}
+                                                {opt.val.replace(/([A-Z])/g, ' $1').trim()}
+                                            </span>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, 1, opt.defaultVal)}
+                                            >
+                                                <IconChevronRight size={20} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
                     ) : characterType === 'tungTung' ? (
                         /* Tung Tung Tung Sahur - eyes, mouth, and mounts */
                         <div className="space-y-3">
@@ -3282,6 +3405,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     {t('common.loading')}...
                 </div>
             )}
+
+            <EntryTokenModal
+                isOpen={showEntryTokenModal}
+                onClose={handleCloseEntryTokenModal}
+            />
 
             <CreatorPitchModal
                 isOpen={showCreatorPitch}

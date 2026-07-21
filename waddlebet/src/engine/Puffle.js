@@ -32,7 +32,8 @@ class Puffle {
         barkingDog: { hex: '#D4A04A', name: 'Barking Dog', personality: 'Loyal', price: 2000, tier: 'mythic', special: 'dog', model: 'dog' },
         babyShrimp: { hex: '#FF6B4A', name: 'Baby Shrimp', personality: 'Curious', price: 2000, tier: 'mythic', special: 'shrimp', model: 'shrimp' },
         babyDuck: { hex: '#FFD93D', name: 'Baby Duck', personality: 'Cheerful', price: 2000, tier: 'mythic', special: 'duck', model: 'duck' },
-        babyPenguin: { hex: '#2A2A2A', name: 'Baby Penguin', personality: 'Playful', price: 2000, tier: 'mythic', special: 'babyPenguin', model: 'babyPenguin' }
+        babyPenguin: { hex: '#2A2A2A', name: 'Baby Penguin', personality: 'Playful', price: 2000, tier: 'mythic', special: 'babyPenguin', model: 'babyPenguin' },
+        babyJimothy: { hex: '#5A5A5A', name: 'Baby Jimothy', personality: 'Pudgy', price: 2000, tier: 'mythic', special: 'babyJimothy', model: 'babyJimothy' }
     };
     
     static TIER_COLORS = {
@@ -203,7 +204,8 @@ class Puffle {
         // Duck-specific emotes (for baby duck puffle)
         duck: ['🦆', '🐤', '🐣', '💛', '🌾', '🌻', '🪺', '🍞', '💕', '🏊'],
         // Baby penguin-specific emotes
-        babyPenguin: ['🐧', '🐣', '❄️', '🧊', '⛄', '🎿', '🐟', '💙', '🌊', '🥶']
+        babyPenguin: ['🐧', '🐣', '❄️', '🧊', '⛄', '🎿', '🐟', '💙', '🌊', '🥶'],
+        babyJimothy: ['🦝', '🍪', '🌰', '🐾', '💕', '✨', '🌙', '🗑️', '🎪', '😴']
     };
     
     // Urgent need emojis
@@ -558,6 +560,8 @@ class Puffle {
                     emoteSet = Puffle.RANDOM_EMOTES.duck;
                 } else if (colorData?.model === 'babyPenguin' && Math.random() > 0.5) {
                     emoteSet = Puffle.RANDOM_EMOTES.babyPenguin;
+                } else if (colorData?.model === 'babyJimothy' && Math.random() > 0.5) {
+                    emoteSet = Puffle.RANDOM_EMOTES.babyJimothy;
                 }
                 this.showEmote(emoteSet[Math.floor(Math.random() * emoteSet.length)]);
             }
@@ -1142,6 +1146,8 @@ class Puffle {
         } else if (this.mesh.userData.special === 'babyPenguin') {
             // Baby penguin puffle animations (same as duck)
             this._animateBabyPenguinPuffle(time, baseY);
+        } else if (this.mesh.userData.special === 'babyJimothy') {
+            this._animateBabyJimothyPuffle(time, baseY);
         }
         
         // Update emote bubble
@@ -1378,6 +1384,9 @@ class Puffle {
         }
         if (colorData.model === 'babyPenguin') {
             return this._createBabyPenguinMesh(THREE, colorData);
+        }
+        if (colorData.model === 'babyJimothy') {
+            return this._createBabyJimothyMesh(THREE, colorData);
         }
         
         const group = new THREE.Group();
@@ -2803,6 +2812,147 @@ class Puffle {
         this.mesh.position.y = baseY + idleBob + waddleBounce;
     }
     
+    // --- BABY JIMOTHY PUFFLE MESH (miniature raccoon) ---
+    _createBabyJimothyMesh(THREE, colorData) {
+        const group = new THREE.Group();
+        group.userData.special = 'babyJimothy';
+        group.userData.colorData = colorData;
+        group.userData.isBabyJimothyPuffle = true;
+
+        const mainMat = new THREE.MeshStandardMaterial({ color: '#5A5A5A', roughness: 0.9 });
+        const lightMat = new THREE.MeshStandardMaterial({ color: '#7A7A7A', roughness: 0.9 });
+        const darkMat = new THREE.MeshStandardMaterial({ color: '#404040', roughness: 0.9 });
+        const maskMat = new THREE.MeshStandardMaterial({ color: '#2A2820', roughness: 0.85 });
+        const muzzleMat = new THREE.MeshStandardMaterial({ color: '#6A6860', roughness: 0.88 });
+        const bellyMat = new THREE.MeshStandardMaterial({ color: '#9A9890', roughness: 0.9 });
+        const earInnerMat = new THREE.MeshStandardMaterial({ color: '#FFB0B8', roughness: 0.8 });
+        const noseMat = new THREE.MeshStandardMaterial({ color: '#1A1A1A', roughness: 0.5 });
+        const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.1 });
+        const pupilMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
+
+        const bodyGeo = new THREE.SphereGeometry(0.38, 16, 12);
+        const body = new THREE.Mesh(bodyGeo, mainMat);
+        body.scale.set(1.05, 0.82, 0.95);
+        body.castShadow = true;
+        body.name = 'body';
+        group.add(body);
+
+        const belly = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 10), bellyMat);
+        belly.scale.set(0.75, 0.65, 0.45);
+        belly.position.set(0, -0.06, 0.18);
+        group.add(belly);
+
+        const headGroup = new THREE.Group();
+        headGroup.name = 'jimothyHead';
+
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 16, 12), mainMat.clone());
+        headGroup.add(head);
+
+        [-0.11, 0.11].forEach((offset) => {
+            const mask = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), maskMat);
+            mask.scale.set(1.1, 0.9, 0.55);
+            mask.position.set(offset, 0.02, 0.12);
+            headGroup.add(mask);
+        });
+
+        const snout = new THREE.Mesh(new THREE.SphereGeometry(0.1, 10, 8), muzzleMat);
+        snout.scale.set(1.2, 0.75, 1.3);
+        snout.position.set(0, -0.04, 0.2);
+        headGroup.add(snout);
+
+        const nose = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 6), noseMat);
+        nose.position.set(0, -0.02, 0.28);
+        headGroup.add(nose);
+
+        [-0.09, 0.09].forEach((offset, idx) => {
+            const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), eyeWhiteMat);
+            eye.position.set(offset, 0.04, 0.18);
+            eye.scale.set(1, 1.05, 0.75);
+            headGroup.add(eye);
+
+            const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.028, 6, 6), pupilMat);
+            pupil.position.set(offset + (idx === 0 ? 0.01 : -0.01), 0.04, 0.22);
+            headGroup.add(pupil);
+
+            const shine = new THREE.Mesh(
+                new THREE.SphereGeometry(0.012, 6, 6),
+                new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.5 })
+            );
+            shine.position.set(offset + 0.02, 0.07, 0.23);
+            headGroup.add(shine);
+        });
+
+        [-1, 1].forEach((side) => {
+            const earGroup = new THREE.Group();
+            earGroup.name = side < 0 ? 'leftEar' : 'rightEar';
+            for (let i = 0; i < 3; i++) {
+                const ear = new THREE.Mesh(new THREE.ConeGeometry(0.045, 0.12, 6), mainMat.clone());
+                ear.position.set(side * (0.12 + i * 0.02), 0.18 + i * 0.03, -0.02 + i * 0.02);
+                ear.rotation.z = side * (0.15 + i * 0.05);
+                earGroup.add(ear);
+                if (i > 0) {
+                    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.07, 6), earInnerMat);
+                    inner.position.set(side * (0.1 + i * 0.02), 0.17 + i * 0.03, -0.01);
+                    inner.rotation.z = side * 0.12;
+                    earGroup.add(inner);
+                }
+            }
+            headGroup.add(earGroup);
+        });
+
+        headGroup.position.set(0, 0.28, 0.1);
+        group.add(headGroup);
+
+        const tailGroup = new THREE.Group();
+        tailGroup.name = 'jimothyTail';
+        for (let i = 0; i < 4; i++) {
+            const ringMat = i % 2 === 0 ? darkMat : lightMat;
+            const seg = new THREE.Mesh(new THREE.SphereGeometry(0.055 - i * 0.008, 8, 6), ringMat);
+            seg.position.set(0, 0.02, -0.08 - i * 0.07);
+            tailGroup.add(seg);
+        }
+        tailGroup.position.set(0, -0.02, -0.34);
+        group.add(tailGroup);
+
+        const legDefs = [
+            { name: 'flipper_l', x: -0.22, z: 0.16 },
+            { name: 'flipper_r', x: 0.22, z: 0.16 },
+            { name: 'foot_l', x: -0.18, z: -0.18 },
+            { name: 'foot_r', x: 0.18, z: -0.18 },
+        ];
+        legDefs.forEach(({ name, x, z }) => {
+            const legGroup = new THREE.Group();
+            legGroup.name = name;
+            const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.055, 0.16, 8), darkMat.clone());
+            leg.position.y = -0.08;
+            legGroup.add(leg);
+            const paw = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), lightMat);
+            paw.scale.set(1, 0.55, 1.1);
+            paw.position.set(0, -0.18, 0.02);
+            legGroup.add(paw);
+            legGroup.position.set(x, -0.22, z);
+            group.add(legGroup);
+        });
+
+        const emoteBubble = this.createEmoteBubble(THREE);
+        emoteBubble.position.set(0, 0.85, 0);
+        emoteBubble.visible = false;
+        group.add(emoteBubble);
+        this.emoteBubble = emoteBubble;
+
+        const accessoriesGroup = new THREE.Group();
+        accessoriesGroup.name = 'accessories';
+        accessoriesGroup.position.set(0, 0.12, 0.12);
+        group.add(accessoriesGroup);
+        this._rebuildAccessories(THREE, accessoriesGroup);
+
+        group.scale.set(0.58, 0.58, 0.58);
+        group.position.set(this.position.x, 0.5, this.position.z);
+
+        this.mesh = group;
+        return group;
+    }
+
     // --- BABY PENGUIN PUFFLE MESH (same as duck but black/white) ---
     _createBabyPenguinMesh(THREE, colorData) {
         const group = new THREE.Group();
@@ -3115,6 +3265,75 @@ class Puffle {
         const idleBob = Math.sin(time * 3) * 0.02;
         const waddleBounce = isMoving ? Math.abs(Math.sin(time * 6)) * 0.05 : 0;
         this.mesh.position.y = baseY + idleBob + waddleBounce;
+    }
+
+    _animateBabyJimothyPuffle(time, baseY) {
+        if (!this.mesh) return;
+
+        const isMoving = this.state === 'following';
+        const isPlaying = this.state === 'playing';
+        const isExcited = this.mood === 'excited' || this.mood === 'ecstatic' || this.mood === 'playful';
+
+        const tail = this.mesh.getObjectByName('jimothyTail');
+        if (tail) {
+            const wagSpeed = isMoving ? 10 : isPlaying ? 12 : 2.5;
+            const wag = isMoving ? 0.35 : isPlaying ? 0.45 : 0.18;
+            tail.rotation.y = Math.sin(time * wagSpeed) * wag;
+            tail.rotation.x = Math.sin(time * (wagSpeed * 0.7)) * 0.1;
+        }
+
+        const leftEar = this.mesh.getObjectByName('leftEar');
+        const rightEar = this.mesh.getObjectByName('rightEar');
+        if (leftEar && rightEar) {
+            const earTwitch = Math.sin(time * 0.6) > 0.88 ? Math.sin(time * 18) * 0.12 : 0;
+            leftEar.rotation.z = -0.08 + earTwitch;
+            rightEar.rotation.z = 0.08 - earTwitch;
+        }
+
+        const head = this.mesh.getObjectByName('jimothyHead');
+        if (head) {
+            const bobSpeed = isMoving ? 14 : 1.4;
+            head.rotation.x = 0.03 + Math.sin(time * bobSpeed) * (isMoving ? 0.05 : 0.015);
+            head.rotation.y = Math.sin(time * 0.35) * 0.025;
+        }
+
+        const flipperL = this.mesh.getObjectByName('flipper_l');
+        const flipperR = this.mesh.getObjectByName('flipper_r');
+        const footL = this.mesh.getObjectByName('foot_l');
+        const footR = this.mesh.getObjectByName('foot_r');
+
+        if (flipperL && flipperR && footL && footR) {
+            if (isMoving) {
+                const shuffleSpeed = 14;
+                const stride = 0.38;
+                const scurryWave = (phase) => {
+                    const s = Math.sin(phase);
+                    return s > 0 ? Math.pow(s, 0.55) * 0.9 : s * 0.45;
+                };
+                flipperL.rotation.x = scurryWave(time * shuffleSpeed) * stride;
+                flipperR.rotation.x = scurryWave(time * shuffleSpeed + Math.PI) * stride;
+                footL.rotation.x = scurryWave(time * shuffleSpeed + Math.PI) * stride;
+                footR.rotation.x = scurryWave(time * shuffleSpeed) * stride;
+            } else {
+                [flipperL, flipperR, footL, footR].forEach((leg) => {
+                    leg.rotation.x *= 0.9;
+                });
+            }
+        }
+
+        if (isMoving) {
+            this.mesh.rotation.z = Math.sin(time * 14) * 0.06;
+        } else {
+            this.mesh.rotation.z = Math.sin(time * 0.9) * 0.01;
+        }
+
+        const idleBob = Math.sin(time * 1.4) * 0.015;
+        const shuffleBounce = isMoving ? Math.abs(Math.sin(time * 14)) * 0.045 : 0;
+        this.mesh.position.y = baseY + idleBob + shuffleBounce;
+
+        if (isPlaying) {
+            this.mesh.rotation.x = Math.sin(time * 3) * 0.08;
+        }
     }
     
     // Create the emote bubble sprite

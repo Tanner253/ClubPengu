@@ -194,6 +194,11 @@ export const generateDogPalette = (primary, secondary) => {
 
 // Y offset to position the dog properly (lower than original to not float)
 const Y_OFFSET = 4;
+/** Back legs — forward Z so hips sit on body (pivot z must match leg top) */
+const BACK_HIP_Y = -6;
+const BACK_LEG_PIVOT_Z = -3;
+const BACK_LEG_Z = -3;
+const BACK_LEG_Z_INNER = -4;
 
 /**
  * Generate the dog's head with snout and ears
@@ -420,27 +425,26 @@ export const generateDoginalLeg = (isLeft) => {
     };
     
     const hipX = side * 3;
-    const hipY = -6;
-    
-    // Back leg (thicker at top) - moved backwards towards tail
+    const hipY = BACK_HIP_Y;
+
+    // Back leg — tucked under haunch (was z=-7/-8, too far from body after pivot fix)
     for (let i = 0; i < 6; i++) {
         const legX = hipX;
         const legY = hipY - i;
-        addVoxel(legX, legY, -7, 'main');
-        addVoxel(legX, legY, -8, 'main');
+        addVoxel(legX, legY, BACK_LEG_Z, 'main');
+        addVoxel(legX, legY, BACK_LEG_Z_INNER, 'main');
         if (i < 3) {
-            addVoxel(legX + side, legY, -7, 'mainDark');
+            addVoxel(legX + side, legY, BACK_LEG_Z, 'mainDark');
         }
     }
-    
-    // Back paw
+
+    // Back paw — slightly forward of leg column
     const pawY = hipY - 6;
-    addVoxel(hipX, pawY, -7, 'mainLight');
-    addVoxel(hipX, pawY, -6, 'mainLight');
-    addVoxel(hipX, pawY, -5, 'mainLight');
-    // Toe beans
-    addVoxel(hipX, pawY - 1, -6, 'mainDark');
-    addVoxel(hipX, pawY - 1, -5, 'mainDark');
+    addVoxel(hipX, pawY, BACK_LEG_Z, 'mainLight');
+    addVoxel(hipX, pawY, BACK_LEG_Z + 1, 'mainLight');
+    addVoxel(hipX, pawY, BACK_LEG_Z + 2, 'mainLight');
+    addVoxel(hipX, pawY - 1, BACK_LEG_Z + 1, 'mainDark');
+    addVoxel(hipX, pawY - 1, BACK_LEG_Z + 2, 'mainDark');
     
     return Array.from(voxelMap.values());
 };
@@ -525,8 +529,8 @@ export const getDoginalPivots = () => ({
     body: { x: 0, y: -4 + Y_OFFSET, z: 0 },
     armLeft: { x: 4, y: -4 + Y_OFFSET, z: 3 },   // Y raised to -4
     armRight: { x: -4, y: -4 + Y_OFFSET, z: 3 }, // Y raised to -4
-    legLeft: { x: 3, y: -6 + Y_OFFSET, z: -5 },  // Z moved to -7
-    legRight: { x: -3, y: -6 + Y_OFFSET, z: -5 },// Z moved to -7
+    legLeft: { x: 3, y: BACK_HIP_Y + Y_OFFSET, z: BACK_LEG_PIVOT_Z },
+    legRight: { x: -3, y: BACK_HIP_Y + Y_OFFSET, z: BACK_LEG_PIVOT_Z },
 });
 
 /**

@@ -5,7 +5,9 @@
 
 // Day/Night duration configuration
 // DAY_LENGTH_RATIO: 0.5 = equal day/night, 0.7 = 70% daylight, etc.
-const DAY_LENGTH_RATIO = 0.7; // 70% of cycle is daylight, 30% is night
+const DAY_LENGTH_RATIO = 0.75; // 75% daylight — shorter, less oppressive nights
+/** Floor for dayFactor so midnight never goes fully dark */
+const MIN_DAY_FACTOR = 0.38;
 
 /**
  * Remap time to create longer days and shorter nights
@@ -62,18 +64,18 @@ export function updateDayNightCycle({
     const sunY = Math.max(5, sunHeight * 80 + 50);
     sunLight.position.set(sunX, sunY, 60);
     
-    // Daylight factor: 0 at night, 1 at noon (smooth sine curve)
-    const dayFactor = Math.max(0, sunHeight);
-    const nightFactor = 1 - dayFactor;
+    // Daylight factor: 0 at night, 1 at noon — floored so nights stay softly lit
+    const rawSunHeight = Math.max(0, sunHeight);
+    const dayFactor = MIN_DAY_FACTOR + rawSunHeight * (1 - MIN_DAY_FACTOR);
+    const nightFactor = Math.max(0, -sunHeight);
     
-    // Colors - smooth interpolation between day and night
-    // Night colors brightened to reduce darkness
+    // Colors - smooth interpolation between day and night (night = moonlit twilight, not pitch black)
     const dayAmbient = { r: 0.75, g: 0.88, b: 0.94 };
-    const nightAmbient = { r: 0.45, g: 0.50, b: 0.60 }; // Brighter night ambient
+    const nightAmbient = { r: 0.58, g: 0.64, b: 0.74 };
     const daySun = { r: 1.0, g: 0.98, b: 0.95 };
-    const nightSun = { r: 0.5, g: 0.6, b: 0.85 }; // Brighter moonlight
+    const nightSun = { r: 0.62, g: 0.70, b: 0.88 };
     const daySky = { r: 0.53, g: 0.81, b: 0.92 };
-    const nightSky = { r: 0.20, g: 0.25, b: 0.40 }; // Brighter night sky
+    const nightSky = { r: 0.38, g: 0.45, b: 0.62 };
     
     // Lerp colors based on dayFactor
     const lerpColor = (day, night, factor) => ({
@@ -91,9 +93,9 @@ export function updateDayNightCycle({
     sunLight.color.setRGB(sunC.r, sunC.g, sunC.b);
     scene.background.setRGB(skyC.r, skyC.g, skyC.b);
     
-    // Intensities - brighter during day, less dim at night (always visible)
-    sunLight.intensity = 0.45 + dayFactor * 0.5; // Night: 0.45, Day: 0.95
-    ambientLight.intensity = 0.5 + dayFactor * 0.15; // Night: 0.5, Day: 0.65
+    // Intensities — softer nights: never drop below ~58% of daytime fill
+    sunLight.intensity = 0.58 + dayFactor * 0.37; // Night: ~0.58, Day: 0.95
+    ambientLight.intensity = 0.58 + dayFactor * 0.10; // Night: ~0.58, Day: 0.68
     
     // Update fog color to match sky
     if (scene.fog) scene.fog.color.copy(scene.background);

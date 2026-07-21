@@ -36,7 +36,9 @@ import {
     TORTOISE_PALETTE,
     generateTortoisePalette,
     BlackBullGenerators,
-    BLACK_BULL_PALETTE
+    BLACK_BULL_PALETTE,
+    JimothyGenerators,
+    JIMOTHY_PALETTE
 } from '../characters';
 
 // Color palette for penguin skins
@@ -410,6 +412,19 @@ function buildPenguin(THREE, group, appearance) {
             ...BlackBullGenerators.legLeft(),
             ...BlackBullGenerators.legRight(),
             ...BlackBullGenerators.tail()
+        ];
+    } else if (characterType === 'jimothy') {
+        characterPalette = JIMOTHY_PALETTE;
+        voxels = [
+            ...JimothyGenerators.head(),
+            ...JimothyGenerators.earLeft(),
+            ...JimothyGenerators.earRight(),
+            ...JimothyGenerators.body(),
+            ...JimothyGenerators.armLeft(),
+            ...JimothyGenerators.armRight(),
+            ...JimothyGenerators.legLeft(),
+            ...JimothyGenerators.legRight(),
+            ...JimothyGenerators.tail()
         ];
     } else if (characterType === 'marcus') {
         characterPalette = MARCUS_PALETTE;

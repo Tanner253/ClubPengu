@@ -42,7 +42,14 @@ import {
     TORTOISE_PALETTES,
     generateTortoisePalette,
     BlackBullGenerators,
-    BLACK_BULL_PALETTE
+    BLACK_BULL_PALETTE,
+    BLACK_BULL_MESH_BASE_Y,
+    BLACK_BULL_HAT_OFFSET,
+    BLACK_BULL_PROPELLER_BLADE_POS,
+    JimothyGenerators,
+    JIMOTHY_PALETTE,
+    JIMOTHY_HAT_OFFSET,
+    JIMOTHY_MESH_BASE_Y
 } from '../characters';
 
 /**
@@ -306,11 +313,29 @@ export function createPenguinBuilder(THREE) {
         
         if (pivot) {
             g.position.set(pivot.x * VOXEL_SIZE, pivot.y * VOXEL_SIZE, pivot.z * VOXEL_SIZE);
+            // AnimationSystem restores foot z from this — required for quadruped hind legs (non-zero pivot z)
+            g.userData.defaultPositionZ = pivot.z * VOXEL_SIZE;
         }
         
         return g;
     };
     
+    /**
+     * Attach spinning propeller blades at voxel-space position (y, z)
+     */
+    const attachPropellerBlades = (group, y, z) => {
+        const blades = new THREE.Group();
+        blades.name = 'propeller_blades';
+        blades.position.set(0, y * VOXEL_SIZE, z * VOXEL_SIZE);
+        const bladeGeo = new THREE.BoxGeometry(4 * VOXEL_SIZE, 0.2 * VOXEL_SIZE, 0.5 * VOXEL_SIZE);
+        const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+        const b1 = new THREE.Mesh(bladeGeo, bladeMat);
+        const b2 = new THREE.Mesh(bladeGeo, bladeMat);
+        b2.rotation.y = Math.PI / 2;
+        blades.add(b1, b2);
+        group.add(blades);
+    };
+
     /**
      * Add hat with special effects
      */
@@ -323,16 +348,7 @@ export function createPenguinBuilder(THREE) {
         
         // Add spinning propeller blades for propeller hat
         if (data.hat === 'propeller') {
-            const blades = new THREE.Group();
-            blades.name = 'propeller_blades';
-            blades.position.set(0, 13 * VOXEL_SIZE, 0);
-            const bladeGeo = new THREE.BoxGeometry(4 * VOXEL_SIZE, 0.2 * VOXEL_SIZE, 0.5 * VOXEL_SIZE);
-            const bladeMat = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-            const b1 = new THREE.Mesh(bladeGeo, bladeMat);
-            const b2 = new THREE.Mesh(bladeGeo, bladeMat);
-            b2.rotation.y = Math.PI / 2;
-            blades.add(b1, b2);
-            group.add(blades);
+            attachPropellerBlades(group, 13, 0);
         }
         
         // Flaming Crown - fire particles
@@ -1424,16 +1440,33 @@ export function createPenguinBuilder(THREE) {
         const tailVoxels = BlackBullGenerators.tail();
         const tail = buildPartMerged(tailVoxels, bullPalette, pivots.tail);
         tail.name = 'tail';
+
+        const noseRingVoxels = BlackBullGenerators.noseRing();
+        const noseRing = buildPartMerged(noseRingVoxels, bullPalette, pivots.noseRing);
+        noseRing.name = 'nose_ring';
+        head.add(noseRing);
         
         group.add(body, head, armL, armR, legL, legR, tail);
         
         if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
             const hatVoxels = ASSETS.HATS[data.hat];
             if (hatVoxels && hatVoxels.length > 0) {
-                const offsetHatVoxels = hatVoxels.map(v => ({ ...v, y: v.y + 4, z: v.z + 4 }));
+                const offsetHatVoxels = hatVoxels.map(v => ({
+                    ...v,
+                    y: v.y + BLACK_BULL_HAT_OFFSET.y,
+                    z: v.z + BLACK_BULL_HAT_OFFSET.z,
+                }));
                 const hat = buildPartMerged(offsetHatVoxels, PALETTE);
                 hat.name = 'hat';
                 group.add(hat);
+
+                if (data.hat === 'propeller') {
+                    attachPropellerBlades(
+                        group,
+                        BLACK_BULL_PROPELLER_BLADE_POS.y,
+                        BLACK_BULL_PROPELLER_BLADE_POS.z
+                    );
+                }
             }
         }
         
@@ -1449,7 +1482,58 @@ export function createPenguinBuilder(THREE) {
         }
         
         group.scale.set(0.18, 0.18, 0.18);
-        group.position.y = 0.8;
+        group.position.y = BLACK_BULL_MESH_BASE_Y;
+        
+        return group;
+    };
+    
+    /**
+     * Build Jimothy (short-spined raccoon) mesh
+     */
+    const buildJimothyMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = JimothyGenerators.pivots();
+        const palette = JIMOTHY_PALETTE;
+        
+        const body = buildPartMerged(JimothyGenerators.body(), palette);
+        body.name = 'body';
+        
+        const head = buildPartMerged(JimothyGenerators.head(), palette);
+        head.name = 'head';
+        
+        const armL = buildPartMerged(JimothyGenerators.armLeft(), palette, pivots.armLeft);
+        armL.name = 'flipper_l';
+        
+        const armR = buildPartMerged(JimothyGenerators.armRight(), palette, pivots.armRight);
+        armR.name = 'flipper_r';
+        
+        const legL = buildPartMerged(JimothyGenerators.legLeft(), palette, pivots.legLeft);
+        legL.name = 'foot_l';
+        
+        const legR = buildPartMerged(JimothyGenerators.legRight(), palette, pivots.legRight);
+        legR.name = 'foot_r';
+        
+        const tail = buildPartMerged(JimothyGenerators.tail(), palette, pivots.tail);
+        tail.name = 'tail';
+        
+        group.add(body, head, armL, armR, legL, legR, tail);
+        
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            if (hatVoxels && hatVoxels.length > 0) {
+                const offsetHatVoxels = hatVoxels.map(v => ({
+                    ...v,
+                    y: v.y + JIMOTHY_HAT_OFFSET.y,
+                    z: v.z + JIMOTHY_HAT_OFFSET.z,
+                }));
+                const hat = buildPartMerged(offsetHatVoxels, PALETTE);
+                hat.name = 'hat';
+                group.add(hat);
+            }
+        }
+        
+        group.scale.set(0.18, 0.18, 0.18);
+        group.position.y = JIMOTHY_MESH_BASE_Y;
         
         return group;
     };
@@ -2429,6 +2513,8 @@ export function createPenguinBuilder(THREE) {
             group = buildTortoiseMesh(data);
         } else if (data.characterType === 'blackBull') {
             group = buildBlackBullMesh(data);
+        } else if (data.characterType === 'jimothy') {
+            group = buildJimothyMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {

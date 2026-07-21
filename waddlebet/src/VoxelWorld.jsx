@@ -34,6 +34,7 @@ import { useIgloo } from './igloo';
 import { getRoomLabel } from './utils/roomLabels';
 import { releaseHudFocusForGameKey } from './utils/gameHudFocus';
 import { useLanguage } from './i18n';
+import { getCharacterMeshBaseY } from './characters';
 import { EMOTE_WHEEL_ITEMS, LOOPING_EMOTES, EMOTE_EMOJI_MAP, createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, GoldLobbySlotSystem, JackpotCelebration, IceFishingSystem, createMountainBackground, performanceManager, PERFORMANCE_PRESETS } from './systems';
 import { getHoleStockRows, getHoleStockSignature, formatRegrowEta, getHoleStatusById } from './utils/fishingHoleStock';
 import { playSfx, stopTravelHum, setMusicEnergy, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME, normalizeMusicVolume, updateProximityAmbient, stopProximityAmbient, handleRemotePlayerSfx } from './audio';
@@ -2991,7 +2992,7 @@ const VoxelWorld = ({
                     mpSendEmote(null);
                     if (playerRef.current && playerRef.current.children[0]) {
                         const m = playerRef.current.children[0];
-                        m.position.y = 0.8;
+                        m.position.y = getCharacterMeshBaseY(penguinDataRef.current?.characterType);
                         m.rotation.x = 0;
                         m.rotation.z = 0; // Reset Z rotation too (for Breakdance)
                     }
@@ -3481,7 +3482,7 @@ const VoxelWorld = ({
                 mpSendEmote(null); // Notify server
                 if (playerRef.current && playerRef.current.children[0]) {
                     const m = playerRef.current.children[0];
-                    m.position.y = 0.8;
+                    m.position.y = getCharacterMeshBaseY(penguinDataRef.current?.characterType);
                     m.rotation.x = 0;
                     m.rotation.z = 0;
                 }
@@ -3538,7 +3539,7 @@ const VoxelWorld = ({
                     // Reset penguin mesh position (inner body)
                     if (playerRef.current && playerRef.current.children[0]) {
                         const m = playerRef.current.children[0];
-                        m.position.y = 0.8;
+                        m.position.y = getCharacterMeshBaseY(penguinDataRef.current?.characterType);
                         m.rotation.x = 0;
                     }
                 } else {
@@ -7713,7 +7714,7 @@ const VoxelWorld = ({
             mpSendEmote(null);
             if (playerRef.current?.children[0]) {
                 const m = playerRef.current.children[0];
-                m.position.y = 0.8;
+                m.position.y = getCharacterMeshBaseY(penguinDataRef.current?.characterType);
                 m.rotation.x = 0;
                 m.rotation.z = 0;
             }

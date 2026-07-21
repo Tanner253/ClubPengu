@@ -260,7 +260,7 @@ function Navigation() {
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="flex md:hidden items-center gap-3">
+          <div className="flex md:hidden items-center gap-2 sm:gap-3">
             <a
               href="https://waddle.bet"
               target="_blank"
@@ -361,6 +361,20 @@ function Navigation() {
 /** Solana + Robinhood chain strip shown in the hero. */
 function HeroChainsStrip() {
   const { t } = useWhitepaperLanguage();
+  const [copiedCa, setCopiedCa] = useState(false);
+
+  const copySolanaMint = async () => {
+    try {
+      await navigator.clipboard.writeText(CP_SOLANA_MINT);
+      setCopiedCa(true);
+      setTimeout(() => setCopiedCa(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  const abbreviatedMint = `${CP_SOLANA_MINT.slice(0, 4)}...${CP_SOLANA_MINT.slice(-4)}`;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 16 }}
@@ -377,7 +391,23 @@ function HeroChainsStrip() {
               {t("hero.chains.solanaStatus")}
             </span>
           </div>
-          <p className="text-slate-400 text-xs">SPL · Phantom · Mainnet</p>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-slate-400 text-xs">SPL · Phantom · Mainnet</p>
+            <button
+              type="button"
+              onClick={copySolanaMint}
+              className="inline-flex items-center gap-1 shrink-0 text-[10px] font-mono text-cyan-400/75 hover:text-cyan-300 transition-colors"
+              title={copiedCa ? t("nav.caCopied") : t("contract.copyTitle")}
+              aria-label={copiedCa ? t("nav.caCopied") : t("contract.copyTitle")}
+            >
+              <span>{abbreviatedMint}</span>
+              {copiedCa ? (
+                <Check className="w-2.5 h-2.5 text-green-400" />
+              ) : (
+                <Copy className="w-2.5 h-2.5 opacity-50" />
+              )}
+            </button>
+          </div>
         </div>
         <div className="glass-card rounded-xl p-4 border border-white/10 text-left">
           <div className="flex items-center gap-2 mb-2">

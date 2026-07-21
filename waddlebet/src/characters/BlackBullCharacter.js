@@ -3,6 +3,8 @@
  * Beefy black bull with white curved horns and thick quadruped build.
  */
 
+import { VOXEL_SIZE } from '../constants';
+
 export const BLACK_BULL_PALETTE = {
     main: '#121212',
     mainLight: '#2E2E2E',
@@ -16,7 +18,9 @@ export const BLACK_BULL_PALETTE = {
     hornLight: '#FFFFFF',
     hornDark: '#D0D0D0',
     hornTip: '#E8E8E8',
-    noseRing: '#C0C0C0',
+    noseRing: '#D4AF37',
+    noseRingLight: '#F0D060',
+    noseRingDark: '#A8860D',
     hoof: '#1E1E1E',
     hoofLight: '#333333',
     eyeWhite: '#FFFFFF',
@@ -29,6 +33,54 @@ export const BLACK_BULL_PALETTE = {
 
 const Y_OFFSET = 3;
 const Z_HEAD_OFFSET = 5;
+/** Shared ground plane for all four hooves (generator Y before Y_OFFSET) */
+const HOOF_BOTTOM_Y = -16;
+const FRONT_SHOULDER_Y = -2;
+const BACK_HIP_Y = -6;
+const NOSE_RING_PIERCE_Y = 3;
+const NOSE_RING_PIERCE_Z = 10;
+/** How far the ring sits into the muzzle (voxels toward the skull) */
+const NOSE_RING_Z_INSET = 1;
+/** Vertical ring hangs below pierce; pivot at septum */
+const NOSE_RING_CENTER_Y = 1;
+const NOSE_RING_RADIUS = 2;
+const NOSE_RING_TUBE = 0.55;
+
+const getNoseRingPlaneZ = () => NOSE_RING_PIERCE_Z - NOSE_RING_Z_INSET;
+
+/** Cells occupied by the nose ring — snout voxels are skipped here to prevent z-fighting */
+const isNoseRingCell = (x, y, z) => {
+    const ringZ = getNoseRingPlaneZ();
+
+    if (y === NOSE_RING_PIERCE_Y && Math.abs(x) <= 1 && z >= ringZ && z < NOSE_RING_PIERCE_Z) {
+        return true;
+    }
+
+    if (z !== ringZ) return false;
+    const dist = Math.hypot(x, y - NOSE_RING_CENTER_Y);
+    return Math.abs(dist - NOSE_RING_RADIUS) <= NOSE_RING_TUBE;
+};
+
+const fillBoxSkipRing = (voxels, x0, x1, y0, y1, z0, z1, color, yOff = Y_OFFSET, zOff = 0) => {
+    for (let x = x0; x <= x1; x++) {
+        for (let y = y0; y <= y1; y++) {
+            for (let z = z0; z <= z1; z++) {
+                if (isNoseRingCell(x, y, z)) continue;
+                voxels.add(x, y, z, color, yOff, zOff);
+            }
+        }
+    }
+};
+/** Whole-model Y lift (voxels) — one offset on the entire mesh, not per-part */
+export const BLACK_BULL_MESH_LIFT_VOXELS = 4;
+export const BLACK_BULL_MESH_BASE_Y = 0.8 + BLACK_BULL_MESH_LIFT_VOXELS * VOXEL_SIZE * 0.18;
+/** Hat voxels authored for penguin heads — offset onto bull crown between horns */
+export const BLACK_BULL_HAT_OFFSET = { y: 2, z: 4 };
+/** Propeller hub in hat asset is y=12; blades sit one voxel above with hat offset applied */
+export const BLACK_BULL_PROPELLER_BLADE_POS = {
+    y: 12 + BLACK_BULL_HAT_OFFSET.y + 1,
+    z: BLACK_BULL_HAT_OFFSET.z,
+};
 
 const createVoxelMap = () => {
     const map = new Map();
@@ -67,23 +119,27 @@ const fillCylinder = (voxels, cx, cz, y0, y1, radius, color, yOff = Y_OFFSET, zO
 };
 
 /**
- * White curved horns — sweep out, then up, then slightly back (classic bull silhouette)
+ * White curved horns — sweep sideways first, then curl up (classic bull silhouette)
  */
 const addCurvedHorn = (voxels, side) => {
     const points = [];
-    for (let t = 0; t <= 1; t += 0.08) {
-        const outward = Math.sin(t * Math.PI * 0.55);
-        const rise = t * t * 10 + t * 4;
-        const back = -t * t * 2.5;
+    for (let t = 0; t <= 1; t += 0.09) {
+        const sweepT = Math.min(1, t / 0.55);
+        const riseT = Math.max(0, (t - 0.42) / 0.58);
+
+        const outward = Math.sin(sweepT * Math.PI * 0.5) * 3.6;
+        const rise = riseT * riseT * 3 + riseT * 1;
+        const back = -riseT * riseT * 1.2;
+
         points.push({
-            x: side * (3.5 + outward * 4.2),
-            y: 8.5 + rise,
-            z: 1.5 + back,
+            x: side * (3.6 + outward),
+            y: 8 + rise,
+            z: 1.2 + back,
         });
     }
 
     points.forEach((p, i) => {
-        const thickness = i < 3 ? 1.4 : i > points.length - 3 ? 0.9 : 1.2;
+        const thickness = i < 3 ? 1.3 : i > points.length - 3 ? 0.85 : 1.1;
         const color = i > points.length * 0.75 ? 'hornTip' : i % 2 === 0 ? 'horn' : 'hornLight';
         for (let dx = -1; dx <= 1; dx++) {
             for (let dy = 0; dy <= 1; dy++) {
@@ -125,14 +181,13 @@ export const generateBlackBullHead = () => {
         }
     }
 
-    // Broad flat bull muzzle
-    fillBox(voxels, -3, 3, 1, 4, 4, 9, 'muzzle', Y_OFFSET, Z_HEAD_OFFSET);
-    fillBox(voxels, -2, 2, 2, 3, 9, 10, 'muzzleLight', Y_OFFSET, Z_HEAD_OFFSET);
+    // Broad flat bull muzzle (carve ring channel so gold/black never share a face)
+    fillBoxSkipRing(voxels, -3, 3, 1, 4, 4, 9, 'muzzle', Y_OFFSET, Z_HEAD_OFFSET);
+    fillBoxSkipRing(voxels, -2, 2, 2, 3, 9, 10, 'muzzleLight', Y_OFFSET, Z_HEAD_OFFSET);
 
     // Nostrils
     voxels.add(-1, 3, 10, 'nose', Y_OFFSET, Z_HEAD_OFFSET);
     voxels.add(1, 3, 10, 'nose', Y_OFFSET, Z_HEAD_OFFSET);
-    voxels.add(0, 3, 10, 'noseRing', Y_OFFSET, Z_HEAD_OFFSET);
 
     // Eyes on sides — stern forward gaze
     [-4, 4].forEach((eyeX) => {
@@ -156,6 +211,43 @@ export const generateBlackBullHead = () => {
 
     addCurvedHorn(voxels, -1);
     addCurvedHorn(voxels, 1);
+
+    return voxels.values();
+};
+
+/** Gold nose ring — vertical torus pierced through septum, hangs on snout */
+export const generateBlackBullNoseRing = () => {
+    const voxels = createVoxelMap();
+    const ringZ = getNoseRingPlaneZ();
+
+    // Hanging ring in X–Y plane (circle faces forward; edge-on from the side)
+    for (let x = -NOSE_RING_RADIUS - 1; x <= NOSE_RING_RADIUS + 1; x++) {
+        for (let y = NOSE_RING_CENTER_Y - NOSE_RING_RADIUS - 1; y <= NOSE_RING_PIERCE_Y + 1; y++) {
+            const dist = Math.hypot(x, y - NOSE_RING_CENTER_Y);
+            const band = Math.abs(dist - NOSE_RING_RADIUS);
+            if (band > NOSE_RING_TUBE) continue;
+
+            const outer = dist >= NOSE_RING_RADIUS;
+            const color = outer
+                ? 'noseRingLight'
+                : (y < NOSE_RING_CENTER_Y ? 'noseRingDark' : 'noseRing');
+            voxels.add(x, y, ringZ, color, Y_OFFSET, Z_HEAD_OFFSET);
+        }
+    }
+
+    // Septum bar — inside snout only (stop before front face to avoid z-fighting)
+    for (let x = -1; x <= 1; x++) {
+        for (let z = ringZ; z < NOSE_RING_PIERCE_Z; z++) {
+            voxels.add(
+                x,
+                NOSE_RING_PIERCE_Y,
+                z,
+                x === 0 ? 'noseRingLight' : 'noseRing',
+                Y_OFFSET,
+                Z_HEAD_OFFSET
+            );
+        }
+    }
 
     return voxels.values();
 };
@@ -209,11 +301,12 @@ export const generateBlackBullArm = (isLeft) => {
     const voxels = createVoxelMap();
     const side = isLeft ? 1 : -1;
     const shoulderX = side * 5;
-    const shoulderY = -2;
+    const shoulderY = FRONT_SHOULDER_Y;
     const legZ = 5;
+    const legSegments = FRONT_SHOULDER_Y - (HOOF_BOTTOM_Y + 1);
 
-    // Thick front leg — 2x2 column tapering to hoof
-    for (let i = 0; i <= 9; i++) {
+    // Front leg — extend to same hoof plane as back legs
+    for (let i = 0; i <= legSegments; i++) {
         const legY = shoulderY - i;
         const spread = i < 3 ? 1 : 0;
         fillBox(
@@ -232,7 +325,7 @@ export const generateBlackBullArm = (isLeft) => {
         }
     }
 
-    const hoofY = shoulderY - 10;
+    const hoofY = HOOF_BOTTOM_Y + 1;
     fillBox(voxels, shoulderX - 1, shoulderX + 1, hoofY, hoofY, legZ - 1, legZ + 2, 'hoofLight');
     fillBox(voxels, shoulderX - 1, shoulderX + 1, hoofY - 1, hoofY - 1, legZ, legZ + 1, 'hoof');
 
@@ -243,16 +336,17 @@ export const generateBlackBullLeg = (isLeft) => {
     const voxels = createVoxelMap();
     const side = isLeft ? 1 : -1;
     const hipX = side * 4;
-    const hipY = -6;
+    const hipY = BACK_HIP_Y;
     const legZ = -6;
+    const legSegments = BACK_HIP_Y - (HOOF_BOTTOM_Y + 1);
 
-    for (let i = 0; i <= 8; i++) {
+    for (let i = 0; i <= legSegments; i++) {
         const legY = hipY - i;
         fillBox(voxels, hipX - 1, hipX + 1, legY, legY + 1, legZ - 1, legZ + 1, i < 2 ? 'mainDeep' : 'main');
         voxels.add(hipX + side, legY, legZ, 'mainDark');
     }
 
-    const hoofY = hipY - 9;
+    const hoofY = HOOF_BOTTOM_Y + 1;
     fillBox(voxels, hipX - 1, hipX + 1, hoofY, hoofY, legZ - 1, legZ + 1, 'hoofLight');
     fillBox(voxels, hipX - 1, hipX + 1, hoofY - 1, hoofY - 1, legZ, legZ, 'hoof');
 
@@ -274,11 +368,12 @@ export const generateBlackBullTail = () => {
 export const getBlackBullPivots = () => ({
     head: { x: 0, y: 2 + Y_OFFSET, z: 4 },
     body: { x: 0, y: -4 + Y_OFFSET, z: 0 },
-    armLeft: { x: 5, y: -2 + Y_OFFSET, z: 5 },
-    armRight: { x: -5, y: -2 + Y_OFFSET, z: 5 },
-    legLeft: { x: 4, y: -6 + Y_OFFSET, z: -6 },
-    legRight: { x: -4, y: -6 + Y_OFFSET, z: -6 },
+    armLeft: { x: 5, y: FRONT_SHOULDER_Y + Y_OFFSET, z: 5 },
+    armRight: { x: -5, y: FRONT_SHOULDER_Y + Y_OFFSET, z: 5 },
+    legLeft: { x: 4, y: BACK_HIP_Y + Y_OFFSET, z: -6 },
+    legRight: { x: -4, y: BACK_HIP_Y + Y_OFFSET, z: -6 },
     tail: { x: 0, y: -5 + Y_OFFSET, z: -6 },
+    noseRing: { x: 0, y: NOSE_RING_PIERCE_Y + Y_OFFSET, z: NOSE_RING_PIERCE_Z + Z_HEAD_OFFSET },
 });
 
 export const generateBlackBullComplete = () => {
@@ -291,6 +386,7 @@ export const generateBlackBullComplete = () => {
     };
 
     addVoxels(generateBlackBullHead());
+    addVoxels(generateBlackBullNoseRing());
     addVoxels(generateBlackBullBody());
     addVoxels(generateBlackBullArm(true));
     addVoxels(generateBlackBullArm(false));
@@ -303,6 +399,7 @@ export const generateBlackBullComplete = () => {
 
 export const BlackBullGenerators = {
     head: generateBlackBullHead,
+    noseRing: generateBlackBullNoseRing,
     body: generateBlackBullBody,
     armLeft: () => generateBlackBullArm(true),
     armRight: () => generateBlackBullArm(false),

@@ -153,6 +153,10 @@ export const generateTortoisePalette = (primary, secondary) => {
 };
 
 const Y_OFFSET = 4;
+/** Back legs — forward Z so hips sit under plastron (extends to z≈-5, not z=-8) */
+const BACK_LEG_TOP_Y = -8;
+const BACK_LEG_PIVOT_Z = -3;
+const BACK_LEG_Z = -3;
 
 /**
  * Generate the tortoise head + long neck
@@ -419,7 +423,7 @@ export const generateTortoiseArm = (isLeft) => {
 };
 
 /**
- * Generate back leg - at z=-8, right next to the tail
+ * Generate back leg — under rear of shell (was z=-8, detached after pivot normalization)
  */
 export const generateTortoiseLeg = (isLeft) => {
     const voxelMap = new Map();
@@ -436,9 +440,9 @@ export const generateTortoiseLeg = (isLeft) => {
     };
 
     const legX = side * 4;
-    const legZ = -8;      // Far back, right by the tail
-    const legTop = -8;    // Starts well below the shell
-    const legHeight = 5;  // Same as front legs
+    const legZ = BACK_LEG_Z;
+    const legTop = BACK_LEG_TOP_Y;
+    const legHeight = 5;
 
     for (let i = 0; i < legHeight; i++) {
         const legY = legTop - i;
@@ -511,8 +515,8 @@ export const getTortoisePivots = () => ({
     body: { x: 0, y: -7 + Y_OFFSET, z: 0 },
     armLeft: { x: 5, y: -8 + Y_OFFSET, z: 3 },
     armRight: { x: -5, y: -8 + Y_OFFSET, z: 3 },
-    legLeft: { x: 4, y: -8 + Y_OFFSET, z: -8 },
-    legRight: { x: -4, y: -8 + Y_OFFSET, z: -8 },
+    legLeft: { x: 4, y: BACK_LEG_TOP_Y + Y_OFFSET, z: BACK_LEG_PIVOT_Z },
+    legRight: { x: -4, y: BACK_LEG_TOP_Y + Y_OFFSET, z: BACK_LEG_PIVOT_Z },
 });
 
 /**

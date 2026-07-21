@@ -25,6 +25,8 @@ const en: Record<string, string> = {
   "nav.play": "Play Now",
   "nav.whitepaper": "Whitepaper",
   "nav.multichain": "Multichain",
+  "nav.caCopyTitle": "Copy $CP contract address",
+  "nav.caCopied": "Copied!",
 
   "hero.badge": "First Multichain Metaverse",
   "hero.taglineStart": "The First ",
@@ -220,6 +222,8 @@ const zhTW: Record<string, string> = {
   "nav.play": "立即遊玩",
   "nav.whitepaper": "白皮書",
   "nav.multichain": "多鏈",
+  "nav.caCopyTitle": "複製 $CP 合約地址",
+  "nav.caCopied": "已複製！",
 
   "hero.badge": "首個多鏈元宇宙",
   "hero.taglineStart": "",

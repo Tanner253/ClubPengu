@@ -14,6 +14,7 @@ import misc from './translations/misc.js';
 import tokenomics from './translations/tokenomics.js';
 import economyGuide from './translations/economyGuide.js';
 import creatorPitch from './translations/creatorPitch.js';
+import entryTokenModal from './translations/entryTokenModal.js';
 import hud from './translations/hud.js';
 import loading from './translations/loading.js';
 
@@ -45,6 +46,7 @@ export const translations = {
     ...tokenomics,
     ...economyGuide,
     ...creatorPitch,
+    ...entryTokenModal,
     ...hud,
     ...loading,
 };

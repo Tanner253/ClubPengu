@@ -3,6 +3,8 @@
  * Handles walking, emotes, sitting, mounted animations
  */
 
+import { getCharacterMeshBaseY } from '../characters';
+
 function findHeldAxeOnFlipper(flipperR) {
     if (!flipperR?.children?.length) return null;
     for (let i = 0; i < flipperR.children.length; i++) {
@@ -33,7 +35,8 @@ export function cacheAnimParts(meshWrapper) {
         earL: meshInner.getObjectByName('ear_l'),
         earR: meshInner.getObjectByName('ear_r'),
         // Tortoise shell
-        shell: meshInner.getObjectByName('shell')
+        shell: meshInner.getObjectByName('shell'),
+        noseRing: meshInner.getObjectByName('nose_ring'),
     };
     
     return meshWrapper._animParts;
@@ -77,12 +80,14 @@ export function animateMesh(
     const isTungTung = characterType === 'tungTung';
     const isTortoise = characterType === 'tortoise';
     const isBlackBull = characterType === 'blackBull';
+    const isJimothy = characterType === 'jimothy';
+    const characterBaseY = getCharacterMeshBaseY(characterType);
     
     // Use cached parts if available, otherwise look up and cache
     if (!meshWrapper._animParts) {
         cacheAnimParts(meshWrapper);
     }
-    const { flipperL, flipperR, head, hatPart, eyesPart, mouthPart, footL, footR, tail, earL, earR, shell } = meshWrapper._animParts || {};
+    const { flipperL, flipperR, head, hatPart, eyesPart, mouthPart, footL, footR, tail, earL, earR, shell, noseRing } = meshWrapper._animParts || {};
     
     // Reset all parts to default pose (ensures clean state after any emote)
     // NOTE: Only reset ROTATIONS - positions are set by the model builder and should not be touched!
@@ -97,11 +102,16 @@ export function animateMesh(
             }
         }
     }
-    meshInner.position.y = 0.8;
+    meshInner.position.y = characterBaseY;
     meshInner.rotation.set(0,0,0);
-    // Feet: reset rotation + only position.z (used by sit emote)
-    if(footL) { footL.rotation.set(0,0,0); footL.position.z = 0; }
-    if(footR) { footR.rotation.set(0,0,0); footR.position.z = 0; }
+    // Feet: reset rotation + position.z (sit emote offsets biped feet from 0; quadrupeds keep hind-leg pivot z)
+    const resetFootPose = (foot) => {
+        if (!foot) return;
+        foot.rotation.set(0, 0, 0);
+        foot.position.z = foot.userData?.defaultPositionZ ?? 0;
+    };
+    resetFootPose(footL);
+    resetFootPose(footR);
     // Head + face parts: reset rotations + only position offsets used by emotes (y, z for headbang)
     if(head) { head.rotation.set(0,0,0); head.position.y = 0; head.position.z = 0; }
     if(hatPart) { hatPart.rotation.set(0,0,0); hatPart.position.y = 0; hatPart.position.z = 0; }
@@ -112,6 +122,7 @@ export function animateMesh(
     if(earL) { earL.rotation.set(0,0,0); }
     if(earR) { earR.rotation.set(0,0,0); }
     if(shell) { shell.rotation.set(0,0,0); }
+    if(noseRing) { noseRing.rotation.set(0, 0, 0); }
     
     // Jumping animation - feet point down when airborne
     if (isAirborne && !isSeatedOnFurniture && !isMounted) {
@@ -298,7 +309,7 @@ export function animateMesh(
         const chopToolLift = .5;
         const chopToolForward = 3;
 
-        meshInner.position.y = 0.8;
+        meshInner.position.y = characterBaseY;
 
         if (flipperR) {
             flipperR.rotation.set(armForward, 0, armRaise);
@@ -334,7 +345,7 @@ export function animateMesh(
         } 
         else if (emoteType === 'Dance') {
             meshInner.rotation.y = eTime * 6; 
-            meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 5)) * 1;
+            meshInner.position.y = characterBaseY + Math.abs(Math.sin(eTime * 5)) * 1;
             if(flipperL) flipperL.rotation.z = Math.sin(eTime * 10) * 1;
             if(flipperR) flipperR.rotation.z = -Math.sin(eTime * 10) * 1;
             // Head bob while dancing
@@ -374,14 +385,14 @@ export function animateMesh(
             if (isTungTung) {
                 // TungTung has a tall cylindrical head - rotate the whole body instead
                 meshInner.rotation.x = laughRot * 0.5;
-                meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 15)) * 0.15;
+                meshInner.position.y = characterBaseY + Math.abs(Math.sin(eTime * 15)) * 0.15;
             } else {
                 if(head) head.rotation.x = laughRot;
                 if(hatPart) hatPart.rotation.x = laughRot;
                 if(eyesPart) eyesPart.rotation.x = laughRot;
                 if(mouthPart) mouthPart.rotation.x = laughRot;
                 meshInner.rotation.x = -0.2;
-                meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 15)) * 0.1;
+                meshInner.position.y = characterBaseY + Math.abs(Math.sin(eTime * 15)) * 0.1;
             }
         }
         else if (emoteType === 'Breakdance') {
@@ -437,7 +448,7 @@ export function animateMesh(
             if (isTungTung) {
                 // TungTung has a tall cylindrical body - rock the whole body forward/back
                 meshInner.rotation.x = headBangAmount * 0.6;
-                meshInner.position.y = 0.8 + Math.abs(Math.sin(bangSpeed)) * 0.1;
+                meshInner.position.y = characterBaseY + Math.abs(Math.sin(bangSpeed)) * 0.1;
             } else {
                 if(head) {
                     head.rotation.x = headBangAmount;
@@ -545,7 +556,7 @@ export function animateMesh(
             // Puff out chest - lean back slightly
             meshInner.rotation.x = -0.15 * flexPose;
             // Slight bounce to show off
-            meshInner.position.y = 0.8 + Math.abs(Math.sin(eTime * 6)) * 0.05;
+            meshInner.position.y = characterBaseY + Math.abs(Math.sin(eTime * 6)) * 0.05;
             // Proud head tilt - looking to the side showing off, head pushed forward
             const proudTilt = -0.15 * flexPose;
             const headForward = 1.5 * flexPose; // Move head forward slightly
@@ -620,7 +631,7 @@ export function animateMesh(
             }
             // Body shaking from sobs
             meshInner.rotation.z = shake;
-            meshInner.position.y = 0.8 + Math.abs(sob) * 0.3;
+            meshInner.position.y = characterBaseY + Math.abs(sob) * 0.3;
         }
         else if (emoteType === 'Backflip') {
             // Exciting backflip - full rotation!
@@ -629,7 +640,7 @@ export function animateMesh(
             
             // Jump arc
             const jumpHeight = Math.sin(flipProgress * Math.PI) * 3;
-            meshInner.position.y = 0.8 + jumpHeight;
+            meshInner.position.y = characterBaseY + jumpHeight;
             
             // Full backward rotation
             meshInner.rotation.x = -flipProgress * Math.PI * 2;
@@ -706,7 +717,7 @@ export function animateMesh(
             if(footR) footR.rotation.x = Math.sin(trotSpeed) * trotAmount;
             
             // Subtle body bounce and sway like a trotting dog
-            meshInner.position.y = 0.8 + Math.abs(Math.sin(trotSpeed * 2)) * 0.08;
+            meshInner.position.y = characterBaseY + Math.abs(Math.sin(trotSpeed * 2)) * 0.08;
             meshInner.rotation.z = Math.sin(trotSpeed) * 0.03;
             
             // Head bob while trotting
@@ -749,7 +760,7 @@ export function animateMesh(
             }
             
             // Body bob - shrimp scuttles with a bounce
-            meshInner.position.y = 0.8 + Math.abs(Math.sin(scuttleSpeed * 2)) * 0.06;
+            meshInner.position.y = characterBaseY + Math.abs(Math.sin(scuttleSpeed * 2)) * 0.06;
             meshInner.rotation.z = Math.sin(scuttleSpeed) * 0.04;
             
             // Antennae movement (via head bob)
@@ -769,7 +780,7 @@ export function animateMesh(
             if(flipperR) flipperR.rotation.z = -0.2 - Math.sin(waddleSpeed * 2) * 0.15;
             
             // Body waddle side-to-side (classic duck waddle!)
-            meshInner.position.y = 0.8 + Math.abs(Math.sin(waddleSpeed)) * 0.05;
+            meshInner.position.y = characterBaseY + Math.abs(Math.sin(waddleSpeed)) * 0.05;
             meshInner.rotation.z = Math.sin(waddleSpeed) * 0.08; // More pronounced side waddle
             
             // Head bob
@@ -796,7 +807,7 @@ export function animateMesh(
             
             // Slight body lean forward while marching
             meshInner.rotation.z = Math.sin(marchSpeed) * 0.06;
-            meshInner.position.y = 0.8 + Math.abs(Math.sin(marchSpeed)) * 0.03;
+            meshInner.position.y = characterBaseY + Math.abs(Math.sin(marchSpeed)) * 0.03;
         } else if (isTortoise) {
             // Tortoise walk: slow lumbering gait with weight transfer
             const plodSpeed = time * 7;
@@ -815,7 +826,7 @@ export function animateMesh(
             if(footR) footR.rotation.x = liftWave(plodSpeed) * stride;
             
             // Body rocks side to side as weight transfers between leg pairs
-            meshInner.position.y = 0.8 + Math.abs(Math.sin(plodSpeed * 2)) * 0.02;
+            meshInner.position.y = characterBaseY + Math.abs(Math.sin(plodSpeed * 2)) * 0.02;
             meshInner.rotation.z = Math.sin(plodSpeed) * 0.04; // Side-to-side rock
             
             // Head/neck bobs with each step and leads the walk
@@ -849,7 +860,7 @@ export function animateMesh(
             if(footL) footL.rotation.x = liftWave(chargeSpeed + Math.PI) * stride;
             if(footR) footR.rotation.x = liftWave(chargeSpeed) * stride;
             
-            meshInner.position.y = 0.8 + Math.abs(Math.sin(chargeSpeed * 2)) * 0.05;
+            meshInner.position.y = characterBaseY + Math.abs(Math.sin(chargeSpeed * 2)) * 0.05;
             meshInner.rotation.z = Math.sin(chargeSpeed) * 0.05;
             
             if(head) {
@@ -860,6 +871,44 @@ export function animateMesh(
             
             if(tail) {
                 tail.rotation.y = Math.sin(time * 6) * 0.2;
+            }
+
+            if (noseRing) {
+                noseRing.rotation.x = Math.sin(chargeSpeed * 1.6) * 0.14;
+                noseRing.rotation.z = Math.sin(chargeSpeed * 1.2 + 0.5) * 0.1;
+                noseRing.rotation.y = Math.sin(chargeSpeed * 0.8) * 0.06;
+            }
+        } else if (isJimothy) {
+            // Short-spined shuffle — tight steps, pudgy bounce, legs close together
+            const shuffleSpeed = time * 14;
+            const stride = 0.38;
+            
+            const scurryWave = (phase) => {
+                const s = Math.sin(phase);
+                return s > 0 ? Math.pow(s, 0.55) * 0.9 : s * 0.45;
+            };
+            
+            if(flipperL) flipperL.rotation.x = scurryWave(shuffleSpeed) * stride;
+            if(flipperR) flipperR.rotation.x = scurryWave(shuffleSpeed + Math.PI) * stride;
+            if(footL) footL.rotation.x = scurryWave(shuffleSpeed + Math.PI) * stride;
+            if(footR) footR.rotation.x = scurryWave(shuffleSpeed) * stride;
+            
+            meshInner.position.y = characterBaseY + Math.abs(Math.sin(shuffleSpeed * 2)) * 0.06;
+            meshInner.rotation.z = Math.sin(shuffleSpeed) * 0.06;
+            
+            if(head) {
+                head.rotation.x = 0.04 + Math.sin(shuffleSpeed * 2) * 0.03;
+                head.rotation.y = Math.sin(shuffleSpeed * 0.4) * 0.02;
+            }
+            if(hatPart) hatPart.rotation.x = 0.04 + Math.sin(shuffleSpeed * 2) * 0.03;
+            
+            if(tail) tail.rotation.y = Math.sin(time * 10) * 0.35;
+            
+            if(earL) {
+                earL.rotation.z = -0.08 + Math.sin(shuffleSpeed * 2) * 0.08;
+            }
+            if(earR) {
+                earR.rotation.z = 0.08 - Math.sin(shuffleSpeed * 2) * 0.08;
             }
         } else {
             // Standard biped walking animation (penguin, marcus, whale, frog)
@@ -971,6 +1020,30 @@ export function animateMesh(
             if(tail) {
                 tail.rotation.y = Math.sin(time * 1.2) * 0.1;
             }
+
+            if (noseRing) {
+                noseRing.rotation.x = Math.sin(time * 1.4) * 0.08;
+                noseRing.rotation.z = Math.sin(time * 1.1) * 0.06;
+                noseRing.rotation.y = Math.sin(time * 0.7) * 0.04;
+            }
+        } else if (isJimothy) {
+            // Pudgy idle — shallow breathing wobble, stub tail flick, ear twitches
+            meshInner.position.y = characterBaseY + Math.sin(time * 1.4) * 0.015;
+            meshInner.rotation.z = Math.sin(time * 0.9) * 0.01;
+            
+            if(head) {
+                head.rotation.x = 0.03 + Math.sin(time * 0.8) * 0.012;
+                head.rotation.y = Math.sin(time * 0.35) * 0.025;
+            }
+            
+            if(tail) {
+                tail.rotation.y = Math.sin(time * 2.5) * 0.2;
+                tail.rotation.x = Math.sin(time * 1.8) * 0.08;
+            }
+            
+            const earTwitch = Math.sin(time * 0.6) > 0.88 ? Math.sin(time * 18) * 0.12 : 0;
+            if(earL) earL.rotation.z = -0.06 + earTwitch;
+            if(earR) earR.rotation.z = 0.06 - earTwitch;
         } else {
         meshInner.rotation.z = Math.sin(time * 1.5) * 0.02;
         }

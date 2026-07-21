@@ -32,7 +32,13 @@ import TungTungGenerators, { TUNG_PALETTE } from './TungTungCharacter';
 import GakeGenerators, { GAKE_PALETTE } from './GakeCharacter';
 import PumpGenerators, { PUMP_PALETTE } from './PumpCharacter';
 import TortoiseGenerators, { TORTOISE_PALETTE, TORTOISE_PALETTES, generateTortoisePalette } from './TortoiseCharacter';
-import BlackBullGenerators, { BLACK_BULL_PALETTE } from './BlackBullCharacter';
+import BlackBullGenerators, {
+    BLACK_BULL_PALETTE,
+    BLACK_BULL_MESH_BASE_Y,
+    BLACK_BULL_HAT_OFFSET,
+    BLACK_BULL_PROPELLER_BLADE_POS,
+} from './BlackBullCharacter';
+import JimothyGenerators, { JIMOTHY_PALETTE, JIMOTHY_HAT_OFFSET, JIMOTHY_MESH_BASE_Y } from './JimothyCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -277,6 +283,23 @@ characterRegistry.registerCharacter('blackBull', {
     }
 });
 
+characterRegistry.registerCharacter('jimothy', {
+    name: 'Jimothy',
+    description: 'A pudgy raccoon with a uniquely short spine',
+    generators: JimothyGenerators,
+    palette: JIMOTHY_PALETTE,
+    isSecret: true,
+    previewScale: 0.88,
+    customizationOptions: {
+        disableSkinColor: true,
+        disableHats: false,
+        disableEyes: true,
+        disableMouth: true,
+        disableBodyItems: true,
+        disableMounts: false,
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -316,6 +339,20 @@ export {
     TORTOISE_PALETTES,
     generateTortoisePalette,
     BlackBullGenerators,
-    BLACK_BULL_PALETTE
+    BLACK_BULL_PALETTE,
+    BLACK_BULL_MESH_BASE_Y,
+    BLACK_BULL_HAT_OFFSET,
+    BLACK_BULL_PROPELLER_BLADE_POS,
+    JimothyGenerators,
+    JIMOTHY_PALETTE,
+    JIMOTHY_HAT_OFFSET,
+    JIMOTHY_MESH_BASE_Y
 };
 export default characterRegistry;
+
+/** Mesh inner Y for ground contact — Jimothy uses calibrated foot-bottom offset */
+export function getCharacterMeshBaseY(characterType) {
+    if (characterType === 'jimothy') return JIMOTHY_MESH_BASE_Y;
+    if (characterType === 'blackBull') return BLACK_BULL_MESH_BASE_Y;
+    return 0.8;
+}
