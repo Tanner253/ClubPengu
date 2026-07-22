@@ -11,7 +11,13 @@ const userSchema = new mongoose.Schema({
     walletAddress: {
         type: String,
         required: true
-        // unique index defined below with schema.index()
+        // unique compound index with chainId defined below
+    },
+    /** Chain identity: 'solana' or EVM chain id string (e.g. '4663', '46630') */
+    chainId: {
+        type: String,
+        default: 'solana',
+        required: true
     },
 
     // ========== PROFILE ==========
@@ -487,7 +493,7 @@ const userSchema = new mongoose.Schema({
 });
 
 // ==================== INDEXES ====================
-userSchema.index({ walletAddress: 1 }, { unique: true });
+userSchema.index({ walletAddress: 1, chainId: 1 }, { unique: true });
 userSchema.index({ username: 1 }, { unique: true });  // Usernames must be unique
 userSchema.index({ isConnected: 1 });
 userSchema.index({ coins: -1 });  // Leaderboard
@@ -685,6 +691,7 @@ userSchema.methods.recordBlackjackResult = function(details) {
 userSchema.methods.getPublicProfile = function() {
     return {
         walletAddress: this.walletAddress,
+        chainId: this.chainId,
         username: this.username,
         characterType: this.characterType,
         customization: this.customization,
@@ -756,6 +763,7 @@ userSchema.methods.getFullData = function() {
     
     return {
         walletAddress: this.walletAddress,
+        chainId: this.chainId,
         username: this.username,
         characterType: this.characterType,
         customization: this.customization,

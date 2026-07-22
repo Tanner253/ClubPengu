@@ -1,25 +1,33 @@
 /**
- * AuthService - Handles Phantom wallet authentication
- * Implements x403 JWT authentication with Solana wallet signature verification
+ * AuthService - Wallet authentication (Solana x403 + EVM SIWE)
+ * JWT sessions with Solana Ed25519 or EIP-4361 signature verification
  */
 
 import jwt from 'jsonwebtoken';
 import nacl from 'tweetnacl';
 import bs58 from 'bs58';
+import crypto from 'crypto';
+import { SiweMessage } from 'siwe';
 import { User, AuthSession } from '../db/models/index.js';
 import { getReferralService } from './ReferralService.js';
 import UserService from './UserService.js';
 import { STARTING_COINS, GOLD_ECONOMY_VERSION } from '../config/goldEconomy.js';
+import {
+    normalizeChainId,
+    isAllowedEvmChainId,
+    parseEvmChainId,
+    SOLANA_CHAIN_ID
+} from '../config/evm.js';
+import { toChecksumAddress } from '../utils/evmAddress.js';
+import { findUserByWallet, canonicalWalletAddress, walletsMatch } from '../utils/walletIdentity.js';
 
 const userServiceForAuth = new UserService();
 
-// JWT configuration
 const IS_DEV = process.env.NODE_ENV !== 'production';
 const JWT_SECRET = process.env.JWT_SECRET;
-const JWT_EXPIRY = process.env.JWT_EXPIRY || '24h'; // 24 hours minimum before re-sign
-const SESSION_EXPIRY_HOURS = 24; // 24 hours session
+const JWT_EXPIRY = process.env.JWT_EXPIRY || '24h';
+const SESSION_EXPIRY_HOURS = 24;
 
-// SECURITY: Fail fast in production without proper JWT_SECRET
 if (!JWT_SECRET) {
     if (IS_DEV) {
         console.warn('⚠️ WARNING: JWT_SECRET not set. Using insecure development secret.');
@@ -29,36 +37,56 @@ if (!JWT_SECRET) {
 }
 const EFFECTIVE_JWT_SECRET = JWT_SECRET || 'dev-secret-DO-NOT-USE-IN-PRODUCTION';
 
-// Challenge nonce storage (in-memory, per-connection)
-const pendingChallenges = new Map(); // playerId -> { nonce, createdAt }
-const CHALLENGE_EXPIRY_MS = 3 * 60 * 1000; // 3 minutes (time to read modal)
+const pendingChallenges = new Map();
+const CHALLENGE_EXPIRY_MS = 3 * 60 * 1000;
 
-// Get domain from environment or default
 const APP_DOMAIN = process.env.APP_DOMAIN || 'clubpengu.com';
 const APP_NAME = 'Club Pengu';
 
 class AuthService {
     constructor() {
-        // Clean up expired challenges periodically
         setInterval(() => this.cleanupExpiredChallenges(), 60000);
     }
 
+    normalizeChainId(chainId) {
+        return normalizeChainId(chainId);
+    }
+
+    isAllowedEvmChain(chainId) {
+        return isAllowedEvmChainId(chainId);
+    }
+
     /**
-     * Generate a challenge nonce for wallet signature
-     * x403 Protocol - comprehensive message for signer confidence
-     * @param {string} playerId - Session player ID  
-     * @param {string} domain - Request origin domain (optional)
-     * @returns {{ message: string, nonce: string, expiresAt: number }}
+     * @param {object} options
+     * @param {'solana'|'evm'} [options.walletType]
+     * @param {string|number} [options.chainId]
+     * @param {string} [options.walletAddress] - required for EVM SIWE
+     * @param {string} [options.uri]
      */
-    generateChallenge(playerId, domain = null) {
-        const timestamp = Date.now();
-        const nonce = Math.random().toString(36).substring(2, 15) + 
-                      Math.random().toString(36).substring(2, 15);
-        const expiresAt = timestamp + CHALLENGE_EXPIRY_MS;
+    generateChallenge(playerId, domain = null, options = {}) {
+        const walletType = options.walletType || 'solana';
         const displayDomain = domain || APP_DOMAIN;
+
+        if (walletType === 'evm') {
+            return this.generateSiweChallenge(
+                playerId,
+                displayDomain,
+                options.chainId,
+                options.walletAddress,
+                options.uri
+            );
+        }
+
+        return this.generateSolanaChallenge(playerId, displayDomain);
+    }
+
+    generateSolanaChallenge(playerId, displayDomain) {
+        const timestamp = Date.now();
+        const nonce = Math.random().toString(36).substring(2, 15)
+            + Math.random().toString(36).substring(2, 15);
+        const expiresAt = timestamp + CHALLENGE_EXPIRY_MS;
         const issuedDate = new Date(timestamp).toISOString();
-        
-        // x403 comprehensive authentication message
+
         const message = `🐧 ${APP_NAME} Wallet Verification
 
 This signature proves you own this wallet.
@@ -96,99 +124,188 @@ Session: ${playerId.slice(0, 8)}...
 x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
 
         pendingChallenges.set(playerId, {
-            nonce: message,  // Store full message as nonce for verification
+            walletType: 'solana',
+            chainId: SOLANA_CHAIN_ID,
+            nonce: message,
             createdAt: timestamp,
             expiresAt
         });
-        
-        return { 
-            message, 
-            nonce, 
+
+        return {
+            message,
+            nonce,
             expiresAt,
-            domain: displayDomain
+            domain: displayDomain,
+            walletType: 'solana',
+            chainId: SOLANA_CHAIN_ID
+        };
+    }
+
+    generateSiweChallenge(playerId, domain, chainId, walletAddress, uri) {
+        const parsedChainId = parseEvmChainId(chainId);
+        if (!parsedChainId) {
+            throw new Error('INVALID_EVM_CHAIN');
+        }
+
+        let checksummedAddress;
+        try {
+            checksummedAddress = toChecksumAddress(walletAddress);
+        } catch {
+            throw new Error('INVALID_EVM_ADDRESS');
+        }
+
+        const timestamp = Date.now();
+        const expiresAt = timestamp + CHALLENGE_EXPIRY_MS;
+        const nonce = crypto.randomBytes(16).toString('hex');
+        const chainIdStr = String(parsedChainId);
+        const originUri = uri || (domain.startsWith('http') ? domain : `https://${domain}`);
+
+        const siweMessage = new SiweMessage({
+            domain,
+            address: checksummedAddress,
+            statement: `Sign in to ${APP_NAME} with your Robinhood Chain wallet.`,
+            uri: originUri,
+            version: '1',
+            chainId: parsedChainId,
+            nonce,
+            expirationTime: new Date(expiresAt).toISOString()
+        });
+
+        const message = siweMessage.prepareMessage();
+
+        pendingChallenges.set(playerId, {
+            walletType: 'evm',
+            chainId: chainIdStr,
+            nonce: message,
+            walletAddress: checksummedAddress.toLowerCase(),
+            createdAt: timestamp,
+            expiresAt
+        });
+
+        return {
+            message,
+            nonce,
+            expiresAt,
+            domain,
+            walletType: 'evm',
+            chainId: chainIdStr
         };
     }
 
     /**
-     * Verify a Solana wallet signature
-     * @param {string} playerId - Session player ID
-     * @param {string} walletAddress - Solana wallet address (base58)
-     * @param {string} signature - Signature (base58)
-     * @returns {{ valid: boolean, error?: string }}
+     * @param {object} [options]
+     * @param {'solana'|'evm'} [options.walletType]
+     * @param {string} [options.message] - SIWE message (required for evm)
      */
-    verifySignature(playerId, walletAddress, signature) {
+    async verifySignature(playerId, walletAddress, signature, options = {}) {
+        const walletType = options.walletType || 'solana';
+
+        if (walletType === 'evm') {
+            return this.verifySiweSignature(playerId, walletAddress, signature, options.message);
+        }
+
+        return this.verifySolanaSignature(playerId, walletAddress, signature);
+    }
+
+    verifySolanaSignature(playerId, walletAddress, signature) {
         try {
-            // Get the pending challenge
             const challenge = pendingChallenges.get(playerId);
-            if (!challenge) {
+            if (!challenge || challenge.walletType !== 'solana') {
                 return { valid: false, error: 'NO_PENDING_CHALLENGE' };
             }
 
-            // Check if challenge expired
             if (Date.now() - challenge.createdAt > CHALLENGE_EXPIRY_MS) {
                 pendingChallenges.delete(playerId);
                 return { valid: false, error: 'CHALLENGE_EXPIRED' };
             }
 
-            // Decode the signature and public key
             const messageBytes = new TextEncoder().encode(challenge.nonce);
             const signatureBytes = bs58.decode(signature);
             const publicKeyBytes = bs58.decode(walletAddress);
 
-            // Verify the signature using nacl
             const isValid = nacl.sign.detached.verify(
                 messageBytes,
                 signatureBytes,
                 publicKeyBytes
             );
 
-            // Clean up the challenge
             pendingChallenges.delete(playerId);
 
             if (!isValid) {
                 return { valid: false, error: 'INVALID_SIGNATURE' };
             }
 
-            return { valid: true };
+            return { valid: true, chainId: SOLANA_CHAIN_ID };
         } catch (error) {
-            console.error('Signature verification error:', error);
+            console.error('Solana signature verification error:', error);
             return { valid: false, error: 'VERIFICATION_ERROR' };
         }
     }
 
-    /**
-     * Create or update user and generate JWT token
-     * @param {string} walletAddress - Verified wallet address
-     * @param {string} playerId - Session player ID
-     * @param {object} clientData - Optional client customization payload
-     * @param {string} ipAddress - Client IP
-     * @returns {Promise<{ token: string, user: object, isNewUser: boolean, referralApplied?: boolean }>}
-     */
-    async authenticateUser(walletAddress, playerId, clientData = {}, ipAddress = null) {
+    async verifySiweSignature(playerId, walletAddress, signature, message) {
         try {
-            // Find or create user
-            let user = await User.findOne({ walletAddress });
+            const challenge = pendingChallenges.get(playerId);
+            if (!challenge || challenge.walletType !== 'evm') {
+                return { valid: false, error: 'NO_PENDING_CHALLENGE' };
+            }
+
+            if (Date.now() - challenge.createdAt > CHALLENGE_EXPIRY_MS) {
+                pendingChallenges.delete(playerId);
+                return { valid: false, error: 'CHALLENGE_EXPIRED' };
+            }
+
+            if (!message || message !== challenge.nonce) {
+                return { valid: false, error: 'MESSAGE_MISMATCH' };
+            }
+
+            const siweMessage = new SiweMessage(message);
+            const result = await siweMessage.verify({ signature });
+
+            if (result.data.address.toLowerCase() !== walletAddress.toLowerCase()) {
+                pendingChallenges.delete(playerId);
+                return { valid: false, error: 'ADDRESS_MISMATCH' };
+            }
+
+            if (String(result.data.chainId) !== challenge.chainId) {
+                pendingChallenges.delete(playerId);
+                return { valid: false, error: 'CHAIN_MISMATCH' };
+            }
+
+            pendingChallenges.delete(playerId);
+            return { valid: true, chainId: challenge.chainId };
+        } catch (error) {
+            console.error('SIWE verification error:', error);
+            pendingChallenges.delete(playerId);
+            return { valid: false, error: 'INVALID_SIGNATURE' };
+        }
+    }
+
+    async findUser(walletAddress, chainId = SOLANA_CHAIN_ID) {
+        return findUserByWallet(User, walletAddress, chainId);
+    }
+
+    async authenticateUser(walletAddress, playerId, clientData = {}, ipAddress = null, chainId = SOLANA_CHAIN_ID) {
+        const normalizedChainId = normalizeChainId(chainId);
+        const normalizedWallet = canonicalWalletAddress(walletAddress, normalizedChainId);
+
+        try {
+            let user = await this.findUser(normalizedWallet, normalizedChainId);
             let isNewUser = false;
             let referralApplied = false;
 
             if (!user) {
                 isNewUser = true;
-                
-                // ALWAYS use default Penguin name for new users
-                // They will choose their permanent username in the designer before entering world
-                // This ensures isEstablishedUser() returns false until they enter world
-                let username = `Penguin${walletAddress.slice(-6)}`;
-                
-                // If even the default is taken (very unlikely), add random suffix
+
+                let username = `Penguin${normalizedWallet.slice(-6)}`;
                 const existingWithUsername = await User.findOne({ username });
                 if (existingWithUsername) {
-                    username = `Penguin${walletAddress.slice(-4)}${Math.floor(Math.random() * 1000)}`;
+                    username = `Penguin${normalizedWallet.slice(-4)}${Math.floor(Math.random() * 1000)}`;
                     console.log(`⚠️ Default username taken, assigned: ${username}`);
                 }
 
-                // Create new user
                 user = new User({
-                    walletAddress,
+                    walletAddress: normalizedWallet,
+                    chainId: normalizedChainId,
                     username,
                     characterType: clientData.characterType || 'penguin',
                     customization: clientData.customization || {},
@@ -200,19 +317,17 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
                         unlockedSlots: 5,
                         slots: Array.from({ length: 5 }, () => ({ itemId: null, quantity: 0, metadata: {} }))
                     },
-                    // Initialize referral fields
                     referral: {
-                        referralCode: username  // Default referral code is username
+                        referralCode: username
                     }
                 });
 
                 await user.save();
-                
-                // Process referral code if provided (only for new users)
+
                 if (clientData.referralCode) {
                     const referralService = getReferralService();
                     if (referralService) {
-                        const referralResult = await referralService.registerReferral(walletAddress, clientData.referralCode);
+                        const referralResult = await referralService.registerReferral(normalizedWallet, clientData.referralCode);
                         if (referralResult.success) {
                             referralApplied = true;
                             console.log(`🔗 Referral applied: ${username} referred by ${referralResult.referrer.username}`);
@@ -221,69 +336,60 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
                         }
                     }
                 }
-                
-                // Record starting bonus transaction
+
                 const Transaction = (await import('../db/models/Transaction.js')).default;
                 await Transaction.record({
                     type: 'starting_bonus',
-                    toWallet: walletAddress,
+                    toWallet: normalizedWallet,
                     amount: STARTING_COINS,
                     toBalanceBefore: 0,
                     toBalanceAfter: STARTING_COINS,
                     reason: 'New player starting bonus'
                 });
 
-                console.log(`🆕 New user created: ${username} (${walletAddress.slice(0, 8)}...) - isEstablished: ${user.isEstablishedUser()}`);
+                console.log(`🆕 New user created: ${username} (${normalizedWallet.slice(0, 8)}..., chain ${normalizedChainId})`);
             } else {
-                console.log(`👤 Existing user found: ${user.username} (${walletAddress.slice(0, 8)}...) - isEstablished: ${user.isEstablishedUser()}, lastUsernameChangeAt: ${user.lastUsernameChangeAt ? 'SET' : 'null'}`);
+                console.log(`👤 Existing user found: ${user.username} (${normalizedWallet.slice(0, 8)}..., chain ${normalizedChainId})`);
                 await userServiceForAuth.ensureGoldEconomyApplied(user);
                 if (user.ensureDay1NametagGrandfather()) {
                     console.log(`⭐ Day 1 nametag grandfathered for ${user.username}`);
                 }
             }
 
-            // Migration: Set lastUsernameChangeAt for established users who don't have it
             if (!isNewUser && user.isEstablishedUser() && !user.lastUsernameChangeAt) {
                 user.lastUsernameChangeAt = user.createdAt || new Date();
                 console.log(`📝 Migrated username lock for ${user.username}`);
             }
-            
-            // CRITICAL: Check if user is banned BEFORE updating connection state
+
             if (user.isBanned) {
-                // Check if ban has expired
                 if (user.banExpires && user.banExpires < new Date()) {
                     user.isBanned = false;
                     user.banReason = null;
                     user.banExpires = null;
                     await user.save();
                 } else {
-                    // User is banned - throw error to prevent authentication
                     throw new Error('BANNED');
                 }
             }
-            
-            // Update connection state
+
             user.isConnected = true;
             user.currentPlayerId = playerId;
             user.lastActiveAt = new Date();
             user.lastIpAddress = ipAddress;
-            
-            // IMPORTANT: Only set lastLoginAt and increment sessions for EXISTING users
-            // New users should remain "not established" until they enter the world
-            // This allows them to choose their username in the designer
+
             if (!isNewUser) {
                 user.lastLoginAt = new Date();
                 user.stats.session.totalSessions++;
             }
-            
+
             await user.save();
 
-            // Create auth session
             const expiresAt = new Date(Date.now() + SESSION_EXPIRY_HOURS * 60 * 60 * 1000);
-            const token = this.generateToken(walletAddress, playerId);
+            const token = this.generateToken(normalizedWallet, playerId, normalizedChainId);
 
             const session = new AuthSession({
-                walletAddress,
+                walletAddress: normalizedWallet,
+                chainId: normalizedChainId,
                 sessionToken: token,
                 expiresAt,
                 ipAddress
@@ -302,13 +408,11 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
         }
     }
 
-    /**
-     * Generate JWT token
-     */
-    generateToken(walletAddress, sessionId) {
+    generateToken(walletAddress, sessionId, chainId = SOLANA_CHAIN_ID) {
         return jwt.sign(
-            { 
-                walletAddress, 
+            {
+                walletAddress,
+                chainId: normalizeChainId(chainId),
                 sessionId,
                 iat: Math.floor(Date.now() / 1000)
             },
@@ -317,11 +421,6 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
         );
     }
 
-    /**
-     * Verify JWT token
-     * @param {string} token - JWT token
-     * @returns {{ valid: boolean, data?: object, error?: string }}
-     */
     verifyToken(token) {
         try {
             const decoded = jwt.verify(token, EFFECTIVE_JWT_SECRET);
@@ -334,30 +433,23 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
         }
     }
 
-    /**
-     * Validate session and get user
-     * @param {string} token - JWT token
-     * @returns {Promise<{ valid: boolean, user?: object, error?: string }>}
-     */
     async validateSession(token) {
         const tokenResult = this.verifyToken(token);
         if (!tokenResult.valid) {
             return { valid: false, error: tokenResult.error };
         }
 
-        // Check if session exists and is active
         const session = await AuthSession.findValidSession(token);
         if (!session) {
             return { valid: false, error: 'SESSION_INVALID' };
         }
 
-        // Get user
-        const user = await User.findOne({ walletAddress: tokenResult.data.walletAddress });
+        const chainId = normalizeChainId(tokenResult.data.chainId || session.chainId || SOLANA_CHAIN_ID);
+        const user = await this.findUser(tokenResult.data.walletAddress, chainId);
         if (!user) {
             return { valid: false, error: 'USER_NOT_FOUND' };
         }
 
-        // Update session activity
         await session.touch();
         user.lastActiveAt = new Date();
         await user.save();
@@ -365,15 +457,11 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
         return { valid: true, user };
     }
 
-    /**
-     * Logout user
-     * @param {string} walletAddress - Wallet address
-     * @param {string} token - Session token (optional, invalidates specific session)
-     */
-    async logout(walletAddress, token = null) {
+    async logout(walletAddress, token = null, chainId = SOLANA_CHAIN_ID) {
+        const normalizedChainId = normalizeChainId(chainId);
+
         try {
-            // Update user connection state
-            const user = await User.findOne({ walletAddress });
+            const user = await this.findUser(walletAddress, normalizedChainId);
             if (user) {
                 user.isConnected = false;
                 user.lastLogoutAt = new Date();
@@ -381,15 +469,13 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
                 await user.save();
             }
 
-            // Invalidate session(s)
             if (token) {
                 const session = await AuthSession.findOne({ sessionToken: token });
                 if (session) {
                     await session.invalidate();
                 }
             } else {
-                // Invalidate all sessions for this wallet
-                await AuthSession.invalidateAllForWallet(walletAddress);
+                await AuthSession.invalidateAllForWallet(walletAddress, normalizedChainId);
             }
 
             return { success: true };
@@ -399,34 +485,27 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
         }
     }
 
-    /**
-     * Clean up expired challenges
-     */
     cleanupExpiredChallenges() {
         const now = Date.now();
         let cleaned = 0;
-        
+
         for (const [playerId, challenge] of pendingChallenges) {
             if (now - challenge.createdAt > CHALLENGE_EXPIRY_MS) {
                 pendingChallenges.delete(playerId);
                 cleaned++;
             }
         }
-        
+
         if (cleaned > 0) {
             console.log(`🧹 Cleaned up ${cleaned} expired auth challenges`);
         }
     }
 
-    /**
-     * Check if a wallet is banned
-     */
-    async isWalletBanned(walletAddress) {
-        const user = await User.findOne({ walletAddress });
+    async isWalletBanned(walletAddress, chainId = SOLANA_CHAIN_ID) {
+        const user = await this.findUser(walletAddress, chainId);
         if (!user) return false;
-        
+
         if (user.isBanned) {
-            // Check if ban has expired
             if (user.banExpires && user.banExpires < new Date()) {
                 user.isBanned = false;
                 user.banReason = null;
@@ -441,4 +520,3 @@ x403 Protocol - Learn more: https://github.com/ByrgerBib/webx403`;
 }
 
 export default AuthService;
-

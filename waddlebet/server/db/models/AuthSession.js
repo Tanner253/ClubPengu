@@ -11,6 +11,12 @@ const authSessionSchema = new mongoose.Schema({
         required: true,
         index: true
     },
+    chainId: {
+        type: String,
+        default: 'solana',
+        required: true,
+        index: true
+    },
     
     sessionToken: {
         type: String,
@@ -92,9 +98,9 @@ authSessionSchema.statics.findValidSession = function(token) {
 /**
  * Invalidate all sessions for a wallet
  */
-authSessionSchema.statics.invalidateAllForWallet = function(walletAddress) {
+authSessionSchema.statics.invalidateAllForWallet = function(walletAddress, chainId = 'solana') {
     return this.updateMany(
-        { walletAddress, isActive: true },
+        { walletAddress, chainId, isActive: true },
         { isActive: false, expiresAt: new Date() }
     );
 };

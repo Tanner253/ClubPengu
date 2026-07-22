@@ -69,17 +69,32 @@ function GuestModeWarning({ onRequestAuth }) {
                     {/* CTA Button */}
                     <button
                         onClick={onRequestAuth}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 
+                        className="w-full flex flex-col items-center gap-2 px-4 py-3 
                                    bg-gradient-to-r from-purple-600 to-indigo-600 
                                    hover:from-purple-500 hover:to-indigo-500
                                    rounded-lg text-white font-medium shadow-lg 
                                    border border-purple-400/30 transition-all"
                     >
-                        <svg className="w-5 h-5" viewBox="0 0 40 40" fill="none">
-                            <path d="M34.9 17.1c-.5-4.8-3.8-8.1-8.5-8.6-2.4-.3-4.8.4-6.7 1.9-1.9 1.4-3.1 3.5-3.5 5.8-.1.6-.1 1.2-.1 1.9 0 .1 0 .1-.1.1H5.8c-.7 0-1.3.6-1.3 1.3v.6c0 3.9 1.6 7.5 4.4 10.2 2.8 2.7 6.4 4.2 10.3 4.2h.5c7.9-.3 14.3-7 14.3-15 0-1-.1-2-.1-2.4z" 
-                                  fill="currentColor"/>
-                        </svg>
-                        {t('guest.signIn')}
+                        <span className="text-sm font-semibold">{t('guest.signIn')}</span>
+                        <span className="flex items-center justify-center gap-2 flex-wrap">
+                            <span className="inline-flex items-center gap-1.5 rounded-md bg-black/25 px-2 py-1 text-xs">
+                                <svg className="w-4 h-4 shrink-0" viewBox="0 0 40 40" fill="currentColor" aria-hidden>
+                                    <path d="M34.9 17.1c-.5-4.8-3.8-8.1-8.5-8.6-2.4-.3-4.8.4-6.7 1.9-1.9 1.4-3.1 3.5-3.5 5.8-.1.6-.1 1.2-.1 1.9 0 .1 0 .1-.1.1H5.8c-.7 0-1.3.6-1.3 1.3v.6c0 3.9 1.6 7.5 4.4 10.2 2.8 2.7 6.4 4.2 10.3 4.2h.5c7.9-.3 14.3-7 14.3-15 0-1-.1-2-.1-2.4z" />
+                                </svg>
+                                Phantom
+                            </span>
+                            <span className="text-[11px] text-white/60">{t('guest.signInOr')}</span>
+                            <span className="inline-flex items-center gap-1.5 rounded-md bg-black/25 px-2 py-1 text-xs">
+                                <img
+                                    src="/robinhood-logo.png"
+                                    alt="Robinhood"
+                                    width={16}
+                                    height={16}
+                                    className="rounded shrink-0"
+                                />
+                                {t('guest.signInMetaMask')}
+                            </span>
+                        </span>
                     </button>
                     
                     <p className="text-center text-xs text-amber-300/50 mt-3">

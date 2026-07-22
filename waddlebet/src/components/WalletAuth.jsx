@@ -1,12 +1,12 @@
 /**
- * WalletAuth - Phantom wallet authentication UI for Penguin Maker
- * Explains x403 auth, why it's safe, and handles the connection flow
- * Supports both desktop (extension) and mobile (Phantom app)
+ * WalletAuth - Phantom (Solana) and MetaMask (Robinhood Chain) sign-in UI
  */
 
 import React, { useState, useEffect } from 'react';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import PhantomWallet from '../wallet/PhantomWallet';
+import MetaMaskWallet from '../wallet/MetaMaskWallet';
+import { getActiveRobinhoodChain } from '../config/evm.js';
 
 function WalletAuth({ onAuthSuccess }) {
     const { 
@@ -21,17 +21,32 @@ function WalletAuth({ onAuthSuccess }) {
     
     const [showInfo, setShowInfo] = useState(false);
     const [mobileStatus, setMobileStatus] = useState({ isMobile: false, needsRedirect: false });
+    const robinhoodChain = getActiveRobinhoodChain();
     
-    // Check mobile status on mount
+    const [activeProvider, setActiveProvider] = useState(null);
+    
     useEffect(() => {
         const wallet = PhantomWallet.getInstance();
         setMobileStatus(wallet.getMobileStatus());
     }, []);
+
+    useEffect(() => {
+        if (!isAuthenticating) {
+            setActiveProvider(null);
+        }
+    }, [isAuthenticating]);
     
-    const handleConnect = async () => {
-        const result = await connectWallet();
-        if (result.success || result.pending) {
-            // Auth will complete via message handler
+    const providerLabel = (provider, idleText) => {
+        if (!isAuthenticating || activeProvider !== provider) return idleText;
+        if (provider === 'phantom') return 'Connect in Phantom…';
+        return 'Sign in MetaMask…';
+    };
+    
+    const handleConnect = async (provider) => {
+        setActiveProvider(provider);
+        const result = await connectWallet(provider);
+        if (!result.success && !result.pending) {
+            setActiveProvider(null);
         }
     };
     
@@ -39,11 +54,13 @@ function WalletAuth({ onAuthSuccess }) {
         const wallet = PhantomWallet.getInstance();
         wallet.openPhantomMobile();
     };
+
+    const shortAddress = walletAddress
+        ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
+        : '';
+    const isEvmAccount = userData?.chainId && userData.chainId !== 'solana';
     
-    // If already authenticated, show connected state
     if (isAuthenticated && walletAddress) {
-        const shortAddress = `${walletAddress.slice(0, 4)}...${walletAddress.slice(-4)}`;
-        
         return (
             <div className="bg-gradient-to-br from-green-900/40 to-emerald-900/40 rounded-xl p-4 border border-green-500/30">
                 <div className="flex items-center gap-2">
@@ -51,6 +68,11 @@ function WalletAuth({ onAuthSuccess }) {
                         <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-green-400 font-bold">{userData?.username || 'Connected'}</span>
                             <span className="text-green-300/60 text-xs">{shortAddress}</span>
+                            {isEvmAccount && (
+                                <span className="text-[10px] uppercase tracking-wide text-amber-300/80 bg-amber-900/30 px-1.5 py-0.5 rounded">
+                                    Robinhood
+                                </span>
+                            )}
                         </div>
                         <div className="text-xs text-green-200/60 mt-0.5">
                             💰 {userData?.coins?.toLocaleString() || 0} coins
@@ -70,27 +92,18 @@ function WalletAuth({ onAuthSuccess }) {
         );
     }
     
-    // Guest state - show connect UI
     return (
         <div className="bg-gradient-to-br from-purple-900/40 to-indigo-900/40 rounded-xl border border-purple-500/30 overflow-hidden">
-            {/* Header */}
             <div className="p-4 border-b border-purple-500/20">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-purple-600/50 flex items-center justify-center">
-                            <svg className="w-5 h-5 text-purple-300" viewBox="0 0 40 40" fill="currentColor">
-                                <path d="M34.9 17.1c-.5-4.8-3.8-8.1-8.5-8.6-2.4-.3-4.8.4-6.7 1.9-1.9 1.4-3.1 3.5-3.5 5.8-.1.6-.1 1.2-.1 1.9 0 .1 0 .1-.1.1H5.8c-.7 0-1.3.6-1.3 1.3v.6c0 3.9 1.6 7.5 4.4 10.2 2.8 2.7 6.4 4.2 10.3 4.2h.5c7.9-.3 14.3-7 14.3-15 0-1-.1-2-.1-2.4z"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <h3 className="text-white font-bold text-sm">Sign In with Phantom</h3>
-                            <p className="text-purple-300/60 text-xs">Save progress & earn coins</p>
-                        </div>
+                    <div>
+                        <h3 className="text-white font-bold text-sm">Sign In with Wallet</h3>
+                        <p className="text-purple-300/60 text-xs">Phantom (Solana) or MetaMask (Robinhood Chain)</p>
                     </div>
                     <button 
                         onClick={() => setShowInfo(!showInfo)}
                         className="text-purple-400 hover:text-purple-300 transition-colors"
-                        title="What is x403 authentication?"
+                        title="How wallet sign-in works"
                     >
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
@@ -100,113 +113,73 @@ function WalletAuth({ onAuthSuccess }) {
                 </div>
             </div>
             
-            {/* Info Panel (expandable) */}
             {showInfo && (
                 <div className="px-4 py-3 bg-black/20 border-b border-purple-500/20">
-                    <h4 className="text-purple-300 font-semibold text-xs mb-2 flex items-center gap-1">
-                        <span>🔐</span> What is x403 Authentication?
-                    </h4>
+                    <h4 className="text-purple-300 font-semibold text-xs mb-2">🔐 Gasless wallet sign-in</h4>
                     <div className="space-y-2 text-xs text-white/70">
                         <p>
-                            <strong className="text-purple-300">x403</strong> is a secure, gasless signature-based 
-                            authentication standard for Web3 games. Instead of connecting your wallet to a smart 
-                            contract, you simply sign a message to prove ownership.
+                            Solana uses our x403 message format. Robinhood Chain uses <strong className="text-purple-300">Sign-In with Ethereum (SIWE)</strong>,
+                            the industry-standard EVM login flow. You only sign a message — no transaction, no gas fee.
                         </p>
-                        <div className="bg-black/30 rounded-lg p-2 mt-2">
-                            <p className="text-green-400 font-medium mb-1">✓ Why it's safe:</p>
-                            <ul className="space-y-1 text-white/60">
-                                <li>• <strong>No transactions</strong> - You're only signing a message, not approving any transfers</li>
-                                <li>• <strong>No gas fees</strong> - Signing is completely free</li>
-                                <li>• <strong>No contract approval</strong> - We can't move your tokens</li>
-                                <li>• <strong>One-time per session</strong> - You stay logged in for 24+ hours</li>
-                            </ul>
-                        </div>
-                        <p className="text-white/50 italic">
-                            Think of it like signing a guest book to prove you arrived - it doesn't give 
-                            anyone access to your wallet or funds.
+                        <p className="text-white/50">
+                            Solana and Robinhood accounts are separate (one wallet address per chain).
                         </p>
                     </div>
                 </div>
             )}
             
-            {/* Benefits */}
             <div className="p-4 space-y-2">
-                <div className="flex items-center gap-2 text-xs text-white/80">
-                    <span className="text-green-400">✓</span>
-                    <span>Earn gold from fishing, wood, and quests</span>
-                </div>
-                <div className="flex items-center gap-2 text-xs text-white/80">
-                    <span className="text-green-400">✓</span>
-                    <span>Wager coins in P2P challenges</span>
-                </div>
                 <div className="flex items-center gap-2 text-xs text-white/80">
                     <span className="text-green-400">✓</span>
                     <span>Save customizations & progress</span>
                 </div>
                 <div className="flex items-center gap-2 text-xs text-white/80">
                     <span className="text-green-400">✓</span>
-                    <span>Track stats & achievements</span>
+                    <span>Earn gold from minigames & quests</span>
                 </div>
             </div>
             
-            {/* Connect Button */}
-            <div className="p-4 pt-0">
-                {/* Mobile - needs Phantom app */}
+            <div className="p-4 pt-0 space-y-2">
                 {mobileStatus.isMobile && mobileStatus.needsRedirect ? (
-                    <div className="space-y-2">
+                    <button
+                        onClick={handleMobileRedirect}
+                        disabled={isAuthenticating}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 
+                                   bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg text-white font-bold text-sm"
+                    >
+                        Open in Phantom App
+                    </button>
+                ) : (
+                    <>
                         <button
-                            onClick={handleMobileRedirect}
+                            onClick={() => handleConnect('phantom')}
+                            disabled={isAuthenticating}
                             className="w-full flex items-center justify-center gap-2 px-4 py-3 
                                        bg-gradient-to-r from-purple-600 to-indigo-600 
                                        hover:from-purple-500 hover:to-indigo-500
+                                       disabled:from-slate-600 disabled:to-slate-700
                                        rounded-lg text-white font-bold text-sm shadow-lg 
-                                       border-b-4 border-purple-800 hover:border-purple-700
-                                       transition-all active:scale-[0.98] active:border-b-2"
+                                       border-b-4 border-purple-800 transition-all active:scale-[0.98]"
                         >
-                            <svg className="w-5 h-5" viewBox="0 0 40 40" fill="currentColor">
-                                <path d="M34.9 17.1c-.5-4.8-3.8-8.1-8.5-8.6-2.4-.3-4.8.4-6.7 1.9-1.9 1.4-3.1 3.5-3.5 5.8-.1.6-.1 1.2-.1 1.9 0 .1 0 .1-.1.1H5.8c-.7 0-1.3.6-1.3 1.3v.6c0 3.9 1.6 7.5 4.4 10.2 2.8 2.7 6.4 4.2 10.3 4.2h.5c7.9-.3 14.3-7 14.3-15 0-1-.1-2-.1-2.4z"/>
-                            </svg>
-                            Open in Phantom App
+                            {providerLabel('phantom', 'Connect Phantom (Solana)')}
                         </button>
-                        <p className="text-center text-xs text-purple-300/60">
-                            📱 Mobile: Opens this page in Phantom's browser
-                        </p>
-                    </div>
-                ) : (
-                    /* Desktop or Phantom browser - direct connect */
-                    <button
-                        onClick={handleConnect}
-                        disabled={isAuthenticating}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 
-                                   bg-gradient-to-r from-purple-600 to-indigo-600 
-                                   hover:from-purple-500 hover:to-indigo-500
-                                   disabled:from-slate-600 disabled:to-slate-700
-                                   rounded-lg text-white font-bold text-sm shadow-lg 
-                                   border-b-4 border-purple-800 hover:border-purple-700
-                                   disabled:border-slate-800 transition-all
-                                   active:scale-[0.98] active:border-b-2"
-                    >
-                        {isAuthenticating ? (
-                            <>
-                                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                                    <path className="opacity-75" fill="currentColor" 
-                                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                </svg>
-                                Waiting for signature...
-                            </>
-                        ) : (
-                            <>
-                                <svg className="w-5 h-5" viewBox="0 0 40 40" fill="currentColor">
-                                    <path d="M34.9 17.1c-.5-4.8-3.8-8.1-8.5-8.6-2.4-.3-4.8.4-6.7 1.9-1.9 1.4-3.1 3.5-3.5 5.8-.1.6-.1 1.2-.1 1.9 0 .1 0 .1-.1.1H5.8c-.7 0-1.3.6-1.3 1.3v.6c0 3.9 1.6 7.5 4.4 10.2 2.8 2.7 6.4 4.2 10.3 4.2h.5c7.9-.3 14.3-7 14.3-15 0-1-.1-2-.1-2.4z"/>
-                                </svg>
-                                Connect Phantom Wallet
-                            </>
-                        )}
-                    </button>
+
+                        <button
+                            onClick={() => handleConnect('metamask')}
+                            disabled={isAuthenticating}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 
+                                       bg-gradient-to-r from-amber-700 to-orange-700 
+                                       hover:from-amber-600 hover:to-orange-600
+                                       disabled:from-slate-600 disabled:to-slate-700
+                                       rounded-lg text-white font-bold text-sm shadow-lg 
+                                       border-b-4 border-amber-900 transition-all active:scale-[0.98]"
+                        >
+                            <img src="/robinhood-logo.png" alt="" width={18} height={18} className="rounded" />
+                            {providerLabel('metamask', `MetaMask (${robinhoodChain.name})`)}
+                        </button>
+                    </>
                 )}
                 
-                {/* Error display */}
                 {authError && (
                     <div className={`mt-3 p-3 rounded-lg border ${
                         authError.code === 'BANNED' 
@@ -219,46 +192,11 @@ function WalletAuth({ onAuthSuccess }) {
                                 : 'text-red-400'
                         }`}>
                             {authError.code === 'BANNED' ? (
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-lg">🚫</span>
-                                        <span className="font-bold">Account Banned</span>
-                                    </div>
-                                    <div className="pl-7 text-red-200/90 whitespace-pre-line">
-                                        {authError.message || 'Your account has been banned. Access denied.'}
-                                    </div>
-                                </div>
+                                authError.message || 'Your account has been banned.'
                             ) : authError.code === 'PHANTOM_NOT_INSTALLED' ? (
-                                mobileStatus.isMobile ? (
-                                    <>
-                                        Open this site in{' '}
-                                        <a 
-                                            href="https://phantom.app/" 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-purple-400 underline hover:text-purple-300"
-                                        >
-                                            Phantom App
-                                        </a>
-                                        {' '}to connect
-                                    </>
-                                ) : (
-                                    <>
-                                        Phantom not found.{' '}
-                                        <a 
-                                            href="https://phantom.app/" 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="text-purple-400 underline hover:text-purple-300"
-                                        >
-                                            Install Phantom →
-                                        </a>
-                                    </>
-                                )
-                            ) : authError.code === 'MOBILE_REDIRECT_NEEDED' ? (
-                                <>
-                                    📱 Tap "Open in Phantom App" above to continue
-                                </>
+                                <>Phantom not found. <a href="https://phantom.app/" target="_blank" rel="noopener noreferrer" className="text-purple-400 underline">Install Phantom →</a></>
+                            ) : authError.code === 'METAMASK_NOT_INSTALLED' ? (
+                                <>MetaMask not found. <a href="https://metamask.io/download/" target="_blank" rel="noopener noreferrer" className="text-amber-300 underline">Install MetaMask →</a></>
                             ) : authError.code === 'USER_REJECTED' ? (
                                 'Signature cancelled. Click connect to try again.'
                             ) : (
@@ -268,9 +206,8 @@ function WalletAuth({ onAuthSuccess }) {
                     </div>
                 )}
                 
-                {/* Guest mode note */}
                 <p className="text-center text-xs text-white/40 mt-3">
-                    Or continue as guest (progress won't save)
+                    Or continue as guest (progress won&apos;t save)
                 </p>
             </div>
         </div>
@@ -278,4 +215,3 @@ function WalletAuth({ onAuthSuccess }) {
 }
 
 export default WalletAuth;
-

@@ -46,7 +46,8 @@ describe('sessionRestore', () => {
         expect(readStoredSession(storage, now)).toEqual({
             expired: false,
             token: 'jwt-token',
-            walletAddress: 'wallet-abc'
+            walletAddress: 'wallet-abc',
+            chainId: 'solana'
         });
     });
 
@@ -59,7 +60,8 @@ describe('sessionRestore', () => {
         expect(readStoredSession(storage, now)).toEqual({
             expired: true,
             token: 'jwt-token',
-            walletAddress: 'wallet-abc'
+            walletAddress: 'wallet-abc',
+            chainId: 'solana'
         });
     });
 
@@ -67,7 +69,8 @@ describe('sessionRestore', () => {
         expect(buildAuthRestoreMessage({ token: 't', walletAddress: 'w' })).toEqual({
             type: 'auth_restore',
             token: 't',
-            walletAddress: 'w'
+            walletAddress: 'w',
+            chainId: 'solana'
         });
     });
 
@@ -76,11 +79,14 @@ describe('sessionRestore', () => {
         storage.setItem('wallet_address', 'w');
         storage.setItem('session_timestamp', '1');
 
+        storage.setItem('wallet_chain_id', '46630');
+
         clearStoredSession(storage);
 
         expect(storage.getItem('auth_token')).toBeNull();
         expect(storage.getItem('wallet_address')).toBeNull();
         expect(storage.getItem('session_timestamp')).toBeNull();
+        expect(storage.getItem('wallet_chain_id')).toBeNull();
     });
 
     it('simulates reconnect: stored session survives disconnect and can restore again', () => {
@@ -103,7 +109,8 @@ describe('sessionRestore', () => {
         expect(buildAuthRestoreMessage(second)).toEqual({
             type: 'auth_restore',
             token: 'persisted-jwt',
-            walletAddress: 'wallet-xyz'
+            walletAddress: 'wallet-xyz',
+            chainId: 'solana'
         });
     });
 });

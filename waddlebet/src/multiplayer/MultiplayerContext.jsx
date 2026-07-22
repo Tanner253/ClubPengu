@@ -6,13 +6,15 @@
 
 import React, { createContext, useContext, useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import GameManager from '../engine/GameManager';
-import { PhantomWallet } from '../wallet';
+import { PhantomWallet, MetaMaskWallet } from '../wallet';
+import { SOLANA_CHAIN_ID, getActiveEvmChainIdString } from '../config/evm.js';
 import { createEmptyChatState, appendChannelMessage, applyChatHistorySnapshot, applyRoomChatHistory, normalizeChatMessage, CHAT_CHANNELS } from '../utils/chatChannels.js';
 import {
     hasStoredSession,
     readStoredSession,
     buildAuthRestoreMessage,
-    clearStoredSession
+    clearStoredSession,
+    persistSessionCredentials
 } from './sessionRestore.js';
 import { clampGoldSlotBet } from '../config/goldEconomy.js';
 
@@ -69,8 +71,9 @@ export function MultiplayerProvider({ children }) {
     const [isAuthenticating, setIsAuthenticating] = useState(false);
     const [isRestoringSession, setIsRestoringSession] = useState(() => hasStoredSession(localStorage));
     
-    // Pending auth challenge
+    // Pending auth challenge / failure (during connectWallet flow)
     const pendingChallengeRef = useRef(null);
+    const pendingAuthFailureRef = useRef(null);
     
     // ==================== PLAYER STATE ====================
     const [playerList, setPlayerList] = useState([]);
@@ -505,12 +508,13 @@ export function MultiplayerProvider({ children }) {
                 break;
                 
             case 'auth_challenge':
-                // Store the x403 challenge for signing (full message)
                 pendingChallengeRef.current = {
-                    message: message.message,    // Full message to display/sign
-                    nonce: message.nonce,        // Unique nonce
-                    domain: message.domain,      // Expected domain
-                    expiresAt: message.expiresAt // Expiration time
+                    message: message.message,
+                    nonce: message.nonce,
+                    domain: message.domain,
+                    expiresAt: message.expiresAt,
+                    chainId: message.chainId,
+                    walletType: message.walletType
                 };
                 break;
                 
@@ -542,9 +546,11 @@ export function MultiplayerProvider({ children }) {
                 
                 // Persist session (survives refresh for 24h+)
                 localStorage.setItem('penguin_name', message.user.username);
-                localStorage.setItem('auth_token', message.token);
-                localStorage.setItem('wallet_address', message.user.walletAddress);
-                localStorage.setItem('session_timestamp', Date.now().toString());
+                persistSessionCredentials(localStorage, {
+                    token: message.token,
+                    walletAddress: message.user.walletAddress,
+                    chainId: message.user.chainId || SOLANA_CHAIN_ID
+                });
                 
                 // Sync GameManager with server data
                 const gm = GameManager.getInstance();
@@ -560,6 +566,12 @@ export function MultiplayerProvider({ children }) {
                 
             case 'auth_failure':
                 console.error(`🔐 Auth failed: ${message.error}`);
+                if (isAuthenticatingRef.current) {
+                    pendingAuthFailureRef.current = {
+                        code: message.error,
+                        message: message.message
+                    };
+                }
                 setIsAuthenticated(false);
                 setAuthError({ code: message.error, message: message.message });
                 setIsAuthenticating(false);
@@ -589,6 +601,7 @@ export function MultiplayerProvider({ children }) {
                 localStorage.removeItem('auth_token');
                 localStorage.removeItem('wallet_address');
                 localStorage.removeItem('session_timestamp');
+                localStorage.removeItem('wallet_chain_id');
                 GameManager.getInstance().clearServerData();
                 break;
                 
@@ -2505,12 +2518,24 @@ export function MultiplayerProvider({ children }) {
     // ==================== AUTHENTICATION ====================
     
     /**
-     * Connect Phantom wallet and authenticate
+     * Connect wallet and authenticate
+     * @param {'phantom'|'metamask'} provider
      */
-    const connectWallet = useCallback(async () => {
-        const wallet = walletRef.current;
+    const connectWallet = useCallback(async (provider = 'phantom') => {
+        const isEvm = provider === 'metamask';
+        const wallet = isEvm ? MetaMaskWallet.getInstance() : walletRef.current;
+        const walletType = isEvm ? 'evm' : 'solana';
+        const chainId = isEvm ? getActiveEvmChainIdString() : SOLANA_CHAIN_ID;
         
-        if (!wallet.isPhantomInstalled()) {
+        if (isEvm) {
+            if (!wallet.isMetaMaskInstalled()) {
+                setAuthError({
+                    code: 'METAMASK_NOT_INSTALLED',
+                    message: 'Please install MetaMask to sign in with Robinhood Chain'
+                });
+                return { success: false, error: 'METAMASK_NOT_INSTALLED' };
+            }
+        } else if (!wallet.isPhantomInstalled()) {
             setAuthError({
                 code: 'PHANTOM_NOT_INSTALLED',
                 message: 'Please install Phantom wallet to save your progress'
@@ -2520,11 +2545,11 @@ export function MultiplayerProvider({ children }) {
         
         setIsAuthenticating(true);
         setAuthError(null);
+        pendingAuthFailureRef.current = null;
         clearStoredSession(localStorage);
         setAuthToken(null);
         setIsAuthenticated(false);
         
-        // Step 1: Connect to Phantom
         const connectResult = await wallet.connect();
         if (!connectResult.success) {
             setAuthError({ code: connectResult.error, message: connectResult.message });
@@ -2540,17 +2565,25 @@ export function MultiplayerProvider({ children }) {
             return { success: false, error: 'NOT_CONNECTED' };
         }
         
-        // Step 2: Request x403 auth challenge from server
-        // Include domain for signer confidence message
         send({ 
             type: 'auth_request',
-            domain: window.location.host
+            domain: window.location.host,
+            walletType,
+            chainId: isEvm ? String(connectResult.chainId || chainId) : chainId,
+            walletAddress: isEvm ? connectResult.publicKey : undefined,
+            uri: window.location.origin
         });
         
-        // Wait for challenge response (max 5 seconds)
         const challenge = await new Promise((resolve) => {
             const timeout = setTimeout(() => resolve(null), 5000);
             const checkInterval = setInterval(() => {
+                if (pendingAuthFailureRef.current) {
+                    clearTimeout(timeout);
+                    clearInterval(checkInterval);
+                    resolve({ failed: pendingAuthFailureRef.current });
+                    pendingAuthFailureRef.current = null;
+                    return;
+                }
                 if (pendingChallengeRef.current) {
                     clearTimeout(timeout);
                     clearInterval(checkInterval);
@@ -2560,14 +2593,21 @@ export function MultiplayerProvider({ children }) {
             }, 100);
         });
         
+        if (challenge?.failed) {
+            setAuthError({
+                code: challenge.failed.code,
+                message: challenge.failed.message || 'Failed to generate sign-in challenge'
+            });
+            setIsAuthenticating(false);
+            return { success: false, error: challenge.failed.code };
+        }
+        
         if (!challenge) {
             setAuthError({ code: 'CHALLENGE_TIMEOUT', message: 'Server did not respond with challenge' });
             setIsAuthenticating(false);
             return { success: false, error: 'CHALLENGE_TIMEOUT' };
         }
         
-        // Step 3: Sign the x403 challenge message
-        // User will see the full message in their wallet for confidence
         const signResult = await wallet.signMessage(challenge.message);
         if (!signResult.success) {
             setAuthError({ code: signResult.error, message: signResult.message });
@@ -2575,28 +2615,22 @@ export function MultiplayerProvider({ children }) {
             return signResult;
         }
         
-        // Step 4: Send signed challenge to server
-        // IMPORTANT: Do NOT send stale data from previous wallet
-        // Server is authoritative - it will send back the correct data for this wallet
-        
-        // Get pending referral code (from URL or sessionStorage)
         const pendingReferral = referralCode || sessionStorage.getItem('pending_referral');
         
         send({
             type: 'auth_verify',
             walletAddress: connectResult.publicKey,
             signature: signResult.signature,
+            walletType,
+            chainId: challenge.chainId || chainId,
+            message: isEvm ? challenge.message : undefined,
             clientData: {
-                // DON'T send username - new users should pick it in the designer
-                // Server will assign a default "Penguin..." name that they can change
-                // Include referral code if user came from a referral link
                 referralCode: pendingReferral || undefined
             }
         });
         
-        // Auth response will be handled by message handler
         return { success: true, pending: true };
-    }, [send, playerName, referralCode, waitForOpenSocket]);
+    }, [send, referralCode, waitForOpenSocket]);
     
     /**
      * Disconnect wallet and logout
@@ -2606,7 +2640,17 @@ export function MultiplayerProvider({ children }) {
         send({ type: 'auth_logout' });
         
         const wallet = walletRef.current;
-        await wallet.disconnect();
+        if (wallet.connected) {
+            await wallet.disconnect();
+        }
+        try {
+            const mm = MetaMaskWallet.getInstance();
+            if (mm.connected) {
+                await mm.disconnect();
+            }
+        } catch {
+            // ignore
+        }
         
         // Clear all React state
         setIsAuthenticated(false);
@@ -2616,9 +2660,7 @@ export function MultiplayerProvider({ children }) {
         setOnboardingQuest(null);
         
         // Clear ALL auth-related localStorage - prevents session restore with old wallet
-        localStorage.removeItem('auth_token');
-        localStorage.removeItem('wallet_address');
-        localStorage.removeItem('session_timestamp');
+        clearStoredSession(localStorage);
         localStorage.removeItem('penguin_name');
         
         // Clear GameManager state including appearance

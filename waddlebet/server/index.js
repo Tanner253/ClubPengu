@@ -13,6 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
 import { WebSocketServer } from 'ws';
+import { walletsMatch } from './utils/walletIdentity.js';
 import http from 'http';
 import { connectDB, isDBConnected, disconnectDB } from './db/connection.js';
 import { User, OwnedCosmetic, Transaction, MarketListing } from './db/models/index.js';
@@ -1353,10 +1354,11 @@ function cleanupStaleConnections(ip) {
 }
 
 // Clean up any existing connection for a wallet (prevents duplicate sessions)
-function cleanupStaleWalletConnection(walletAddress, excludePlayerId = null) {
+function cleanupStaleWalletConnection(walletAddress, excludePlayerId = null, chainId = 'solana') {
     for (const [existingPlayerId, existingPlayer] of players) {
         if (existingPlayerId === excludePlayerId) continue;
-        if (existingPlayer.walletAddress === walletAddress) {
+        const existingChainId = existingPlayer.chainId || 'solana';
+        if (existingPlayer.walletAddress === walletAddress && existingChainId === chainId) {
             console.log(`[${ts()}] 🧹 Cleaning up stale connection for wallet ${walletAddress.slice(0, 8)}... (old player: ${existingPlayerId})`);
             
             // Close the old WebSocket
@@ -1496,7 +1498,7 @@ async function getPlayerCoins(playerId) {
     if (!player) return 0;
     
     if (player.walletAddress) {
-        const user = await userService.getUser(player.walletAddress);
+        const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
         return user?.coins || 0;
     }
     // Guest players have no persistent coins
@@ -1847,7 +1849,11 @@ wss.on('connection', (ws, req) => {
             
             // Update user connection state in DB
             if (player.walletAddress) {
-                await authService.logout(player.walletAddress, player.authToken);
+                await authService.logout(
+                    player.walletAddress,
+                    player.authToken,
+                    player.chainId || 'solana'
+                );
             }
             
             removeIPConnection(player.ip, playerId);
@@ -1957,26 +1963,82 @@ async function handleMessage(playerId, message) {
     switch (message.type) {
         // ==================== AUTHENTICATION ====================
         case 'auth_request': {
-            // Generate x403 challenge for wallet signature
-            // Include domain from request for signer confidence
             const domain = message.domain || process.env.APP_DOMAIN || 'clubpengu.com';
-            const challenge = authService.generateChallenge(playerId, domain);
-            
-            sendToPlayer(playerId, {
-                type: 'auth_challenge',
-                message: challenge.message,    // Full message to sign
-                nonce: challenge.nonce,        // Unique nonce
-                domain: challenge.domain,      // Domain for verification
-                expiresAt: challenge.expiresAt // When challenge expires
-            });
+            const walletType = message.walletType || 'solana';
+            const chainId = message.chainId;
+            const walletAddress = message.walletAddress;
+
+            if (walletType === 'evm') {
+                if (!walletAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'auth_failure',
+                        error: 'MISSING_WALLET',
+                        message: 'Wallet address required for MetaMask sign-in'
+                    });
+                    break;
+                }
+                if (!authService.isAllowedEvmChain(chainId)) {
+                    sendToPlayer(playerId, {
+                        type: 'auth_failure',
+                        error: 'INVALID_CHAIN',
+                        message: 'Unsupported EVM chain. Use Robinhood Chain in MetaMask.'
+                    });
+                    break;
+                }
+            }
+
+            try {
+                const challenge = authService.generateChallenge(playerId, domain, {
+                    walletType,
+                    chainId,
+                    walletAddress,
+                    uri: message.uri
+                });
+
+                sendToPlayer(playerId, {
+                    type: 'auth_challenge',
+                    message: challenge.message,
+                    nonce: challenge.nonce,
+                    domain: challenge.domain,
+                    expiresAt: challenge.expiresAt,
+                    walletType: challenge.walletType,
+                    chainId: challenge.chainId
+                });
+            } catch (error) {
+                console.error('Auth challenge error:', error);
+                const errorCode = error.message || 'CHALLENGE_ERROR';
+                const friendlyMessage = errorCode === 'INVALID_EVM_ADDRESS'
+                    ? 'Invalid Ethereum wallet address'
+                    : errorCode === 'INVALID_EVM_CHAIN'
+                        ? 'Unsupported EVM chain. Switch MetaMask to Robinhood Chain.'
+                        : 'Failed to generate sign-in challenge';
+                sendToPlayer(playerId, {
+                    type: 'auth_failure',
+                    error: errorCode,
+                    message: friendlyMessage
+                });
+            }
             break;
         }
         
         case 'auth_verify': {
-            const { walletAddress, signature, clientData } = message;
-            
-            // Verify the signature
-            const verifyResult = authService.verifySignature(playerId, walletAddress, signature);
+            const {
+                walletAddress,
+                signature,
+                clientData,
+                walletType = 'solana',
+                chainId = 'solana',
+                message: signedMessage
+            } = message;
+
+            const normalizedChainId = authService.normalizeChainId(chainId);
+
+            const verifyResult = await authService.verifySignature(
+                playerId,
+                walletAddress,
+                signature,
+                { walletType, message: signedMessage }
+            );
             if (!verifyResult.valid) {
                 sendToPlayer(playerId, {
                     type: 'auth_failure',
@@ -1986,11 +2048,8 @@ async function handleMessage(playerId, message) {
                 break;
             }
             
-            // Check if banned
-            if (await authService.isWalletBanned(walletAddress)) {
-                // Get user to retrieve their IP address and ban details
-                const User = (await import('./db/models/User.js')).default;
-                const user = await User.findOne({ walletAddress }, 'lastIpAddress isBanned banReason banExpires');
+            if (await authService.isWalletBanned(walletAddress, normalizedChainId)) {
+                const user = await authService.findUser(walletAddress, normalizedChainId);
                 
                 // Log banned user connection attempt
                 const username = user?.username || 'Unknown';
@@ -2035,20 +2094,21 @@ async function handleMessage(playerId, message) {
             }
             
             try {
-                // Clean up any existing connection for this wallet (prevents duplicate sessions)
-                cleanupStaleWalletConnection(walletAddress, playerId);
-                
-                // Authenticate and get/create user
+                cleanupStaleWalletConnection(walletAddress, playerId, normalizedChainId);
+
                 const authResult = await authService.authenticateUser(
                     walletAddress,
                     playerId,
                     clientData || {},
-                    player.ip
+                    player.ip,
+                    normalizedChainId
                 );
-                
-                // Update player state
+
+                const canonicalWallet = authResult.user.walletAddress;
+
                 player.isAuthenticated = true;
-                player.walletAddress = walletAddress;
+                player.walletAddress = canonicalWallet;
+                player.chainId = normalizedChainId;
                 player.authToken = authResult.token;
                 player.name = authResult.user.username;
                 player.role = authResult.user.role || null;
@@ -2063,11 +2123,10 @@ async function handleMessage(playerId, message) {
                 };
                 
                 // Associate wallet with inbox
-                inboxService.associateWallet(walletAddress, playerId);
+                inboxService.associateWallet(canonicalWallet, playerId);
 
                 await nametagTierService.refreshPlayerTier(player);
                 
-                // Send success with full user data
                 sendToPlayer(playerId, {
                     type: 'auth_success',
                     token: authResult.token,
@@ -2077,9 +2136,9 @@ async function handleMessage(playerId, message) {
                     ...getNametagTierFields(player),
                 });
 
-                await sendGameInventorySnapshot(playerId, walletAddress);
+                await sendGameInventorySnapshot(playerId, canonicalWallet);
 
-                onboardingQuestService.sendStatusToPlayer(playerId, walletAddress)
+                onboardingQuestService.sendStatusToPlayer(playerId, canonicalWallet)
                     .catch((err) => console.error('[OnboardingQuest] auth status:', err));
 
                 npcDailyOrderService.sendStatusToPlayer(playerId, walletAddress)
@@ -2255,7 +2314,7 @@ async function handleMessage(playerId, message) {
             }
             
             try {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 if (!user) {
                     sendToPlayer(playerId, {
                         type: 'username_change_failed',
@@ -2316,12 +2375,17 @@ async function handleMessage(playerId, message) {
                 await persistPlayerLocation(player.walletAddress, player.room, player.position);
             }
             if (player.walletAddress) {
-                await authService.logout(player.walletAddress, player.authToken);
+                await authService.logout(
+                    player.walletAddress,
+                    player.authToken,
+                    player.chainId || 'solana'
+                );
             }
             
             // Reset to guest state
             player.isAuthenticated = false;
             player.walletAddress = null;
+            player.chainId = null;
             player.authToken = null;
             player.name = generateGuestName();
             
@@ -2333,8 +2397,8 @@ async function handleMessage(playerId, message) {
         }
         
         case 'auth_restore': {
-            // Attempt to restore session from stored token
-            const { token, walletAddress } = message;
+            const { token, walletAddress, chainId = 'solana' } = message;
+            const normalizedChainId = authService.normalizeChainId(chainId);
             
             if (!token || !walletAddress) {
                 sendToPlayer(playerId, {
@@ -2361,7 +2425,7 @@ async function handleMessage(playerId, message) {
                 const user = sessionResult.user;
                 
                 // Verify wallet matches
-                if (user.walletAddress !== walletAddress) {
+                if (!walletsMatch(user.walletAddress, walletAddress, normalizedChainId)) {
                     sendToPlayer(playerId, {
                         type: 'auth_failure',
                         error: 'WALLET_MISMATCH',
@@ -2369,13 +2433,21 @@ async function handleMessage(playerId, message) {
                     });
                     break;
                 }
+
+                if (authService.normalizeChainId(user.chainId) !== normalizedChainId) {
+                    sendToPlayer(playerId, {
+                        type: 'auth_failure',
+                        error: 'CHAIN_MISMATCH',
+                        message: 'Wallet chain does not match session'
+                    });
+                    break;
+                }
                 
-                // Clean up any existing connection for this wallet (prevents duplicate sessions)
-                cleanupStaleWalletConnection(walletAddress, playerId);
+                cleanupStaleWalletConnection(user.walletAddress, playerId, normalizedChainId);
                 
-                // Update player state
                 player.isAuthenticated = true;
-                player.walletAddress = walletAddress;
+                player.walletAddress = user.walletAddress;
+                player.chainId = normalizedChainId;
                 player.authToken = token;
                 player.name = user.username;
                 player.role = user.role || null;
@@ -2394,7 +2466,7 @@ async function handleMessage(playerId, message) {
                 
                 
                 // Associate wallet with inbox
-                inboxService.associateWallet(walletAddress, playerId);
+                inboxService.associateWallet(user.walletAddress, playerId);
                 
                 // Migration: Set lastUsernameChangeAt for established users who don't have it
                 if (user.isEstablishedUser() && !user.lastUsernameChangeAt) {
@@ -2486,7 +2558,7 @@ async function handleMessage(playerId, message) {
             
             let spawnPos = getDefaultSpawnForRoom(roomId);
             if (player.walletAddress) {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 if (user) {
                     spawnPos = await getSavedSpawnForUser(user, roomId);
                 }
@@ -2506,7 +2578,7 @@ async function handleMessage(playerId, message) {
             let needsSave = false;
             
             if (player.walletAddress) {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 if (user) {
                     coins = user.coins || 0;
                     
@@ -2733,7 +2805,7 @@ async function handleMessage(playerId, message) {
             // Get updated user data for authenticated users (includes locked username status)
             let userData = null;
             if (player.walletAddress) {
-                const updatedUser = await userService.getUser(player.walletAddress);
+                const updatedUser = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 if (updatedUser) {
                     // Use async version to include gacha-owned cosmetics
                     userData = await updatedUser.getFullDataAsync();
@@ -3524,7 +3596,7 @@ async function handleMessage(playerId, message) {
             const newAppearance = message.appearance || {};
             let appearanceUser = null;
             if (player.walletAddress) {
-                appearanceUser = await userService.getUser(player.walletAddress);
+                appearanceUser = await userService.getUser(player.walletAddress, player.chainId || 'solana');
             }
             player.appearance = normalizeAppearance({
                 ...player.appearance,
@@ -3547,7 +3619,7 @@ async function handleMessage(playerId, message) {
                         message: `You don't own: ${result.item}`
                     });
                     // Reset appearance from DB, including characterType
-                    const user = await userService.getUser(player.walletAddress);
+                    const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                     if (user) {
                         const userObj = user.toObject();
                         player.appearance = {
@@ -3716,7 +3788,7 @@ async function handleMessage(playerId, message) {
             // Return server-authoritative coin balance
             let coins = 0;
             if (player.walletAddress) {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 coins = user?.coins || 0;
             }
             sendToPlayer(playerId, {
@@ -4331,7 +4403,7 @@ async function handleMessage(playerId, message) {
                     const p1Coins = challenge.challengerWallet ? 
                         (await userService.getUser(challenge.challengerWallet))?.coins || 0 : 0;
                     const p2Coins = player.walletAddress ? 
-                        (await userService.getUser(player.walletAddress))?.coins || 0 : 0;
+                        (await userService.getUser(player.walletAddress, player.chainId || 'solana'))?.coins || 0 : 0;
                     
                     // Notify both players
                     const matchStartMsg1 = {
@@ -4936,7 +5008,7 @@ async function handleMessage(playerId, message) {
             
             if (feedResult.success) {
                 // Update coins
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 sendToPlayer(playerId, {
                     type: 'coins_update',
                     coins: user.coins,
@@ -4977,7 +5049,7 @@ async function handleMessage(playerId, message) {
             });
             
             if (toyResult.success) {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 sendToPlayer(playerId, {
                     type: 'coins_update',
                     coins: user.coins,
@@ -5020,7 +5092,7 @@ async function handleMessage(playerId, message) {
             });
             
             if (buyFoodResult.success) {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 sendToPlayer(playerId, {
                     type: 'coins_update',
                     coins: user.coins,
@@ -5062,7 +5134,7 @@ async function handleMessage(playerId, message) {
             });
             
             if (buyAccResult.success) {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 sendToPlayer(playerId, {
                     type: 'coins_update',
                     coins: user.coins,
@@ -5267,7 +5339,7 @@ async function handleMessage(playerId, message) {
                 }
                 
                 // Update coins for both
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 sendToPlayer(playerId, {
                     type: 'coins_update',
                     coins: user.coins,
@@ -5298,7 +5370,7 @@ async function handleMessage(playerId, message) {
             });
             
             if (daycareResult.success) {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 sendToPlayer(playerId, {
                     type: 'coins_update',
                     coins: user.coins,
@@ -5349,7 +5421,7 @@ async function handleMessage(playerId, message) {
             });
             
             if (foodResult.success) {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 sendToPlayer(playerId, {
                     type: 'coins_update',
                     coins: user.coins,
@@ -5391,7 +5463,7 @@ async function handleMessage(playerId, message) {
             });
             
             if (accessoryResult.success) {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 sendToPlayer(playerId, {
                     type: 'coins_update',
                     coins: user.coins,
@@ -5428,7 +5500,7 @@ async function handleMessage(playerId, message) {
                 break;
             }
             
-            const user = await userService.getUser(player.walletAddress);
+            const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
             sendToPlayer(playerId, {
                 type: 'user_data',
                 user: user ? await user.getFullDataAsync() : null,
@@ -5501,7 +5573,7 @@ async function handleMessage(playerId, message) {
             
             // If successful, also send updated user data with new unlocks
             if (promoResult.success) {
-                const updatedUser = await userService.getUser(player.walletAddress);
+                const updatedUser = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 if (updatedUser) {
                     sendToPlayer(playerId, {
                         type: 'user_data',
@@ -6032,7 +6104,7 @@ async function handleMessage(playerId, message) {
         case 'worm_forage_get': {
             try {
                 if (!player.walletAddress) break;
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 if (!user) break;
                 sendToPlayer(playerId, {
                     type: 'worm_forage_status',
@@ -6280,7 +6352,7 @@ async function handleMessage(playerId, message) {
         case 'scavenge_get': {
             try {
                 if (!player.walletAddress) break;
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 if (!user) break;
                 sendToPlayer(playerId, {
                     type: 'scavenge_status',
@@ -7891,7 +7963,7 @@ async function handleMessage(playerId, message) {
                     });
                     
                     // Send updated pebble balance
-                    const user = await userService.getUser(player.walletAddress);
+                    const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                     if (user) {
                         sendToPlayer(playerId, {
                             type: 'pebbles_update',
@@ -8360,7 +8432,7 @@ async function handleMessage(playerId, message) {
             }
             
             try {
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 sendToPlayer(playerId, {
                     type: 'pebbles_balance',
                     pebbles: user?.pebbles || 0,
@@ -8625,7 +8697,7 @@ async function handleMessage(playerId, message) {
                     sortBy
                 });
                 
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 
                 sendToPlayer(playerId, {
                     type: 'inventory_data',
@@ -8656,7 +8728,7 @@ async function handleMessage(playerId, message) {
             
             try {
                 const stats = await OwnedCosmetic.getInventoryStats(player.walletAddress);
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 
                 sendToPlayer(playerId, {
                     type: 'inventory_stats',
@@ -8740,7 +8812,7 @@ async function handleMessage(playerId, message) {
                     });
                     
                     // Get updated inventory count
-                    const user = await userService.getUser(player.walletAddress);
+                    const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                     const inventoryCount = await user.getInventoryCount();
                     
                     sendToPlayer(playerId, {
@@ -8843,7 +8915,7 @@ async function handleMessage(playerId, message) {
                 }
                 
                 // Transaction verified! Apply the upgrade
-                const user = await userService.getUser(player.walletAddress);
+                const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                 if (!user) {
                     sendToPlayer(playerId, {
                         type: 'inventory_error',
@@ -8973,7 +9045,7 @@ async function handleMessage(playerId, message) {
                         reason: `Bulk burned ${burnedItems.length} cosmetics`
                     });
                     
-                    const user = await userService.getUser(player.walletAddress);
+                    const user = await userService.getUser(player.walletAddress, player.chainId || 'solana');
                     const inventoryCount = await user.getInventoryCount();
                     
                     sendToPlayer(playerId, {
@@ -9101,7 +9173,7 @@ setInterval(async () => {
             }
             
             if (player.walletAddress) {
-                await authService.logout(player.walletAddress);
+                await authService.logout(player.walletAddress, null, player.chainId || 'solana');
             }
             
             if (player.ip) removeIPConnection(player.ip, playerId);

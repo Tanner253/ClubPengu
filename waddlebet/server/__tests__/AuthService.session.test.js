@@ -54,6 +54,7 @@ describe('AuthService session validation', () => {
         mockFindValidSession.mockResolvedValue({ touch });
         mockFindOne.mockResolvedValue({
             walletAddress: 'wallet1',
+            chainId: 'solana',
             lastActiveAt: null,
             save
         });
@@ -74,5 +75,24 @@ describe('AuthService session validation', () => {
         const result = await authService.validateSession(forgedToken);
         expect(result.valid).toBe(false);
         expect(result.error).toBe('INVALID_TOKEN');
+    });
+
+    it('findUser falls back to legacy Solana accounts without chainId', async () => {
+        const legacyUser = {
+            walletAddress: 'legacyWallet123',
+            chainId: undefined,
+            save: vi.fn().mockResolvedValue(undefined)
+        };
+
+        mockFindOne
+            .mockResolvedValueOnce(null)
+            .mockResolvedValueOnce(legacyUser);
+
+        const user = await authService.findUser('legacyWallet123', 'solana');
+
+        expect(user).toBe(legacyUser);
+        expect(legacyUser.chainId).toBe('solana');
+        expect(legacyUser.save).toHaveBeenCalled();
+        expect(mockFindOne).toHaveBeenCalledTimes(2);
     });
 });

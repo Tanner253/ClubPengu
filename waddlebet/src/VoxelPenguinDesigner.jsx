@@ -2174,7 +2174,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         </div>
     ) : null;
 
-    const renderCreatorHeaderLinks = (compact = false) => {
+    const renderCreatorHeaderLinks = (compact = false, { hideRobinhood = false } = {}) => {
         const iconSize = compact ? 12 : 16;
         const linkClass = compact
             ? 'px-2 py-1 text-[9px] leading-tight gap-1'
@@ -2194,6 +2194,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         {compact ? t('creatorPitch.badgeShort') : t('creatorPitch.badge')}
                     </span>
                 </button>
+                {!hideRobinhood && (
                 <a
                     href="https://whitepaper.waddle.bet/#multichain"
                     target="_blank"
@@ -2208,6 +2209,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         {compact ? t('menu.robinhoodEvmBadgeShort') : t('menu.robinhoodEvmBadge')}
                     </span>
                 </a>
+                )}
                 <a
                     href="https://whitepaper.waddle.bet/"
                     target="_blank"
@@ -2314,10 +2316,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 {t('creator.deluxe')}
                             </span>
                         </h1>
-                        {renderCreatorHeaderLinks(isMobileView)}
-                    </div>
-                    <div className="mt-2 pointer-events-auto max-w-sm">
-                        {renderRobinhoodEvmBanner()}
+                        {renderCreatorHeaderLinks(isMobileView, { hideRobinhood: true })}
                     </div>
                     {isMobilePortrait && (
                         <p className="absolute bottom-3 inset-x-0 text-center text-white/45 text-[10px] pointer-events-none flex items-center justify-center gap-1">
@@ -2368,7 +2367,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         ? 'rounded-b-none overflow-hidden border-b-0'
                         : isMobileView
                             ? 'max-h-[42vh] overflow-hidden'
-                            : 'p-6 max-h-[80vh] gap-3 overflow-y-auto'
+                            : 'p-6 max-h-[80vh] gap-3 overflow-y-auto creator-scroll'
                 }`} style={isMobilePortrait ? { maxHeight: `${MOBILE_SHEET_VH}vh` } : undefined}>
                 {isMobilePortrait && (
                     <div className="shrink-0 flex justify-center pt-2 pb-1">
@@ -2377,7 +2376,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 )}
                 <div className={
                     isMobileView
-                        ? 'overflow-y-auto flex-1 min-h-0 px-4 pb-2 flex flex-col gap-3 overscroll-contain'
+                        ? 'overflow-y-auto creator-scroll flex-1 min-h-0 px-4 pb-2 flex flex-col gap-3 overscroll-contain'
                         : 'flex flex-col gap-3'
                 } style={isMobileView ? { WebkitOverflowScrolling: 'touch' } : undefined}>
                     <h2 className={`text-white font-bold flex items-center gap-2 sticky top-0 bg-gray-900/50 p-2 rounded backdrop-blur-md z-20 ${isMobileView ? 'text-base mb-1' : 'text-lg mb-2'}`}>
@@ -2500,7 +2499,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                 </button>
                                 {colorsExpanded && (
                                     <div className="mt-2 p-3 bg-black/30 rounded-lg border border-cyan-500/20">
-                                        <div className={`grid gap-1.5 ${isPortrait && isMobileView ? 'grid-cols-8' : 'grid-cols-8'} max-h-[120px] overflow-y-auto overflow-x-hidden`}>
+                                        <div className={`creator-scroll grid gap-1.5 ${isPortrait && isMobileView ? 'grid-cols-8' : 'grid-cols-8'} max-h-[120px] overflow-y-auto overflow-x-hidden`}>
                                             {options.skin.map(c => {
                                                 const isUnlocked = isSkinColorUnlocked(c);
                                                 const isSelected = skinColor === c;

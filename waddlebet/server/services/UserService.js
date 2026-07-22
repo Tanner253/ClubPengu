@@ -10,7 +10,8 @@ import {
     PUFFLE_SOCIAL_GOLD_REWARD,
     isValidWagerGold,
 } from '../config/goldEconomy.js';
-import { getPuffleShopItems, getPuffleAccessoryEntry } from '../config/puffleAccessories.js';
+import { findUserByWallet, canonicalWalletAddress } from '../utils/walletIdentity.js';
+import { SOLANA_CHAIN_ID } from '../config/evm.js';
 
 // ========== FREE ITEMS (always available, no gacha needed) ==========
 const FREE_ITEMS = ['none', 'normal', 'beak'];
@@ -63,10 +64,29 @@ class UserService {
     }
 
     /**
-     * Get user by wallet address
+     * Get user by wallet address (chain-aware for EVM EIP-55 + legacy Solana)
      */
-    async getUser(walletAddress) {
-        return User.findOne({ walletAddress });
+    async getUser(walletAddress, chainId = null) {
+        if (!walletAddress) return null;
+
+        if (chainId) {
+            return findUserByWallet(User, walletAddress, chainId);
+        }
+
+        let user = await User.findOne({ walletAddress });
+        if (user) return user;
+
+        if (walletAddress.startsWith('0x')) {
+            try {
+                user = await User.findOne({ walletAddress: canonicalWalletAddress(walletAddress, '4663') });
+            } catch {
+                // ignore invalid hex
+            }
+        }
+
+        if (user) return user;
+
+        return findUserByWallet(User, walletAddress, SOLANA_CHAIN_ID);
     }
 
     /**
