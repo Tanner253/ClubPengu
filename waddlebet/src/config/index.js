@@ -49,3 +49,13 @@ export {
     PAYMENT_STATUS,
     IGLOO_ACCESS
 } from './solana.js';
+
+export {
+    ROBINHOOD_CHAIN_MAINNET,
+    ROBINHOOD_CHAIN_TESTNET,
+    SOLANA_CHAIN_ID,
+    CP_ETH_CONTRACT,
+    getActiveRobinhoodChain,
+    getActiveEvmChainIdString,
+    getCpEthBlockExplorerUrl,
+} from './evm.js';

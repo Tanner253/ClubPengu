@@ -24,6 +24,13 @@ export const ROBINHOOD_CHAIN_TESTNET = {
 /** Solana accounts use this chainId in the database */
 export const SOLANA_CHAIN_ID = 'solana';
 
+/** $CP ERC-20 contract on Robinhood Chain (Ethereum EVM). */
+export const CP_ETH_CONTRACT = '0xcf83b446d4cf400b132538d7bb03e36bdbd3c8b8';
+
+export function getCpEthBlockExplorerUrl(contract = CP_ETH_CONTRACT) {
+    return `${getActiveRobinhoodChain().blockExplorer}/token/${contract}`;
+}
+
 /** Resolve active Robinhood network — mainnet by default; opt into testnet via VITE_EVM_CHAIN_ID=testnet */
 export function getActiveRobinhoodChain() {
     const override = import.meta.env.VITE_EVM_CHAIN_ID;

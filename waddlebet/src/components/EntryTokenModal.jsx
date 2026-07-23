@@ -6,27 +6,40 @@ import React, { useRef, useState } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useLanguage } from '../i18n';
 import { CPW3_TOKEN_ADDRESS } from '../config/solana';
+import { CP_ETH_CONTRACT, getCpEthBlockExplorerUrl } from '../config/evm';
 
 export const ENTRY_TOKEN_MODAL_STORAGE_KEY = 'waddlebet_entry_token_modal_hidden';
 
 const DEXSCREENER_URL = `https://dexscreener.com/solana/${CPW3_TOKEN_ADDRESS}`;
+const ETH_BLOCK_EXPLORER_URL = getCpEthBlockExplorerUrl();
 
 const EntryTokenModal = ({ isOpen, onClose }) => {
     const modalRef = useRef(null);
     const { t } = useLanguage();
     const [dontShowAgain, setDontShowAgain] = useState(false);
-    const [copied, setCopied] = useState(false);
+    const [copiedSolana, setCopiedSolana] = useState(false);
+    const [copiedEth, setCopiedEth] = useState(false);
 
     useClickOutside(modalRef, () => onClose(dontShowAgain), isOpen);
     useEscapeKey(() => onClose(dontShowAgain), isOpen);
 
-    const handleCopyCa = async () => {
+    const handleCopySolanaCa = async () => {
         try {
             await navigator.clipboard.writeText(CPW3_TOKEN_ADDRESS);
-            setCopied(true);
-            setTimeout(() => setCopied(false), 2000);
+            setCopiedSolana(true);
+            setTimeout(() => setCopiedSolana(false), 2000);
         } catch {
-            setCopied(false);
+            setCopiedSolana(false);
+        }
+    };
+
+    const handleCopyEthCa = async () => {
+        try {
+            await navigator.clipboard.writeText(CP_ETH_CONTRACT);
+            setCopiedEth(true);
+            setTimeout(() => setCopiedEth(false), 2000);
+        } catch {
+            setCopiedEth(false);
         }
     };
 
@@ -86,10 +99,10 @@ const EntryTokenModal = ({ isOpen, onClose }) => {
                             </code>
                             <button
                                 type="button"
-                                onClick={handleCopyCa}
+                                onClick={handleCopySolanaCa}
                                 className="shrink-0 px-3 py-2 rounded-lg border border-white/15 bg-white/5 text-white text-xs font-bold hover:bg-white/10 transition-colors"
                             >
-                                {copied ? t('entryToken.copied') : t('entryToken.copyCa')}
+                                {copiedSolana ? t('entryToken.copied') : t('entryToken.copyCa')}
                             </button>
                         </div>
 
@@ -104,26 +117,49 @@ const EntryTokenModal = ({ isOpen, onClose }) => {
                     </section>
 
                     <section className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-                        <div className="flex items-start gap-3">
-                            <span className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-[#1a1f2e] w-10 h-10">
+                        <div className="flex items-center gap-2 mb-2">
+                            <span className="inline-flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-white/10 bg-[#1a1f2e] w-8 h-8">
                                 <img
                                     src="/robinhood-logo.png"
                                     alt="Robinhood"
-                                    width={40}
-                                    height={40}
+                                    width={32}
+                                    height={32}
                                     className="h-full w-full object-cover"
                                 />
                             </span>
-                            <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2 mb-1">
-                                    <h3 className="text-sm font-bold text-white">{t('entryToken.robinhoodHead')}</h3>
-                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-300 px-2 py-0.5 rounded-full bg-white/5 border border-white/15">
-                                        {t('entryToken.comingSoon')}
-                                    </span>
-                                </div>
-                                <p className="text-xs sm:text-sm text-white/55 leading-relaxed">{t('entryToken.robinhoodBody')}</p>
-                            </div>
+                            <h3 className="text-sm font-bold text-white uppercase tracking-wide">
+                                {t('entryToken.robinhoodHead')}
+                            </h3>
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-300 px-2 py-0.5 rounded-full bg-white/5 border border-white/15">
+                                {t('entryToken.robinhoodStatus')}
+                            </span>
                         </div>
+                        <p className="text-sm text-white/70 leading-relaxed mb-4">{t('entryToken.robinhoodBody')}</p>
+
+                        <label className="block text-[10px] font-semibold uppercase tracking-wide text-white/45 mb-1.5">
+                            {t('entryToken.ethCaLabel')}
+                        </label>
+                        <div className="flex gap-2">
+                            <code className="flex-1 min-w-0 text-[11px] sm:text-xs text-slate-100 bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 font-mono break-all leading-snug">
+                                {CP_ETH_CONTRACT}
+                            </code>
+                            <button
+                                type="button"
+                                onClick={handleCopyEthCa}
+                                className="shrink-0 px-3 py-2 rounded-lg border border-white/15 bg-white/5 text-white text-xs font-bold hover:bg-white/10 transition-colors"
+                            >
+                                {copiedEth ? t('entryToken.copied') : t('entryToken.copyCa')}
+                            </button>
+                        </div>
+
+                        <a
+                            href={ETH_BLOCK_EXPLORER_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-4 block w-full text-center py-2.5 px-4 rounded-lg border border-white/15 bg-white/5 text-white font-bold text-sm hover:bg-white/10 transition-colors"
+                        >
+                            {t('entryToken.viewExplorer')}
+                        </a>
                     </section>
                 </div>
 

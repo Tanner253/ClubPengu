@@ -51,6 +51,7 @@ import LanguageToggle from './components/LanguageToggle';
 import WebGLStatusBanner from './components/WebGLStatusBanner';
 import CreatorPitchModal from './components/CreatorPitchModal';
 import EntryTokenModal, { ENTRY_TOKEN_MODAL_STORAGE_KEY } from './components/EntryTokenModal';
+import { CP_ETH_CONTRACT } from './config/evm';
 import { useLanguage } from './i18n';
 import performanceManager from './systems/PerformanceManager';
 import { initBrowserCapabilities, usesPrivacyBrowserOptimizations, readLiveWebGLInfo } from './utils/browserCapabilities';
@@ -257,6 +258,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             return true;
         }
     });
+    const [copiedEthCa, setCopiedEthCa] = useState(false);
     const handleCloseEntryTokenModal = useCallback((dontShowAgain) => {
         if (dontShowAgain) {
             try {
@@ -2243,12 +2245,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     };
 
     const renderRobinhoodEvmBanner = () => (
-        <a
-            href="https://whitepaper.waddle.bet/#multichain"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="creator-robinhood-banner block rounded-xl p-3 md:p-4 transition-colors"
-        >
+        <div className="creator-robinhood-banner block rounded-xl p-3 md:p-4 transition-colors">
             <div className="flex items-start gap-3">
                 <img
                     src="/robinhood-logo.png"
@@ -2265,11 +2262,41 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         </span>
                     </div>
                     <p className="text-slate-200 text-xs font-semibold mb-1">{t('menu.robinhoodEvmTitle')}</p>
-                    <p className="text-slate-400 text-xs leading-relaxed">{t('menu.robinhoodEvmDesc')}</p>
-                    <p className="text-slate-300 text-xs font-semibold mt-2">{t('menu.robinhoodEvmCta')} →</p>
+                    <p className="text-slate-400 text-xs leading-relaxed mb-3">{t('menu.robinhoodEvmDesc')}</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-white/45 mb-1.5">
+                        {t('menu.ethCaLabel')}
+                    </p>
+                    <div className="flex gap-2 mb-3">
+                        <code className="flex-1 min-w-0 text-[10px] sm:text-[11px] text-slate-100 bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 font-mono break-all leading-snug">
+                            {CP_ETH_CONTRACT}
+                        </code>
+                        <button
+                            type="button"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                navigator.clipboard.writeText(CP_ETH_CONTRACT)
+                                    .then(() => {
+                                        setCopiedEthCa(true);
+                                        setTimeout(() => setCopiedEthCa(false), 2000);
+                                    })
+                                    .catch(() => {});
+                            }}
+                            className="shrink-0 px-2.5 py-2 rounded-lg border border-white/15 bg-white/5 text-white text-[10px] font-bold hover:bg-white/10 transition-colors"
+                        >
+                            {copiedEthCa ? t('entryToken.copied') : t('entryToken.copyCa')}
+                        </button>
+                    </div>
+                    <a
+                        href="https://whitepaper.waddle.bet/#multichain"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-slate-300 text-xs font-semibold hover:text-white transition-colors"
+                    >
+                        {t('menu.robinhoodEvmCta')} →
+                    </a>
                 </div>
             </div>
-        </a>
+        </div>
     );
 
     const renderCloudflareBadge = () => (
