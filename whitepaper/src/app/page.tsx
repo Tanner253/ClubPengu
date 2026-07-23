@@ -64,6 +64,11 @@ const CP_SOLANA_MINT = "9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump";
 /** Original $CPW3 SPL mint (~$700k ATH on Solana). */
 const CPW3_ORIGINAL_SOLANA_MINT = "63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump";
 
+/** $CP ERC-20 contract on Robinhood Chain (Ethereum EVM). */
+const CP_ETH_CONTRACT = "0xcf83b446d4cf400b132538d7bb03e36bdbd3c8b8";
+
+const CP_ETH_BLOCK_EXPLORER = `https://robinhoodchain.blockscout.com/token/${CP_ETH_CONTRACT}`;
+
 /** Hero background — same trailer as the demo section (no second embed there). */
 const HERO_YOUTUBE_VIDEO_ID = "H2Ge_hb5Gfc";
 
@@ -361,19 +366,31 @@ function Navigation() {
 /** Solana + Robinhood chain strip shown in the hero. */
 function HeroChainsStrip() {
   const { t } = useWhitepaperLanguage();
-  const [copiedCa, setCopiedCa] = useState(false);
+  const [copiedSolanaCa, setCopiedSolanaCa] = useState(false);
+  const [copiedEthCa, setCopiedEthCa] = useState(false);
 
   const copySolanaMint = async () => {
     try {
       await navigator.clipboard.writeText(CP_SOLANA_MINT);
-      setCopiedCa(true);
-      setTimeout(() => setCopiedCa(false), 2000);
+      setCopiedSolanaCa(true);
+      setTimeout(() => setCopiedSolanaCa(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  const copyEthContract = async () => {
+    try {
+      await navigator.clipboard.writeText(CP_ETH_CONTRACT);
+      setCopiedEthCa(true);
+      setTimeout(() => setCopiedEthCa(false), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
     }
   };
 
   const abbreviatedMint = `${CP_SOLANA_MINT.slice(0, 4)}...${CP_SOLANA_MINT.slice(-4)}`;
+  const abbreviatedEth = `${CP_ETH_CONTRACT.slice(0, 6)}...${CP_ETH_CONTRACT.slice(-4)}`;
 
   return (
     <motion.div
@@ -397,11 +414,11 @@ function HeroChainsStrip() {
               type="button"
               onClick={copySolanaMint}
               className="inline-flex items-center gap-1 shrink-0 text-[10px] font-mono text-cyan-400/75 hover:text-cyan-300 transition-colors"
-              title={copiedCa ? t("nav.caCopied") : t("contract.copyTitle")}
-              aria-label={copiedCa ? t("nav.caCopied") : t("contract.copyTitle")}
+              title={copiedSolanaCa ? t("nav.caCopied") : t("contract.copyTitle")}
+              aria-label={copiedSolanaCa ? t("nav.caCopied") : t("contract.copyTitle")}
             >
               <span>{abbreviatedMint}</span>
-              {copiedCa ? (
+              {copiedSolanaCa ? (
                 <Check className="w-2.5 h-2.5 text-green-400" />
               ) : (
                 <Copy className="w-2.5 h-2.5 opacity-50" />
@@ -421,6 +438,22 @@ function HeroChainsStrip() {
               </div>
               <p className="text-slate-500 text-xs">{t("hero.chains.robinhoodSub")}</p>
             </div>
+          </div>
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={copyEthContract}
+              className="inline-flex items-center gap-1 shrink-0 text-[10px] font-mono text-slate-300/80 hover:text-white transition-colors"
+              title={copiedEthCa ? t("nav.caCopied") : t("contract.copyEthTitle")}
+              aria-label={copiedEthCa ? t("nav.caCopied") : t("contract.copyEthTitle")}
+            >
+              <span>{abbreviatedEth}</span>
+              {copiedEthCa ? (
+                <Check className="w-2.5 h-2.5 text-green-400" />
+              ) : (
+                <Copy className="w-2.5 h-2.5 opacity-50" />
+              )}
+            </button>
           </div>
         </div>
       </div>
@@ -928,6 +961,18 @@ function AboutSection() {
 
 function MultichainSection() {
   const { t } = useWhitepaperLanguage();
+  const [copiedEthCa, setCopiedEthCa] = useState(false);
+
+  const copyEthContract = async () => {
+    try {
+      await navigator.clipboard.writeText(CP_ETH_CONTRACT);
+      setCopiedEthCa(true);
+      setTimeout(() => setCopiedEthCa(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
   const whyBullets = [
     t("multichain.why.b1"),
     t("multichain.why.b2"),
@@ -990,9 +1035,19 @@ function MultichainSection() {
             <h3 className="text-xl md:text-2xl font-bold text-white mb-3">{t("multichain.robinhood.title")}</h3>
             <p className="text-slate-300 text-sm md:text-base leading-relaxed mb-4">{t("multichain.robinhood.p1")}</p>
             <p className="text-slate-400 text-sm leading-relaxed mb-5">{t("multichain.robinhood.p2")}</p>
-            <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-black/30 border border-white/10">
-              <span className="text-slate-500 text-xs uppercase tracking-wide">{t("multichain.robinhood.caLabel")}</span>
-              <span className="text-slate-300 font-mono text-sm font-semibold">{t("multichain.robinhood.caValue")}</span>
+            <div className="p-3 rounded-xl bg-black/30 border border-white/10">
+              <span className="text-slate-500 text-xs uppercase tracking-wide block mb-2">{t("multichain.robinhood.caLabel")}</span>
+              <div className="flex items-center gap-2">
+                <code className="text-xs sm:text-sm text-slate-200 font-mono truncate flex-1">{CP_ETH_CONTRACT}</code>
+                <button
+                  type="button"
+                  onClick={copyEthContract}
+                  className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0"
+                  title={copiedEthCa ? t("nav.caCopied") : t("contract.copyEthTitle")}
+                >
+                  {copiedEthCa ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
             <p className="mt-4 text-xs text-slate-400 font-medium">{t("multichain.robinhood.status")}</p>
           </motion.div>
@@ -1966,6 +2021,7 @@ function RoadmapSection() {
 function ContractAddress() {
   const { t } = useWhitepaperLanguage();
   const [copied, setCopied] = useState(false);
+  const [copiedEth, setCopiedEth] = useState(false);
   const [copiedCpw3, setCopiedCpw3] = useState(false);
 
   const copyCpMint = async () => {
@@ -1973,6 +2029,16 @@ function ContractAddress() {
       await navigator.clipboard.writeText(CP_SOLANA_MINT);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  const copyEthContract = async () => {
+    try {
+      await navigator.clipboard.writeText(CP_ETH_CONTRACT);
+      setCopiedEth(true);
+      setTimeout(() => setCopiedEth(false), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
     }
@@ -2024,6 +2090,44 @@ function ContractAddress() {
                 title={t("contract.copyTitle")}
               >
                 {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+              <RobinhoodLogo size={24} />
+            </div>
+            <div>
+              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{t("contract.ethLabel")}</p>
+              <p className="text-sm font-medium text-slate-300">
+                {t("contract.liveOn")}{" "}
+                <a
+                  href={CP_ETH_BLOCK_EXPLORER}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-slate-200 hover:underline"
+                >
+                  {t("contract.ethPlatform")}
+                </a>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex-1 w-full sm:w-auto">
+            <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 border border-white/10">
+              <code className="text-xs sm:text-sm text-slate-200 font-mono truncate flex-1">
+                {CP_ETH_CONTRACT}
+              </code>
+              <button
+                type="button"
+                onClick={copyEthContract}
+                className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0"
+                title={t("contract.copyEthTitle")}
+              >
+                {copiedEth ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
               </button>
             </div>
           </div>

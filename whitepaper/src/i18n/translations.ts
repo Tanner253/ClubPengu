@@ -118,7 +118,6 @@ const en: Record<string, string> = {
   "multichain.robinhood.p2":
     "We're actively preparing our Robinhood Chain deployment: contract architecture, token bridging strategy, and wallet integrations are underway. Full utility ships in phases — Solana remains live and fully playable today.",
   "multichain.robinhood.caLabel": "Contract Address",
-  "multichain.robinhood.caValue": "Deploying Soon",
   "multichain.why.title": "Why Multichain?",
   "multichain.why.p1":
     "Crypto shouldn't be a single-chain island. Supporting Ethereum via Robinhood Chain lets WaddleBet reach a broader audience — ETH holders, Robinhood traders, and EVM-native communities — while keeping our Solana roots intact.",
@@ -136,6 +135,9 @@ const en: Record<string, string> = {
   "contract.tokenLabel": "$CP",
   "contract.liveOn": "Live on",
   "contract.platform": "Solana",
+  "contract.ethLabel": "$CP (Robinhood Chain)",
+  "contract.ethPlatform": "Robinhood Chain",
+  "contract.copyEthTitle": "Copy ETH contract address",
   "contract.cpw3OriginalLabel": "Original $CPW3 (Solana) — ~$700k ATH",
   "contract.copyCpw3Title": "Copy original $CPW3 mint",
   "contract.note":
@@ -314,7 +316,6 @@ const zhTW: Record<string, string> = {
   "multichain.robinhood.p2":
     "我們正積極準備 Robinhood Chain 部署：合約架構、代幣橋接策略與錢包整合進行中。完整功能分階段上線——Solana 今日仍完全可玩。",
   "multichain.robinhood.caLabel": "合約地址",
-  "multichain.robinhood.caValue": "即將部署",
   "multichain.why.title": "為何多鏈？",
   "multichain.why.p1":
     "加密不應是單鏈孤島。透過 Robinhood Chain 支援以太坊，讓 WaddleBet 觸及更廣受眾——ETH 持有者、Robinhood 交易者與 EVM 原生社群——同時保留 Solana 根基。",
@@ -332,6 +333,9 @@ const zhTW: Record<string, string> = {
   "contract.tokenLabel": "$CP",
   "contract.liveOn": "上線於",
   "contract.platform": "Solana",
+  "contract.ethLabel": "$CP（Robinhood Chain）",
+  "contract.ethPlatform": "Robinhood Chain",
+  "contract.copyEthTitle": "複製 ETH 合約地址",
   "contract.cpw3OriginalLabel": "原始 $CPW3（Solana）— 約 70 萬美元 ATH",
   "contract.copyCpw3Title": "複製原始 $CPW3 鑄幣",
   "contract.note":
