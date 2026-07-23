@@ -12,7 +12,7 @@
 [![Solana](https://img.shields.io/badge/Built%20on-Solana-9945FF?style=for-the-badge&logo=solana)](https://solana.com)
 [![Open Source](https://img.shields.io/badge/Open%20Source-MIT-34d399?style=for-the-badge)](LICENSE)
 
-[Whitepaper](./whitepaper) · [Community](https://x.com/i/communities/1998537610592137381) · [$CP on Pump](https://pump.fun/coin/PSNFtAvpVSZDFjRScGkKxMdEYArRr6LvScwmuYRpump)
+[Whitepaper](./whitepaper) · [Community](https://x.com/i/communities/1998537610592137381)
 
 </div>
 
