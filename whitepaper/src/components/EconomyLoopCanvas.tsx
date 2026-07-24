@@ -27,7 +27,7 @@ function EconomyLoopCanvas({ width = 640, height = 280, className = '' }) {
             { label: 'GEAR', sub: 'axes · rods', color: '#60a5fa', angle: -Math.PI / 6 },
             { label: 'CONTRACTS', sub: 'NPC quests', color: '#fbbf24', angle: Math.PI / 6 },
             { label: 'GOLD', sub: 'travel · wagers', color: '#f59e0b', angle: Math.PI / 2 },
-            { label: '$CP', sub: 'on-chain', color: '#a78bfa', angle: (5 * Math.PI) / 6 },
+            { label: '$WADDLE', sub: 'on-chain', color: '#a78bfa', angle: (5 * Math.PI) / 6 },
             { label: 'SINKS', sub: 'rent · gacha', color: '#f472b6', angle: (7 * Math.PI) / 6 },
         ];
 

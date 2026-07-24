@@ -24,7 +24,7 @@ const notoSansTc = Noto_Sans_TC({
 
 export const metadata: Metadata = {
   title: "WaddleBet | First Multichain Social Metaverse on Solana & Robinhood EVM",
-  description: "No KYC. No accounts. Wager any SPL token P2P with instant on-chain settlement. Expanding to Robinhood Chain (Ethereum EVM). First multichain social wagering metaverse.",
+  description: "$WADDLE flagship on Robinhood Chain. Wager any SPL or EVM token P2P. Solana ($CP) live in parallel. First multichain social wagering metaverse.",
   keywords: [
     "Solana",
     "Robinhood Chain",
@@ -34,7 +34,8 @@ export const metadata: Metadata = {
     "P2P Wagering",
     "No KYC",
     "x402",
-    "SPL Token",
+    "EVM Token",
+    "WADDLE",
     "Crypto Gaming",
     "DeFi",
     "WaddleBet",
@@ -45,14 +46,14 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "WaddleBet | First Multichain Social Metaverse on Solana & Robinhood EVM",
-    description: "No KYC. No accounts. Wager any SPL token P2P. Expanding to Robinhood Chain (Ethereum EVM).",
+    description: "$WADDLE on Robinhood Chain. Wager any SPL or EVM token P2P. Solana ($CP) live in parallel.",
     type: "website",
     images: ["/character.png"],
   },
   twitter: {
     card: "summary_large_image",
     title: "WaddleBet | First Multichain Social Metaverse",
-    description: "Live on Solana. Robinhood Chain (EVM) in development. First multichain social wagering metaverse.",
+    description: "$WADDLE live on Robinhood Chain. Solana ($CP) in parallel. First multichain social wagering metaverse.",
     images: ["/character.png"],
   },
 };

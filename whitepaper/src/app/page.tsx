@@ -55,8 +55,8 @@ const SOCIAL_LINKS = {
   x: "https://x.com/i/communities/1998537610592137381",
 };
 
-/** Display name for the token. */
-const TOKEN_DISPLAY_NAME = "$CP";
+/** Flagship platform token (Robinhood EVM). Solana uses $CP in parallel. */
+const TOKEN_DISPLAY_NAME = "$WADDLE";
 
 /** $CP SPL mint on Solana — redeployed after $CPW3 chart issues; same mint the game uses. */
 const CP_SOLANA_MINT = "9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump";
@@ -111,9 +111,9 @@ function Snowfall() {
 function TickerStrip() {
   const items = [
     "FIRST MULTICHAIN METAVERSE",
-    "LIVE ON SOLANA",
-    "ROBINHOOD EVM · IN DEVELOPMENT",
-    "WAGER ANY TOKEN",
+    "$WADDLE · FLAGSHIP TOKEN",
+    "ROBINHOOD EVM · LIVE",
+    "WAGER ANY SPL OR EVM TOKEN",
     "700+ PEAK CONCURRENT",
     "8+ MINIGAMES",
     "267+ COSMETICS",
@@ -401,7 +401,37 @@ function HeroChainsStrip() {
     >
       <p className="hud-label text-slate-400 mb-3 text-center">{t("hero.chains.title")}</p>
       <div className="grid grid-cols-2 gap-3">
-        <div className="glass-card rounded-xl p-4 border border-cyan-500/25 text-left">
+        <div className="glass-card rounded-xl p-4 border border-amber-400/30 text-left order-1">
+          <div className="flex items-center gap-2 mb-2">
+            <RobinhoodLogo size={28} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-white text-sm truncate">{t("hero.chains.robinhood")}</span>
+                <span className="text-[10px] uppercase tracking-wide font-semibold text-amber-300 px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/25 shrink-0">
+                  {t("hero.chains.robinhoodStatus")}
+                </span>
+              </div>
+              <p className="text-slate-500 text-xs">{t("hero.chains.robinhoodSub")} · $WADDLE</p>
+            </div>
+          </div>
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={copyEthContract}
+              className="inline-flex items-center gap-1 shrink-0 text-[10px] font-mono text-amber-200/80 hover:text-amber-100 transition-colors"
+              title={copiedEthCa ? t("nav.caCopied") : t("contract.copyEthTitle")}
+              aria-label={copiedEthCa ? t("nav.caCopied") : t("contract.copyEthTitle")}
+            >
+              <span>{abbreviatedEth}</span>
+              {copiedEthCa ? (
+                <Check className="w-2.5 h-2.5 text-green-400" />
+              ) : (
+                <Copy className="w-2.5 h-2.5 opacity-50" />
+              )}
+            </button>
+          </div>
+        </div>
+        <div className="glass-card rounded-xl p-4 border border-cyan-500/25 text-left order-2">
           <div className="flex items-center justify-between gap-2 mb-1">
             <span className="font-semibold text-cyan-300">{t("hero.chains.solana")}</span>
             <span className="text-[10px] uppercase tracking-wide font-semibold text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/25">
@@ -419,36 +449,6 @@ function HeroChainsStrip() {
             >
               <span>{abbreviatedMint}</span>
               {copiedSolanaCa ? (
-                <Check className="w-2.5 h-2.5 text-green-400" />
-              ) : (
-                <Copy className="w-2.5 h-2.5 opacity-50" />
-              )}
-            </button>
-          </div>
-        </div>
-        <div className="glass-card rounded-xl p-4 border border-white/10 text-left">
-          <div className="flex items-center gap-2 mb-2">
-            <RobinhoodLogo size={28} />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-semibold text-white text-sm truncate">{t("hero.chains.robinhood")}</span>
-                <span className="text-[10px] uppercase tracking-wide font-semibold text-slate-300 px-2 py-0.5 rounded-full bg-white/5 border border-white/15 shrink-0">
-                  {t("hero.chains.robinhoodStatus")}
-                </span>
-              </div>
-              <p className="text-slate-500 text-xs">{t("hero.chains.robinhoodSub")}</p>
-            </div>
-          </div>
-          <div className="flex items-center justify-end">
-            <button
-              type="button"
-              onClick={copyEthContract}
-              className="inline-flex items-center gap-1 shrink-0 text-[10px] font-mono text-slate-300/80 hover:text-white transition-colors"
-              title={copiedEthCa ? t("nav.caCopied") : t("contract.copyEthTitle")}
-              aria-label={copiedEthCa ? t("nav.caCopied") : t("contract.copyEthTitle")}
-            >
-              <span>{abbreviatedEth}</span>
-              {copiedEthCa ? (
                 <Check className="w-2.5 h-2.5 text-green-400" />
               ) : (
                 <Copy className="w-2.5 h-2.5 opacity-50" />
@@ -850,7 +850,7 @@ function AboutSection() {
               </h3>
               <p className="text-slate-300 text-lg mb-6 leading-relaxed">{t("about.p1")}</p>
               <div className="flex flex-wrap justify-center lg:justify-start gap-2 mb-6">
-                {["$SOL", "$BONK", "$WIF", "$PENGU", TOKEN_DISPLAY_NAME, t("about.anyToken")].map((token, i) => (
+                {["$BONK", "$WIF", "$PEPE", "$WETH", TOKEN_DISPLAY_NAME, t("about.anyToken")].map((token, i) => (
                   <span
                     key={i}
                     className={`px-3 py-1.5 rounded-full text-sm font-medium ${
@@ -1009,26 +1009,11 @@ function MultichainSection() {
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true }}
-            className="glass-card rounded-2xl p-6 md:p-8 border border-cyan-500/25"
-          >
-            <div className="flex items-center justify-between gap-3 mb-4">
-              <h3 className="text-xl font-bold text-cyan-300">{t("multichain.solana.title")}</h3>
-              <span className="text-xs font-semibold text-emerald-400 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25">
-                {t("multichain.solana.status")}
-              </span>
-            </div>
-            <p className="text-slate-300 text-sm md:text-base leading-relaxed">{t("multichain.solana.desc")}</p>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 30 }}
-            whileInView={{ opacity: 1, x: 0 }}
-            viewport={{ once: true }}
-            className="glass-card rounded-2xl p-6 md:p-8 border border-white/10"
+            className="glass-card rounded-2xl p-6 md:p-8 border border-amber-400/25"
           >
             <div className="flex items-start justify-between gap-4 mb-5">
               <RobinhoodLogo size={48} showWordmark />
-              <span className="text-xs font-semibold text-slate-300 px-2.5 py-1 rounded-full bg-white/5 border border-white/15 shrink-0">
+              <span className="text-xs font-semibold text-amber-300 px-2.5 py-1 rounded-full bg-amber-500/10 border border-amber-500/25 shrink-0">
                 {t("multichain.robinhood.badge")}
               </span>
             </div>
@@ -1050,6 +1035,21 @@ function MultichainSection() {
               </div>
             </div>
             <p className="mt-4 text-xs text-slate-400 font-medium">{t("multichain.robinhood.status")}</p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, x: 30 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            className="glass-card rounded-2xl p-6 md:p-8 border border-cyan-500/25"
+          >
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="text-xl font-bold text-cyan-300">{t("multichain.solana.title")}</h3>
+              <span className="text-xs font-semibold text-emerald-400 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/25">
+                {t("multichain.solana.status")}
+              </span>
+            </div>
+            <p className="text-slate-300 text-sm md:text-base leading-relaxed">{t("multichain.solana.desc")}</p>
           </motion.div>
         </div>
 
@@ -1358,7 +1358,7 @@ function EconomySection() {
                 {
                   icon: <Shield className="w-5 h-5" />,
                   title: "Access Control",
-                  description: "Property owners can paywall their spaces with any Solana token.",
+                  description: "Property owners can paywall their spaces with any SPL or EVM token — same flexibility on both chains.",
                 },
               ].map((item, i) => (
                 <div key={i} className="flex gap-4">
@@ -2059,6 +2059,44 @@ function ContractAddress() {
       <div className="flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
           <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
+              <RobinhoodLogo size={24} />
+            </div>
+            <div>
+              <p className="text-xs text-amber-300 uppercase tracking-wider font-semibold">{t("contract.ethLabel")}</p>
+              <p className="text-sm font-medium text-slate-300">
+                {t("contract.liveOn")}{" "}
+                <a
+                  href={WADDLE_ETH_BLOCK_EXPLORER}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-amber-200 hover:underline"
+                >
+                  {t("contract.ethPlatform")}
+                </a>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex-1 w-full sm:w-auto">
+            <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 border border-amber-500/20">
+              <code className="text-xs sm:text-sm text-amber-100 font-mono truncate flex-1">
+                {WADDLE_ETH_CONTRACT}
+              </code>
+              <button
+                type="button"
+                onClick={copyEthContract}
+                className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0"
+                title={t("contract.copyEthTitle")}
+              >
+                {copiedEth ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+          <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500/20 to-cyan-500/20 flex items-center justify-center">
               <Coins className="w-5 h-5 text-purple-400" />
             </div>
@@ -2090,44 +2128,6 @@ function ContractAddress() {
                 title={t("contract.copyTitle")}
               >
                 {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-              <RobinhoodLogo size={24} />
-            </div>
-            <div>
-              <p className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{t("contract.ethLabel")}</p>
-              <p className="text-sm font-medium text-slate-300">
-                {t("contract.liveOn")}{" "}
-                <a
-                  href={WADDLE_ETH_BLOCK_EXPLORER}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-slate-200 hover:underline"
-                >
-                  {t("contract.ethPlatform")}
-                </a>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex-1 w-full sm:w-auto">
-            <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 border border-white/10">
-              <code className="text-xs sm:text-sm text-slate-200 font-mono truncate flex-1">
-                {WADDLE_ETH_CONTRACT}
-              </code>
-              <button
-                type="button"
-                onClick={copyEthContract}
-                className="p-1.5 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-all shrink-0"
-                title={t("contract.copyEthTitle")}
-              >
-                {copiedEth ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
               </button>
             </div>
           </div>
