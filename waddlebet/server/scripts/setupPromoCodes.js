@@ -241,6 +241,18 @@ const PROMO_CODES = [
             coins: 0
         }
     },
+    {
+        code: 'FONZ',
+        name: '👍 FONZ Character',
+        description: 'Unlocks FONZ — pink worm-head penguin in a black tracksuit hoodie',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['fonz'],
+            skinColor: null,
+            coins: 0
+        }
+    },
     
     // ========== INTERNAL TEAM CODES ==========
     {

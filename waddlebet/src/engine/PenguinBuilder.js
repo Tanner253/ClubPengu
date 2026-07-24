@@ -49,7 +49,10 @@ import {
     JimothyGenerators,
     JIMOTHY_PALETTE,
     JIMOTHY_HAT_OFFSET,
-    JIMOTHY_MESH_BASE_Y
+    JIMOTHY_MESH_BASE_Y,
+    FonzGenerators,
+    FONZ_PALETTE,
+    FONZ_HAT_OFFSET
 } from '../characters';
 
 /**
@@ -1537,6 +1540,58 @@ export function createPenguinBuilder(THREE) {
         
         return group;
     };
+
+    /**
+     * Build FONZ (pink worm-head penguin in tracksuit hoodie) mesh
+     */
+    const buildFonzMesh = (data) => {
+        const group = new THREE.Group();
+        const pivots = FonzGenerators.pivots();
+        const palette = FONZ_PALETTE;
+
+        const body = buildPartMerged(FonzGenerators.body(), palette);
+        body.name = 'body';
+
+        const head = buildPartMerged(FonzGenerators.head(), palette);
+        head.name = 'head';
+
+        const flipperL = buildPartMerged(FonzGenerators.flipperLeft(), palette, pivots.flipperLeft);
+        flipperL.name = 'flipper_l';
+
+        const flipperR = buildPartMerged(FonzGenerators.flipperRight(), palette, pivots.flipperRight);
+        flipperR.name = 'flipper_r';
+
+        const feetVoxels = FonzGenerators.feet();
+        const footL = buildPartMerged(feetVoxels.filter(v => v.x > 0), PALETTE, pivots.footLeft);
+        footL.name = 'foot_l';
+        const footR = buildPartMerged(feetVoxels.filter(v => v.x < 0), PALETTE, pivots.footRight);
+        footR.name = 'foot_r';
+
+        group.add(body, head, flipperL, flipperR, footL, footR);
+
+        if (data.bodyItem === 'goldChain') {
+            addBodyItem(group, data);
+        }
+
+        if (data.hat && data.hat !== 'none' && ASSETS.HATS[data.hat]) {
+            const hatVoxels = ASSETS.HATS[data.hat];
+            if (hatVoxels && hatVoxels.length > 0) {
+                const offsetHatVoxels = hatVoxels.map(v => ({
+                    ...v,
+                    y: v.y + FONZ_HAT_OFFSET.y,
+                    z: v.z + FONZ_HAT_OFFSET.z,
+                }));
+                const hat = buildPartMerged(offsetHatVoxels, PALETTE);
+                hat.name = 'hat';
+                group.add(hat);
+            }
+        }
+
+        group.scale.set(0.2, 0.2, 0.2);
+        group.position.y = 0.8;
+
+        return group;
+    };
     
     /**
      * Build Frog (PEPE character) mesh with cosmetics support
@@ -2515,6 +2570,8 @@ export function createPenguinBuilder(THREE) {
             group = buildBlackBullMesh(data);
         } else if (data.characterType === 'jimothy') {
             group = buildJimothyMesh(data);
+        } else if (data.characterType === 'fonz') {
+            group = buildFonzMesh(data);
         } else if (WHALE_CONFIGS[data.characterType]) {
             group = buildWhaleMesh(data);
         } else {

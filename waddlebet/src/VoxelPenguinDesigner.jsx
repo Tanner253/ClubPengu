@@ -44,7 +44,10 @@ import {
     BLACK_BULL_PROPELLER_BLADE_POS,
     JimothyGenerators,
     JIMOTHY_PALETTE,
-    JIMOTHY_HAT_OFFSET
+    JIMOTHY_HAT_OFFSET,
+    FonzGenerators,
+    FONZ_PALETTE,
+    FONZ_HAT_OFFSET
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 import LanguageToggle from './components/LanguageToggle';
@@ -285,6 +288,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         tortoise: '🐢',
         blackBull: '🐂',
         jimothy: '🦝',
+        fonz: '👍',
         whiteWhale: '🐋',
         blackWhale: '🖤',
         silverWhale: '🩶',
@@ -665,6 +669,12 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 setMouth('none');
                 setBodyItem('none');
             }
+
+            if (typeId === 'fonz') {
+                setEyes('none');
+                setMouth('none');
+                setBodyItem(bodyItem === 'goldChain' ? 'goldChain' : 'none');
+            }
             
             // Duck has built-in eyes and bill, but allows hats and clothing
             if (typeId === 'duck') {
@@ -687,7 +697,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharactersList = useMemo(() => {
         // TEMPORARY: Unlock all characters for everyone (matches cosmetics unlock)
         if (UNLOCK_ALL_COSMETICS) {
-            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'pump', 'tortoise', 'blackBull', 'jimothy', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
+            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'pump', 'tortoise', 'blackBull', 'jimothy', 'fonz', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
         }
         
         const chars = ['penguin']; // Penguin always unlocked
@@ -698,6 +708,12 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         }
         return chars;
     }, [isAuthenticated, userData?.unlockedCharacters]);
+    
+    useEffect(() => {
+        if (characterType === 'fonz' && bodyItem !== 'none' && bodyItem !== 'goldChain') {
+            setBodyItem('none');
+        }
+    }, [characterType, bodyItem]);
     
     // Filter to only include characters that exist in registry
     const unlockedCharacters = unlockedCharactersList.filter(id => characterRegistry.getCharacter(id));
@@ -1583,6 +1599,31 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 }));
                 addPart(offsetHatVoxels, 'hat');
             }
+        } else if (characterType === 'fonz') {
+            addPart(FonzGenerators.body(), 'body', FONZ_PALETTE);
+            addPart(FonzGenerators.head(), 'head', FONZ_PALETTE);
+            addPart(FonzGenerators.flipperLeft(), 'flipper_l', FONZ_PALETTE);
+            addPart(FonzGenerators.flipperRight(), 'flipper_r', FONZ_PALETTE);
+            addPart(FonzGenerators.feet().filter(v => v.x > 0), 'foot_l', PALETTE);
+            addPart(FonzGenerators.feet().filter(v => v.x < 0), 'foot_r', PALETTE);
+
+            const fonzHatVoxels = ASSETS.HATS[hat] || [];
+            if (fonzHatVoxels.length > 0) {
+                const offsetHatVoxels = fonzHatVoxels.map(v => ({
+                    ...v,
+                    y: v.y + FONZ_HAT_OFFSET.y,
+                    z: v.z + FONZ_HAT_OFFSET.z,
+                }));
+                addPart(offsetHatVoxels, 'hat');
+            }
+
+            if (bodyItem === 'goldChain') {
+                const chainData = ASSETS.BODY.goldChain;
+                const chainVoxels = chainData?.voxels || chainData || [];
+                if (chainVoxels.length > 0) {
+                    addPart(chainVoxels, 'bodyItem');
+                }
+            }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body
             const WHALE_CONFIGS = {
@@ -1792,6 +1833,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             } else if (characterType === 'jimothy') {
                 bladeY = 12 + JIMOTHY_HAT_OFFSET.y + 1;
                 bladeZ = JIMOTHY_HAT_OFFSET.z;
+            } else if (characterType === 'fonz') {
+                bladeY = 12 + FONZ_HAT_OFFSET.y + 1;
+                bladeZ = FONZ_HAT_OFFSET.z;
             } else if (characterType === 'frog') {
                 bladeY = 15;
                 bladeZ = 2;
@@ -3187,6 +3231,58 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             
                             {[
                                 { labelKey: 'creator.headwear', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
+                                { labelKey: 'creator.mounts', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                            ].map((opt, i) => {
+                                const categoryForCheck = opt.key === 'head' ? 'hat' : opt.key === 'body' ? 'bodyItem' : opt.key;
+                                const isCurrentLocked = opt.isMount 
+                                    ? (opt.val !== 'none' && !isMountUnlocked(opt.val))
+                                    : (opt.val !== 'none' && opt.val !== opt.defaultVal && !isCosmeticUnlocked(opt.val, categoryForCheck));
+                                
+                                return (
+                                    <div key={i} className="flex flex-col gap-1">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                            {t(opt.labelKey)}
+                                            {opt.isMount && <span className="text-orange-400 ml-1">({t('creator.promo')})</span>}
+                                        </span>
+                                        <div className={`flex items-center justify-between rounded-lg p-1 ${
+                                            isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
+                                        }`}>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, -1, opt.defaultVal)}
+                                            >
+                                                <IconChevronLeft size={20} />
+                                            </button>
+                                            <span className={`text-sm font-bold capitalize ${isCurrentLocked ? 'text-red-400' : 'text-white'}`}>
+                                                {isCurrentLocked && '🔒 '}
+                                                {opt.val.replace(/([A-Z])/g, ' $1').trim()}
+                                            </span>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, 1, opt.defaultVal)}
+                                            >
+                                                <IconChevronRight size={20} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : characterType === 'fonz' ? (
+                        <div className="space-y-3">
+                            <div className="bg-gradient-to-br from-pink-900/50 to-gray-900 rounded-xl p-4 border border-pink-500/30">
+                                <div className="text-center">
+                                    <span className="text-2xl">👍</span>
+                                    <h3 className="text-white font-bold mt-2">{t('character.fonz')}</h3>
+                                    <p className="text-white/60 text-xs mt-1">
+                                        {t('character.fonzDesc')}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {[
+                                { labelKey: 'creator.headwear', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
+                                { labelKey: 'creator.clothing', key: 'body', val: bodyItem, set: setBodyItem, list: options.body.filter(k => k === 'none' || k === 'goldChain'), defaultVal: null },
                                 { labelKey: 'creator.mounts', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
                             ].map((opt, i) => {
                                 const categoryForCheck = opt.key === 'head' ? 'hat' : opt.key === 'body' ? 'bodyItem' : opt.key;

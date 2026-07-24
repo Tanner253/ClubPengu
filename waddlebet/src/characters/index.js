@@ -39,6 +39,7 @@ import BlackBullGenerators, {
     BLACK_BULL_PROPELLER_BLADE_POS,
 } from './BlackBullCharacter';
 import JimothyGenerators, { JIMOTHY_PALETTE, JIMOTHY_HAT_OFFSET, JIMOTHY_MESH_BASE_Y } from './JimothyCharacter';
+import FonzGenerators, { FONZ_PALETTE, FONZ_HAT_OFFSET } from './FonzCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -300,6 +301,24 @@ characterRegistry.registerCharacter('jimothy', {
     }
 });
 
+characterRegistry.registerCharacter('fonz', {
+    name: 'FONZ',
+    description: 'A pink worm-head penguin in a black tracksuit hoodie',
+    generators: FonzGenerators,
+    palette: FONZ_PALETTE,
+    isSecret: true,
+    previewScale: 0.9,
+    customizationOptions: {
+        disableSkinColor: true,
+        disableHats: false,
+        disableEyes: true,
+        disableMouth: true,
+        disableBodyItems: false,
+        allowedBodyItems: ['goldChain'],
+        disableMounts: false,
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -346,7 +365,10 @@ export {
     JimothyGenerators,
     JIMOTHY_PALETTE,
     JIMOTHY_HAT_OFFSET,
-    JIMOTHY_MESH_BASE_Y
+    JIMOTHY_MESH_BASE_Y,
+    FonzGenerators,
+    FONZ_PALETTE,
+    FONZ_HAT_OFFSET
 };
 export default characterRegistry;
 
