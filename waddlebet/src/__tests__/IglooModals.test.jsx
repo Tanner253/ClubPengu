@@ -75,6 +75,26 @@ vi.mock('../config/roomConfig.js', () => ({
     ]
 }));
 
+vi.mock('../hooks/useChainEconomy.js', () => ({
+    useChainEconomy: () => ({
+        chainId: 'solana',
+        isEvm: false,
+        isSolana: true,
+        isAuthenticated: true,
+        platformToken: '$CP',
+        canPayIglooEntryFee: true,
+        canRentIgloo: true,
+        isFeatureLive: () => true,
+    }),
+}));
+
+vi.mock('../i18n', () => ({
+    useLanguage: () => ({
+        t: (key) => key,
+        language: 'en',
+    }),
+}));
+
 // Import components after mocks are set up
 import IglooRentalModal from '../components/IglooRentalModal.jsx';
 import IglooEntryModal from '../components/IglooEntryModal.jsx';

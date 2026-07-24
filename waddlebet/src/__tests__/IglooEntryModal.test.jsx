@@ -11,7 +11,9 @@ vi.mock('../config/solana.js', () => ({
     IGLOO_CONFIG: {
         DAILY_RENT_CPW3: 10000,
         MINIMUM_BALANCE_CPW3: 70000
-    }
+    },
+    CPW3_TOKEN_ADDRESS: 'CPw3TokenMint123',
+    RENT_WALLET_ADDRESS: 'RentWallet123',
 }));
 
 // Mock MultiplayerContext
