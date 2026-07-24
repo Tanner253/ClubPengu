@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { getDailySpendHint } from '../config/npcOrders';
+import { formatDailyBonusPlaytime } from '../utils/dailyBonusDisplay.js';
+import { useDailyBonusSessionTimer } from '../hooks/useDailyBonusSessionTimer.js';
+import { useChainEconomy } from '../hooks/useChainEconomy.js';
 import { playSfx } from '../audio';
 
 const STORAGE_KEY = 'waddlebet_daily_quest_collapsed';
@@ -28,7 +31,7 @@ function countInventory(gameInventory, predicate) {
 }
 
 /**
- * Persistent "Today" panel — daily NPC orders + $CP bonus progress.
+ * Persistent "Today" panel — daily NPC orders + platform token bonus progress.
  * Shown after onboarding quest reward is claimed.
  */
 export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) {
@@ -42,6 +45,7 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
         fetchDailyBonusStatus,
         claimDailyBonus,
     } = useMultiplayer();
+    const { platformToken, canClaimDailyBonus } = useChainEconomy();
 
     const [collapsed, setCollapsed] = useState(() => {
         if (typeof window === 'undefined') return false;
@@ -49,8 +53,16 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
     });
     const [claiming, setClaiming] = useState(false);
     const [claimMessage, setClaimMessage] = useState(null);
-    const [sessionSeconds, setSessionSeconds] = useState(0);
     const claimInFlightRef = useRef(false);
+
+    const {
+        sessionSeconds,
+        requiredSeconds,
+        hasEnoughTime,
+        progressPct: sessionPct,
+    } = useDailyBonusSessionTimer(dailyBonusStatus, {
+        enabled: isAuthenticated && canClaimDailyBonus,
+    });
 
     const onboardingDone = !!onboardingQuest?.rewardClaimed;
     const visible = isAuthenticated && onboardingDone && dailyQuestStatus?.onboardingComplete !== false;
@@ -115,28 +127,28 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
     const noActiveContracts = orders.length === 0 && availableContracts > 0;
     const bonusComplete = dailyBonusStatus?.canClaim === false
         && (dailyBonusStatus?.totalClaimed > 0 || dailyBonusStatus?.timeUntilClaim > 0);
-    const requiredMinutes = dailyBonusStatus?.requiredMinutes ?? 60;
-    const hasEnoughTime = dailyBonusStatus?.hasEnoughTime
-        || sessionSeconds >= requiredMinutes * 60;
 
     useEffect(() => {
         if (!visible || !isAuthenticated) return;
         fetchDailyQuestStatus?.();
-        fetchDailyBonusStatus?.();
-    }, [visible, isAuthenticated, fetchDailyQuestStatus, fetchDailyBonusStatus]);
+        if (canClaimDailyBonus) {
+            fetchDailyBonusStatus?.();
+        }
+    }, [visible, isAuthenticated, canClaimDailyBonus, fetchDailyQuestStatus, fetchDailyBonusStatus]);
 
     useEffect(() => {
-        if (!visible) return;
-        setSessionSeconds((dailyBonusStatus?.sessionMinutes ?? 0) * 60);
-    }, [visible, dailyBonusStatus?.sessionMinutes, dailyBonusStatus?.receivedAt]);
-
-    useEffect(() => {
-        if (!visible || hasEnoughTime) return;
-        const interval = setInterval(() => {
-            setSessionSeconds((prev) => prev + 1);
-        }, 1000);
-        return () => clearInterval(interval);
-    }, [visible, hasEnoughTime]);
+        if (!visible || !dailyBonusStatus || dailyBonusStatus.hasEnoughTime || dailyBonusStatus.canClaim) return;
+        if (sessionSeconds >= requiredSeconds) {
+            fetchDailyBonusStatus?.();
+        }
+    }, [
+        visible,
+        sessionSeconds,
+        requiredSeconds,
+        dailyBonusStatus?.hasEnoughTime,
+        dailyBonusStatus?.canClaim,
+        fetchDailyBonusStatus,
+    ]);
 
     useEffect(() => {
         if (!visible || collapsed) return;
@@ -170,11 +182,11 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
             const result = await claimDailyBonus?.(generateNonce());
             if (result?.success) {
                 playSfx('quest_complete');
-                const cp = result.amount ?? 0;
+                const tokenAmount = result.amount ?? 0;
                 const gold = result.goldReward ?? 0;
-                const msg = gold > 0 && cp <= 0
+                const msg = gold > 0 && tokenAmount <= 0
                     ? `+${gold}g claimed!`
-                    : `+${cp.toLocaleString()} $CP${gold > 0 ? ` +${gold}g` : ''} claimed!`;
+                    : `+${tokenAmount.toLocaleString()} ${platformToken}${gold > 0 ? ` +${gold}g` : ''} claimed!`;
                 setClaimMessage(msg);
                 fetchDailyBonusStatus?.();
             } else {
@@ -184,7 +196,7 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
             claimInFlightRef.current = false;
             setClaiming(false);
         }
-    }, [claimDailyBonus, dailyBonusStatus?.canClaim, fetchDailyBonusStatus]);
+    }, [claimDailyBonus, dailyBonusStatus?.canClaim, fetchDailyBonusStatus, platformToken]);
 
     if (!visible) return null;
 
@@ -197,8 +209,11 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
 
     const completedCount = dailyQuestStatus?.completedCount ?? orders.filter((o) => o.completed).length;
     const totalOrders = dailyQuestStatus?.totalOrders ?? orders.length;
-    const sessionPct = Math.min(100, (sessionSeconds / (requiredMinutes * 60)) * 100);
-    const sessionLabel = `${Math.min(requiredMinutes, Math.floor(sessionSeconds / 60))} / ${requiredMinutes} min`;
+    const sessionLabel = `${formatDailyBonusPlaytime(sessionSeconds)} / ${formatDailyBonusPlaytime(requiredSeconds)}`;
+    const playtimeHint = requiredSeconds >= 3600
+        ? 'Play 60 min to unlock today\'s reward'
+        : `Play ${formatDailyBonusPlaytime(requiredSeconds)} to unlock today's reward`;
+    const defaultTokenReward = platformToken.startsWith('$') ? `1k ${platformToken}` : `1k $${platformToken}`;
 
     const panelBody = (
         <div className="max-h-[48vh] overflow-y-auto overscroll-contain pr-0.5">
@@ -268,13 +283,13 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
                         <span className="font-medium">Daily bonus</span>
                         <span className="text-[10px] font-bold text-emerald-300/90 tabular-nums">
                             {(dailyBonusStatus?.rewardAmount || 0) > 0 && (
-                                <>{(dailyBonusStatus.rewardAmount).toLocaleString()} $CP</>
+                                <>{(dailyBonusStatus.rewardAmount).toLocaleString()} {platformToken}</>
                             )}
                             {(dailyBonusStatus?.goldReward || 0) > 0 && (
                                 <>{(dailyBonusStatus?.rewardAmount || 0) > 0 ? ' + ' : ''}{dailyBonusStatus.goldReward}g</>
                             )}
                             {(dailyBonusStatus?.rewardAmount || 0) <= 0 && (dailyBonusStatus?.goldReward || 0) <= 0 && (
-                                <>1k $CP</>
+                                <>{defaultTokenReward}</>
                             )}
                         </span>
                     </div>
@@ -302,7 +317,7 @@ export default function DailyQuestHUD({ isMobile = false, isPortrait = false }) 
                                 ? dailyBonusStatus?.onboardingComplete === false
                                     ? 'Finish Getting Started to unlock'
                                     : 'Already claimed — come back tomorrow'
-                                : 'Play 60 min to unlock today\'s reward'}
+                                : playtimeHint}
                         </span>
                     )}
                     {claimMessage && (

@@ -116,7 +116,7 @@ const en: Record<string, string> = {
   "multichain.robinhood.p1":
     "Robinhood is bringing crypto to a mainstream audience of 25M+ users. Their EVM-compatible chain opens the door for WaddleBet to meet that audience where they already are — with the same social wagering, cosmetics economy, and penguin metaverse they love on Solana.",
   "multichain.robinhood.p2":
-    "$WADDLE is deployed on Robinhood Chain. MetaMask sign-in, world play, gold economy, and Diamond Flippers nametags are live today. On-chain rails (daily bonus, pebbles, igloos, token wagers) ship in later phases — Solana ($CP) remains fully playable in parallel.",
+    "$WADDLE is deployed on Robinhood Chain. MetaMask sign-in, world play, gold economy, Diamond Flippers nametags, and daily bonus rewards are live today. Pebbles, igloos, and token wagers ship in later phases — Solana ($CP) remains fully playable in parallel.",
   "multichain.robinhood.caLabel": "Contract Address",
   "multichain.why.title": "Why Multichain?",
   "multichain.why.p1":

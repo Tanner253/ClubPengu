@@ -8,6 +8,8 @@ import {
     DOJO_SENSEI_WIN_GOLD,
     ONBOARDING_STEPS,
     TRAVEL_ROUTE_QUEST_STEPS,
+    getOnboardingStepIds,
+    isOnboardingQuestComplete,
     isTownTrashSpot,
 } from '../config/onboardingQuest.js';
 
@@ -219,5 +221,38 @@ export default class OnboardingQuestService {
     handleScavenge(walletAddress, spotId) {
         if (!isTownTrashSpot(spotId)) return Promise.resolve(null);
         return this.tryCompleteStep(walletAddress, 'search_trash');
+    }
+
+    /**
+     * Dev-only: mark all onboarding steps done and grant the quest reward.
+     * Skips gameplay requirements for local QA with fresh wallets.
+     */
+    async devCompleteQuest(walletAddress) {
+        if (!walletAddress) {
+            return { success: false, error: 'NO_WALLET' };
+        }
+
+        const user = await User.findOne({ walletAddress });
+        if (!user) {
+            return { success: false, error: 'USER_NOT_FOUND' };
+        }
+
+        if (isOnboardingQuestComplete(user)) {
+            const status = this.buildStatus(user);
+            this.notifyWallet(walletAddress, status, { devCompleted: true, alreadyComplete: true });
+            return { success: true, alreadyComplete: true, status };
+        }
+
+        user.onboardingQuest = {
+            completedSteps: getOnboardingStepIds(),
+            rewardClaimed: false,
+        };
+        await user.save();
+
+        const rewardResult = await this.claimReward(walletAddress);
+        return {
+            ...rewardResult,
+            devCompleted: true,
+        };
     }
 }

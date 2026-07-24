@@ -18,9 +18,9 @@ const SOLANA_LIVE = {
     nametagTiers: true,
 };
 
-/** Robinhood EVM — read-only nametag balance live; payouts/payments ship in later phases. */
+/** Robinhood EVM — daily bonus live; other payouts ship in later phases. */
 const EVM_LIVE = {
-    dailyBonusClaim: false,
+    dailyBonusClaim: true,
     pebblesRail: false,
     iglooRent: false,
     iglooEntryFee: false,

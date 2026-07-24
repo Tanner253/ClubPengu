@@ -1,11 +1,13 @@
 /**
  * Chain-aware platform token registry.
  * Solana: $CP (SPL) · Robinhood EVM: $WADDLE (ERC-20)
+ *
+ * EVM fields use getters so values resolve after loadEnv.js runs.
  */
 
-import { SOLANA_CHAIN_ID, getDefaultEvmChainId, WADDLE_ETH_CONTRACT } from './evm.js';
+import { SOLANA_CHAIN_ID, getDefaultEvmChainId, getWaddleEthContract } from './evm.js';
 
-export { WADDLE_ETH_CONTRACT };
+export { getWaddleEthContract };
 
 export const SOLANA_PLATFORM_TOKEN = {
     chainId: SOLANA_CHAIN_ID,
@@ -16,11 +18,17 @@ export const SOLANA_PLATFORM_TOKEN = {
 };
 
 export const EVM_PLATFORM_TOKEN = {
-    chainId: String(getDefaultEvmChainId()),
+    get chainId() {
+        return String(getDefaultEvmChainId());
+    },
     symbol: 'WADDLE',
     displaySymbol: '$WADDLE',
-    address: process.env.WADDLE_TOKEN_ADDRESS || WADDLE_ETH_CONTRACT,
-    decimals: parseInt(process.env.WADDLE_TOKEN_DECIMALS || '18', 10),
+    get address() {
+        return process.env.WADDLE_TOKEN_ADDRESS || getWaddleEthContract();
+    },
+    get decimals() {
+        return parseInt(process.env.WADDLE_TOKEN_DECIMALS || '18', 10);
+    },
 };
 
 const EVM_CHAIN_IDS = new Set(['4663', '46630', 4663, 46630]);

@@ -1,21 +1,23 @@
 /**
  * DailyBonusModal - Daily Login Bonus Panel
- * Rewards players with 5,000 $CP for 1 hour of play time
+ * Rewards players with streak-based platform tokens ($CP / $WADDLE) after play time
  * 24 hour cooldown between claims
- * 
- * Design copied from SettingsMenu.jsx
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
+import { useDailyBonusSessionTimer } from '../hooks/useDailyBonusSessionTimer.js';
 import { useMultiplayer } from '../multiplayer';
 import { useLanguage } from '../i18n';
 import StreakCalendar from './StreakCalendar';
 import ChainComingSoonPanel from './ChainComingSoonPanel';
 import { useChainEconomy } from '../hooks/useChainEconomy.js';
 import { formatTokenText } from '../utils/tokenDisplay.js';
+import { formatDailyBonusPlaytime } from '../utils/dailyBonusDisplay.js';
+import { getEvmTxExplorerUrl } from '../config/evm.js';
+import { isEvmChainId } from '../config/tokens.js';
+import { getSolscanTxUrl } from '../config/wagerTokens.js';
 
-// Generate secure random nonce for replay protection
 const generateNonce = () => {
     const array = new Uint8Array(32);
     crypto.getRandomValues(array);
@@ -25,143 +27,106 @@ const generateNonce = () => {
 const DailyBonusModal = ({ isOpen, onClose }) => {
     const menuRef = useRef(null);
     const claimInFlightRef = useRef(false);
-    const { send, registerCallbacks, isAuthenticated } = useMultiplayer();
+    const {
+        isAuthenticated,
+        dailyBonusStatus,
+        fetchDailyBonusStatus,
+        claimDailyBonus,
+    } = useMultiplayer();
     const { t } = useLanguage();
     const { chainId, platformToken, canClaimDailyBonus } = useChainEconomy();
-    
-    // State
-    const [status, setStatus] = useState(null);
-    const [isLoading, setIsLoading] = useState(false);
+
+    const status = dailyBonusStatus;
+    const receivedAt = dailyBonusStatus?.receivedAt;
+    const {
+        sessionSeconds: localSessionSeconds,
+        requiredSeconds,
+        progressPct: sessionProgress,
+    } = useDailyBonusSessionTimer(dailyBonusStatus, {
+        enabled: isAuthenticated && canClaimDailyBonus,
+    });
+
     const [isClaiming, setIsClaiming] = useState(false);
     const [claimResult, setClaimResult] = useState(null);
     const [countdown, setCountdown] = useState(null);
-    const [receivedAt, setReceivedAt] = useState(null);
-    const [localSessionSeconds, setLocalSessionSeconds] = useState(0);
-    
-    // Close handlers
+
+    const isLoading = isOpen && isAuthenticated && canClaimDailyBonus && !status;
+
     useClickOutside(menuRef, onClose, isOpen);
     useEscapeKey(onClose, isOpen);
-    
-    // Register callbacks for daily bonus responses
+
     useEffect(() => {
-        if (!isOpen || !registerCallbacks) return;
-        
-        registerCallbacks({
-            onDailyBonusStatus: (msg) => {
-                setIsLoading(false);
-                if (msg.success !== false) {
-                    setStatus(msg);
-                    setReceivedAt(Date.now());
-                    setClaimResult(null);
-                    // Initialize local session seconds from server data
-                    setLocalSessionSeconds((msg.sessionMinutes || 0) * 60);
-                }
-            },
-            onDailyBonusResult: (msg) => {
-                setIsClaiming(false);
-                claimInFlightRef.current = false;
-                setClaimResult(msg);
-                if (msg.success) {
-                    setStatus((prev) => prev ? {
-                        ...prev,
-                        canClaim: false,
-                        cooldownExpired: false,
-                        timeUntilClaim: 24 * 60 * 60 * 1000,
-                        totalClaimed: (prev.totalClaimed || 0) + 1,
-                        totalWaddleEarned: (prev.totalWaddleEarned || 0) + (msg.amount || 0),
-                        streakDay: msg.streakDay != null ? (msg.streakDay >= 7 ? 1 : msg.streakDay + 1) : prev.streakDay,
-                        lastClaimAt: new Date().toISOString()
-                    } : prev);
-                    setReceivedAt(Date.now());
-                    setTimeout(() => {
-                        send({ type: 'daily_bonus_status' });
-                    }, 500);
-                }
-            }
-        });
-    }, [isOpen, registerCallbacks, send]);
-    
-    // Fetch status when opened
+        if (!isOpen || !isAuthenticated || !canClaimDailyBonus) return;
+        setClaimResult(null);
+        fetchDailyBonusStatus?.();
+    }, [isOpen, isAuthenticated, canClaimDailyBonus, fetchDailyBonusStatus]);
+
     useEffect(() => {
-        if (isOpen && isAuthenticated && canClaimDailyBonus) {
-            setIsLoading(true);
-            setClaimResult(null);
-            send({ type: 'daily_bonus_status' });
+        if (!isOpen || !status || status.hasEnoughTime || status.canClaim) return;
+        if (localSessionSeconds >= requiredSeconds) {
+            fetchDailyBonusStatus?.();
         }
-    }, [isOpen, isAuthenticated, canClaimDailyBonus, send]);
-    
-    // Update session time every second (count up)
-    useEffect(() => {
-        if (!isOpen || !status || status.hasEnoughTime) return;
-        
-        const interval = setInterval(() => {
-            setLocalSessionSeconds(prev => {
-                const newValue = prev + 1;
-                const requiredSeconds = (status.requiredMinutes || 60) * 60;
-                // If we've reached the requirement, refresh status from server
-                if (newValue >= requiredSeconds && prev < requiredSeconds) {
-                    send({ type: 'daily_bonus_status' });
-                }
-                return newValue;
-            });
-        }, 1000);
-        
-        return () => clearInterval(interval);
-    }, [isOpen, status, send]);
-    
-    // Update countdown timer
+    }, [
+        isOpen,
+        localSessionSeconds,
+        requiredSeconds,
+        status?.hasEnoughTime,
+        status?.canClaim,
+        fetchDailyBonusStatus,
+    ]);
+
     useEffect(() => {
         if (!status?.timeUntilClaim || status.timeUntilClaim <= 0) {
             setCountdown(null);
             return;
         }
-        
+
         const updateCountdown = () => {
             const elapsed = Date.now() - (receivedAt || Date.now());
             const remaining = status.timeUntilClaim - elapsed;
-            
+
             if (remaining <= 0) {
                 setCountdown(null);
-                // Refresh status when cooldown expires
-                send({ type: 'daily_bonus_status' });
+                fetchDailyBonusStatus?.();
                 return;
             }
-            
+
             const hours = Math.floor(remaining / (1000 * 60 * 60));
             const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60));
             const seconds = Math.floor((remaining % (1000 * 60)) / 1000);
-            
+
             setCountdown(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
         };
-        
+
         updateCountdown();
         const interval = setInterval(updateCountdown, 1000);
         return () => clearInterval(interval);
-    }, [status, receivedAt, send]);
-    
-    // Claim handler
-    const handleClaim = useCallback(() => {
+    }, [status?.timeUntilClaim, receivedAt, fetchDailyBonusStatus]);
+
+    const handleClaim = useCallback(async () => {
         if (claimInFlightRef.current || isClaiming || !status?.canClaim) return;
-        
+
         claimInFlightRef.current = true;
         setIsClaiming(true);
         setClaimResult(null);
-        
-        const nonce = generateNonce();
-        send({ type: 'daily_bonus_claim', nonce });
-    }, [isClaiming, status, send]);
-    
+
+        try {
+            const result = await claimDailyBonus?.(generateNonce());
+            setClaimResult(result);
+            if (result?.success) {
+                fetchDailyBonusStatus?.();
+            }
+        } finally {
+            claimInFlightRef.current = false;
+            setIsClaiming(false);
+        }
+    }, [isClaiming, status, claimDailyBonus, fetchDailyBonusStatus]);
+
     if (!isOpen) return null;
-    
-    // Calculate progress percentage for session time (use local seconds for real-time updates)
-    const requiredSeconds = (status?.requiredMinutes || 60) * 60;
-    const sessionProgress = status ? Math.min(100, (localSessionSeconds / requiredSeconds) * 100) : 0;
-    const currentMinutes = Math.floor(localSessionSeconds / 60);
-    const currentSeconds = localSessionSeconds % 60;
-    
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-md p-2 sm:p-4">
-            <div 
+            <div
                 ref={menuRef}
                 className="bg-gradient-to-br from-slate-900/98 via-slate-800/98 to-slate-900/98 rounded-3xl border border-white/10 shadow-2xl w-full max-w-[480px] max-h-[90vh] flex flex-col overflow-hidden animate-fade-in"
                 style={{
@@ -170,7 +135,6 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                 onClick={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
             >
-                {/* Header */}
                 <div className="relative px-6 pt-5 pb-3 border-b border-white/5">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-bold text-white flex items-center gap-3">
@@ -181,7 +145,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                 Daily Bonus
                             </span>
                         </h2>
-                        <button 
+                        <button
                             onClick={onClose}
                             className="w-10 h-10 rounded-xl bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all"
                         >
@@ -189,10 +153,8 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                         </button>
                     </div>
                 </div>
-                
-                {/* Content */}
+
                 <div className="flex-1 overflow-y-auto px-6 py-4 space-y-3 overscroll-contain">
-                    
                     {!isAuthenticated ? (
                         <div className="text-center py-8">
                             <div className="text-5xl mb-4">🔐</div>
@@ -215,7 +177,6 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                         </div>
                     ) : (
                         <>
-                            {/* 7-Day Streak Calendar */}
                             <div className="bg-gradient-to-br from-cyan-500/10 to-blue-500/10 rounded-2xl p-3 sm:p-4 border border-cyan-500/20">
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-white text-sm font-bold">7-Day Streak</span>
@@ -242,13 +203,12 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                     </div>
                                     <p className="text-white/50 text-[10px] sm:text-xs mt-1">
                                         {(status?.rewardAmount || 0) > 0
-                                            ? `Today's reward after 60 min play (${platformToken})`
+                                            ? `Today's reward after ${formatDailyBonusPlaytime(requiredSeconds)} play (${platformToken})`
                                             : 'Gold bonus day — no token payout'}
                                     </p>
                                 </div>
                             </div>
-                            
-                            {/* Intro Quest Prerequisite */}
+
                             {status?.onboardingComplete === false && (
                                 <div className="bg-white/5 rounded-2xl p-4 border border-amber-500/20">
                                     <div className="flex items-center justify-between mb-2">
@@ -274,7 +234,6 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                 </div>
                             )}
 
-                            {/* Session Time Progress */}
                             <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
                                 <div className="flex items-center justify-between mb-2">
                                     <div className="flex items-center gap-2">
@@ -282,36 +241,26 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                         <span className="text-white text-sm font-medium">Play Time</span>
                                     </div>
                                     <span className="text-cyan-400 font-mono text-sm">
-                                        {currentMinutes}:{currentSeconds.toString().padStart(2, '0')} / {status?.requiredMinutes || 60}:00
+                                        {formatDailyBonusPlaytime(localSessionSeconds)} / {formatDailyBonusPlaytime(requiredSeconds)}
                                     </span>
                                 </div>
-                                
-                                {/* Progress Bar */}
                                 <div className="h-2.5 bg-white/10 rounded-full overflow-hidden">
-                                    <div 
+                                    <div
                                         className={`h-full transition-all duration-500 ${
-                                            sessionProgress >= 100 
-                                                ? 'bg-gradient-to-r from-green-500 to-emerald-400' 
+                                            sessionProgress >= 100
+                                                ? 'bg-gradient-to-r from-green-500 to-emerald-400'
                                                 : 'bg-gradient-to-r from-cyan-500 to-blue-400'
                                         }`}
                                         style={{ width: `${sessionProgress}%` }}
                                     />
                                 </div>
-                                
                                 <p className="text-white/40 text-xs mt-2">
-                                    {sessionProgress >= 100 
-                                        ? '✅ Time requirement met!' 
-                                        : (() => {
-                                            const totalSecondsRemaining = Math.max(0, requiredSeconds - localSessionSeconds);
-                                            const mins = Math.floor(totalSecondsRemaining / 60);
-                                            const secs = totalSecondsRemaining % 60;
-                                            return `${mins}:${secs.toString().padStart(2, '0')} remaining`;
-                                        })()
-                                    }
+                                    {sessionProgress >= 100
+                                        ? '✅ Time requirement met!'
+                                        : `${formatDailyBonusPlaytime(Math.max(0, requiredSeconds - localSessionSeconds))} remaining`}
                                 </p>
                             </div>
-                            
-                            {/* Cooldown Timer */}
+
                             {countdown && (
                                 <div className="bg-white/5 rounded-2xl p-4 border border-purple-500/20">
                                     <div className="flex items-center justify-between">
@@ -325,8 +274,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                     </div>
                                 </div>
                             )}
-                            
-                            {/* Claim Statistics */}
+
                             <div className="bg-white/5 rounded-2xl p-4 border border-white/10">
                                 <div className="flex items-center gap-2 mb-3">
                                     <span className="text-base">📊</span>
@@ -347,8 +295,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                     </div>
                                 </div>
                             </div>
-                            
-                            {/* Custodial Wallet Balance */}
+
                             {status?.custodialBalance !== null && status?.custodialBalance !== undefined && (
                                 <div className="bg-gradient-to-r from-purple-500/10 to-pink-500/10 rounded-2xl p-4 border border-purple-500/20">
                                     <div className="flex items-center justify-between">
@@ -362,12 +309,11 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                     </div>
                                 </div>
                             )}
-                            
-                            {/* Claim Result */}
+
                             {claimResult && (
                                 <div className={`rounded-2xl p-4 border ${
-                                    claimResult.success 
-                                        ? 'bg-green-500/20 border-green-500/30' 
+                                    claimResult.success
+                                        ? 'bg-green-500/20 border-green-500/30'
                                         : 'bg-red-500/20 border-red-500/30'
                                 }`}>
                                     <div className="flex items-start gap-3">
@@ -384,8 +330,12 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                                 {formatTokenText(claimResult.message, chainId)}
                                             </p>
                                             {claimResult.txSignature && (
-                                                <a 
-                                                    href={`https://solscan.io/tx/${claimResult.txSignature}`}
+                                                <a
+                                                    href={
+                                                        isEvmChainId(chainId)
+                                                            ? getEvmTxExplorerUrl(claimResult.txSignature, chainId)
+                                                            : getSolscanTxUrl(claimResult.txSignature)
+                                                    }
                                                     target="_blank"
                                                     rel="noopener noreferrer"
                                                     className="text-cyan-400 text-xs hover:text-cyan-300 mt-2 inline-block"
@@ -400,8 +350,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                         </>
                     )}
                 </div>
-                
-                {/* Footer */}
+
                 <div className="p-4 border-t border-white/5">
                     {isAuthenticated && !canClaimDailyBonus ? (
                         <button
@@ -440,7 +389,9 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                 </span>
                             ) : (
                                 <span className="flex items-center justify-center gap-2">
-                                    ⏱️ Play {status.minutesRemaining} More Minutes
+                                    ⏱️ Play {formatDailyBonusPlaytime(
+                                        status.secondsRemaining ?? (status.minutesRemaining ?? 0) * 60
+                                    )} More
                                 </span>
                             )}
                         </button>

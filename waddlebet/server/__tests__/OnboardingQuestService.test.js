@@ -100,4 +100,43 @@ describe('OnboardingQuestService', () => {
         await service.handleTravelArrival('wallet1', 'town_snow_forts');
         expect(mockUser.onboardingQuest.completedSteps).toContain('ferry_snow_forts');
     });
+
+    it('devCompleteQuest marks all steps and claims reward', async () => {
+        const result = await service.devCompleteQuest('wallet1');
+
+        expect(result.success).toBe(true);
+        expect(result.devCompleted).toBe(true);
+        expect(mockUser.onboardingQuest.rewardClaimed).toBe(true);
+        expect(mockUser.onboardingQuest.completedSteps).toHaveLength(9);
+        expect(userService.addCoins).toHaveBeenCalledWith(
+            'wallet1',
+            10,
+            'onboarding_quest_reward',
+            expect.any(Object),
+            expect.any(String)
+        );
+    });
+
+    it('devCompleteQuest is idempotent when already complete', async () => {
+        mockUser.onboardingQuest = {
+            completedSteps: [
+                'dojo_gold',
+                'ferry_snow_forts',
+                'catch_fish',
+                'sell_fish',
+                'ferry_forest',
+                'chop_wood',
+                'ferry_town',
+                'upgrade_backpack',
+                'search_trash',
+            ],
+            rewardClaimed: true,
+        };
+
+        const result = await service.devCompleteQuest('wallet1');
+
+        expect(result.success).toBe(true);
+        expect(result.alreadyComplete).toBe(true);
+        expect(userService.addCoins).not.toHaveBeenCalled();
+    });
 });

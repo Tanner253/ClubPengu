@@ -101,7 +101,8 @@ const CHANGELOG_DATA: ChangelogVersion[] = [
 
       // ── What’s live on EVM (Phase 1) ──
       { type: "feature", text: "EVM live today — MetaMask auth, full world play, gold economy, gold PvP wagers, Diamond Flippers nametags from $WADDLE wallet balance" },
-      { type: "improvement", text: "Coming Soon on EVM — daily bonus, pebbles, igloo rent/entry fees, and token wagers (UI clearly gated until those rails ship)" },
+      { type: "feature", text: "$WADDLE daily bonus on Robinhood Chain — same streak calendar and playtime rules as Solana; custodial ERC-20 payouts after claim" },
+      { type: "improvement", text: "Coming Soon on EVM — pebbles, igloo rent/entry fees, and token wagers (UI clearly gated until those rails ship)" },
       { type: "improvement", text: "Gold wagers stay live on Robinhood Chain; SPL/token wagers remain Solana-only for now" },
       { type: "improvement", text: "Profile gifts — pebbles and SPL sends show “· soon” on EVM; gold gifts unchanged" },
 
@@ -112,6 +113,7 @@ const CHANGELOG_DATA: ChangelogVersion[] = [
       // ── Under the hood (condensed) ──
       { type: "backend", text: "Multichain token registry — one source of truth for $CP on Solana and $WADDLE on Robinhood EVM across client and server" },
       { type: "backend", text: "Per-chain feature flags — Solana keeps full on-chain economy; EVM unlocks features in phases instead of half-working flows" },
+      { type: "backend", text: "EvmCustodialWalletService — ERC-20 $WADDLE payouts for daily bonus on Robinhood Chain (viem; separate from Solana SPL custodial)" },
       { type: "backend", text: "Nametag tiers read the correct on-chain balance per wallet type (SPL vs ERC-20)" },
 
       // ── Fixes shipped with the release ──

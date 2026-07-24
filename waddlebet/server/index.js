@@ -4,14 +4,7 @@
  * With MongoDB persistence and Phantom wallet authentication
  */
 
-import dotenv from 'dotenv';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-// Load .env from root directory (parent of server/)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-dotenv.config({ path: path.resolve(__dirname, '../.env') });
+import './config/loadEnv.js';
 import { WebSocketServer } from 'ws';
 import { walletsMatch } from './utils/walletIdentity.js';
 import http from 'http';
@@ -63,6 +56,7 @@ import NpcDailyOrderService from './services/NpcDailyOrderService.js';
 import { getNpcDailyOrder } from './config/npcOrders.js';
 import { getScavengeSpot } from './config/scavenge.js';
 import wagerSettlementService from './services/WagerSettlementService.js';
+import evmCustodialWalletService from './services/EvmCustodialWalletService.js';
 import dailyBonusService from './services/DailyBonusService.js';
 import { initializeReferralService, getReferralService } from './services/ReferralService.js';
 import { validateWalletAddress, validateTransactionSignature, validateAmount } from './utils/securityValidation.js';
@@ -8542,6 +8536,36 @@ async function handleMessage(playerId, message) {
             break;
         }
 
+        case 'dev_complete_onboarding': {
+            if (!IS_DEV) break;
+            if (!player.isAuthenticated || !player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'dev_complete_onboarding_result',
+                    success: false,
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Must be authenticated',
+                });
+                break;
+            }
+
+            try {
+                const result = await onboardingQuestService.devCompleteQuest(player.walletAddress);
+                sendToPlayer(playerId, {
+                    type: 'dev_complete_onboarding_result',
+                    ...result,
+                });
+            } catch (error) {
+                console.error('[Dev] Complete onboarding error:', error);
+                sendToPlayer(playerId, {
+                    type: 'dev_complete_onboarding_result',
+                    success: false,
+                    error: 'DEV_COMPLETE_FAILED',
+                    message: 'Failed to complete onboarding quest',
+                });
+            }
+            break;
+        }
+
         
         // ==================== REFERRAL SYSTEM ====================
         case 'referral_info': {
@@ -9448,6 +9472,15 @@ async function start() {
     } else {
         console.warn('⚠️ Wager settlement service not available:', settlementInit.error);
         console.warn('   Token wagers will require manual settlement');
+    }
+
+    const evmCustodialInit = await evmCustodialWalletService.initialize();
+    if (evmCustodialInit.success) {
+        console.log('🔐 EVM custodial wallet ready for $WADDLE daily bonus payouts');
+        console.log(`   Wallet: ${evmCustodialWalletService.getPublicKeyMasked()}`);
+    } else {
+        console.warn('⚠️ EVM custodial wallet not available:', evmCustodialInit.error);
+        console.warn('   $WADDLE daily bonus payouts disabled until EVM_CUSTODIAL_WALLET_PRIVATE_KEY is set');
     }
     
     // Initialize NFT services

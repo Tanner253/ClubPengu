@@ -33,6 +33,14 @@ vi.mock('../services/CustodialWalletService.js', () => ({
     }
 }));
 
+vi.mock('../services/EvmCustodialWalletService.js', () => ({
+    default: {
+        isReady: () => true,
+        getTokenBalance: () => Promise.resolve({ success: true, uiBalance: 1_000_000 }),
+        sendTokenPayout: (...args) => mockSendPayout(...args)
+    }
+}));
+
 vi.mock('../services/ReferralService.js', () => ({
     getReferralService: vi.fn(() => null)
 }));
@@ -210,6 +218,21 @@ describe('DailyBonusService.claim', () => {
                 })
             })
         );
+    });
+
+    it('routes token payout through EVM custodial for Robinhood users', async () => {
+        const wallet = '0x1234567890123456789012345678901234567890';
+        mockUserFindOne.mockResolvedValue(eligibleUser(wallet, { chainId: '4663' }));
+
+        const nonce = makeNonce();
+        const result = await withEligibleSession(wallet, () =>
+            dailyBonusService.claim(wallet, nonce)
+        , { chainId: '4663' });
+
+        expect(result.success).toBe(true);
+        expect(result.tokenSymbol).toBe('$WADDLE');
+        expect(result.chainId).toBe('4663');
+        expect(mockSendPayout).toHaveBeenCalledTimes(1);
     });
 
     it('reverts DB reservation when payout fails before broadcast', async () => {

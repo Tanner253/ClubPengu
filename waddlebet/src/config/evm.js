@@ -52,3 +52,17 @@ export function getActiveRobinhoodChain() {
 export function getActiveEvmChainIdString() {
     return String(getActiveRobinhoodChain().chainId);
 }
+
+/** Resolve Robinhood network config from a chain id (4663 mainnet, 46630 testnet). */
+export function getRobinhoodChainById(chainId) {
+    const id = typeof chainId === 'string' ? parseInt(chainId, 10) : chainId;
+    if (id === 46630) return ROBINHOOD_CHAIN_TESTNET;
+    return ROBINHOOD_CHAIN_MAINNET;
+}
+
+/** Block explorer URL for an EVM transaction hash. */
+export function getEvmTxExplorerUrl(txHash, chainId) {
+    if (!txHash) return null;
+    const chain = getRobinhoodChainById(chainId ?? getActiveRobinhoodChain().chainId);
+    return `${chain.blockExplorer}/tx/${txHash}`;
+}

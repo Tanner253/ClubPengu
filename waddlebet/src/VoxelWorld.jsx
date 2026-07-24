@@ -483,6 +483,7 @@ const VoxelWorld = ({
         acceptNpcQuest,
         dailyQuestStatus,
         fetchDailyQuestStatus,
+        onboardingQuest,
         roomTravelVoyages,
         travelRouteStatuses,
         myTravelVoyage,
@@ -990,7 +991,20 @@ const VoxelWorld = ({
     const [showChangelog, setShowChangelog] = useState(false);
     const [showDebugPosition, setShowDebugPosition] = useState(false);
     const showDebugPositionRef = useRef(false);
+    const [devOnboardingSkipMsg, setDevOnboardingSkipMsg] = useState('');
     const [debugPosition, setDebugPosition] = useState({ x: 0, y: 0, z: 0, offsetX: 0, offsetZ: 0 });
+
+    useEffect(() => {
+        if (devOnboardingSkipMsg !== 'Completing quest…') return;
+        if (onboardingQuest?.rewardClaimed) {
+            setDevOnboardingSkipMsg('Getting Started complete');
+            return;
+        }
+        const timeout = setTimeout(() => {
+            setDevOnboardingSkipMsg('Failed — log in and try again');
+        }, 5000);
+        return () => clearTimeout(timeout);
+    }, [devOnboardingSkipMsg, onboardingQuest?.rewardClaimed]);
     const [showCollisionDebug, setShowCollisionDebug] = useState(false);
     const [showPerfDebug, setShowPerfDebug] = useState(false);
     const showPerfDebugRef = useRef(false);
@@ -13762,6 +13776,34 @@ const VoxelWorld = ({
                             <div>🔴 Red = Ground colliders</div>
                             <div>🟡 Yellow = Elevated colliders</div>
                             <div>🟢 Green = Triggers</div>
+                        </div>
+                    </div>
+
+                    {/* Dev QA shortcuts */}
+                    <div className="border-t border-white/20 mt-3 pt-3">
+                        <div className="text-purple-400 font-bold mb-2 text-[10px]">🧪 DEV QA</div>
+                        <button
+                            type="button"
+                            disabled={!isAuthenticated || onboardingQuest?.rewardClaimed}
+                            onClick={() => {
+                                if (!isAuthenticated) {
+                                    setDevOnboardingSkipMsg('Log in first');
+                                    return;
+                                }
+                                setDevOnboardingSkipMsg('Completing quest…');
+                                mpSend({ type: 'dev_complete_onboarding' });
+                            }}
+                            className="w-full bg-purple-600 hover:bg-purple-500 disabled:bg-gray-700 disabled:text-white/40 text-white text-[10px] py-1.5 px-2 rounded"
+                        >
+                            {onboardingQuest?.rewardClaimed
+                                ? '✓ Getting Started complete'
+                                : 'Complete Getting Started quest'}
+                        </button>
+                        {devOnboardingSkipMsg && (
+                            <div className="mt-1 text-[9px] text-purple-200/80 text-center">{devOnboardingSkipMsg}</div>
+                        )}
+                        <div className="mt-1 text-[8px] text-white/40 text-center">
+                            Unlocks daily bonus on fresh test wallets
                         </div>
                     </div>
                 </div>

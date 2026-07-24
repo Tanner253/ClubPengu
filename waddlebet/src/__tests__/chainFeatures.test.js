@@ -7,8 +7,8 @@ describe('chainFeatures', () => {
         expect(isChainFeatureLive('solana', 'tokenWagers')).toBe(true);
     });
 
-    it('disables EVM payouts until custodial rail ships', () => {
-        expect(isChainFeatureLive('4663', 'dailyBonusClaim')).toBe(false);
+    it('enables EVM daily bonus; other rails still gated', () => {
+        expect(isChainFeatureLive('4663', 'dailyBonusClaim')).toBe(true);
         expect(isChainFeatureLive('4663', 'pebblesRail')).toBe(false);
         expect(isChainFeatureLive('4663', 'tokenWagers')).toBe(false);
         expect(isChainFeatureLive('4663', 'nametagTiers')).toBe(true);

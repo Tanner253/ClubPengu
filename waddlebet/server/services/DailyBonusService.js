@@ -12,6 +12,8 @@
 import { User, Transaction } from '../db/models/index.js';
 import { isDBConnected } from '../db/connection.js';
 import custodialWalletService from './CustodialWalletService.js';
+import evmCustodialWalletService from './EvmCustodialWalletService.js';
+import { getPlatformToken, isEvmChainId } from '../config/tokens.js';
 import crypto from 'crypto';
 import { getReferralService } from './ReferralService.js';
 import { getOnboardingProgress, isOnboardingQuestComplete } from '../config/onboardingQuest.js';
@@ -47,6 +49,9 @@ const CONFIG = {
 
 const CLIENT_NONCE_REGEX = /^[a-f0-9]{64}$/i;
 
+const REQUIRED_PLAY_SECONDS = CONFIG.REQUIRED_SESSION_MINUTES * 60;
+const COOLDOWN_MS = CONFIG.COOLDOWN_HOURS * 60 * 60 * 1000;
+
 // Track active sessions (walletAddress -> session info)
 const _activeSessions = new Map();
 
@@ -74,6 +79,42 @@ class DailyBonusService {
     /** @param {import('./UserService.js').default} userService */
     setUserService(userService) {
         this.userService = userService;
+    }
+
+    _resolveUserChainId(user) {
+        return user?.chainId || 'solana';
+    }
+
+    _isCustodialReady(chainId) {
+        if (isEvmChainId(chainId)) {
+            return evmCustodialWalletService.isReady();
+        }
+        return custodialWalletService.isReady();
+    }
+
+    async _getCustodialTokenBalance(chainId, tokenAddress) {
+        if (isEvmChainId(chainId)) {
+            return evmCustodialWalletService.getTokenBalance(tokenAddress, chainId);
+        }
+        return custodialWalletService.getTokenBalance(tokenAddress);
+    }
+
+    async _sendTokenPayout(recipientWallet, chainId, tokenAddress, amountRaw, memo) {
+        if (isEvmChainId(chainId)) {
+            return evmCustodialWalletService.sendTokenPayout(
+                recipientWallet,
+                tokenAddress,
+                amountRaw,
+                chainId,
+                memo
+            );
+        }
+        return custodialWalletService._sendPayoutTransaction(
+            recipientWallet,
+            tokenAddress,
+            amountRaw,
+            memo
+        );
     }
 
     _resolveClaimStreakDay(user) {
@@ -160,6 +201,25 @@ class DailyBonusService {
     _effectiveMinutesFromSession(session, now = new Date()) {
         if (!session?.canAccumulate) return 0;
         return Math.floor(session.persistedMinutes + this._segmentMinutes(session, now));
+    }
+
+    _effectivePlaySecondsFromSession(session, now = new Date()) {
+        if (!session?.canAccumulate) return 0;
+        return this._effectiveMinutesFromSession(session, now) * 60;
+    }
+
+    getSessionPlaySeconds(walletAddress, user = null) {
+        const session = _activeSessions.get(walletAddress);
+        const now = new Date();
+
+        if (session) {
+            return this._effectivePlaySecondsFromSession(session, now);
+        }
+
+        if (!user) return 0;
+        const progress = this._resolveProgressState(user, now);
+        if (!progress.canAccumulate || progress.needsNewWindow) return 0;
+        return Math.floor(progress.accumulatedMinutes || 0) * 60;
     }
 
     async _maybeAwardReferralPromo(walletAddress, totalMinutes, session) {
@@ -347,36 +407,40 @@ class DailyBonusService {
             const now = new Date();
             const progress = this._resolveProgressState(user, now);
             const sessionMinutes = this.getSessionMinutes(walletAddress, user);
+            const sessionSeconds = this.getSessionPlaySeconds(walletAddress, user);
+            const requiredSeconds = REQUIRED_PLAY_SECONDS;
             
             // Check if 24h cooldown has passed
             const lastClaim = user.dailyBonus?.lastClaimAt;
-            const cooldownMs = CONFIG.COOLDOWN_HOURS * 60 * 60 * 1000;
-            const cooldownExpired = !lastClaim || (now - lastClaim) >= cooldownMs;
+            const cooldownExpired = !lastClaim || (now - lastClaim) >= COOLDOWN_MS;
             
             // Time until cooldown expires
             let timeUntilClaim = 0;
             if (lastClaim && !cooldownExpired) {
-                timeUntilClaim = cooldownMs - (now - lastClaim);
+                timeUntilClaim = COOLDOWN_MS - (now - lastClaim);
             }
             
             // Check playtime requirement (accrued across sessions in the progress window)
-            const hasEnoughTime = cooldownExpired && sessionMinutes >= CONFIG.REQUIRED_SESSION_MINUTES;
-            const minutesRemaining = cooldownExpired
-                ? Math.max(0, CONFIG.REQUIRED_SESSION_MINUTES - sessionMinutes)
-                : CONFIG.REQUIRED_SESSION_MINUTES;
+            const hasEnoughTime = cooldownExpired && sessionSeconds >= requiredSeconds;
+            const secondsRemaining = cooldownExpired
+                ? Math.max(0, requiredSeconds - sessionSeconds)
+                : requiredSeconds;
+            const minutesRemaining = Math.ceil(secondsRemaining / 60);
 
             const onboardingProgress = getOnboardingProgress(user);
             const onboardingComplete = onboardingProgress.complete;
 
             const streak = this._resolveClaimStreakDay(user);
+            const chainId = this._resolveUserChainId(user);
+            const platformToken = getPlatformToken(chainId);
             
             // Can claim if cooldown expired AND has enough session time AND intro quest done
             const canClaim = cooldownExpired && hasEnoughTime && onboardingComplete;
             
-            // Get custodial wallet balance
+            // Custodial reward pool balance for this chain
             let custodialBalance = null;
-            if (custodialWalletService.isReady()) {
-                const balanceResult = await custodialWalletService.getTokenBalance(CONFIG.getTokenAddress());
+            if (this._isCustodialReady(chainId)) {
+                const balanceResult = await this._getCustodialTokenBalance(chainId, platformToken.address);
                 if (balanceResult.success) {
                     custodialBalance = balanceResult.uiBalance;
                 }
@@ -390,8 +454,11 @@ class DailyBonusService {
                 timeUntilWindowEnds: progress.timeUntilWindowEnds, // ms left to finish playtime window
                 progressWindowStartedAt: progress.windowStartedAt,
                 sessionMinutes,                                    // accrued playtime in current window
-                requiredMinutes: CONFIG.REQUIRED_SESSION_MINUTES,  // required time
-                minutesRemaining,                                  // minutes until eligible
+                sessionSeconds,                                    // precise playtime for UI timers
+                requiredMinutes: Math.ceil(requiredSeconds / 60),  // legacy minute display
+                requiredSeconds,
+                minutesRemaining,
+                secondsRemaining,
                 hasEnoughTime,
                 onboardingComplete,
                 onboardingCompletedCount: onboardingProgress.completedCount,
@@ -405,7 +472,9 @@ class DailyBonusService {
                 totalClaimed: user.dailyBonus?.totalClaimed || 0,
                 totalWaddleEarned: user.dailyBonus?.totalWaddleEarned || 0,
                 lastClaimAt: lastClaim,
-                custodialBalance                                   // Show wallet balance
+                custodialBalance,                                  // Show wallet balance
+                platformToken: platformToken.displaySymbol,
+                chainId,
             };
             
         } catch (error) {
@@ -468,10 +537,6 @@ class DailyBonusService {
             return { success: false, error: 'DB_NOT_CONNECTED' };
         }
         
-        if (!custodialWalletService.isReady()) {
-            return { success: false, error: 'CUSTODIAL_NOT_READY', message: 'Reward system temporarily unavailable' };
-        }
-        
         // Mark claim in progress
         _claimsInProgress.add(walletAddress);
 
@@ -491,6 +556,17 @@ class DailyBonusService {
                 return { success: false, error: 'USER_NOT_FOUND' };
             }
 
+            const chainId = this._resolveUserChainId(user);
+            const platformToken = getPlatformToken(chainId);
+
+            if (!this._isCustodialReady(chainId)) {
+                return {
+                    success: false,
+                    error: 'CUSTODIAL_NOT_READY',
+                    message: 'Reward system temporarily unavailable'
+                };
+            }
+
             const processedNonces = user.dailyBonus?.processedClaimNonces || [];
             if (processedNonces.includes(clientNonce)) {
                 return {
@@ -501,7 +577,9 @@ class DailyBonusService {
             }
             
             const now = new Date();
+            const sessionSeconds = this.getSessionPlaySeconds(walletAddress, user);
             const sessionMinutes = this.getSessionMinutes(walletAddress, user);
+            const requiredSeconds = REQUIRED_PLAY_SECONDS;
 
             if (!isOnboardingQuestComplete(user)) {
                 const progress = getOnboardingProgress(user);
@@ -516,10 +594,9 @@ class DailyBonusService {
 
             // Check 24h cooldown before playtime (clearer when still on cooldown)
             const lastClaim = user.dailyBonus?.lastClaimAt;
-            const cooldownMs = CONFIG.COOLDOWN_HOURS * 60 * 60 * 1000;
 
-            if (lastClaim && (now - lastClaim) < cooldownMs) {
-                const timeRemaining = cooldownMs - (now - lastClaim);
+            if (lastClaim && (now - lastClaim) < COOLDOWN_MS) {
+                const timeRemaining = COOLDOWN_MS - (now - lastClaim);
                 const hoursRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60));
                 return {
                     success: false,
@@ -530,13 +607,14 @@ class DailyBonusService {
             }
             
             // Check playtime requirement (accrued across sessions in the progress window)
-            if (sessionMinutes < CONFIG.REQUIRED_SESSION_MINUTES) {
-                const remaining = CONFIG.REQUIRED_SESSION_MINUTES - sessionMinutes;
-                return { 
-                    success: false, 
-                    error: 'INSUFFICIENT_TIME', 
-                    message: `Need ${remaining} more minutes of play time`,
-                    minutesRemaining: remaining
+            if (sessionSeconds < requiredSeconds) {
+                const remaining = requiredSeconds - sessionSeconds;
+                return {
+                    success: false,
+                    error: 'INSUFFICIENT_TIME',
+                    message: `Need ${Math.ceil(remaining / 60)} more minutes of play time`,
+                    minutesRemaining: Math.ceil(remaining / 60),
+                    secondsRemaining: remaining,
                 };
             }
             
@@ -562,7 +640,7 @@ class DailyBonusService {
                     'dailyBonus.processedClaimNonces': { $nin: [clientNonce] },
                     $or: [
                         { 'dailyBonus.lastClaimAt': null },
-                        { 'dailyBonus.lastClaimAt': { $lt: new Date(now.getTime() - cooldownMs) } }
+                        { 'dailyBonus.lastClaimAt': { $lt: new Date(now.getTime() - COOLDOWN_MS) } }
                     ]
                 },
                 {
@@ -607,7 +685,7 @@ class DailyBonusService {
             
             console.log(`🎁 [DailyBonus] Processing claim for ${walletAddress.slice(0, 8)}...`);
             console.log(`   Claim ID: ${claimId}`);
-            console.log(`   Streak day ${streak.claimDay}: ${cpAmount} $CP${goldAmount > 0 ? ` + ${goldAmount}g` : ''}`);
+            console.log(`   Streak day ${streak.claimDay}: ${cpAmount} ${platformToken.displaySymbol}${goldAmount > 0 ? ` + ${goldAmount}g` : ''}`);
 
             let goldNewBalance = null;
             if (goldAmount > 0 && this.userService) {
@@ -673,21 +751,24 @@ class DailyBonusService {
                     goldReward: goldAmount,
                     goldNewBalance,
                     streakDay: streak.claimDay,
-                    tokenSymbol: '$CP',
+                    tokenSymbol: platformToken.displaySymbol,
+                    platformToken: platformToken.displaySymbol,
+                    chainId,
                     claimId,
                     message: `Day ${streak.claimDay} reward: ${goldAmount} gold!`
                 };
             }
 
             // ═══════════════════════════════════════════════════════════════
-            // SEND TOKENS FROM CUSTODIAL WALLET
+            // SEND TOKENS FROM CUSTODIAL WALLET (Solana $CP or EVM $WADDLE)
             // ═══════════════════════════════════════════════════════════════
             
-            const tokenAddress = CONFIG.getTokenAddress();
-            const amountRaw = BigInt(cpAmount) * BigInt(10 ** CONFIG.TOKEN_DECIMALS);
+            const tokenAddress = platformToken.address;
+            const amountRaw = BigInt(cpAmount) * BigInt(10 ** platformToken.decimals);
             
-            const txResult = await custodialWalletService._sendPayoutTransaction(
+            const txResult = await this._sendTokenPayout(
                 walletAddress,
+                chainId,
                 tokenAddress,
                 amountRaw,
                 claimId
@@ -722,7 +803,7 @@ class DailyBonusService {
                             fromWallet: 'custodial',
                             toWallet: walletAddress,
                             amount: cpAmount,
-                            currency: 'WADDLE',
+                            currency: platformToken.symbol,
                             relatedData: {
                                 claimId,
                                 clientNonce,
@@ -747,9 +828,11 @@ class DailyBonusService {
                     goldReward: goldAmount,
                     goldNewBalance,
                     streakDay: streak.claimDay,
-                    tokenSymbol: '$CP',
+                    tokenSymbol: platformToken.displaySymbol,
+                    platformToken: platformToken.displaySymbol,
+                    chainId,
                     claimId,
-                    message: `Day ${streak.claimDay} reward: ${cpAmount.toLocaleString()} $CP${goldPart}!`
+                    message: `Day ${streak.claimDay} reward: ${cpAmount.toLocaleString()} ${platformToken.displaySymbol}${goldPart}!`
                 };
                 
             } else {
@@ -775,6 +858,7 @@ class DailyBonusService {
                 const payoutErrors = {
                     INSUFFICIENT_BALANCE: 'Reward pool is temporarily low. Please try again later.',
                     INSUFFICIENT_SOL_FOR_FEES: 'Reward payouts are temporarily unavailable (custodial wallet needs SOL for fees).',
+                    INSUFFICIENT_ETH_FOR_FEES: 'Reward payouts are temporarily unavailable (custodial wallet needs ETH for gas).',
                     TRANSACTION_FAILED: 'Token transfer failed. Please try again.',
                 };
                 
