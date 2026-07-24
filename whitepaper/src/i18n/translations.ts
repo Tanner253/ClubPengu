@@ -314,7 +314,7 @@ const zhTW: Record<string, string> = {
   "multichain.robinhood.p1":
     "Robinhood 正將加密帶給 2500 萬以上的主流用戶。其 EVM 相容鏈讓 WaddleBet 能在用戶已熟悉的地方相遇——與 Solana 上相同的社交對賭、外觀經濟與企鵝元宇宙。",
   "multichain.robinhood.p2":
-    "$WADDLE 已部署於 Robinhood Chain。MetaMask 登入、世界遊玩、金幣經濟與 Diamond Flippers 名牌今日已上線。鏈上功能（每日獎勵、卵石、冰屋、代幣對賭）分階段推出——Solana（$CP）仍完全可玩。",
+    "$WADDLE 已部署於 Robinhood Chain。MetaMask 登入、世界遊玩、金幣經濟、Diamond Flippers 名牌與每日獎勵今日已上線。卵石、冰屋與代幣對賭於後續階段推出——Solana（$CP）仍完全可玩。",
   "multichain.robinhood.caLabel": "合約地址",
   "multichain.why.title": "為何多鏈？",
   "multichain.why.p1":

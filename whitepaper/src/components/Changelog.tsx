@@ -84,6 +84,40 @@ const typeLabels: Record<ChangeType, string> = {
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
   {
+    version: "1.4.1",
+    date: "July 24, 2026",
+    title: "$WADDLE Daily Bonus · Production Ready",
+    description:
+      "Ship-ready daily rewards on Robinhood Chain — MetaMask players now earn $WADDLE through the same 7-day streak calendar and 60-minute playtime rules as Solana. Custodial ERC-20 payouts, chain-native HUD/modal, Blockscout claim links, and a full test pass. Solana ($CP) daily bonus unchanged.",
+    highlight: true,
+    brand: "robinhood",
+    stats: { filesChanged: 28, additions: 1200, deletions: 180 },
+    changes: [
+      // ── Daily bonus on EVM ──
+      { type: "feature", text: "$WADDLE daily bonus live on Robinhood Chain — 7-day streak (1k→5k $WADDLE), 60 min playtime, 24h claim cooldown, Getting Started quest required" },
+      { type: "feature", text: "EvmCustodialWalletService — viem ERC-20 transfers from a dedicated custodial wallet; pre-flight token + ETH balance checks before each payout" },
+      { type: "feature", text: "Chain-aware daily bonus UI — DailyBonusModal and DailyQuestHUD show $WADDLE or $CP based on wallet; EVM claims link to Blockscout (Solana still uses Solscan)" },
+      { type: "improvement", text: "Shared useDailyBonusSessionTimer hook — playtime progress stays accurate when opening the bonus modal (no timer reset on refresh)" },
+
+      // ── Backend & config ──
+      { type: "backend", text: "DailyBonusService routes payouts by user chainId — Solana SPL custodial for $CP, EVM custodial for $WADDLE" },
+      { type: "backend", text: "loadEnv.js — server loads waddlebet/.env + server/.env before token config; fixes reward pool showing 0 when WADDLE_TOKEN_ADDRESS was set only in server/.env" },
+      { type: "backend", text: "Lazy token getters on server — WADDLE contract address and decimals read at runtime so env overrides apply correctly" },
+      { type: "backend", text: "Per-chain feature flag dailyBonusClaim: true on EVM; pebbles, igloos, and token wagers remain gated" },
+      { type: "security", text: "EVM custodial private key cleared from process.env after wallet init; atomic DB claim reservation + nonce replay protection unchanged from Solana rail" },
+
+      // ── Fixes ──
+      { type: "fix", text: "Daily bonus claim — sessionMinutes now recorded on successful EVM claims (Transaction.record no longer throws after payout)" },
+      { type: "fix", text: "DailyQuestHUD — fixed undefined requiredMinutes crash and hardcoded $CP labels on Robinhood wallets" },
+      { type: "fix", text: "Reward pool balance — custodial $WADDLE balance displays correctly in the bonus modal after env load fix" },
+
+      // ── Dev tooling ──
+      { type: "improvement", text: "F3 debug panel (dev only) — Complete Getting Started quest button for fresh-wallet QA; disabled in production" },
+      { type: "refactor", text: "Removed DAILY_BONUS_TEST_MODE scratchpad — production rules only (60 min / 24h cooldown / onboarding gate)" },
+      { type: "backend", text: "559 automated tests passing — DailyBonusService EVM routing, cooldown, onboarding gating, and playtime window coverage" },
+    ],
+  },
+  {
     version: "1.4.0",
     date: "July 23, 2026",
     title: "Robinhood Chain · $WADDLE EVM Deployment",
