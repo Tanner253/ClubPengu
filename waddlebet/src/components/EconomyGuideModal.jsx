@@ -6,6 +6,7 @@
 import React, { useRef } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useLanguage } from '../i18n';
+import { useChainEconomy } from '../hooks/useChainEconomy.js';
 
 const Section = ({ emoji, title, children }) => (
     <div className="mb-6">
@@ -21,16 +22,25 @@ const Section = ({ emoji, title, children }) => (
 const EconomyGuideModal = ({ isOpen, onClose }) => {
     const modalRef = useRef(null);
     const { t } = useLanguage();
+    const { isEvm, platformToken } = useChainEconomy();
 
     useClickOutside(modalRef, onClose, isOpen);
     useEscapeKey(onClose, isOpen);
 
     if (!isOpen) return null;
 
+    const platformTitle = isEvm ? `${platformToken} token` : t('economyGuide.cpTitle');
+    const platformDesc = isEvm
+        ? `${platformToken} on Robinhood Chain powers nametag tiers today. Igloo rent, token wagers, and daily bonus redemption ship in a later phase — no $CP on this account.`
+        : t('economyGuide.cpDesc');
+    const pebblesDesc = isEvm
+        ? 'Premium currency (ETH-backed, coming soon). Gacha and cosmetic marketplace use Pebbles once the ETH rail is live.'
+        : t('economyGuide.pebblesDesc');
+
     const currencies = [
         { emoji: '🪙', title: t('economyGuide.goldTitle'), desc: t('economyGuide.goldDesc'), border: 'border-amber-500/30' },
-        { emoji: '🪨', title: t('economyGuide.pebblesTitle'), desc: t('economyGuide.pebblesDesc'), border: 'border-purple-500/30' },
-        { emoji: '💎', title: t('economyGuide.cpTitle'), desc: t('economyGuide.cpDesc'), border: 'border-cyan-500/30' },
+        { emoji: '🪨', title: t('economyGuide.pebblesTitle'), desc: pebblesDesc, border: 'border-purple-500/30' },
+        { emoji: '💎', title: platformTitle, desc: platformDesc, border: 'border-cyan-500/30' },
     ];
 
     const loopSteps = [

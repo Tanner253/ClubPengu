@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer';
 import { useClickOutside, useEscapeKey } from '../hooks';
+import { useLanguage } from '../i18n';
+import { useChainEconomy } from '../hooks/useChainEconomy.js';
+import ChainComingSoonPanel from './ChainComingSoonPanel';
 import PhantomWallet from '../wallet/PhantomWallet';
 
 // Pebble bundles (must match server constants)
@@ -28,6 +31,8 @@ console.log('🪨 RAKE_WALLET configured:', RAKE_WALLET ? RAKE_WALLET.slice(0, 8
 const PebblesPurchaseModal = ({ isOpen, onClose }) => {
     const panelRef = useRef(null);
     const { userData, isAuthenticated, send, walletAddress, registerCallbacks } = useMultiplayer();
+    const { t } = useLanguage();
+    const { canUsePebblesRail } = useChainEconomy();
     
     // Tab state
     const [activeTab, setActiveTab] = useState('buy'); // 'buy' | 'withdraw'
@@ -232,6 +237,31 @@ const PebblesPurchaseModal = ({ isOpen, onClose }) => {
     };
     
     if (!isOpen) return null;
+
+    if (!canUsePebblesRail) {
+        return (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                <div
+                    ref={panelRef}
+                    className="bg-gradient-to-br from-gray-900 via-purple-900/30 to-gray-900 rounded-2xl max-w-md w-full border border-purple-500/30 shadow-2xl p-5"
+                >
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-white retro-text">🪨 Pebbles</h2>
+                        <button type="button" onClick={onClose} className="text-white/50 hover:text-white text-2xl leading-none">×</button>
+                    </div>
+                    <ChainComingSoonPanel title={t('chainEconomy.pebblesTitle')} />
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        disabled
+                        className="w-full mt-4 py-3 rounded-xl font-bold text-sm bg-white/10 text-white/40 cursor-not-allowed"
+                    >
+                        {t('chainEconomy.comingSoon')}
+                    </button>
+                </div>
+            </div>
+        );
+    }
     
     return (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">

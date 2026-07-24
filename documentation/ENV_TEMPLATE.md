@@ -2,6 +2,8 @@
 VITE_SOLANA_RPC_URL
 VITE_CPW3_TOKEN_ADDRESS
 VITE_RENT_WALLET_ADDRESS
+VITE_WADDLE_TOKEN_ADDRESS
+VITE_WADDLE_TOKEN_DECIMALS
 
 # Custodial wallet public address for wager deposits
 # This is the PUBLIC KEY only - safe to expose

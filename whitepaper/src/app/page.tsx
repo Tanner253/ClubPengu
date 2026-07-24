@@ -64,10 +64,10 @@ const CP_SOLANA_MINT = "9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump";
 /** Original $CPW3 SPL mint (~$700k ATH on Solana). */
 const CPW3_ORIGINAL_SOLANA_MINT = "63RFxQy57mJKhRhWbdEQNcwmQ5kFfmSGJpVxKeVCpump";
 
-/** $CP ERC-20 contract on Robinhood Chain (Ethereum EVM). */
-const CP_ETH_CONTRACT = "0xcf83b446d4cf400b132538d7bb03e36bdbd3c8b8";
+/** $WADDLE ERC-20 contract on Robinhood Chain (Ethereum EVM). */
+const WADDLE_ETH_CONTRACT = "0xcf83b446d4cf400b132538d7bb03e36bdbd3c8b8";
 
-const CP_ETH_BLOCK_EXPLORER = `https://robinhoodchain.blockscout.com/token/${CP_ETH_CONTRACT}`;
+const WADDLE_ETH_BLOCK_EXPLORER = `https://robinhoodchain.blockscout.com/token/${WADDLE_ETH_CONTRACT}`;
 
 /** Hero background — same trailer as the demo section (no second embed there). */
 const HERO_YOUTUBE_VIDEO_ID = "H2Ge_hb5Gfc";
@@ -381,7 +381,7 @@ function HeroChainsStrip() {
 
   const copyEthContract = async () => {
     try {
-      await navigator.clipboard.writeText(CP_ETH_CONTRACT);
+      await navigator.clipboard.writeText(WADDLE_ETH_CONTRACT);
       setCopiedEthCa(true);
       setTimeout(() => setCopiedEthCa(false), 2000);
     } catch (err) {
@@ -390,7 +390,7 @@ function HeroChainsStrip() {
   };
 
   const abbreviatedMint = `${CP_SOLANA_MINT.slice(0, 4)}...${CP_SOLANA_MINT.slice(-4)}`;
-  const abbreviatedEth = `${CP_ETH_CONTRACT.slice(0, 6)}...${CP_ETH_CONTRACT.slice(-4)}`;
+  const abbreviatedEth = `${WADDLE_ETH_CONTRACT.slice(0, 6)}...${WADDLE_ETH_CONTRACT.slice(-4)}`;
 
   return (
     <motion.div
@@ -965,7 +965,7 @@ function MultichainSection() {
 
   const copyEthContract = async () => {
     try {
-      await navigator.clipboard.writeText(CP_ETH_CONTRACT);
+      await navigator.clipboard.writeText(WADDLE_ETH_CONTRACT);
       setCopiedEthCa(true);
       setTimeout(() => setCopiedEthCa(false), 2000);
     } catch (err) {
@@ -1038,7 +1038,7 @@ function MultichainSection() {
             <div className="p-3 rounded-xl bg-black/30 border border-white/10">
               <span className="text-slate-500 text-xs uppercase tracking-wide block mb-2">{t("multichain.robinhood.caLabel")}</span>
               <div className="flex items-center gap-2">
-                <code className="text-xs sm:text-sm text-slate-200 font-mono truncate flex-1">{CP_ETH_CONTRACT}</code>
+                <code className="text-xs sm:text-sm text-slate-200 font-mono truncate flex-1">{WADDLE_ETH_CONTRACT}</code>
                 <button
                   type="button"
                   onClick={copyEthContract}
@@ -1772,7 +1772,7 @@ function RoadmapSection() {
       title: "Ecosystem",
       status: "planned",
       items: [
-        "🔨 Robinhood Chain (EVM) — multichain expansion in development",
+        "✅ Robinhood Chain (EVM) · $WADDLE deployed — Phase 1 live (MetaMask auth, nametags, single-chain UX)",
         "📋 Contract deployment + wallet integrations shipping in phases",
       ],
     },
@@ -2036,7 +2036,7 @@ function ContractAddress() {
 
   const copyEthContract = async () => {
     try {
-      await navigator.clipboard.writeText(CP_ETH_CONTRACT);
+      await navigator.clipboard.writeText(WADDLE_ETH_CONTRACT);
       setCopiedEth(true);
       setTimeout(() => setCopiedEth(false), 2000);
     } catch (err) {
@@ -2105,7 +2105,7 @@ function ContractAddress() {
               <p className="text-sm font-medium text-slate-300">
                 {t("contract.liveOn")}{" "}
                 <a
-                  href={CP_ETH_BLOCK_EXPLORER}
+                  href={WADDLE_ETH_BLOCK_EXPLORER}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-slate-200 hover:underline"
@@ -2119,7 +2119,7 @@ function ContractAddress() {
           <div className="flex-1 w-full sm:w-auto">
             <div className="flex items-center gap-2 bg-black/30 rounded-lg px-3 py-2 border border-white/10">
               <code className="text-xs sm:text-sm text-slate-200 font-mono truncate flex-1">
-                {CP_ETH_CONTRACT}
+                {WADDLE_ETH_CONTRACT}
               </code>
               <button
                 type="button"

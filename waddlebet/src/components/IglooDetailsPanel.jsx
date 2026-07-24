@@ -5,6 +5,7 @@
 
 import React from 'react';
 import { IGLOO_CONFIG } from '../config/solana.js';
+import { useChainEconomy } from '../hooks/useChainEconomy.js';
 
 const IglooDetailsPanel = ({ 
     isOpen, 
@@ -14,6 +15,8 @@ const IglooDetailsPanel = ({
     onPreview,    // "I want to see inside" - demo mode
     walletAddress
 }) => {
+    const { platformToken } = useChainEconomy();
+    
     if (!isOpen) return null;
     
     const iglooName = iglooData?.iglooId?.replace('igloo', 'Igloo ') || 'This Igloo';
@@ -84,8 +87,8 @@ const IglooDetailsPanel = ({
                     
                     {/* Price Tag */}
                     <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-1/2">
-                        <div className="bg-gradient-to-r from-yellow-500 to-amber-500 text-black px-4 py-1.5 rounded-full font-bold text-sm shadow-lg shadow-yellow-500/30">
-                            💎 {IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString() || '10,000'} $CP/day
+                        <div className="bg-gradient-to-r from-cyan-500 to-purple-500 text-white px-4 py-1.5 rounded-full font-bold text-sm shadow-lg shadow-cyan-500/30">
+                            💎 {IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString() || '10,000'} {platformToken}/day
                         </div>
                     </div>
                 </div>
@@ -130,14 +133,14 @@ const IglooDetailsPanel = ({
                         <div className="grid grid-cols-2 gap-3 text-sm">
                             <div className="flex justify-between">
                                 <span className="text-slate-400">Daily Rent:</span>
-                                <span className="text-yellow-400 font-mono">
-                                    {IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString()} $CP
+                                <span className="text-cyan-400 font-mono">
+                                    {IGLOO_CONFIG.DAILY_RENT_CPW3?.toLocaleString()} {platformToken}
                                 </span>
                             </div>
                             <div className="flex justify-between">
                                 <span className="text-slate-400">Min Balance:</span>
                                 <span className="text-cyan-400 font-mono">
-                                    {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3?.toLocaleString()} $CP
+                                    {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3?.toLocaleString()} {platformToken}
                                 </span>
                             </div>
                             <div className="flex justify-between">

@@ -7,6 +7,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext.jsx';
 import { payIglooEntryFee } from '../wallet/SolanaPayment.js';
 import { displayTokenSymbol, formatTokenText } from '../utils/tokenDisplay.js';
+import { useChainEconomy } from '../hooks/useChainEconomy.js';
+import { useLanguage } from '../i18n';
+import ChainComingSoonPanel from './ChainComingSoonPanel';
 
 /**
  * Abbreviate a wallet address: "abc123...xyz789"
@@ -79,8 +82,8 @@ const IglooRequirementsPanel = ({
     isLoading = false
 }) => {
     const { send } = useMultiplayer();
-    
-    // Status tracking state
+    const { t } = useLanguage();
+    const { chainId, isEvm, canPayIglooEntryFee, platformToken } = useChainEconomy();
     const [checkingStatus, setCheckingStatus] = useState(false);
     const [paymentLoading, setPaymentLoading] = useState(false);
     const [userTokenBalance, setUserTokenBalance] = useState(null);
@@ -105,13 +108,13 @@ const IglooRequirementsPanel = ({
     // Normalize token gate info
     const tokenGateData = tokenGateInfo || tokenGate || {};
     const tokenAddress = tokenGateData.tokenAddress;
-    const tokenSymbol = displayTokenSymbol(tokenGateData.symbol || tokenGateData.tokenSymbol || 'TOKEN');
+    const tokenSymbol = displayTokenSymbol(tokenGateData.symbol || tokenGateData.tokenSymbol || 'TOKEN', chainId);
     const minBalance = tokenGateData.minimumBalance || tokenGateData.minimum || 1;
     
     // Normalize entry fee info
     const entryFeeData = entryFeeToken || entryFee || {};
     const feeTokenAddress = entryFeeData.tokenAddress;
-    const feeTokenSymbol = displayTokenSymbol(entryFeeData.tokenSymbol || 'TOKEN');
+    const feeTokenSymbol = displayTokenSymbol(entryFeeData.tokenSymbol || 'TOKEN', chainId);
     const feeAmount = entryFeeAmount || entryFee?.amount || 0;
     
     // Determine what requirements exist
@@ -123,6 +126,7 @@ const IglooRequirementsPanel = ({
     const entryFeeOk = !showEntryFee || hasEntryFeePaid;
     const allRequirementsMet = tokenGateOk && entryFeeOk;
     const needsPayment = showEntryFee && !hasEntryFeePaid;
+    const onChainIglooBlocked = isEvm && (showTokenGate || showEntryFee) && !allRequirementsMet;
     
     // Refresh status handler - MUST be defined before useEffect that uses it
     const handleRefreshStatus = useCallback(() => {
@@ -137,6 +141,10 @@ const IglooRequirementsPanel = ({
     
     // Handle pay and enter
     const handlePayAndEnter = useCallback(async () => {
+        if (onChainIglooBlocked) {
+            setError(t('chainEconomy.comingSoon'));
+            return;
+        }
         if (!walletAddress) {
             setError('Please connect your wallet');
             return;
@@ -179,7 +187,7 @@ const IglooRequirementsPanel = ({
                 // Check if token gate is met (entry fee check comes after payment)
                 if (eligibilityCheck.tokenGateRequired && !eligibilityCheck.tokenGateMet) {
                     console.log('❌ Token gate not met');
-                    setError(formatTokenText(eligibilityCheck.message) || 'You do not meet the token requirement');
+                    setError(formatTokenText(eligibilityCheck.message, chainId) || 'You do not meet the token requirement');
                     setPaymentLoading(false);
                     return;
                 }
@@ -215,7 +223,7 @@ const IglooRequirementsPanel = ({
                 
                 if (!paymentResult.success) {
                     console.error('Payment failed:', paymentResult);
-                    setError(formatTokenText(paymentResult.message) || 'Payment failed. Please try again.');
+                    setError(formatTokenText(paymentResult.message, chainId) || 'Payment failed. Please try again.');
                     setPaymentLoading(false);
                     return;
                 }
@@ -297,7 +305,7 @@ const IglooRequirementsPanel = ({
                             onClose();
                         }
                     } else {
-                        setError(formatTokenText(msg.error || msg.message) || 'Payment failed');
+                        setError(formatTokenText(msg.error || msg.message, chainId) || 'Payment failed');
                     }
                 }
                 
@@ -536,8 +544,15 @@ const IglooRequirementsPanel = ({
                 {/* Footer with Action Buttons */}
                 <div className="px-6 py-4 bg-slate-900/90 border-t border-slate-700/50 space-y-3">
                     
+                    {onChainIglooBlocked && (
+                        <ChainComingSoonPanel
+                            title={t('chainEconomy.iglooTitle').replace(/\{token\}/g, platformToken)}
+                            className="mb-2"
+                        />
+                    )}
+
                     {/* Main Action Button */}
-                    {walletAddress && statusChecked && (
+                    {walletAddress && statusChecked && !onChainIglooBlocked && (
                         <>
                             {allRequirementsMet ? (
                                 <button
@@ -574,6 +589,16 @@ const IglooRequirementsPanel = ({
                                 </div>
                             ) : null}
                         </>
+                    )}
+                    
+                    {walletAddress && statusChecked && onChainIglooBlocked && (
+                        <button
+                            type="button"
+                            disabled
+                            className="w-full py-3.5 rounded-xl font-bold text-base bg-slate-700/50 text-slate-400 cursor-not-allowed border border-slate-600"
+                        >
+                            {t('chainEconomy.comingSoon')}
+                        </button>
                     )}
                     
                     {/* Connect Wallet Warning */}

@@ -8,6 +8,8 @@ import { useMultiplayer } from '../multiplayer';
 import GameManager from '../engine/GameManager';
 import { sendSPLToken } from '../wallet/SolanaPayment';
 import { displayTokenSymbol, formatTokenText } from '../utils/tokenDisplay.js';
+import { isChainFeatureLive } from '../config/chainFeatures.js';
+import { SOLANA_CHAIN_ID } from '../config/evm.js';
 
 // Server custodial wallet for holding wager deposits
 // Uses dedicated custodial wallet, falls back to rent wallet for backwards compatibility
@@ -20,7 +22,7 @@ const PROFILE_PROXIMITY_DISTANCE = 8;
 const WAGER_BOT_ID = 'dev_bot_wager';
 
 export function ChallengeProvider({ children }) {
-    const { connected, playerId, playersDataRef, sendChat, updateUserCoins } = useMultiplayer();
+    const { connected, playerId, playersDataRef, sendChat, updateUserCoins, userData } = useMultiplayer();
     const wsRef = useRef(null);
     
     // Local player position tracking
@@ -596,7 +598,12 @@ export function ChallengeProvider({ children }) {
         const isPracticeBot = targetPlayerId === WAGER_BOT_ID;
         const safeWager = isPracticeBot ? 0 : wagerAmount;
         if (safeWager < 0) return;
+        const chainId = userData?.chainId || SOLANA_CHAIN_ID;
         const hasTokenWager = !isPracticeBot && tokenWager?.tokenAddress && tokenWager?.tokenAmount > 0;
+        if (hasTokenWager && !isChainFeatureLive(chainId, 'tokenWagers')) {
+            showNotification('Token wagers are coming soon on your network', 'error');
+            return;
+        }
         // Zero coin + zero token = casual PvP for guests; coin/token wagers validated on server
         
         const message = {
@@ -626,7 +633,7 @@ export function ChallengeProvider({ children }) {
             }
             
             setIsSigningWager(true);
-            showNotification(`Sending ${tokenWager.tokenAmount} ${displayTokenSymbol(tokenWager.tokenSymbol)} wager deposit...`, 'info');
+            showNotification(`Sending ${tokenWager.tokenAmount} ${displayTokenSymbol(tokenWager.tokenSymbol, chainId)} wager deposit...`, 'info');
             
             try {
                 console.log('💰 Sending wager deposit to custodial wallet...');
@@ -671,8 +678,14 @@ export function ChallengeProvider({ children }) {
     // If the challenge has a token wager, we need to sign our payment authorization first
     const acceptChallenge = useCallback(async (challengeId, challengeData = null) => {
         // Check if this challenge has a token wager
+        const chainId = userData?.chainId || SOLANA_CHAIN_ID;
         const hasTokenWager = challengeData?.wagerToken?.tokenAddress && 
                               (challengeData?.wagerToken?.tokenAmount > 0 || challengeData?.wagerToken?.amountRaw);
+        
+        if (hasTokenWager && !isChainFeatureLive(chainId, 'tokenWagers')) {
+            showNotification('Token wagers are coming soon on your network', 'error');
+            return;
+        }
         
         let wagerDepositTx = null;
         
@@ -688,7 +701,7 @@ export function ChallengeProvider({ children }) {
             const wagerToken = challengeData.wagerToken;
             
             setIsSigningWager(true);
-            showNotification(`Sending ${wagerToken.tokenAmount} ${displayTokenSymbol(wagerToken.tokenSymbol)} wager deposit...`, 'info');
+            showNotification(`Sending ${wagerToken.tokenAmount} ${displayTokenSymbol(wagerToken.tokenSymbol, chainId)} wager deposit...`, 'info');
             
             try {
                 console.log('💰 Sending wager deposit to custodial wallet (accepting)...');

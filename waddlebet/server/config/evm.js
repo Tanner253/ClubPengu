@@ -31,3 +31,7 @@ export function getDefaultEvmChainId() {
     if (override === '46630' || override === 'testnet') return 46630;
     return 4663;
 }
+
+/** $WADDLE ERC-20 contract on Robinhood Chain (Ethereum EVM). */
+export const WADDLE_ETH_CONTRACT =
+    process.env.WADDLE_TOKEN_ADDRESS || '0xcf83b446d4cf400b132538d7bb03e36bdbd3c8b8';

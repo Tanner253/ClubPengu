@@ -17,6 +17,7 @@ import {
   Cpu,
   Layers,
 } from "lucide-react";
+import { RobinhoodLogo } from "./RobinhoodLogo";
 
 // Changelog entry types
 type ChangeType = "feature" | "fix" | "improvement" | "content" | "mobile" | "backend" | "refactor" | "security" | "performance";
@@ -32,6 +33,8 @@ interface ChangelogVersion {
   title: string;
   description?: string;
   highlight?: boolean;
+  /** Show Robinhood feather mark on this release card (multichain / $WADDLE milestones). */
+  brand?: "robinhood";
   stats?: {
     filesChanged?: number;
     additions?: number;
@@ -80,6 +83,42 @@ const typeLabels: Record<ChangeType, string> = {
 // ==================== CHANGELOG DATA ====================
 // Comprehensive changelog from git history
 const CHANGELOG_DATA: ChangelogVersion[] = [
+  {
+    version: "1.4.0",
+    date: "July 23, 2026",
+    title: "Robinhood Chain · $WADDLE EVM Deployment",
+    description:
+      "Major multichain milestone — $WADDLE is live on Robinhood Chain. MetaMask players sign in, explore the full penguin world, and get a single-chain experience ($WADDLE only — no $CP bleed). Solana ($CP) unchanged and fully playable. Production deploy went smooth; Phase 1 EVM ships wallet auth, Diamond Flippers nametags, and Coming Soon gates while deeper on-chain rails roll out next.",
+    highlight: true,
+    brand: "robinhood",
+    stats: { filesChanged: 45, additions: 850, deletions: 200 },
+    changes: [
+      // ── Milestone & deployment ──
+      { type: "feature", text: "$WADDLE live on Robinhood Chain — contract address + Blockscout link on whitepaper, Penguin Maker, and in-game entry flow" },
+      { type: "feature", text: "MetaMask sign-in on Robinhood Chain — EVM players get their own account; same penguin world, chain-native labels after login" },
+      { type: "feature", text: "Single-chain UX after sign-in — Phantom sees $CP only; MetaMask sees $WADDLE only; both chains still shown pre-login for discovery" },
+      { type: "improvement", text: "Production deploy — game + EVM rail shipped together; both wallets conditionally render the world as intended" },
+
+      // ── What’s live on EVM (Phase 1) ──
+      { type: "feature", text: "EVM live today — MetaMask auth, full world play, gold economy, gold PvP wagers, Diamond Flippers nametags from $WADDLE wallet balance" },
+      { type: "improvement", text: "Coming Soon on EVM — daily bonus, pebbles, igloo rent/entry fees, and token wagers (UI clearly gated until those rails ship)" },
+      { type: "improvement", text: "Gold wagers stay live on Robinhood Chain; SPL/token wagers remain Solana-only for now" },
+      { type: "improvement", text: "Profile gifts — pebbles and SPL sends show “· soon” on EVM; gold gifts unchanged" },
+
+      // ── Labels & guides ──
+      { type: "improvement", text: "Igloo rental guides, door prompts, and owner settings show $CP or $WADDLE based on wallet — no more confusing gold/yellow rent labels" },
+      { type: "improvement", text: "Economy guide, entry modal, and HUD copy updated so each chain only surfaces its own platform token" },
+
+      // ── Under the hood (condensed) ──
+      { type: "backend", text: "Multichain token registry — one source of truth for $CP on Solana and $WADDLE on Robinhood EVM across client and server" },
+      { type: "backend", text: "Per-chain feature flags — Solana keeps full on-chain economy; EVM unlocks features in phases instead of half-working flows" },
+      { type: "backend", text: "Nametag tiers read the correct on-chain balance per wallet type (SPL vs ERC-20)" },
+
+      // ── Fixes shipped with the release ──
+      { type: "fix", text: "Daily bonus — clearer message when reward payouts fail (e.g. custodial wallet needs SOL for fees)" },
+      { type: "fix", text: "Profile game dropdown — restored after multichain HUD wiring" },
+    ],
+  },
   {
     version: "1.3.4",
     date: "June 18, 2026",
@@ -997,7 +1036,13 @@ function VersionCard({ version, isExpanded, onToggle }: { version: ChangelogVers
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      className={`glass-card rounded-xl overflow-hidden ${version.highlight ? "border-cyan-500/30 ring-1 ring-cyan-500/20" : ""}`}
+      className={`glass-card rounded-xl overflow-hidden ${
+        version.brand === "robinhood"
+          ? "border-violet-500/35 ring-1 ring-violet-500/25"
+          : version.highlight
+            ? "border-cyan-500/30 ring-1 ring-cyan-500/20"
+            : ""
+      }`}
     >
       {/* Header - Always visible */}
       <button
@@ -1008,6 +1053,12 @@ function VersionCard({ version, isExpanded, onToggle }: { version: ChangelogVers
         <div className="mt-1 text-slate-500">
           {isExpanded ? <ChevronDown className="w-5 h-5" /> : <ChevronRight className="w-5 h-5" />}
         </div>
+
+        {version.brand === "robinhood" && (
+          <div className="shrink-0 mt-0.5 hidden sm:block">
+            <RobinhoodLogo size={44} />
+          </div>
+        )}
         
         {/* Version info */}
         <div className="flex-1 min-w-0">
@@ -1015,13 +1066,24 @@ function VersionCard({ version, isExpanded, onToggle }: { version: ChangelogVers
             <span className="text-cyan-400 font-mono text-sm font-bold">v{version.version}</span>
             <span className="text-slate-600">•</span>
             <span className="text-slate-500 text-sm">{version.date}</span>
+            {version.brand === "robinhood" && (
+              <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-violet-500/15 border border-violet-400/35 text-violet-200 text-xs font-medium">
+                <RobinhoodLogo size={16} className="sm:hidden" />
+                <span>Robinhood · $WADDLE</span>
+              </span>
+            )}
             {version.highlight && (
               <span className="px-2 py-0.5 rounded-full bg-gradient-to-r from-yellow-500/20 to-orange-500/20 border border-yellow-500/30 text-yellow-400 text-xs font-medium">
                 ⭐ Major Release
               </span>
             )}
           </div>
-          <h3 className="text-lg sm:text-xl font-bold text-white mb-1">{version.title}</h3>
+          <h3 className="text-lg sm:text-xl font-bold text-white mb-1 flex flex-wrap items-center gap-2">
+            {version.brand === "robinhood" && (
+              <RobinhoodLogo size={28} className="sm:hidden shrink-0" />
+            )}
+            <span>{version.title}</span>
+          </h3>
           {version.description && (
             <p className="text-slate-400 text-sm mb-2">{version.description}</p>
           )}

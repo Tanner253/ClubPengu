@@ -6,6 +6,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { IGLOO_CONFIG, RENT_WALLET_ADDRESS, CPW3_TOKEN_ADDRESS } from '../config/solana.js';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext.jsx';
+import { useLanguage } from '../i18n';
+import { useChainEconomy } from '../hooks/useChainEconomy.js';
+import ChainComingSoonPanel from './ChainComingSoonPanel';
+import { getPlatformTokenSymbol } from '../config/tokens.js';
 import { payIglooRent } from '../wallet/SolanaPayment.js';
 
 const IglooRentalModal = ({ 
@@ -16,6 +20,9 @@ const IglooRentalModal = ({
     onRentSuccess
 }) => {
     const { send } = useMultiplayer();
+    const { t } = useLanguage();
+    const { chainId, canRentIgloo, platformToken } = useChainEconomy();
+    const platformTokenLabel = getPlatformTokenSymbol(chainId);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [canAfford, setCanAfford] = useState(null);
@@ -72,6 +79,7 @@ const IglooRentalModal = ({
     }, [isOpen, iglooData?.iglooId, send, onRentSuccess, onClose]);
     
     const handleRent = useCallback(async () => {
+        if (!canRentIgloo) return;
         if (!walletAddress) {
             setError('Please connect your wallet first');
             return;
@@ -220,13 +228,13 @@ const IglooRentalModal = ({
                                     <div className="flex justify-between">
                                         <span>Daily Rent:</span>
                                         <span className="text-yellow-400 font-mono">
-                                            {IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $CP
+                                            {IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} {platformTokenLabel}
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span>Minimum Balance Required:</span>
                                         <span className="text-yellow-400 font-mono">
-                                            {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} $CP
+                                            {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} {platformTokenLabel}
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
@@ -248,7 +256,7 @@ const IglooRentalModal = ({
                                 <ul className="text-sm text-slate-300 space-y-1">
                                     <li className="flex items-center gap-2">
                                         <span className="text-green-400">✓</span>
-                                        Hold {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} $CP (7 days rent)
+                                        Hold {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} {platformTokenLabel} (7 days rent)
                                     </li>
                                     <li className="flex items-center gap-2">
                                         <span className="text-green-400">✓</span>
@@ -274,7 +282,7 @@ const IglooRentalModal = ({
                                         </span>
                                     ) : (
                                         <span className="text-red-400 font-semibold">
-                                            ❌ Insufficient balance ({balanceInfo.current.toLocaleString()} / {balanceInfo.required.toLocaleString()} $CP)
+                                            ❌ Insufficient balance ({balanceInfo.current.toLocaleString()} / {balanceInfo.required.toLocaleString()} {platformTokenLabel})
                                         </span>
                                     )}
                                 </div>
@@ -287,12 +295,18 @@ const IglooRentalModal = ({
                                 </div>
                             )}
                             
+                            {!canRentIgloo && (
+                                <ChainComingSoonPanel
+                                    title={t('chainEconomy.iglooTitle').replace(/\{token\}/g, platformToken)}
+                                />
+                            )}
+
                             {/* Rent Button */}
                             <button
                                 onClick={handleRent}
-                                disabled={isLoading || !canAfford || !walletAddress}
+                                disabled={!canRentIgloo || isLoading || !canAfford || !walletAddress}
                                 className={`w-full py-3 rounded-lg font-bold text-lg transition-all duration-200 ${
-                                    isLoading || !canAfford || !walletAddress
+                                    !canRentIgloo || isLoading || !canAfford || !walletAddress
                                         ? 'bg-slate-600 text-slate-400 cursor-not-allowed'
                                         : 'bg-gradient-to-r from-cyan-500 to-purple-500 text-white hover:from-cyan-400 hover:to-purple-400 shadow-lg hover:shadow-cyan-500/25'
                                 }`}
@@ -305,10 +319,14 @@ const IglooRentalModal = ({
                                         </svg>
                                         Processing...
                                     </span>
+                                ) : !canRentIgloo ? (
+                                    t('chainEconomy.comingSoon')
                                 ) : !walletAddress ? (
                                     'Connect Wallet to Rent'
+                                ) : !canAfford ? (
+                                    `Need ${IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} ${platformTokenLabel}`
                                 ) : (
-                                    `🔑 Rent for ${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $CP/day`
+                                    `🔑 Rent for ${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} ${platformTokenLabel}/day`
                                 )}
                             </button>
                             

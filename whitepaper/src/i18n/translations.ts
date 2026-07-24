@@ -41,12 +41,12 @@ const en: Record<string, string> = {
   "pill.anySpl": "Any SPL Token",
   "pill.cults": "All Solana Cults",
   "pill.multichain": "Multichain",
-  "pill.robinhoodEvm": "Robinhood EVM · Building",
+  "pill.robinhoodEvm": "Robinhood EVM · Phase 1 Live",
   "hero.chains.title": "Built for Two Chains",
   "hero.chains.solana": "Solana",
   "hero.chains.solanaStatus": "Live",
   "hero.chains.robinhood": "Robinhood Chain",
-  "hero.chains.robinhoodStatus": "In Development",
+  "hero.chains.robinhoodStatus": "Phase 1 Live",
   "hero.chains.robinhoodSub": "Ethereum EVM",
   "hero.cta.multichain": "Multichain Vision",
   "hero.stat.peak": "Peak Concurrent",
@@ -55,7 +55,7 @@ const en: Record<string, string> = {
   "hero.stat.live": "Live",
   "hero.cta.explore": "Explore Whitepaper",
   "hero.cta.play": "Play Now",
-  "hero.token.chains": "Solana live today · Robinhood Chain (EVM) in development",
+  "hero.token.chains": "Solana ($CP) + Robinhood Chain ($WADDLE) — multichain live",
   "hero.scroll": "Scroll",
   "hero.videoBgTitle": "WaddleBet gameplay trailer (background)",
   "hero.scrollLift": "Scroll to reveal the trailer",
@@ -111,12 +111,12 @@ const en: Record<string, string> = {
   "multichain.titleHighlight": "Social Metaverse",
   "multichain.lead":
     "WaddleBet is expanding beyond Solana. We're building toward Robinhood Chain — Robinhood's Ethereum-compatible EVM layer — so millions of new users can waddle in without switching ecosystems.",
-  "multichain.robinhood.badge": "In Development",
+  "multichain.robinhood.badge": "Phase 1 Live",
   "multichain.robinhood.title": "Robinhood Chain · Ethereum EVM",
   "multichain.robinhood.p1":
     "Robinhood is bringing crypto to a mainstream audience of 25M+ users. Their EVM-compatible chain opens the door for WaddleBet to meet that audience where they already are — with the same social wagering, cosmetics economy, and penguin metaverse they love on Solana.",
   "multichain.robinhood.p2":
-    "We're actively preparing our Robinhood Chain deployment: contract architecture, token bridging strategy, and wallet integrations are underway. Full utility ships in phases — Solana remains live and fully playable today.",
+    "$WADDLE is deployed on Robinhood Chain. MetaMask sign-in, world play, gold economy, and Diamond Flippers nametags are live today. On-chain rails (daily bonus, pebbles, igloos, token wagers) ship in later phases — Solana ($CP) remains fully playable in parallel.",
   "multichain.robinhood.caLabel": "Contract Address",
   "multichain.why.title": "Why Multichain?",
   "multichain.why.p1":
@@ -130,12 +130,12 @@ const en: Record<string, string> = {
   "multichain.solana.desc":
     "Our production chain today. Instant settlement, SPL wagering, Phantom wallet auth, and the full WaddleBet experience — playable right now at waddle.bet.",
   "multichain.solana.status": "● Live on Mainnet",
-  "multichain.robinhood.status": "🔨 Under Development",
+  "multichain.robinhood.status": "● Live on Robinhood Chain",
 
   "contract.tokenLabel": "$CP",
   "contract.liveOn": "Live on",
   "contract.platform": "Solana",
-  "contract.ethLabel": "$CP (Robinhood Chain)",
+  "contract.ethLabel": "$WADDLE (Robinhood Chain)",
   "contract.ethPlatform": "Robinhood Chain",
   "contract.copyEthTitle": "Copy ETH contract address",
   "contract.cpw3OriginalLabel": "Original $CPW3 (Solana) — ~$700k ATH",
@@ -153,7 +153,7 @@ const en: Record<string, string> = {
   "chart.mintLabel": "SPL mint (contract address)",
   "chart.copyMint": "Copy mint address",
 
-  "economy.tokenSubtitle": "Multichain · Solana live · Robinhood EVM in development",
+  "economy.tokenSubtitle": "Multichain · Solana ($CP) + Robinhood EVM ($WADDLE) live — phased on-chain rollout",
 
   "footer.tagline": "Permissionless Social Wagering",
   "footer.builtOn": "Built on",
@@ -241,12 +241,12 @@ const zhTW: Record<string, string> = {
   "pill.anySpl": "任意 SPL 代幣",
   "pill.cults": "所有 Solana 社群",
   "pill.multichain": "多鏈",
-  "pill.robinhoodEvm": "Robinhood EVM · 開發中",
+  "pill.robinhoodEvm": "Robinhood EVM · 第一階段",
   "hero.chains.title": "雙鏈建置",
   "hero.chains.solana": "Solana",
   "hero.chains.solanaStatus": "已上線",
   "hero.chains.robinhood": "Robinhood Chain",
-  "hero.chains.robinhoodStatus": "開發中",
+  "hero.chains.robinhoodStatus": "第一階段已上線",
   "hero.chains.robinhoodSub": "以太坊 EVM",
   "hero.cta.multichain": "多鏈願景",
   "hero.stat.peak": "同時在線高峰",
@@ -255,7 +255,7 @@ const zhTW: Record<string, string> = {
   "hero.stat.live": "已上線",
   "hero.cta.explore": "閱讀白皮書",
   "hero.cta.play": "立即遊玩",
-  "hero.token.chains": "Solana 今日上線 · Robinhood Chain（EVM）開發中",
+  "hero.token.chains": "Solana（$CP）+ Robinhood Chain（$WADDLE）— 多鏈已上線",
   "hero.scroll": "向下捲動",
   "hero.videoBgTitle": "WaddleBet 實機預告（背景）",
   "hero.scrollLift": "捲動以揭開預告片",
@@ -309,12 +309,12 @@ const zhTW: Record<string, string> = {
   "multichain.titleHighlight": "社交元宇宙",
   "multichain.lead":
     "WaddleBet 正超越 Solana。我們正朝 Robinhood Chain——Robinhood 的以太坊相容 EVM 層——擴展，讓數百萬新用戶無需切換生態即可搖擺入場。",
-  "multichain.robinhood.badge": "開發中",
+  "multichain.robinhood.badge": "第一階段已上線",
   "multichain.robinhood.title": "Robinhood Chain · 以太坊 EVM",
   "multichain.robinhood.p1":
     "Robinhood 正將加密帶給 2500 萬以上的主流用戶。其 EVM 相容鏈讓 WaddleBet 能在用戶已熟悉的地方相遇——與 Solana 上相同的社交對賭、外觀經濟與企鵝元宇宙。",
   "multichain.robinhood.p2":
-    "我們正積極準備 Robinhood Chain 部署：合約架構、代幣橋接策略與錢包整合進行中。完整功能分階段上線——Solana 今日仍完全可玩。",
+    "$WADDLE 已部署於 Robinhood Chain。MetaMask 登入、世界遊玩、金幣經濟與 Diamond Flippers 名牌今日已上線。鏈上功能（每日獎勵、卵石、冰屋、代幣對賭）分階段推出——Solana（$CP）仍完全可玩。",
   "multichain.robinhood.caLabel": "合約地址",
   "multichain.why.title": "為何多鏈？",
   "multichain.why.p1":
@@ -328,12 +328,12 @@ const zhTW: Record<string, string> = {
   "multichain.solana.desc":
     "我們目前的生產鏈。即時結算、SPL 對賭、Phantom 錢包驗證與完整 WaddleBet 體驗——現在即可在 waddle.bet 遊玩。",
   "multichain.solana.status": "● 主網已上線",
-  "multichain.robinhood.status": "🔨 開發中",
+  "multichain.robinhood.status": "● Robinhood Chain 已上線",
 
   "contract.tokenLabel": "$CP",
   "contract.liveOn": "上線於",
   "contract.platform": "Solana",
-  "contract.ethLabel": "$CP（Robinhood Chain）",
+  "contract.ethLabel": "$WADDLE（Robinhood Chain）",
   "contract.ethPlatform": "Robinhood Chain",
   "contract.copyEthTitle": "複製 ETH 合約地址",
   "contract.cpw3OriginalLabel": "原始 $CPW3（Solana）— 約 70 萬美元 ATH",
@@ -351,7 +351,7 @@ const zhTW: Record<string, string> = {
   "chart.mintLabel": "SPL 鑄幣地址",
   "chart.copyMint": "複製鑄幣地址",
 
-  "economy.tokenSubtitle": "多鏈 · Solana 已上線 · Robinhood EVM 開發中",
+  "economy.tokenSubtitle": "多鏈 · Solana（$CP）+ Robinhood EVM（$WADDLE）已上線 — 鏈上功能分階段推出",
 
   "footer.tagline": "無需許可的社交博弈",
   "footer.builtOn": "建置於",

@@ -6,16 +6,18 @@
 import React, { useState, useEffect } from 'react';
 import { IGLOO_CONFIG } from '../config/solana.js';
 import { useLanguage } from '../i18n';
-
-const formatCp = (amount) => `${amount.toLocaleString()} $CP`;
+import { useChainEconomy } from '../hooks/useChainEconomy.js';
 
 const IglooRentalGuide = ({ 
     isOpen, 
     onClose
 }) => {
     const { t } = useLanguage();
+    const { platformToken, isEvm } = useChainEconomy();
     const [isMobile, setIsMobile] = useState(false);
     const [isPortrait, setIsPortrait] = useState(false);
+    
+    const formatPlatform = (amount) => `${amount.toLocaleString()} ${platformToken}`;
     
     useEffect(() => {
         const checkMobile = () => {
@@ -41,14 +43,14 @@ const IglooRentalGuide = ({
     const rentInfo = [
         { 
             label: 'Daily Rent', 
-            value: formatCp(DAILY_RENT_CPW3), 
-            color: 'text-yellow-400', 
+            value: formatPlatform(DAILY_RENT_CPW3), 
+            color: 'text-cyan-400', 
             icon: '💰',
-            detail: 'Paid in $CP each day you want to keep the igloo.'
+            detail: `Paid in ${platformToken} each day you want to keep the igloo.`
         },
         { 
             label: 'Min Balance', 
-            value: formatCp(MINIMUM_BALANCE_CPW3), 
+            value: formatPlatform(MINIMUM_BALANCE_CPW3), 
             color: 'text-red-400', 
             icon: '⚠️',
             detail: '7 days of rent held in your wallet to qualify for a new rental.'
@@ -70,10 +72,12 @@ const IglooRentalGuide = ({
     ];
     
     const rentSteps = [
-        'Connect your Solana wallet (must hold enough $CP)',
+        isEvm
+            ? `Connect MetaMask on Robinhood Chain (must hold enough ${platformToken})`
+            : `Connect Phantom on Solana (must hold enough ${platformToken})`,
         'Walk to a vacant igloo along the north row in town',
         'Press E at the door to open the rental panel',
-        'Pay the first day\'s rent — the igloo is yours for 24 hours',
+        `Pay the first day's rent in ${platformToken} — the igloo is yours for 24 hours`,
         'Open Igloo Settings inside to set your banner, access rules, and fees'
     ];
     
@@ -93,7 +97,7 @@ const IglooRentalGuide = ({
         { 
             emoji: '💵', 
             title: 'Entry Fees', 
-            desc: 'Charge visitors an SPL token fee to enter your igloo. Payments go on-chain to your wallet. Great for exclusive hangouts, alpha groups, or paid events.'
+            desc: `Charge visitors a ${platformToken} entry fee to enter your igloo. Payments go on-chain to your wallet. Great for exclusive hangouts, alpha groups, or paid events.`
         },
         { 
             emoji: '🔐', 
@@ -120,8 +124,8 @@ const IglooRentalGuide = ({
         },
         { 
             type: '💰 Entry Fee', 
-            desc: 'Visitors pay a one-time SPL token fee (set by you) before entering. You keep the revenue.',
-            color: 'text-yellow-400' 
+            desc: `Visitors pay a one-time ${platformToken} fee (set by you) before entering. You keep the revenue.`,
+            color: 'text-cyan-400' 
         },
         { 
             type: '🪙 Token Gated', 
@@ -189,11 +193,11 @@ const IglooRentalGuide = ({
                     <div className="mb-6">
                         <div className="flex items-center gap-2 mb-4">
                             <span className="text-2xl">💰</span>
-                            <h3 className="text-xl font-bold text-yellow-400">
+                            <h3 className="text-xl font-bold text-cyan-400">
                                 How to Rent
                             </h3>
                         </div>
-                        <div className="h-px bg-gradient-to-r from-transparent via-yellow-400/50 to-transparent mb-4" />
+                        <div className="h-px bg-gradient-to-r from-transparent via-cyan-400/50 to-transparent mb-4" />
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                             {rentInfo.map((info, idx) => (

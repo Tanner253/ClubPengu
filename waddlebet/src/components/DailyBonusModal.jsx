@@ -9,7 +9,10 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useMultiplayer } from '../multiplayer';
+import { useLanguage } from '../i18n';
 import StreakCalendar from './StreakCalendar';
+import ChainComingSoonPanel from './ChainComingSoonPanel';
+import { useChainEconomy } from '../hooks/useChainEconomy.js';
 import { formatTokenText } from '../utils/tokenDisplay.js';
 
 // Generate secure random nonce for replay protection
@@ -23,6 +26,8 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
     const menuRef = useRef(null);
     const claimInFlightRef = useRef(false);
     const { send, registerCallbacks, isAuthenticated } = useMultiplayer();
+    const { t } = useLanguage();
+    const { chainId, platformToken, canClaimDailyBonus } = useChainEconomy();
     
     // State
     const [status, setStatus] = useState(null);
@@ -78,12 +83,12 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
     
     // Fetch status when opened
     useEffect(() => {
-        if (isOpen && isAuthenticated) {
+        if (isOpen && isAuthenticated && canClaimDailyBonus) {
             setIsLoading(true);
             setClaimResult(null);
             send({ type: 'daily_bonus_status' });
         }
-    }, [isOpen, isAuthenticated, send]);
+    }, [isOpen, isAuthenticated, canClaimDailyBonus, send]);
     
     // Update session time every second (count up)
     useEffect(() => {
@@ -193,6 +198,11 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                             <div className="text-5xl mb-4">🔐</div>
                             <p className="text-white/60 text-sm">Connect your wallet to access daily bonuses</p>
                         </div>
+                    ) : !canClaimDailyBonus ? (
+                        <ChainComingSoonPanel
+                            title={t('chainEconomy.dailyBonusTitle').replace(/\{token\}/g, platformToken)}
+                            className="my-4"
+                        />
                     ) : isLoading ? (
                         <div className="text-center py-8">
                             <div className="text-4xl animate-bounce mb-4">⏳</div>
@@ -201,7 +211,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                     ) : status?.error ? (
                         <div className="text-center py-8">
                             <div className="text-4xl mb-4">⚠️</div>
-                            <p className="text-red-400 text-sm">{formatTokenText(status.message || status.error)}</p>
+                            <p className="text-red-400 text-sm">{formatTokenText(status.message || status.error, chainId)}</p>
                         </div>
                     ) : (
                         <>
@@ -221,7 +231,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                     <div className="text-xl sm:text-2xl font-bold tabular-nums">
                                         {(status?.rewardAmount || 0) > 0 && (
                                             <span className="text-cyan-300">
-                                                {(status.rewardAmount).toLocaleString()} $CP
+                                                {(status.rewardAmount).toLocaleString()} {platformToken}
                                             </span>
                                         )}
                                         {(status?.goldReward || 0) > 0 && (
@@ -232,8 +242,8 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                     </div>
                                     <p className="text-white/50 text-[10px] sm:text-xs mt-1">
                                         {(status?.rewardAmount || 0) > 0
-                                            ? "Today's reward after 60 min play"
-                                            : "Gold bonus day — no $CP payout"}
+                                            ? `Today's reward after 60 min play (${platformToken})`
+                                            : 'Gold bonus day — no token payout'}
                                     </p>
                                 </div>
                             </div>
@@ -333,7 +343,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                         <div className="text-xl font-bold text-green-300">
                                             {((status?.totalWaddleEarned || 0) / 1000).toFixed(0)}K
                                         </div>
-                                        <div className="text-white/40 text-xs">$CP Earned</div>
+                                        <div className="text-white/40 text-xs">{platformToken} Earned</div>
                                     </div>
                                 </div>
                             </div>
@@ -347,7 +357,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                             <span className="text-white/60 text-sm">Reward Pool</span>
                                         </div>
                                         <span className="text-purple-300 font-mono font-bold">
-                                            {status.custodialBalance?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '---'} $CP
+                                            {status.custodialBalance?.toLocaleString(undefined, { maximumFractionDigits: 0 }) || '---'} {platformToken}
                                         </span>
                                     </div>
                                 </div>
@@ -371,7 +381,7 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                                                 {claimResult.success ? 'Bonus Claimed!' : 'Claim Failed'}
                                             </div>
                                             <p className="text-white/60 text-sm mt-1">
-                                                {formatTokenText(claimResult.message)}
+                                                {formatTokenText(claimResult.message, chainId)}
                                             </p>
                                             {claimResult.txSignature && (
                                                 <a 
@@ -393,7 +403,15 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
                 
                 {/* Footer */}
                 <div className="p-4 border-t border-white/5">
-                    {isAuthenticated && status && !status.error ? (
+                    {isAuthenticated && !canClaimDailyBonus ? (
+                        <button
+                            type="button"
+                            disabled
+                            className="w-full py-3 rounded-2xl font-bold text-sm bg-white/10 text-white/40 cursor-not-allowed"
+                        >
+                            {t('chainEconomy.comingSoon')}
+                        </button>
+                    ) : isAuthenticated && status && !status.error ? (
                         <button
                             onClick={handleClaim}
                             disabled={!status.canClaim || isClaiming}

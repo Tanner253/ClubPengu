@@ -12,7 +12,22 @@ vi.mock('../config/solana.js', () => ({
         DAILY_RENT_CPW3: 10000,
         MINIMUM_BALANCE_CPW3: 70000,
         GRACE_PERIOD_HOURS: 12
-    }
+    },
+    CPW3_TOKEN_ADDRESS: 'CPw3TokenMint123',
+    RENT_WALLET_ADDRESS: 'RentWallet123'
+}));
+
+vi.mock('../hooks/useChainEconomy.js', () => ({
+    useChainEconomy: () => ({
+        chainId: 'solana',
+        isEvm: false,
+        isSolana: true,
+        isAuthenticated: true,
+        platformToken: '$CP',
+        canPayIglooEntryFee: true,
+        canRentIgloo: true,
+        isFeatureLive: () => true,
+    }),
 }));
 
 describe('IglooPortal', () => {

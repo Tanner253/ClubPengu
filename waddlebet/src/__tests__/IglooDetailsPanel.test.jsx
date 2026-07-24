@@ -15,6 +15,28 @@ vi.mock('../config/solana.js', () => ({
     }
 }));
 
+// Mock chain economy (defaults to Solana / $CP)
+vi.mock('../hooks/useChainEconomy.js', () => ({
+    useChainEconomy: () => ({
+        chainId: 'solana',
+        isEvm: false,
+        isSolana: true,
+        isAuthenticated: true,
+        platformToken: '$CP',
+        canPayIglooEntryFee: true,
+        canRentIgloo: true,
+        isFeatureLive: () => true,
+    }),
+}));
+
+// Mock MultiplayerContext for useChainEconomy fallback
+vi.mock('../multiplayer/MultiplayerContext.jsx', () => ({
+    useMultiplayer: () => ({
+        userData: { chainId: 'solana' },
+        isAuthenticated: true
+    })
+}));
+
 describe('IglooDetailsPanel', () => {
     const defaultProps = {
         isOpen: true,

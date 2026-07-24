@@ -54,8 +54,19 @@ export {
     ROBINHOOD_CHAIN_MAINNET,
     ROBINHOOD_CHAIN_TESTNET,
     SOLANA_CHAIN_ID,
+    WADDLE_ETH_CONTRACT,
     CP_ETH_CONTRACT,
     getActiveRobinhoodChain,
     getActiveEvmChainIdString,
+    getWaddleEthBlockExplorerUrl,
     getCpEthBlockExplorerUrl,
 } from './evm.js';
+
+export {
+    SOLANA_PLATFORM_TOKEN,
+    EVM_PLATFORM_TOKEN,
+    isEvmChainId,
+    getPlatformToken,
+    getPlatformTokenSymbol,
+    getPlatformTokenAddress,
+} from './tokens.js';

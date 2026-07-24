@@ -1,16 +1,18 @@
 /**
- * Server-authoritative $CP balance → Diamond Flippers nametag tier.
- * Cached to limit Solana RPC calls.
+ * Server-authoritative platform token balance → Diamond Flippers nametag tier.
+ * Solana: $CP SPL · Robinhood EVM: $WADDLE ERC-20
  */
 
 import { getTierFromBalance } from '../../src/config/whaleNametagTiers.js';
+import { getPlatformToken, isEvmChainId } from '../config/tokens.js';
 import solanaPaymentService from './SolanaPaymentService.js';
+import evmPaymentService from './EvmPaymentService.js';
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const balanceCache = new Map();
 
-function getCpTokenMint() {
-    return process.env.CPW3_TOKEN_ADDRESS || '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump';
+function cacheKey(walletAddress, chainId) {
+    return `${chainId || 'solana'}:${walletAddress.toLowerCase()}`;
 }
 
 class NametagTierService {
@@ -22,7 +24,10 @@ class NametagTierService {
         }
 
         const wallet = player.walletAddress;
-        const cached = balanceCache.get(wallet);
+        const chainId = player.chainId || 'solana';
+        const key = cacheKey(wallet, chainId);
+        const cached = balanceCache.get(key);
+
         if (!force && cached && Date.now() - cached.at < CACHE_TTL_MS) {
             player.cpBalance = cached.balance;
             player.cpNametagTier = cached.tier;
@@ -31,9 +36,14 @@ class NametagTierService {
 
         let balance = 0;
         try {
-            balance = await solanaPaymentService.getTokenBalance(wallet, getCpTokenMint());
+            const token = getPlatformToken(chainId);
+            if (isEvmChainId(chainId)) {
+                balance = await evmPaymentService.getTokenBalance(wallet, token.address, chainId);
+            } else {
+                balance = await solanaPaymentService.getTokenBalance(wallet, token.address);
+            }
         } catch (err) {
-            console.warn(`💎 Nametag tier balance check failed for ${wallet.slice(0, 8)}:`, err.message);
+            console.warn(`💎 Nametag tier balance check failed for ${wallet.slice(0, 8)} (${chainId}):`, err.message);
             if (cached) {
                 player.cpBalance = cached.balance;
                 player.cpNametagTier = cached.tier;
@@ -43,14 +53,14 @@ class NametagTierService {
 
         const tier = getTierFromBalance(balance);
         const entry = { balance, tier, at: Date.now() };
-        balanceCache.set(wallet, entry);
+        balanceCache.set(key, entry);
         player.cpBalance = balance;
         player.cpNametagTier = tier;
         return entry;
     }
 
-    clearCache(walletAddress) {
-        if (walletAddress) balanceCache.delete(walletAddress);
+    clearCache(walletAddress, chainId = 'solana') {
+        if (walletAddress) balanceCache.delete(cacheKey(walletAddress, chainId));
     }
 }
 

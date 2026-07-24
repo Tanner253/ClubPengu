@@ -3,12 +3,14 @@
  * Manage access control, entry fees, token gates, and banner customization
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { IGLOO_BANNER_STYLES } from '../config/roomConfig.js';
 import { useIgloo } from '../igloo/IglooContext.jsx';
 import { payIglooRent } from '../wallet/SolanaPayment.js';
 import { RENT_WALLET_ADDRESS, CPW3_TOKEN_ADDRESS, IGLOO_CONFIG } from '../config/solana.js';
 import { displayTokenSymbol } from '../utils/tokenDisplay.js';
+import { useChainEconomy } from '../hooks/useChainEconomy.js';
+import { getPlatformTokenAddress } from '../config/tokens.js';
 
 // Predefined gradient presets
 const GRADIENT_PRESETS = [
@@ -38,13 +40,8 @@ const BANNER_FONTS = [
     { name: 'Mono', value: "'JetBrains Mono', 'Courier New', monospace" }
 ];
 
-// Tokens for Token Gate (community/meme tokens that make sense for holder gating)
-const TOKEN_GATE_TOKENS = [
-    { 
-        symbol: '$CP', 
-        name: 'WaddleBet',
-        address: '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump'
-    },
+// Community tokens for Token Gate (platform token added dynamically per chain)
+const TOKEN_GATE_COMMUNITY_TOKENS = [
     { 
         symbol: 'BONK', 
         name: 'Bonk',
@@ -57,13 +54,8 @@ const TOKEN_GATE_TOKENS = [
     }
 ];
 
-// Tokens for Entry Fee (includes stables and SOL for payments)
-const ENTRY_FEE_TOKENS = [
-    { 
-        symbol: '$CP', 
-        name: 'WaddleBet',
-        address: '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump'
-    },
+// Community tokens for Entry Fee (platform token added dynamically per chain)
+const ENTRY_FEE_COMMUNITY_TOKENS = [
     { 
         symbol: 'BONK', 
         name: 'Bonk',
@@ -89,7 +81,7 @@ const ENTRY_FEE_TOKENS = [
 /**
  * TokenQuickSelect - Renders quick-fill buttons for tokens
  */
-const TokenQuickSelect = ({ tokens, onSelect, currentAddress }) => (
+const TokenQuickSelect = ({ tokens, onSelect, currentAddress, chainId }) => (
     <div className="flex flex-wrap gap-1 mb-2">
         {tokens.map((token) => (
             <button
@@ -103,7 +95,7 @@ const TokenQuickSelect = ({ tokens, onSelect, currentAddress }) => (
                 }`}
                 title={`${token.name}\n${token.address}`}
             >
-                {displayTokenSymbol(token.symbol)}
+                {displayTokenSymbol(token.symbol, chainId)}
             </button>
         ))}
     </div>
@@ -116,6 +108,23 @@ const IglooSettingsPanel = ({
     onSave
 }) => {
     const { updateSettings: sendSettings, payRent: sendPayRent, isLoading: contextLoading } = useIgloo();
+    const { chainId, platformToken } = useChainEconomy();
+    
+    const platformTokenEntry = useMemo(() => ({
+        symbol: platformToken,
+        name: 'WaddleBet',
+        address: getPlatformTokenAddress(chainId),
+    }), [platformToken, chainId]);
+    
+    const tokenGateTokens = useMemo(
+        () => [platformTokenEntry, ...TOKEN_GATE_COMMUNITY_TOKENS],
+        [platformTokenEntry]
+    );
+    
+    const entryFeeTokens = useMemo(
+        () => [platformTokenEntry, ...ENTRY_FEE_COMMUNITY_TOKENS],
+        [platformTokenEntry]
+    );
     
     const [settings, setSettings] = useState({
         iglooId: null, // Track which igloo these settings are for
@@ -261,7 +270,7 @@ const IglooSettingsPanel = ({
         try {
             console.log('💰 Starting rent payment...');
             console.log(`   Igloo: ${iglooData.iglooId}`);
-            console.log(`   Amount: ${IGLOO_CONFIG.DAILY_RENT_CPW3} $CP`);
+            console.log(`   Amount: ${IGLOO_CONFIG.DAILY_RENT_CPW3} ${platformToken}`);
             
             // Step 1: Send the Solana transaction
             const paymentResult = await payIglooRent(
@@ -376,7 +385,8 @@ const IglooSettingsPanel = ({
                                     <div>
                                         <label className="block text-xs text-slate-400 mb-1">Quick Select</label>
                                         <TokenQuickSelect 
-                                            tokens={TOKEN_GATE_TOKENS}
+                                            tokens={tokenGateTokens}
+                                            chainId={chainId}
                                             currentAddress={settings.tokenGate.tokenAddress}
                                             onSelect={(address, symbol) => setSettings({
                                                 ...settings,
@@ -445,7 +455,8 @@ const IglooSettingsPanel = ({
                                     <div>
                                         <label className="block text-xs text-slate-400 mb-1">Quick Select</label>
                                         <TokenQuickSelect 
-                                            tokens={ENTRY_FEE_TOKENS}
+                                            tokens={entryFeeTokens}
+                                            chainId={chainId}
                                             currentAddress={settings.entryFee.tokenAddress}
                                             onSelect={(address, symbol) => setSettings({
                                                 ...settings,
@@ -913,8 +924,8 @@ const IglooSettingsPanel = ({
                                 
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-400">Total Rent Paid:</span>
-                                    <span className="text-yellow-400 font-mono">
-                                        {iglooData?.stats?.totalRentPaid?.toLocaleString() || 0} $CP
+                                    <span className="text-cyan-400 font-mono">
+                                        {iglooData?.stats?.totalRentPaid?.toLocaleString() || 0} {platformToken}
                                     </span>
                                 </div>
                                 
@@ -928,7 +939,7 @@ const IglooSettingsPanel = ({
                                 <div className="flex justify-between text-sm">
                                     <span className="text-slate-400">Entry Fees Collected:</span>
                                     <span className="text-green-400 font-mono">
-                                        {iglooData?.stats?.totalEntryFeesCollected?.toLocaleString() || 0} {displayTokenSymbol(iglooData?.entryFee?.tokenSymbol) || 'tokens'}
+                                        {iglooData?.stats?.totalEntryFeesCollected?.toLocaleString() || 0} {displayTokenSymbol(iglooData?.entryFee?.tokenSymbol, chainId) || 'tokens'}
                                     </span>
                                 </div>
                             </div>
@@ -974,7 +985,7 @@ const IglooSettingsPanel = ({
                                             ? '⏳ Processing Payment...' 
                                             : rentPaymentSuccess 
                                                 ? '✅ Payment Sent!'
-                                                : `💰 Pay Rent (${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} $CP)`}
+                                                : `💰 Pay Rent (${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} ${platformToken})`}
                                     </button>
                                 </div>
                             )}

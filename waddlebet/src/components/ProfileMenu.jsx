@@ -7,7 +7,7 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { useChallenge } from '../challenge';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
-import { useDeviceDetection, useClickOutside, useEscapeKey } from '../hooks';
+import { useDeviceDetection, useClickOutside, useEscapeKey, useChainEconomy } from '../hooks';
 import { useLanguage } from '../i18n';
 import TippingPanel from './TippingPanel';
 import GiftPanel from './GiftPanel';
@@ -44,7 +44,7 @@ const ProfileMenu = () => {
     // Get user data from multiplayer context for server-authoritative coin balance
     const { userData, isAuthenticated } = useMultiplayer();
     const { t } = useLanguage();
-    
+    const { canSplGift, canUsePebblesRail } = useChainEconomy();
     const [showGameDropdown, setShowGameDropdown] = useState(false);
     const [showTipPanel, setShowTipPanel] = useState(false);
     const [showGiftDropdown, setShowGiftDropdown] = useState(false);
@@ -295,10 +295,12 @@ const ProfileMenu = () => {
                                 <span>🪙</span><span>Gold</span>
                             </button>
                             <button
-                                onClick={() => { setGiftType('pebbles'); setShowGiftPanel(true); setShowGiftDropdown(false); }}
-                                className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/10 text-white rounded-lg transition-colors"
+                                type="button"
+                                disabled={!canUsePebblesRail}
+                                onClick={() => { if (!canUsePebblesRail) return; setGiftType('pebbles'); setShowGiftPanel(true); setShowGiftDropdown(false); }}
+                                className={`w-full px-3 py-2.5 flex items-center gap-2 rounded-lg transition-colors ${canUsePebblesRail ? 'hover:bg-white/10 text-white' : 'text-white/35 cursor-not-allowed'}`}
                             >
-                                <span>🪨</span><span>Pebbles</span>
+                                <span>🪨</span><span>Pebbles{!canUsePebblesRail ? ' · soon' : ''}</span>
                             </button>
                             <button
                                 onClick={() => { setGiftType('item'); setShowGiftPanel(true); setShowGiftDropdown(false); }}
@@ -307,10 +309,12 @@ const ProfileMenu = () => {
                                 <span>🎒</span><span>Item</span>
                             </button>
                             <button
-                                onClick={() => { setGiftType('spl'); setShowGiftPanel(true); setShowGiftDropdown(false); }}
-                                className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/10 text-white rounded-lg transition-colors"
+                                type="button"
+                                disabled={!canSplGift}
+                                onClick={() => { if (!canSplGift) return; setGiftType('spl'); setShowGiftPanel(true); setShowGiftDropdown(false); }}
+                                className={`w-full px-3 py-2.5 flex items-center gap-2 rounded-lg transition-colors ${canSplGift ? 'hover:bg-white/10 text-white' : 'text-white/35 cursor-not-allowed'}`}
                             >
-                                <span>🪙</span><span>SPL Token</span>
+                                <span>🪙</span><span>SPL Token{!canSplGift ? ' · soon' : ''}</span>
                             </button>
                         </div>
                     </div>
@@ -513,11 +517,13 @@ const ProfileMenu = () => {
                                             <span className="flex-1 text-left text-sm font-medium">Send Gold</span>
                                         </button>
                                         <button
-                                            onClick={() => { setGiftType('pebbles'); setShowGiftPanel(true); setShowGiftDropdown(false); }}
-                                            className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/10 active:bg-white/20 text-white rounded-lg my-0.5 transition-colors"
+                                            type="button"
+                                            disabled={!canUsePebblesRail}
+                                            onClick={() => { if (!canUsePebblesRail) return; setGiftType('pebbles'); setShowGiftPanel(true); setShowGiftDropdown(false); }}
+                                            className={`w-full px-3 py-2.5 flex items-center gap-2 rounded-lg my-0.5 transition-colors ${canUsePebblesRail ? 'hover:bg-white/10 active:bg-white/20 text-white' : 'text-white/35 cursor-not-allowed'}`}
                                         >
                                             <span className="text-lg">🪨</span>
-                                            <span className="flex-1 text-left text-sm font-medium">Send Pebbles</span>
+                                            <span className="flex-1 text-left text-sm font-medium">Send Pebbles{!canUsePebblesRail ? ' · soon' : ''}</span>
                                         </button>
                                         <button
                                             onClick={() => { setGiftType('item'); setShowGiftPanel(true); setShowGiftDropdown(false); }}
@@ -527,11 +533,13 @@ const ProfileMenu = () => {
                                             <span className="flex-1 text-left text-sm font-medium">Send Item</span>
                                         </button>
                                         <button
-                                            onClick={() => { setGiftType('spl'); setShowGiftPanel(true); setShowGiftDropdown(false); }}
-                                            className="w-full px-3 py-2.5 flex items-center gap-2 hover:bg-white/10 active:bg-white/20 text-white rounded-lg my-0.5 transition-colors"
+                                            type="button"
+                                            disabled={!canSplGift}
+                                            onClick={() => { if (!canSplGift) return; setGiftType('spl'); setShowGiftPanel(true); setShowGiftDropdown(false); }}
+                                            className={`w-full px-3 py-2.5 flex items-center gap-2 rounded-lg my-0.5 transition-colors ${canSplGift ? 'hover:bg-white/10 active:bg-white/20 text-white' : 'text-white/35 cursor-not-allowed'}`}
                                         >
                                             <span className="text-lg">🪙</span>
-                                            <span className="flex-1 text-left text-sm font-medium">Send SPL Token</span>
+                                            <span className="flex-1 text-left text-sm font-medium">Send SPL Token{!canSplGift ? ' · soon' : ''}</span>
                                         </button>
                                     </div>
                                 </div>

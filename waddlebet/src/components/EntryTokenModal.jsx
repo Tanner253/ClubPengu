@@ -6,12 +6,12 @@ import React, { useRef, useState } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useLanguage } from '../i18n';
 import { CPW3_TOKEN_ADDRESS } from '../config/solana';
-import { CP_ETH_CONTRACT, getCpEthBlockExplorerUrl } from '../config/evm';
+import { WADDLE_ETH_CONTRACT, getWaddleEthBlockExplorerUrl } from '../config/evm';
 
 export const ENTRY_TOKEN_MODAL_STORAGE_KEY = 'waddlebet_entry_token_modal_hidden';
 
 const DEXSCREENER_URL = `https://dexscreener.com/solana/${CPW3_TOKEN_ADDRESS}`;
-const ETH_BLOCK_EXPLORER_URL = getCpEthBlockExplorerUrl();
+const ETH_BLOCK_EXPLORER_URL = getWaddleEthBlockExplorerUrl();
 
 const EntryTokenModal = ({ isOpen, onClose }) => {
     const modalRef = useRef(null);
@@ -35,7 +35,7 @@ const EntryTokenModal = ({ isOpen, onClose }) => {
 
     const handleCopyEthCa = async () => {
         try {
-            await navigator.clipboard.writeText(CP_ETH_CONTRACT);
+            await navigator.clipboard.writeText(WADDLE_ETH_CONTRACT);
             setCopiedEth(true);
             setTimeout(() => setCopiedEth(false), 2000);
         } catch {
@@ -141,7 +141,7 @@ const EntryTokenModal = ({ isOpen, onClose }) => {
                         </label>
                         <div className="flex gap-2">
                             <code className="flex-1 min-w-0 text-[11px] sm:text-xs text-slate-100 bg-black/40 border border-white/10 rounded-lg px-3 py-2.5 font-mono break-all leading-snug">
-                                {CP_ETH_CONTRACT}
+                                {WADDLE_ETH_CONTRACT}
                             </code>
                             <button
                                 type="button"

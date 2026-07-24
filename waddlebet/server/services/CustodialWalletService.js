@@ -759,6 +759,14 @@ class CustodialWalletService {
     async _sendPayoutTransaction(recipientWallet, tokenAddress, amount, memo) {
         let signature = null;
         try {
+            // SPL transfers + optional ATA creation need SOL for fees/rent
+            const solBalance = await this.connection.getBalance(_keypair.publicKey);
+            const minSolLamports = 10_000; // ~0.00001 SOL — covers tx fee + ATA rent buffer
+            if (solBalance < minSolLamports) {
+                console.error(`🚨 Custodial wallet SOL too low for payout (${(solBalance / 1e9).toFixed(6)} SOL)`);
+                return { success: false, error: 'INSUFFICIENT_SOL_FOR_FEES' };
+            }
+
             const recipientPubkey = new PublicKey(recipientWallet);
             const mintPubkey = new PublicKey(tokenAddress);
 
@@ -870,7 +878,12 @@ class CustodialWalletService {
                 };
             }
             
-            if (error.message?.includes('insufficient funds')) {
+            const errMsg = (error.message || '').toLowerCase();
+            if (
+                errMsg.includes('insufficient funds') ||
+                errMsg.includes('attempt to debit') ||
+                errMsg.includes('no record of a prior credit')
+            ) {
                 return { success: false, error: 'INSUFFICIENT_SOL_FOR_FEES' };
             }
             

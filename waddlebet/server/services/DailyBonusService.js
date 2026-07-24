@@ -771,11 +771,17 @@ class DailyBonusService {
                 );
                 
                 _usedNonces.delete(clientNonce);
+
+                const payoutErrors = {
+                    INSUFFICIENT_BALANCE: 'Reward pool is temporarily low. Please try again later.',
+                    INSUFFICIENT_SOL_FOR_FEES: 'Reward payouts are temporarily unavailable (custodial wallet needs SOL for fees).',
+                    TRANSACTION_FAILED: 'Token transfer failed. Please try again.',
+                };
                 
                 return {
                     success: false,
-                    error: 'TRANSACTION_FAILED',
-                    message: 'Token transfer failed. Please try again.'
+                    error: txResult.error || 'TRANSACTION_FAILED',
+                    message: payoutErrors[txResult.error] || payoutErrors.TRANSACTION_FAILED
                 };
             }
             

@@ -11,6 +11,9 @@ import { useChallenge } from '../challenge';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
 import { useDeviceDetection, useEscapeKey } from '../hooks';
 import WagerTokenSelector from './WagerTokenSelector';
+import ChainComingSoonPanel from './ChainComingSoonPanel';
+import { useLanguage } from '../i18n';
+import { useChainEconomy } from '../hooks/useChainEconomy.js';
 import { MAX_WAGER_GOLD, clampWagerGold } from '../config/goldEconomy';
 
 const WagerModal = () => {
@@ -24,6 +27,8 @@ const WagerModal = () => {
     
     // Get user data from multiplayer context for server-authoritative coin balance
     const { userData, isAuthenticated, walletAddress } = useMultiplayer();
+    const { t } = useLanguage();
+    const { chainId, canTokenWager, platformToken } = useChainEconomy();
     
     const [wagerAmount, setWagerAmount] = useState('');
     const [error, setError] = useState('');
@@ -173,7 +178,7 @@ const WagerModal = () => {
         e.stopPropagation();
         
         const amount = clampWagerGold(parseInt(wagerAmount, 10) || 0);
-        const hasTokenWager = tokenWager.tokenAddress && tokenWager.tokenAmount > 0;
+        const hasTokenWager = canTokenWager && tokenWager.tokenAddress && tokenWager.tokenAmount > 0;
         
         // Allow free play for monopoly in dev mode
         if (allowFreePlay && amount === 0 && !hasTokenWager) {
@@ -317,11 +322,19 @@ const WagerModal = () => {
                                 {/* SPL Token Wager (x402) - Optional enhancement */}
                                 {isAuthenticated && walletAddress && (
                                     <div className="mb-2">
-                                        <WagerTokenSelector
-                                            selectedToken={tokenWager}
-                                            onTokenSelect={handleTokenWagerChange}
-                                            walletAddress={walletAddress}
-                                        />
+                                        {canTokenWager ? (
+                                            <WagerTokenSelector
+                                                selectedToken={tokenWager}
+                                                onTokenSelect={handleTokenWagerChange}
+                                                walletAddress={walletAddress}
+                                            />
+                                        ) : (
+                                            <ChainComingSoonPanel
+                                                title={t('chainEconomy.wagerTitle')}
+                                                description={t('chainEconomy.wagerHint').replace(/\{token\}/g, platformToken)}
+                                                showTokenNote={false}
+                                            />
+                                        )}
                                     </div>
                                 )}
                                 
@@ -457,11 +470,19 @@ const WagerModal = () => {
                             {/* SPL Token Wager (x402) - Optional enhancement */}
                             {isAuthenticated && walletAddress && (
                                 <div className="mb-3">
-                                    <WagerTokenSelector
-                                        selectedToken={tokenWager}
-                                        onTokenSelect={handleTokenWagerChange}
-                                        walletAddress={walletAddress}
-                                    />
+                                    {canTokenWager ? (
+                                        <WagerTokenSelector
+                                            selectedToken={tokenWager}
+                                            onTokenSelect={handleTokenWagerChange}
+                                            walletAddress={walletAddress}
+                                        />
+                                    ) : (
+                                        <ChainComingSoonPanel
+                                            title={t('chainEconomy.wagerTitle')}
+                                            description={t('chainEconomy.wagerHint').replace(/\{token\}/g, platformToken)}
+                                            showTokenNote={false}
+                                        />
+                                    )}
                                 </div>
                             )}
                             

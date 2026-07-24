@@ -1,25 +1,69 @@
 /**
- * Display-only token symbol mapping.
- * Maps legacy WADDLE/CPw3 identifiers to $CP for all user-facing UI.
+ * Chain-aware token symbol display.
+ * Solana platform token: $CP · Robinhood EVM platform token: $WADDLE
  */
 
-const LEGACY_CP_SYMBOLS = new Set(['$WADDLE', 'WADDLE', '$CPw3', 'CPw3', '$CP']);
+import {
+    getPlatformTokenSymbol,
+    isEvmChainId,
+} from '../config/tokens.js';
 
-export function displayTokenSymbol(symbol) {
+const LEGACY_SOLANA_SYMBOLS = new Set(['$CPw3', 'CPw3', '$CP', 'CP']);
+const LEGACY_EVM_SYMBOLS = new Set(['$WADDLE', 'WADDLE']);
+const PLATFORM_SYMBOLS = new Set([...LEGACY_SOLANA_SYMBOLS, ...LEGACY_EVM_SYMBOLS]);
+
+export function isPlatformTokenSymbol(symbol) {
+    return PLATFORM_SYMBOLS.has(String(symbol));
+}
+
+export function displayTokenSymbol(symbol, chainId) {
     if (symbol == null || symbol === '') return symbol;
     const s = String(symbol);
-    if (LEGACY_CP_SYMBOLS.has(s)) {
+
+    if (s === '$CPw3' || s === 'CPw3') {
+        return getPlatformTokenSymbol(chainId);
+    }
+
+    if (isPlatformTokenSymbol(s)) {
+        if (chainId) {
+            return getPlatformTokenSymbol(chainId);
+        }
+        if (LEGACY_EVM_SYMBOLS.has(s)) {
+            return s.startsWith('$') ? '$WADDLE' : 'WADDLE';
+        }
         return s.startsWith('$') ? '$CP' : 'CP';
     }
+
     return s;
 }
 
-/** Replace legacy token tickers in free-form server/UI strings */
-export function formatTokenText(text) {
+/** Replace legacy/platform tickers in free-form strings for the active chain. */
+export function formatTokenText(text, chainId) {
     if (text == null || text === '') return text;
-    return String(text)
-        .replace(/\$WADDLE/g, '$CP')
+
+    let result = String(text);
+    const platform = getPlatformTokenSymbol(chainId);
+    const bare = platform.replace('$', '');
+
+    if (chainId && isEvmChainId(chainId)) {
+        result = result
+            .replace(/\$CPw3/g, platform)
+            .replace(/\bCPw3\b/g, bare)
+            .replace(/\$CP\b/g, platform)
+            .replace(/\bCP\b/g, bare);
+        return result;
+    }
+
+    if (chainId) {
+        result = result
+            .replace(/\$CPw3/g, '$CP')
+            .replace(/\bCPw3\b/g, 'CP')
+            .replace(/\$WADDLE/g, '$CP')
+            .replace(/\bWADDLE\b/g, 'CP');
+        return result;
+    }
+
+    return result
         .replace(/\$CPw3/g, '$CP')
-        .replace(/\bWADDLE\b/g, 'CP')
         .replace(/\bCPw3\b/g, 'CP');
 }

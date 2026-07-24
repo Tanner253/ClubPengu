@@ -18,6 +18,26 @@ vi.mock('../wallet/SolanaPayment.js', () => ({
     payIglooEntryFee: vi.fn().mockResolvedValue({ success: true, signature: 'mockSig123' })
 }));
 
+vi.mock('../hooks/useChainEconomy.js', () => ({
+    useChainEconomy: () => ({
+        chainId: 'solana',
+        isEvm: false,
+        isSolana: true,
+        isAuthenticated: true,
+        platformToken: '$CP',
+        canPayIglooEntryFee: true,
+        canRentIgloo: true,
+        isFeatureLive: () => true,
+    }),
+}));
+
+vi.mock('../i18n', () => ({
+    useLanguage: () => ({
+        t: (key) => key,
+        language: 'en',
+    }),
+}));
+
 describe('IglooRequirementsPanel', () => {
     const defaultProps = {
         isOpen: true,
