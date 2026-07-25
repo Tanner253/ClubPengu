@@ -9,6 +9,7 @@ import GameManager from '../engine/GameManager';
 import { sendSPLToken } from '../wallet/SolanaPayment';
 import { displayTokenSymbol, formatTokenText } from '../utils/tokenDisplay.js';
 import { resolveMatchEndWinner } from './getMatchOutcome.js';
+import { isChainFeatureLive } from '../config/chainFeatures.js';
 import { SOLANA_CHAIN_ID } from '../config/evm.js';
 
 // Server custodial wallet for holding wager deposits

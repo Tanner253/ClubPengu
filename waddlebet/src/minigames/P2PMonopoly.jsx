@@ -9,7 +9,8 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { useChallenge, getMatchOutcome } from '../challenge';
+import { useChallenge } from '../challenge';
+import { getMatchOutcome } from '../challenge/getMatchOutcome.js';
 import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
