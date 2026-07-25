@@ -1,4 +1,4 @@
-/** In-game changelog — Settings → Changelog (maintained separately from whitepaper/src/data/changelogData.js) */
+/** Whitepaper changelog — /changelog section (maintained separately from waddlebet/src/data/changelogData.js) */
 export default [
   {
     version: "1.4.2",

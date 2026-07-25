@@ -80,7 +80,9 @@ const typeLabels: Record<ChangeType, string> = {
   performance: "Perf",
 };
 
-import CHANGELOG_DATA from "../../../waddlebet/src/data/changelogData.js";
+import CHANGELOG_DATA_RAW from "../data/changelogData.js";
+
+const CHANGELOG_DATA = CHANGELOG_DATA_RAW as ChangelogVersion[];
 
 // ==================== COMPONENTS ====================
 

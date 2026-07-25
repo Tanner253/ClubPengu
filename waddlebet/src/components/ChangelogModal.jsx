@@ -1,7 +1,7 @@
 /**
  * ChangelogModal - In-game development changelog
  * Accessible via Settings menu
- * 1:1 match with whitepaper changelog
+ * 1:1 content parity with whitepaper changelog (separate files, updated in parallel)
  */
 
 import React, { useRef, useState } from 'react';
