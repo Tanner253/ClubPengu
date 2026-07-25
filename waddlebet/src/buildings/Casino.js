@@ -1868,6 +1868,7 @@ class Casino extends BaseBuilding {
                 position: { x: worldPos.x, z: worldPos.z },
                 rotation: adjustedRotation,
                 seatHeight: secondFloorHeight + 1.8,  // 2nd floor + stool height
+                platformHeight: secondFloorHeight,
                 snapPoints: [{ x: 0, z: 0 }],
                 interactionRadius: 1.0,
                 dismountBack: true,
@@ -1885,6 +1886,7 @@ class Casino extends BaseBuilding {
                 position: { x: worldPos.x, z: worldPos.z },
                 rotation: adjustedRotation + Math.PI / 2,
                 seatHeight: secondFloorHeight + 1.2,
+                platformHeight: secondFloorHeight,
                 snapPoints: [
                     { x: -1.5, z: 0 },
                     { x: 0, z: 0 },

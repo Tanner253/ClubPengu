@@ -1,7 +1,13 @@
 /**
- * CasinoTVSystem - Renders $CP token info as a 3D mesh with REAL data from DexScreener API
+ * CasinoTVSystem - Renders $WADDLE token info as a 3D mesh with REAL data from DexScreener API
  * Positioned at the TV location in the casino
  */
+
+import { EVM_PLATFORM_TOKEN } from '../config/tokens.js';
+
+const WADDLE_TOKEN_ADDRESS = EVM_PLATFORM_TOKEN.address;
+const DEXSCREENER_TOKEN_URL = `https://api.dexscreener.com/latest/dex/tokens/${WADDLE_TOKEN_ADDRESS}`;
+const DEXSCREENER_PAGE_URL = `https://dexscreener.com/robinhood/${WADDLE_TOKEN_ADDRESS}`;
 
 // Cache for API data - conservative rate limiting
 let cachedTokenData = null;
@@ -32,7 +38,7 @@ export async function fetchTokenData() {
     fetchInProgress = true;
     
     try {
-        const response = await fetch('https://api.dexscreener.com/latest/dex/tokens/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump');
+        const response = await fetch(DEXSCREENER_TOKEN_URL);
         
         if (!response.ok) {
             throw new Error(`API returned ${response.status}`);
@@ -50,12 +56,15 @@ export async function fetchTokenData() {
                 volume24h: parseFloat(pair.volume?.h24) || 0,
                 liquidity: parseFloat(pair.liquidity?.usd) || 0,
                 marketCap: parseFloat(pair.marketCap) || parseFloat(pair.fdv) || 0,
-                symbol: pair.baseToken?.symbol || 'CP',
+                symbol: pair.baseToken?.symbol || EVM_PLATFORM_TOKEN.symbol,
                 name: pair.baseToken?.name || 'WaddleBet',
+                quoteSymbol: pair.quoteToken?.symbol || 'WETH',
+                contractAddress: pair.baseToken?.address || WADDLE_TOKEN_ADDRESS,
+                dexUrl: pair.url || DEXSCREENER_PAGE_URL,
                 lastUpdated: now
             };
             lastFetchTime = now;
-            console.log('📊 Casino TV: Updated $CP data - Price:', cachedTokenData.price);
+            console.log('📊 Casino TV: Updated $WADDLE data - Price:', cachedTokenData.price);
         }
     } catch (error) {
         console.warn('Casino TV: API fetch failed, using cached data');
@@ -102,11 +111,12 @@ function renderCasinoTVBanner(ctx, tokenData = null) {
     ctx.fill();
     
     // Title
-    const symbol = tokenData?.symbol || 'CP';
+    const symbol = tokenData?.symbol || EVM_PLATFORM_TOKEN.symbol;
+    const quote = tokenData?.quoteSymbol || 'WETH';
     ctx.fillStyle = '#00ffff';
     ctx.font = 'bold 22px Arial, sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText(`📺 $${symbol} / SOL`, 15, 32);
+    ctx.fillText(`📺 $${symbol} / ${quote}`, 15, 32);
     
     // Live indicator
     ctx.fillStyle = '#00ff88';
@@ -126,7 +136,7 @@ function renderCasinoTVBanner(ctx, tokenData = null) {
         ctx.fillStyle = '#00ffff';
         ctx.font = 'bold 18px Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Loading $CP data...', w / 2, h / 2);
+        ctx.fillText('Loading $WADDLE data...', w / 2, h / 2);
         return;
     }
     
@@ -256,10 +266,12 @@ function renderCasinoTVBanner(ctx, tokenData = null) {
     ctx.textAlign = 'right';
     ctx.fillText('1H', w - 15, h - 33);
     
-    // Data source
+    // Data source + truncated CA
     ctx.fillStyle = '#555555';
     ctx.font = '9px Arial, sans-serif';
-    ctx.fillText('via DexScreener API', w - 15, h - 12);
+    const ca = tokenData?.contractAddress || WADDLE_TOKEN_ADDRESS;
+    const caShort = `${ca.slice(0, 6)}…${ca.slice(-4)}`;
+    ctx.fillText(`DexScreener · ${caShort}`, w - 15, h - 12);
 }
 
 /**
@@ -308,8 +320,8 @@ export async function createCasinoTVSprite(THREE) {
     // Store banner data for zoom overlay
     mesh.userData.bannerData = {
         type: 'canvas',
-        title: '$CP Token Chart',
-        description: 'Real-time token price and market data from DexScreener',
+        title: '$WADDLE Token Chart',
+        description: `Live $WADDLE price on Robinhood Chain (${WADDLE_TOKEN_ADDRESS})`,
         canvas: canvas,
         renderFn: (ctx, w, h) => {
             const tokenData = cachedTokenData;
@@ -375,4 +387,3 @@ export default {
 
 // Named exports for direct imports
 export { renderCasinoTVBanner };
-

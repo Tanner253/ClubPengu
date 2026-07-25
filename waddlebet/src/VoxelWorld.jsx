@@ -3565,8 +3565,8 @@ const VoxelWorld = ({
                     }
                     
                     // Calculate dismount Y: stay at platform height if elevated, otherwise ground
-                    // If seat has platformHeight (rooftop benches), stay at that height
-                    const platformHeight = seatData.platformHeight || 0;
+                    const platformHeight = seatData.platformHeight
+                        ?? (seatData.elevated ? Math.max(0, (seatData.seatHeight || 0) - 1.8) : 0);
                     const dismountY = platformHeight > 0 ? platformHeight : 0;
                     posRef.current.y = dismountY;
                     velRef.current.y = 0; // Stop any vertical velocity
@@ -4602,6 +4602,7 @@ const VoxelWorld = ({
                                 seatHeight: nearFurniture.seatHeight,
                                 platformHeight: nearFurniture.platformHeight ?? 0,
                                 dismountBack: nearFurniture.dismountBack || false,
+                                elevated: nearFurniture.elevated || false,
                                 bidirectionalSit: nearFurniture.bidirectionalSit || false
                             }
                         }
@@ -11004,7 +11005,8 @@ const VoxelWorld = ({
                         benchRotation: benchRotation,
                         benchDepth: benchData.benchDepth || 0.8,
                         dismountBack: benchData.dismountBack || false, // For bar stools
-                        platformHeight: benchData.platformHeight || benchData.data?.platformHeight || 0 // For rooftop benches
+                        platformHeight: benchData.platformHeight ?? benchData.data?.platformHeight ?? 0,
+                        elevated: benchData.elevated || benchData.data?.elevated || false
                     };
                     setSeatedOnBench(seatData);
                     seatedRef.current = seatData;
@@ -13472,7 +13474,8 @@ const VoxelWorld = ({
                                     benchRotation: finalRotation,
                                     benchDepth: benchData.benchDepth || 0.8,
                                     dismountBack: benchData.dismountBack || false,
-                                    platformHeight: benchData.platformHeight || benchData.data?.platformHeight || 0
+                                    platformHeight: benchData.platformHeight ?? benchData.data?.platformHeight ?? 0,
+                                    elevated: benchData.elevated || benchData.data?.elevated || false
                                 };
                                 setSeatedOnBench(seatData);
                                 seatedRef.current = seatData;
