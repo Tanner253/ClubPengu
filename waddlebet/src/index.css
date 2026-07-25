@@ -748,16 +748,16 @@ input, textarea {
   animation: creator-whitepaper-icon-bob 2s ease-in-out infinite;
 }
 
-/* Penguin Maker — Robinhood EVM (subtle dark glass, official logo tile) */
+/* Penguin Maker — Robinhood / $WADDLE badge */
 .creator-robinhood-link {
-  background: rgba(18, 22, 28, 0.92);
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #e2e8f0;
+  background: rgba(6, 78, 59, 0.88);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #d1fae5;
 }
 
 .creator-robinhood-link:hover {
-  border-color: rgba(255, 255, 255, 0.22);
-  background: rgba(24, 28, 36, 0.95);
+  border-color: rgba(52, 211, 153, 0.55);
+  background: rgba(6, 95, 70, 0.92);
 }
 
 .creator-robinhood-icon img {
@@ -765,14 +765,14 @@ input, textarea {
 }
 
 .creator-robinhood-banner {
-  background: rgba(15, 18, 24, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(6, 78, 59, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.25);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
 }
 
 .creator-robinhood-banner:hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(20, 24, 32, 0.92);
+  border-color: rgba(52, 211, 153, 0.4);
+  background: rgba(6, 95, 70, 0.16);
 }
 
 /* Penguin Maker — purple glass scrollbars */

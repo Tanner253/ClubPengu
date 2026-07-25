@@ -63,14 +63,14 @@ const GameHUD = ({
     const isPortrait = compactHud;
 
     useEffect(() => {
-        if (isAuthenticated && !tutorialShownRef.current && shouldShowTutorial()) {
+        if (!tutorialShownRef.current && shouldShowTutorial()) {
             const timer = setTimeout(() => {
                 setShowTutorial(true);
                 tutorialShownRef.current = true;
             }, 1500);
             return () => clearTimeout(timer);
         }
-    }, [isAuthenticated]);
+    }, []);
 
     useEffect(() => {
         const handleOpenTutorial = () => {

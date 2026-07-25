@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { useChallenge } from '../challenge';
+import { useChallenge, getMatchOutcome } from '../challenge';
 import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
@@ -803,7 +803,7 @@ const P2PUno = ({ onMatchEnd }) => {
     const containerRef = useRef(null);
     const engineRef = useRef(null);
     const lastAnimatedActionRef = useRef(null); // Track last animated discard to prevent replays
-    const { activeMatch, matchState, playCard, forfeitMatch, clearMatch } = useChallenge();
+    const { activeMatch, matchState, matchResult, playCard, forfeitMatch, clearMatch } = useChallenge();
     const { connected, playerId, registerChatBubbleCallback, setMobileChatOpen } = useMultiplayer();
     
     const [showColorPicker, setShowColorPicker] = useState(false);
@@ -969,11 +969,11 @@ const P2PUno = ({ onMatchEnd }) => {
     const currentTurnName = matchState.currentTurn === 'player1' 
         ? activeMatch.player1.name : activeMatch.player2.name;
     const isComplete = matchState.phase === 'complete';
-    const didWin = matchState.winner === (isPlayer1 ? 'player1' : 'player2');
+    const localPlayerId = myPlayer.id;
+    const { didWin } = getMatchOutcome({ matchState, matchResult, localPlayerId });
     const totalPot = activeMatch.wagerAmount * 2;
     
-    // Token wager info from match result OR active match
-    const matchResult = activeMatch.matchResult;
+    // Token wager info from match result
     const tokenSettlement = matchResult?.tokenSettlement;
     const wagerToken = matchResult?.wagerToken || activeMatch?.wagerToken;
     const tokenWon = didWin && wagerToken ? (tokenSettlement?.amount || wagerToken.tokenAmount * 2) : 0;

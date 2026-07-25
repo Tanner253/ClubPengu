@@ -13,7 +13,7 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { useChallenge } from '../challenge';
+import { useChallenge, getMatchOutcome } from '../challenge';
 import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
@@ -603,7 +603,7 @@ const P2PBlackjack = ({ onMatchEnd }) => {
     const renderedCardsRef = useRef({ dealer: [], player1: [], player2: [] });
     const lastPhaseRef = useRef(null);
     
-    const { activeMatch, matchState, playCard, forfeitMatch, clearMatch } = useChallenge();
+    const { activeMatch, matchState, matchResult, playCard, forfeitMatch, clearMatch } = useChallenge();
     const { connected, playerId, setMobileChatOpen } = useMultiplayer();
     
     const [showDisconnected, setShowDisconnected] = useState(false);
@@ -838,12 +838,10 @@ const P2PBlackjack = ({ onMatchEnd }) => {
     const isComplete = matchState.phase === 'complete';
     const totalPot = activeMatch.wagerAmount * 2;
     
-    // Determine P2P winner
-    const didWin = matchState.winner === (isPlayer1 ? 'player1' : 'player2');
-    const isDraw = matchState.winner === 'draw';
+    const localPlayerId = myPlayer.id;
+    const { isDraw, didWin } = getMatchOutcome({ matchState, matchResult, localPlayerId });
     
     // Token wager info
-    const matchResult = activeMatch.matchResult;
     const tokenSettlement = matchResult?.tokenSettlement;
     const wagerToken = matchResult?.wagerToken || activeMatch?.wagerToken;
     const tokenWon = didWin && wagerToken ? (tokenSettlement?.amount || wagerToken.tokenAmount * 2) : 0;

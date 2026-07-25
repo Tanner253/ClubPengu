@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useChallenge } from '../challenge';
+import { useChallenge, getMatchOutcome } from '../challenge';
 import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 // Helper to generate Solscan link
@@ -15,6 +15,7 @@ const P2PCardJitsu = ({ onMatchEnd }) => {
     const {
         activeMatch,
         matchState,
+        matchResult,
         playCard,
         forfeitMatch,
         clearMatch,
@@ -86,12 +87,12 @@ const P2PCardJitsu = ({ onMatchEnd }) => {
     const opponentWins = isPlayer1 ? matchState.player2Wins : matchState.player1Wins;
     
     const isComplete = matchState.status === 'complete';
-    const didWin = matchState.winnerId === (isPlayer1 ? activeMatch.player1.id : activeMatch.player2.id);
+    const localPlayerId = myPlayer.id;
+    const { didWin } = getMatchOutcome({ matchState, matchResult, localPlayerId });
     const totalPot = activeMatch.wagerAmount * 2;
     const landscapeMobile = isLandscape && isMobile;
     
-    // Token wager info from match result OR active match
-    const matchResult = activeMatch.matchResult;
+    // Token wager info from match result
     const tokenSettlement = matchResult?.tokenSettlement;
     const wagerToken = matchResult?.wagerToken || activeMatch?.wagerToken;
     const tokenWon = didWin && wagerToken ? (tokenSettlement?.amount || wagerToken.tokenAmount * 2) : 0;

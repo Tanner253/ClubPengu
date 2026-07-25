@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { useChallenge } from '../challenge';
+import { useChallenge, getMatchOutcome } from '../challenge';
 import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 
 // Helper to generate Solscan link
@@ -78,8 +78,8 @@ const P2PTicTacToe = ({ onMatchEnd }) => {
     const opponentSymbol = isPlayer1 ? 'O' : 'X';
     
     const isComplete = matchState.status === 'complete';
-    const isDraw = matchState.winner === 'draw';
-    const didWin = matchState.winner === mySymbol;
+    const localPlayerId = myPlayer.id;
+    const { isDraw, didWin } = getMatchOutcome({ matchState, matchResult, localPlayerId });
     const totalPot = activeMatch.wagerAmount * 2;
     
     // Token wager info from match result OR active match

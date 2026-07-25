@@ -4,14 +4,20 @@
 
 import { useMemo } from 'react';
 import { useMultiplayer } from '../multiplayer';
-import { SOLANA_CHAIN_ID } from '../config/evm.js';
+import { SOLANA_CHAIN_ID, getActiveEvmChainIdString } from '../config/evm.js';
 import { getPlatformTokenSymbol, isEvmChainId } from '../config/tokens.js';
 import { isChainFeatureLive } from '../config/chainFeatures.js';
+
+/** Guests preview the Robinhood / $WADDLE rail until they sign in on a wallet. */
+export function getEffectiveChainId(userData, isAuthenticated) {
+    if (userData?.chainId) return userData.chainId;
+    return isAuthenticated ? SOLANA_CHAIN_ID : getActiveEvmChainIdString();
+}
 
 export function useChainEconomy() {
     const { userData, isAuthenticated } = useMultiplayer();
 
-    const chainId = userData?.chainId || SOLANA_CHAIN_ID;
+    const chainId = getEffectiveChainId(userData, isAuthenticated);
     const isEvm = isEvmChainId(chainId);
     const isSolana = !isEvm;
     const platformToken = getPlatformTokenSymbol(chainId);

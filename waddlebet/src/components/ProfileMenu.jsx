@@ -72,10 +72,8 @@ const ProfileMenu = () => {
 
     const isPracticeBot = selectedPlayer.isBot || selectedPlayer.id === WAGER_BOT_ID;
     const stats = isPracticeBot ? null : selectedPlayerStats?.[selectedPlayer.id];
-    // Use server-authoritative coins from userData for authenticated users
-    // In dev mode, give guests coins for testing
-    const isDev = import.meta.env.DEV;
-    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : (isDev ? 1000 : 0);
+    // Server-authoritative coins from userData; guests have no gold balance
+    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : 0;
     
     // Casual PvP: guests can challenge (0 coin / 0 token); wagers still require login on server
     const canChallenge = true;

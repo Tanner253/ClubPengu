@@ -148,10 +148,8 @@ const Inbox = () => {
     const { userData, isAuthenticated } = useMultiplayer();
     
     const panelRef = useRef(null);
-    // Server-authoritative coins from userData
-    // In dev mode, give guests coins for testing
-    const isDev = import.meta.env.DEV;
-    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : (isDev ? 1000 : 0);
+    // Server-authoritative coins from userData; guests have no gold balance
+    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : 0;
     
     // Close on click/touch outside (but not when clicking inbox button)
     useClickOutside(panelRef, (e) => {

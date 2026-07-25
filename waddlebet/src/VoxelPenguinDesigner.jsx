@@ -2229,6 +2229,22 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
 
         return (
             <div className={`flex shrink-0 items-center pointer-events-auto ${compact ? 'gap-1 flex-wrap justify-end max-w-[72vw]' : 'gap-2'}`}>
+                {!hideRobinhood && (
+                <a
+                    href="https://whitepaper.waddle.bet/#multichain"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={t('menu.robinhoodEvmTitle')}
+                    className={`creator-robinhood-link flex shrink-0 items-center rounded-lg border font-bold text-emerald-100 shadow-md transition-transform hover:scale-[1.03] active:scale-95 ${linkClass}`}
+                >
+                    <span className="creator-robinhood-icon shrink-0">
+                        <img src="/robinhood-logo.png" alt="Robinhood" width={iconSize} height={iconSize} className="rounded" />
+                    </span>
+                    <span className={`retro-text uppercase tracking-wide ${badgeTextClass}`}>
+                        {compact ? t('menu.robinhoodEvmBadgeShort') : t('menu.robinhoodEvmBadge')}
+                    </span>
+                </a>
+                )}
                 <button
                     type="button"
                     onClick={() => setShowCreatorPitch(true)}
@@ -2240,22 +2256,6 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         {compact ? t('creatorPitch.badgeShort') : t('creatorPitch.badge')}
                     </span>
                 </button>
-                {!hideRobinhood && (
-                <a
-                    href="https://whitepaper.waddle.bet/#multichain"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={t('menu.robinhoodEvmTitle')}
-                    className={`creator-robinhood-link flex shrink-0 items-center rounded-lg border font-bold text-slate-100 shadow-md transition-transform hover:scale-[1.03] active:scale-95 ${linkClass}`}
-                >
-                    <span className="creator-robinhood-icon shrink-0">
-                        <img src="/robinhood-logo.png" alt="Robinhood" width={iconSize} height={iconSize} className="rounded" />
-                    </span>
-                    <span className={`retro-text uppercase tracking-wide ${badgeTextClass}`}>
-                        {compact ? t('menu.robinhoodEvmBadgeShort') : t('menu.robinhoodEvmBadge')}
-                    </span>
-                </a>
-                )}
                 <a
                     href="https://whitepaper.waddle.bet/"
                     target="_blank"
@@ -2289,7 +2289,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     };
 
     const renderRobinhoodEvmBanner = () => (
-        <div className="creator-robinhood-banner block rounded-xl p-3 md:p-4 transition-colors">
+        <div className="creator-robinhood-banner block rounded-xl p-3 md:p-4 transition-colors border border-emerald-500/25 bg-emerald-500/5">
             <div className="flex items-start gap-3">
                 <img
                     src="/robinhood-logo.png"
@@ -2298,20 +2298,20 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 />
                 <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                        <span className="text-white font-bold text-sm retro-text uppercase tracking-wide">
+                        <span className="text-emerald-300 font-bold text-sm retro-text uppercase tracking-wide">
                             {t('menu.multichainHeadline')}
                         </span>
-                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/5 border border-white/15 text-slate-300">
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/35 text-emerald-300">
                             {t('menu.robinhoodEvmStatus')}
                         </span>
                     </div>
-                    <p className="text-slate-200 text-xs font-semibold mb-1">{t('menu.robinhoodEvmTitle')}</p>
-                    <p className="text-slate-400 text-xs leading-relaxed mb-3">{t('menu.robinhoodEvmDesc')}</p>
+                    <p className="text-emerald-100 text-xs font-semibold mb-1">{t('menu.robinhoodEvmTitle')}</p>
+                    <p className="text-slate-300 text-xs leading-relaxed mb-3">{t('menu.robinhoodEvmDesc')}</p>
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-white/45 mb-1.5">
                         {t('menu.ethCaLabel')}
                     </p>
                     <div className="flex gap-2 mb-3">
-                        <code className="flex-1 min-w-0 text-[10px] sm:text-[11px] text-slate-100 bg-black/40 border border-white/10 rounded-lg px-2.5 py-2 font-mono break-all leading-snug">
+                        <code className="flex-1 min-w-0 text-[10px] sm:text-[11px] text-emerald-100 bg-black/40 border border-emerald-500/20 rounded-lg px-2.5 py-2 font-mono break-all leading-snug">
                             {WADDLE_ETH_CONTRACT}
                         </code>
                         <button
@@ -2325,7 +2325,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                                     })
                                     .catch(() => {});
                             }}
-                            className="shrink-0 px-2.5 py-2 rounded-lg border border-white/15 bg-white/5 text-white text-[10px] font-bold hover:bg-white/10 transition-colors"
+                            className="shrink-0 px-2.5 py-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-100 text-[10px] font-bold hover:bg-emerald-500/20 transition-colors"
                         >
                             {copiedEthCa ? t('entryToken.copied') : t('entryToken.copyCa')}
                         </button>
@@ -2334,7 +2334,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                         href="https://whitepaper.waddle.bet/#multichain"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-slate-300 text-xs font-semibold hover:text-white transition-colors"
+                        className="text-emerald-300 text-xs font-semibold hover:text-emerald-200 transition-colors"
                     >
                         {t('menu.robinhoodEvmCta')} →
                     </a>

@@ -8,7 +8,7 @@ import { useMultiplayer } from '../multiplayer';
 import GameManager from '../engine/GameManager';
 import { sendSPLToken } from '../wallet/SolanaPayment';
 import { displayTokenSymbol, formatTokenText } from '../utils/tokenDisplay.js';
-import { isChainFeatureLive } from '../config/chainFeatures.js';
+import { resolveMatchEndWinner } from './getMatchOutcome.js';
 import { SOLANA_CHAIN_ID } from '../config/evm.js';
 
 // Server custodial wallet for holding wager deposits
@@ -254,13 +254,12 @@ export function ChallengeProvider({ children }) {
                     // Keep all existing state but mark as complete (spread operator preserves all fields)
                     setMatchState(prevState => {
                         if (!prevState) return prevState;
-                        // Preserve all existing state and just update completion fields
                         return {
-                            ...prevState, // Preserves ALL fields (scores, card counts, positions, money, etc.)
+                            ...prevState,
                             phase: 'complete',
-                            winner: result.winner === 'player1' ? 'player1' : result.winner === 'player2' ? 'player2' : result.winner,
+                            winner: resolveMatchEndWinner(prevState.winner, result.winner),
                             isComplete: true,
-                            status: 'complete'
+                            status: 'complete',
                         };
                     });
                     

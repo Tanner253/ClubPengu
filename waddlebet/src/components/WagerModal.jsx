@@ -47,10 +47,8 @@ const WagerModal = () => {
     // Use shared device detection hook
     const { isMobile, isLandscape } = useDeviceDetection();
     
-    // Server-authoritative coins from userData
-    // In development, give guests coins for testing
-    const isDev = import.meta.env.DEV;
-    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : (isDev ? 1000 : 0);
+    // Server-authoritative coins from userData; guests have no gold balance
+    const playerCoins = isAuthenticated ? (userData?.coins ?? 0) : 0;
     
     // Allow free play (0 wager) for all games - betting is optional
     const allowFreePlay = true;

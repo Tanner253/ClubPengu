@@ -9,7 +9,7 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { useChallenge } from '../challenge';
+import { useChallenge, getMatchOutcome } from '../challenge';
 import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
@@ -991,7 +991,7 @@ class MonopolyEngine {
 
 // ============== REACT COMPONENT ==============
 const P2PMonopoly = ({ onMatchEnd }) => {
-    const { activeMatch, matchState, playCard, forfeitMatch, clearMatch } = useChallenge();
+    const { activeMatch, matchState, matchResult, playCard, forfeitMatch, clearMatch } = useChallenge();
     
     const containerRef = useRef(null);
     const engineRef = useRef(null);
@@ -1237,11 +1237,11 @@ const P2PMonopoly = ({ onMatchEnd }) => {
     const currentTurnName = matchState.currentTurn === 'player1' 
         ? activeMatch.player1.name : activeMatch.player2.name;
     const isComplete = matchState.status === 'complete';
-    const didWin = (matchState.winner === 'player1' && isPlayer1) || (matchState.winner === 'player2' && !isPlayer1);
+    const localPlayerId = myPlayer.id;
+    const { didWin } = getMatchOutcome({ matchState, matchResult, localPlayerId });
     const totalPot = activeMatch.wagerAmount * 2;
     
-    // Token wager info from match result OR active match
-    const matchResult = activeMatch.matchResult;
+    // Token wager info from match result
     const tokenSettlement = matchResult?.tokenSettlement;
     const wagerToken = matchResult?.wagerToken || activeMatch?.wagerToken;
     const tokenWon = didWin && wagerToken ? (tokenSettlement?.amount || wagerToken.tokenAmount * 2) : 0;

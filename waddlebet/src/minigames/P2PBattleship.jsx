@@ -11,7 +11,7 @@
  */
 
 import React, { useEffect, useRef, useCallback, useState } from 'react';
-import { useChallenge } from '../challenge';
+import { useChallenge, getMatchOutcome } from '../challenge';
 import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 import { useMultiplayer } from '../multiplayer';
 import * as THREE from 'three';
@@ -1080,7 +1080,7 @@ const P2PBattleship = ({ onMatchEnd }) => {
     const lastAnimatedActionRef = useRef(null);
     const isAnimatingRef = useRef(false); // Track if projectile animation is in progress
     const pendingCameraMoveRef = useRef(null); // Store pending camera target after animation
-    const { activeMatch, matchState, playCard, forfeitMatch, clearMatch } = useChallenge();
+    const { activeMatch, matchState, matchResult, playCard, forfeitMatch, clearMatch } = useChallenge();
     const [selectedCell, setSelectedCell] = useState(null); // Mobile: selected target cell
     const { connected, playerId, registerChatBubbleCallback, setMobileChatOpen } = useMultiplayer();
     
@@ -1273,7 +1273,8 @@ const P2PBattleship = ({ onMatchEnd }) => {
     const currentTurnName = matchState.currentTurn === 'player1' ? activeMatch.player1.name : activeMatch.player2.name;
     const isComplete = matchState.phase === 'complete';
     const isSetupPhase = matchState.phase === 'setup' || matchState.isSetupPhase;
-    const didWin = matchState.winner === (isPlayer1 ? 'player1' : 'player2');
+    const localPlayerId = myPlayer.id;
+    const { didWin } = getMatchOutcome({ matchState, matchResult, localPlayerId });
     const totalPot = activeMatch.wagerAmount * 2;
     
     // Setup phase state
@@ -1287,7 +1288,6 @@ const P2PBattleship = ({ onMatchEnd }) => {
     const totalShips = 5;
 
     // Token wager info
-    const matchResult = activeMatch.matchResult;
     const tokenSettlement = matchResult?.tokenSettlement;
     const wagerToken = matchResult?.wagerToken || activeMatch?.wagerToken;
     const tokenWon = didWin && wagerToken ? (tokenSettlement?.amount || wagerToken.tokenAmount * 2) : 0;

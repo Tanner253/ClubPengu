@@ -2,3 +2,7 @@ cosmetics for pets not working after recent refactor of UI panel (seems to be ha
 log benches behind casino in snow fort rotated wrong way (backwards sit on bench)
 
 Facial cosmetics for pets need adjustment 
+
+guests need sign in and ability to adjust settings
+
+wager settlement for guests is not working right guests sees loss even when they win 
