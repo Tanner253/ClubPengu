@@ -15,7 +15,6 @@ import EconomyGuideModal from './EconomyGuideModal';
 import { applyGameSettings, MUSIC_TRACKS, DEFAULT_MUSIC_VOLUME } from '../audio';
 
 const WHITEPAPER_URL = 'https://whitepaper.waddle.bet';
-const DEXSCREENER_URL = 'https://dexscreener.com/solana/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump';
 
 // Default keybinds
 const DEFAULT_KEYBINDS = {
@@ -53,7 +52,7 @@ const getKeyDisplayName = (code) => {
     return code;
 };
 
-const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChangelog, isAuthenticated, day1NametagUnlocked = false }) => {
+const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChangelog, isAuthenticated, day1NametagUnlocked = false, launchAction = null, launchTab = null, onLaunchConsumed }) => {
     const { t } = useLanguage();
     const menuRef = useRef(null);
     const [activeTab, setActiveTab] = useState('general');
@@ -73,6 +72,24 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
         window.addEventListener('lowEndModeActivated', syncLowEnd);
         return () => window.removeEventListener('lowEndModeActivated', syncLowEnd);
     }, []);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        if (launchTab) setActiveTab(launchTab);
+        if (launchAction === 'tokenomics') {
+            setActiveTab('general');
+            setShowTokenomics(true);
+        } else if (launchAction === 'economyGuide') {
+            setActiveTab('info');
+            setShowEconomyGuide(true);
+        }
+        onLaunchConsumed?.();
+    }, [isOpen, launchAction, launchTab, onLaunchConsumed]);
+
+    useEffect(() => {
+        if (!isOpen || isAuthenticated) return;
+        if (activeTab === 'referral') setActiveTab('info');
+    }, [isOpen, isAuthenticated, activeTab]);
     
     // Use shared hooks for click outside and escape key
     useClickOutside(menuRef, onClose, isOpen && !rebindingKey);
@@ -144,9 +161,11 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
         { id: 'controls', icon: '🎮', label: t('settings.controls') },
         { id: 'audio', icon: '🔊', label: t('settings.tabAudio') },
         { id: 'display', icon: '✨', label: t('settings.tabDisplay') },
-        { id: 'referral', icon: '🔗', label: t('settings.tabReferral') },
+        { id: 'referral', icon: '🔗', label: t('settings.tabReferral'), authOnly: true },
         { id: 'info', icon: '📋', label: t('settings.tabInfo') },
     ];
+
+    const visibleTabs = isAuthenticated ? tabs : tabs.filter((tab) => !tab.authOnly);
 
     const perfPresetHintKey = {
         ultra: 'settings.perfUltra',
@@ -263,7 +282,7 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                     
                     {/* Tab Bar */}
                     <div className="flex gap-1 mt-4 p-1 bg-white/5 rounded-2xl">
-                        {tabs.map(tab => (
+                        {visibleTabs.map(tab => (
                             <button
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
@@ -363,24 +382,6 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                                         <span className="text-white/30 group-hover:text-white/60 transition-colors">→</span>
                                     </div>
                                 </button>
-
-                                <a
-                                    href={DEXSCREENER_URL}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="w-full p-3 rounded-xl bg-gradient-to-r from-green-500/10 to-emerald-500/10 border border-green-500/20 hover:border-green-500/40 transition-all text-left group block"
-                                >
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
-                                            <span className="text-lg">📈</span>
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <div className="text-white text-sm font-bold">{t('settings.dexscreenerBtn')}</div>
-                                            <p className="text-white/40 text-xs truncate">{t('settings.dexscreenerDesc')}</p>
-                                        </div>
-                                        <span className="text-white/30 group-hover:text-white/60 transition-colors">↗</span>
-                                    </div>
-                                </a>
                             </div>
 
                             <SettingRow
@@ -852,6 +853,11 @@ const SettingsMenu = ({ isOpen, onClose, settings, onSettingsChange, onOpenChang
                 
                 {/* Footer */}
                 <div className="p-4 border-t border-white/5">
+                    {!isAuthenticated && (
+                        <p className="text-center text-white/40 text-[11px] mb-3 leading-snug">
+                            {t('settings.guestFooterHint')}
+                        </p>
+                    )}
                     <button
                         onClick={onClose}
                         className="w-full py-3 bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-white rounded-2xl font-bold text-sm transition-all shadow-lg hover:shadow-cyan-500/25"

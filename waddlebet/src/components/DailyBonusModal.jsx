@@ -58,8 +58,12 @@ const DailyBonusModal = ({ isOpen, onClose }) => {
     useEffect(() => {
         if (!isOpen || !isAuthenticated || !canClaimDailyBonus) return;
         setClaimResult(null);
-        fetchDailyBonusStatus?.();
-    }, [isOpen, isAuthenticated, canClaimDailyBonus, fetchDailyBonusStatus]);
+        const receivedAt = dailyBonusStatus?.receivedAt;
+        const isStale = !receivedAt || Date.now() - receivedAt > 15000;
+        if (isStale) {
+            fetchDailyBonusStatus?.();
+        }
+    }, [isOpen, isAuthenticated, canClaimDailyBonus, fetchDailyBonusStatus, dailyBonusStatus?.receivedAt]);
 
     useEffect(() => {
         if (!isOpen || !status || status.hasEnoughTime || status.canClaim) return;

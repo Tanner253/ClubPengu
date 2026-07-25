@@ -246,10 +246,10 @@ export default {
         en: 'Read the full documentation', zh: '阅读完整文档', es: 'Lee la documentación', pt: 'Leia a documentação', ko: '전체 문서 읽기', ja: '全文を読む', fr: 'Lire la documentation', de: 'Dokumentation lesen', ru: 'Полная документация', ar: 'اقرأ الوثائق',
     },
     'settings.linksSection': {
-        en: '$CP & Resources', zh: '$CP 与资源', es: '$CP y recursos', pt: '$CP e recursos', ko: '$CP 및 자료', ja: '$CP とリソース', fr: '$CP et ressources', de: '$CP & Ressourcen', ru: '$CP и ресурсы', ar: '$CP والموارد',
+        en: '$WADDLE & Resources', zh: '$WADDLE 与资源', es: '$WADDLE y recursos', pt: '$WADDLE e recursos', ko: '$WADDLE 및 자료', ja: '$WADDLE とリソース', fr: '$WADDLE et ressources', de: '$WADDLE & Ressourcen', ru: '$WADDLE и ресурсы', ar: '$WADDLE والموارد',
     },
     'settings.linksHint': {
-        en: 'Economy guide, $CP tokenomics, and live chart', zh: '经济指南、$CP 代币经济与实时图表', es: 'Guía de economía, tokenomics y gráfico', pt: 'Guia da economia, tokenomics e gráfico', ko: '경제 가이드, 토크노믹스, 실시간 차트', ja: '経済ガイド・トークノミクス・チャート', fr: 'Guide économie, tokenomics et graphique', de: 'Wirtschaftsleitfaden, Tokenomics und Chart', ru: 'Гайд по экономике, токеномика и график', ar: 'دليل الاقتصاد واقتصاد الرمز والرسم',
+        en: 'Economy guide and $WADDLE tokenomics', zh: '经济指南与 $WADDLE 代币经济', es: 'Guía de economía y tokenomics $WADDLE', pt: 'Guia da economia e tokenomics $WADDLE', ko: '경제 가이드 및 $WADDLE 토크노믹스', ja: '経済ガイドと $WADDLE トークノミクス', fr: 'Guide économie et tokenomics $WADDLE', de: 'Wirtschaftsleitfaden und $WADDLE Tokenomics', ru: 'Гайд по экономике и токеномика $WADDLE', ar: 'دليل الاقتصاد واقتصاد $WADDLE',
     },
     'settings.economyGuideBtn': {
         en: 'Game Economy Guide', zh: '游戏经济指南', es: 'Guía de economía', pt: 'Guia da economia', ko: '게임 경제 가이드', ja: 'ゲーム経済ガイド', fr: 'Guide économie du jeu', de: 'Spielwirtschaft', ru: 'Гайд по экономике', ar: 'دليل اقتصاد اللعبة',
@@ -258,10 +258,10 @@ export default {
         en: 'Gold grind, materials, markets & balance', zh: '金币刷取、物资、市场与平衡', es: 'Oro, materiales, mercados y equilibrio', pt: 'Ouro, materiais, mercados e equilíbrio', ko: '골드, 자원, 마켓, 균형', ja: 'ゴールド・素材・マーケット・均衡', fr: 'Or, matériaux, marchés et équilibre', de: 'Gold, Materialien, Märkte & Balance', ru: 'Золото, ресурсы, рынки', ar: 'الذهب والموارد والأسواق',
     },
     'settings.tokenomicsBtn': {
-        en: '$CP Tokenomics', zh: '$CP 代币经济', es: 'Tokenomics $CP', pt: 'Tokenomics $CP', ko: '$CP 토크노믹스', ja: '$CP トークノミクス', fr: 'Tokenomics $CP', de: '$CP Tokenomics', ru: 'Токеномика $CP', ar: 'اقتصاد رمز $CP',
+        en: '$WADDLE Tokenomics', zh: '$WADDLE 代币经济', es: 'Tokenomics $WADDLE', pt: 'Tokenomics $WADDLE', ko: '$WADDLE 토크노믹스', ja: '$WADDLE トークノミクス', fr: 'Tokenomics $WADDLE', de: '$WADDLE Tokenomics', ru: 'Токеномика $WADDLE', ar: 'اقتصاد رمز $WADDLE',
     },
     'settings.tokenomicsDesc': {
-        en: 'Supply, distribution, and utility', zh: '供应、分配与用途', es: 'Suministro, distribución y utilidad', pt: 'Oferta, distribuição e utilidade', ko: '공급, 분배, 유틸리티', ja: '供給・配分・ユーティリティ', fr: 'Offre, distribution et utilité', de: 'Angebot, Verteilung und Nutzen', ru: 'Эмиссия, распределение и применение', ar: 'العرض والتوزيع والفائدة',
+        en: 'Flagship token on Robinhood Chain', zh: 'Robinhood Chain 旗舰代币', es: 'Token insignia en Robinhood Chain', pt: 'Token carro-chefe na Robinhood Chain', ko: 'Robinhood Chain 플래그십 토큰', ja: 'Robinhood Chain 旗艦トークン', fr: 'Jeton phare sur Robinhood Chain', de: 'Flaggschiff-Token auf Robinhood Chain', ru: 'Флагманский токен на Robinhood Chain', ar: 'الرمز الرائد على Robinhood Chain',
     },
     'settings.dexscreenerBtn': {
         en: 'DEX Screener Chart', zh: 'DEX Screener 图表', es: 'Gráfico DEX Screener', pt: 'Gráfico DEX Screener', ko: 'DEX Screener 차트', ja: 'DEX Screener チャート', fr: 'Graphique DEX Screener', de: 'DEX Screener Chart', ru: 'График DEX Screener', ar: 'رسم DEX Screener',
@@ -274,6 +274,18 @@ export default {
     },
     'settings.done': {
         en: 'Done', zh: '完成', es: 'Listo', pt: 'Concluir', ko: '완료', ja: '完了', fr: 'Terminé', de: 'Fertig', ru: 'Готово', ar: 'تم',
+    },
+    'settings.guestFooterHint': {
+        en: 'Playing as a guest — sign in to save progress, daily rewards, and referrals.',
+        zh: '访客模式 — 登录后可保存进度、每日奖励与推荐奖励。',
+        es: 'Modo invitado — inicia sesión para guardar progreso, recompensas diarias y referidos.',
+        pt: 'Modo convidado — entre para salvar progresso, recompensas diárias e indicações.',
+        ko: '게스트 플레이 — 로그인하면 진행 상황, 일일 보상, 추천 보상이 저장됩니다.',
+        ja: 'ゲストプレイ中 — サインインで進行状況・デイリー報酬・紹介報酬を保存。',
+        fr: 'Mode invité — connectez-vous pour sauvegarder progression, bonus quotidiens et parrainage.',
+        de: 'Gastmodus — anmelden, um Fortschritt, Tagesbelohnungen und Referrals zu speichern.',
+        ru: 'Гостевой режим — войдите, чтобы сохранить прогресс, ежедневные награды и рефералы.',
+        ar: 'وضع الضيف — سجّل الدخول لحفظ التقدم والمكافآت اليومية والإحالات.',
     },
     'settings.pressKey': {
         en: 'Press key...', zh: '按下按键…', es: 'Pulsa tecla…', pt: 'Pressione tecla…', ko: '키를 누르세요…', ja: 'キーを押す…', fr: 'Appuyez sur une touche…', de: 'Taste drücken…', ru: 'Нажмите клавишу…', ar: 'اضغط مفتاحاً…',

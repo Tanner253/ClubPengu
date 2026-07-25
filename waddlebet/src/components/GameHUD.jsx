@@ -28,6 +28,8 @@ const GameHUD = ({
     showMinimap = false,
     showInbox = true,
     onOpenSettings,
+    onOpenChangelog,
+    onOpenSettingsGuide,
     isMobile = false,
     playerCount = 0,
     totalPlayerCount = 0,
@@ -170,6 +172,8 @@ const GameHUD = ({
                 onInventory={() => setShowInventory(true)}
                 onMarket={() => setShowMarketplace(true)}
                 onOpenSettings={onOpenSettings}
+                onOpenChangelog={onOpenChangelog}
+                onOpenSettingsGuide={onOpenSettingsGuide}
                 onOpenStats={() => setShowStatsModal(true)}
                 onOpenDailyBonus={() => setShowDailyBonus(true)}
                 onOpenIglooSettings={onOpenIglooSettings}

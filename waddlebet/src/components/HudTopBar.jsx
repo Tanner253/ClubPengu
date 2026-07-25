@@ -30,6 +30,8 @@ function HudTopBar({
     onInventory,
     onMarket,
     onOpenSettings,
+    onOpenChangelog,
+    onOpenSettingsGuide,
     onOpenStats,
     onOpenDailyBonus,
     onOpenIglooSettings,
@@ -168,6 +170,8 @@ function HudTopBar({
                     compact={compact}
                     useMobileOverlay={isMobile}
                     onOpenSettings={onOpenSettings}
+                    onOpenChangelog={onOpenChangelog}
+                    onOpenSettingsGuide={onOpenSettingsGuide}
                     onOpenStats={onOpenStats}
                     onOpenDailyBonus={onOpenDailyBonus}
                     onOpenIglooSettings={onOpenIglooSettings}

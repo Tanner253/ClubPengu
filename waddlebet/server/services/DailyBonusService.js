@@ -205,7 +205,8 @@ class DailyBonusService {
 
     _effectivePlaySecondsFromSession(session, now = new Date()) {
         if (!session?.canAccumulate) return 0;
-        return this._effectiveMinutesFromSession(session, now) * 60;
+        const totalMinutes = session.persistedMinutes + this._segmentMinutes(session, now);
+        return Math.floor(totalMinutes * 60);
     }
 
     getSessionPlaySeconds(walletAddress, user = null) {
@@ -219,7 +220,7 @@ class DailyBonusService {
         if (!user) return 0;
         const progress = this._resolveProgressState(user, now);
         if (!progress.canAccumulate || progress.needsNewWindow) return 0;
-        return Math.floor(progress.accumulatedMinutes || 0) * 60;
+        return Math.floor((progress.accumulatedMinutes || 0) * 60);
     }
 
     async _maybeAwardReferralPromo(walletAddress, totalMinutes, session) {

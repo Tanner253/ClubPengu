@@ -1,10 +1,14 @@
 /**
- * TokenomicsModal - $CP Token Utility & Tokenomics Information
+ * TokenomicsModal — $WADDLE flagship (Robinhood Chain) + $CP on Solana
  */
 
 import React, { useRef, useMemo } from 'react';
 import { useClickOutside, useEscapeKey } from '../hooks';
 import { useLanguage } from '../i18n';
+import { getWaddleEthBlockExplorerUrl } from '../config/evm.js';
+
+const WHITEPAPER_URL = 'https://whitepaper.waddle.bet/#multichain';
+const CP_DEXSCREENER_URL = 'https://dexscreener.com/solana/9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump';
 
 const TokenomicsModal = ({ isOpen, onClose }) => {
     const modalRef = useRef(null);
@@ -23,7 +27,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
     ], []);
     
     const roadmapItems = useMemo(() => [
-        { phaseKey: 'tokenomics.phase1', status: 'live', titleKey: 'tokenomics.rTitle1', itemKeys: ['tokenomics.r1i1', 'tokenomics.r1i2', 'tokenomics.r1i3'] },
+        { phaseKey: 'tokenomics.phase1', status: 'live', titleKey: 'tokenomics.rTitle1', itemKeys: ['tokenomics.r1i1', 'tokenomics.r1i2', 'tokenomics.r1i3', 'tokenomics.r1i4'] },
         { phaseKey: 'tokenomics.phase2', status: 'live', titleKey: 'tokenomics.rTitle2', itemKeys: ['tokenomics.r2i1', 'tokenomics.r2i2', 'tokenomics.r2i3'] },
         { phaseKey: 'tokenomics.phase3', status: 'building', titleKey: 'tokenomics.rTitle3', itemKeys: ['tokenomics.r3i1', 'tokenomics.r3i2', 'tokenomics.r3i3'] },
         { phaseKey: 'tokenomics.phase4', status: 'soon', titleKey: 'tokenomics.rTitle4', itemKeys: ['tokenomics.r4i1', 'tokenomics.r4i2', 'tokenomics.r4i3'] },
@@ -51,7 +55,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-2 sm:p-4">
             <div 
                 ref={modalRef}
-                className="relative bg-gradient-to-br from-[#0a0a1a] via-[#111128] to-[#0d1a2d] rounded-2xl border border-cyan-500/30 shadow-2xl shadow-cyan-500/10 w-full max-w-2xl max-h-[90vh] flex flex-col animate-fade-in overflow-hidden"
+                className="relative bg-gradient-to-br from-[#0a0a1a] via-[#111128] to-[#0d1a2d] rounded-2xl border border-emerald-500/30 shadow-2xl shadow-emerald-500/10 w-full max-w-2xl max-h-[90vh] flex flex-col animate-fade-in overflow-hidden"
                 onClick={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
             >
@@ -59,7 +63,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                     <div className="flex items-center gap-3">
                         <div className="text-3xl sm:text-4xl animate-bounce-slow">🐧</div>
                         <div>
-                            <h2 className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400">
+                            <h2 className="text-xl sm:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 via-green-400 to-cyan-400">
                                 {t('tokenomics.title')}
                             </h2>
                             <p className="text-white/50 text-xs sm:text-sm">{t('tokenomics.subtitle')}</p>
@@ -75,18 +79,46 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                 
                 <div className="relative flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6 overscroll-contain">
                     
-                    <div className="relative bg-gradient-to-r from-cyan-600/30 via-blue-600/30 to-purple-600/30 rounded-xl p-4 sm:p-6 border border-white/10">
+                    <div className="relative bg-gradient-to-r from-emerald-600/30 via-green-600/25 to-teal-600/30 rounded-xl p-4 sm:p-5 border border-emerald-500/40">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                            <span className="px-2.5 py-0.5 bg-emerald-500/25 text-emerald-300 rounded-full text-[10px] font-black uppercase tracking-wide border border-emerald-500/40">
+                                {t('tokenomics.flagshipBadge')}
+                            </span>
+                            <span className="text-white/40 text-xs">{t('tokenomics.flagshipChain')}</span>
+                        </div>
+                        <h3 className="text-xl sm:text-2xl font-black text-white mb-1">$WADDLE</h3>
+                        <p className="text-white/70 text-sm leading-relaxed">{t('tokenomics.flagshipDesc')}</p>
+                    </div>
+
+                    <div className="bg-cyan-500/10 rounded-xl p-3 sm:p-4 border border-cyan-500/25">
+                        <div className="flex items-start gap-3">
+                            <span className="text-xl shrink-0">◎</span>
+                            <div>
+                                <h4 className="text-cyan-300 font-bold text-sm">{t('tokenomics.solanaParallelTitle')}</h4>
+                                <p className="text-white/55 text-xs mt-1 leading-relaxed">{t('tokenomics.solanaParallelDesc')}</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div className="relative bg-gradient-to-r from-emerald-600/20 via-blue-600/20 to-purple-600/20 rounded-xl p-4 sm:p-6 border border-white/10">
                         <h3 className="text-lg sm:text-xl font-bold text-white mb-2">{t('tokenomics.heroTitle')}</h3>
                         <p className="text-white/70 text-sm sm:text-base leading-relaxed">
                             {t('tokenomics.heroA')}
-                            <span className="text-cyan-400 font-bold">{t('tokenomics.heroYou')}</span>
+                            <span className="text-emerald-400 font-bold">{t('tokenomics.heroYou')}</span>
                             {t('tokenomics.heroB')}
-                            <span className="text-purple-400 font-bold">{t('tokenomics.heroSolana')}</span>
+                            <span className="text-emerald-400 font-bold">$WADDLE</span>
                             {t('tokenomics.heroC')}
+                            <span className="text-green-400 font-bold">{t('tokenomics.heroRobinhood')}</span>
+                            {t('tokenomics.heroD')}
+                            <span className="text-cyan-400 font-bold">$CP</span>
+                            {t('tokenomics.heroE')}
+                            <span className="text-purple-400 font-bold">{t('tokenomics.heroSolana')}</span>
+                            {t('tokenomics.heroF')}
                             <span className="text-green-400 font-bold">{t('tokenomics.heroX402')}</span>
                             .
                         </p>
                         <div className="mt-4 flex flex-wrap gap-2">
+                            <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 rounded-full text-xs font-bold border border-emerald-500/30">{t('tokenomics.badgeFlagship')}</span>
                             <span className="px-3 py-1 bg-green-500/20 text-green-400 rounded-full text-xs font-bold border border-green-500/30">{t('tokenomics.badgeP2p')}</span>
                             <span className="px-3 py-1 bg-purple-500/20 text-purple-400 rounded-full text-xs font-bold border border-purple-500/30">{t('tokenomics.badgeDecent')}</span>
                             <span className="px-3 py-1 bg-cyan-500/20 text-cyan-400 rounded-full text-xs font-bold border border-cyan-500/30">{t('tokenomics.badgeCommunity')}</span>
@@ -100,7 +132,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                         </h3>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {features.map((feature, idx) => (
-                                <div key={idx} className="bg-white/5 hover:bg-white/10 rounded-xl p-3 sm:p-4 border border-white/5 hover:border-cyan-500/30 transition-all group">
+                                <div key={idx} className="bg-white/5 hover:bg-white/10 rounded-xl p-3 sm:p-4 border border-white/5 hover:border-emerald-500/30 transition-all group">
                                     <div className="flex items-start gap-3">
                                         <span className="text-2xl group-hover:scale-110 transition-transform">{feature.emoji}</span>
                                         <div>
@@ -121,8 +153,9 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                             {t('tokenomics.wagerBody')}
                             <span className="text-orange-400 font-bold">$BONK</span>
                             <span className="text-purple-400 font-bold"> $WIF</span>
-                            <span className="text-green-400 font-bold">$POPCAT</span>
+                            <span className="text-green-400 font-bold"> $POPCAT</span>
                             {' — '}
+                            {t('tokenomics.wagerTail')}
                         </p>
                         <div className="flex flex-wrap gap-2 text-xs">
                             <span className="px-2 py-1 bg-orange-500/30 text-orange-300 rounded-lg">{t('tokenomics.wagerChipTtt')}</span>
@@ -210,17 +243,33 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                         </div>
                     </div>
                     
-                    <div className="bg-gradient-to-r from-cyan-500/20 to-purple-500/20 rounded-xl p-4 text-center border border-cyan-500/20">
+                    <div className="bg-gradient-to-r from-emerald-500/20 to-purple-500/20 rounded-xl p-4 text-center border border-emerald-500/20">
                         <h3 className="text-xl font-black text-white mb-2">{t('tokenomics.joinHead')}</h3>
                         <p className="text-white/60 text-sm mb-4">{t('tokenomics.joinBody')}</p>
                         <div className="flex flex-wrap justify-center gap-2 sm:gap-3">
                             <a 
-                                href="https://dexscreener.com/solana/5yfmefzrompokc2r9j8b1mzqututhywr9vrqmsxhzd3r"
+                                href={getWaddleEthBlockExplorerUrl()}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-lg font-bold text-sm transition-all hover:scale-105 active:scale-95"
+                                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white rounded-lg font-bold text-sm transition-all hover:scale-105 active:scale-95"
                             >
-                                {t('tokenomics.viewChart')}
+                                {t('tokenomics.viewWaddleChart')}
+                            </a>
+                            <a 
+                                href={CP_DEXSCREENER_URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white rounded-lg font-bold text-sm transition-all hover:scale-105 active:scale-95"
+                            >
+                                {t('tokenomics.viewCpChart')}
+                            </a>
+                            <a 
+                                href={WHITEPAPER_URL}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-4 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white rounded-lg font-bold text-sm transition-all hover:scale-105 active:scale-95"
+                            >
+                                {t('tokenomics.viewWhitepaper')}
                             </a>
                             <a 
                                 href="https://x.com/oSKNYo_dev"
@@ -239,7 +288,7 @@ const TokenomicsModal = ({ isOpen, onClose }) => {
                 <div className="relative p-4 shrink-0 border-t border-white/5 bg-black/30">
                     <button
                         onClick={onClose}
-                        className="w-full py-3 bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-400 hover:to-purple-400 text-white rounded-xl font-bold text-sm transition-all hover:shadow-lg hover:shadow-cyan-500/20"
+                        className="w-full py-3 bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-white rounded-xl font-bold text-sm transition-all hover:shadow-lg hover:shadow-emerald-500/20"
                     >
                         {t('tokenomics.lfg')}
                     </button>

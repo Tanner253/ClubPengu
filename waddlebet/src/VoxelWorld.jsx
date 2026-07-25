@@ -988,6 +988,7 @@ const VoxelWorld = ({
     }, [isMobile]);
 
     const [showSettings, setShowSettings] = useState(false);
+    const [settingsLaunch, setSettingsLaunch] = useState(null);
     const [showChangelog, setShowChangelog] = useState(false);
     const [showDebugPosition, setShowDebugPosition] = useState(false);
     const showDebugPositionRef = useRef(false);
@@ -12575,7 +12576,15 @@ const VoxelWorld = ({
 
              {/* HUD - Top Right */}
              <GameHUD 
-                onOpenSettings={() => setShowSettings(true)}
+                onOpenSettings={() => {
+                    setSettingsLaunch(null);
+                    setShowSettings(true);
+                }}
+                onOpenChangelog={() => setShowChangelog(true)}
+                onOpenSettingsGuide={(action) => {
+                    setSettingsLaunch({ action });
+                    setShowSettings(true);
+                }}
                 isMobile={isMobile}
                 playerCount={playerCount}
                 totalPlayerCount={totalPlayerCount}
@@ -13920,12 +13929,18 @@ const VoxelWorld = ({
              {/* Settings Menu Modal */}
              <SettingsMenu
                 isOpen={showSettings}
-                onClose={() => setShowSettings(false)}
+                onClose={() => {
+                    setShowSettings(false);
+                    setSettingsLaunch(null);
+                }}
                 settings={gameSettings}
                 onSettingsChange={setGameSettings}
                 onOpenChangelog={() => setShowChangelog(true)}
                 isAuthenticated={isAuthenticated}
                 day1NametagUnlocked={userData?.day1NametagUnlocked === true}
+                launchAction={settingsLaunch?.action ?? null}
+                launchTab={settingsLaunch?.tab ?? null}
+                onLaunchConsumed={() => setSettingsLaunch(null)}
              />
              
              {/* Changelog Modal */}
