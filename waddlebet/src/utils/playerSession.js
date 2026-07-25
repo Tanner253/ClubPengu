@@ -8,6 +8,7 @@ import {
     isInvalidNightclubPosition,
     getNightclubSpawnPosition
 } from '../config/roomConfig.js';
+import { isUnsafeOverworldSpawn, resolveOverworldSpawn } from '../config/overworldSpawn.js';
 
 const STORAGE_KEY = 'player_session';
 const LEGACY_KEY = 'player_position';
@@ -15,6 +16,7 @@ const LEGACY_KEY = 'player_position';
 export function savePlayerSession(room, position) {
     if (!room || !position || position.x == null || position.z == null) return;
     if (room === WORLD_SPAWN_ROOM && isInvalidNightclubPosition(position)) return;
+    if (isUnsafeOverworldSpawn(room, position)) return;
     try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({
             room,
@@ -57,7 +59,11 @@ function normalizeResumePosition(room, position) {
     if (room === WORLD_SPAWN_ROOM && isInvalidNightclubPosition(position)) {
         return getNightclubSpawnPosition();
     }
-    return { x: position.x, y: position.y ?? 0, z: position.z };
+    return resolveOverworldSpawn(room, {
+        x: position.x,
+        y: position.y ?? 0,
+        z: position.z,
+    });
 }
 
 export function getResumePosition(room, isAuthenticated, userData) {

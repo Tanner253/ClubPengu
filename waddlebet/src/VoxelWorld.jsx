@@ -98,7 +98,8 @@ import { formatForestRegrowCountdown } from './config/harvestableTrees';
 import ForestTreeManager from './systems/ForestTreeManager';
 import WorldDropManager from './systems/WorldDropManager';
 import { WORLD_DROP_PICKUP_RADIUS, isGoldWorldDrop } from './config/worldDrops';
-import { getOverworldMountainConfig, OVERWORLD_CENTER_SPAWN } from './config/overworldConfig';
+import { getOverworldMountainConfig, OVERWORLD_CENTER_SPAWN, isOverworldRoom } from './config/overworldConfig';
+import { resolveOverworldSpawn, escapeOverworldSpawnCollision } from './config/overworldSpawn';
 import { loadSnowFortsQuadrant, loadForestQuadrant } from './world/overworldLoader';
 import { HARVESTABLE_MUSHROOMS, MUSHROOM_INTERACTION_RADIUS, MUSHROOM_HARVEST_MS } from './config/harvestableMushrooms';
 import { FORAGEABLE_LOGS, WORM_FORAGE_RADIUS, WORM_FORAGE_CHANNEL_MS } from './config/forageableLogs';
@@ -559,6 +560,19 @@ const VoxelWorld = ({
             }
             savePlayerSession(WORLD_SPAWN_ROOM, spawn);
             console.log('🌟 Reconnect: restored nightclub /spawn position', spawn);
+        } else if (isOverworldRoom(roomRef.current)) {
+            const safe = resolveOverworldSpawn(roomRef.current, posRef.current);
+            if (safe.x !== posRef.current.x || safe.z !== posRef.current.z) {
+                posRef.current = safe;
+                rotRef.current = 0;
+                velRef.current = { x: 0, y: 0, z: 0 };
+                if (playerRef.current) {
+                    playerRef.current.position.set(safe.x, safe.y ?? 0, safe.z);
+                    playerRef.current.rotation.y = 0;
+                }
+                savePlayerSession(roomRef.current, safe);
+                console.log(`🧭 Reconnect: relocated unsafe ${roomRef.current} spawn`, safe);
+            }
         }
     }, [connected]);
     
@@ -2734,6 +2748,27 @@ const VoxelWorld = ({
             posRef.current.x = clamped.x;
             posRef.current.z = clamped.z;
             posRef.current.y = posRef.current.y ?? 0;
+        } else if (isOverworldRoom(room)) {
+            posRef.current = resolveOverworldSpawn(room, posRef.current);
+            const zoneRef = room === 'snow_forts' ? snowFortsZoneRef.current
+                : room === 'town' ? townCenterRef.current
+                    : room === 'forest_trails' ? forestTrailsZoneRef.current
+                        : null;
+            if (zoneRef?.collisionSystem) {
+                const escaped = escapeOverworldSpawnCollision(
+                    { x: posRef.current.x, z: posRef.current.z },
+                    {
+                        roomId: room,
+                        checkZone: (px, pz, r) => zoneRef.collisionSystem.checkCollision(px, pz, r, 0),
+                        checkMountain: (px, pz, r) => mountainBackgroundRef.current?.checkCollision?.(px, pz, r) ?? false,
+                    }
+                );
+                if (escaped.relocated) {
+                    posRef.current.x = escaped.x;
+                    posRef.current.z = escaped.z;
+                    console.log(`🧭 Relocated unsafe ${room} spawn to`, { x: escaped.x, z: escaped.z });
+                }
+            }
         }
         
         // CRITICAL: Sync mesh position with posRef IMMEDIATELY after spawn logic

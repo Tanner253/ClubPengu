@@ -40,6 +40,7 @@ import { handleMarketplaceMessage } from './handlers/marketplaceHandlers.js';
 import { getHelpLines, isHelpCommand, isClientOnlyCommand, parseWarpCommand, getWarpTargetMeta, getWarpTargets } from './utils/chatCommands.js';
 import { handleGiftMessage } from './handlers/giftHandlers.js';
 import { WORLD_SPAWN, WORLD_SPAWN_ROOM, isInvalidNightclubPosition } from '../src/config/roomConfig.js';
+import { resolveOverworldSpawn } from '../src/config/overworldSpawn.js';
 import { initializeNFTServices, handleNFTMessage, handleGetImage, handleGetMetadata } from './handlers/nftHandlers.js';
 import nftOwnershipService from './services/NFTOwnershipService.js';
 import rentScheduler from './schedulers/RentScheduler.js';
@@ -138,7 +139,7 @@ async function getSavedSpawnForUser(user, roomId) {
         if (roomId === WORLD_SPAWN_ROOM && isInvalidNightclubPosition(saved)) {
             return getDefaultSpawnForRoom(roomId);
         }
-        return saved;
+        return resolveOverworldSpawn(roomId, saved);
     }
     return getDefaultSpawnForRoom(roomId);
 }
@@ -615,11 +616,11 @@ async function transferPlayerRoom(playerId, newRoom, position, voyageMeta = null
         joinRoom(playerId, newRoom);
     }
 
-    player.position = {
+    player.position = resolveOverworldSpawn(newRoom, {
         x: position.x,
         y: position.y ?? 0,
-        z: position.z
-    };
+        z: position.z,
+    });
 
     if (player.walletAddress) {
         await persistPlayerLocation(player.walletAddress, newRoom, player.position);
@@ -2557,7 +2558,7 @@ async function handleMessage(playerId, message) {
                     spawnPos = await getSavedSpawnForUser(user, roomId);
                 }
             }
-            player.position = { ...spawnPos };
+            player.position = resolveOverworldSpawn(roomId, spawnPos);
             
             if (player.puffle) {
                 player.pufflePosition = {
@@ -3457,13 +3458,13 @@ async function handleMessage(playerId, message) {
             }
 
             if (message.position?.x != null && message.position?.z != null) {
-                player.position = {
+                player.position = resolveOverworldSpawn(newRoom, {
                     x: message.position.x,
                     y: message.position.y ?? 0,
-                    z: message.position.z
-                };
+                    z: message.position.z,
+                });
             } else if (roomChanged) {
-                player.position = { ...getDefaultSpawnForRoom(newRoom) };
+                player.position = resolveOverworldSpawn(newRoom, getDefaultSpawnForRoom(newRoom));
             }
 
             if (player.walletAddress && (roomChanged || message.position?.x != null)) {
