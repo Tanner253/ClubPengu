@@ -3,7 +3,7 @@
  * Edge portals trigger room transitions with loading screen (same as interior portals).
  */
 
-import { CENTER_X, CENTER_Z } from './roomConfig';
+import { CENTER_X, CENTER_Z } from './roomConfig.js';
 
 export const OVERWORLD_ZONE_SIZE = 220;
 export const OVERWORLD_CENTER = OVERWORLD_ZONE_SIZE / 2; // 110
