@@ -4602,6 +4602,7 @@ const VoxelWorld = ({
                                 seatHeight: nearFurniture.seatHeight,
                                 platformHeight: nearFurniture.platformHeight ?? 0,
                                 dismountBack: nearFurniture.dismountBack || false,
+                                dismountOffset: nearFurniture.dismountOffset || null,
                                 elevated: nearFurniture.elevated || false,
                                 bidirectionalSit: nearFurniture.bidirectionalSit || false
                             }
@@ -11005,6 +11006,7 @@ const VoxelWorld = ({
                         benchRotation: benchRotation,
                         benchDepth: benchData.benchDepth || 0.8,
                         dismountBack: benchData.dismountBack || false, // For bar stools
+                        dismountOffset: benchData.dismountOffset || benchData.data?.dismountOffset || null,
                         platformHeight: benchData.platformHeight ?? benchData.data?.platformHeight ?? 0,
                         elevated: benchData.elevated || benchData.data?.elevated || false
                     };
@@ -13474,6 +13476,7 @@ const VoxelWorld = ({
                                     benchRotation: finalRotation,
                                     benchDepth: benchData.benchDepth || 0.8,
                                     dismountBack: benchData.dismountBack || false,
+                                    dismountOffset: benchData.dismountOffset || benchData.data?.dismountOffset || null,
                                     platformHeight: benchData.platformHeight ?? benchData.data?.platformHeight ?? 0,
                                     elevated: benchData.elevated || benchData.data?.elevated || false
                                 };

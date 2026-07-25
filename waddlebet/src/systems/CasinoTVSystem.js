@@ -9,70 +9,110 @@ const WADDLE_TOKEN_ADDRESS = EVM_PLATFORM_TOKEN.address;
 const DEXSCREENER_TOKEN_URL = `https://api.dexscreener.com/latest/dex/tokens/${WADDLE_TOKEN_ADDRESS}`;
 const DEXSCREENER_PAGE_URL = `https://dexscreener.com/robinhood/${WADDLE_TOKEN_ADDRESS}`;
 
+function getHttpServerBase() {
+    const wsUrl = import.meta.env.VITE_WS_SERVER
+        || (import.meta.env.DEV ? 'ws://localhost:3001' : '');
+    if (!wsUrl) return '';
+    return wsUrl.replace(/^wss:/i, 'https:').replace(/^ws:/i, 'http:');
+}
+
+function normalizeTokenPayload(raw) {
+    if (!raw || raw.error) return null;
+    const price = parseFloat(raw.price ?? raw.priceUsd) || 0;
+    const marketCap = parseFloat(raw.marketCap) || parseFloat(raw.fdv) || 0;
+    if (price <= 0 && marketCap <= 0) return null;
+    return {
+        price,
+        priceNative: parseFloat(raw.priceNative) || 0,
+        change1h: parseFloat(raw.change1h ?? raw.priceChange?.h1) || 0,
+        change24h: parseFloat(raw.change24h ?? raw.priceChange?.h24) || 0,
+        volume24h: parseFloat(raw.volume24h ?? raw.volume?.h24) || 0,
+        liquidity: parseFloat(raw.liquidity ?? raw.liquidity?.usd) || 0,
+        marketCap,
+        symbol: raw.symbol || EVM_PLATFORM_TOKEN.symbol,
+        name: raw.name || 'WaddleBet',
+        quoteSymbol: raw.quoteSymbol || raw.quoteToken?.symbol || 'WETH',
+        contractAddress: raw.contractAddress || raw.baseToken?.address || WADDLE_TOKEN_ADDRESS,
+        dexUrl: raw.dexUrl || raw.url || DEXSCREENER_PAGE_URL,
+        lastUpdated: raw.lastUpdated || Date.now(),
+    };
+}
+
+async function fetchFromGameServer() {
+    const base = getHttpServerBase();
+    if (!base) return null;
+    try {
+        const response = await fetch(`${base}/api/token-chart/waddle`);
+        if (!response.ok) return null;
+        const data = await response.json();
+        return normalizeTokenPayload(data);
+    } catch {
+        return null;
+    }
+}
+
+async function fetchFromDexScreenerDirect() {
+    try {
+        const response = await fetch(DEXSCREENER_TOKEN_URL);
+        if (!response.ok) return null;
+        const data = await response.json();
+        const pair = data?.pairs?.[0];
+        if (!pair) return null;
+        return normalizeTokenPayload({
+            price: pair.priceUsd,
+            priceNative: pair.priceNative,
+            change1h: pair.priceChange?.h1,
+            change24h: pair.priceChange?.h24,
+            volume24h: pair.volume?.h24,
+            liquidity: pair.liquidity?.usd,
+            marketCap: pair.marketCap || pair.fdv,
+            symbol: pair.baseToken?.symbol,
+            name: pair.baseToken?.name,
+            quoteSymbol: pair.quoteToken?.symbol,
+            contractAddress: pair.baseToken?.address,
+            dexUrl: pair.url,
+        });
+    } catch {
+        return null;
+    }
+}
+
 // Cache for API data - conservative rate limiting
 let cachedTokenData = null;
 let lastFetchTime = 0;
-let lastDataHash = ''; // Track if data actually changed
-const FETCH_INTERVAL = 120000; // Refresh every 2 minutes to reduce load
-const MIN_FETCH_INTERVAL = 60000; // Minimum 60 seconds between requests
-
-// Track if a fetch is in progress to prevent duplicate requests
+let lastDataHash = '';
+const FETCH_INTERVAL = 120000;
+const MIN_FETCH_INTERVAL = 60000;
 let fetchInProgress = false;
 
 /**
- * Fetch real token data from DexScreener API (with rate limiting)
+ * Fetch real token data (game server proxy first, DexScreener direct fallback).
  */
 export async function fetchTokenData() {
     const now = Date.now();
-    
-    // Return cached data if within interval
+
     if (cachedTokenData && now - lastFetchTime < MIN_FETCH_INTERVAL) {
         return cachedTokenData;
     }
-    
-    // Prevent duplicate concurrent requests
+
     if (fetchInProgress) {
         return cachedTokenData;
     }
-    
+
     fetchInProgress = true;
-    
+
     try {
-        const response = await fetch(DEXSCREENER_TOKEN_URL);
-        
-        if (!response.ok) {
-            throw new Error(`API returned ${response.status}`);
-        }
-        
-        const data = await response.json();
-        
-        if (data.pairs && data.pairs.length > 0) {
-            const pair = data.pairs[0]; // Get the main pair
-            cachedTokenData = {
-                price: parseFloat(pair.priceUsd) || 0,
-                priceNative: parseFloat(pair.priceNative) || 0,
-                change1h: parseFloat(pair.priceChange?.h1) || 0,
-                change24h: parseFloat(pair.priceChange?.h24) || 0,
-                volume24h: parseFloat(pair.volume?.h24) || 0,
-                liquidity: parseFloat(pair.liquidity?.usd) || 0,
-                marketCap: parseFloat(pair.marketCap) || parseFloat(pair.fdv) || 0,
-                symbol: pair.baseToken?.symbol || EVM_PLATFORM_TOKEN.symbol,
-                name: pair.baseToken?.name || 'WaddleBet',
-                quoteSymbol: pair.quoteToken?.symbol || 'WETH',
-                contractAddress: pair.baseToken?.address || WADDLE_TOKEN_ADDRESS,
-                dexUrl: pair.url || DEXSCREENER_PAGE_URL,
-                lastUpdated: now
-            };
+        cachedTokenData = await fetchFromGameServer() || await fetchFromDexScreenerDirect();
+        if (cachedTokenData) {
             lastFetchTime = now;
             console.log('📊 Casino TV: Updated $WADDLE data - Price:', cachedTokenData.price);
         }
     } catch (error) {
-        console.warn('Casino TV: API fetch failed, using cached data');
-        // Don't update lastFetchTime on error so we can retry sooner
+        console.warn('Casino TV: API fetch failed, using cached data', error);
     } finally {
         fetchInProgress = false;
     }
-    
+
     return cachedTokenData;
 }
 
@@ -84,8 +124,7 @@ export async function fetchTokenData() {
 function renderCasinoTVBanner(ctx, tokenData = null) {
     const w = ctx.canvas.width;
     const h = ctx.canvas.height;
-    
-    // Dark background with gradient
+
     const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
     bgGrad.addColorStop(0, '#0a0a1a');
     bgGrad.addColorStop(1, '#0d1520');
@@ -93,15 +132,13 @@ function renderCasinoTVBanner(ctx, tokenData = null) {
     ctx.beginPath();
     ctx.roundRect(0, 0, w, h, 12);
     ctx.fill();
-    
-    // Border glow
+
     ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
     ctx.lineWidth = 3;
     ctx.beginPath();
     ctx.roundRect(2, 2, w - 4, h - 4, 10);
     ctx.stroke();
-    
-    // Header bar
+
     const headerGrad = ctx.createLinearGradient(0, 0, w, 0);
     headerGrad.addColorStop(0, 'rgba(128, 0, 128, 0.8)');
     headerGrad.addColorStop(1, 'rgba(0, 128, 128, 0.8)');
@@ -109,46 +146,43 @@ function renderCasinoTVBanner(ctx, tokenData = null) {
     ctx.beginPath();
     ctx.roundRect(4, 4, w - 8, 40, [8, 8, 0, 0]);
     ctx.fill();
-    
-    // Title
+
     const symbol = tokenData?.symbol || EVM_PLATFORM_TOKEN.symbol;
     const quote = tokenData?.quoteSymbol || 'WETH';
     ctx.fillStyle = '#00ffff';
     ctx.font = 'bold 22px Arial, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(`📺 $${symbol} / ${quote}`, 15, 32);
-    
-    // Live indicator
+
     ctx.fillStyle = '#00ff88';
     ctx.font = 'bold 14px Arial, sans-serif';
     ctx.textAlign = 'right';
-    ctx.fillText('● LIVE', w - 15, 30);
-    
-    // Use real data or show loading state
-    const hasData = tokenData && tokenData.price > 0;
+    ctx.fillText(tokenData ? '● LIVE' : '○ OFFLINE', w - 15, 30);
+
+    const hasData = tokenData && (tokenData.price > 0 || tokenData.marketCap > 0);
     const price = hasData ? tokenData.price : 0;
     const priceChange = hasData ? tokenData.change1h : 0;
     const marketCap = hasData ? tokenData.marketCap : 0;
     const volume = hasData ? tokenData.volume24h : 0;
-    
-    // If no data yet, show loading message
+
     if (!hasData) {
         ctx.fillStyle = '#00ffff';
-        ctx.font = 'bold 18px Arial, sans-serif';
+        ctx.font = 'bold 16px Arial, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Loading $WADDLE data...', w / 2, h / 2);
+        ctx.fillText('Loading $WADDLE data...', w / 2, h / 2 - 8);
+        ctx.fillStyle = '#888888';
+        ctx.font = '11px Arial, sans-serif';
+        ctx.fillText('Robinhood Chain', w / 2, h / 2 + 16);
         return;
     }
-    
-    // Draw chart area
+
     const chartTop = 55;
     const chartBottom = h - 85;
     const chartLeft = 20;
     const chartRight = w - 20;
     const chartHeight = chartBottom - chartTop;
     const chartWidth = chartRight - chartLeft;
-    
-    // Grid (simplified - fewer lines for performance)
+
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
     ctx.lineWidth = 1;
     for (let i = 0; i <= 4; i++) {
@@ -165,108 +199,89 @@ function renderCasinoTVBanner(ctx, tokenData = null) {
         ctx.lineTo(chartRight, y);
         ctx.stroke();
     }
-    
-    // STATIC decorative candles - always uptrending, never changes
+
     const numCandles = 16;
     const candleWidth = chartWidth / numCandles * 0.65;
     const candleSpacing = chartWidth / numCandles;
-    
-    // Fixed seed for consistent static candles
+
     const seededRandom = (i) => {
         const x = Math.sin(42 + i * 127.1) * 43758.5453;
         return x - Math.floor(x);
     };
-    
-    // Static uptrending candles (decorative only)
+
     const candles = [];
-    let currentVal = 100; // Arbitrary starting value
-    
+    let currentVal = 100;
+
     for (let i = 0; i < numCandles; i++) {
         const r1 = seededRandom(i);
         const r2 = seededRandom(i + 100);
         const r3 = seededRandom(i + 200);
-        
-        // Mostly green with slight uptrend
         const isGreen = r1 > 0.35;
         const change = isGreen ? (r1 * 0.08 + 0.01) : -(r1 * 0.04);
-        
         const open = currentVal;
         const close = currentVal * (1 + change);
         const high = Math.max(open, close) * (1 + r2 * 0.015);
         const low = Math.min(open, close) * (1 - r3 * 0.012);
-        
         candles.push({ open, high, low, close, isGreen });
         currentVal = close;
     }
-    
-    // Scale to chart bounds
-    let minP = Infinity, maxP = -Infinity;
-    candles.forEach(c => {
+
+    let minP = Infinity;
+    let maxP = -Infinity;
+    candles.forEach((c) => {
         minP = Math.min(minP, c.low);
         maxP = Math.max(maxP, c.high);
     });
     const range = maxP - minP;
     minP -= range * 0.1;
     maxP += range * 0.1;
-    
+
     const scaleY = (p) => chartBottom - ((p - minP) / (maxP - minP)) * chartHeight;
-    
-    // Draw static candles
+
     candles.forEach((c, i) => {
         const x = chartLeft + i * candleSpacing + (candleSpacing - candleWidth) / 2;
         ctx.fillStyle = c.isGreen ? '#00ff88' : '#ff4466';
-        
-        // Wick
         ctx.fillRect(x + candleWidth / 2 - 1, scaleY(c.high), 2, scaleY(c.low) - scaleY(c.high));
-        
-        // Body
         const bodyTop = Math.min(scaleY(c.open), scaleY(c.close));
         const bodyHeight = Math.abs(scaleY(c.close) - scaleY(c.open));
         ctx.fillRect(x, bodyTop, candleWidth, Math.max(bodyHeight, 2));
     });
-    
-    // Bottom info bar - REAL DATA
+
     ctx.fillStyle = '#00ffff';
     ctx.font = 'bold 9px Arial, sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText('LIVE DATA', 15, h - 52);
-    
-    // Price
+
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 16px Arial, sans-serif';
     ctx.fillText('$' + price.toFixed(7), 15, h - 33);
-    
-    // Change %
+
     ctx.fillStyle = priceChange >= 0 ? '#00ff88' : '#ff4466';
     ctx.font = 'bold 14px Arial, sans-serif';
     ctx.fillText((priceChange >= 0 ? '+' : '') + priceChange.toFixed(2) + '%', 135, h - 33);
-    
-    // Market Cap (ACCURATE)
+
     ctx.fillStyle = '#ffffff';
     ctx.font = '13px Arial, sans-serif';
-    const mcDisplay = marketCap >= 1000000 
+    const mcDisplay = marketCap >= 1000000
         ? `MC: $${(marketCap / 1000000).toFixed(2)}M`
-        : marketCap >= 1000 
+        : marketCap >= 1000
             ? `MC: $${(marketCap / 1000).toFixed(1)}K`
             : `MC: $${marketCap.toFixed(0)}`;
     ctx.fillText(mcDisplay, 15, h - 12);
-    
-    // Volume
+
     ctx.fillStyle = '#aaaaaa';
-    const volDisplay = volume >= 1000000 
+    const volDisplay = volume >= 1000000
         ? `Vol: $${(volume / 1000000).toFixed(2)}M`
-        : volume >= 1000 
+        : volume >= 1000
             ? `Vol: $${(volume / 1000).toFixed(0)}K`
             : `Vol: $${volume.toFixed(0)}`;
     ctx.fillText(volDisplay, 130, h - 12);
-    
-    // Timeframe
+
     ctx.fillStyle = '#888888';
     ctx.font = '12px Arial, sans-serif';
     ctx.textAlign = 'right';
     ctx.fillText('1H', w - 15, h - 33);
-    
-    // Data source + truncated CA
+
     ctx.fillStyle = '#555555';
     ctx.font = '9px Arial, sans-serif';
     const ca = tokenData?.contractAddress || WADDLE_TOKEN_ADDRESS;
@@ -274,109 +289,87 @@ function renderCasinoTVBanner(ctx, tokenData = null) {
     ctx.fillText(`DexScreener · ${caShort}`, w - 15, h - 12);
 }
 
-/**
- * Create a Casino TV mesh (static plane, not a sprite that faces camera)
- * @param {Object} THREE - THREE.js library
- * @returns {THREE.Mesh}
- */
 export async function createCasinoTVSprite(THREE) {
     const canvas = document.createElement('canvas');
     const w = 400;
     const h = 280;
     canvas.width = w;
     canvas.height = h;
-    
+
     const ctx = canvas.getContext('2d');
-    
-    // Fetch real data and render
+
     const tokenData = await fetchTokenData();
     renderCasinoTVBanner(ctx, tokenData);
-    
+
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
-    
-    // Use MeshBasicMaterial for unlit appearance (like a screen)
-    const material = new THREE.MeshBasicMaterial({ 
+
+    const material = new THREE.MeshBasicMaterial({
         map: texture,
         transparent: true,
         side: THREE.DoubleSide
     });
-    
-    // Create plane geometry sized to fit the TV (25% larger)
-    const planeWidth = 9.375;  // Match TV screen size
+
+    const planeWidth = 9.375;
     const planeHeight = 5.25;
     const geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
     const mesh = new THREE.Mesh(geometry, material);
-    
+
     mesh.renderOrder = 100;
-    
-    // Store canvas for updates
+
     mesh.userData.canvas = canvas;
     mesh.userData.ctx = ctx;
     mesh.userData.texture = texture;
     mesh.userData.lastUpdate = Date.now();
     mesh.userData.isCasinoTV = true;
-    
-    // Store banner data for zoom overlay
+
     mesh.userData.bannerData = {
         type: 'canvas',
         title: '$WADDLE Token Chart',
         description: `Live $WADDLE price on Robinhood Chain (${WADDLE_TOKEN_ADDRESS})`,
-        canvas: canvas,
-        renderFn: (ctx, w, h) => {
-            const tokenData = cachedTokenData;
-            renderCasinoTVBanner(ctx, tokenData);
+        canvas,
+        renderFn: (bannerCtx) => {
+            renderCasinoTVBanner(bannerCtx, cachedTokenData);
         }
     };
-    
-    // Start auto-refresh timer
+
     mesh.userData.refreshInterval = setInterval(async () => {
         await updateCasinoTVSprite(mesh);
     }, FETCH_INTERVAL);
-    
+
+    // Retry quickly if first load failed (e.g. server still connecting)
+    if (!cachedTokenData) {
+        setTimeout(() => updateCasinoTVSprite(mesh), 4000);
+    }
+
     return mesh;
 }
 
-/**
- * Update the casino TV mesh with fresh data from API
- * Only re-renders if data has actually changed
- * @param {THREE.Mesh} mesh - The mesh to update
- */
 export async function updateCasinoTVSprite(mesh) {
     if (!mesh || !mesh.userData.ctx) return;
-    
+
     const tokenData = await fetchTokenData();
     if (!tokenData) return;
-    
-    // Create hash to check if data changed
+
     const dataHash = `${tokenData.price}-${tokenData.marketCap}-${tokenData.change1h}`;
-    
-    // Skip render if data hasn't changed
     if (dataHash === lastDataHash) {
         return;
     }
-    
+
     lastDataHash = dataHash;
-    
-    const ctx = mesh.userData.ctx;
-    renderCasinoTVBanner(ctx, tokenData);
-    
+
+    renderCasinoTVBanner(mesh.userData.ctx, tokenData);
+
     mesh.userData.texture.needsUpdate = true;
     mesh.userData.lastUpdate = Date.now();
-    console.log('📺 Casino TV: Canvas updated with new data');
 }
 
-/**
- * Cleanup the casino TV (stop refresh interval)
- * @param {THREE.Mesh} mesh - The mesh to cleanup
- */
 export function cleanupCasinoTV(mesh) {
     if (mesh?.userData?.refreshInterval) {
         clearInterval(mesh.userData.refreshInterval);
     }
 }
 
-// Default export with all functions
 export default {
     createCasinoTVSprite,
     updateCasinoTVSprite,
@@ -385,5 +378,4 @@ export default {
     renderCasinoTVBanner
 };
 
-// Named exports for direct imports
 export { renderCasinoTVBanner };

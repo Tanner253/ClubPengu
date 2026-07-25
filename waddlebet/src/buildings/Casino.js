@@ -1861,6 +1861,10 @@ class Casino extends BaseBuilding {
         
         // Bar stools (same format as Pizza Parlor / SKNY Igloo)
         const stoolPositions = this.group.userData.stoolPositions || [];
+        // Local +Z = away from bar counter (bar sits at lower local Z)
+        const dismountAwayZ = 1.8;
+        const dismountOffX = -dismountAwayZ * Math.sin(adjustedRotation);
+        const dismountOffZ = dismountAwayZ * Math.cos(adjustedRotation);
         stoolPositions.forEach((stool, idx) => {
             const worldPos = transform(stool.localX, stool.localZ);
             furniture.push({
@@ -1871,7 +1875,7 @@ class Casino extends BaseBuilding {
                 platformHeight: secondFloorHeight,
                 snapPoints: [{ x: 0, z: 0 }],
                 interactionRadius: 1.0,
-                dismountBack: true,
+                dismountOffset: { x: dismountOffX, z: dismountOffZ },
                 elevated: true,
                 name: `casino_stool_${idx}`
             });

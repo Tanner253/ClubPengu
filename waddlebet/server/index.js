@@ -325,6 +325,20 @@ const server = http.createServer((req, res) => {
         }));
         return;
     }
+
+    // Casino TV — $WADDLE chart (DexScreener proxy)
+    if (req.url === '/api/token-chart/waddle') {
+        import('./services/tokenChart.js').then(async (mod) => {
+            const data = await mod.fetchWaddleChartData();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(data || { error: 'unavailable' }));
+        }).catch((err) => {
+            console.error('[TokenChart] API error:', err);
+            res.writeHead(502, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'unavailable' }));
+        });
+        return;
+    }
     
     // ==================== NFT API ENDPOINTS ====================
     
