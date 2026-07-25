@@ -29,6 +29,8 @@ const TouchCameraControl = ({
                                      target.closest('[data-no-camera]') ||
                                      target.closest('[data-player-modal]') ||
                                      target.closest('[data-emote-wheel]') ||
+                                     target.closest('.rs-chat-panel') ||
+                                     target.closest('.rs-chat-input-wrap') ||
                                      target.closest('input') ||
                                      target.tagName === 'INPUT' ||
                                      target.tagName === 'BUTTON' ||

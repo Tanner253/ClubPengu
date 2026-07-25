@@ -180,7 +180,9 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
     };
 
     const handleBlur = () => {
-        setInputReadonly(true);
+        if (!isMobile) {
+            setInputReadonly(true);
+        }
         resetFadeTimer();
     };
 
@@ -426,9 +428,33 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         }
     };
 
-    const focusInput = () => {
-        if (canWrite) inputRef.current?.focus();
-    };
+    const focusInput = useCallback(() => {
+        if (!canWrite) return;
+        const input = inputRef.current;
+        if (!input) return;
+        if (isMobile) {
+            setInputReadonly(false);
+            input.focus({ preventScroll: true });
+        } else {
+            setInputReadonly(false);
+            input.focus();
+        }
+    }, [canWrite, isMobile]);
+
+    const handleInputTouch = useCallback((e) => {
+        if (!canWrite || !isMobile) return;
+        e.stopPropagation();
+        setInputReadonly(false);
+        requestAnimationFrame(() => {
+            inputRef.current?.focus({ preventScroll: true });
+        });
+    }, [canWrite, isMobile]);
+
+    useEffect(() => {
+        if (isMobile && isOpen && canWrite) {
+            setInputReadonly(false);
+        }
+    }, [isMobile, isOpen, canWrite, activeChatTab]);
 
     const formatTime = (timestamp) => {
         const date = new Date(timestamp);
@@ -515,6 +541,8 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
                 onKeyDown={handleKeyDown}
                 onFocus={handleFocus}
                 onBlur={handleBlur}
+                onTouchStart={handleInputTouch}
+                onPointerDown={isMobile ? handleInputTouch : undefined}
                 placeholder={enterPlaceholder}
                 className={`rs-chat-input ${isMobile ? '' : 'w-full'}`}
                 maxLength={200}
@@ -522,7 +550,8 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck={false}
-                readOnly={inputReadonly}
+                readOnly={!isMobile && inputReadonly}
+                inputMode="text"
                 enterKeyHint="send"
                 data-lpignore="true"
                 data-1p-ignore="true"
@@ -561,8 +590,13 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
 
         if (isMobile) {
             return (
-                <div className="rs-chat-input-row" onClick={(e) => { e.stopPropagation(); focusInput(); }}>
-                    <div className="rs-chat-input-wrap">
+                <div
+                    className="rs-chat-input-row"
+                    data-no-camera="true"
+                    onTouchStart={handleInputTouch}
+                    onClick={(e) => { e.stopPropagation(); focusInput(); }}
+                >
+                    <div className="rs-chat-input-wrap" data-no-camera="true">
                         {suggestions}
                         {inputField}
                     </div>
@@ -591,6 +625,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         <div
             ref={panelRef}
             className={`rs-chat-panel flex flex-col min-h-0 overflow-hidden${isMobile ? ' rs-chat-panel--mobile' : ''}`}
+            data-no-camera="true"
         >
             <div className="rs-chat-header">
                 <span className="rs-chat-header-icon" aria-hidden="true">{activeTabConfig.icon}</span>
@@ -676,7 +711,7 @@ const ChatLog = ({ isMobile = false, isOpen = true, onClose, minigameMode = fals
         return (
             <div
                 className={`fixed inset-0 pointer-events-auto flex items-center justify-center p-4 ${
-                    minigameMode ? 'z-[10050]' : 'z-40'
+                    minigameMode ? 'z-[10050]' : 'z-[10045]'
                 }`}
                 onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
                 data-no-camera="true"

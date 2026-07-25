@@ -25,6 +25,7 @@ export function elementBlocksWorldPick(el, canvas) {
 
     if (el.closest('[data-emote-wheel]')) return true;
     if (el.closest('[data-no-camera]')) return true;
+    if (el.closest('.rs-chat-panel')) return true;
     if (el.closest('[data-player-modal]')) return true;
 
     const tag = el.tagName;
