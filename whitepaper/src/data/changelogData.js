@@ -1,6 +1,28 @@
 /** Whitepaper changelog — /changelog section (maintained separately from waddlebet/src/data/changelogData.js) */
 export default [
   {
+    version: "1.4.3",
+    date: "July 25, 2026",
+    title: "Mobile Chat & World Fixes",
+    description:
+      "Small bugfix patch — mobile chat input opens the keyboard again, Snow Forts spawns no longer trap players near walls and Old Salty, casino barstools dismount to the floor, and the casino TV chart tracks live $WADDLE data.",
+    stats: { filesChanged: 13, additions: 556, deletions: 183 },
+    changes: [
+      // ── Mobile ──
+      { type: "fix", text: "Mobile chat input — tapping the ALL CHAT text field now focuses and opens the keyboard (removed readonly-on-first-tap iOS bug; touch handlers and z-index above game HUD)" },
+      { type: "mobile", text: "Chat input row — 16px font, touch-action manipulation, and game touch layers ignore taps on the chat panel" },
+
+      // ── Snow Forts & spawns ──
+      { type: "fix", text: "Snow Forts spawn safety — saved spawns, ferry arrivals, and reconnect positions validated against perimeter walls, mountains, and Old Salty’s shack; unsafe coords fall back to zone center" },
+      { type: "backend", text: "overworldSpawn.js — shared client/server spawn validation on login, room transfer, and join; +overworldSpawn.test.js" },
+      { type: "fix", text: "Render deploy — ESM import path fix in overworldConfig (roomConfig.js extension) so spawn validation loads on production Node" },
+
+      // ── Casino ──
+      { type: "fix", text: "Casino barstools — dismount from 2nd-floor stools lands on the casino floor away from the bar instead of inside slot machines or the counter" },
+      { type: "improvement", text: "Casino TV chart — switched from $CP to live $WADDLE (Robinhood contract); server proxy at /api/token-chart/waddle with DexScreener fallback" },
+    ],
+  },
+  {
     version: "1.4.2",
     date: "July 25, 2026",
     title: "Multichain Polish & Guest QOL",
