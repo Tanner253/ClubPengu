@@ -229,4 +229,27 @@ describe('IglooPortal', () => {
             expect(container.textContent).toMatch(/PRIVATE|Owner only/i);
         });
     });
+
+    describe('cross-chain denial', () => {
+        it('blocks Solana visitors from EVM-owned igloos', () => {
+            render(
+                <IglooPortal
+                    {...defaultProps}
+                    walletAddress="So11111111111111111111111111111111111111112"
+                    isAuthenticated
+                    iglooData={{
+                        isRented: true,
+                        ownerWallet: '0x4B1234567890abcdef1234567890abcdef12f974',
+                        ownerUsername: 'RH_Test',
+                        accessType: 'fee',
+                        hasEntryFee: true,
+                        entryFee: { enabled: true, amount: 1000, tokenSymbol: '$WADDLE' },
+                    }}
+                />
+            );
+            expect(screen.getByText(/EVM IGLOO ACCESS DENIED/i)).toBeInTheDocument();
+            expect(screen.getByRole('button', { name: /ACCESS DENIED/i })).toBeDisabled();
+            expect(document.body.textContent).not.toMatch(/VIEW REQUIREMENTS/i);
+        });
+    });
 });

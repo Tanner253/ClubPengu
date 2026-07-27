@@ -7,9 +7,28 @@ import iglooService from '../services/IglooService.js';
 import chainPaymentService from '../services/ChainPaymentService.js';
 import rateLimiter from '../utils/RateLimiter.js';
 import { getTxExplorerUrl, getExplorerLabel } from '../utils/txExplorer.js';
+import {
+    getCrossChainIglooDenialMessage,
+    isEvmWalletAddress,
+} from '../utils/tokenAddress.js';
 
 function playerChainId(player) {
     return player?.chainId || 'solana';
+}
+
+function walletsMatch(a, b) {
+    if (!a || !b) return false;
+    if (isEvmWalletAddress(a) || isEvmWalletAddress(b)) {
+        return a.toLowerCase() === b.toLowerCase();
+    }
+    return a === b;
+}
+
+/** Block Solana visitors from EVM igloos and vice versa (owners always allowed). */
+function crossChainEntryDenial(player, igloo) {
+    if (!igloo?.ownerWallet) return null;
+    if (walletsMatch(player?.walletAddress, igloo.ownerWallet)) return null;
+    return getCrossChainIglooDenialMessage(playerChainId(player), igloo);
 }
 
 /**
@@ -242,7 +261,7 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 }
                 
                 // Owner always has access
-                const isOwner = walletAddress && walletAddress === igloo.ownerWallet;
+                const isOwner = walletsMatch(walletAddress, igloo.ownerWallet);
                 if (isOwner) {
                     sendToPlayer(playerId, {
                         type: 'igloo_can_enter',
@@ -252,7 +271,23 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     });
                     return true;
                 }
-                
+
+                const chainDenial = crossChainEntryDenial(player, igloo);
+                if (chainDenial) {
+                    sendToPlayer(playerId, {
+                        type: 'igloo_can_enter',
+                        iglooId,
+                        canEnter: false,
+                        isOwner: false,
+                        blockingReason: 'CROSS_CHAIN_DENIED',
+                        reason: 'CROSS_CHAIN_DENIED',
+                        message: chainDenial,
+                        ownerWallet: igloo.ownerWallet,
+                        ownerUsername: igloo.ownerUsername || igloo.reservedOwnerName,
+                    });
+                    return true;
+                }
+
                 // PRIVATE igloo - only owner can enter (guests blocked)
                 if (igloo.accessType === 'private') {
                     if (!player.isAuthenticated || !walletAddress) {
@@ -430,7 +465,7 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 
                 // Igloo data already fetched above (for guest check)
                 // Owner always has access
-                const isOwner = walletAddress === igloo.ownerWallet;
+                const isOwner = walletsMatch(walletAddress, igloo.ownerWallet);
                 if (isOwner) {
                     sendToPlayer(playerId, {
                         type: 'igloo_eligibility_check',
@@ -440,7 +475,20 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     });
                     return true;
                 }
-                
+
+                const chainDenial = crossChainEntryDenial(player, igloo);
+                if (chainDenial) {
+                    sendToPlayer(playerId, {
+                        type: 'igloo_eligibility_check',
+                        iglooId,
+                        canEnter: false,
+                        isOwner: false,
+                        reason: 'CROSS_CHAIN_DENIED',
+                        message: chainDenial,
+                    });
+                    return true;
+                }
+
                 // Query REAL on-chain token balance (don't trust client!)
                 let tokenBalance = 0;
                 let balanceCheckFailed = false;
@@ -515,6 +563,22 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     });
                     return true;
                 }
+
+                const isOwner = walletsMatch(walletAddress, igloo.ownerWallet);
+                const chainDenial = !isOwner ? crossChainEntryDenial(player, igloo) : null;
+                if (chainDenial) {
+                    sendToPlayer(playerId, {
+                        type: 'igloo_requirements_status',
+                        iglooId,
+                        isOwner: false,
+                        error: chainDenial,
+                        blockingReason: 'CROSS_CHAIN_DENIED',
+                        userTokenBalance: 0,
+                        tokenGateMet: false,
+                        entryFeePaid: false,
+                    });
+                    return true;
+                }
                 
                 // Get user's token balance for the token gate token
                 let userTokenBalance = 0;
@@ -541,12 +605,13 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 // Check if entry fee has been paid
                 let entryFeePaid = true; // Default to true if no entry fee
                 if (igloo.entryFee?.enabled && igloo.entryFee?.amount > 0) {
-                    const paidEntry = igloo.paidEntryFees?.find(p => p.walletAddress === walletAddress);
+                    const paidEntry = igloo.paidEntryFees?.find(p =>
+                        walletsMatch(p.walletAddress, walletAddress)
+                    );
                     entryFeePaid = !!paidEntry;
                 }
                 
                 // Owner always has access
-                const isOwner = walletAddress === igloo.ownerWallet;
                 if (isOwner) {
                     tokenGateMet = true;
                     entryFeePaid = true;
@@ -604,6 +669,16 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 
                 // First check if token gate is met (if applicable)
                 const igloo = await iglooService.getIglooRaw(iglooId);
+                const chainDenial = igloo ? crossChainEntryDenial(player, igloo) : null;
+                if (chainDenial) {
+                    sendToPlayer(playerId, {
+                        type: 'igloo_pay_entry_result',
+                        success: false,
+                        error: 'CROSS_CHAIN_DENIED',
+                        message: chainDenial,
+                    });
+                    return true;
+                }
                 if (igloo && igloo.tokenGate?.enabled && igloo.tokenGate?.tokenAddress) {
                     const balanceCheck = await chainPaymentService.checkMinimumBalance(
                         player.walletAddress,

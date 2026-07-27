@@ -35,6 +35,8 @@ import { getRoomLabel } from './utils/roomLabels';
 import { releaseHudFocusForGameKey } from './utils/gameHudFocus';
 import { useLanguage } from './i18n';
 import { getCharacterMeshBaseY } from './characters';
+import { getCrossChainIglooDenialMessage, isEvmWalletAddress } from './utils/tokenAddress.js';
+import { getEffectiveChainId } from './hooks/useChainEconomy.js';
 import { EMOTE_WHEEL_ITEMS, LOOPING_EMOTES, EMOTE_EMOJI_MAP, createChatSprite, updateAIAgents, updateMatchBanners, updatePveBanners, cleanupPveBanners, createIglooOccupancySprite, updateIglooOccupancySprite, animateMesh, updateDayNightCycle, calculateNightFactor, SnowfallSystem, WizardTrailSystem, GakeCandleTrailSystem, MountTrailSystem, LocalizedParticleSystem, CameraController, lerp, lerpRotation, calculateLerpFactor, SlotMachineSystem, GoldLobbySlotSystem, JackpotCelebration, IceFishingSystem, createMountainBackground, performanceManager, PERFORMANCE_PRESETS } from './systems';
 import { getHoleStockRows, getHoleStockSignature, formatRegrowEta, getHoleStatusById } from './utils/fishingHoleStock';
 import { playSfx, stopTravelHum, setMusicEnergy, DEFAULT_MUSIC_VOLUME, DEFAULT_SFX_VOLUME, normalizeMusicVolume, updateProximityAmbient, stopProximityAmbient, handleRemotePlayerSfx } from './audio';
@@ -9862,13 +9864,27 @@ const VoxelWorld = ({
             // If entering an igloo (from town), check requirements
             if (isEnteringIgloo && !isExitingToTown && nearbyPortal.isIgloo && nearbyPortal.iglooData) {
                 const iglooData = nearbyPortal.iglooData;
-                const isOwner = walletAddress && iglooData.ownerWallet === walletAddress;
+                const isOwner = walletAddress && iglooData.ownerWallet && (
+                    isEvmWalletAddress(iglooData.ownerWallet)
+                        ? iglooData.ownerWallet.toLowerCase() === walletAddress.toLowerCase()
+                        : iglooData.ownerWallet === walletAddress
+                );
                 
                 // If not rented (available), show details panel instead
                 if (!iglooData.isRented) {
                     console.log('🏠 Igloo not rented - showing details panel');
                     openDetailsPanel(nearbyPortal.targetRoom);
                     return;
+                }
+
+                // Opposite-chain rented igloos: hard deny (Solana ↔ EVM)
+                if (!isOwner) {
+                    const visitorChainId = getEffectiveChainId(userDataRef.current, isAuthenticated);
+                    const denial = getCrossChainIglooDenialMessage(visitorChainId, iglooData);
+                    if (denial) {
+                        console.log('🚫', denial);
+                        return;
+                    }
                 }
                 
                 // Owner always has direct entry

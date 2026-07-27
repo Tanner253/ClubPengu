@@ -287,6 +287,11 @@ export const IglooProvider = ({ children }) => {
                             setPendingIglooEntry(null);
                             if (callback) callback(msg.iglooId);
                         }
+                    } else if (msg.blockingReason === 'CROSS_CHAIN_DENIED' || msg.reason === 'CROSS_CHAIN_DENIED') {
+                        // Opposite-chain igloo — door prompt already explains; do not open paywall UI
+                        console.log('🚫 Cross-chain igloo access denied:', msg.message);
+                        pendingIglooEntryRef.current = null;
+                        setPendingIglooEntry(null);
                     } else {
                         // ❌ Requirements not met - show panel with pre-fetched status
                         console.log('❌ Requirements not met:', msg.blockingReason);

@@ -7,6 +7,13 @@ import React from 'react';
 import { IGLOO_CONFIG } from '../config/solana.js';
 import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 import { useChainEconomy } from '../hooks/useChainEconomy.js';
+import {
+    getCrossChainIglooDenialMessage,
+    getIglooChainKind,
+    isEvmWalletAddress,
+} from '../utils/tokenAddress.js';
+import { getActiveEvmChainIdString } from '../config/evm.js';
+import { isEvmChainId } from '../config/tokens.js';
 
 /**
  * Abbreviate a wallet address: "abc123...xyz789"
@@ -46,12 +53,44 @@ const IglooPortal = ({
     const entryFeeAmount = iglooData?.entryFeeAmount || iglooData?.entryFee?.amount || 0;
     const hasTokenGate = iglooData?.hasTokenGate || iglooData?.tokenGate?.enabled;
     const tokenGateInfo = iglooData?.tokenGateInfo || iglooData?.tokenGate;
+
+    // Label fees/gates with the *igloo's* chain token, not the visitor's
+    const iglooChainKind = getIglooChainKind(iglooData);
+    const iglooDisplayChainId = iglooChainKind === 'evm'
+        ? getActiveEvmChainIdString()
+        : iglooChainKind === 'solana'
+            ? 'solana'
+            : chainId;
     
-    // Is this the user's igloo? Check wallet match
-    const isOwner = walletAddress && ownerWallet && (ownerWallet === walletAddress);
+    // Is this the user's igloo? Check wallet match (EVM addresses are case-insensitive)
+    const isOwner = walletAddress && ownerWallet && (
+        isEvmWalletAddress(ownerWallet)
+            ? ownerWallet.toLowerCase() === walletAddress.toLowerCase()
+            : ownerWallet === walletAddress
+    );
+
+    const crossChainDenial = (isRented || isReserved) && ownerWallet && !isOwner
+        ? getCrossChainIglooDenialMessage(chainId, iglooData)
+        : null;
     
     // Determine what to show
     const getStatusInfo = () => {
+        if (crossChainDenial) {
+            const otherChain = isEvmChainId(chainId) ? 'Solana' : 'Robinhood / EVM';
+            return {
+                emoji: '🚫',
+                title: crossChainDenial.toUpperCase(),
+                subtitle: ownerUsername ? `🌟 ${ownerUsername}` : null,
+                description: `This igloo belongs to a ${otherChain} wallet. Switch wallets to visit.`,
+                color: 'red',
+                canEnter: false,
+                actionText: 'ACCESS DENIED',
+                showWallet: !!ownerWallet,
+                walletDisplay: abbreviateWallet(ownerWallet),
+                crossChainBlocked: true,
+            };
+        }
+
         // Not rented - available for rent (unless reserved)
         if (!isRented && !isReserved) {
             return {
@@ -102,9 +141,9 @@ const IglooPortal = ({
         // IMPORTANT: Check requirements BEFORE checking for public access
         // 'both' = Token Gate + Entry Fee
         if (accessType === 'both' && (hasTokenGate || hasEntryFee)) {
-            const tokenSymbol = displayTokenSymbol(tokenGateInfo?.tokenSymbol || tokenGateInfo?.symbol || 'TOKEN', chainId);
+            const tokenSymbol = displayTokenSymbol(tokenGateInfo?.tokenSymbol || tokenGateInfo?.symbol || 'TOKEN', iglooDisplayChainId);
             const minBalance = tokenGateInfo?.minimumBalance || tokenGateInfo?.minimum || 1;
-            const feeTokenSymbol = displayTokenSymbol(iglooData?.entryFeeToken?.tokenSymbol || iglooData?.entryFee?.tokenSymbol || 'TOKEN', chainId);
+            const feeTokenSymbol = displayTokenSymbol(iglooData?.entryFeeToken?.tokenSymbol || iglooData?.entryFee?.tokenSymbol || 'TOKEN', iglooDisplayChainId);
             
             // Show partial status if user has some requirements met
             const tokenMet = userClearance?.tokenGateMet;
@@ -137,7 +176,7 @@ const IglooPortal = ({
         
         // Token gated only
         if (accessType === 'token' || hasTokenGate) {
-            const tokenSymbol = displayTokenSymbol(tokenGateInfo?.tokenSymbol || tokenGateInfo?.symbol || 'TOKEN', chainId);
+            const tokenSymbol = displayTokenSymbol(tokenGateInfo?.tokenSymbol || tokenGateInfo?.symbol || 'TOKEN', iglooDisplayChainId);
             const minBalance = tokenGateInfo?.minimumBalance || tokenGateInfo?.minimum || 1;
             const tokenMet = userClearance?.tokenGateMet;
             
@@ -162,7 +201,7 @@ const IglooPortal = ({
         
         // Entry fee only
         if (accessType === 'fee' || hasEntryFee) {
-            const feeTokenSymbol = displayTokenSymbol(iglooData?.entryFeeToken?.tokenSymbol || iglooData?.entryFee?.tokenSymbol || 'TOKEN', chainId);
+            const feeTokenSymbol = displayTokenSymbol(iglooData?.entryFeeToken?.tokenSymbol || iglooData?.entryFee?.tokenSymbol || 'TOKEN', iglooDisplayChainId);
             const feePaid = userClearance?.entryFeePaid;
             
             return {
@@ -316,9 +355,10 @@ const IglooPortal = ({
                 )}
                 
                 {/* Action Button */}
-                {status.canEnter || status.showRentInfo || status.showRequirements ? (
+                {status.canEnter || status.showRentInfo || status.showRequirements || status.crossChainBlocked ? (
                     <button 
                         onClick={() => {
+                            if (status.crossChainBlocked) return;
                             if (status.showRentInfo && onViewDetails) {
                                 // Not rented - show details/marketing panel
                                 onViewDetails();
@@ -338,7 +378,7 @@ const IglooPortal = ({
                             }
                             text-white px-5 py-2 rounded-lg retro-text text-xs transition-all border
                         `}
-                        disabled={status.color === 'red'}
+                        disabled={status.color === 'red' || status.crossChainBlocked}
                     >
                         {status.actionText}
                     </button>

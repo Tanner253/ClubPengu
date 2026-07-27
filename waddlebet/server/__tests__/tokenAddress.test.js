@@ -4,11 +4,13 @@ import {
     isSolanaTokenAddress,
     isTokenOnUserChain,
     resolveTokenChainId,
+    getCrossChainIglooDenialMessage,
 } from '../utils/tokenAddress.js';
 
 describe('tokenAddress (server)', () => {
     const waddle = '0xcf83b446d4cf400b132538d7bb03e36bdbd3c8b8';
     const cpMint = '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump';
+    const evmOwner = '0x4B1234567890abcdef1234567890abcdef12f974';
 
     it('detects EVM ERC-20 contract addresses', () => {
         expect(isEvmTokenAddress(waddle)).toBe(true);
@@ -31,5 +33,12 @@ describe('tokenAddress (server)', () => {
         expect(resolveTokenChainId(waddle, '4663')).toBe('4663');
         expect(resolveTokenChainId(waddle, 'solana')).toBe('4663');
         expect(resolveTokenChainId(cpMint, '4663')).toBe('solana');
+    });
+
+    it('denies opposite-chain igloo entry', () => {
+        expect(getCrossChainIglooDenialMessage('solana', { ownerWallet: evmOwner }))
+            .toBe('EVM igloo access denied');
+        expect(getCrossChainIglooDenialMessage('4663', { ownerWallet: cpMint }))
+            .toBe('Solana igloo access denied');
     });
 });
