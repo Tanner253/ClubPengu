@@ -30,11 +30,12 @@ vi.mock('../services/X402Service.js', () => ({
     }
 }));
 
-vi.mock('../services/SolanaPaymentService.js', () => ({
+vi.mock('../services/ChainPaymentService.js', () => ({
     default: {
         checkMinimumBalance: vi.fn(),
         verifyRentPayment: vi.fn(),
-        verifyTransaction: vi.fn()
+        verifyEntryFee: vi.fn(),
+        isEvm: vi.fn(() => false),
     }
 }));
 
@@ -42,7 +43,7 @@ vi.mock('../services/SolanaPaymentService.js', () => ({
 import Igloo from '../db/models/Igloo.js';
 import User from '../db/models/User.js';
 import x402Service from '../services/X402Service.js';
-import solanaPaymentService from '../services/SolanaPaymentService.js';
+import chainPaymentService from '../services/ChainPaymentService.js';
 
 // ==================== TEST DATA ====================
 const mockWallet = 'TestWallet123';
@@ -98,7 +99,7 @@ describe('IglooService', () => {
         it('should allow renting available igloo with sufficient balance', async () => {
             const mockIgloo = createMockIgloo();
             Igloo.findOne.mockResolvedValue(mockIgloo);
-            solanaPaymentService.checkMinimumBalance.mockResolvedValue({ hasBalance: true, balance: 100000 });
+            chainPaymentService.checkMinimumBalance.mockResolvedValue({ hasBalance: true, balance: 100000 });
             
             // Import service (after mocks are set up)
             const { default: iglooService } = await import('../services/IglooService.js');
@@ -136,7 +137,7 @@ describe('IglooService', () => {
         it('should reject when insufficient balance', async () => {
             const mockIgloo = createMockIgloo();
             Igloo.findOne.mockResolvedValue(mockIgloo);
-            solanaPaymentService.checkMinimumBalance.mockResolvedValue({ hasBalance: false, balance: 5000 });
+            chainPaymentService.checkMinimumBalance.mockResolvedValue({ hasBalance: false, balance: 5000 });
             
             const { default: iglooService } = await import('../services/IglooService.js');
             
@@ -385,9 +386,9 @@ describe('IglooService', () => {
             User.findOne.mockResolvedValue({ username: 'TestUser' });
             
             // Mock balance check (for canRent)
-            solanaPaymentService.checkMinimumBalance.mockResolvedValue({ hasBalance: true, balance: 100000 });
+            chainPaymentService.checkMinimumBalance.mockResolvedValue({ hasBalance: true, balance: 100000 });
             // Mock rent payment verification
-            solanaPaymentService.verifyRentPayment.mockResolvedValue({ 
+            chainPaymentService.verifyRentPayment.mockResolvedValue({ 
                 success: true, 
                 transactionHash: 'tx123' 
             });
@@ -407,9 +408,9 @@ describe('IglooService', () => {
             Igloo.findOne.mockResolvedValue(mockIgloo);
             
             // Mock balance check (for canRent) - pass
-            solanaPaymentService.checkMinimumBalance.mockResolvedValue({ hasBalance: true, balance: 100000 });
+            chainPaymentService.checkMinimumBalance.mockResolvedValue({ hasBalance: true, balance: 100000 });
             // Mock rent payment verification - fail
-            solanaPaymentService.verifyRentPayment.mockResolvedValue({ 
+            chainPaymentService.verifyRentPayment.mockResolvedValue({ 
                 success: false, 
                 error: 'INVALID_SIGNATURE' 
             });

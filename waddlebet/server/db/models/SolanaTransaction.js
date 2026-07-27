@@ -203,11 +203,22 @@ solanaTransactionSchema.statics.getIglooStats = async function(iglooId) {
             }
         }
     ]);
-    
+
     return result.reduce((acc, item) => {
         acc[item._id] = { count: item.count, totalAmount: item.totalAmount };
         return acc;
     }, {});
+};
+
+/**
+ * All verified igloo payments for a room (rent + entry fees)
+ */
+solanaTransactionSchema.statics.getIglooHistory = function(iglooId, options = {}) {
+    const { limit = 50 } = options;
+    return this.find({ iglooId, status: 'verified' })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .lean();
 };
 
 /**

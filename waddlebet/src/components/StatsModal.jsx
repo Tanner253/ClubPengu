@@ -5,13 +5,17 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext';
+import { getTxExplorerUrl, getExplorerLabelForTx } from '../utils/txExplorer.js';
 
-// Generate Solscan link
-const getSolscanLink = (txOrAddress, type = 'tx') => {
-    if (!txOrAddress) return null;
-    if (txOrAddress.startsWith('DEV_')) return null;
-    const base = 'https://solscan.io';
-    return type === 'tx' ? `${base}/tx/${txOrAddress}` : `${base}/account/${txOrAddress}`;
+// Chain-aware explorer link (Solscan for Solana, Blockscout for EVM)
+const getExplorerLink = (txOrAddress, chainId, type = 'tx') => {
+    if (!txOrAddress || String(txOrAddress).startsWith('DEV_')) return null;
+    if (type === 'tx') return getTxExplorerUrl(txOrAddress, chainId);
+    // Account / token pages — keep Solscan for base58; Blockscout address for 0x
+    if (String(txOrAddress).startsWith('0x')) {
+        return `https://robinhoodchain.blockscout.com/address/${txOrAddress}`;
+    }
+    return `https://solscan.io/account/${txOrAddress}`;
 };
 
 // Format date nicely
@@ -223,7 +227,10 @@ const TransactionsTab = ({ transactions }) => {
                         const typeInfo = txTypeDisplay[tx.type] || { label: tx.type, color: 'text-white', icon: '📝' };
                         const isIncoming = tx.direction === 'in';
                         const isTokenTx = tx.signature || tx.type?.startsWith('token_');
-                        const solscanTxLink = tx.signature ? getSolscanLink(tx.signature, 'tx') : null;
+                        const explorerTxLink = tx.explorerUrl
+                            || (tx.signature ? getExplorerLink(tx.signature, tx.chainId, 'tx') : null);
+                        const explorerLabel = tx.explorerLabel
+                            || getExplorerLabelForTx(tx.signature, tx.chainId);
                         
                         return (
                             <div 
@@ -253,7 +260,7 @@ const TransactionsTab = ({ transactions }) => {
                                         </p>
                                         {tx.tokenAddress && (
                                             <a
-                                                href={getSolscanLink(tx.tokenAddress, 'account')}
+                                                href={getExplorerLink(tx.tokenAddress, tx.chainId, 'account')}
                                                 target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="text-purple-400/60 text-xs hover:text-purple-300"
@@ -264,14 +271,14 @@ const TransactionsTab = ({ transactions }) => {
                                     </div>
                                 </div>
                                 
-                                {solscanTxLink && (
+                                {explorerTxLink && (
                                     <a
-                                        href={solscanTxLink}
+                                        href={explorerTxLink}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="mt-2 flex items-center gap-1 text-xs text-purple-400 hover:text-purple-300"
                                     >
-                                        🔗 View on Solscan
+                                        🔗 View on {explorerLabel}
                                         <span className="text-purple-400/50">({tx.signature.slice(0, 8)}...)</span>
                                     </a>
                                 )}

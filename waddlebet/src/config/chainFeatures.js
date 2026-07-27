@@ -18,12 +18,12 @@ const SOLANA_LIVE = {
     nametagTiers: true,
 };
 
-/** Robinhood EVM — daily bonus live; other payouts ship in later phases. */
+/** Robinhood EVM — daily bonus + igloo economy live. */
 const EVM_LIVE = {
     dailyBonusClaim: true,
     pebblesRail: false,
-    iglooRent: false,
-    iglooEntryFee: false,
+    iglooRent: true,
+    iglooEntryFee: true,
     tokenWagers: false,
     splGifts: false,
     referralPayouts: false,

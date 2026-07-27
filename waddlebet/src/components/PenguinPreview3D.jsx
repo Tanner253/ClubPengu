@@ -40,7 +40,9 @@ import {
     JimothyGenerators,
     JIMOTHY_PALETTE,
     FonzGenerators,
-    FONZ_PALETTE
+    FONZ_PALETTE,
+    BadgerGenerators,
+    BADGER_PALETTE
 } from '../characters';
 
 // Color palette for penguin skins
@@ -436,6 +438,17 @@ function buildPenguin(THREE, group, appearance) {
             ...FonzGenerators.flipperLeft(),
             ...FonzGenerators.flipperRight(),
             ...FonzGenerators.feet()
+        ];
+    } else if (characterType === 'badger') {
+        characterPalette = BADGER_PALETTE;
+        voxels = [
+            ...BadgerGenerators.head(),
+            ...BadgerGenerators.body(),
+            ...BadgerGenerators.armLeft(),
+            ...BadgerGenerators.armRight(),
+            ...BadgerGenerators.legLeft(),
+            ...BadgerGenerators.legRight(),
+            ...BadgerGenerators.tail()
         ];
     } else if (characterType === 'marcus') {
         characterPalette = MARCUS_PALETTE;

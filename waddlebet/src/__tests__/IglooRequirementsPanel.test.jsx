@@ -14,7 +14,7 @@ vi.mock('../multiplayer/MultiplayerContext.jsx', () => ({
 }));
 
 // Mock SolanaPayment
-vi.mock('../wallet/SolanaPayment.js', () => ({
+vi.mock('../wallet/iglooPayments.js', () => ({
     payIglooEntryFee: vi.fn().mockResolvedValue({ success: true, signature: 'mockSig123' })
 }));
 

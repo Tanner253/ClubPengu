@@ -253,6 +253,18 @@ const PROMO_CODES = [
             coins: 0
         }
     },
+    {
+        code: 'BADGER',
+        name: '🦡 Badger Character',
+        description: 'Unlocks the burly striped badger with white gloves',
+        unlocks: {
+            mounts: [],
+            cosmetics: [],
+            characters: ['badger'],
+            skinColor: null,
+            coins: 0
+        }
+    },
     
     // ========== INTERNAL TEAM CODES ==========
     {

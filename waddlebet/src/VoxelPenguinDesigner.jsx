@@ -47,7 +47,11 @@ import {
     JIMOTHY_HAT_OFFSET,
     FonzGenerators,
     FONZ_PALETTE,
-    FONZ_HAT_OFFSET
+    FONZ_HAT_OFFSET,
+    BadgerGenerators,
+    BADGER_PALETTE,
+    BADGER_HAT_OFFSET,
+    BADGER_PROPELLER_BLADE_POS
 } from './characters';
 import WalletAuth from './components/WalletAuth';
 import LanguageToggle from './components/LanguageToggle';
@@ -289,6 +293,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         blackBull: '🐂',
         jimothy: '🦝',
         fonz: '👍',
+        badger: '🦡',
         whiteWhale: '🐋',
         blackWhale: '🖤',
         silverWhale: '🩶',
@@ -675,6 +680,11 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 setMouth('none');
                 setBodyItem(bodyItem === 'goldChain' ? 'goldChain' : 'none');
             }
+
+            if (typeId === 'badger') {
+                setEyes('none');
+                setMouth('none');
+            }
             
             // Duck has built-in eyes and bill, but allows hats and clothing
             if (typeId === 'duck') {
@@ -697,7 +707,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const unlockedCharactersList = useMemo(() => {
         // TEMPORARY: Unlock all characters for everyone (matches cosmetics unlock)
         if (UNLOCK_ALL_COSMETICS) {
-            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'pump', 'tortoise', 'blackBull', 'jimothy', 'fonz', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
+            return ['penguin', 'marcus', 'doginal', 'frog', 'shrimp', 'duck', 'tungTung', 'gake', 'pump', 'tortoise', 'blackBull', 'jimothy', 'fonz', 'badger', 'whiteWhale', 'blackWhale', 'silverWhale', 'goldWhale'];
         }
         
         const chars = ['penguin']; // Penguin always unlocked
@@ -1624,6 +1634,35 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     addPart(chainVoxels, 'bodyItem');
                 }
             }
+        } else if (characterType === 'badger') {
+            addPart(BadgerGenerators.body(), 'body', BADGER_PALETTE);
+            addPart(BadgerGenerators.head(), 'head', BADGER_PALETTE);
+            addPart(BadgerGenerators.armLeft(), 'flipper_l', BADGER_PALETTE);
+            addPart(BadgerGenerators.armRight(), 'flipper_r', BADGER_PALETTE);
+            addPart(BadgerGenerators.legLeft(), 'foot_l', BADGER_PALETTE);
+            addPart(BadgerGenerators.legRight(), 'foot_r', BADGER_PALETTE);
+            addPart(BadgerGenerators.tail(), 'tail', BADGER_PALETTE);
+
+            const badgerHatVoxels = ASSETS.HATS[hat] || [];
+            if (badgerHatVoxels.length > 0) {
+                const offsetHatVoxels = badgerHatVoxels.map(v => ({
+                    ...v,
+                    y: v.y + BADGER_HAT_OFFSET.y,
+                    z: v.z + BADGER_HAT_OFFSET.z,
+                }));
+                addPart(offsetHatVoxels, 'hat');
+            }
+
+            const badgerBodyItemData = ASSETS.BODY[bodyItem];
+            const badgerBodyItemVoxels = badgerBodyItemData?.voxels || badgerBodyItemData || [];
+            if (badgerBodyItemVoxels.length > 0) {
+                const offsetBodyVoxels = badgerBodyItemVoxels.map(v => ({
+                    ...v,
+                    y: v.y - 3,
+                    z: (v.z || 0) + 2,
+                }));
+                addPart(offsetBodyVoxels, 'bodyItem');
+            }
         } else if (characterType?.includes('Whale')) {
             // Build Whale variant - whale head on penguin body
             const WHALE_CONFIGS = {
@@ -1836,6 +1875,9 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             } else if (characterType === 'fonz') {
                 bladeY = 12 + FONZ_HAT_OFFSET.y + 1;
                 bladeZ = FONZ_HAT_OFFSET.z;
+            } else if (characterType === 'badger') {
+                bladeY = BADGER_PROPELLER_BLADE_POS.y;
+                bladeZ = BADGER_PROPELLER_BLADE_POS.z;
             } else if (characterType === 'frog') {
                 bladeY = 15;
                 bladeZ = 2;
@@ -3231,6 +3273,58 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                             
                             {[
                                 { labelKey: 'creator.headwear', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
+                                { labelKey: 'creator.mounts', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
+                            ].map((opt, i) => {
+                                const categoryForCheck = opt.key === 'head' ? 'hat' : opt.key === 'body' ? 'bodyItem' : opt.key;
+                                const isCurrentLocked = opt.isMount 
+                                    ? (opt.val !== 'none' && !isMountUnlocked(opt.val))
+                                    : (opt.val !== 'none' && opt.val !== opt.defaultVal && !isCosmeticUnlocked(opt.val, categoryForCheck));
+                                
+                                return (
+                                    <div key={i} className="flex flex-col gap-1">
+                                        <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                                            {t(opt.labelKey)}
+                                            {opt.isMount && <span className="text-orange-400 ml-1">({t('creator.promo')})</span>}
+                                        </span>
+                                        <div className={`flex items-center justify-between rounded-lg p-1 ${
+                                            isCurrentLocked ? 'bg-red-900/30 border border-red-500/30' : 'bg-black/30'
+                                        }`}>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, -1, opt.defaultVal)}
+                                            >
+                                                <IconChevronLeft size={20} />
+                                            </button>
+                                            <span className={`text-sm font-bold capitalize ${isCurrentLocked ? 'text-red-400' : 'text-white'}`}>
+                                                {isCurrentLocked && '🔒 '}
+                                                {opt.val.replace(/([A-Z])/g, ' $1').trim()}
+                                            </span>
+                                            <button 
+                                                className="voxel-btn p-2 text-white hover:text-yellow-400"
+                                                onClick={() => cycle(opt.val, opt.list, opt.set, 1, opt.defaultVal)}
+                                            >
+                                                <IconChevronRight size={20} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : characterType === 'badger' ? (
+                        <div className="space-y-3">
+                            <div className="bg-gradient-to-br from-zinc-800/70 to-stone-900 rounded-xl p-4 border border-zinc-500/40">
+                                <div className="text-center">
+                                    <span className="text-2xl">🦡</span>
+                                    <h3 className="text-white font-bold mt-2">{t('character.badger')}</h3>
+                                    <p className="text-white/60 text-xs mt-1">
+                                        {t('character.badgerDesc')}
+                                    </p>
+                                </div>
+                            </div>
+                            
+                            {[
+                                { labelKey: 'creator.headwear', key: 'head', val: hat, set: setHat, list: options.head, defaultVal: null },
+                                { labelKey: 'creator.clothing', key: 'body', val: bodyItem, set: setBodyItem, list: options.body, defaultVal: null },
                                 { labelKey: 'creator.mounts', key: 'mounts', val: mount, set: setMount, list: options.mounts, isMount: true, defaultVal: null },
                             ].map((opt, i) => {
                                 const categoryForCheck = opt.key === 'head' ? 'hat' : opt.key === 'body' ? 'bodyItem' : opt.key;

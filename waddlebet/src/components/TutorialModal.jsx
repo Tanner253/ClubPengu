@@ -453,7 +453,7 @@ function buildTutorialSlides({ isEvm, canUsePebblesRail, canReferralPayout }) {
                     </div>
                     {isEvm && (
                         <p className="text-xs text-violet-300/80 text-center">
-                            Igloo rent &amp; entry fees on Robinhood Chain ship soon. Live today on Solana with $CP.
+                            Igloo rent &amp; entry fees work on both chains — $WADDLE on Robinhood Chain, $CP on Solana.
                         </p>
                     )}
                 </div>

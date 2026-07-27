@@ -33,15 +33,15 @@ vi.mock('../services/X402Service.js', () => ({
     }
 }));
 
-vi.mock('../services/SolanaPaymentService.js', () => ({
+vi.mock('../services/ChainPaymentService.js', () => ({
     default: {
         checkMinimumBalance: vi.fn(),
-        verifyTransaction: vi.fn()
+        verifyEntryFee: vi.fn(),
     }
 }));
 
 import iglooService from '../services/IglooService.js';
-import solanaPaymentService from '../services/SolanaPaymentService.js';
+import chainPaymentService from '../services/ChainPaymentService.js';
 import { handleIglooMessage } from '../handlers/iglooHandlers.js';
 
 // ==================== TEST HELPERS ====================
@@ -166,7 +166,7 @@ describe('Igloo Handlers', () => {
             );
             
             expect(handled).toBe(true);
-            expect(iglooService.canRent).toHaveBeenCalledWith('TestWallet123', 'igloo1');
+            expect(iglooService.canRent).toHaveBeenCalledWith('TestWallet123', 'igloo1', 'solana');
             expect(sendToPlayer).toHaveBeenCalledWith(playerId, {
                 type: 'igloo_can_rent',
                 iglooId: 'igloo1',
@@ -232,7 +232,8 @@ describe('Igloo Handlers', () => {
             expect(iglooService.startRental).toHaveBeenCalledWith(
                 'TestWallet123',
                 'igloo1',
-                txSig
+                txSig,
+                'solana'
             );
             expect(sendToPlayer).toHaveBeenCalledWith(playerId, expect.objectContaining({
                 type: 'igloo_rent_result',

@@ -3904,9 +3904,14 @@ async function handleMessage(playerId, message) {
                 const TransactionModel = (await import('./db/models/Transaction.js')).default;
                 const coinTransactions = await TransactionModel.getHistoryForWallet(player.walletAddress, 50);
                 
-                // Get Solana token transaction history (last 50)
+                // Get Solana + EVM token transaction history (last 50 each)
                 const SolanaTransactionModel = (await import('./db/models/SolanaTransaction.js')).default;
-                const tokenTransactions = await SolanaTransactionModel.getWalletHistory(player.walletAddress, 50);
+                const EvmTransactionModel = (await import('./db/models/EvmTransaction.js')).default;
+                const { getTxExplorerUrl, getExplorerLabel } = await import('./utils/txExplorer.js');
+                const [tokenTransactions, evmTransactions] = await Promise.all([
+                    SolanaTransactionModel.getWalletHistory(player.walletAddress, 50),
+                    EvmTransactionModel.getWalletHistory(player.walletAddress, 50),
+                ]);
                 
                 // Format match history for client
                 const formattedMatches = matchHistory.map(m => ({
@@ -3938,33 +3943,75 @@ async function handleMessage(playerId, message) {
                     reason: t.reason,
                     matchId: t.relatedData?.matchId,
                     timestamp: t.createdAt,
-                    signature: null // No Solscan for coin transactions
+                    signature: null,
+                    explorerUrl: null,
+                    explorerLabel: null,
                 }));
+
+                const mapOnChainType = (type) => (
+                    type === 'wager' ? 'token_wager'
+                        : type === 'igloo_entry_fee' ? 'token_entry_fee'
+                            : type === 'igloo_rent' ? 'token_rent'
+                                : type === 'igloo_rent_renewal' ? 'token_rent_renewal'
+                                    : 'token_transfer'
+                );
+                const mapOnChainReason = (t) => (
+                    t.type === 'wager' ? `Wager ${t.matchId ? `for match ${t.matchId}` : ''}`
+                        : t.type === 'igloo_entry_fee' ? `Entry fee ${t.iglooId ? `for ${t.iglooId}` : ''}`
+                            : t.type === 'igloo_rent' ? `Rent ${t.iglooId ? `for ${t.iglooId}` : ''}`
+                                : t.type === 'igloo_rent_renewal' ? `Rent renewal ${t.iglooId ? `for ${t.iglooId}` : ''}`
+                                    : 'Token transfer'
+                );
                 
                 // Format Solana token transactions for client
                 const formattedTokenTransactions = tokenTransactions.map(t => ({
-                    id: t.signature?.slice(0, 16) || t._id.toString(),
-                    type: t.type === 'wager' ? 'token_wager' : 
-                          t.type === 'igloo_entry_fee' ? 'token_entry_fee' :
-                          t.type === 'igloo_rent' ? 'token_rent' :
-                          t.type === 'igloo_rent_renewal' ? 'token_rent_renewal' : 'token_transfer',
+                    id: `sol:${t.signature?.slice(0, 16) || t._id.toString()}`,
+                    type: mapOnChainType(t.type),
                     amount: t.amount,
                     currency: t.tokenSymbol || 'SPL',
                     tokenAddress: t.tokenMint,
                     direction: t.recipientWallet === player.walletAddress ? 'in' : 'out',
                     otherParty: t.recipientWallet === player.walletAddress ? t.senderWallet : t.recipientWallet,
-                    reason: t.type === 'wager' ? `Wager ${t.matchId ? `for match ${t.matchId}` : ''}` :
-                            t.type === 'igloo_entry_fee' ? `Entry fee ${t.iglooId ? `for ${t.iglooId}` : ''}` :
-                            t.type === 'igloo_rent' ? `Rent ${t.iglooId ? `for ${t.iglooId}` : ''}` :
-                            t.type === 'igloo_rent_renewal' ? `Rent renewal ${t.iglooId ? `for ${t.iglooId}` : ''}` : 'Token transfer',
+                    reason: mapOnChainReason(t),
                     matchId: t.matchId,
                     iglooId: t.iglooId,
                     timestamp: t.processedAt || t.createdAt,
-                    signature: t.signature // For Solscan link
+                    signature: t.signature,
+                    chainId: 'solana',
+                    explorerUrl: getTxExplorerUrl(t.signature, 'solana'),
+                    explorerLabel: getExplorerLabel('solana'),
                 }));
+
+                // Format EVM ($WADDLE) token transactions for client
+                const formattedEvmTransactions = evmTransactions.map(t => {
+                    const chainId = t.chainId || '4663';
+                    return {
+                        id: `evm:${t.txHash?.slice(0, 18) || t._id.toString()}`,
+                        type: mapOnChainType(t.type),
+                        amount: t.amount,
+                        currency: t.tokenSymbol || '$WADDLE',
+                        tokenAddress: t.tokenAddress,
+                        direction: t.recipientWallet?.toLowerCase() === player.walletAddress.toLowerCase() ? 'in' : 'out',
+                        otherParty: t.recipientWallet?.toLowerCase() === player.walletAddress.toLowerCase()
+                            ? t.senderWallet
+                            : t.recipientWallet,
+                        reason: mapOnChainReason(t),
+                        matchId: t.matchId,
+                        iglooId: t.iglooId,
+                        timestamp: t.processedAt || t.createdAt,
+                        signature: t.txHash,
+                        chainId,
+                        explorerUrl: getTxExplorerUrl(t.txHash, chainId),
+                        explorerLabel: getExplorerLabel(chainId),
+                    };
+                });
                 
                 // Merge and sort all transactions by timestamp (newest first)
-                const allTransactions = [...formattedCoinTransactions, ...formattedTokenTransactions]
+                const allTransactions = [
+                    ...formattedCoinTransactions,
+                    ...formattedTokenTransactions,
+                    ...formattedEvmTransactions,
+                ]
                     .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
                     .slice(0, 100); // Limit to 100 total
                 

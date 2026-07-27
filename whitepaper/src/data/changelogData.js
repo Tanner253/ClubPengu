@@ -1,6 +1,47 @@
 /** Whitepaper changelog — /changelog section (maintained separately from waddlebet/src/data/changelogData.js) */
 export default [
   {
+    version: "1.4.4",
+    date: "July 26, 2026",
+    title: "Igloo $WADDLE Rent · On-Chain Receipts",
+    description:
+      "Major utility update — rent igloos and collect entry fees with real $WADDLE on Robinhood Chain (same idea as $CP on Solana). Every payment is verified on-chain and shown like a receipt: explorer links for renters, and an owner payment log of who paid, how much, and when. Open Igloo Settings → Rent to review your cash flow.",
+    highlight: true,
+    brand: "robinhood",
+    stats: { filesChanged: 25, additions: 1800, deletions: 200 },
+    changes: [
+      // ── How it works (player-friendly) ──
+      {
+        type: "content",
+        text: "How igloo payments work — (1) Renter pays daily rent in $WADDLE/$CP from their wallet → (2) Server verifies the transfer on-chain → (3) Igloo unlocks / renews → (4) Both sides get a receipt with a Blockscout or Solscan link. Entry fees go straight to the igloo owner’s wallet.",
+      },
+      {
+        type: "content",
+        text: "Flow: Wallet pay → chain confirm → game unlock → receipt. Rent goes to the platform rent wallet; entry fees go to the owner. Owners see a live Payment receipts list (payer, amount, token, explorer link).",
+      },
+      {
+        type: "content",
+        text: "Diagram — Renter wallet ──$WADDLE rent──▶ Rent treasury → Igloo unlocked; Guest wallet ──entry fee──▶ Owner wallet → Door opens; Owner Settings → Payment receipts → Blockscout/Solscan.",
+      },
+
+      // ── Player-facing receipts ──
+      { type: "feature", text: "Rent success receipt — after renting, see amount paid plus a one-click Blockscout (Robinhood) or Solscan (Solana) link instead of the modal vanishing silently" },
+      { type: "feature", text: "Entry-fee receipt — pay-to-enter shows a verified payment card with explorer link, then Enter Igloo" },
+      { type: "feature", text: "Owner Payment receipts — Igloo Settings → Rent lists rent + entry-fee payments (who paid, how much, when) with explorer links; refreshes when guests pay" },
+      { type: "improvement", text: "Stats → Activity — EVM igloo/$WADDLE txs appear next to Solana history; links open Blockscout or Solscan by chain" },
+
+      // ── EVM igloo rail ──
+      { type: "feature", text: "$WADDLE igloo rent & renew on Robinhood Chain — MetaMask ERC-20 transfer, server verification, same daily-rent + grace-period rules as Solana" },
+      { type: "feature", text: "$WADDLE entry fees to the owner wallet — custom amount/token gates where enabled; chain-aware eligibility checks" },
+      { type: "backend", text: "ChainPaymentService + EvmTransaction audit trail — replay-safe tx hashes, igloo payment history API (igloo_payment_history)" },
+      { type: "backend", text: "Shared txExplorer helpers — Solscan for Solana signatures, Blockscout for 0x hashes across server logs and client UI" },
+
+      // ── Clarity & safety ──
+      { type: "improvement", text: "Clearer payment errors when client/server token addresses disagree (prevents “paid but not rented” mismatches)" },
+      { type: "security", text: "On-chain verify-before-grant — rent and entry fees only unlock after the transfer is confirmed and recorded" },
+    ],
+  },
+  {
     version: "1.4.3",
     date: "July 25, 2026",
     title: "Mobile Chat & World Fixes",

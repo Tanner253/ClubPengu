@@ -7,8 +7,10 @@ describe('chainFeatures', () => {
         expect(isChainFeatureLive('solana', 'tokenWagers')).toBe(true);
     });
 
-    it('enables EVM daily bonus; other rails still gated', () => {
+    it('enables EVM daily bonus and igloo economy', () => {
         expect(isChainFeatureLive('4663', 'dailyBonusClaim')).toBe(true);
+        expect(isChainFeatureLive('4663', 'iglooRent')).toBe(true);
+        expect(isChainFeatureLive('4663', 'iglooEntryFee')).toBe(true);
         expect(isChainFeatureLive('4663', 'pebblesRail')).toBe(false);
         expect(isChainFeatureLive('4663', 'tokenWagers')).toBe(false);
         expect(isChainFeatureLive('4663', 'nametagTiers')).toBe(true);

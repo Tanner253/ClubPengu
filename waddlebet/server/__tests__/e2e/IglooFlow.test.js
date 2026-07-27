@@ -30,18 +30,19 @@ vi.mock('../../services/X402Service.js', () => ({
     }
 }));
 
-vi.mock('../../services/SolanaPaymentService.js', () => ({
+vi.mock('../../services/ChainPaymentService.js', () => ({
     default: {
         checkMinimumBalance: vi.fn(),
         verifyRentPayment: vi.fn(),
-        verifyTransaction: vi.fn()
+        verifyEntryFee: vi.fn(),
+        isEvm: vi.fn(() => false),
     }
 }));
 
 import Igloo from '../../db/models/Igloo.js';
 import User from '../../db/models/User.js';
 import x402Service from '../../services/X402Service.js';
-import solanaPaymentService from '../../services/SolanaPaymentService.js';
+import chainPaymentService from '../../services/ChainPaymentService.js';
 
 // ==================== TEST HELPERS ====================
 const createMockIgloo = (id, overrides = {}) => ({
@@ -102,7 +103,7 @@ describe('End-to-End Igloo Flows', () => {
             // Step 1: User finds available igloo
             const availableIgloo = createMockIgloo(iglooId);
             Igloo.findOne.mockResolvedValue(availableIgloo);
-            solanaPaymentService.checkMinimumBalance.mockResolvedValue({ hasBalance: true, balance: 100000 });
+            chainPaymentService.checkMinimumBalance.mockResolvedValue({ hasBalance: true, balance: 100000 });
             
             const { default: iglooService } = await import('../../services/IglooService.js');
             
@@ -111,7 +112,7 @@ describe('End-to-End Igloo Flows', () => {
             
             // Step 2: User rents igloo
             User.findOne.mockResolvedValue({ username: 'CoolPenguin' });
-            solanaPaymentService.verifyRentPayment.mockResolvedValue({ success: true, transactionHash: 'tx_rent' });
+            chainPaymentService.verifyRentPayment.mockResolvedValue({ success: true, transactionHash: 'tx_rent' });
             
             const rentResult = await iglooService.startRental(walletAddress, iglooId, 'txSignature123');
             expect(rentResult.success).toBe(true);
@@ -186,7 +187,7 @@ describe('End-to-End Igloo Flows', () => {
             expect(canEnterResult.reason).toBe('ENTRY_FEE_REQUIRED');
             
             // Step 2: Pay entry fee with real transaction signature
-            solanaPaymentService.verifyTransaction.mockResolvedValue({ 
+            chainPaymentService.verifyEntryFee.mockResolvedValue({
                 success: true, 
                 transactionHash: 'tx_entry',
                 amount: 500
@@ -254,7 +255,7 @@ describe('End-to-End Igloo Flows', () => {
             });
             Igloo.findOne.mockResolvedValue(rentedIgloo);
             
-            solanaPaymentService.verifyRentPayment.mockResolvedValue({ 
+            chainPaymentService.verifyRentPayment.mockResolvedValue({ 
                 success: true, 
                 transactionHash: 'tx_daily' 
             });

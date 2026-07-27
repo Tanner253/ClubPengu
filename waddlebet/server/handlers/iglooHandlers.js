@@ -4,8 +4,13 @@
  */
 
 import iglooService from '../services/IglooService.js';
-import solanaPaymentService from '../services/SolanaPaymentService.js';
+import chainPaymentService from '../services/ChainPaymentService.js';
 import rateLimiter from '../utils/RateLimiter.js';
+import { getTxExplorerUrl, getExplorerLabel } from '../utils/txExplorer.js';
+
+function playerChainId(player) {
+    return player?.chainId || 'solana';
+}
 
 /**
  * Handle igloo-related messages
@@ -78,7 +83,11 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     return true;
                 }
                 
-                const result = await iglooService.canRent(player.walletAddress, iglooId);
+                const result = await iglooService.canRent(
+                    player.walletAddress,
+                    iglooId,
+                    playerChainId(player)
+                );
                 sendToPlayer(playerId, {
                     type: 'igloo_can_rent',
                     iglooId,
@@ -117,7 +126,8 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 const result = await iglooService.startRental(
                     player.walletAddress,
                     iglooId,
-                    transactionSignature
+                    transactionSignature,
+                    playerChainId(player)
                 );
                 
                 sendToPlayer(playerId, {
@@ -173,7 +183,8 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 const result = await iglooService.payRent(
                     player.walletAddress,
                     iglooId,
-                    transactionSignature
+                    transactionSignature,
+                    playerChainId(player)
                 );
                 
                 sendToPlayer(playerId, {
@@ -299,10 +310,11 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 if ((igloo.accessType === 'token' || igloo.accessType === 'both') && 
                     igloo.tokenGate?.enabled && igloo.tokenGate?.tokenAddress) {
                     try {
-                        const balanceCheck = await solanaPaymentService.checkMinimumBalance(
+                        const balanceCheck = await chainPaymentService.checkMinimumBalance(
                             walletAddress,
                             igloo.tokenGate.tokenAddress,
-                            igloo.tokenGate.minimumBalance || 0
+                            igloo.tokenGate.minimumBalance || 0,
+                            playerChainId(player)
                         );
                         userTokenBalance = balanceCheck.balance;
                         tokenGateMet = balanceCheck.hasBalance;
@@ -434,10 +446,11 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 let balanceCheckFailed = false;
                 if (igloo.tokenGate?.enabled && igloo.tokenGate?.tokenAddress) {
                     try {
-                        const balanceCheck = await solanaPaymentService.checkMinimumBalance(
+                        const balanceCheck = await chainPaymentService.checkMinimumBalance(
                             walletAddress,
                             igloo.tokenGate.tokenAddress,
-                            igloo.tokenGate.minimumBalance || 0
+                            igloo.tokenGate.minimumBalance || 0,
+                            playerChainId(player)
                         );
                         tokenBalance = balanceCheck.balance;
                     } catch (e) {
@@ -510,10 +523,11 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 if (igloo.tokenGate?.enabled && igloo.tokenGate?.tokenAddress) {
                     try {
                         // Query actual token balance from Solana
-                        const balanceCheck = await solanaPaymentService.checkMinimumBalance(
+                        const balanceCheck = await chainPaymentService.checkMinimumBalance(
                             walletAddress,
                             igloo.tokenGate.tokenAddress,
-                            igloo.tokenGate.minimumBalance || 0
+                            igloo.tokenGate.minimumBalance || 0,
+                            playerChainId(player)
                         );
                         userTokenBalance = balanceCheck.balance;
                         tokenGateMet = balanceCheck.hasBalance;
@@ -591,10 +605,11 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 // First check if token gate is met (if applicable)
                 const igloo = await iglooService.getIglooRaw(iglooId);
                 if (igloo && igloo.tokenGate?.enabled && igloo.tokenGate?.tokenAddress) {
-                    const balanceCheck = await solanaPaymentService.checkMinimumBalance(
+                    const balanceCheck = await chainPaymentService.checkMinimumBalance(
                         player.walletAddress,
                         igloo.tokenGate.tokenAddress,
-                        igloo.tokenGate.minimumBalance || 0
+                        igloo.tokenGate.minimumBalance || 0,
+                        playerChainId(player)
                     );
                     
                     if (!balanceCheck.hasBalance) {
@@ -614,11 +629,14 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 const result = await iglooService.payEntryFee(
                     player.walletAddress,
                     iglooId,
-                    transactionSignature  // Now a real tx signature, not signed intent
+                    transactionSignature,
+                    playerChainId(player)
                 );
                 
                 // ========== AUDIT LOGGING ==========
                 if (result.success) {
+                    const chainId = playerChainId(player);
+                    const explorerUrl = result.explorerUrl || getTxExplorerUrl(transactionSignature, chainId);
                     console.log('═══════════════════════════════════════════════════════════');
                     console.log('💰 [PAYMENT RECORDED] Igloo Entry Fee');
                     console.log('═══════════════════════════════════════════════════════════');
@@ -629,7 +647,7 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                     console.log(`   Amount:       ${igloo?.entryFee?.amount || 0} ${igloo?.entryFee?.tokenSymbol || 'TOKEN'}`);
                     console.log(`   Token:        ${igloo?.entryFee?.tokenAddress || 'unknown'}`);
                     console.log(`   TX Signature: ${transactionSignature}`);
-                    console.log(`   Solscan:      https://solscan.io/tx/${transactionSignature}`);
+                    console.log(`   ${getExplorerLabel(chainId)}:      ${explorerUrl}`);
                     console.log('═══════════════════════════════════════════════════════════');
                 } else {
                     console.warn('⚠️ [PAYMENT FAILED] Igloo Entry Fee');
@@ -767,11 +785,12 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                             }
                             // Check token gate
                             else if (igloo.tokenGate?.enabled && p.walletAddress) {
-                                const balanceCheck = await solanaPaymentService.checkMinimumBalance(
-                                    p.walletAddress,
-                                    igloo.tokenGate.tokenAddress,
-                                    igloo.tokenGate.minimumBalance || 0
-                                );
+                        const balanceCheck = await chainPaymentService.checkMinimumBalance(
+                            p.walletAddress,
+                            igloo.tokenGate.tokenAddress,
+                            igloo.tokenGate.minimumBalance || 0,
+                            p.chainId || 'solana'
+                        );
                                 if (!balanceCheck.hasBalance) {
                                     canStay = false;
                                     kickReason = 'TOKEN_GATE_NOT_MET';
@@ -833,6 +852,53 @@ export async function handleIglooMessage(playerId, player, message, sendToPlayer
                 
             } catch (error) {
                 console.error('🏠 Error in igloo_my_rentals:', error);
+            }
+            return true;
+        }
+
+        // ==================== OWNER PAYMENT RECEIPTS ====================
+        case 'igloo_payment_history': {
+            try {
+                const { iglooId, limit } = message;
+
+                if (!player.isAuthenticated || !player.walletAddress) {
+                    sendToPlayer(playerId, {
+                        type: 'igloo_payment_history',
+                        success: false,
+                        error: 'NOT_AUTHENTICATED',
+                        payments: [],
+                    });
+                    return true;
+                }
+
+                if (!iglooId) {
+                    sendToPlayer(playerId, {
+                        type: 'igloo_payment_history',
+                        success: false,
+                        error: 'MISSING_IGLOO',
+                        payments: [],
+                    });
+                    return true;
+                }
+
+                const result = await iglooService.getPaymentHistory(
+                    player.walletAddress,
+                    iglooId,
+                    { limit: Math.min(Number(limit) || 40, 100) }
+                );
+
+                sendToPlayer(playerId, {
+                    type: 'igloo_payment_history',
+                    ...result,
+                });
+            } catch (error) {
+                console.error('🏠 Error in igloo_payment_history:', error);
+                sendToPlayer(playerId, {
+                    type: 'igloo_payment_history',
+                    success: false,
+                    error: 'SERVER_ERROR',
+                    payments: [],
+                });
             }
             return true;
         }

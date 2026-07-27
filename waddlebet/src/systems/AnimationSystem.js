@@ -81,6 +81,7 @@ export function animateMesh(
     const isTortoise = characterType === 'tortoise';
     const isBlackBull = characterType === 'blackBull';
     const isJimothy = characterType === 'jimothy';
+    const isBadger = characterType === 'badger';
     const characterBaseY = getCharacterMeshBaseY(characterType);
     
     // Use cached parts if available, otherwise look up and cache
@@ -910,6 +911,33 @@ export function animateMesh(
             if(earR) {
                 earR.rotation.z = 0.08 - Math.sin(shuffleSpeed * 2) * 0.08;
             }
+        } else if (isBadger) {
+            // Low table-body trot — diagonal gait like the bull, a bit quicker
+            const trotSpeed = time * 10;
+            const stride = 0.42;
+
+            const liftWave = (phase) => {
+                const s = Math.sin(phase);
+                return s > 0 ? Math.pow(s, 0.6) : s * 0.35;
+            };
+
+            if (flipperL) flipperL.rotation.x = liftWave(trotSpeed) * stride;
+            if (flipperR) flipperR.rotation.x = liftWave(trotSpeed + Math.PI) * stride;
+            if (footL) footL.rotation.x = liftWave(trotSpeed + Math.PI) * stride;
+            if (footR) footR.rotation.x = liftWave(trotSpeed) * stride;
+
+            meshInner.position.y = characterBaseY + Math.abs(Math.sin(trotSpeed * 2)) * 0.035;
+            meshInner.rotation.z = Math.sin(trotSpeed) * 0.04;
+
+            if (head) {
+                head.rotation.x = -0.05 + Math.sin(trotSpeed * 2) * 0.04;
+                head.rotation.y = Math.sin(trotSpeed * 0.5) * 0.03;
+            }
+            if (hatPart) hatPart.rotation.x = -0.05 + Math.sin(trotSpeed * 2) * 0.04;
+
+            if (tail) {
+                tail.rotation.y = Math.sin(time * 7) * 0.18;
+            }
         } else {
             // Standard biped walking animation (penguin, marcus, whale, frog)
         if(footL) footL.rotation.x = Math.sin(walkCycle) * 0.5;
@@ -1044,6 +1072,20 @@ export function animateMesh(
             const earTwitch = Math.sin(time * 0.6) > 0.88 ? Math.sin(time * 18) * 0.12 : 0;
             if(earL) earL.rotation.z = -0.06 + earTwitch;
             if(earR) earR.rotation.z = 0.06 - earTwitch;
+        } else if (isBadger) {
+            // Grounded idle — low breathing rock, sniffing head, stub-tail flick
+            meshInner.position.y = characterBaseY + Math.sin(time * 1.0) * 0.01;
+            meshInner.rotation.z = Math.sin(time * 0.75) * 0.012;
+
+            if (head) {
+                head.rotation.x = -0.04 + Math.sin(time * 0.65) * 0.02;
+                head.rotation.y = Math.sin(time * 0.28) * 0.04;
+            }
+
+            if (tail) {
+                const twitch = Math.sin(time * 0.35) > 0.9 ? Math.sin(time * 9) * 0.14 : 0;
+                tail.rotation.y = twitch;
+            }
         } else {
         meshInner.rotation.z = Math.sin(time * 1.5) * 0.02;
         }

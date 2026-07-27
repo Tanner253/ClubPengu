@@ -40,6 +40,12 @@ import BlackBullGenerators, {
 } from './BlackBullCharacter';
 import JimothyGenerators, { JIMOTHY_PALETTE, JIMOTHY_HAT_OFFSET, JIMOTHY_MESH_BASE_Y } from './JimothyCharacter';
 import FonzGenerators, { FONZ_PALETTE, FONZ_HAT_OFFSET } from './FonzCharacter';
+import BadgerGenerators, {
+    BADGER_PALETTE,
+    BADGER_HAT_OFFSET,
+    BADGER_MESH_BASE_Y,
+    BADGER_PROPELLER_BLADE_POS,
+} from './BadgerCharacter';
 
 // Register all characters (unlocks determined by server)
 characterRegistry.registerCharacter('penguin', {
@@ -319,6 +325,23 @@ characterRegistry.registerCharacter('fonz', {
     }
 });
 
+characterRegistry.registerCharacter('badger', {
+    name: 'Badger',
+    description: 'A long, low striped badger — table-like body, silver back, and digging claws',
+    generators: BadgerGenerators,
+    palette: BADGER_PALETTE,
+    isSecret: true,
+    previewScale: 0.85,
+    customizationOptions: {
+        disableSkinColor: true,
+        disableHats: false,
+        disableEyes: true,
+        disableMouth: true,
+        disableBodyItems: false,
+        disableMounts: false,
+    }
+});
+
 // Export everything
 export { 
     characterRegistry, 
@@ -368,7 +391,12 @@ export {
     JIMOTHY_MESH_BASE_Y,
     FonzGenerators,
     FONZ_PALETTE,
-    FONZ_HAT_OFFSET
+    FONZ_HAT_OFFSET,
+    BadgerGenerators,
+    BADGER_PALETTE,
+    BADGER_HAT_OFFSET,
+    BADGER_MESH_BASE_Y,
+    BADGER_PROPELLER_BLADE_POS
 };
 export default characterRegistry;
 
@@ -376,5 +404,6 @@ export default characterRegistry;
 export function getCharacterMeshBaseY(characterType) {
     if (characterType === 'jimothy') return JIMOTHY_MESH_BASE_Y;
     if (characterType === 'blackBull') return BLACK_BULL_MESH_BASE_Y;
+    if (characterType === 'badger') return BADGER_MESH_BASE_Y;
     return 0.8;
 }

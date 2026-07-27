@@ -5,11 +5,11 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext.jsx';
-import { payIglooEntryFee } from '../wallet/SolanaPayment.js';
+import { payIglooEntryFee } from '../wallet/iglooPayments.js';
 import { displayTokenSymbol, formatTokenText } from '../utils/tokenDisplay.js';
+import { isTokenOnUserChain } from '../utils/tokenAddress.js';
 import { useChainEconomy } from '../hooks/useChainEconomy.js';
 import { useLanguage } from '../i18n';
-import ChainComingSoonPanel from './ChainComingSoonPanel';
 
 /**
  * Abbreviate a wallet address: "abc123...xyz789"
@@ -83,7 +83,7 @@ const IglooRequirementsPanel = ({
 }) => {
     const { send } = useMultiplayer();
     const { t } = useLanguage();
-    const { chainId, isEvm, canPayIglooEntryFee, platformToken } = useChainEconomy();
+    const { chainId, canPayIglooEntryFee, platformToken } = useChainEconomy();
     const [checkingStatus, setCheckingStatus] = useState(false);
     const [paymentLoading, setPaymentLoading] = useState(false);
     const [userTokenBalance, setUserTokenBalance] = useState(null);
@@ -91,6 +91,7 @@ const IglooRequirementsPanel = ({
     const [hasEntryFeePaid, setHasEntryFeePaid] = useState(false);
     const [statusChecked, setStatusChecked] = useState(false);
     const [error, setError] = useState(null);
+    const [entryFeeReceipt, setEntryFeeReceipt] = useState(null);
     
     // Extract igloo data safely (before any hooks that depend on them)
     const iglooId = iglooData?.iglooId;
@@ -126,7 +127,9 @@ const IglooRequirementsPanel = ({
     const entryFeeOk = !showEntryFee || hasEntryFeePaid;
     const allRequirementsMet = tokenGateOk && entryFeeOk;
     const needsPayment = showEntryFee && !hasEntryFeePaid;
-    const onChainIglooBlocked = isEvm && (showTokenGate || showEntryFee) && !allRequirementsMet;
+    const entryFeeTokenMismatch = showEntryFee && feeTokenAddress && !isTokenOnUserChain(feeTokenAddress, chainId);
+    const tokenGateTokenMismatch = showTokenGate && tokenAddress && !isTokenOnUserChain(tokenAddress, chainId);
+    const crossChainBlocked = entryFeeTokenMismatch || tokenGateTokenMismatch;
     
     // Refresh status handler - MUST be defined before useEffect that uses it
     const handleRefreshStatus = useCallback(() => {
@@ -141,8 +144,12 @@ const IglooRequirementsPanel = ({
     
     // Handle pay and enter
     const handlePayAndEnter = useCallback(async () => {
-        if (onChainIglooBlocked) {
+        if (!canPayIglooEntryFee) {
             setError(t('chainEconomy.comingSoon'));
+            return;
+        }
+        if (crossChainBlocked) {
+            setError('This igloo requires tokens on a different chain than your wallet.');
             return;
         }
         if (!walletAddress) {
@@ -215,6 +222,7 @@ const IglooRequirementsPanel = ({
                 // Execute REAL Solana SPL token transfer
                 // DEAD SIMPLE: Send tokens to igloo owner, decimals fetched automatically
                 const paymentResult = await payIglooEntryFee(
+                    chainId,
                     iglooId,
                     feeAmount,
                     ownerWallet,
@@ -259,6 +267,7 @@ const IglooRequirementsPanel = ({
             setUserTokenBalance(null);
             setHasTokenGateMet(false);
             setHasEntryFeePaid(false);
+            setEntryFeeReceipt(null);
             setCheckingStatus(true);
             
             // Always request fresh status from server to get current token balance
@@ -298,12 +307,14 @@ const IglooRequirementsPanel = ({
                     setPaymentLoading(false);
                     if (msg.success) {
                         setHasEntryFeePaid(true);
-                        if (!showTokenGate || hasTokenGateMet) {
-                            if (onEnterSuccess) {
-                                onEnterSuccess(iglooId);
-                            }
-                            onClose();
-                        }
+                        setEntryFeeReceipt({
+                            explorerUrl: msg.explorerUrl,
+                            explorerLabel: msg.explorerLabel,
+                            amount: msg.amount ?? feeAmount,
+                            tokenSymbol: msg.tokenSymbol || feeTokenSymbol,
+                            transactionHash: msg.transactionHash || msg.transactionSignature,
+                            message: msg.message,
+                        });
                     } else {
                         setError(formatTokenText(msg.error || msg.message, chainId) || 'Payment failed');
                     }
@@ -325,7 +336,7 @@ const IglooRequirementsPanel = ({
         
         ws.addEventListener('message', handleMessage);
         return () => ws.removeEventListener('message', handleMessage);
-    }, [isOpen, iglooId, showTokenGate, hasTokenGateMet, onEnterSuccess, onClose]);
+    }, [isOpen, iglooId, showTokenGate, hasTokenGateMet, onEnterSuccess, onClose, feeAmount, feeTokenSymbol, chainId]);
     
     // Early return AFTER all hooks
     if (!isOpen || !iglooData) return null;
@@ -533,6 +544,31 @@ const IglooRequirementsPanel = ({
                         </div>
                     )}
                     
+                    {entryFeeReceipt && (
+                        <div className="bg-emerald-500/15 border border-emerald-500/40 rounded-xl p-4 space-y-2">
+                            <p className="text-emerald-300 font-bold">Entry fee paid</p>
+                            <p className="text-sm text-slate-200">
+                                {entryFeeReceipt.message || 'Payment verified — you can enter this igloo.'}
+                            </p>
+                            {(entryFeeReceipt.amount != null) && (
+                                <p className="text-sm text-white font-mono">
+                                    Paid {Number(entryFeeReceipt.amount).toLocaleString()}{' '}
+                                    {entryFeeReceipt.tokenSymbol || feeTokenSymbol}
+                                </p>
+                            )}
+                            {entryFeeReceipt.explorerUrl && (
+                                <a
+                                    href={entryFeeReceipt.explorerUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex text-sm text-amber-300 hover:text-amber-200"
+                                >
+                                    View receipt on {entryFeeReceipt.explorerLabel || 'explorer'} ↗
+                                </a>
+                            )}
+                        </div>
+                    )}
+
                     {/* Error Message */}
                     {error && (
                         <div className="bg-red-500/20 border border-red-500/40 rounded-lg p-3 text-center">
@@ -544,19 +580,21 @@ const IglooRequirementsPanel = ({
                 {/* Footer with Action Buttons */}
                 <div className="px-6 py-4 bg-slate-900/90 border-t border-slate-700/50 space-y-3">
                     
-                    {onChainIglooBlocked && (
-                        <ChainComingSoonPanel
-                            title={t('chainEconomy.iglooTitle').replace(/\{token\}/g, platformToken)}
-                            className="mb-2"
-                        />
+                    {crossChainBlocked && (
+                        <div className="bg-amber-500/15 border border-amber-500/40 rounded-lg p-3 text-center text-amber-200 text-sm">
+                            This igloo uses tokens on another chain. Connect the matching wallet to enter.
+                        </div>
                     )}
 
                     {/* Main Action Button */}
-                    {walletAddress && statusChecked && !onChainIglooBlocked && (
+                    {walletAddress && statusChecked && !crossChainBlocked && (
                         <>
-                            {allRequirementsMet ? (
+                            {(entryFeeReceipt || allRequirementsMet) ? (
                                 <button
-                                    onClick={handlePayAndEnter}
+                                    onClick={() => {
+                                        if (onEnterSuccess) onEnterSuccess(iglooId);
+                                        onClose();
+                                    }}
                                     className="w-full py-3.5 rounded-xl font-bold text-base bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-400 hover:to-emerald-400 shadow-lg hover:shadow-green-500/30 transition-all duration-300"
                                 >
                                     🚪 Enter Igloo
@@ -589,16 +627,6 @@ const IglooRequirementsPanel = ({
                                 </div>
                             ) : null}
                         </>
-                    )}
-                    
-                    {walletAddress && statusChecked && onChainIglooBlocked && (
-                        <button
-                            type="button"
-                            disabled
-                            className="w-full py-3.5 rounded-xl font-bold text-base bg-slate-700/50 text-slate-400 cursor-not-allowed border border-slate-600"
-                        >
-                            {t('chainEconomy.comingSoon')}
-                        </button>
                     )}
                     
                     {/* Connect Wallet Warning */}

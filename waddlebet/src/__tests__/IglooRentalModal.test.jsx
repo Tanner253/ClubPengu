@@ -18,8 +18,9 @@ vi.mock('../config/solana.js', () => ({
 }));
 
 // Mock SolanaPayment
-vi.mock('../wallet/SolanaPayment.js', () => ({
-    payIglooRent: vi.fn().mockResolvedValue({ success: true, signature: 'mockRentSig' })
+vi.mock('../wallet/iglooPayments.js', () => ({
+    payIglooRent: vi.fn().mockResolvedValue({ success: true, signature: 'mockRentSig' }),
+    payIglooEntryFee: vi.fn().mockResolvedValue({ success: true, signature: 'mockSig123' }),
 }));
 
 vi.mock('../hooks/useChainEconomy.js', () => ({

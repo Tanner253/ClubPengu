@@ -53,6 +53,21 @@ vi.mock('../igloo/IglooContext.jsx', () => ({
     })
 }));
 
+vi.mock('../wallet/iglooPayments.js', () => ({
+    payIglooRent: vi.fn().mockResolvedValue({ success: true, signature: 'mockRentSig' }),
+    payIglooEntryFee: vi.fn().mockResolvedValue({ success: true, signature: 'mockSig' }),
+}));
+
+vi.mock('../config/iglooEconomy.js', () => ({
+    getIglooEconomy: () => ({
+        dailyRent: 10000,
+        minimumBalance: 70000,
+        rentWallet: 'RentWallet123',
+        platformTokenAddress: 'CPw3TEST',
+        platformTokenSymbol: '$CP',
+    }),
+}));
+
 // Mock config
 vi.mock('../config/solana.js', () => ({
     CPW3_TOKEN_ADDRESS: 'CPw3TEST',

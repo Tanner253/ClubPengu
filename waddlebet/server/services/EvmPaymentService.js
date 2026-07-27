@@ -7,6 +7,8 @@ import { createPublicClient, http, parseAbi, formatUnits, isAddress, decodeEvent
 import { getDefaultEvmChainId } from '../config/evm.js';
 import { getPlatformToken, isEvmChainId } from '../config/tokens.js';
 import { toChecksumAddress } from '../utils/evmAddress.js';
+import EvmTransaction from '../db/models/EvmTransaction.js';
+import rateLimiter from '../utils/RateLimiter.js';
 
 const ERC20_ABI = parseAbi([
     'function balanceOf(address owner) view returns (uint256)',
@@ -21,6 +23,7 @@ class EvmPaymentService {
     constructor() {
         this._clients = new Map();
         this._decimalsCache = new Map();
+        this.recentTxHashes = new Set();
     }
 
     _resolveChainId(chainId) {
@@ -175,15 +178,150 @@ class EvmPaymentService {
                 };
             }
 
+            console.error(
+                `EvmPayment: TRANSFER_NOT_FOUND tx=${txHash?.slice(0, 12)}... ` +
+                `token=${token.slice(0, 10)}... to=${recipient.slice(0, 10)}... ` +
+                `from=${sender.slice(0, 10)}... minAmount=${minimumAmount}`
+            );
             return {
                 valid: false,
                 error: 'TRANSFER_NOT_FOUND',
-                message: 'No matching ERC-20 transfer found in transaction',
+                message:
+                    `No matching ERC-20 transfer found. Expected ${minimumAmount} tokens ` +
+                    `of ${token.slice(0, 10)}… to ${recipient.slice(0, 10)}…. ` +
+                    `Check that the client and server use the same WADDLE token address.`,
             };
         } catch (error) {
             console.error('EvmPayment: verify transfer failed:', error.message);
             return { valid: false, error: 'VERIFY_FAILED', message: error.message };
         }
+    }
+
+    async verifyTransaction(txHash, expectedSender, expectedRecipient, expectedToken, expectedAmount, options = {}) {
+        const chainId = options.chainId ?? getDefaultEvmChainId();
+
+        if (!txHash || typeof txHash !== 'string' || !txHash.startsWith('0x')) {
+            return { success: false, error: 'INVALID_TX_HASH', message: 'Invalid transaction hash' };
+        }
+
+        const rateCheck = rateLimiter.check('payment', expectedSender);
+        if (!rateCheck.allowed) {
+            return {
+                success: false,
+                error: 'RATE_LIMITED',
+                message: 'Too many payment attempts. Please wait.',
+                retryAfterMs: rateCheck.retryAfterMs,
+            };
+        }
+
+        if (this.recentTxHashes.has(txHash)) {
+            return {
+                success: false,
+                error: 'TX_ALREADY_USED',
+                message: 'This transaction has already been used for a payment',
+            };
+        }
+
+        try {
+            const existsInDb = await EvmTransaction.isTxHashUsed(txHash);
+            if (existsInDb) {
+                this.recentTxHashes.add(txHash);
+                return {
+                    success: false,
+                    error: 'TX_ALREADY_USED',
+                    message: 'This transaction has already been used for a payment',
+                };
+            }
+        } catch (dbError) {
+            console.error('EvmPayment: DB replay check failed:', dbError.message);
+        }
+
+        const startTime = Date.now();
+        const verification = await this.verifyErc20Transfer(txHash, {
+            expectedSender,
+            expectedRecipient,
+            tokenAddress: expectedToken,
+            minimumAmount: expectedAmount,
+            chainId,
+        });
+
+        if (!verification.valid) {
+            console.error(
+                `EvmPayment: verifyTransaction failed (${verification.error}) ` +
+                `tx=${txHash.slice(0, 12)}... expectedToken=${String(expectedToken).slice(0, 10)}... ` +
+                `expectedAmount=${expectedAmount} recipient=${String(expectedRecipient).slice(0, 10)}...`
+            );
+            return {
+                success: false,
+                error: verification.error || 'VERIFY_FAILED',
+                message: verification.message || 'Transaction verification failed',
+            };
+        }
+
+        const decimals = await this.getTokenDecimals(expectedToken, chainId);
+        const amountRaw = BigInt(Math.floor(verification.amount * 10 ** decimals)).toString();
+
+        try {
+            await EvmTransaction.recordTransaction({
+                txHash,
+                chainId: String(chainId),
+                type: options.transactionType || 'other',
+                senderWallet: expectedSender,
+                recipientWallet: expectedRecipient,
+                amount: verification.amount,
+                amountRaw,
+                tokenAddress: expectedToken,
+                tokenSymbol: options.tokenSymbol || getPlatformToken(chainId).displaySymbol,
+                iglooId: options.iglooId,
+                matchId: options.matchId,
+                status: 'verified',
+                processingTimeMs: Date.now() - startTime,
+            });
+            this.recentTxHashes.add(txHash);
+        } catch (recordError) {
+            if (recordError.code === 11000) {
+                return {
+                    success: false,
+                    error: 'TX_ALREADY_USED',
+                    message: 'This transaction has already been used for a payment',
+                };
+            }
+            console.error('EvmPayment: failed to record transaction:', recordError.message);
+        }
+
+        return {
+            success: true,
+            transactionHash: txHash,
+            amount: verification.amount,
+        };
+    }
+
+    async verifyRentPayment(txHash, expectedSender, expectedRecipient, expectedAmount, options = {}) {
+        const chainId = options.chainId ?? getDefaultEvmChainId();
+        const tokenAddress = options.tokenAddress || getPlatformToken(chainId).address;
+
+        if (!expectedRecipient) {
+            return {
+                success: false,
+                error: 'CONFIG_ERROR',
+                message: 'EVM rent treasury wallet not configured',
+            };
+        }
+
+        return this.verifyTransaction(
+            txHash,
+            expectedSender,
+            expectedRecipient,
+            tokenAddress,
+            expectedAmount,
+            {
+                chainId,
+                transactionType: options.isRenewal ? 'igloo_rent_renewal' : 'igloo_rent',
+                tokenSymbol: options.tokenSymbol || getPlatformToken(chainId).displaySymbol,
+                iglooId: options.iglooId,
+                ipAddress: options.ipAddress,
+            }
+        );
     }
 }
 

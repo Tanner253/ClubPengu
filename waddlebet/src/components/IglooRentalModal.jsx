@@ -4,13 +4,14 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { IGLOO_CONFIG, RENT_WALLET_ADDRESS, CPW3_TOKEN_ADDRESS } from '../config/solana.js';
+import { IGLOO_CONFIG } from '../config/solana.js';
+import { getIglooEconomy } from '../config/iglooEconomy.js';
 import { useMultiplayer } from '../multiplayer/MultiplayerContext.jsx';
 import { useLanguage } from '../i18n';
 import { useChainEconomy } from '../hooks/useChainEconomy.js';
 import ChainComingSoonPanel from './ChainComingSoonPanel';
 import { getPlatformTokenSymbol } from '../config/tokens.js';
-import { payIglooRent } from '../wallet/SolanaPayment.js';
+import { payIglooRent } from '../wallet/iglooPayments.js';
 
 const IglooRentalModal = ({ 
     isOpen, 
@@ -22,11 +23,13 @@ const IglooRentalModal = ({
     const { send } = useMultiplayer();
     const { t } = useLanguage();
     const { chainId, canRentIgloo, platformToken } = useChainEconomy();
+    const iglooEconomy = getIglooEconomy(chainId);
     const platformTokenLabel = getPlatformTokenSymbol(chainId);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
     const [canAfford, setCanAfford] = useState(null);
     const [balanceInfo, setBalanceInfo] = useState(null);
+    const [receipt, setReceipt] = useState(null);
     
     // Listen for rent result from server
     useEffect(() => {
@@ -42,10 +45,17 @@ const IglooRentalModal = ({
                 if (msg.type === 'igloo_rent_result') {
                     setIsLoading(false);
                     if (msg.success) {
+                        setReceipt({
+                            explorerUrl: msg.explorerUrl,
+                            explorerLabel: msg.explorerLabel,
+                            amount: msg.amount,
+                            tokenSymbol: msg.tokenSymbol,
+                            transactionHash: msg.transactionHash,
+                            message: msg.message,
+                        });
                         if (onRentSuccess) {
                             onRentSuccess(msg);
                         }
-                        onClose();
                     } else {
                         setError(msg.message || msg.error || 'Rental failed');
                     }
@@ -58,7 +68,7 @@ const IglooRentalModal = ({
                     }
                     setBalanceInfo({
                         current: msg.current || 0,
-                        required: msg.required || IGLOO_CONFIG.MINIMUM_BALANCE_CPW3
+                        required: msg.required || iglooEconomy.minimumBalance
                     });
                 }
             } catch (e) {
@@ -77,6 +87,13 @@ const IglooRentalModal = ({
             ws.removeEventListener('message', handleMessage);
         };
     }, [isOpen, iglooData?.iglooId, send, onRentSuccess, onClose]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        setError(null);
+        setIsLoading(false);
+        setReceipt(null);
+    }, [isOpen]);
     
     const handleRent = useCallback(async () => {
         if (!canRentIgloo) return;
@@ -134,12 +151,7 @@ const IglooRentalModal = ({
             
             // Step 2: Pay rent via Solana transaction (only after eligibility confirmed)
             console.log('💰 Starting rent payment...');
-            const paymentResult = await payIglooRent(
-                iglooData.iglooId,
-                IGLOO_CONFIG.DAILY_RENT_CPW3,
-                RENT_WALLET_ADDRESS,
-                CPW3_TOKEN_ADDRESS
-            );
+            const paymentResult = await payIglooRent(chainId, iglooData.iglooId);
             
             if (!paymentResult.success) {
                 setError(paymentResult.message || 'Payment failed');
@@ -195,6 +207,39 @@ const IglooRentalModal = ({
                 
                 {/* Content */}
                 <div className="p-6 space-y-4">
+                    {receipt && (
+                        <div className="bg-emerald-500/15 border border-emerald-500/40 rounded-xl p-4 space-y-2">
+                            <p className="text-emerald-300 font-bold text-lg">🏠 Igloo rented!</p>
+                            <p className="text-sm text-slate-200">
+                                {receipt.message || 'Welcome to your new igloo.'}
+                            </p>
+                            {(receipt.amount != null) && (
+                                <p className="text-sm text-white font-mono">
+                                    Paid {Number(receipt.amount).toLocaleString()} {receipt.tokenSymbol || platformTokenLabel}
+                                </p>
+                            )}
+                            {receipt.explorerUrl && (
+                                <a
+                                    href={receipt.explorerUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex text-sm text-amber-300 hover:text-amber-200"
+                                >
+                                    View receipt on {receipt.explorerLabel || 'explorer'} ↗
+                                </a>
+                            )}
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="mt-2 w-full py-2 rounded-lg bg-emerald-500/80 hover:bg-emerald-400 text-white font-semibold"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    )}
+
+                    {!receipt && (
+                    <>
                     {/* Status Badge */}
                     {isReserved ? (
                         <div className="bg-purple-500/20 border border-purple-500/40 rounded-lg p-4 text-center">
@@ -228,13 +273,13 @@ const IglooRentalModal = ({
                                     <div className="flex justify-between">
                                         <span>Daily Rent:</span>
                                         <span className="text-yellow-400 font-mono">
-                                            {IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} {platformTokenLabel}
+                                            {iglooEconomy.dailyRent.toLocaleString()} {platformTokenLabel}
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span>Minimum Balance Required:</span>
                                         <span className="text-yellow-400 font-mono">
-                                            {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} {platformTokenLabel}
+                                            {iglooEconomy.minimumBalance.toLocaleString()} {platformTokenLabel}
                                         </span>
                                     </div>
                                     <div className="flex justify-between">
@@ -256,7 +301,7 @@ const IglooRentalModal = ({
                                 <ul className="text-sm text-slate-300 space-y-1">
                                     <li className="flex items-center gap-2">
                                         <span className="text-green-400">✓</span>
-                                        Hold {IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} {platformTokenLabel} (7 days rent)
+                                        Hold {iglooEconomy.minimumBalance.toLocaleString()} {platformTokenLabel} (7 days rent)
                                     </li>
                                     <li className="flex items-center gap-2">
                                         <span className="text-green-400">✓</span>
@@ -324,9 +369,9 @@ const IglooRentalModal = ({
                                 ) : !walletAddress ? (
                                     'Connect Wallet to Rent'
                                 ) : !canAfford ? (
-                                    `Need ${IGLOO_CONFIG.MINIMUM_BALANCE_CPW3.toLocaleString()} ${platformTokenLabel}`
+                                    `Need ${iglooEconomy.minimumBalance.toLocaleString()} ${platformTokenLabel}`
                                 ) : (
-                                    `🔑 Rent for ${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} ${platformTokenLabel}/day`
+                                    `🔑 Rent for ${iglooEconomy.dailyRent.toLocaleString()} ${platformTokenLabel}/day`
                                 )}
                             </button>
                             
@@ -334,6 +379,8 @@ const IglooRentalModal = ({
                                 By renting, you agree to pay daily rent manually within the grace period.
                             </p>
                         </>
+                    )}
+                    </>
                     )}
                 </div>
             </div>

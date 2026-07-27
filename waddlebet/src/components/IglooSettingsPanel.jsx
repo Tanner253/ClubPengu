@@ -6,11 +6,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { IGLOO_BANNER_STYLES } from '../config/roomConfig.js';
 import { useIgloo } from '../igloo/IglooContext.jsx';
-import { payIglooRent } from '../wallet/SolanaPayment.js';
-import { RENT_WALLET_ADDRESS, CPW3_TOKEN_ADDRESS, IGLOO_CONFIG } from '../config/solana.js';
+import { payIglooRent } from '../wallet/iglooPayments.js';
+import { getIglooEconomy } from '../config/iglooEconomy.js';
+import { IGLOO_CONFIG } from '../config/solana.js';
 import { displayTokenSymbol } from '../utils/tokenDisplay.js';
 import { useChainEconomy } from '../hooks/useChainEconomy.js';
 import { getPlatformTokenAddress } from '../config/tokens.js';
+import IglooPaymentLog from './IglooPaymentLog.jsx';
 
 // Predefined gradient presets
 const GRADIENT_PRESETS = [
@@ -108,7 +110,8 @@ const IglooSettingsPanel = ({
     onSave
 }) => {
     const { updateSettings: sendSettings, payRent: sendPayRent, isLoading: contextLoading } = useIgloo();
-    const { chainId, platformToken } = useChainEconomy();
+    const { chainId, platformToken, isEvm } = useChainEconomy();
+    const iglooEconomy = getIglooEconomy(chainId);
     
     const platformTokenEntry = useMemo(() => ({
         symbol: platformToken,
@@ -117,13 +120,17 @@ const IglooSettingsPanel = ({
     }), [platformToken, chainId]);
     
     const tokenGateTokens = useMemo(
-        () => [platformTokenEntry, ...TOKEN_GATE_COMMUNITY_TOKENS],
-        [platformTokenEntry]
+        () => (isEvm
+            ? [platformTokenEntry]
+            : [platformTokenEntry, ...TOKEN_GATE_COMMUNITY_TOKENS]),
+        [platformTokenEntry, isEvm]
     );
     
     const entryFeeTokens = useMemo(
-        () => [platformTokenEntry, ...ENTRY_FEE_COMMUNITY_TOKENS],
-        [platformTokenEntry]
+        () => (isEvm
+            ? [platformTokenEntry]
+            : [platformTokenEntry, ...ENTRY_FEE_COMMUNITY_TOKENS]),
+        [platformTokenEntry, isEvm]
     );
     
     const [settings, setSettings] = useState({
@@ -162,6 +169,10 @@ const IglooSettingsPanel = ({
     const [activeTab, setActiveTab] = useState('access');
     const [isPayingRent, setIsPayingRent] = useState(false);
     const [rentPaymentSuccess, setRentPaymentSuccess] = useState(false);
+    const [rentReceipt, setRentReceipt] = useState(null);
+    const [paymentLog, setPaymentLog] = useState([]);
+    const [paymentLogLoading, setPaymentLogLoading] = useState(false);
+    const [paymentLogError, setPaymentLogError] = useState(null);
     
     // Track if this is the initial load vs a save response
     const [hasLoadedInitial, setHasLoadedInitial] = useState(false);
@@ -220,8 +231,80 @@ const IglooSettingsPanel = ({
     useEffect(() => {
         if (!isOpen) {
             setHasLoadedInitial(false);
+            setRentReceipt(null);
+            setPaymentLog([]);
+            setPaymentLogError(null);
         }
     }, [isOpen]);
+
+    // Load owner payment receipts when Rent tab is open
+    useEffect(() => {
+        if (!isOpen || activeTab !== 'rent' || !iglooData?.iglooId) return;
+
+        const ws = window.__multiplayerWs;
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        setPaymentLogLoading(true);
+        setPaymentLogError(null);
+
+        const handleMessage = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg.type !== 'igloo_payment_history' || msg.iglooId !== iglooData.iglooId) return;
+                setPaymentLogLoading(false);
+                if (msg.success) {
+                    setPaymentLog(msg.payments || []);
+                } else {
+                    setPaymentLogError(msg.message || msg.error || 'Could not load receipts');
+                    setPaymentLog([]);
+                }
+            } catch {
+                // ignore
+            }
+        };
+
+        const handleRentResult = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg.type !== 'igloo_pay_rent_result') return;
+                if (msg.success && msg.explorerUrl) {
+                    setRentReceipt({
+                        explorerUrl: msg.explorerUrl,
+                        explorerLabel: msg.explorerLabel,
+                        amount: msg.amount,
+                        tokenSymbol: msg.tokenSymbol,
+                        txHash: msg.transactionHash,
+                    });
+                    // Refresh log after renew
+                    ws.send(JSON.stringify({ type: 'igloo_payment_history', iglooId: iglooData.iglooId }));
+                }
+            } catch {
+                // ignore
+            }
+        };
+
+        // Guest paid entry fee → refresh owner receipts
+        const handleIglooUpdated = (event) => {
+            try {
+                const msg = JSON.parse(event.data);
+                if (msg.type !== 'igloo_updated' || msg.igloo?.iglooId !== iglooData.iglooId) return;
+                ws.send(JSON.stringify({ type: 'igloo_payment_history', iglooId: iglooData.iglooId }));
+            } catch {
+                // ignore
+            }
+        };
+
+        ws.addEventListener('message', handleMessage);
+        ws.addEventListener('message', handleRentResult);
+        ws.addEventListener('message', handleIglooUpdated);
+        ws.send(JSON.stringify({ type: 'igloo_payment_history', iglooId: iglooData.iglooId }));
+
+        return () => {
+            ws.removeEventListener('message', handleMessage);
+            ws.removeEventListener('message', handleRentResult);
+            ws.removeEventListener('message', handleIglooUpdated);
+        };
+    }, [isOpen, activeTab, iglooData?.iglooId]);
     
     // Watch for context loading to change (indicates save completed)
     useEffect(() => {
@@ -270,15 +353,9 @@ const IglooSettingsPanel = ({
         try {
             console.log('💰 Starting rent payment...');
             console.log(`   Igloo: ${iglooData.iglooId}`);
-            console.log(`   Amount: ${IGLOO_CONFIG.DAILY_RENT_CPW3} ${platformToken}`);
-            
-            // Step 1: Send the Solana transaction
-            const paymentResult = await payIglooRent(
-                iglooData.iglooId,
-                IGLOO_CONFIG.DAILY_RENT_CPW3,
-                RENT_WALLET_ADDRESS,
-                CPW3_TOKEN_ADDRESS
-            );
+            console.log(`   Amount: ${iglooEconomy.dailyRent} ${platformToken}`);
+
+            const paymentResult = await payIglooRent(chainId, iglooData.iglooId);
             
             if (!paymentResult.success) {
                 throw new Error(paymentResult.message || 'Payment failed');
@@ -296,7 +373,7 @@ const IglooSettingsPanel = ({
         } finally {
             setIsPayingRent(false);
         }
-    }, [iglooData, sendPayRent]);
+    }, [iglooData, sendPayRent, chainId, iglooEconomy.dailyRent, platformToken]);
     
     if (!isOpen) return null;
     
@@ -943,6 +1020,53 @@ const IglooSettingsPanel = ({
                                     </span>
                                 </div>
                             </div>
+
+                            {/* Payment receipts / activity log */}
+                            <div className="bg-slate-700/40 border border-white/10 rounded-lg p-4 space-y-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <h4 className="text-sm font-bold text-white">Payment receipts</h4>
+                                    <button
+                                        type="button"
+                                        className="text-[11px] text-cyan-300 hover:text-cyan-200"
+                                        onClick={() => {
+                                            const ws = window.__multiplayerWs;
+                                            if (ws?.readyState === WebSocket.OPEN && iglooData?.iglooId) {
+                                                setPaymentLogLoading(true);
+                                                ws.send(JSON.stringify({
+                                                    type: 'igloo_payment_history',
+                                                    iglooId: iglooData.iglooId,
+                                                }));
+                                            }
+                                        }}
+                                    >
+                                        Refresh
+                                    </button>
+                                </div>
+                                <p className="text-[11px] text-slate-400">
+                                    On-chain rent and entry-fee payments for this igloo — open Blockscout (Robinhood) or Solscan (Solana) for a full receipt.
+                                </p>
+                                {rentReceipt?.explorerUrl && (
+                                    <div className="bg-emerald-500/15 border border-emerald-500/30 rounded-lg px-3 py-2 text-sm">
+                                        <p className="text-emerald-300 font-semibold">Latest rent receipt</p>
+                                        <p className="text-slate-300 text-xs mt-0.5">
+                                            {Number(rentReceipt.amount || 0).toLocaleString()} {rentReceipt.tokenSymbol || platformToken}
+                                        </p>
+                                        <a
+                                            href={rentReceipt.explorerUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-amber-300 hover:text-amber-200 text-xs mt-1 inline-block"
+                                        >
+                                            View on {rentReceipt.explorerLabel || 'explorer'} ↗
+                                        </a>
+                                    </div>
+                                )}
+                                <IglooPaymentLog
+                                    payments={paymentLog}
+                                    loading={paymentLogLoading}
+                                    error={paymentLogError}
+                                />
+                            </div>
                             
                             {/* Rent Payment Required Warning */}
                             {(iglooData?.rentStatus === 'grace_period' || iglooData?.rentStatus === 'overdue') && (
@@ -985,7 +1109,7 @@ const IglooSettingsPanel = ({
                                             ? '⏳ Processing Payment...' 
                                             : rentPaymentSuccess 
                                                 ? '✅ Payment Sent!'
-                                                : `💰 Pay Rent (${IGLOO_CONFIG.DAILY_RENT_CPW3.toLocaleString()} ${platformToken})`}
+                                                : `💰 Pay Rent (${iglooEconomy.dailyRent.toLocaleString()} ${platformToken})`}
                                     </button>
                                 </div>
                             )}

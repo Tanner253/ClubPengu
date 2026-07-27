@@ -1,17 +1,18 @@
 /**
  * IglooService - Business logic for igloo rental, ownership, and access control
  * Server-authoritative for all igloo operations
- * Uses Solana SPL token transfers for payments
+ * Uses chain-aware SPL / ERC-20 transfers for payments
  */
 
 import Igloo from '../db/models/Igloo.js';
 import User from '../db/models/User.js';
-import solanaPaymentService from './SolanaPaymentService.js';
+import SolanaTransaction from '../db/models/SolanaTransaction.js';
+import EvmTransaction from '../db/models/EvmTransaction.js';
+import chainPaymentService from './ChainPaymentService.js';
+import { getIglooEconomy } from '../config/iglooEconomy.js';
+import { getTxExplorerUrl, getExplorerLabel } from '../utils/txExplorer.js';
 
-// ==================== CONFIGURATION ====================
-const DAILY_RENT_CPW3 = parseInt(process.env.DAILY_RENT_CPW3 || '10000');
-const MINIMUM_BALANCE_CPW3 = parseInt(process.env.MINIMUM_BALANCE_CPW3 || '70000'); // 7 days
-const GRACE_PERIOD_HOURS = parseInt(process.env.GRACE_PERIOD_HOURS || '12');
+const GRACE_PERIOD_HOURS = parseInt(process.env.GRACE_PERIOD_HOURS || '12', 10);
 
 // Permanent igloos - these are marked as reserved but owner wallet comes from DATABASE only
 // Do NOT use env variables for owner wallets - they must be set in the database
@@ -34,9 +35,11 @@ const IGLOO_POSITIONS = {
 
 class IglooService {
     constructor() {
-        this.dailyRent = DAILY_RENT_CPW3;
-        this.minimumBalance = MINIMUM_BALANCE_CPW3;
         this.gracePeriodHours = GRACE_PERIOD_HOURS;
+    }
+
+    _economy(chainId) {
+        return getIglooEconomy(chainId || 'solana');
     }
     
     /**
@@ -161,7 +164,8 @@ class IglooService {
      * @param {string} walletAddress - User's wallet
      * @param {string} iglooId - Target igloo
      */
-    async canRent(walletAddress, iglooId) {
+    async canRent(walletAddress, iglooId, chainId = 'solana') {
+        const economy = this._economy(chainId);
         const igloo = await Igloo.findOne({ iglooId });
         
         if (!igloo) {
@@ -199,28 +203,28 @@ class IglooService {
             };
         }
         
-        // Check balance eligibility using $CP token
-        const cpw3TokenAddress = process.env.CPW3_TOKEN_ADDRESS || '9kdJA8Ahjyh7Yt8UDWpihznwTMtKJVEAmhsUFmeppump';
-        const balanceCheck = await solanaPaymentService.checkMinimumBalance(
-            walletAddress, 
-            cpw3TokenAddress, 
-            this.minimumBalance
+        const balanceCheck = await chainPaymentService.checkMinimumBalance(
+            walletAddress,
+            economy.platformTokenAddress,
+            economy.minimumBalance,
+            chainId
         );
-        
+
         if (!balanceCheck.hasBalance) {
-            return { 
-                canRent: false, 
+            return {
+                canRent: false,
                 error: 'INSUFFICIENT_BALANCE',
-                message: `Minimum balance of ${this.minimumBalance} $CP required (7 days rent)`,
-                required: this.minimumBalance,
-                current: balanceCheck.balance
+                message: `Minimum balance of ${economy.minimumBalance} ${economy.platformTokenSymbol} required (7 days rent)`,
+                required: economy.minimumBalance,
+                current: balanceCheck.balance,
             };
         }
-        
-        return { 
-            canRent: true, 
-            dailyRent: this.dailyRent,
-            minimumBalance: this.minimumBalance
+
+        return {
+            canRent: true,
+            dailyRent: economy.dailyRent,
+            minimumBalance: economy.minimumBalance,
+            platformTokenSymbol: economy.platformTokenSymbol,
         };
     }
     
@@ -230,20 +234,19 @@ class IglooService {
      * @param {string} iglooId - Target igloo
      * @param {string} paymentPayload - x402 payment authorization
      */
-    async startRental(walletAddress, iglooId, transactionSignature) {
-        // Verify rental eligibility
-        const eligibility = await this.canRent(walletAddress, iglooId);
+    async startRental(walletAddress, iglooId, transactionSignature, chainId = 'solana') {
+        const economy = this._economy(chainId);
+
+        const eligibility = await this.canRent(walletAddress, iglooId, chainId);
         if (!eligibility.canRent) {
             return { success: false, ...eligibility };
         }
-        
-        // Verify rent payment on-chain
-        const result = await solanaPaymentService.verifyRentPayment(
+
+        const result = await chainPaymentService.verifyRentPayment(
             transactionSignature,
             walletAddress,
-            process.env.RENT_WALLET_ADDRESS,
-            this.dailyRent,
-            { iglooId, isRenewal: false }  // Audit trail options
+            chainId,
+            { iglooId, isRenewal: false }
         );
         
         if (!result.success) {
@@ -253,12 +256,11 @@ class IglooService {
         const settlement = result;
         
         // Get user info
-        const user = await User.findOne({ walletAddress });
+        const user = await User.findOne({ walletAddress, chainId: chainId || 'solana' });
         const username = user?.username || `Penguin${walletAddress.slice(0, 6)}`;
-        
-        // Assign igloo to renter
+
         const igloo = await Igloo.findOne({ iglooId });
-        igloo.startRental(walletAddress, username, this.dailyRent);
+        igloo.startRental(walletAddress, username, economy.dailyRent);
         await igloo.save();
         
         // Audit log
@@ -268,9 +270,10 @@ class IglooService {
         console.log(`   Timestamp:    ${new Date().toISOString()}`);
         console.log(`   Igloo:        ${iglooId}`);
         console.log(`   New Owner:    ${username} (${walletAddress.slice(0, 8)}...)`);
-        console.log(`   Rent Paid:    ${this.dailyRent} $CP`);
+        const explorerUrl = getTxExplorerUrl(settlement.transactionHash, chainId);
+        console.log(`   Rent Paid:    ${economy.dailyRent} ${economy.platformTokenSymbol}`);
         console.log(`   TX Signature: ${settlement.transactionHash.slice(0, 16)}...`);
-        console.log(`   Solscan:      https://solscan.io/tx/${settlement.transactionHash}`);
+        console.log(`   ${getExplorerLabel(chainId)}:     ${explorerUrl}`);
         console.log(`═══════════════════════════════════════════════════════════`);
         
         // Get owner info (full settings) for immediate UI display
@@ -280,6 +283,10 @@ class IglooService {
             success: true,
             iglooId,
             transactionHash: settlement.transactionHash,
+            explorerUrl,
+            explorerLabel: getExplorerLabel(chainId),
+            amount: economy.dailyRent,
+            tokenSymbol: economy.platformTokenSymbol,
             rentDueDate: igloo.rentDueDate,
             message: 'Welcome to your new igloo!',
             igloo: ownerInfo  // Include full igloo data for settings panel
@@ -289,7 +296,8 @@ class IglooService {
     /**
      * Process rent payment (called daily by user)
      */
-    async payRent(walletAddress, iglooId, transactionSignature) {
+    async payRent(walletAddress, iglooId, transactionSignature, chainId = 'solana') {
+        const economy = this._economy(chainId);
         const igloo = await Igloo.findOne({ iglooId });
         
         if (!igloo) {
@@ -301,12 +309,11 @@ class IglooService {
         }
         
         // Verify rent payment on-chain
-        const result = await solanaPaymentService.verifyRentPayment(
+        const result = await chainPaymentService.verifyRentPayment(
             transactionSignature,
             walletAddress,
-            process.env.RENT_WALLET_ADDRESS,
-            this.dailyRent,
-            { iglooId, isRenewal: true }  // Mark as renewal for audit trail
+            chainId,
+            { iglooId, isRenewal: true }
         );
         
         if (!result.success) {
@@ -316,14 +323,19 @@ class IglooService {
         const settlement = result;
         
         // Update igloo
-        igloo.payRent(this.dailyRent);
+        igloo.payRent(economy.dailyRent);
         await igloo.save();
         
         console.log(`🏠 Rent paid for ${iglooId} by ${igloo.ownerUsername}`);
+        const explorerUrl = getTxExplorerUrl(settlement.transactionHash, chainId);
         
         return {
             success: true,
             transactionHash: settlement.transactionHash,
+            explorerUrl,
+            explorerLabel: getExplorerLabel(chainId),
+            amount: economy.dailyRent,
+            tokenSymbol: economy.platformTokenSymbol,
             newDueDate: igloo.rentDueDate
         };
     }
@@ -345,7 +357,7 @@ class IglooService {
      * Process entry fee payment
      * Now accepts a real Solana transaction signature instead of a signed intent
      */
-    async payEntryFee(walletAddress, iglooId, transactionSignature) {
+    async payEntryFee(walletAddress, iglooId, transactionSignature, chainId = 'solana') {
         const igloo = await Igloo.findOne({ iglooId });
         
         if (!igloo) {
@@ -376,16 +388,16 @@ class IglooService {
         }
         
         // Verify the transaction on-chain
-        const verifyResult = await solanaPaymentService.verifyTransaction(
+        const verifyResult = await chainPaymentService.verifyEntryFee(
             transactionSignature,
-            walletAddress,           // Expected sender
-            igloo.ownerWallet,       // Expected recipient
+            walletAddress,
+            igloo.ownerWallet,
             igloo.entryFee.tokenAddress,
             igloo.entryFee.amount,
+            chainId,
             {
-                transactionType: 'igloo_entry_fee',
                 iglooId,
-                tokenSymbol: igloo.entryFee.tokenSymbol || '$CP'
+                tokenSymbol: igloo.entryFee.tokenSymbol || getIglooEconomy(chainId).platformTokenSymbol,
             }
         );
         
@@ -396,10 +408,89 @@ class IglooService {
         // Record payment with real transaction signature
         igloo.recordEntryFeePayment(walletAddress, igloo.entryFee.amount, transactionSignature);
         await igloo.save();
-        
+
+        const explorerUrl = getTxExplorerUrl(transactionSignature, chainId);
         console.log(`💰 Entry fee paid for ${iglooId}: ${transactionSignature.slice(0, 16)}...`);
+        console.log(`   ${getExplorerLabel(chainId)}: ${explorerUrl}`);
         
-        return { success: true, transactionSignature };
+        return {
+            success: true,
+            transactionSignature,
+            transactionHash: transactionSignature,
+            explorerUrl,
+            explorerLabel: getExplorerLabel(chainId),
+            amount: igloo.entryFee.amount,
+            tokenSymbol: igloo.entryFee.tokenSymbol,
+            recipient: igloo.ownerWallet,
+        };
+    }
+
+    /**
+     * Owner-facing payment log (rent + entry fees) with explorer links.
+     * Owner-only — verifies wallet owns the igloo.
+     */
+    async getPaymentHistory(walletAddress, iglooId, options = {}) {
+        const { limit = 40 } = options;
+        const igloo = await Igloo.findOne({ iglooId });
+        if (!igloo) {
+            return { success: false, error: 'IGLOO_NOT_FOUND' };
+        }
+        if (!walletAddress || igloo.ownerWallet?.toLowerCase() !== walletAddress.toLowerCase()) {
+            return { success: false, error: 'NOT_OWNER', message: 'Only the igloo owner can view payment receipts' };
+        }
+
+        const [solanaRows, evmRows] = await Promise.all([
+            SolanaTransaction.getIglooHistory(iglooId, { limit }),
+            EvmTransaction.getIglooHistory(iglooId, { limit }),
+        ]);
+
+        const TYPE_LABELS = {
+            igloo_rent: 'Igloo rented',
+            igloo_rent_renewal: 'Daily rent paid',
+            igloo_entry_fee: 'Entry fee received',
+        };
+
+        const mapRow = (row, chain) => {
+            const txHash = chain === 'evm' ? row.txHash : row.signature;
+            const chainId = chain === 'evm' ? (row.chainId || '4663') : 'solana';
+            const isEntry = row.type === 'igloo_entry_fee';
+            return {
+                id: `${chain}:${txHash}`,
+                type: row.type,
+                label: TYPE_LABELS[row.type] || row.type,
+                direction: isEntry ? 'in' : 'out',
+                amount: row.amount,
+                tokenSymbol: row.tokenSymbol || (chain === 'evm' ? '$WADDLE' : '$CP'),
+                tokenAddress: chain === 'evm' ? row.tokenAddress : row.tokenMint,
+                payerWallet: row.senderWallet,
+                recipientWallet: row.recipientWallet,
+                txHash,
+                explorerUrl: getTxExplorerUrl(txHash, chainId),
+                explorerLabel: getExplorerLabel(chainId),
+                chainId,
+                chain,
+                iglooId: row.iglooId,
+                timestamp: row.processedAt || row.createdAt,
+            };
+        };
+
+        const payments = [
+            ...solanaRows.map((r) => mapRow(r, 'solana')),
+            ...evmRows.map((r) => mapRow(r, 'evm')),
+        ]
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+            .slice(0, limit);
+
+        return {
+            success: true,
+            iglooId,
+            payments,
+            summary: {
+                entryFeesCollected: igloo.stats?.totalEntryFeesCollected || 0,
+                rentPaid: igloo.stats?.totalRentPaid || 0,
+                uniqueVisitors: igloo.stats?.uniqueVisitors || 0,
+            },
+        };
     }
     
     /**
@@ -609,6 +700,7 @@ class IglooService {
         return { success: true, message: 'You have left the igloo' };
     }
 }
+
 
 // Export singleton instance
 const iglooService = new IglooService();
