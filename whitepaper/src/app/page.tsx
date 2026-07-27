@@ -1769,11 +1769,13 @@ function RoadmapSection() {
     },
     {
       phase: "Phase 8",
-      title: "Ecosystem",
-      status: "planned",
+      title: "Ecosystem · Robinhood EVM",
+      status: "current",
       items: [
-        "✅ Robinhood Chain (EVM) · $WADDLE deployed — Phase 1 live (MetaMask auth, nametags, single-chain UX)",
-        "📋 Contract deployment + wallet integrations shipping in phases",
+        "✅ Phase 1 — MetaMask auth, world play, gold economy, Diamond Flippers nametags, single-chain UX",
+        "✅ Phase 2 — $WADDLE daily bonus + igloo rent & entry fees (on-chain receipts)",
+        "📋 Phase 3 — Pebbles (ETH rail) + ERC-20 / $WADDLE token wagers",
+        "📋 Phase 4 — EVM referral payouts & deeper cross-chain parity",
       ],
     },
     {

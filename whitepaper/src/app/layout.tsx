@@ -24,7 +24,7 @@ const notoSansTc = Noto_Sans_TC({
 
 export const metadata: Metadata = {
   title: "WaddleBet | First Multichain Social Metaverse on Solana & Robinhood EVM",
-  description: "$WADDLE flagship on Robinhood Chain. Wager any SPL or EVM token P2P. Solana ($CP) live in parallel. First multichain social wagering metaverse.",
+  description: "$WADDLE flagship on Robinhood Chain — daily bonus, igloo rent, MetaMask play. Solana ($CP) full economy in parallel. First multichain social wagering metaverse.",
   keywords: [
     "Solana",
     "Robinhood Chain",
@@ -46,7 +46,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "WaddleBet | First Multichain Social Metaverse on Solana & Robinhood EVM",
-    description: "$WADDLE on Robinhood Chain. Wager any SPL or EVM token P2P. Solana ($CP) live in parallel.",
+    description: "$WADDLE on Robinhood Chain — daily bonus & igloo rent live. Solana ($CP) full economy in parallel.",
     type: "website",
     images: ["/character.png"],
   },

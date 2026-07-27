@@ -196,7 +196,7 @@ function buildTutorialSlides({ isEvm, canUsePebblesRail, canReferralPayout }) {
                             <span className="text-lg">🪶</span>
                             <div>
                                 <div className="text-emerald-400 font-bold text-sm">$WADDLE — Robinhood Chain (flagship)</div>
-                                <p className="text-white/60 text-xs">Nametag tiers, daily bonus streak, and the next wave of on-chain economy features.</p>
+                                <p className="text-white/60 text-xs">Nametag tiers, daily bonus, igloo rent &amp; entry fees — ERC-20 token wagers and pebbles next.</p>
                             </div>
                         </div>
                         <div className="flex items-start gap-2 bg-black/30 rounded-lg p-2 border border-cyan-500/30">

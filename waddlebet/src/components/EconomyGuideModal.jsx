@@ -31,7 +31,7 @@ const EconomyGuideModal = ({ isOpen, onClose }) => {
 
     const platformTitle = isEvm ? `${platformToken} token` : t('economyGuide.cpTitle');
     const platformDesc = isEvm
-        ? `${platformToken} on Robinhood Chain powers nametag tiers today. Igloo rent, token wagers, and daily bonus redemption ship in a later phase — no $CP on this account.`
+        ? `${platformToken} on Robinhood Chain powers nametag tiers, daily bonus, and igloo rent/entry fees today. ERC-20 token wagers ship next — no $CP on this account.`
         : t('economyGuide.cpDesc');
     const pebblesDesc = isEvm
         ? 'Premium currency (ETH-backed, coming soon). Gacha and cosmetic marketplace use Pebbles once the ETH rail is live.'

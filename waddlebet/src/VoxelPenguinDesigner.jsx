@@ -86,6 +86,8 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
     const isMobilePortrait = isPortrait && isMobileView;
     const MOBILE_PREVIEW_VH = 48;
     const MOBILE_SHEET_VH = 52;
+    /** Extra space so sticky Play CTA clears Safari/Chrome mobile browser bottom bars (safe-area alone is often 0). */
+    const MOBILE_BROWSER_CHROME_PB = 'calc(1.25rem + 4.5rem + env(safe-area-inset-bottom, 0px))';
 
     const applyPreviewFraming = useCallback((portrait, mobile) => {
         const camera = cameraRef.current;
@@ -2468,13 +2470,22 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
             )}
 
             {/* Settings Panel - bottom sheet on mobile portrait, side panel on landscape/desktop */}
-            <div className={`absolute z-10 pointer-events-auto ${
-                isMobilePortrait
-                    ? 'bottom-0 left-0 right-0 w-full'
-                    : isMobileView
-                        ? 'bottom-4 right-4 left-4 w-auto max-w-md mx-auto'
-                        : 'bottom-10 right-10 w-80'
-            }`}>
+            <div
+                className={`absolute z-10 pointer-events-auto ${
+                    isMobilePortrait
+                        ? 'bottom-0 left-0 right-0 w-full'
+                        : isMobileView
+                            ? 'right-4 left-4 w-auto max-w-md mx-auto'
+                            : 'bottom-10 right-10 w-80'
+                }`}
+                style={
+                    isMobilePortrait
+                        ? undefined
+                        : isMobileView
+                            ? { bottom: MOBILE_BROWSER_CHROME_PB }
+                            : undefined
+                }
+            >
                 <div className={`glass-panel rounded-2xl flex flex-col ${
                     isMobilePortrait
                         ? 'rounded-b-none overflow-hidden border-b-0'
@@ -3579,10 +3590,13 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                 </div>
                 {isMobileView && (
                     <div
-                        className="shrink-0 border-t border-white/10 bg-gray-900/95 px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] space-y-2"
+                        className="shrink-0 border-t border-white/10 bg-gray-900/95 px-4 pt-3 space-y-2"
+                        style={{ paddingBottom: MOBILE_BROWSER_CHROME_PB }}
                     >
                         {turnstileBlock}
                         {renderEnterWorldCTA()}
+                        {/* Spacer so the Play button can clear browser bottom chrome when the sheet is flush to the viewport */}
+                        <div className="h-2 shrink-0" aria-hidden />
                     </div>
                 )}
                 </div>
