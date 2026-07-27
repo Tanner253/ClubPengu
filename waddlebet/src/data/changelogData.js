@@ -19,10 +19,6 @@ export default [
         type: "content",
         text: "Flow: Wallet pay → chain confirm → game unlock → receipt. Rent goes to the platform rent wallet; entry fees go to the owner. Owners see a live Payment receipts list (payer, amount, token, explorer link).",
       },
-      {
-        type: "content",
-        text: "Diagram — Renter wallet ──$WADDLE rent──▶ Rent treasury → Igloo unlocked; Guest wallet ──entry fee──▶ Owner wallet → Door opens; Owner Settings → Payment receipts → Blockscout/Solscan.",
-      },
 
       // ── Player-facing receipts ──
       { type: "feature", text: "Rent success receipt — after renting, see amount paid plus a one-click Blockscout (Robinhood) or Solscan (Solana) link instead of the modal vanishing silently" },
