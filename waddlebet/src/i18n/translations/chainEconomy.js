@@ -57,16 +57,16 @@ export default {
         'مكافأة {token} اليومية — قريباً'
     ),
     'chainEconomy.pebblesTitle': row(
-        'Pebbles (ETH) — coming soon',
-        '卵石（ETH）— 即将推出',
-        'Pebbles (ETH) — próximamente',
-        'Pebbles (ETH) — em breve',
-        '페블(ETH) — 곧 출시',
-        'ペブル（ETH）— 近日',
-        'Pebbles (ETH) — bientôt',
-        'Pebbles (ETH) — demnächst',
-        'Pebbles (ETH) — скоро',
-        'Pebbles (ETH) — قريباً'
+        'Pebbles (ETH) — USD-pegged',
+        '卵石（ETH）— 美元锚定',
+        'Pebbles (ETH) — anclado a USD',
+        'Pebbles (ETH) — lastreados em USD',
+        '페블(ETH) — USD 페그',
+        'ペブル（ETH）— USDペッグ',
+        'Pebbles (ETH) — indexés USD',
+        'Pebbles (ETH) — USD-Peg',
+        'Pebbles (ETH) — USD-пег',
+        'Pebbles (ETH) — مربوط بالدولار'
     ),
     'chainEconomy.iglooTitle': row(
         'Igloo {token} payments — coming soon',

@@ -3,12 +3,15 @@
  * Phase 0: balance reads + transfer verification foundation for $WADDLE rail
  */
 
-import { createPublicClient, http, parseAbi, formatUnits, isAddress, decodeEventLog } from 'viem';
+import { createPublicClient, http, parseAbi, formatUnits, parseEther, isAddress, decodeEventLog } from 'viem';
 import { getDefaultEvmChainId } from '../config/evm.js';
 import { getPlatformToken, isEvmChainId } from '../config/tokens.js';
 import { toChecksumAddress } from '../utils/evmAddress.js';
 import EvmTransaction from '../db/models/EvmTransaction.js';
 import rateLimiter from '../utils/RateLimiter.js';
+
+/** Wei tolerance for native ETH deposits (~0.00001 ETH) */
+const NATIVE_ETH_WEI_TOLERANCE = 10_000_000_000_000n;
 
 const ERC20_ABI = parseAbi([
     'function balanceOf(address owner) view returns (uint256)',
@@ -294,6 +297,124 @@ class EvmPaymentService {
             transactionHash: txHash,
             amount: verification.amount,
         };
+    }
+
+    /**
+     * Verify a native ETH transfer (pebble deposits).
+     */
+    async verifyNativeEthTransfer(txHash, {
+        expectedSender,
+        expectedRecipient,
+        expectedEthAmount,
+        chainId,
+        transactionType = 'pebble_deposit',
+    }) {
+        if (!txHash || typeof txHash !== 'string' || !txHash.startsWith('0x')) {
+            return { success: false, error: 'INVALID_TX_HASH', message: 'Invalid transaction hash' };
+        }
+
+        const rateCheck = rateLimiter.check('payment', expectedSender);
+        if (!rateCheck.allowed) {
+            return {
+                success: false,
+                error: 'RATE_LIMITED',
+                message: 'Too many payment attempts. Please wait.',
+                retryAfterMs: rateCheck.retryAfterMs,
+            };
+        }
+
+        if (this.recentTxHashes.has(txHash)) {
+            return {
+                success: false,
+                error: 'TX_ALREADY_USED',
+                message: 'This transaction has already been used for a payment',
+            };
+        }
+
+        try {
+            const existsInDb = await EvmTransaction.isTxHashUsed(txHash);
+            if (existsInDb) {
+                this.recentTxHashes.add(txHash);
+                return {
+                    success: false,
+                    error: 'TX_ALREADY_USED',
+                    message: 'This transaction has already been used for a payment',
+                };
+            }
+        } catch (dbError) {
+            console.error('EvmPayment: DB replay check failed:', dbError.message);
+        }
+
+        const startTime = Date.now();
+        try {
+            const client = this._getClient(chainId);
+            const receipt = await client.getTransactionReceipt({ hash: txHash });
+            if (!receipt || receipt.status !== 'success') {
+                return { success: false, error: 'TX_FAILED', message: 'Transaction not confirmed or failed' };
+            }
+
+            const tx = await client.getTransaction({ hash: txHash });
+            if (!tx) {
+                return { success: false, error: 'TX_NOT_FOUND', message: 'Transaction not found' };
+            }
+
+            const sender = toChecksumAddress(expectedSender);
+            const recipient = toChecksumAddress(expectedRecipient);
+            if (tx.from.toLowerCase() !== sender.toLowerCase()) {
+                return { success: false, error: 'SENDER_MISMATCH', message: 'Transaction sender mismatch' };
+            }
+            if (!tx.to || tx.to.toLowerCase() !== recipient.toLowerCase()) {
+                return { success: false, error: 'RECIPIENT_MISMATCH', message: 'ETH must be sent to the rake wallet' };
+            }
+
+            const expectedWei = parseEther(String(expectedEthAmount));
+            const actualWei = tx.value ?? 0n;
+            if (actualWei + NATIVE_ETH_WEI_TOLERANCE < expectedWei) {
+                return {
+                    success: false,
+                    error: 'AMOUNT_TOO_LOW',
+                    message: `Expected ≥ ${expectedEthAmount} ETH`,
+                };
+            }
+
+            const amountEth = parseFloat(formatUnits(actualWei, 18));
+
+            try {
+                await EvmTransaction.recordTransaction({
+                    txHash,
+                    chainId: String(this._resolveChainId(chainId)),
+                    type: transactionType,
+                    senderWallet: sender,
+                    recipientWallet: recipient,
+                    amount: amountEth,
+                    amountRaw: actualWei.toString(),
+                    tokenAddress: null,
+                    tokenSymbol: 'ETH',
+                    isNative: true,
+                    status: 'verified',
+                    processingTimeMs: Date.now() - startTime,
+                });
+                this.recentTxHashes.add(txHash);
+            } catch (recordError) {
+                if (recordError.code === 11000) {
+                    return {
+                        success: false,
+                        error: 'TX_ALREADY_USED',
+                        message: 'This transaction has already been used for a payment',
+                    };
+                }
+                console.error('EvmPayment: failed to record native ETH tx:', recordError.message);
+            }
+
+            return {
+                success: true,
+                transactionHash: txHash,
+                amount: amountEth,
+            };
+        } catch (error) {
+            console.error('EvmPayment: verify native ETH failed:', error.message);
+            return { success: false, error: 'VERIFY_FAILED', message: error.message };
+        }
     }
 
     async verifyRentPayment(txHash, expectedSender, expectedRecipient, expectedAmount, options = {}) {

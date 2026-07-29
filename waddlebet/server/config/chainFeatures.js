@@ -1,11 +1,9 @@
 /**
- * Which on-chain economy features are live per chain.
- * Off-chain (gold, inventory, cosmetics DB) is always available when authenticated.
+ * Which on-chain economy features are live per chain (server authority).
+ * Keep in sync with waddlebet/src/config/chainFeatures.js
  */
 
 import { isEvmChainId } from './tokens.js';
-
-/** @typedef {'dailyBonusClaim'|'pebblesRail'|'iglooRent'|'iglooEntryFee'|'tokenWagers'|'splGifts'|'referralPayouts'} ChainFeature */
 
 const SOLANA_LIVE = {
     dailyBonusClaim: true,
@@ -18,7 +16,7 @@ const SOLANA_LIVE = {
     nametagTiers: true,
 };
 
-/** Robinhood EVM — daily bonus, igloos, USD-pegged ETH pebbles. */
+/** Robinhood EVM — daily bonus, igloos, USD-pegged pebbles. */
 const EVM_LIVE = {
     dailyBonusClaim: true,
     pebblesRail: true,

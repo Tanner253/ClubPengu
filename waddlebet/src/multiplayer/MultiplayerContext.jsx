@@ -615,6 +615,10 @@ export function MultiplayerProvider({ children }) {
                 }
                 break;
                 
+            case 'pebbles_quote':
+                callbacksRef.current.onPebblesQuote?.(message);
+                break;
+
             case 'pebbles_update':
             case 'pebbles_deposited':
                 // Server-authoritative pebbles update
@@ -623,6 +627,7 @@ export function MultiplayerProvider({ children }) {
                     setUserData(prev => prev ? { ...prev, pebbles: message.pebbles } : prev);
                 }
                 callbacksRef.current.onPebblesUpdate?.(message);
+                callbacksRef.current.onPebblesDeposited?.(message);
                 break;
                 
             case 'pebbles_withdrawn':

@@ -11,13 +11,15 @@ const pebbleWithdrawalSchema = new mongoose.Schema({
     
     // User info
     walletAddress: { type: String, required: true, index: true },
+    chainId: { type: String, default: 'solana', index: true },
+    asset: { type: String, enum: ['SOL', 'ETH'], default: 'SOL' },
     
     // Amount details
     pebbleAmount: { type: Number, required: true },        // Total pebbles requested
     rakeAmount: { type: Number, required: true },          // Pebbles taken as rake
     netPebbles: { type: Number, required: true },          // Pebbles after rake
-    solAmount: { type: Number, required: true },           // SOL to be sent (net)
-    lamports: { type: String, required: true },            // Lamports as string (BigInt safe)
+    solAmount: { type: Number, required: true },           // SOL or ETH to be sent (net)
+    lamports: { type: String, required: true },            // Lamports or wei as string (BigInt safe)
     
     // Status tracking
     status: {
@@ -59,7 +61,16 @@ pebbleWithdrawalSchema.statics.generateWithdrawalId = function() {
  * Create a new pending withdrawal request
  */
 pebbleWithdrawalSchema.statics.createRequest = async function(data) {
-    const { walletAddress, pebbleAmount, rakeAmount, netPebbles, solAmount, lamports } = data;
+    const {
+        walletAddress,
+        pebbleAmount,
+        rakeAmount,
+        netPebbles,
+        solAmount,
+        lamports,
+        chainId = 'solana',
+        asset = 'SOL',
+    } = data;
     
     // Get next queue position
     const lastInQueue = await this.findOne({ status: 'pending' }).sort({ queuePosition: -1 });
@@ -68,6 +79,8 @@ pebbleWithdrawalSchema.statics.createRequest = async function(data) {
     return this.create({
         withdrawalId: this.generateWithdrawalId(),
         walletAddress,
+        chainId,
+        asset,
         pebbleAmount,
         rakeAmount,
         netPebbles,
@@ -81,8 +94,8 @@ pebbleWithdrawalSchema.statics.createRequest = async function(data) {
 /**
  * Get pending withdrawals in queue order
  */
-pebbleWithdrawalSchema.statics.getPendingQueue = function(limit = 10) {
-    return this.find({ status: 'pending' })
+pebbleWithdrawalSchema.statics.getPendingQueue = function(limit = 10, asset = 'SOL') {
+    return this.find({ status: 'pending', asset: asset || 'SOL' })
         .sort({ queuePosition: 1 })
         .limit(limit);
 };

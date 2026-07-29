@@ -34,7 +34,7 @@ const EconomyGuideModal = ({ isOpen, onClose }) => {
         ? `${platformToken} on Robinhood Chain powers nametag tiers, daily bonus, and igloo rent/entry fees today. ERC-20 token wagers ship next — no $CP on this account.`
         : t('economyGuide.cpDesc');
     const pebblesDesc = isEvm
-        ? 'Premium currency (ETH-backed, coming soon). Gacha and cosmetic marketplace use Pebbles once the ETH rail is live.'
+        ? 'Premium currency on Robinhood Chain — buy with ETH at a USD peg so $1 buys the same pebbles as on Solana. Withdraw to ETH only (5% rake). Gacha & marketplace spend.'
         : t('economyGuide.pebblesDesc');
 
     const currencies = [

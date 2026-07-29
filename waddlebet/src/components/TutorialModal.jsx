@@ -295,7 +295,7 @@ function buildTutorialSlides({ isEvm, canUsePebblesRail, canReferralPayout }) {
                         </div>
                     ) : (
                         <div className="bg-violet-500/10 rounded-lg p-3 border border-violet-500/30 text-sm text-white/70">
-                            Pebbles on Robinhood Chain (ETH-backed) are <strong className="text-violet-300">coming soon</strong>.
+                            Pebbles on Robinhood Chain are <strong className="text-emerald-300">USD-pegged</strong> — pay ETH so $1 buys the same pebbles as 1 SOL / 1000 on Solana.
                             The full pebbles rail — gacha, marketplace, withdrawals — is live on Solana with $CP today.
                         </div>
                     )}

@@ -1,6 +1,24 @@
 /** In-game changelog — Settings → Changelog (maintained separately from whitepaper/src/data/changelogData.js) */
 export default [
   {
+    version: "1.4.5",
+    date: "July 29, 2026",
+    title: "Pebbles on Robinhood · USD-Pegged ETH",
+    description:
+      "Phase 3 EVM utility — MetaMask players can buy and withdraw Pebbles with native ETH. Pricing is USD-pegged to Solana’s 1 SOL = 1,000 pebbles so $1 buys the same pebble amount on both chains. Same-chain redeem only (no SOL↔ETH cash-out bridge). Purchase UI shows ≈ USD on every pack.",
+    highlight: true,
+    brand: "robinhood",
+    stats: { filesChanged: 20, additions: 1600, deletions: 120 },
+    changes: [
+      { type: "feature", text: "ETH pebbles deposits — locked quote (SOL/USD + ETH/USD), pay rake wallet, server verifies native transfer, credits pebbles from the quote" },
+      { type: "feature", text: "ETH pebbles withdrawals — inverse FX at withdraw time, 5% rake, EVM custodial payout / queue (same-rail only)" },
+      { type: "feature", text: "Pebbles shop UI — USD values on packs; MetaMask ETH path; Solana packs show ≈ USD too" },
+      { type: "backend", text: "PriceOracleService (CoinGecko) + EvmPebbleService; server pebblesRail flag; EVM_RAKE_WALLET_ADDRESS" },
+      { type: "security", text: "Anti-arb design — no fixed PEBBLES_PER_ETH; quotes expire; gift pebbles still non-withdrawable; per-chain user accounts" },
+      { type: "content", text: "Tutorial, Economy Guide, whitepaper Phase 8 updated for USD-pegged pebbles live" },
+    ],
+  },
+  {
     version: "1.4.4",
     date: "July 26, 2026",
     title: "Igloo $WADDLE Rent · On-Chain Receipts",

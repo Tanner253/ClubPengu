@@ -23,6 +23,8 @@ const evmTransactionSchema = new mongoose.Schema({
             'igloo_rent',
             'igloo_rent_renewal',
             'igloo_entry_fee',
+            'pebble_deposit',
+            'pebble_withdrawal',
             'wager',
             'other',
         ],
@@ -48,12 +50,18 @@ const evmTransactionSchema = new mongoose.Schema({
     },
     tokenAddress: {
         type: String,
-        required: true,
+        required: false,
+        default: null,
         index: true,
     },
     tokenSymbol: {
         type: String,
         default: '$WADDLE',
+    },
+    /** native ETH deposits use symbol ETH and null tokenAddress */
+    isNative: {
+        type: Boolean,
+        default: false,
     },
     iglooId: {
         type: String,

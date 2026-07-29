@@ -41,12 +41,12 @@ const en: Record<string, string> = {
   "pill.anySpl": "Any SPL / EVM Token",
   "pill.cults": "All Solana Cults",
   "pill.multichain": "Multichain",
-  "pill.robinhoodEvm": "Robinhood EVM · Phase 2 Live",
+  "pill.robinhoodEvm": "Robinhood EVM · Phase 3 Live",
   "hero.chains.title": "Built for Two Chains",
   "hero.chains.solana": "Solana",
   "hero.chains.solanaStatus": "Live",
   "hero.chains.robinhood": "Robinhood Chain",
-  "hero.chains.robinhoodStatus": "Phase 2 Live",
+  "hero.chains.robinhoodStatus": "Phase 3 Live",
   "hero.chains.robinhoodSub": "Ethereum EVM",
   "hero.cta.multichain": "Multichain Vision",
   "hero.stat.peak": "Peak Concurrent",
@@ -111,12 +111,12 @@ const en: Record<string, string> = {
   "multichain.titleHighlight": "Social Metaverse",
   "multichain.lead":
     "WaddleBet is expanding beyond Solana. We're building toward Robinhood Chain — Robinhood's Ethereum-compatible EVM layer — so millions of new users can waddle in without switching ecosystems.",
-  "multichain.robinhood.badge": "Phase 2 Live",
+  "multichain.robinhood.badge": "Phase 3 Live",
   "multichain.robinhood.title": "Robinhood Chain · Ethereum EVM",
   "multichain.robinhood.p1":
     "Robinhood is bringing crypto to a mainstream audience of 25M+ users. Their EVM-compatible chain opens the door for WaddleBet to meet that audience where they already are — with the same social wagering, cosmetics economy, and penguin metaverse they love on Solana.",
   "multichain.robinhood.p2":
-    "$WADDLE is live on Robinhood Chain. Phase 1 shipped MetaMask sign-in, world play, gold economy, and Diamond Flippers nametags. Phase 2 adds $WADDLE daily bonus plus igloo rent & entry fees with on-chain receipts. Still coming: pebbles (ETH rail) and ERC-20 token wagers — Solana ($CP) remains fully playable in parallel.",
+    "$WADDLE is live on Robinhood Chain. Phase 1: MetaMask sign-in, world play, gold, Diamond Flippers. Phase 2: daily bonus + igloo rent/entry fees. Phase 3: Pebbles with ETH — USD-pegged so $1 buys the same pebbles as on Solana. Still coming: ERC-20 token wagers — Solana ($CP) remains fully playable in parallel.",
   "multichain.robinhood.caLabel": "Contract Address",
   "multichain.why.title": "Why Multichain?",
   "multichain.why.p1":
@@ -241,12 +241,12 @@ const zhTW: Record<string, string> = {
   "pill.anySpl": "任意 SPL / EVM 代幣",
   "pill.cults": "所有 Solana 社群",
   "pill.multichain": "多鏈",
-  "pill.robinhoodEvm": "Robinhood EVM · 第二階段",
+  "pill.robinhoodEvm": "Robinhood EVM · 第三階段",
   "hero.chains.title": "雙鏈建置",
   "hero.chains.solana": "Solana",
   "hero.chains.solanaStatus": "已上線",
   "hero.chains.robinhood": "Robinhood Chain",
-  "hero.chains.robinhoodStatus": "第二階段已上線",
+  "hero.chains.robinhoodStatus": "第三階段已上線",
   "hero.chains.robinhoodSub": "以太坊 EVM",
   "hero.cta.multichain": "多鏈願景",
   "hero.stat.peak": "同時在線高峰",
@@ -309,12 +309,12 @@ const zhTW: Record<string, string> = {
   "multichain.titleHighlight": "社交元宇宙",
   "multichain.lead":
     "WaddleBet 正超越 Solana。我們正朝 Robinhood Chain——Robinhood 的以太坊相容 EVM 層——擴展，讓數百萬新用戶無需切換生態即可搖擺入場。",
-  "multichain.robinhood.badge": "第二階段已上線",
+  "multichain.robinhood.badge": "第三階段已上線",
   "multichain.robinhood.title": "Robinhood Chain · 以太坊 EVM",
   "multichain.robinhood.p1":
     "Robinhood 正將加密帶給 2500 萬以上的主流用戶。其 EVM 相容鏈讓 WaddleBet 能在用戶已熟悉的地方相遇——與 Solana 上相同的社交對賭、外觀經濟與企鵝元宇宙。",
   "multichain.robinhood.p2":
-    "$WADDLE 已於 Robinhood Chain 上線。第一階段：MetaMask 登入、世界遊玩、金幣經濟與 Diamond Flippers 名牌。第二階段：$WADDLE 每日獎勵與冰屋租金／入場費（鏈上收據）。即將推出：卵石（ETH 軌道）與 ERC-20 代幣對賭——Solana（$CP）仍完全可玩。",
+    "$WADDLE 已於 Robinhood Chain 上線。第一階段：MetaMask 登入、世界遊玩、金幣與 Diamond Flippers。第二階段：每日獎勵與冰屋租金／入場費。第三階段：以 ETH 購買卵石（美元錨定，與 Solana 等值）。即將推出：ERC-20 代幣對賭——Solana（$CP）仍完全可玩。",
   "multichain.robinhood.caLabel": "合約地址",
   "multichain.why.title": "為何多鏈？",
   "multichain.why.p1":

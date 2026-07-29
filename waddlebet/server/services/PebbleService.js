@@ -483,7 +483,7 @@ class PebbleService {
             return { processed: 0, failed: 0 };
         }
         
-        const pending = await PebbleWithdrawal.getPendingQueue(maxToProcess);
+        const pending = await PebbleWithdrawal.getPendingQueue(maxToProcess, 'SOL');
         if (pending.length === 0) {
             return { processed: 0, failed: 0 };
         }

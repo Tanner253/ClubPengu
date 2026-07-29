@@ -77,13 +77,28 @@ export function validateAmount(value, options = {}) {
  * @param {any} address - Wallet address to validate
  * @returns {{valid: boolean, address: string|null, error: string|null}}
  */
-export function validateWalletAddress(address) {
+/**
+ * Validate Solana (base58) or EVM (0x) wallet address.
+ * Pass chainId '4663'/'46630' to require EVM; 'solana' to require Solana; null = either.
+ */
+export function validateWalletAddress(address, chainId = null) {
     if (!address || typeof address !== 'string') {
         return { valid: false, address: null, error: 'Wallet address is required and must be a string' };
     }
 
     // Trim whitespace
     const trimmed = address.trim();
+
+    const forceEvm = chainId === '4663' || chainId === '46630' || chainId === 4663 || chainId === 46630;
+    const forceSolana = chainId === 'solana';
+    const evmRegex = /^0x[a-fA-F0-9]{40}$/;
+
+    if (forceEvm || (!forceSolana && evmRegex.test(trimmed))) {
+        if (!evmRegex.test(trimmed)) {
+            return { valid: false, address: null, error: 'Invalid EVM wallet address format' };
+        }
+        return { valid: true, address: trimmed, error: null, chain: 'evm' };
+    }
 
     // Solana addresses are base58 encoded and typically 32-44 characters
     // Base58 alphabet: 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz
@@ -113,8 +128,8 @@ export function validateWalletAddress(address) {
 }
 
 /**
- * Validate a Solana transaction signature
- * @param {any} signature - Transaction signature to validate
+ * Validate a Solana signature or EVM 0x tx hash.
+ * @param {any} signature - Transaction signature / hash to validate
  * @returns {{valid: boolean, signature: string|null, error: string|null}}
  */
 export function validateTransactionSignature(signature) {
@@ -124,6 +139,11 @@ export function validateTransactionSignature(signature) {
 
     // Trim whitespace
     const trimmed = signature.trim();
+
+    // EVM tx hash
+    if (/^0x[a-fA-F0-9]{64}$/.test(trimmed)) {
+        return { valid: true, signature: trimmed, error: null, chain: 'evm' };
+    }
 
     // Solana signatures are base58 encoded and typically 88 characters
     // Base58 alphabet: 123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz

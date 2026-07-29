@@ -9,6 +9,7 @@ import {
     http,
     parseAbi,
     parseUnits,
+    parseEther,
     formatUnits,
     isAddress,
 } from 'viem';
@@ -159,6 +160,92 @@ export async function payIglooRent(iglooId, amount, rentWalletAddress, tokenAddr
     });
 }
 
+/**
+ * Send native ETH on Robinhood Chain (USD-pegged pebble deposits).
+ */
+export async function sendNativeEth(options) {
+    const { recipientAddress, amountEth } = options;
+    const wallet = MetaMaskWallet.getInstance();
+
+    if (!wallet.connected || !wallet.address) {
+        return {
+            success: false,
+            error: 'WALLET_NOT_CONNECTED',
+            message: 'Please connect your MetaMask wallet first',
+        };
+    }
+
+    if (!isAddress(recipientAddress)) {
+        return {
+            success: false,
+            error: 'INVALID_ADDRESS',
+            message: 'Invalid rake wallet address',
+        };
+    }
+
+    try {
+        const chain = await wallet.ensureRobinhoodChain();
+        const provider = wallet.getMetaMaskProvider();
+        if (!provider) {
+            return {
+                success: false,
+                error: 'WALLET_NOT_CONNECTED',
+                message: 'MetaMask provider not available',
+            };
+        }
+
+        const chainConfig = {
+            id: chain.chainId,
+            name: chain.name,
+            nativeCurrency: chain.nativeCurrency,
+        };
+
+        const publicClient = createPublicClient({
+            chain: chainConfig,
+            transport: http(chain.rpcUrl),
+        });
+
+        const walletClient = createWalletClient({
+            chain: chainConfig,
+            transport: custom(provider),
+        });
+
+        const value = parseEther(String(amountEth));
+        const balance = await publicClient.getBalance({ address: wallet.address });
+        if (balance < value) {
+            return {
+                success: false,
+                error: 'INSUFFICIENT_BALANCE',
+                message: `Insufficient ETH. Need ${amountEth} ETH.`,
+            };
+        }
+
+        const hash = await walletClient.sendTransaction({
+            account: wallet.address,
+            to: recipientAddress,
+            value,
+            chain: chainConfig,
+        });
+
+        await publicClient.waitForTransactionReceipt({ hash });
+
+        return { success: true, signature: hash, transactionHash: hash };
+    } catch (error) {
+        if (error.code === 4001 || error.message?.includes('User rejected')) {
+            return {
+                success: false,
+                error: 'USER_REJECTED',
+                message: 'Transaction cancelled by user',
+            };
+        }
+        return {
+            success: false,
+            error: 'PAYMENT_FAILED',
+            message: error.shortMessage || error.message || 'ETH transfer failed',
+        };
+    }
+}
+
 export async function getTokenBalance(walletAddress, tokenAddress, chainId) {
     try {
         const chain = getRobinhoodChainById(chainId ?? getActiveRobinhoodChain().chainId);
@@ -187,6 +274,7 @@ export async function getTokenBalance(walletAddress, tokenAddress, chainId) {
 
 export default {
     sendErc20Token,
+    sendNativeEth,
     payIglooEntryFee,
     payIglooRent,
     getTokenBalance,

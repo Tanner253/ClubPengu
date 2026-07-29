@@ -226,6 +226,91 @@ class EvmCustodialWalletService {
     }
 
     /**
+     * Send native ETH from custodial wallet (pebble withdrawals).
+     * @param {string} recipientWallet
+     * @param {bigint|string} amountWei
+     * @param {string|number} chainId
+     * @param {string} [memo]
+     */
+    async sendNativeEth(recipientWallet, amountWei, chainId, memo) {
+        if (!this.isReady()) {
+            return { success: false, error: 'SERVICE_NOT_READY' };
+        }
+        if (!isAddress(recipientWallet)) {
+            return { success: false, error: 'INVALID_ADDRESS' };
+        }
+
+        const amount = typeof amountWei === 'bigint' ? amountWei : BigInt(amountWei);
+        if (amount <= 0n) {
+            return { success: false, error: 'INVALID_AMOUNT' };
+        }
+
+        const walletClient = this._getWalletClient(chainId);
+        const publicClient = this._getPublicClient(chainId);
+        if (!walletClient || !publicClient) {
+            return { success: false, error: 'SERVICE_NOT_READY' };
+        }
+
+        const recipient = toChecksumAddress(recipientWallet);
+        let txHash = null;
+
+        try {
+            const nativeBalance = await publicClient.getBalance({ address: _publicAddress });
+            const feeBuffer = MIN_NATIVE_BALANCE_WEI;
+            if (nativeBalance < amount + feeBuffer) {
+                console.error(
+                    `🚨 EVM custodial ETH too low for payout (have ${formatUnits(nativeBalance, 18)}, need ${formatUnits(amount + feeBuffer, 18)})`
+                );
+                return { success: false, error: 'INSUFFICIENT_BALANCE' };
+            }
+
+            console.log(`   📤 EVM native ETH (${memo || 'payout'}): ${formatUnits(amount, 18)} → ${recipient.slice(0, 10)}...`);
+
+            txHash = await walletClient.sendTransaction({
+                to: recipient,
+                value: amount,
+            });
+
+            console.log(`   📤 Broadcast: ${txHash.slice(0, 18)}...`);
+
+            const receipt = await publicClient.waitForTransactionReceipt({
+                hash: txHash,
+                confirmations: 1,
+            });
+
+            if (receipt.status !== 'success') {
+                return { success: false, error: 'TRANSACTION_FAILED', txId: txHash };
+            }
+
+            console.log('   ✅ EVM native ETH payout confirmed');
+            return { success: true, txId: txHash };
+        } catch (error) {
+            console.error('🚨 EVM native ETH payout failed:', error.message?.slice(0, 120));
+            if (txHash) {
+                return { success: false, error: 'CONFIRMATION_UNCERTAIN', txId: txHash };
+            }
+            return { success: false, error: 'TRANSACTION_FAILED' };
+        }
+    }
+
+    async getNativeBalance(chainId) {
+        if (!this.isReady() || !_publicAddress) {
+            return { success: false, error: 'SERVICE_NOT_READY' };
+        }
+        try {
+            const client = this._getPublicClient(chainId);
+            const raw = await client.getBalance({ address: _publicAddress });
+            return {
+                success: true,
+                balance: raw.toString(),
+                uiBalance: parseFloat(formatUnits(raw, 18)),
+            };
+        } catch {
+            return { success: false, error: 'BALANCE_CHECK_FAILED' };
+        }
+    }
+
+    /**
      * Send ERC-20 tokens from custodial wallet to recipient.
      * @returns {Promise<{success: boolean, txId?: string, error?: string}>}
      */

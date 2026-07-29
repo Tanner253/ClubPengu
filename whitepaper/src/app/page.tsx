@@ -1774,8 +1774,8 @@ function RoadmapSection() {
       items: [
         "✅ Phase 1 — MetaMask auth, world play, gold economy, Diamond Flippers nametags, single-chain UX",
         "✅ Phase 2 — $WADDLE daily bonus + igloo rent & entry fees (on-chain receipts)",
-        "📋 Phase 3 — Pebbles (ETH rail) + ERC-20 / $WADDLE token wagers",
-        "📋 Phase 4 — EVM referral payouts & deeper cross-chain parity",
+        "✅ Phase 3 — Pebbles (ETH, USD-pegged to Solana pebble value) — token wagers next",
+        "📋 Phase 4 — ERC-20 / $WADDLE token wagers, EVM referrals & deeper parity",
       ],
     },
     {

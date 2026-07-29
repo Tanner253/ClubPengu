@@ -58,9 +58,13 @@ import { getNpcDailyOrder } from './config/npcOrders.js';
 import { getScavengeSpot } from './config/scavenge.js';
 import wagerSettlementService from './services/WagerSettlementService.js';
 import evmCustodialWalletService from './services/EvmCustodialWalletService.js';
+import evmPebbleService from './services/EvmPebbleService.js';
+import priceOracleService from './services/PriceOracleService.js';
 import dailyBonusService from './services/DailyBonusService.js';
 import { initializeReferralService, getReferralService } from './services/ReferralService.js';
 import { validateWalletAddress, validateTransactionSignature, validateAmount } from './utils/securityValidation.js';
+import { isEvmChainId } from './config/tokens.js';
+import { isChainFeatureLive } from './config/chainFeatures.js';
 import { displayTokenSymbol } from './utils/tokenDisplay.js';
 import {
     broadcastProximitySfx,
@@ -8180,8 +8184,70 @@ async function handleMessage(playerId, message) {
         }
         
         // ==================== PEBBLES (Premium Currency) ====================
+        case 'pebbles_quote': {
+            if (!player.isAuthenticated || !player.walletAddress) {
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'NOT_AUTHENTICATED',
+                    message: 'Must be authenticated to get a quote'
+                });
+                break;
+            }
+            const playerChain = player.chainId || 'solana';
+            if (!isEvmChainId(playerChain)) {
+                // Solana uses fixed 1 SOL = 1000; still return oracle USD for UI
+                try {
+                    const prices = await priceOracleService.getPrices();
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_quote',
+                        success: true,
+                        chainId: 'solana',
+                        asset: 'SOL',
+                        pebblesPerSol: 1000,
+                        solUsd: prices.solUsd,
+                        ethUsd: prices.ethUsd,
+                        pebbleUsd: prices.pebbleUsd,
+                    });
+                } catch {
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_quote',
+                        success: true,
+                        chainId: 'solana',
+                        asset: 'SOL',
+                        pebblesPerSol: 1000,
+                    });
+                }
+                break;
+            }
+            try {
+                const { ethAmount, targetPebbles } = message;
+                const result = await evmPebbleService.createQuote(
+                    player.walletAddress,
+                    playerChain,
+                    { ethAmount, targetPebbles }
+                );
+                if (result.success) {
+                    sendToPlayer(playerId, { type: 'pebbles_quote', success: true, ...result.quote });
+                } else {
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_error',
+                        error: result.error,
+                        message: result.message || 'Quote failed',
+                    });
+                }
+            } catch (error) {
+                console.error('🪨 Pebble quote error:', error);
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'SERVER_ERROR',
+                    message: 'Failed to create quote',
+                });
+            }
+            break;
+        }
+
         case 'pebbles_deposit': {
-            // Player deposited SOL and wants Pebbles
+            // Player deposited SOL or ETH and wants Pebbles
             if (!player.isAuthenticated || !player.walletAddress) {
                 sendToPlayer(playerId, {
                     type: 'pebbles_error',
@@ -8190,9 +8256,84 @@ async function handleMessage(playerId, message) {
                 });
                 break;
             }
+
+            const depositChainId = player.chainId || 'solana';
+            if (!isChainFeatureLive(depositChainId, 'pebblesRail')) {
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'FEATURE_DISABLED',
+                    message: 'Pebbles are not available on this chain yet',
+                });
+                break;
+            }
+
+            // ========== EVM (USD-pegged ETH) ==========
+            if (isEvmChainId(depositChainId)) {
+                const walletValidation = validateWalletAddress(player.walletAddress, depositChainId);
+                if (!walletValidation.valid) {
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_error',
+                        error: 'INVALID_WALLET',
+                        message: 'Invalid wallet address'
+                    });
+                    break;
+                }
+                const { txSignature, quoteId } = message;
+                const sigValidation = validateTransactionSignature(txSignature);
+                if (!sigValidation.valid) {
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_error',
+                        error: 'INVALID_SIGNATURE',
+                        message: sigValidation.error || 'Invalid transaction hash'
+                    });
+                    break;
+                }
+                if (!quoteId) {
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_error',
+                        error: 'MISSING_QUOTE',
+                        message: 'Deposit quote required — request pebbles_quote first'
+                    });
+                    break;
+                }
+                try {
+                    const result = await evmPebbleService.depositPebbles(
+                        walletValidation.address,
+                        sigValidation.signature,
+                        quoteId,
+                        depositChainId
+                    );
+                    if (result.success) {
+                        sendToPlayer(playerId, {
+                            type: 'pebbles_deposited',
+                            pebbles: result.newBalance,
+                            pebblesAwarded: result.pebblesReceived,
+                            ethDeposited: result.ethAmount,
+                            usdValue: result.usdValue,
+                            asset: 'ETH',
+                            txHash: result.txHash,
+                        });
+                    } else {
+                        sendToPlayer(playerId, {
+                            type: 'pebbles_error',
+                            error: result.error,
+                            message: result.message || 'Deposit failed'
+                        });
+                    }
+                } catch (error) {
+                    console.error('🪨 EVM pebble deposit error:', error);
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_error',
+                        error: 'SERVER_ERROR',
+                        message: 'Failed to process deposit'
+                    });
+                }
+                break;
+            }
             
+            // ========== SOLANA ==========
             // CRITICAL SECURITY: Validate all inputs
-            const walletValidation = validateWalletAddress(player.walletAddress);
+            const walletValidation = validateWalletAddress(player.walletAddress, 'solana');
             if (!walletValidation.valid) {
                 console.error(`🚨 Security: Invalid wallet address in pebbles_deposit: ${walletValidation.error}`);
                 sendToPlayer(playerId, {
@@ -8277,7 +8418,8 @@ async function handleMessage(playerId, message) {
                         type: 'pebbles_deposited',
                         pebbles: result.newBalance,
                         pebblesAwarded: result.pebblesReceived,
-                        solDeposited: result.solAmount
+                        solDeposited: result.solAmount,
+                        asset: 'SOL',
                     });
                 } else {
                     sendToPlayer(playerId, {
@@ -8298,7 +8440,7 @@ async function handleMessage(playerId, message) {
         }
         
         case 'pebbles_withdraw': {
-            // Player wants to withdraw Pebbles to SOL
+            // Player wants to withdraw Pebbles to SOL or ETH
             if (!player.isAuthenticated || !player.walletAddress) {
                 sendToPlayer(playerId, {
                     type: 'pebbles_error',
@@ -8307,9 +8449,19 @@ async function handleMessage(playerId, message) {
                 });
                 break;
             }
+
+            const withdrawChainId = player.chainId || 'solana';
+            if (!isChainFeatureLive(withdrawChainId, 'pebblesRail')) {
+                sendToPlayer(playerId, {
+                    type: 'pebbles_error',
+                    error: 'FEATURE_DISABLED',
+                    message: 'Pebbles are not available on this chain yet',
+                });
+                break;
+            }
             
             // CRITICAL SECURITY: Validate wallet address
-            const walletValidation = validateWalletAddress(player.walletAddress);
+            const walletValidation = validateWalletAddress(player.walletAddress, withdrawChainId);
             if (!walletValidation.valid) {
                 console.error(`🚨 Security: Invalid wallet address in pebbles_withdraw: ${walletValidation.error}`);
                 sendToPlayer(playerId, {
@@ -8341,6 +8493,51 @@ async function handleMessage(playerId, message) {
             }
             
             const sanitizedPebbleAmount = amountValidation.value;
+
+            // ========== EVM ==========
+            if (isEvmChainId(withdrawChainId)) {
+                try {
+                    const result = await evmPebbleService.withdrawPebbles(
+                        walletValidation.address,
+                        sanitizedPebbleAmount,
+                        withdrawChainId
+                    );
+                    const withdrawals = await pebbleService.getUserWithdrawals(player.walletAddress);
+                    if (result.success) {
+                        sendToPlayer(playerId, {
+                            type: 'pebbles_withdrawn',
+                            status: result.status,
+                            pebbles: result.newBalance,
+                            pebbleAmount: result.pebbleAmount,
+                            rakeAmount: result.rakeAmount,
+                            ethReceived: result.ethReceived ?? result.ethToReceive,
+                            solReceived: result.ethReceived ?? result.ethToReceive,
+                            asset: 'ETH',
+                            txSignature: result.txSignature,
+                            queuePosition: result.queuePosition,
+                            withdrawalId: result.withdrawalId,
+                            message: result.message,
+                            usdValue: result.usdValue,
+                            withdrawals,
+                        });
+                    } else {
+                        sendToPlayer(playerId, {
+                            type: 'pebbles_error',
+                            error: result.error,
+                            message: result.message || 'Withdrawal failed',
+                            withdrawableAmount: result.withdrawableAmount,
+                        });
+                    }
+                } catch (error) {
+                    console.error('🪨 EVM pebble withdraw error:', error);
+                    sendToPlayer(playerId, {
+                        type: 'pebbles_error',
+                        error: 'SERVER_ERROR',
+                        message: 'Failed to process withdrawal'
+                    });
+                }
+                break;
+            }
             
             try {
                 const result = await pebbleService.withdrawPebbles(
@@ -8362,6 +8559,7 @@ async function handleMessage(playerId, message) {
                             pebbleAmount: result.pebbleAmount,
                             rakeAmount: result.rakeAmount,
                             solReceived: result.solReceived,
+                            asset: 'SOL',
                             txSignature: result.txSignature,
                             withdrawals // Include updated history
                         });
@@ -8372,6 +8570,7 @@ async function handleMessage(playerId, message) {
                             pebbles: result.newBalance,
                             pebbleAmount: result.pebbleAmount,
                             rakeAmount: result.rakeAmount,
+                            asset: 'SOL',
                             solToReceive: result.solToReceive,
                             withdrawalId: result.withdrawalId,
                             queuePosition: result.queuePosition,
@@ -9340,6 +9539,10 @@ setInterval(async () => {
         const result = await pebbleService.processWithdrawalQueue(3); // Process up to 3 at a time
         if (result.processed > 0) {
             console.log(`🪨 Withdrawal queue: processed ${result.processed}, failed ${result.failed}`);
+        }
+        const ethResult = await evmPebbleService.processEthWithdrawalQueue(3);
+        if (ethResult.processed > 0) {
+            console.log(`🪨 EVM withdrawal queue: processed ${ethResult.processed}, failed ${ethResult.failed}`);
         }
     } catch (error) {
         console.error('🪨 Withdrawal queue error:', error.message);
