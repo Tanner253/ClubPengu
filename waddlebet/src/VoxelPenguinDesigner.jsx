@@ -2332,6 +2332,37 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
         );
     };
 
+    const renderBscComingSoonNote = () => (
+        <a
+            href="https://whitepaper.waddle.bet/#multichain"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block rounded-xl p-3 border border-yellow-500/20 bg-yellow-500/5 hover:bg-yellow-500/10 transition-colors"
+        >
+            <div className="flex items-start gap-3">
+                <img
+                    src="/binance-logo.png"
+                    alt="Binance"
+                    className="w-8 h-8 shrink-0 mt-0.5 rounded bg-black object-contain p-0.5"
+                />
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="text-yellow-200 font-bold text-xs retro-text uppercase tracking-wide">
+                            {t('menu.bscComingSoonTitle')}
+                        </span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-yellow-500/15 border border-yellow-500/30 text-yellow-300">
+                            {t('menu.bscComingSoonBadge')}
+                        </span>
+                    </div>
+                    <p className="text-slate-400 text-xs leading-relaxed">{t('menu.bscComingSoonNote')}</p>
+                    <span className="inline-block mt-2 text-yellow-300/90 text-xs font-semibold">
+                        {t('menu.bscComingSoonCta')} →
+                    </span>
+                </div>
+            </div>
+        </a>
+    );
+
     const renderRobinhoodEvmBanner = () => (
         <div className="creator-robinhood-banner block rounded-xl p-3 md:p-4 transition-colors border border-emerald-500/25 bg-emerald-500/5">
             <div className="flex items-start gap-3">
@@ -2508,6 +2539,7 @@ function VoxelPenguinDesigner({ onEnterWorld, currentData, updateData }) {
                     </h2>
 
                     {renderRobinhoodEvmBanner()}
+                    {renderBscComingSoonNote()}
                     
                     {/* Wallet & Account Section - Collapsible, at top */}
                     <div className="mb-2">

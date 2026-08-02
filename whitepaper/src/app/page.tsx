@@ -28,6 +28,7 @@ import Changelog from "../components/Changelog";
 import GachaSystemSection from "../components/GachaSystem";
 import { SolanaHistoryChart } from "../components/SolanaHistoryChart";
 import { RobinhoodLogo } from "../components/RobinhoodLogo";
+import { BinanceLogo } from "../components/BinanceLogo";
 import { ChapterTag } from "../components/ChapterTag";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import {
@@ -363,7 +364,7 @@ function Navigation() {
   );
 }
 
-/** Solana + Robinhood chain strip shown in the hero. */
+/** Solana + Robinhood + BSC chain strip shown in the hero. */
 function HeroChainsStrip() {
   const { t } = useWhitepaperLanguage();
   const [copiedSolanaCa, setCopiedSolanaCa] = useState(false);
@@ -397,10 +398,10 @@ function HeroChainsStrip() {
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: 0.36 }}
-      className="mb-8 max-w-xl mx-auto w-full"
+      className="mb-8 max-w-3xl mx-auto w-full"
     >
       <p className="hud-label text-slate-400 mb-3 text-center">{t("hero.chains.title")}</p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="glass-card rounded-xl p-4 border border-amber-400/30 text-left order-1">
           <div className="flex items-center gap-2 mb-2">
             <RobinhoodLogo size={28} />
@@ -455,6 +456,26 @@ function HeroChainsStrip() {
               )}
             </button>
           </div>
+        </div>
+        <div className="glass-card rounded-xl p-4 border border-yellow-400/25 text-left order-3 sm:col-span-1">
+          <div className="flex items-center gap-2 mb-2">
+            <BinanceLogo size={28} />
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-yellow-200 text-sm truncate">{t("hero.chains.bsc")}</span>
+                <span className="text-[10px] uppercase tracking-wide font-semibold text-yellow-300 px-2 py-0.5 rounded-full bg-yellow-500/10 border border-yellow-500/25 shrink-0">
+                  {t("hero.chains.bscStatus")}
+                </span>
+              </div>
+              <p className="text-slate-500 text-xs">{t("hero.chains.bscSub")}</p>
+            </div>
+          </div>
+          <a
+            href="#multichain"
+            className="text-[10px] font-semibold text-yellow-300/90 hover:text-yellow-200 transition-colors"
+          >
+            {t("hero.cta.multichain")} →
+          </a>
         </div>
       </div>
     </motion.div>
@@ -527,6 +548,7 @@ function HeroContent({ showScrollHint = false }: { showScrollHint?: boolean }) {
               { label: t("pill.noKyc"), color: "border-emerald-400/40 text-emerald-300" },
               { label: t("pill.multichain"), color: "border-violet-400/40 text-violet-300" },
               { label: t("pill.robinhoodEvm"), color: "border-white/20 text-slate-200" },
+              { label: t("pill.bscSoon"), color: "border-yellow-400/40 text-yellow-300" },
               { label: t("pill.x402"), color: "border-purple-400/40 text-purple-300" },
               { label: t("pill.anySpl"), color: "border-amber-400/40 text-amber-300" },
             ].map((pill, i) => (
@@ -1004,7 +1026,7 @@ function MultichainSection() {
           <p className="text-slate-400 text-lg max-w-3xl mx-auto">{t("multichain.lead")}</p>
         </motion.div>
 
-        <div className="grid lg:grid-cols-2 gap-6 md:gap-8 mb-8">
+        <div className="grid lg:grid-cols-3 gap-6 md:gap-8 mb-8">
           <motion.div
             initial={{ opacity: 0, x: -30 }}
             whileInView={{ opacity: 1, x: 0 }}
@@ -1051,6 +1073,24 @@ function MultichainSection() {
             </div>
             <p className="text-slate-300 text-sm md:text-base leading-relaxed">{t("multichain.solana.desc")}</p>
           </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            className="glass-card rounded-2xl p-6 md:p-8 border border-yellow-400/25 lg:col-span-1"
+          >
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <BinanceLogo size={48} showWordmark />
+              <span className="text-xs font-semibold text-yellow-300 px-2.5 py-1 rounded-full bg-yellow-500/10 border border-yellow-500/25 shrink-0">
+                {t("multichain.bsc.badge")}
+              </span>
+            </div>
+            <h3 className="text-xl md:text-2xl font-bold text-white mb-3">{t("multichain.bsc.title")}</h3>
+            <p className="text-slate-300 text-sm md:text-base leading-relaxed mb-4">{t("multichain.bsc.p1")}</p>
+            <p className="text-slate-400 text-sm leading-relaxed mb-5">{t("multichain.bsc.p2")}</p>
+            <p className="text-xs text-yellow-300/90 font-medium">{t("multichain.bsc.status")}</p>
+          </motion.div>
         </div>
 
         <motion.div
@@ -1076,11 +1116,14 @@ function MultichainSection() {
               </ul>
             </div>
             <div className="shrink-0 flex flex-col items-center gap-4 p-5 rounded-2xl bg-white/[0.03] border border-white/10 min-w-[200px]">
-              <RobinhoodLogo size={64} />
+              <div className="flex items-center gap-3">
+                <RobinhoodLogo size={48} />
+                <BinanceLogo size={48} />
+              </div>
               <p className="text-center text-sm text-white font-semibold leading-snug">
-                Robinhood Chain
+                Multichain roadmap
                 <br />
-                <span className="text-slate-400 font-normal">Ethereum EVM</span>
+                <span className="text-slate-400 font-normal">Solana · Robinhood · BSC</span>
               </p>
             </div>
           </div>
@@ -2293,6 +2336,11 @@ function Footer() {
               <span className="inline-flex items-center gap-1.5 text-slate-300 font-semibold">
                 <img src="/robinhood-logo.png" alt="Robinhood" className="w-4 h-4 rounded object-cover" />
                 Robinhood EVM
+              </span>
+              <span className="text-slate-700">+</span>
+              <span className="inline-flex items-center gap-1.5 text-yellow-300/90 font-semibold">
+                <img src="/binance-logo.png" alt="Binance" className="w-4 h-4 rounded object-contain bg-black" />
+                BSC (soon)
               </span>
               <span className="text-slate-700">•</span>
               <span>© 2025 WaddleBet</span>
